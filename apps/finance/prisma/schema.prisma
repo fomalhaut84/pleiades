@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id        String    @id @default(cuid())
+  name      String
+  ownerAge  Int?
+  strategy  String?
+  horizon   Int?
+  createdAt DateTime  @default(now())
+  holdings  Holding[]
+  trades    Trade[]
+  deposits  Deposit[]
+}
+
+model Holding {
+  id          String  @id @default(cuid())
+  accountId   String
+  account     Account @relation(fields: [accountId], references: [id])
+  ticker      String
+  displayName String
+  market      String
+  shares      Int
+  avgPrice    Float
+  currency    String  @default("KRW")
+  avgPriceFx  Float?
+  avgFxRate   Float?
+
+  @@unique([accountId, ticker])
+}
+
+model Trade {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id])
+  ticker      String
+  displayName String
+  market      String
+  type        String
+  shares      Int
+  price       Float
+  currency    String
+  fxRate      Float?
+  totalKRW    Float
+  note        String?
+  tradedAt    DateTime
+  createdAt   DateTime @default(now())
+}
+
+model Deposit {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id])
+  amount      Float
+  source      String
+  note        String?
+  depositedAt DateTime
+  createdAt   DateTime @default(now())
+}
+
+model PriceCache {
+  ticker        String   @id
+  displayName   String
+  market        String
+  price         Float
+  currency      String
+  change        Float?
+  changePercent Float?
+  updatedAt     DateTime @updatedAt
+}
+
+model RSUSchedule {
+  id          String    @id @default(cuid())
+  vestingDate DateTime
+  shares      Int?
+  basisValue  Float
+  basisDate   DateTime?
+  basisPrice  Float?
+  status      String    @default("pending")
+  sellShares  Int?
+  keepShares  Int?
+  note        String?
+}
