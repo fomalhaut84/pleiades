@@ -1,5 +1,7 @@
-import yahooFinance from 'yahoo-finance2'
+import YahooFinance from 'yahoo-finance2'
 import { prisma } from './prisma'
+
+const yahooFinance = new YahooFinance()
 
 const FX_TICKER = 'USDKRW=X'
 
