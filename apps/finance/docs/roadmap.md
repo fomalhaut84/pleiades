@@ -8,9 +8,9 @@
 - [x] 기본 레이아웃 (사이드바 nav, 계좌 탭, 다크 테마)
 - [x] 대시보드 메인 페이지 (계좌별 요약 카드)
 - [x] 계좌 상세 페이지 (보유종목 테이블, 파이차트)
-- [ ] PM2 + Nginx 배포 설정
-- [ ] Nginx basic auth 설정 (최소 인증 — 외부 접근 차단)
-- [ ] .env 구성 (DATABASE_URL, BASE_URL, BASIC_AUTH_USER/PASS)
+- [x] PM2 + Nginx 배포 설정
+- [x] Nginx basic auth 설정 (최소 인증 — 외부 접근 차단)
+- [x] .env 구성 (DATABASE_URL, BASE_URL, BASIC_AUTH_USER/PASS)
 
 ## Phase 2: Live Prices
 
