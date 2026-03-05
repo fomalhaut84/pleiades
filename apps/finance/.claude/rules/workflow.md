@@ -114,15 +114,20 @@ npm run lint && npm run typecheck && npm run test && npm run build
 
 codex-cli MCP의 프롬프트를 통해 코드 리뷰를 수행한다.
 
-**리뷰 요청 예시:**
-```
-codex-cli에 다음 프롬프트로 코드 리뷰 요청:
+**리뷰 요청:**
 
-"dev 브랜치 대비 현재 브랜치의 변경사항을 코드 리뷰해줘.
-아래 심각도 기준으로 분류해서 보고:
-- P0 (info): 스타일·네이밍 개선 제안
-- P1 (major): 로직 오류, 엣지케이스 누락, 성능 문제
-- P2 (critical): 보안 취약점, 데이터 손실 가능성, 크래시"
+`codex` MCP 도구를 사용한다 (`review` 도구가 아님 — `review`는 reasoningEffort를 지원하지 않아 피상적 결과만 반환).
+
+```
+codex MCP 도구 호출:
+- prompt: "dev 브랜치 대비 현재 브랜치의 변경사항을 코드 리뷰해줘.
+  먼저 `git diff dev...HEAD`로 전체 변경사항을 확인한 뒤 심각도별 분류:
+  - P0 (info): 스타일·네이밍 개선 제안
+  - P1 (major): 로직 오류, 엣지케이스 누락, 성능 문제
+  - P2 (critical): 보안 취약점, 데이터 손실 가능성, 크래시
+  각 이슈마다 파일명, 라인, 설명, 수정 제안 포함. 최종 요약: P0/P1/P2 각 건수."
+- reasoningEffort: "high"
+- fullAuto: true
 ```
 
 **심각도별 대응:**

@@ -2,9 +2,9 @@
 
 ## Phase 1: Foundation
 
-- [ ] Next.js 14 + TypeScript + Tailwind 프로젝트 초기화
-- [ ] Prisma 설정 + PostgreSQL + schema.prisma 적용
-- [ ] 시드 스크립트 작성 (3계좌 보유종목, `@docs/seed-data.md` 참조)
+- [x] Next.js 14 + TypeScript + Tailwind 프로젝트 초기화
+- [x] Prisma 설정 + PostgreSQL + schema.prisma 적용
+- [x] 시드 스크립트 작성 (3계좌 보유종목, `@docs/seed-data.md` 참조)
 - [ ] 기본 레이아웃 (사이드바 nav, 계좌 탭, 다크 테마)
 - [ ] 대시보드 메인 페이지 (계좌별 요약 카드)
 - [ ] 계좌 상세 페이지 (보유종목 테이블, 파이차트)
