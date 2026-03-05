@@ -1,14 +1,17 @@
 import Card from '@/components/ui/Card'
-import { formatKRW } from '@/lib/format'
+import { formatKRW, formatPercent, formatSignedKRW } from '@/lib/format'
 
 interface AccountSummary {
   name: string
-  totalKRW: number
+  currentValueKRW: number
+  costKRW: number
+  returnPct: number
   holdingsCount: number
 }
 
 interface FamilyTotalCardProps {
   accounts: AccountSummary[]
+  hasPriceData: boolean
 }
 
 const COLOR_MAP: Record<string, string> = {
@@ -17,8 +20,11 @@ const COLOR_MAP: Record<string, string> = {
   '다솜': 'text-dasom',
 }
 
-export default function FamilyTotalCard({ accounts }: FamilyTotalCardProps) {
-  const grandTotal = accounts.reduce((sum, a) => sum + a.totalKRW, 0)
+export default function FamilyTotalCard({ accounts, hasPriceData }: FamilyTotalCardProps) {
+  const grandTotal = accounts.reduce((sum, a) => sum + a.currentValueKRW, 0)
+  const grandCost = accounts.reduce((sum, a) => sum + a.costKRW, 0)
+  const grandPL = grandTotal - grandCost
+  const grandReturnPct = grandCost > 0 ? (grandPL / grandCost) * 100 : 0
   const totalHoldings = accounts.reduce((sum, a) => sum + a.holdingsCount, 0)
 
   return (
@@ -31,12 +37,24 @@ export default function FamilyTotalCard({ accounts }: FamilyTotalCardProps) {
           <div className="text-[32px] font-black text-bright tracking-tight mt-1.5">
             {formatKRW(grandTotal)}
           </div>
+          {hasPriceData && (
+            <div className="flex items-baseline gap-2.5 mt-1.5">
+              <span className={`text-[16px] font-extrabold ${grandReturnPct >= 0 ? 'text-sejin' : 'text-red-500'}`}>
+                {formatPercent(grandReturnPct)}
+              </span>
+              <span className={`text-[12px] font-semibold ${grandPL >= 0 ? 'text-sejin' : 'text-red-500'}`}>
+                {formatSignedKRW(grandPL)}
+              </span>
+            </div>
+          )}
+          <div className="text-[11px] text-dim mt-1">
+            {hasPriceData ? `매입금 ${formatKRW(grandCost)}` : '매입금 기준 합산'}
+          </div>
         </div>
         <div className="text-right">
           <div className="text-[12px] text-sub">
             {accounts.length}개 계좌 · {totalHoldings}종목
           </div>
-          <div className="text-[12px] text-sub mt-1">매입금 기준 합산</div>
         </div>
       </div>
 
@@ -47,8 +65,13 @@ export default function FamilyTotalCard({ accounts }: FamilyTotalCardProps) {
               {account.name}
             </div>
             <div className={`text-[16px] font-extrabold mt-1 ${COLOR_MAP[account.name] ?? 'text-bright'}`}>
-              {formatKRW(account.totalKRW)}
+              {formatKRW(account.currentValueKRW)}
             </div>
+            {hasPriceData && (
+              <div className={`text-[12px] font-bold mt-0.5 ${account.returnPct >= 0 ? 'text-sejin' : 'text-red-500'}`}>
+                {formatPercent(account.returnPct)}
+              </div>
+            )}
           </div>
         ))}
       </div>

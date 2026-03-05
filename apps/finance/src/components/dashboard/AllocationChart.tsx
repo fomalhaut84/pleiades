@@ -10,6 +10,8 @@ interface ChartData {
 interface AllocationChartProps {
   data: ChartData[]
   totalLabel: string
+  chartTitle?: string
+  centerLabel?: string
 }
 
 const COLORS = [
@@ -17,13 +19,13 @@ const COLORS = [
   '#f87171', '#9494a8', '#6e6e82', '#c084fc', '#22d3ee',
 ]
 
-export default function AllocationChart({ data, totalLabel }: AllocationChartProps) {
+export default function AllocationChart({ data, totalLabel, chartTitle = '매입비중', centerLabel = '총 매입' }: AllocationChartProps) {
   const total = data.reduce((sum, d) => sum + d.value, 0)
 
   return (
     <div className="relative overflow-visible rounded-[14px] border border-border bg-card p-5 flex flex-col items-center">
       <div className="text-[13px] font-bold text-bright mb-5 self-start">
-        매입비중
+        {chartTitle}
       </div>
 
       <div className="relative w-[180px] h-[180px] mb-5">
@@ -45,7 +47,7 @@ export default function AllocationChart({ data, totalLabel }: AllocationChartPro
           </PieChart>
         </ResponsiveContainer>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-          <div className="text-[11px] text-sub tracking-wide">총 매입</div>
+          <div className="text-[11px] text-sub tracking-wide">{centerLabel}</div>
           <div className="text-[16px] font-extrabold text-bright tracking-tight">
             {totalLabel}
           </div>
