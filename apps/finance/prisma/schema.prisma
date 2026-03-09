@@ -8,15 +8,16 @@ datasource db {
 }
 
 model Account {
-  id        String    @id @default(cuid())
-  name      String
-  ownerAge  Int?
-  strategy  String?
-  horizon   Int?
-  createdAt DateTime  @default(now())
-  holdings  Holding[]
-  trades    Trade[]
-  deposits  Deposit[]
+  id           String        @id @default(cuid())
+  name         String
+  ownerAge     Int?
+  strategy     String?
+  horizon      Int?
+  createdAt    DateTime      @default(now())
+  holdings     Holding[]
+  trades       Trade[]
+  deposits     Deposit[]
+  rsuSchedules RSUSchedule[]
 }
 
 model Holding {
@@ -77,13 +78,17 @@ model PriceCache {
 
 model RSUSchedule {
   id          String    @id @default(cuid())
+  accountId   String
+  account     Account   @relation(fields: [accountId], references: [id])
   vestingDate DateTime
-  shares      Int?
+  shares      Int
   basisValue  Float
   basisDate   DateTime?
   basisPrice  Float?
+  vestPrice   Float?
   status      String    @default("pending")
   sellShares  Int?
   keepShares  Int?
   note        String?
+  vestedAt    DateTime?
 }

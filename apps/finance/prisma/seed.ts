@@ -131,10 +131,11 @@ async function main() {
       await createHoldingWithTrade(tx, dasom.id, seed)
     }
 
-    // RSU 스케줄
+    // RSU 스케줄 (세진 계좌 연동)
     await tx.rSUSchedule.createMany({
       data: [
         {
+          accountId: sejin.id,
           vestingDate: new Date('2026-04-09'),
           shares: 135,
           basisValue: 5000000,
@@ -144,6 +145,7 @@ async function main() {
           note: '1차 베스팅',
         },
         {
+          accountId: sejin.id,
           vestingDate: new Date('2027-04-09'),
           shares: 83,
           basisValue: 5000000,

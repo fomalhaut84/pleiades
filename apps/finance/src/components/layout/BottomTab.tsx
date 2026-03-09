@@ -39,6 +39,16 @@ export default function BottomTab({ accounts }: BottomTabProps) {
           <span className="text-[11px] font-semibold">거래</span>
         </Link>
 
+        <Link
+          href="/rsu"
+          className={`flex flex-col items-center gap-1 py-2 px-3 rounded-lg ${
+            pathname.startsWith('/rsu') ? 'text-bright' : 'text-dim'
+          }`}
+        >
+          <span className="text-lg">🏢</span>
+          <span className="text-[11px] font-semibold">RSU</span>
+        </Link>
+
         {accounts.map((account) => (
           <Link
             key={account.id}
