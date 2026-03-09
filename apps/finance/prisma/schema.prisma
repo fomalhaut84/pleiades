@@ -18,6 +18,7 @@ model Account {
   trades       Trade[]
   deposits     Deposit[]
   rsuSchedules RSUSchedule[]
+  dividends    Dividend[]
 }
 
 model Holding {
@@ -91,4 +92,25 @@ model RSUSchedule {
   keepShares  Int?
   note        String?
   vestedAt    DateTime?
+}
+
+model Dividend {
+  id          String    @id @default(cuid())
+  accountId   String
+  account     Account   @relation(fields: [accountId], references: [id])
+  ticker      String
+  displayName String
+  exDate      DateTime?
+  payDate     DateTime
+  amountGross Float
+  amountNet   Float
+  taxAmount   Float?
+  currency    String
+  fxRate      Float?
+  amountKRW   Float
+  reinvested  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  @@index([accountId, payDate])
+  @@index([payDate])
 }

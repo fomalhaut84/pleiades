@@ -66,6 +66,18 @@ export default function Sidebar({ accounts }: SidebarProps) {
           RSU
         </Link>
 
+        <Link
+          href="/dividends"
+          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
+            ${pathname.startsWith('/dividends')
+              ? 'bg-white/5 text-bright font-semibold border-border'
+              : 'text-sub hover:bg-white/[0.03] hover:text-muted'
+            }`}
+        >
+          <span className="text-[15px] w-5 text-center">💰</span>
+          배당금
+        </Link>
+
         <div className="text-[10px] font-bold text-dim tracking-[1.5px] uppercase px-3 pt-4 pb-2">
           계좌
         </div>
