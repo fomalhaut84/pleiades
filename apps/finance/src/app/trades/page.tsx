@@ -54,6 +54,12 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
     <div className="px-8 py-7 max-w-[960px]">
       <Header title="거래 내역" sub={`총 ${total}건`}>
         <Link
+          href="/trades/import"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/[0.04] text-sub text-[13px] font-semibold border border-white/[0.06] hover:bg-white/[0.08] transition-all"
+        >
+          CSV 가져오기
+        </Link>
+        <Link
           href="/trades/new"
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sejin/15 text-sejin text-[13px] font-semibold border border-sejin/25 hover:bg-sejin/25 transition-all"
         >
