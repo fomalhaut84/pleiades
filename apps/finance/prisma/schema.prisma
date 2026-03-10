@@ -18,6 +18,7 @@ model Account {
   trades       Trade[]
   deposits     Deposit[]
   rsuSchedules RSUSchedule[]
+  stockOptions StockOption[]
   dividends    Dividend[]
 }
 
@@ -92,6 +93,40 @@ model RSUSchedule {
   keepShares  Int?
   note        String?
   vestedAt    DateTime?
+}
+
+model StockOption {
+  id              String               @id @default(cuid())
+  accountId       String
+  account         Account              @relation(fields: [accountId], references: [id])
+  ticker          String
+  displayName     String
+  grantDate       DateTime             // 부여일
+  expiryDate      DateTime             // 만료일
+  strikePrice     Float                // 행사가격
+  totalShares     Int                  // 총부여수량
+  cancelledShares Int      @default(0) // 취소수량
+  exercisedShares Int      @default(0) // 행사수량
+  adjustedShares  Int      @default(0) // 조정수량
+  remainingShares Int                  // 잔여수량
+  note            String?
+  createdAt       DateTime             @default(now())
+  vestings        StockOptionVesting[]
+
+  @@index([accountId, grantDate])
+}
+
+model StockOptionVesting {
+  id            String      @id @default(cuid())
+  stockOptionId String
+  stockOption   StockOption @relation(fields: [stockOptionId], references: [id])
+  vestingDate   DateTime    // 행사 가능일
+  shares        Int         // 행사 가능 수량
+  status        String      @default("pending") // pending | exercisable | exercised | expired
+  exercisedAt   DateTime?
+  note          String?
+
+  @@index([stockOptionId, vestingDate])
 }
 
 model Dividend {

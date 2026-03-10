@@ -102,6 +102,8 @@ async function main() {
   // === 삭제 + 생성을 단일 트랜잭션으로 실행 (all-or-nothing) ===
   await prisma.$transaction(async (tx) => {
     // 기존 데이터 정리
+    await tx.stockOptionVesting.deleteMany()
+    await tx.stockOption.deleteMany()
     await tx.deposit.deleteMany()
     await tx.trade.deleteMany()
     await tx.holding.deleteMany()
@@ -196,6 +198,90 @@ async function main() {
         },
       ],
     })
+    // 스톡옵션 (세진 계좌 — 카카오)
+    const soGrants = [
+      {
+        ticker: '035720.KS',
+        displayName: '카카오',
+        grantDate: '2021-05-04',
+        expiryDate: '2028-05-04',
+        strikePrice: 116449,
+        totalShares: 200,
+        adjustedShares: -5,
+        remainingShares: 195,
+        // 전량 행사 가능 (2년 경과)
+        vestings: [
+          { vestingDate: '2023-05-04', shares: 195, status: 'exercisable' },
+        ],
+      },
+      {
+        ticker: '035720.KS',
+        displayName: '카카오',
+        grantDate: '2022-03-29',
+        expiryDate: '2029-03-29',
+        strikePrice: 103359,
+        totalShares: 200,
+        adjustedShares: -5,
+        remainingShares: 195,
+        // 전량 행사 가능 (2년 경과)
+        vestings: [
+          { vestingDate: '2024-03-29', shares: 195, status: 'exercisable' },
+        ],
+      },
+      {
+        ticker: '035720.KS',
+        displayName: '카카오',
+        grantDate: '2023-03-28',
+        expiryDate: '2030-03-28',
+        strikePrice: 62760,
+        totalShares: 200,
+        adjustedShares: -3,
+        remainingShares: 197,
+        vestings: [
+          { vestingDate: '2025-03-28', shares: 99, status: 'exercisable' },
+          { vestingDate: '2026-03-28', shares: 98, status: 'pending' },
+        ],
+      },
+      {
+        ticker: '035720.KS',
+        displayName: '카카오',
+        grantDate: '2024-03-28',
+        expiryDate: '2031-03-28',
+        strikePrice: 54943,
+        totalShares: 200,
+        adjustedShares: -2,
+        remainingShares: 198,
+        vestings: [
+          { vestingDate: '2026-03-28', shares: 99, status: 'pending' },
+          { vestingDate: '2027-03-28', shares: 99, status: 'pending' },
+        ],
+      },
+    ]
+
+    for (const grant of soGrants) {
+      const so = await tx.stockOption.create({
+        data: {
+          accountId: sejin.id,
+          ticker: grant.ticker,
+          displayName: grant.displayName,
+          grantDate: new Date(grant.grantDate),
+          expiryDate: new Date(grant.expiryDate),
+          strikePrice: grant.strikePrice,
+          totalShares: grant.totalShares,
+          adjustedShares: grant.adjustedShares,
+          remainingShares: grant.remainingShares,
+        },
+      })
+
+      await tx.stockOptionVesting.createMany({
+        data: grant.vestings.map((v) => ({
+          stockOptionId: so.id,
+          vestingDate: new Date(v.vestingDate),
+          shares: v.shares,
+          status: v.status,
+        })),
+      })
+    }
   })
 
   const totalHoldings = sejinHoldings.length + sodamHoldings.length + dasomHoldings.length
@@ -205,6 +291,7 @@ async function main() {
   console.log(`  Trades: ${totalHoldings} (초기 보유분)`)
   console.log('  RSU Schedules: 2')
   console.log('  Deposits: 4')
+  console.log('  Stock Options: 4 (카카오, 베스팅 7건)')
 }
 
 main()
