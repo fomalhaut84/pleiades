@@ -129,6 +129,21 @@ model StockOptionVesting {
   @@index([stockOptionId, vestingDate])
 }
 
+model IncomeProfile {
+  id              String   @id @default(cuid())
+  year            Int                         // 귀속 연도
+  inputType       String                      // "gross" | "taxable"
+  grossSalary     Float?                      // 세전 총급여 (inputType=gross 시)
+  earnedDeduction Float?                      // 근로소득공제 (자동 계산)
+  taxableIncome   Float                       // 종합소득 과세표준
+  prepaidTax      Float    @default(0)        // 기납부 세액 (원천징수 합계)
+  note            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([year])
+}
+
 model Dividend {
   id          String    @id @default(cuid())
   accountId   String

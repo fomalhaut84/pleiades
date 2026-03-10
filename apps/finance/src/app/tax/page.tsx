@@ -6,6 +6,7 @@ import RealizedGainsTable from '@/components/tax/RealizedGainsTable'
 import RSUTaxCard from '@/components/tax/RSUTaxCard'
 import SellTaxSimulator from '@/components/tax/SellTaxSimulator'
 import DividendTaxCard from '@/components/tax/DividendTaxCard'
+import IncomeProfileCard from '@/components/tax/IncomeProfileCard'
 import { calcGiftTaxSummary, GIFT_SOURCES } from '@/lib/tax/gift-tax'
 import { calcRealizedGains, calcCapitalGainsSummary } from '@/lib/tax/capital-gains-tax'
 import { calcRSUTaxSummary } from '@/lib/tax/income-tax'
@@ -167,6 +168,11 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
 
   const dividendTaxSummary = calcDividendTaxSummary(dividends)
 
+  // 근로소득 프로필
+  const incomeProfiles = await prisma.incomeProfile.findMany({
+    orderBy: { year: 'desc' },
+  })
+
   // 연도 선택 옵션
   const years = [currentYear, currentYear - 1, currentYear - 2]
 
@@ -295,6 +301,12 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
       <div className="mb-8">
         <h2 className="text-[14px] font-bold text-bright mb-3">배당소득세 ({year}년)</h2>
         <DividendTaxCard summary={dividendTaxSummary} year={year} />
+      </div>
+
+      {/* 근로소득 프로필 */}
+      <div className="mb-8">
+        <h2 className="text-[14px] font-bold text-bright mb-3">근로소득 프로필</h2>
+        <IncomeProfileCard profiles={incomeProfiles} />
       </div>
 
       <p className="text-[11px] text-dim">
