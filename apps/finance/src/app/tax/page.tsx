@@ -4,6 +4,7 @@ import GiftTaxGauge from '@/components/tax/GiftTaxGauge'
 import CapitalGainsSummary from '@/components/tax/CapitalGainsSummary'
 import RealizedGainsTable from '@/components/tax/RealizedGainsTable'
 import RSUTaxCard from '@/components/tax/RSUTaxCard'
+import SellTaxSimulator from '@/components/tax/SellTaxSimulator'
 import { calcGiftTaxSummary, GIFT_SOURCES } from '@/lib/tax/gift-tax'
 import { calcRealizedGains, calcCapitalGainsSummary } from '@/lib/tax/capital-gains-tax'
 import { calcRSUTaxSummary } from '@/lib/tax/income-tax'
@@ -111,6 +112,36 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
     }))
   )
 
+  // 매도 시뮬레이터 데이터: 보유종목 + 현재가 + 현재환율
+  const holdings = await prisma.holding.findMany({
+    where: { shares: { gt: 0 } },
+    include: { account: { select: { name: true } } },
+    orderBy: [{ accountId: 'asc' }, { ticker: 'asc' }],
+  })
+
+  const tickers = Array.from(new Set(holdings.map((h) => h.ticker)))
+  const priceCaches = await prisma.priceCache.findMany({
+    where: { ticker: { in: [...tickers, 'USDKRW=X'] } },
+    select: { ticker: true, price: true },
+  })
+  const priceMap = new Map(priceCaches.map((p) => [p.ticker, p.price]))
+  const currentFxRate = priceMap.get('USDKRW=X') ?? null
+
+  const holdingOptions = holdings.map((h) => ({
+    id: h.id,
+    accountName: h.account.name,
+    ticker: h.ticker,
+    displayName: h.displayName,
+    market: h.market,
+    currency: h.currency,
+    shares: h.shares,
+    avgPrice: h.avgPrice,
+    avgPriceFx: h.avgPriceFx,
+    avgFxRate: h.avgFxRate,
+    currentPrice: priceMap.get(h.ticker) ?? null,
+    currentFxRate: h.currency === 'USD' ? currentFxRate : null,
+  }))
+
   // 연도 선택 옵션
   const years = [currentYear, currentYear - 1, currentYear - 2]
 
@@ -213,6 +244,23 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
                   firstGiftDate={s.firstGiftDate}
                 />
               ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 매도 전 세금 미리보기 (현재 연도만) */}
+      <div className="mb-8">
+        <h2 className="text-[14px] font-bold text-bright mb-3">매도 전 세금 미리보기</h2>
+        {year === currentYear ? (
+          <SellTaxSimulator
+            holdings={holdingOptions}
+            ytdForeignGain={capitalGainsSummary.foreignStockGain}
+          />
+        ) : (
+          <div className="relative overflow-hidden rounded-[14px] border border-border bg-card p-8 text-center">
+            <div className="text-[13px] text-sub">
+              매도 시뮬레이션은 현재 연도({currentYear}년)에서만 사용할 수 있습니다
             </div>
           </div>
         )}
