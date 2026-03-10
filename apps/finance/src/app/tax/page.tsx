@@ -3,8 +3,10 @@ import Header from '@/components/layout/Header'
 import GiftTaxGauge from '@/components/tax/GiftTaxGauge'
 import CapitalGainsSummary from '@/components/tax/CapitalGainsSummary'
 import RealizedGainsTable from '@/components/tax/RealizedGainsTable'
+import RSUTaxCard from '@/components/tax/RSUTaxCard'
 import { calcGiftTaxSummary, GIFT_SOURCES } from '@/lib/tax/gift-tax'
 import { calcRealizedGains, calcCapitalGainsSummary } from '@/lib/tax/capital-gains-tax'
+import { calcRSUTaxSummary } from '@/lib/tax/income-tax'
 
 export const dynamic = 'force-dynamic'
 
@@ -86,12 +88,35 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
   const realizedGains = calcRealizedGains(allTrades, year)
   const capitalGainsSummary = calcCapitalGainsSummary(realizedGains)
 
+  // RSU 근로소득세 데이터: 해당 연도 베스팅 스케줄
+  const rsuSchedules = await prisma.rSUSchedule.findMany({
+    where: {
+      vestingDate: {
+        gte: new Date(`${year}-01-01`),
+        lt: new Date(`${year + 1}-01-01`),
+      },
+    },
+    orderBy: { vestingDate: 'asc' },
+  })
+
+  const rsuTaxSummary = calcRSUTaxSummary(
+    rsuSchedules.map((s) => ({
+      id: s.id,
+      vestingDate: s.vestingDate,
+      shares: s.shares,
+      vestPrice: s.vestPrice,
+      basisPrice: s.basisPrice,
+      basisValue: s.basisValue,
+      status: s.status,
+    }))
+  )
+
   // 연도 선택 옵션
   const years = [currentYear, currentYear - 1, currentYear - 2]
 
   return (
     <div className="px-8 py-7 max-w-[960px]">
-      <Header title="세금 센터" sub="증여세 · 양도세 · 배당소득세" />
+      <Header title="세금 센터" sub="양도세 · RSU 근로소득세 · 증여세 · 배당소득세" />
 
       {/* 연도 선택 */}
       <div className="mt-5 mb-6 flex items-center gap-1 bg-white/[0.02] rounded-lg p-1 border border-white/[0.04] w-fit">
@@ -129,6 +154,16 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
             <RealizedGainsTable gains={realizedGains} />
           </div>
         )}
+      </div>
+
+      {/* RSU 근로소득세 섹션 */}
+      <div className="mb-8">
+        <h2 className="text-[14px] font-bold text-bright mb-3">RSU 근로소득세 ({year}년)</h2>
+        <RSUTaxCard
+          estimates={rsuTaxSummary.estimates}
+          totalGrossIncome={rsuTaxSummary.totalGrossIncome}
+          totalTax={rsuTaxSummary.totalTax}
+        />
       </div>
 
       {/* 증여세 섹션 */}
