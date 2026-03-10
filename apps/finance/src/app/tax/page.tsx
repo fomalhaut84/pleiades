@@ -5,9 +5,11 @@ import CapitalGainsSummary from '@/components/tax/CapitalGainsSummary'
 import RealizedGainsTable from '@/components/tax/RealizedGainsTable'
 import RSUTaxCard from '@/components/tax/RSUTaxCard'
 import SellTaxSimulator from '@/components/tax/SellTaxSimulator'
+import DividendTaxCard from '@/components/tax/DividendTaxCard'
 import { calcGiftTaxSummary, GIFT_SOURCES } from '@/lib/tax/gift-tax'
 import { calcRealizedGains, calcCapitalGainsSummary } from '@/lib/tax/capital-gains-tax'
 import { calcRSUTaxSummary } from '@/lib/tax/income-tax'
+import { calcDividendTaxSummary } from '@/lib/tax/dividend-tax'
 
 export const dynamic = 'force-dynamic'
 
@@ -142,6 +144,29 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
     currentFxRate: h.currency === 'USD' ? currentFxRate : null,
   }))
 
+  // 배당소득세 데이터
+  const dividends = await prisma.dividend.findMany({
+    where: {
+      payDate: {
+        gte: new Date(`${year}-01-01`),
+        lt: new Date(`${year + 1}-01-01`),
+      },
+    },
+    select: {
+      ticker: true,
+      displayName: true,
+      currency: true,
+      amountGross: true,
+      amountNet: true,
+      taxAmount: true,
+      fxRate: true,
+      amountKRW: true,
+    },
+    orderBy: { payDate: 'asc' },
+  })
+
+  const dividendTaxSummary = calcDividendTaxSummary(dividends)
+
   // 연도 선택 옵션
   const years = [currentYear, currentYear - 1, currentYear - 2]
 
@@ -266,11 +291,10 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
         )}
       </div>
 
-      {/* Placeholder */}
-      <div className="mb-6">
-        <div className="relative overflow-hidden rounded-[14px] border border-white/[0.04] bg-white/[0.015] px-5 py-4">
-          <span className="text-[13px] text-dim">배당소득세 추적 — Phase 4-F에서 추가 예정</span>
-        </div>
+      {/* 배당소득세 섹션 */}
+      <div className="mb-8">
+        <h2 className="text-[14px] font-bold text-bright mb-3">배당소득세 ({year}년)</h2>
+        <DividendTaxCard summary={dividendTaxSummary} year={year} />
       </div>
 
       <p className="text-[11px] text-dim">
