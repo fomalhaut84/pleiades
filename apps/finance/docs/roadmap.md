@@ -62,8 +62,8 @@
 ## Phase 5: Simulator
 
 - [ ] **스톡옵션 관리**
-  - [ ] StockOption 모델 + StockOptionVesting 스케줄 (DB)
-  - [ ] 시드 데이터 (카카오 스톡옵션 4건 + 행사 일정)
+  - [x] StockOption 모델 + StockOptionVesting 스케줄 (DB)
+  - [x] 시드 데이터 (카카오 스톡옵션 4건 + 행사 일정)
   - [ ] 대시보드 — 부여별 내가치(intrinsic value), 행사 가능/대기/만료 상태, 만료일 카운트다운
   - [ ] 행사 시뮬레이터 — 목표 주가 입력 → 행사 이익 + 세금 계산
 - [ ] **근로소득 프로필 + 통합 세금 시뮬레이션**
