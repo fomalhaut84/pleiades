@@ -279,6 +279,6 @@ export const TICKER_MAP: Record<string, { displayName: string; market: string; c
   '472150.KS':  { displayName: 'SOL 미국배당미국채혼합50', market: 'KR', currency: 'KRW' },
   '035720.KS':  { displayName: '카카오',                  market: 'KR', currency: 'KRW' },
   '454910.KS':  { displayName: '두산로보틱스',             market: 'KR', currency: 'KRW' },
-  '241560.KQ':  { displayName: '컨텍',                    market: 'KR', currency: 'KRW' },
+  '451760.KQ':  { displayName: '컨텍',                    market: 'KR', currency: 'KRW' },
 };
 ```

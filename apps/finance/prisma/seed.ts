@@ -80,7 +80,7 @@ async function main() {
     { ticker: 'RKLB', displayName: 'RKLB', market: 'US', shares: 16, avgPriceFx: 6.05, currency: 'USD', tradedAt: '2024-01-10' },
     { ticker: '035720.KS', displayName: '카카오', market: 'KR', shares: 1, avgPrice: 45000, currency: 'KRW', tradedAt: '2025-02-01' },
     { ticker: '454910.KS', displayName: '두산로보틱스', market: 'KR', shares: 2, avgPrice: 26000, currency: 'KRW', tradedAt: '2025-03-01' },
-    { ticker: '241560.KQ', displayName: '컨텍', market: 'KR', shares: 12, avgPrice: 22500, currency: 'KRW', tradedAt: '2025-01-15' },
+    { ticker: '451760.KQ', displayName: '컨텍', market: 'KR', shares: 12, avgPrice: 22500, currency: 'KRW', tradedAt: '2025-01-15' },
   ]
 
   const sodamHoldings: HoldingSeed[] = [
@@ -102,6 +102,9 @@ async function main() {
   // === 삭제 + 생성을 단일 트랜잭션으로 실행 (all-or-nothing) ===
   await prisma.$transaction(async (tx) => {
     // 기존 데이터 정리
+    await tx.holdingSnapshot.deleteMany()
+    await tx.portfolioSnapshot.deleteMany()
+    await tx.benchmarkPrice.deleteMany()
     await tx.stockOptionVesting.deleteMany()
     await tx.stockOption.deleteMany()
     await tx.deposit.deleteMany()
@@ -113,13 +116,13 @@ async function main() {
 
     // 계좌 생성
     const sejin = await tx.account.create({
-      data: { name: '세진', strategy: 'index-focus', horizon: null },
+      data: { name: '세진', strategy: 'index-focus', horizon: null, benchmarkTicker: '^GSPC' },
     })
     const sodam = await tx.account.create({
-      data: { name: '소담', ownerAge: 9, strategy: 'balanced', horizon: 10 },
+      data: { name: '소담', ownerAge: 9, strategy: 'balanced', horizon: 10, benchmarkTicker: 'SCHD' },
     })
     const dasom = await tx.account.create({
-      data: { name: '다솜', ownerAge: 5, strategy: 'growth', horizon: 15 },
+      data: { name: '다솜', ownerAge: 5, strategy: 'growth', horizon: 15, benchmarkTicker: '^IXIC' },
     })
 
     // 보유종목 + Trade 생성

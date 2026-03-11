@@ -8,18 +8,20 @@ datasource db {
 }
 
 model Account {
-  id           String        @id @default(cuid())
-  name         String
-  ownerAge     Int?
-  strategy     String?
-  horizon      Int?
-  createdAt    DateTime      @default(now())
-  holdings     Holding[]
-  trades       Trade[]
-  deposits     Deposit[]
-  rsuSchedules RSUSchedule[]
-  stockOptions StockOption[]
-  dividends    Dividend[]
+  id                 String              @id @default(cuid())
+  name               String
+  ownerAge           Int?
+  strategy           String?
+  horizon            Int?
+  benchmarkTicker    String?
+  createdAt          DateTime            @default(now())
+  holdings           Holding[]
+  trades             Trade[]
+  deposits           Deposit[]
+  rsuSchedules       RSUSchedule[]
+  stockOptions       StockOption[]
+  dividends          Dividend[]
+  portfolioSnapshots PortfolioSnapshot[]
 }
 
 model Holding {
@@ -163,4 +165,42 @@ model Dividend {
 
   @@index([accountId, payDate])
   @@index([payDate])
+}
+
+model PortfolioSnapshot {
+  id               String            @id @default(cuid())
+  accountId        String
+  account          Account           @relation(fields: [accountId], references: [id])
+  snapshotDate     DateTime
+  totalValueKRW    Float
+  totalCostKRW     Float
+  fxRate           Float
+  createdAt        DateTime          @default(now())
+  holdingSnapshots HoldingSnapshot[]
+
+  @@unique([accountId, snapshotDate])
+}
+
+model HoldingSnapshot {
+  id                  String            @id @default(cuid())
+  portfolioSnapshotId String
+  portfolioSnapshot   PortfolioSnapshot @relation(fields: [portfolioSnapshotId], references: [id], onDelete: Cascade)
+  ticker              String
+  displayName         String
+  shares              Float
+  price               Float
+  currency            String
+  valueKRW            Float
+
+  @@index([portfolioSnapshotId])
+}
+
+model BenchmarkPrice {
+  id        String   @id @default(cuid())
+  ticker    String
+  priceDate DateTime
+  close     Float
+  currency  String   @default("USD")
+
+  @@unique([ticker, priceDate])
 }

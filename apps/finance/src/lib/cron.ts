@@ -1,5 +1,6 @@
 import cron from 'node-cron'
 import { refreshPrices } from './price-fetcher'
+import { takeAllSnapshots } from './performance/snapshot'
 
 /** 현재 시각을 KST 기준으로 반환 (시, 분, 요일) */
 function getKSTTime(): { h: number; m: number; day: number } {
@@ -74,4 +75,24 @@ export function schedulePriceUpdates(): void {
   )
 
   console.log('[cron] 주가 스케줄러 등록 (장중 10분 / 장외 1시간)')
+}
+
+/**
+ * 일일 포트폴리오 스냅샷 스케줄러.
+ * 매일 06:05 KST (월~토) 실행. 미국장 종료 후 최신가 반영.
+ */
+export function scheduleSnapshots(): void {
+  cron.schedule(
+    '5 6 * * 1-6',
+    async () => {
+      try {
+        await takeAllSnapshots()
+      } catch (error) {
+        console.error('[cron] Snapshot failed:', error)
+      }
+    },
+    { timezone: 'Asia/Seoul' }
+  )
+
+  console.log('[cron] 스냅샷 스케줄러 등록 (매일 06:05 KST, 월~토)')
 }
