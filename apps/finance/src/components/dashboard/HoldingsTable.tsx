@@ -46,28 +46,28 @@ export default function HoldingsTable({ holdings, priceMap, currentFxRate, hasPr
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-white/[0.02]">
+              <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-card">
                 종목
               </th>
-              <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-white/[0.02]">
+              <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-card">
                 시장
               </th>
-              <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-white/[0.02]">
+              <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-card">
                 수량
               </th>
-              <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-white/[0.02]">
+              <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-card">
                 평균단가
               </th>
               {hasPriceData && (
-                <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-white/[0.02]">
+                <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-card">
                   현재가
                 </th>
               )}
-              <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-white/[0.02]">
+              <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-card">
                 {hasPriceData ? '평가금' : '매입금'}
               </th>
               {hasPriceData && (
-                <th className="px-4 py-2.5 text-right text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-white/[0.02]">
+                <th className="px-4 py-2.5 text-right text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-card">
                   수익률
                 </th>
               )}
@@ -85,11 +85,11 @@ export default function HoldingsTable({ holdings, priceMap, currentFxRate, hasPr
                 : null
 
               return (
-                <tr key={h.id} className="hover:bg-white/[0.015]">
-                  <td className="px-4 py-3 text-[13px] border-b border-white/[0.025]">
+                <tr key={h.id} className="hover:bg-card">
+                  <td className="px-4 py-3 text-[13px] border-b border-border">
                     <span className="font-bold text-bright">{h.displayName}</span>
                   </td>
-                  <td className="px-3 py-3 text-[13px] border-b border-white/[0.025]">
+                  <td className="px-3 py-3 text-[13px] border-b border-border">
                     <span
                       className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
                         h.market === 'US'
@@ -100,16 +100,16 @@ export default function HoldingsTable({ holdings, priceMap, currentFxRate, hasPr
                       {h.market}
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-[13px] text-right border-b border-white/[0.025]">
+                  <td className="px-3 py-3 text-[13px] text-right border-b border-border">
                     {h.shares}주
                   </td>
-                  <td className="px-3 py-3 text-right border-b border-white/[0.025]">
+                  <td className="px-3 py-3 text-right border-b border-border">
                     <div className={h.currency === 'USD' ? 'text-[11px] text-sub' : 'text-[13px] text-muted font-semibold'}>
                       {h.currency === 'USD' ? formatUSD(h.avgPriceFx ?? h.avgPrice) : formatKRW(h.avgPrice)}
                     </div>
                   </td>
                   {hasPriceData && (
-                    <td className="px-3 py-3 text-right border-b border-white/[0.025]">
+                    <td className="px-3 py-3 text-right border-b border-border">
                       {price ? (
                         <div className={h.currency === 'USD' ? 'text-[11px] text-sub' : 'text-[13px] text-muted font-semibold'}>
                           {h.currency === 'USD' ? formatUSD(price.price) : formatKRW(price.price)}
@@ -119,13 +119,13 @@ export default function HoldingsTable({ holdings, priceMap, currentFxRate, hasPr
                       )}
                     </td>
                   )}
-                  <td className="px-3 py-3 text-right border-b border-white/[0.025]">
+                  <td className="px-3 py-3 text-right border-b border-border">
                     <span className="font-semibold text-muted tabular-nums">
                       {formatKRW(currentValue)}
                     </span>
                   </td>
                   {hasPriceData && (
-                    <td className="px-4 py-3 text-right border-b border-white/[0.025]">
+                    <td className="px-4 py-3 text-right border-b border-border">
                       {pl ? (
                         <div>
                           <div className={`font-bold tabular-nums ${pl.returnPct >= 0 ? 'text-sejin' : 'text-red-500'}`}>

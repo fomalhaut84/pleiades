@@ -71,7 +71,7 @@ export default function DepositForm({ accounts }: DepositFormProps) {
     }
   }
 
-  const inputClasses = 'w-full bg-white/[0.035] border border-white/[0.06] rounded-lg px-3.5 py-2.5 text-[13px] text-bright placeholder-dim focus:outline-none focus:bg-white/[0.055] focus:border-white/[0.14] transition-colors'
+  const inputClasses = 'w-full bg-surface-dim border border-border rounded-lg px-3.5 py-2.5 text-[13px] text-bright placeholder-dim focus:outline-none focus:bg-surface focus:border-border-hover transition-colors'
   const labelClasses = 'block text-[12px] font-semibold text-sub mb-1.5'
 
   return (
@@ -92,7 +92,7 @@ export default function DepositForm({ accounts }: DepositFormProps) {
                   className={`py-2.5 rounded-lg text-[13px] font-semibold border transition-all ${
                     isActive
                       ? `${colors?.bg} ${colors?.border} ${colors?.text}`
-                      : 'border-white/[0.06] text-sub hover:bg-white/[0.03] hover:text-muted'
+                      : 'border-border text-sub hover:bg-surface-dim hover:text-muted'
                   }`}
                 >
                   {account.name}
@@ -130,8 +130,8 @@ export default function DepositForm({ accounts }: DepositFormProps) {
                 onClick={() => setSource(s)}
                 className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-all ${
                   source === s
-                    ? 'bg-white/[0.07] text-bright border-white/[0.1]'
-                    : 'border-white/[0.06] text-sub hover:bg-white/[0.03]'
+                    ? 'bg-surface text-bright border-border-hover'
+                    : 'border-border text-sub hover:bg-surface-dim'
                 }`}
               >
                 {s}
@@ -176,7 +176,7 @@ export default function DepositForm({ accounts }: DepositFormProps) {
 
         {/* 요약 */}
         {parsedAmount > 0 && (
-          <div className="bg-white/[0.025] border border-white/[0.06] rounded-lg px-4 py-3 flex items-center justify-between">
+          <div className="bg-card border border-border rounded-lg px-4 py-3 flex items-center justify-between">
             <span className="text-[12px] text-sub">입금액</span>
             <div className="text-[15px] font-bold text-bright tabular-nums">
               {parsedAmount.toLocaleString('ko-KR')}원

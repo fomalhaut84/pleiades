@@ -85,7 +85,7 @@ export default function DepositEditPanel({ deposit, onClose }: DepositEditPanelP
     }
   }
 
-  const inputClasses = 'w-full bg-white/[0.035] border border-white/[0.06] rounded-lg px-3.5 py-2.5 text-[13px] text-bright placeholder-dim focus:outline-none focus:bg-white/[0.055] focus:border-white/[0.14] transition-colors'
+  const inputClasses = 'w-full bg-surface-dim border border-border rounded-lg px-3.5 py-2.5 text-[13px] text-bright placeholder-dim focus:outline-none focus:bg-surface focus:border-border-hover transition-colors'
   const labelClasses = 'block text-[12px] font-semibold text-sub mb-1.5'
 
   return (
@@ -94,7 +94,7 @@ export default function DepositEditPanel({ deposit, onClose }: DepositEditPanelP
       <div className="fixed top-0 right-0 h-full w-full max-w-[420px] bg-bg-raised border-l border-border z-50 overflow-y-auto animate-slide-in">
         <div className="px-6 py-5 border-b border-border flex items-center justify-between">
           <h2 className="text-[15px] font-bold text-bright">입금 수정</h2>
-          <button onClick={onClose} className="p-1.5 rounded-md text-sub hover:text-bright hover:bg-white/[0.05] transition-all">
+          <button onClick={onClose} className="p-1.5 rounded-md text-sub hover:text-bright hover:bg-surface transition-all">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M4 4l8 8M12 4l-8 8" />
             </svg>
@@ -103,7 +103,7 @@ export default function DepositEditPanel({ deposit, onClose }: DepositEditPanelP
 
         <form onSubmit={handleSubmit} className="px-6 py-5 flex flex-col gap-5">
           {/* 고정 정보 */}
-          <div className="bg-white/[0.02] rounded-lg px-4 py-3 flex items-center justify-between">
+          <div className="bg-card rounded-lg px-4 py-3 flex items-center justify-between">
             <span className="text-[11px] text-dim">계좌</span>
             <span className={`text-[13px] font-semibold ${ACCOUNT_COLORS[deposit.account.name] ?? 'text-muted'}`}>
               {deposit.account.name}
@@ -137,8 +137,8 @@ export default function DepositEditPanel({ deposit, onClose }: DepositEditPanelP
                   onClick={() => setSource(s)}
                   className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-all ${
                     source === s
-                      ? 'bg-white/[0.07] text-bright border-white/[0.1]'
-                      : 'border-white/[0.06] text-sub hover:bg-white/[0.03]'
+                      ? 'bg-surface text-bright border-border-hover'
+                      : 'border-border text-sub hover:bg-surface-dim'
                   }`}
                 >
                   {s}
@@ -183,7 +183,7 @@ export default function DepositEditPanel({ deposit, onClose }: DepositEditPanelP
 
           {/* 요약 */}
           {parsedAmount > 0 && (
-            <div className="bg-white/[0.025] border border-white/[0.06] rounded-lg px-4 py-3 flex items-center justify-between">
+            <div className="bg-card border border-border rounded-lg px-4 py-3 flex items-center justify-between">
               <span className="text-[12px] text-sub">수정 후 금액</span>
               <div className="text-[15px] font-bold text-bright tabular-nums">
                 {parsedAmount.toLocaleString('ko-KR')}원
@@ -196,7 +196,7 @@ export default function DepositEditPanel({ deposit, onClose }: DepositEditPanelP
           )}
 
           <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-lg text-[13px] font-semibold text-sub border border-white/[0.06] hover:bg-white/[0.04] transition-all">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-lg text-[13px] font-semibold text-sub border border-border hover:bg-surface-dim transition-all">
               취소
             </button>
             <button type="submit" disabled={isSubmitting} className="flex-1 py-2.5 rounded-lg text-[13px] font-bold bg-sodam/15 text-sodam border border-sodam/25 hover:bg-sodam/25 disabled:opacity-40 transition-all">

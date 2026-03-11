@@ -137,7 +137,7 @@ export default function PerformanceClient({ accounts, hasSnapshots }: Performanc
   }
 
   const selectedAccountName = accounts.find((a) => a.id === selectedAccount)?.name ?? ''
-  const accountColor = ACCOUNT_COLORS[selectedAccountName] ?? '#9494a8'
+  const accountColor = ACCOUNT_COLORS[selectedAccountName] ?? 'var(--sub)'
 
   if (!hasSnapshots) {
     return (
@@ -154,7 +154,7 @@ export default function PerformanceClient({ accounts, hasSnapshots }: Performanc
               type="button"
               onClick={handleTriggerSnapshot}
               disabled={triggeringSnapshot}
-              className="px-4 py-2 text-[12px] font-semibold bg-white/[0.07] border border-white/[0.12] rounded-lg text-bright hover:bg-white/[0.1] transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-[12px] font-semibold bg-surface border border-border-hover rounded-lg text-bright hover:bg-surface-hover transition-colors disabled:opacity-50"
             >
               {triggeringSnapshot ? '생성 중...' : '스냅샷 생성'}
             </button>
@@ -162,7 +162,7 @@ export default function PerformanceClient({ accounts, hasSnapshots }: Performanc
               type="button"
               onClick={handleBackfill}
               disabled={backfilling}
-              className="px-4 py-2 text-[12px] font-semibold bg-white/[0.07] border border-white/[0.12] rounded-lg text-bright hover:bg-white/[0.1] transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-[12px] font-semibold bg-surface border border-border-hover rounded-lg text-bright hover:bg-surface-hover transition-colors disabled:opacity-50"
             >
               {backfilling ? '수집 중...' : '벤치마크 수집'}
             </button>
@@ -185,13 +185,13 @@ export default function PerformanceClient({ accounts, hasSnapshots }: Performanc
               onClick={() => setSelectedAccount(a.id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold rounded-md border transition-colors ${
                 selectedAccount === a.id
-                  ? 'bg-white/[0.07] border-white/[0.12] text-bright'
-                  : 'bg-white/[0.02] border-white/[0.04] text-dim hover:text-sub'
+                  ? 'bg-surface border-border-hover text-bright'
+                  : 'bg-card border-border text-dim hover:text-sub'
               }`}
             >
               <span
                 className="w-1.5 h-1.5 rounded-full"
-                style={{ background: ACCOUNT_COLORS[a.name] ?? '#9494a8' }}
+                style={{ background: ACCOUNT_COLORS[a.name] ?? 'var(--sub)' }}
               />
               {a.name}
             </button>
@@ -207,8 +207,8 @@ export default function PerformanceClient({ accounts, hasSnapshots }: Performanc
               onClick={() => setPeriod(p)}
               className={`px-2.5 py-1.5 text-[11px] font-semibold rounded-md border transition-colors ${
                 period === p
-                  ? 'bg-white/[0.07] border-white/[0.12] text-bright'
-                  : 'bg-white/[0.02] border-white/[0.04] text-dim hover:text-sub'
+                  ? 'bg-surface border-border-hover text-bright'
+                  : 'bg-card border-border text-dim hover:text-sub'
               }`}
             >
               {PERIOD_LABELS[p] ?? p}
@@ -222,7 +222,7 @@ export default function PerformanceClient({ accounts, hasSnapshots }: Performanc
             type="button"
             onClick={handleTriggerSnapshot}
             disabled={triggeringSnapshot}
-            className="px-3 py-1.5 text-[11px] font-semibold bg-white/[0.04] border border-white/[0.06] rounded-md text-sub hover:text-bright hover:bg-white/[0.07] transition-colors disabled:opacity-50"
+            className="px-3 py-1.5 text-[11px] font-semibold bg-surface-dim border border-border rounded-md text-sub hover:text-bright hover:bg-surface transition-colors disabled:opacity-50"
           >
             {triggeringSnapshot ? '...' : '스냅샷'}
           </button>
@@ -230,7 +230,7 @@ export default function PerformanceClient({ accounts, hasSnapshots }: Performanc
             type="button"
             onClick={handleBackfill}
             disabled={backfilling}
-            className="px-3 py-1.5 text-[11px] font-semibold bg-white/[0.04] border border-white/[0.06] rounded-md text-sub hover:text-bright hover:bg-white/[0.07] transition-colors disabled:opacity-50"
+            className="px-3 py-1.5 text-[11px] font-semibold bg-surface-dim border border-border rounded-md text-sub hover:text-bright hover:bg-surface transition-colors disabled:opacity-50"
           >
             {backfilling ? '...' : '벤치마크'}
           </button>

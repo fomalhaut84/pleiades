@@ -32,8 +32,8 @@ export default function ContributionTable({ data, loading }: ContributionTablePr
     return (
       <div className="relative overflow-hidden rounded-[14px] border border-border bg-card p-5">
         <div className="animate-pulse flex flex-col gap-3">
-          <div className="h-4 bg-white/[0.04] rounded w-32" />
-          <div className="h-40 bg-white/[0.04] rounded" />
+          <div className="h-4 bg-surface-dim rounded w-32" />
+          <div className="h-40 bg-surface-dim rounded" />
         </div>
       </div>
     )
@@ -62,7 +62,7 @@ export default function ContributionTable({ data, loading }: ContributionTablePr
       <div className="overflow-x-auto">
         <table className="w-full text-[12px]">
           <thead>
-            <tr className="text-dim border-b border-white/[0.06]">
+            <tr className="text-dim border-b border-border">
               <th className="text-left py-2 font-medium">종목</th>
               <th className="text-right py-2 font-medium">비중</th>
               <th className="text-right py-2 font-medium">수익률</th>
@@ -71,7 +71,7 @@ export default function ContributionTable({ data, loading }: ContributionTablePr
           </thead>
           <tbody>
             {data.holdings.map((h) => (
-              <tr key={h.ticker} className="border-b border-white/[0.03]">
+              <tr key={h.ticker} className="border-b border-border">
                 <td className="py-2.5 text-bright font-medium">{h.displayName}</td>
                 <td className="py-2.5 text-right text-sub tabular-nums">
                   {h.weightStart.toFixed(1)}%

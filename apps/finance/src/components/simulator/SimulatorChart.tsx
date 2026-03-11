@@ -82,7 +82,7 @@ function CustomTooltip({ active, payload, label, displayNameMap }: any) {
   if (!active || !payload?.length) return null
 
   return (
-    <div className="bg-[#1a1a2e] border border-white/[0.08] rounded-lg px-3 py-2 shadow-xl">
+    <div className="bg-bg-raised border border-border rounded-lg px-3 py-2 shadow-xl">
       <div className="text-[11px] text-dim mb-1.5">{label}년 후</div>
       {payload.map((entry: { name: string; value: number; color: string }) => (
         <div key={entry.name} className="flex items-center gap-2 text-[11px]">
@@ -115,7 +115,7 @@ export default function SimulatorChart({
   const displayNameMap = new Map<string, string>()
 
   for (const sim of simulations) {
-    const color = ACCOUNT_COLORS[sim.accountName] ?? '#9494a8'
+    const color = ACCOUNT_COLORS[sim.accountName] ?? 'var(--sub)'
     const scenarios = selectedScenario
       ? sim.scenarios.filter((s) => s.scenarioName === selectedScenario)
       : sim.scenarios
@@ -149,16 +149,16 @@ export default function SimulatorChart({
       <div className="h-[320px]">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
             <XAxis
               dataKey="year"
-              tick={{ fontSize: 11, fill: '#6e6e82' }}
+              tick={{ fontSize: 11, fill: 'var(--dim)' }}
               tickLine={false}
-              axisLine={{ stroke: 'rgba(255,255,255,0.06)' }}
+              axisLine={{ stroke: 'var(--border)' }}
               unit="년"
             />
             <YAxis
-              tick={{ fontSize: 11, fill: '#6e6e82' }}
+              tick={{ fontSize: 11, fill: 'var(--dim)' }}
               tickLine={false}
               axisLine={false}
               tickFormatter={formatAxisValue}
@@ -184,12 +184,12 @@ export default function SimulatorChart({
               <ReferenceLine
                 key={`${m.label}-${i}`}
                 x={m.year}
-                stroke="rgba(255,255,255,0.15)"
+                stroke="var(--border-hover)"
                 strokeDasharray="3 3"
                 label={{
                   value: m.label,
                   position: 'top',
-                  fill: '#9494a8',
+                  fill: 'var(--sub)',
                   fontSize: 10,
                 }}
               />

@@ -74,7 +74,7 @@ export default function DeleteModal({ trade, onClose }: DeleteModalProps) {
           <div className="px-6 py-5">
             <h2 className="text-[15px] font-bold text-bright mb-4">거래 삭제</h2>
 
-            <div className="bg-white/[0.025] border border-white/[0.04] rounded-lg px-4 py-3 mb-4">
+            <div className="bg-card border border-border rounded-lg px-4 py-3 mb-4">
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] text-dim">종목</span>
@@ -126,7 +126,7 @@ export default function DeleteModal({ trade, onClose }: DeleteModalProps) {
           <div className="px-6 py-4 border-t border-border flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-lg text-[13px] font-semibold text-sub border border-white/[0.06] hover:bg-white/[0.04] transition-all"
+              className="flex-1 py-2.5 rounded-lg text-[13px] font-semibold text-sub border border-border hover:bg-surface-dim transition-all"
             >
               취소
             </button>

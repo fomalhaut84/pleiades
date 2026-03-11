@@ -10,7 +10,7 @@ export default function ExportButton({ href, label = 'CSV' }: ExportButtonProps)
     <a
       href={href}
       download
-      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.04] text-sub text-[12px] sm:text-[13px] font-semibold border border-white/[0.06] hover:bg-white/[0.08] transition-all"
+      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface-dim text-sub text-[12px] sm:text-[13px] font-semibold border border-border hover:bg-surface-hover transition-all"
     >
       <span className="hidden sm:inline">↓</span> {label}
     </a>

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import ThemeToggle from '@/components/theme/ThemeToggle'
 
 interface BottomTabProps {
   accounts: { id: string; name: string }[]
@@ -55,7 +56,7 @@ export default function BottomTab({ accounts }: BottomTabProps) {
                   href={item.href}
                   onClick={() => setMoreOpen(false)}
                   className={`flex flex-col items-center gap-1 py-2.5 rounded-lg transition-colors ${
-                    pathname.startsWith(item.href) ? 'text-bright bg-white/[0.05]' : 'text-sub'
+                    pathname.startsWith(item.href) ? 'text-bright bg-surface' : 'text-sub'
                   }`}
                 >
                   <span className="text-lg">{item.icon}</span>
@@ -64,9 +65,12 @@ export default function BottomTab({ accounts }: BottomTabProps) {
               ))}
             </div>
 
-            {/* 계좌 바로가기 */}
-            <div className="border-t border-white/[0.06] pt-2">
-              <div className="text-[10px] text-dim font-bold tracking-wider uppercase px-1 mb-1.5">계좌</div>
+            {/* 계좌 바로가기 + 테마 토글 */}
+            <div className="border-t border-border pt-2">
+              <div className="flex items-center justify-between px-1 mb-1.5">
+                <div className="text-[10px] text-dim font-bold tracking-wider uppercase">계좌</div>
+                <ThemeToggle />
+              </div>
               <div className="flex gap-2">
                 {accounts.map((account) => (
                   <Link
@@ -74,7 +78,7 @@ export default function BottomTab({ accounts }: BottomTabProps) {
                     href={`/accounts/${account.id}`}
                     onClick={() => setMoreOpen(false)}
                     className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-colors ${
-                      pathname === `/accounts/${account.id}` ? 'text-bright bg-white/[0.05]' : 'text-sub'
+                      pathname === `/accounts/${account.id}` ? 'text-bright bg-surface' : 'text-sub'
                     }`}
                   >
                     <span className={`text-lg ${colorMap[account.name] ?? ''}`}>●</span>

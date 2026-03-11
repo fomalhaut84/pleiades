@@ -57,7 +57,7 @@ export default async function AccountDetailPage({ params }: PageProps) {
   const lastUpdatedAt = getLastUpdatedAt(prices)
 
   const colors = COLOR_MAP[account.name] ?? {
-    color: '#9494a8',
+    color: 'var(--sub)',
     text: 'text-sub',
     tagBg: 'rgba(148,148,168,0.1)',
   }
@@ -157,11 +157,11 @@ export default async function AccountDetailPage({ params }: PageProps) {
               {strategyText}
             </span>
             {horizonText && (
-              <span className="text-[12px] font-semibold text-sub bg-white/[0.04] px-2.5 py-1 rounded">
+              <span className="text-[12px] font-semibold text-sub bg-surface-dim px-2.5 py-1 rounded">
                 {horizonText}
               </span>
             )}
-            <span className="text-[12px] font-semibold text-sub bg-white/[0.04] px-2.5 py-1 rounded">
+            <span className="text-[12px] font-semibold text-sub bg-surface-dim px-2.5 py-1 rounded">
               {account.holdings.length}종목
             </span>
           </div>

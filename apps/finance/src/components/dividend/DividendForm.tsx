@@ -144,7 +144,7 @@ export default function DividendForm({ accounts }: DividendFormProps) {
     }
   }
 
-  const inputClasses = 'w-full bg-white/[0.035] border border-white/[0.06] rounded-lg px-3.5 py-2.5 text-[13px] text-bright placeholder-dim focus:outline-none focus:bg-white/[0.055] focus:border-white/[0.14] transition-colors'
+  const inputClasses = 'w-full bg-surface-dim border border-border rounded-lg px-3.5 py-2.5 text-[13px] text-bright placeholder-dim focus:outline-none focus:bg-surface focus:border-border-hover transition-colors'
   const labelClasses = 'block text-[12px] font-semibold text-sub mb-1.5'
 
   return (
@@ -165,7 +165,7 @@ export default function DividendForm({ accounts }: DividendFormProps) {
                   className={`py-2.5 rounded-lg text-[13px] font-semibold border transition-all ${
                     isActive
                       ? `${colors?.bg} ${colors?.border} ${colors?.text}`
-                      : 'border-white/[0.06] text-sub hover:bg-white/[0.03] hover:text-muted'
+                      : 'border-border text-sub hover:bg-surface-dim hover:text-muted'
                   }`}
                 >
                   {account.name}
@@ -226,14 +226,14 @@ export default function DividendForm({ accounts }: DividendFormProps) {
               </div>
               <div>
                 <label className={labelClasses}>통화</label>
-                <div className="grid grid-cols-2 gap-0 rounded-lg border border-white/[0.06] overflow-hidden">
+                <div className="grid grid-cols-2 gap-0 rounded-lg border border-border overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setManualCurrency('KRW')}
                     className={`py-2 text-[12px] font-bold transition-all ${
                       manualCurrency === 'KRW'
                         ? 'bg-amber-400/15 text-amber-400'
-                        : 'text-sub hover:bg-white/[0.03]'
+                        : 'text-sub hover:bg-surface-dim'
                     }`}
                   >
                     KRW
@@ -241,10 +241,10 @@ export default function DividendForm({ accounts }: DividendFormProps) {
                   <button
                     type="button"
                     onClick={() => setManualCurrency('USD')}
-                    className={`py-2 text-[12px] font-bold border-l border-white/[0.06] transition-all ${
+                    className={`py-2 text-[12px] font-bold border-l border-border transition-all ${
                       manualCurrency === 'USD'
                         ? 'bg-sodam/15 text-sodam'
-                        : 'text-sub hover:bg-white/[0.03]'
+                        : 'text-sub hover:bg-surface-dim'
                     }`}
                   >
                     USD
@@ -367,14 +367,14 @@ export default function DividendForm({ accounts }: DividendFormProps) {
             type="checkbox"
             checked={reinvested}
             onChange={(e) => setReinvested(e.target.checked)}
-            className="w-4 h-4 rounded border-white/[0.1] bg-white/[0.03] text-sodam focus:ring-sodam/30"
+            className="w-4 h-4 rounded border-border-hover bg-surface-dim text-sodam focus:ring-sodam/30"
           />
           <span className="text-[13px] text-sub">배당 재투자</span>
         </label>
 
         {/* 요약 */}
         {parsedGross > 0 && (
-          <div className="bg-white/[0.025] border border-white/[0.06] rounded-lg px-4 py-3 flex items-center justify-between">
+          <div className="bg-card border border-border rounded-lg px-4 py-3 flex items-center justify-between">
             <span className="text-[12px] text-sub">원화 환산 세후</span>
             <div className="text-right">
               <div className="text-[15px] font-bold text-bright tabular-nums">

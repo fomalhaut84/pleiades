@@ -49,7 +49,7 @@ export default function RefreshButton({ lastUpdatedAt }: RefreshButtonProps) {
         onClick={handleRefresh}
         disabled={isRefreshing}
         title="주가 새로고침"
-        className="w-8 h-8 rounded-lg border border-border bg-card text-sub hover:bg-card-hover hover:text-bright hover:border-white/[0.12] transition-all flex items-center justify-center disabled:opacity-50"
+        className="w-8 h-8 rounded-lg border border-border bg-card text-sub hover:bg-card-hover hover:text-bright hover:border-border-hover transition-all flex items-center justify-center disabled:opacity-50"
       >
         <svg
           width="14"

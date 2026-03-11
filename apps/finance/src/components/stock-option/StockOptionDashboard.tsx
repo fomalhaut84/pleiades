@@ -94,7 +94,7 @@ export default function StockOptionDashboard({ overview, currentPrice }: StockOp
                   {opt.remainingShares}주 / {opt.exercisableShares}주
                 </span>
               </div>
-              <div className="h-px bg-white/[0.04]" />
+              <div className="h-px bg-surface-dim" />
               <div className="flex items-center justify-between">
                 <span className="text-[12px] font-semibold text-sub">내가치 (전체)</span>
                 <span className={`text-[14px] font-bold tabular-nums ${
@@ -107,7 +107,7 @@ export default function StockOptionDashboard({ overview, currentPrice }: StockOp
 
             {/* 베스팅 일정 */}
             {opt.vestings.length > 1 && (
-              <div className="mt-3 bg-white/[0.02] rounded-lg px-3 py-2.5">
+              <div className="mt-3 bg-card rounded-lg px-3 py-2.5">
                 <div className="text-[11px] text-dim mb-1.5">베스팅 일정</div>
                 {opt.vestings.map((v) => (
                   <div key={v.id} className="flex items-center justify-between py-0.5">

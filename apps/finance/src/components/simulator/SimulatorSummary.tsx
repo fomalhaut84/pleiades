@@ -26,7 +26,7 @@ export default function SimulatorSummary({ simulations, years }: SimulatorSummar
 
         if (!base) return null
 
-        const color = ACCOUNT_COLORS[sim.accountName] ?? '#9494a8'
+        const color = ACCOUNT_COLORS[sim.accountName] ?? 'var(--sub)'
 
         return (
           <div
@@ -55,7 +55,7 @@ export default function SimulatorSummary({ simulations, years }: SimulatorSummar
                   </span>
                 </div>
 
-                <div className="h-px bg-white/[0.04]" />
+                <div className="h-px bg-surface-dim" />
 
                 {pessimistic && (
                   <div className="flex items-center justify-between">
@@ -80,7 +80,7 @@ export default function SimulatorSummary({ simulations, years }: SimulatorSummar
                   </div>
                 )}
 
-                <div className="h-px bg-white/[0.04]" />
+                <div className="h-px bg-surface-dim" />
 
                 <div className="flex items-center justify-between">
                   <span className="text-[12px] text-sub">투입금 합계</span>
@@ -98,7 +98,7 @@ export default function SimulatorSummary({ simulations, years }: SimulatorSummar
                 {/* 마일스톤 */}
                 {sim.milestones.length > 0 && (
                   <>
-                    <div className="h-px bg-white/[0.04]" />
+                    <div className="h-px bg-surface-dim" />
                     <div className="text-[11px] text-dim font-semibold mb-0.5">마일스톤</div>
                     {sim.milestones.map((m) => (
                       <div key={m.label} className="flex items-center justify-between">
@@ -114,7 +114,7 @@ export default function SimulatorSummary({ simulations, years }: SimulatorSummar
                 {/* 증여세 한도 */}
                 {sim.giftLimitMonth != null && (
                   <>
-                    <div className="h-px bg-white/[0.04]" />
+                    <div className="h-px bg-surface-dim" />
                     {sim.giftLimitMonth === 0 ? (
                       <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-1.5">
                         <span className="text-[11px] text-red-400">

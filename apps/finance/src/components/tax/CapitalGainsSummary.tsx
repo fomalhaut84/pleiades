@@ -47,7 +47,7 @@ export default function CapitalGainsSummary({
           <div className="px-5 py-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-[13px] font-bold text-bright">해외주식 양도소득세</h3>
-              <span className="text-[11px] text-dim px-1.5 py-0.5 rounded bg-white/[0.04]">
+              <span className="text-[11px] text-dim px-1.5 py-0.5 rounded bg-surface-dim">
                 {(FOREIGN_STOCK_TAX_RATE * 100).toFixed(0)}%
               </span>
             </div>
@@ -65,7 +65,7 @@ export default function CapitalGainsSummary({
                 <span className="text-[12px] text-sub">기본공제</span>
                 <span className="text-[12px] text-dim tabular-nums">-{formatKRW(FOREIGN_STOCK_DEDUCTION)}</span>
               </div>
-              <div className="h-px bg-white/[0.04]" />
+              <div className="h-px bg-surface-dim" />
               <div className="flex items-center justify-between">
                 <span className="text-[12px] text-sub">과세 대상</span>
                 <span className="text-[13px] font-semibold text-muted tabular-nums">
@@ -89,7 +89,7 @@ export default function CapitalGainsSummary({
           <div className="px-5 py-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-[13px] font-bold text-bright">국내 ETF 배당소득세</h3>
-              <span className="text-[11px] text-dim px-1.5 py-0.5 rounded bg-white/[0.04]">
+              <span className="text-[11px] text-dim px-1.5 py-0.5 rounded bg-surface-dim">
                 {(KR_ETF_TAX_RATE * 100).toFixed(1)}%
               </span>
             </div>
@@ -101,7 +101,7 @@ export default function CapitalGainsSummary({
                   +{formatKRW(krEtfGain)}
                 </span>
               </div>
-              <div className="h-px bg-white/[0.04]" />
+              <div className="h-px bg-surface-dim" />
               <div className="flex items-center justify-between">
                 <span className="text-[12px] font-semibold text-sub">예상 세금</span>
                 <span className="text-[14px] font-bold text-bright tabular-nums">
@@ -115,7 +115,7 @@ export default function CapitalGainsSummary({
 
       {/* 합계 */}
       {(hasForeign || hasKrEtf) && totalEstimatedTax > 0 && (
-        <div className="relative overflow-hidden rounded-[14px] border border-white/[0.08] bg-white/[0.02] px-5 py-4">
+        <div className="relative overflow-hidden rounded-[14px] border border-border bg-card px-5 py-4">
           <div className="flex items-center justify-between">
             <span className="text-[13px] font-bold text-sub">{year}년 예상 양도세 합계</span>
             <span className="text-[17px] font-bold text-bright tabular-nums">

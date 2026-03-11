@@ -9,7 +9,7 @@ interface HeaderProps {
 
 export default function Header({ title, sub, badge, children }: HeaderProps) {
   return (
-    <div className="sticky top-0 z-40 px-4 sm:px-8 py-4 sm:py-5 bg-[rgba(7,8,12,0.85)] backdrop-blur-xl border-b border-border flex justify-between items-center">
+    <div className="sticky top-0 z-40 px-4 sm:px-8 py-4 sm:py-5 bg-header-blur backdrop-blur-xl border-b border-border flex justify-between items-center">
       <div>
         <div className="text-[15px] font-bold text-bright">{title}</div>
         {sub && <div className="text-[12px] text-sub mt-0.5">{sub}</div>}
@@ -17,7 +17,7 @@ export default function Header({ title, sub, badge, children }: HeaderProps) {
       <div className="flex items-center gap-3">
         {children}
         {badge && (
-          <div className="text-[11px] text-sub bg-white/[0.04] px-3 py-1.5 rounded-md border border-border">
+          <div className="text-[11px] text-sub bg-surface-dim px-3 py-1.5 rounded-md border border-border">
             {badge}
           </div>
         )}

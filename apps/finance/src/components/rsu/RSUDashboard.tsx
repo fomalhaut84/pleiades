@@ -165,7 +165,7 @@ export default function RSUDashboard({ schedules: initialSchedules }: RSUDashboa
                     value={vestPrice}
                     onChange={(e) => setVestPrice(e.target.value)}
                     placeholder="예: 45000"
-                    className="w-full max-w-[240px] px-3 py-2 rounded-lg bg-white/[0.04] border border-border text-[13px] text-bright placeholder:text-dim focus:outline-none focus:border-sejin/50"
+                    className="w-full max-w-[240px] px-3 py-2 rounded-lg bg-surface-dim border border-border text-[13px] text-bright placeholder:text-dim focus:outline-none focus:border-sejin/50"
                   />
                 </div>
 
@@ -182,7 +182,7 @@ export default function RSUDashboard({ schedules: initialSchedules }: RSUDashboa
                 )}
 
                 {vestPrice && parseFloat(vestPrice) > 0 && (
-                  <div className="p-3 rounded-lg bg-white/[0.02] border border-border text-[12px] text-sub space-y-1">
+                  <div className="p-3 rounded-lg bg-card border border-border text-[12px] text-sub space-y-1">
                     <div className="text-muted font-medium mb-1">요약</div>
                     <div>취득: {schedule.shares}주 x {formatKRW(parseFloat(vestPrice))} = {formatKRW(schedule.shares * parseFloat(vestPrice))}</div>
                     {autoSell && schedule.sellShares != null && schedule.sellShares > 0 && (

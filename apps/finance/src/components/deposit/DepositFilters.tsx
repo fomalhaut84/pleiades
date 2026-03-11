@@ -44,13 +44,13 @@ export default function DepositFilters({ accounts }: DepositFiltersProps) {
   const years = [currentYear, currentYear - 1, currentYear - 2]
 
   const segmentBase = 'px-3 py-1.5 text-[12px] font-semibold rounded-md transition-all cursor-pointer'
-  const segmentActive = 'bg-white/[0.07] text-bright'
-  const segmentInactive = 'text-sub hover:text-muted hover:bg-white/[0.03]'
+  const segmentActive = 'bg-surface text-bright'
+  const segmentInactive = 'text-sub hover:text-muted hover:bg-surface-dim'
 
   return (
     <div className="flex flex-wrap items-center gap-4">
       {/* 계좌 필터 */}
-      <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1 border border-white/[0.04]">
+      <div className="flex items-center gap-1 bg-card rounded-lg p-1 border border-border">
         <button
           onClick={() => updateFilter('accountId', '')}
           className={`${segmentBase} ${!activeAccountId ? segmentActive : segmentInactive}`}
@@ -78,7 +78,7 @@ export default function DepositFilters({ accounts }: DepositFiltersProps) {
       </div>
 
       {/* 연도 필터 */}
-      <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1 border border-white/[0.04]">
+      <div className="flex items-center gap-1 bg-card rounded-lg p-1 border border-border">
         <button
           onClick={() => updateFilter('year', '')}
           className={`${segmentBase} ${!activeYear ? segmentActive : segmentInactive}`}

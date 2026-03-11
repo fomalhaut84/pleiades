@@ -4,6 +4,7 @@ import Sidebar from '@/components/layout/Sidebar'
 import BottomTab from '@/components/layout/BottomTab'
 import MainContent from '@/components/layout/MainContent'
 import AuthProvider from '@/components/auth/AuthProvider'
+import ThemeProvider from '@/components/theme/ThemeProvider'
 import { prisma } from '@/lib/prisma'
 
 export const metadata: Metadata = {
@@ -27,15 +28,17 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="ko">
+    <html lang="ko" suppressHydrationWarning>
       <body className="antialiased">
-        <AuthProvider>
-          <Sidebar accounts={accounts} />
-          <BottomTab accounts={accounts} />
-          <MainContent>
-            {children}
-          </MainContent>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <Sidebar accounts={accounts} />
+            <BottomTab accounts={accounts} />
+            <MainContent>
+              {children}
+            </MainContent>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

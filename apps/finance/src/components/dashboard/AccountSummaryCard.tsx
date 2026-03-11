@@ -38,7 +38,7 @@ export default function AccountSummaryCard({
   hasPriceData,
 }: AccountSummaryCardProps) {
   const router = useRouter()
-  const colors = COLOR_MAP[name] ?? { color: '#9494a8', text: 'text-sub', bg: 'bg-sub' }
+  const colors = COLOR_MAP[name] ?? { color: 'var(--sub)', text: 'text-sub', bg: 'bg-sub' }
 
   return (
     <Card

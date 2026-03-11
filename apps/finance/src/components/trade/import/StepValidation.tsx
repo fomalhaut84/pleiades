@@ -128,7 +128,7 @@ export default function StepValidation({
               type="checkbox"
               checked={skipDuplicates}
               onChange={(e) => setSkipDuplicates(e.target.checked)}
-              className="rounded border-white/20 bg-white/5 text-sodam focus:ring-sodam/30"
+              className="rounded border-border-hover bg-surface text-sodam focus:ring-sodam/30"
             />
             <span className="text-[12px] text-muted">
               중복 거래 건너뛰기 ({counts.duplicate}건)
@@ -138,7 +138,7 @@ export default function StepValidation({
       )}
 
       {/* 필터 탭 */}
-      <div className="flex gap-1 bg-white/[0.02] rounded-lg p-1 border border-white/[0.04]">
+      <div className="flex gap-1 bg-card rounded-lg p-1 border border-border">
         {(['all', 'valid', 'duplicate', 'error'] as StatusFilter[]).map((f) => {
           const count = f === 'all' ? validatedRows.length : counts[f]
           return (
@@ -148,7 +148,7 @@ export default function StepValidation({
               onClick={() => setFilter(f)}
               className={`flex-1 py-1.5 rounded-md text-[11px] font-medium transition-all ${
                 filter === f
-                  ? 'bg-white/[0.06] text-bright'
+                  ? 'bg-surface text-bright'
                   : 'text-dim hover:text-sub'
               }`}
             >
@@ -180,7 +180,7 @@ export default function StepValidation({
                 return (
                   <tr
                     key={row.rowIndex}
-                    className="border-t border-white/[0.04] hover:bg-white/[0.015]"
+                    className="border-t border-border hover:bg-card"
                   >
                     <td className="text-dim px-3 py-2">{row.rowIndex + 1}</td>
                     <td className="px-2 py-2">
@@ -234,7 +234,7 @@ export default function StepValidation({
         <button
           type="button"
           onClick={onBack}
-          className="flex-1 py-3 rounded-lg text-[13px] font-semibold text-sub border border-white/[0.06] hover:bg-white/[0.03] transition-all"
+          className="flex-1 py-3 rounded-lg text-[13px] font-semibold text-sub border border-border hover:bg-surface-dim transition-all"
         >
           ← 이전
         </button>

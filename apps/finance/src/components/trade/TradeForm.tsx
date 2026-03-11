@@ -155,7 +155,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
     }
   }
 
-  const inputClasses = 'w-full bg-white/[0.035] border border-white/[0.06] rounded-lg px-3.5 py-2.5 text-[13px] text-bright placeholder-dim focus:outline-none focus:bg-white/[0.055] focus:border-white/[0.14] transition-colors'
+  const inputClasses = 'w-full bg-surface-dim border border-border rounded-lg px-3.5 py-2.5 text-[13px] text-bright placeholder-dim focus:outline-none focus:bg-surface focus:border-border-hover transition-colors'
   const labelClasses = 'block text-[12px] font-semibold text-sub mb-1.5'
 
   return (
@@ -176,7 +176,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                   className={`py-2.5 rounded-lg text-[13px] font-semibold border transition-all ${
                     isActive
                       ? `${colors?.bg} ${colors?.border} ${colors?.text}`
-                      : 'border-white/[0.06] text-sub hover:bg-white/[0.03] hover:text-muted'
+                      : 'border-border text-sub hover:bg-surface-dim hover:text-muted'
                   }`}
                 >
                   {account.name}
@@ -189,14 +189,14 @@ export default function TradeForm({ accounts }: TradeFormProps) {
         {/* 거래 유형 */}
         <div>
           <label className={labelClasses}>유형</label>
-          <div className="grid grid-cols-2 gap-0 rounded-lg border border-white/[0.06] overflow-hidden">
+          <div className="grid grid-cols-2 gap-0 rounded-lg border border-border overflow-hidden">
             <button
               type="button"
               onClick={() => setTradeType('BUY')}
               className={`py-2.5 text-[13px] font-bold transition-all ${
                 tradeType === 'BUY'
                   ? 'bg-sejin/15 text-sejin'
-                  : 'text-sub hover:bg-white/[0.03]'
+                  : 'text-sub hover:bg-surface-dim'
               }`}
             >
               매수
@@ -204,10 +204,10 @@ export default function TradeForm({ accounts }: TradeFormProps) {
             <button
               type="button"
               onClick={() => setTradeType('SELL')}
-              className={`py-2.5 text-[13px] font-bold border-l border-white/[0.06] transition-all ${
+              className={`py-2.5 text-[13px] font-bold border-l border-border transition-all ${
                 tradeType === 'SELL'
                   ? 'bg-red-500/15 text-red-500'
-                  : 'text-sub hover:bg-white/[0.03]'
+                  : 'text-sub hover:bg-surface-dim'
               }`}
             >
               매도
@@ -269,14 +269,14 @@ export default function TradeForm({ accounts }: TradeFormProps) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClasses}>시장</label>
-                  <div className="grid grid-cols-2 gap-0 rounded-lg border border-white/[0.06] overflow-hidden">
+                  <div className="grid grid-cols-2 gap-0 rounded-lg border border-border overflow-hidden">
                     <button
                       type="button"
                       onClick={() => setManualMarket('US')}
                       className={`py-2 text-[12px] font-bold transition-all ${
                         manualMarket === 'US'
                           ? 'bg-sodam/15 text-sodam'
-                          : 'text-sub hover:bg-white/[0.03]'
+                          : 'text-sub hover:bg-surface-dim'
                       }`}
                     >
                       US
@@ -284,10 +284,10 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                     <button
                       type="button"
                       onClick={() => setManualMarket('KR')}
-                      className={`py-2 text-[12px] font-bold border-l border-white/[0.06] transition-all ${
+                      className={`py-2 text-[12px] font-bold border-l border-border transition-all ${
                         manualMarket === 'KR'
                           ? 'bg-amber-400/15 text-amber-400'
-                          : 'text-sub hover:bg-white/[0.03]'
+                          : 'text-sub hover:bg-surface-dim'
                       }`}
                     >
                       KR
@@ -395,7 +395,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
 
         {/* 예상 총액 */}
         {parsedShares > 0 && parsedPrice > 0 && (
-          <div className="bg-white/[0.025] border border-white/[0.06] rounded-lg px-4 py-3 flex items-center justify-between">
+          <div className="bg-card border border-border rounded-lg px-4 py-3 flex items-center justify-between">
             <span className="text-[12px] text-sub">예상 총액</span>
             <div className="text-right">
               <div className="text-[15px] font-bold text-bright tabular-nums">

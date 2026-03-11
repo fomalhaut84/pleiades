@@ -95,7 +95,7 @@ export default function StepUpload({ accounts, onNext }: StepUploadProps) {
                 className={`py-2.5 rounded-lg text-[13px] font-semibold border transition-all ${
                   isActive
                     ? `${colors?.bg} ${colors?.border} ${colors?.text}`
-                    : 'border-white/[0.06] text-sub hover:bg-white/[0.03] hover:text-muted'
+                    : 'border-border text-sub hover:bg-surface-dim hover:text-muted'
                 }`}
               >
                 {account.name}
@@ -108,14 +108,14 @@ export default function StepUpload({ accounts, onNext }: StepUploadProps) {
       {/* 시장/통화 선택 */}
       <Card>
         <label className="block text-[12px] font-semibold text-sub mb-2">시장 / 통화</label>
-        <div className="grid grid-cols-2 gap-0 rounded-lg border border-white/[0.06] overflow-hidden">
+        <div className="grid grid-cols-2 gap-0 rounded-lg border border-border overflow-hidden">
           <button
             type="button"
             onClick={() => setMarket('US')}
             className={`py-2.5 text-[13px] font-bold transition-all ${
               market === 'US'
                 ? 'bg-sodam/15 text-sodam'
-                : 'text-sub hover:bg-white/[0.03]'
+                : 'text-sub hover:bg-surface-dim'
             }`}
           >
             US (USD)
@@ -123,10 +123,10 @@ export default function StepUpload({ accounts, onNext }: StepUploadProps) {
           <button
             type="button"
             onClick={() => setMarket('KR')}
-            className={`py-2.5 text-[13px] font-bold border-l border-white/[0.06] transition-all ${
+            className={`py-2.5 text-[13px] font-bold border-l border-border transition-all ${
               market === 'KR'
                 ? 'bg-amber-400/15 text-amber-400'
-                : 'text-sub hover:bg-white/[0.03]'
+                : 'text-sub hover:bg-surface-dim'
             }`}
           >
             KR (KRW)
@@ -138,7 +138,7 @@ export default function StepUpload({ accounts, onNext }: StepUploadProps) {
       <Card>
         <label className="block text-[12px] font-semibold text-sub mb-2">CSV 파일</label>
         {fileName && rows.length > 0 ? (
-          <div className="flex items-center justify-between bg-white/[0.03] border border-white/[0.06] rounded-lg px-4 py-3">
+          <div className="flex items-center justify-between bg-surface-dim border border-border rounded-lg px-4 py-3">
             <div>
               <p className="text-[13px] text-bright font-medium">{fileName}</p>
               <p className="text-[11px] text-dim mt-0.5">
@@ -184,7 +184,7 @@ export default function StepUpload({ accounts, onNext }: StepUploadProps) {
               </thead>
               <tbody>
                 {rows.slice(0, 3).map((row, i) => (
-                  <tr key={i} className="border-t border-white/[0.04]">
+                  <tr key={i} className="border-t border-border">
                     {headers.map((h) => (
                       <td key={h} className="text-muted px-2 py-1.5 whitespace-nowrap max-w-[200px] truncate">
                         {row[h] || '-'}
@@ -200,7 +200,7 @@ export default function StepUpload({ accounts, onNext }: StepUploadProps) {
 
       {/* 요약 & 다음 */}
       {selectedAccount && rows.length > 0 && (
-        <div className="bg-white/[0.025] border border-white/[0.06] rounded-lg px-4 py-3 flex items-center justify-between">
+        <div className="bg-card border border-border rounded-lg px-4 py-3 flex items-center justify-between">
           <div className="text-[12px] text-sub">
             <span className={ACCOUNT_COLORS[selectedAccount.name]?.text}>
               {selectedAccount.name}

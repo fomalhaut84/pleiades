@@ -16,7 +16,7 @@ interface AllocationChartProps {
 
 const COLORS = [
   '#60a5fa', '#a78bfa', '#34d399', '#fbbf24', '#fb923c',
-  '#f87171', '#9494a8', '#6e6e82', '#c084fc', '#22d3ee',
+  '#f87171', 'var(--sub)', 'var(--dim)', '#c084fc', '#22d3ee',
 ]
 
 export default function AllocationChart({ data, totalLabel, chartTitle = '매입비중', centerLabel = '총 매입' }: AllocationChartProps) {

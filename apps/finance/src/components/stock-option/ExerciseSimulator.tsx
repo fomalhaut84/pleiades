@@ -40,7 +40,7 @@ export default function ExerciseSimulator({ stockOptions, currentPrice }: Exerci
             onChange={(e) => setTargetPrice(e.target.value)}
             min={0}
             step={1000}
-            className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2.5 text-[13px] text-bright tabular-nums outline-none focus:border-white/[0.12] transition-colors"
+            className="w-full bg-surface-dim border border-border rounded-lg px-3 py-2.5 text-[13px] text-bright tabular-nums outline-none focus:border-border-hover transition-colors"
           />
           <div className="mt-2 flex gap-2">
             {[0.8, 1.0, 1.2, 1.5, 2.0].map((mult) => (
@@ -50,8 +50,8 @@ export default function ExerciseSimulator({ stockOptions, currentPrice }: Exerci
                 onClick={() => setTargetPrice(String(Math.round(currentPrice * mult)))}
                 className={`px-2 py-1 text-[10px] font-semibold rounded border transition-colors ${
                   Math.round(currentPrice * mult) === parsedPrice
-                    ? 'bg-white/[0.07] border-white/[0.12] text-bright'
-                    : 'bg-white/[0.02] border-white/[0.04] text-dim hover:text-sub'
+                    ? 'bg-surface border-border-hover text-bright'
+                    : 'bg-card border-border text-dim hover:text-sub'
                 }`}
               >
                 {mult === 1.0 ? '현재가' : `×${mult}`}
@@ -66,7 +66,7 @@ export default function ExerciseSimulator({ stockOptions, currentPrice }: Exerci
         <div className="relative overflow-hidden rounded-[14px] border border-border bg-card">
           <div className="px-5 py-3.5 border-b border-border flex justify-between items-center">
             <div className="text-[13px] font-bold text-bright">행사 시 예상 이익</div>
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/[0.04] text-dim">
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface-dim text-dim">
               행사 가능분만
             </span>
           </div>
@@ -86,7 +86,7 @@ export default function ExerciseSimulator({ stockOptions, currentPrice }: Exerci
               </div>
             ))}
 
-            <div className="h-px bg-white/[0.06]" />
+            <div className="h-px bg-surface" />
 
             <div className="flex items-center justify-between">
               <span className="text-[13px] font-bold text-sub">행사 이익 합계</span>
@@ -100,7 +100,7 @@ export default function ExerciseSimulator({ stockOptions, currentPrice }: Exerci
             {/* 세금 추정 */}
             {taxEstimate && (
               <>
-                <div className="h-px bg-white/[0.04]" />
+                <div className="h-px bg-surface-dim" />
                 <div className="flex items-center justify-between">
                   <span className="text-[12px] text-sub">예상 소득세 (근로소득)</span>
                   <span className="text-[12px] text-muted tabular-nums">{formatKRW(taxEstimate.incomeTax)}</span>

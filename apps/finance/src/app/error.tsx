@@ -19,7 +19,7 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
         <button
           type="button"
           onClick={reset}
-          className="px-5 py-2.5 rounded-lg bg-white/[0.07] text-bright text-[13px] font-semibold border border-white/[0.12] hover:bg-white/[0.1] transition-colors"
+          className="px-5 py-2.5 rounded-lg bg-surface text-bright text-[13px] font-semibold border border-border-hover hover:bg-surface-hover transition-colors"
         >
           다시 시도
         </button>

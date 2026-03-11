@@ -28,7 +28,7 @@ function calcDeductionPreview(gross: number): number {
   return Math.round(14_750_000 + (gross - 100_000_000) * 0.02)
 }
 
-const inputClasses = 'w-full bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2.5 text-[13px] text-bright tabular-nums outline-none focus:border-white/[0.12] transition-colors'
+const inputClasses = 'w-full bg-surface-dim border border-border rounded-lg px-3 py-2.5 text-[13px] text-bright tabular-nums outline-none focus:border-border-hover transition-colors'
 
 export default function IncomeProfileForm({ initial, onCancel }: IncomeProfileFormProps) {
   const router = useRouter()
@@ -150,8 +150,8 @@ export default function IncomeProfileForm({ initial, onCancel }: IncomeProfileFo
               disabled={isSubmitting}
               className={`flex-1 px-3 py-2 text-[12px] font-semibold rounded-lg border transition-colors ${
                 inputType === type
-                  ? 'bg-white/[0.07] border-white/[0.12] text-bright'
-                  : 'bg-white/[0.02] border-white/[0.04] text-dim hover:text-sub'
+                  ? 'bg-surface border-border-hover text-bright'
+                  : 'bg-card border-border text-dim hover:text-sub'
               }`}
             >
               {type === 'gross' ? '세전 총급여' : '과세표준 직접 입력'}
@@ -175,7 +175,7 @@ export default function IncomeProfileForm({ initial, onCancel }: IncomeProfileFo
             disabled={isSubmitting}
           />
           {deductionPreview && (
-            <div className="mt-2 bg-white/[0.02] rounded-lg px-3 py-2 flex flex-col gap-1">
+            <div className="mt-2 bg-card rounded-lg px-3 py-2 flex flex-col gap-1">
               <div className="flex justify-between">
                 <span className="text-[11px] text-dim">근로소득공제</span>
                 <span className="text-[11px] text-muted tabular-nums">
@@ -248,7 +248,7 @@ export default function IncomeProfileForm({ initial, onCancel }: IncomeProfileFo
             type="button"
             onClick={onCancel}
             disabled={isSubmitting}
-            className="px-4 py-2 text-[12px] font-semibold text-sub rounded-lg border border-white/[0.06] hover:bg-white/[0.03] transition-colors"
+            className="px-4 py-2 text-[12px] font-semibold text-sub rounded-lg border border-border hover:bg-surface-dim transition-colors"
           >
             취소
           </button>
@@ -256,7 +256,7 @@ export default function IncomeProfileForm({ initial, onCancel }: IncomeProfileFo
         <button
           type="submit"
           disabled={isSubmitting}
-          className="px-4 py-2 text-[12px] font-semibold text-bright bg-white/[0.07] rounded-lg border border-white/[0.12] hover:bg-white/[0.10] transition-colors disabled:opacity-40"
+          className="px-4 py-2 text-[12px] font-semibold text-bright bg-surface rounded-lg border border-border-hover hover:bg-surface-hover transition-colors disabled:opacity-40"
         >
           {isSubmitting ? '저장 중...' : isEdit ? '수정' : '저장'}
         </button>

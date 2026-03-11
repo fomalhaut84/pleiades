@@ -24,7 +24,7 @@ const ACCOUNT_COLORS: Record<string, string> = {
   다솜: '#fb923c',
 }
 
-const inputClasses = 'w-full bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2 text-[13px] text-bright tabular-nums outline-none focus:border-white/[0.12] transition-colors'
+const inputClasses = 'w-full bg-surface-dim border border-border rounded-lg px-3 py-2 text-[13px] text-bright tabular-nums outline-none focus:border-border-hover transition-colors'
 
 export default function SimulatorControls({
   accounts,
@@ -59,7 +59,7 @@ export default function SimulatorControls({
                 max={30}
                 value={years}
                 onChange={(e) => onYearsChange(Number(e.target.value))}
-                className="flex-1 accent-white/60"
+                className="flex-1 accent-sodam"
               />
               <span className="text-[13px] font-bold text-bright tabular-nums w-12 text-right">
                 {years}년
@@ -78,8 +78,8 @@ export default function SimulatorControls({
                   onClick={() => onScenarioChange(opt.value)}
                   className={`flex-1 px-2 py-1.5 text-[11px] font-semibold rounded-md border transition-colors ${
                     selectedScenario === opt.value
-                      ? 'bg-white/[0.07] border-white/[0.12] text-bright'
-                      : 'bg-white/[0.02] border-white/[0.04] text-dim hover:text-sub'
+                      ? 'bg-surface border-border-hover text-bright'
+                      : 'bg-card border-border text-dim hover:text-sub'
                   }`}
                 >
                   {opt.label}
@@ -99,7 +99,7 @@ export default function SimulatorControls({
           <div className="flex items-center gap-2 mb-3">
             <div
               className="w-2.5 h-2.5 rounded-full"
-              style={{ background: ACCOUNT_COLORS[account.accountName] ?? '#9494a8' }}
+              style={{ background: ACCOUNT_COLORS[account.accountName] ?? 'var(--sub)' }}
             />
             <span className="text-[13px] font-bold text-bright">{account.accountName}</span>
             <span className="text-[11px] text-dim ml-auto tabular-nums">

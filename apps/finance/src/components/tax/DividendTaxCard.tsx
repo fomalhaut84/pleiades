@@ -56,7 +56,7 @@ export default function DividendTaxCard({ summary, year }: DividendTaxCardProps)
                 {formatKRW(summary.totalGrossKRW)} / {formatKRW(summary.threshold)}
               </span>
             </div>
-            <div className="w-full h-2 rounded-full bg-white/[0.04] overflow-hidden">
+            <div className="w-full h-2 rounded-full bg-surface-dim overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${
                   summary.exceeded
@@ -100,13 +100,13 @@ export default function DividendTaxCard({ summary, year }: DividendTaxCardProps)
             <div className="text-[12px] text-sub">{summary.totalCount}건</div>
           </div>
 
-          <div className="divide-y divide-white/[0.025]">
+          <div className="divide-y divide-border">
             {summary.byTicker.map((t) => (
-              <div key={`${t.ticker}:${t.currency}`} className="px-5 py-3 hover:bg-white/[0.015]">
+              <div key={`${t.ticker}:${t.currency}`} className="px-5 py-3 hover:bg-card">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
                     <span className="text-[13px] font-bold text-bright">{t.displayName}</span>
-                    <span className="text-[10px] text-dim px-1 py-0.5 rounded bg-white/[0.04]">
+                    <span className="text-[10px] text-dim px-1 py-0.5 rounded bg-surface-dim">
                       {t.currency === 'USD' ? 'USD' : 'KRW'}
                     </span>
                   </div>

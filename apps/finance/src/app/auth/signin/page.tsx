@@ -75,7 +75,7 @@ export default function SignInPage() {
             value={pin}
             onChange={(e) => setPin(e.target.value)}
             placeholder="PIN을 입력하세요"
-            className="w-full px-4 py-3 rounded-lg bg-white/[0.06] border border-border text-bright text-[14px] placeholder:text-dim focus:outline-none focus:border-white/[0.2] transition-colors"
+            className="w-full px-4 py-3 rounded-lg bg-surface border border-border text-bright text-[14px] placeholder:text-dim focus:outline-none focus:border-border-hover transition-colors"
             autoFocus
             disabled={loading}
           />
@@ -87,7 +87,7 @@ export default function SignInPage() {
           <button
             type="submit"
             disabled={loading || !pin}
-            className="w-full mt-4 px-4 py-3 rounded-lg bg-white/[0.1] text-bright text-[13px] font-semibold border border-white/[0.12] hover:bg-white/[0.15] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full mt-4 px-4 py-3 rounded-lg bg-surface-hover text-bright text-[13px] font-semibold border border-border-hover hover:bg-surface-active transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {loading ? '확인 중...' : '로그인'}
           </button>

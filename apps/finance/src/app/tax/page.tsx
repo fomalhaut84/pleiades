@@ -225,15 +225,15 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
       <Header title="세금 센터" sub="양도세 · 근로소득세 통합 시뮬레이션 · 증여세 · 배당소득세" />
 
       {/* 연도 선택 */}
-      <div className="mt-5 mb-6 flex items-center gap-1 bg-white/[0.02] rounded-lg p-1 border border-white/[0.04] w-fit">
+      <div className="mt-5 mb-6 flex items-center gap-1 bg-card rounded-lg p-1 border border-border w-fit">
         {years.map((y) => (
           <a
             key={y}
             href={`/tax?year=${y}`}
             className={`px-3 py-1.5 text-[12px] font-semibold rounded-md transition-all ${
               year === y
-                ? 'bg-white/[0.07] text-bright'
-                : 'text-sub hover:text-muted hover:bg-white/[0.03]'
+                ? 'bg-surface text-bright'
+                : 'text-sub hover:text-muted hover:bg-surface-dim'
             }`}
           >
             {y}

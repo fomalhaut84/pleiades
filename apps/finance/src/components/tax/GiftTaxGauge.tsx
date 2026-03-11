@@ -33,7 +33,7 @@ export default function GiftTaxGauge({
   resetDate,
   firstGiftDate,
 }: GiftTaxGaugeProps) {
-  const colors = ACCOUNT_COLORS[accountName] ?? { bar: 'bg-dim', text: 'text-muted', bg: 'bg-white/5' }
+  const colors = ACCOUNT_COLORS[accountName] ?? { bar: 'bg-dim', text: 'text-muted', bg: 'bg-surface' }
   const clampedRate = Math.min(usageRate, 1)
   const isOver = remaining < 0
 
@@ -45,7 +45,7 @@ export default function GiftTaxGauge({
           <div className="flex items-center gap-2.5">
             <span className={`text-[15px] font-bold ${colors.text}`}>{accountName}</span>
             {ownerAge != null && (
-              <span className="text-[11px] text-dim px-1.5 py-0.5 rounded bg-white/[0.04]">
+              <span className="text-[11px] text-dim px-1.5 py-0.5 rounded bg-surface-dim">
                 {ownerAge}세 · {isMinor ? '미성년' : '성인'}
               </span>
             )}
@@ -61,7 +61,7 @@ export default function GiftTaxGauge({
         </div>
 
         {/* Gauge Bar */}
-        <div className="relative h-3 rounded-full bg-white/[0.04] overflow-hidden mb-3">
+        <div className="relative h-3 rounded-full bg-surface-dim overflow-hidden mb-3">
           <div
             className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${
               isOver ? 'bg-red-400/80' : colors.bar
@@ -89,13 +89,13 @@ export default function GiftTaxGauge({
         {/* Details */}
         <div className="grid grid-cols-2 gap-3">
           {firstGiftDate && (
-            <div className="bg-white/[0.02] rounded-lg px-3 py-2.5">
+            <div className="bg-card rounded-lg px-3 py-2.5">
               <div className="text-[10px] text-dim mb-0.5">최초 증여일</div>
               <div className="text-[12px] text-muted tabular-nums">{formatDate(firstGiftDate)}</div>
             </div>
           )}
           {resetDate && (
-            <div className="bg-white/[0.02] rounded-lg px-3 py-2.5">
+            <div className="bg-card rounded-lg px-3 py-2.5">
               <div className="text-[10px] text-dim mb-0.5">10년 리셋</div>
               <div className="text-[12px] text-muted tabular-nums">{formatDate(resetDate)}</div>
             </div>

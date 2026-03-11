@@ -12,7 +12,7 @@ export default function FxBanner({ fxRate, fxChange, fxChangePercent }: FxBanner
   const isPositive = (fxChange ?? 0) >= 0
 
   return (
-    <div className="flex items-center gap-2 px-3.5 py-2 bg-white/[0.02] border border-border rounded-lg text-[12px] text-sub w-fit mb-5">
+    <div className="flex items-center gap-2 px-3.5 py-2 bg-card border border-border rounded-lg text-[12px] text-sub w-fit mb-5">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
         <circle cx="5.5" cy="8" r="4" />
         <circle cx="10.5" cy="8" r="4" />

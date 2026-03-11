@@ -63,7 +63,7 @@ export default function FileDropZone({
           cursor-pointer rounded-xl border-2 border-dashed p-10 text-center transition-all
           ${isDragging
             ? 'border-sodam/50 bg-sodam/5'
-            : 'border-white/[0.08] hover:border-white/[0.16] hover:bg-white/[0.02]'
+            : 'border-border hover:border-border-hover hover:bg-card'
           }
         `}
       >

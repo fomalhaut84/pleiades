@@ -34,8 +34,8 @@ export default function TWRSummaryCard({ data, loading }: TWRSummaryCardProps) {
     return (
       <div className="relative overflow-hidden rounded-[14px] border border-border bg-card p-5">
         <div className="animate-pulse flex flex-col gap-3">
-          <div className="h-4 bg-white/[0.04] rounded w-32" />
-          <div className="h-20 bg-white/[0.04] rounded" />
+          <div className="h-4 bg-surface-dim rounded w-32" />
+          <div className="h-20 bg-surface-dim rounded" />
         </div>
       </div>
     )
@@ -54,11 +54,11 @@ export default function TWRSummaryCard({ data, loading }: TWRSummaryCardProps) {
           return (
             <div
               key={item.accountId}
-              className="flex items-center gap-3 bg-white/[0.02] rounded-lg px-4 py-3 border border-white/[0.04]"
+              className="flex items-center gap-3 bg-card rounded-lg px-4 py-3 border border-border"
             >
               <div
                 className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                style={{ background: ACCOUNT_COLORS[item.accountName] ?? '#9494a8' }}
+                style={{ background: ACCOUNT_COLORS[item.accountName] ?? 'var(--sub)' }}
               />
               <div className="flex-1 min-w-0">
                 <div className="text-[12px] font-semibold text-bright">{item.accountName}</div>

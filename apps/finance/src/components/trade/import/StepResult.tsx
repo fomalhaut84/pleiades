@@ -89,7 +89,7 @@ export default function StepResult({ result }: StepResultProps) {
         </Link>
         <Link
           href="/"
-          className="flex-1 py-3 rounded-lg text-[13px] font-semibold text-center text-sub border border-white/[0.06] hover:bg-white/[0.03] transition-all"
+          className="flex-1 py-3 rounded-lg text-[13px] font-semibold text-center text-sub border border-border hover:bg-surface-dim transition-all"
         >
           대시보드
         </Link>

@@ -102,14 +102,14 @@ export default function StepMapping({
               key={header}
               className="grid grid-cols-[1fr_auto_1fr] items-center gap-3"
             >
-              <div className="text-[12px] text-muted truncate bg-white/[0.03] rounded px-3 py-2 border border-white/[0.04]">
+              <div className="text-[12px] text-muted truncate bg-surface-dim rounded px-3 py-2 border border-border">
                 {header}
               </div>
               <span className="text-[11px] text-dim">→</span>
               <select
                 value={mapping[header] ?? ''}
                 onChange={(e) => handleChange(header, e.target.value)}
-                className="w-full bg-white/[0.035] border border-white/[0.06] rounded-lg px-3 py-2 text-[12px] text-bright focus:outline-none focus:border-white/[0.14] transition-colors"
+                className="w-full bg-surface-dim border border-border rounded-lg px-3 py-2 text-[12px] text-bright focus:outline-none focus:border-border-hover transition-colors"
               >
                 <option value="">무시</option>
                 {ALL_FIELDS.map((field) => {
@@ -160,7 +160,7 @@ export default function StepMapping({
               {rows.slice(0, 5).map((row, i) => {
                 const mapped = applyMapping(row, mapping, currency)
                 return (
-                  <tr key={i} className="border-t border-white/[0.04]">
+                  <tr key={i} className="border-t border-border">
                     <td className="text-dim px-2 py-1.5">{i + 1}</td>
                     {ALL_FIELDS
                       .filter((f) => currency === 'USD' || f !== 'fxRate')
@@ -182,7 +182,7 @@ export default function StepMapping({
         <button
           type="button"
           onClick={onBack}
-          className="flex-1 py-3 rounded-lg text-[13px] font-semibold text-sub border border-white/[0.06] hover:bg-white/[0.03] transition-all"
+          className="flex-1 py-3 rounded-lg text-[13px] font-semibold text-sub border border-border hover:bg-surface-dim transition-all"
         >
           ← 이전
         </button>

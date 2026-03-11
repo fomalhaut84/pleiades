@@ -114,7 +114,7 @@ export default function DividendEditPanel({ dividend, onClose }: DividendEditPan
     }
   }
 
-  const inputClasses = 'w-full bg-white/[0.035] border border-white/[0.06] rounded-lg px-3.5 py-2.5 text-[13px] text-bright placeholder-dim focus:outline-none focus:bg-white/[0.055] focus:border-white/[0.14] transition-colors'
+  const inputClasses = 'w-full bg-surface-dim border border-border rounded-lg px-3.5 py-2.5 text-[13px] text-bright placeholder-dim focus:outline-none focus:bg-surface focus:border-border-hover transition-colors'
   const labelClasses = 'block text-[12px] font-semibold text-sub mb-1.5'
 
   return (
@@ -123,7 +123,7 @@ export default function DividendEditPanel({ dividend, onClose }: DividendEditPan
       <div className="fixed top-0 right-0 h-full w-full max-w-[420px] bg-bg-raised border-l border-border z-50 overflow-y-auto animate-slide-in">
         <div className="px-6 py-5 border-b border-border flex items-center justify-between">
           <h2 className="text-[15px] font-bold text-bright">배당 수정</h2>
-          <button onClick={onClose} className="p-1.5 rounded-md text-sub hover:text-bright hover:bg-white/[0.05] transition-all">
+          <button onClick={onClose} className="p-1.5 rounded-md text-sub hover:text-bright hover:bg-surface transition-all">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M4 4l8 8M12 4l-8 8" />
             </svg>
@@ -132,7 +132,7 @@ export default function DividendEditPanel({ dividend, onClose }: DividendEditPan
 
         <form onSubmit={handleSubmit} className="px-6 py-5 flex flex-col gap-5">
           {/* 고정 정보 */}
-          <div className="bg-white/[0.02] rounded-lg px-4 py-3 flex flex-col gap-2">
+          <div className="bg-card rounded-lg px-4 py-3 flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-dim">계좌</span>
               <span className={`text-[13px] font-semibold ${ACCOUNT_COLORS[dividend.account.name] ?? 'text-muted'}`}>
@@ -204,12 +204,12 @@ export default function DividendEditPanel({ dividend, onClose }: DividendEditPan
           )}
 
           <label className="flex items-center gap-2.5 cursor-pointer">
-            <input type="checkbox" checked={reinvested} onChange={(e) => setReinvested(e.target.checked)} className="w-4 h-4 rounded border-white/[0.1] bg-white/[0.03] text-sodam focus:ring-sodam/30" />
+            <input type="checkbox" checked={reinvested} onChange={(e) => setReinvested(e.target.checked)} className="w-4 h-4 rounded border-border-hover bg-surface-dim text-sodam focus:ring-sodam/30" />
             <span className="text-[13px] text-sub">배당 재투자</span>
           </label>
 
           {/* 수정 후 원화 */}
-          <div className="bg-white/[0.025] border border-white/[0.06] rounded-lg px-4 py-3 flex items-center justify-between">
+          <div className="bg-card border border-border rounded-lg px-4 py-3 flex items-center justify-between">
             <span className="text-[12px] text-sub">수정 후 원화</span>
             <div className="text-right">
               <div className="text-[15px] font-bold text-bright tabular-nums">{amountKRW.toLocaleString('ko-KR')}원</div>
@@ -222,7 +222,7 @@ export default function DividendEditPanel({ dividend, onClose }: DividendEditPan
           )}
 
           <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-lg text-[13px] font-semibold text-sub border border-white/[0.06] hover:bg-white/[0.04] transition-all">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-lg text-[13px] font-semibold text-sub border border-border hover:bg-surface-dim transition-all">
               취소
             </button>
             <button type="submit" disabled={isSubmitting} className="flex-1 py-2.5 rounded-lg text-[13px] font-bold bg-sodam/15 text-sodam border border-sodam/25 hover:bg-sodam/25 disabled:opacity-40 transition-all">

@@ -63,7 +63,7 @@ export default function RSUTaxCard({ estimates, totalGrossIncome, totalTax }: RS
                   {formatKRW(e.grossIncome)}
                 </span>
               </div>
-              <div className="h-px bg-white/[0.04]" />
+              <div className="h-px bg-surface-dim" />
               <div className="flex items-center justify-between">
                 <span className="text-[12px] text-sub">소득세</span>
                 <span className="text-[12px] text-muted tabular-nums">{formatKRW(e.incomeTax)}</span>
@@ -84,7 +84,7 @@ export default function RSUTaxCard({ estimates, totalGrossIncome, totalTax }: RS
             </div>
 
             {e.status === 'pending' && e.vestPrice == null && e.grossIncome === 0 && (
-              <div className="mt-3 bg-white/[0.02] border border-white/[0.06] rounded-lg px-3 py-2">
+              <div className="mt-3 bg-card border border-border rounded-lg px-3 py-2">
                 <span className="text-[11px] text-dim">
                   예상 베스팅가 미설정. RSU 관리에서 기준가를 입력하면 세금이 추정됩니다.
                 </span>
@@ -103,7 +103,7 @@ export default function RSUTaxCard({ estimates, totalGrossIncome, totalTax }: RS
 
       {/* 합계 */}
       {estimates.length > 1 && totalTax > 0 && (
-        <div className="relative overflow-hidden rounded-[14px] border border-white/[0.08] bg-white/[0.02] px-5 py-4">
+        <div className="relative overflow-hidden rounded-[14px] border border-border bg-card px-5 py-4">
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <span className="text-[12px] text-sub">총 근로소득</span>

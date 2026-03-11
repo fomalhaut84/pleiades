@@ -89,7 +89,7 @@ export default function SellTaxSimulator({ holdings, ytdForeignGain }: SellTaxSi
             <select
               value={selectedId}
               onChange={(e) => handleSelect(e.target.value)}
-              className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2.5 text-[13px] text-bright outline-none focus:border-white/[0.12] transition-colors"
+              className="w-full bg-surface-dim border border-border rounded-lg px-3 py-2.5 text-[13px] text-bright outline-none focus:border-border-hover transition-colors"
             >
               <option value="">종목을 선택하세요</option>
               {holdings.map((h) => (
@@ -103,7 +103,7 @@ export default function SellTaxSimulator({ holdings, ytdForeignGain }: SellTaxSi
           {selected && (
             <>
               {/* 보유 정보 요약 */}
-              <div className="bg-white/[0.02] rounded-lg px-3 py-2.5 flex flex-col gap-1">
+              <div className="bg-card rounded-lg px-3 py-2.5 flex flex-col gap-1">
                 <div className="flex justify-between text-[11px]">
                   <span className="text-dim">보유 수량</span>
                   <span className="text-muted tabular-nums">{selected.shares}주</span>
@@ -145,12 +145,12 @@ export default function SellTaxSimulator({ holdings, ytdForeignGain }: SellTaxSi
                     max={selected.shares}
                     step={1}
                     placeholder="0"
-                    className="flex-1 bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2.5 text-[13px] text-bright tabular-nums outline-none focus:border-white/[0.12] transition-colors"
+                    className="flex-1 bg-surface-dim border border-border rounded-lg px-3 py-2.5 text-[13px] text-bright tabular-nums outline-none focus:border-border-hover transition-colors"
                   />
                   <button
                     type="button"
                     onClick={() => setSellShares(String(selected.shares))}
-                    className="px-3 py-2 text-[11px] font-semibold text-sub bg-white/[0.04] border border-white/[0.06] rounded-lg hover:bg-white/[0.07] transition-colors"
+                    className="px-3 py-2 text-[11px] font-semibold text-sub bg-surface-dim border border-border rounded-lg hover:bg-surface transition-colors"
                   >
                     전량
                   </button>
@@ -172,7 +172,7 @@ export default function SellTaxSimulator({ holdings, ytdForeignGain }: SellTaxSi
                   min={0}
                   step={selected.currency === 'USD' ? 0.01 : 1}
                   placeholder={selected.currentPrice != null ? String(selected.currentPrice) : '0'}
-                  className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2.5 text-[13px] text-bright tabular-nums outline-none focus:border-white/[0.12] transition-colors"
+                  className="w-full bg-surface-dim border border-border rounded-lg px-3 py-2.5 text-[13px] text-bright tabular-nums outline-none focus:border-border-hover transition-colors"
                 />
               </div>
 
@@ -187,7 +187,7 @@ export default function SellTaxSimulator({ holdings, ytdForeignGain }: SellTaxSi
                     min={0}
                     step={0.01}
                     placeholder={selected.currentFxRate != null ? String(selected.currentFxRate) : '0'}
-                    className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2.5 text-[13px] text-bright tabular-nums outline-none focus:border-white/[0.12] transition-colors"
+                    className="w-full bg-surface-dim border border-border rounded-lg px-3 py-2.5 text-[13px] text-bright tabular-nums outline-none focus:border-border-hover transition-colors"
                   />
                 </div>
               )}
@@ -201,7 +201,7 @@ export default function SellTaxSimulator({ holdings, ytdForeignGain }: SellTaxSi
         <div className="relative overflow-hidden rounded-[14px] border border-border bg-card">
           <div className="px-5 py-3.5 border-b border-border flex justify-between items-center">
             <div className="text-[13px] font-bold text-bright">예상 세금</div>
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/[0.04] text-dim">
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface-dim text-dim">
               시뮬레이션
             </span>
           </div>
@@ -215,7 +215,7 @@ export default function SellTaxSimulator({ holdings, ytdForeignGain }: SellTaxSi
               <span className="text-[12px] text-sub">매입 원가</span>
               <span className="text-[12px] text-dim tabular-nums">{formatKRW(result.costBasisKRW)}</span>
             </div>
-            <div className="h-px bg-white/[0.04]" />
+            <div className="h-px bg-surface-dim" />
             <div className="flex items-center justify-between">
               <span className="text-[12px] font-semibold text-sub">실현 손익</span>
               <span className={`text-[13px] font-semibold tabular-nums ${
@@ -227,7 +227,7 @@ export default function SellTaxSimulator({ holdings, ytdForeignGain }: SellTaxSi
 
             {/* USD 종목: 주가분/환율분 분리 */}
             {selected?.currency === 'USD' && result.priceGainKRW != null && result.fxGainKRW != null && (
-              <div className="bg-white/[0.02] rounded-lg px-3 py-2 flex flex-col gap-1">
+              <div className="bg-card rounded-lg px-3 py-2 flex flex-col gap-1">
                 <div className="flex justify-between text-[11px]">
                   <span className="text-dim">주가 변동분</span>
                   <span className={`tabular-nums ${result.priceGainKRW >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
@@ -243,7 +243,7 @@ export default function SellTaxSimulator({ holdings, ytdForeignGain }: SellTaxSi
               </div>
             )}
 
-            <div className="h-px bg-white/[0.04]" />
+            <div className="h-px bg-surface-dim" />
 
             {/* 해외주식: 공제 정보 */}
             {selected?.market === 'US' && (
@@ -275,7 +275,7 @@ export default function SellTaxSimulator({ holdings, ytdForeignGain }: SellTaxSi
               </span>
             </div>
 
-            <div className="h-px bg-white/[0.06]" />
+            <div className="h-px bg-surface" />
             <div className="flex items-center justify-between">
               <span className="text-[13px] font-bold text-sub">예상 세금</span>
               <span className={`text-[17px] font-bold tabular-nums ${

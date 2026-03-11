@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import ThemeToggle from '@/components/theme/ThemeToggle'
 
 interface SidebarProps {
   accounts: { id: string; name: string; ownerAge: number | null }[]
@@ -36,8 +37,8 @@ export default function Sidebar({ accounts }: SidebarProps) {
           href="/"
           className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
             ${pathname === '/'
-              ? 'bg-white/5 text-bright font-semibold border-border'
-              : 'text-sub hover:bg-white/[0.03] hover:text-muted'
+              ? 'bg-surface text-bright font-semibold border-border'
+              : 'text-sub hover:bg-surface-dim hover:text-muted'
             }`}
         >
           <span className="text-[15px] w-5 text-center">📊</span>
@@ -48,8 +49,8 @@ export default function Sidebar({ accounts }: SidebarProps) {
           href="/trades"
           className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
             ${pathname.startsWith('/trades')
-              ? 'bg-white/5 text-bright font-semibold border-border'
-              : 'text-sub hover:bg-white/[0.03] hover:text-muted'
+              ? 'bg-surface text-bright font-semibold border-border'
+              : 'text-sub hover:bg-surface-dim hover:text-muted'
             }`}
         >
           <span className="text-[15px] w-5 text-center">📝</span>
@@ -60,8 +61,8 @@ export default function Sidebar({ accounts }: SidebarProps) {
           href="/rsu"
           className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
             ${pathname.startsWith('/rsu')
-              ? 'bg-white/5 text-bright font-semibold border-border'
-              : 'text-sub hover:bg-white/[0.03] hover:text-muted'
+              ? 'bg-surface text-bright font-semibold border-border'
+              : 'text-sub hover:bg-surface-dim hover:text-muted'
             }`}
         >
           <span className="text-[15px] w-5 text-center">🏢</span>
@@ -72,8 +73,8 @@ export default function Sidebar({ accounts }: SidebarProps) {
           href="/dividends"
           className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
             ${pathname.startsWith('/dividends')
-              ? 'bg-white/5 text-bright font-semibold border-border'
-              : 'text-sub hover:bg-white/[0.03] hover:text-muted'
+              ? 'bg-surface text-bright font-semibold border-border'
+              : 'text-sub hover:bg-surface-dim hover:text-muted'
             }`}
         >
           <span className="text-[15px] w-5 text-center">💰</span>
@@ -84,8 +85,8 @@ export default function Sidebar({ accounts }: SidebarProps) {
           href="/deposits"
           className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
             ${pathname.startsWith('/deposits')
-              ? 'bg-white/5 text-bright font-semibold border-border'
-              : 'text-sub hover:bg-white/[0.03] hover:text-muted'
+              ? 'bg-surface text-bright font-semibold border-border'
+              : 'text-sub hover:bg-surface-dim hover:text-muted'
             }`}
         >
           <span className="text-[15px] w-5 text-center">🎁</span>
@@ -96,8 +97,8 @@ export default function Sidebar({ accounts }: SidebarProps) {
           href="/stock-options"
           className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
             ${pathname.startsWith('/stock-options')
-              ? 'bg-white/5 text-bright font-semibold border-border'
-              : 'text-sub hover:bg-white/[0.03] hover:text-muted'
+              ? 'bg-surface text-bright font-semibold border-border'
+              : 'text-sub hover:bg-surface-dim hover:text-muted'
             }`}
         >
           <span className="text-[15px] w-5 text-center">📊</span>
@@ -108,8 +109,8 @@ export default function Sidebar({ accounts }: SidebarProps) {
           href="/tax"
           className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
             ${pathname.startsWith('/tax')
-              ? 'bg-white/5 text-bright font-semibold border-border'
-              : 'text-sub hover:bg-white/[0.03] hover:text-muted'
+              ? 'bg-surface text-bright font-semibold border-border'
+              : 'text-sub hover:bg-surface-dim hover:text-muted'
             }`}
         >
           <span className="text-[15px] w-5 text-center">🧾</span>
@@ -120,8 +121,8 @@ export default function Sidebar({ accounts }: SidebarProps) {
           href="/simulator"
           className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
             ${pathname.startsWith('/simulator')
-              ? 'bg-white/5 text-bright font-semibold border-border'
-              : 'text-sub hover:bg-white/[0.03] hover:text-muted'
+              ? 'bg-surface text-bright font-semibold border-border'
+              : 'text-sub hover:bg-surface-dim hover:text-muted'
             }`}
         >
           <span className="text-[15px] w-5 text-center">🔮</span>
@@ -132,8 +133,8 @@ export default function Sidebar({ accounts }: SidebarProps) {
           href="/performance"
           className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
             ${pathname.startsWith('/performance')
-              ? 'bg-white/5 text-bright font-semibold border-border'
-              : 'text-sub hover:bg-white/[0.03] hover:text-muted'
+              ? 'bg-surface text-bright font-semibold border-border'
+              : 'text-sub hover:bg-surface-dim hover:text-muted'
             }`}
         >
           <span className="text-[15px] w-5 text-center">📈</span>
@@ -150,8 +151,8 @@ export default function Sidebar({ accounts }: SidebarProps) {
             href={`/accounts/${account.id}`}
             className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
               ${pathname === `/accounts/${account.id}`
-                ? 'bg-white/5 text-bright font-semibold border-border'
-                : 'text-sub hover:bg-white/[0.03] hover:text-muted'
+                ? 'bg-surface text-bright font-semibold border-border'
+                : 'text-sub hover:bg-surface-dim hover:text-muted'
               }`}
           >
             <span className={`w-1.5 h-1.5 rounded-full ${colorMap[account.name] ?? 'bg-dim'}`} />
@@ -164,6 +165,11 @@ export default function Sidebar({ accounts }: SidebarProps) {
           </Link>
         ))}
       </nav>
+
+      {/* Theme toggle */}
+      <div className="px-4 py-3 border-t border-border">
+        <ThemeToggle />
+      </div>
     </aside>
   )
 }

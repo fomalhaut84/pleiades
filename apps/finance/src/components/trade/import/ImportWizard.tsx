@@ -104,7 +104,7 @@ export default function ImportWizard({ accounts }: ImportWizardProps) {
                     ? 'bg-sejin/20 text-sejin'
                     : i === step
                     ? 'bg-sodam/20 text-sodam border border-sodam/30'
-                    : 'bg-white/[0.04] text-dim'
+                    : 'bg-surface-dim text-dim'
                 }`}
               >
                 {i < step ? '\u2713' : String(i + 1)}
@@ -120,7 +120,7 @@ export default function ImportWizard({ accounts }: ImportWizardProps) {
             {i < STEP_LABELS.length - 1 && (
               <div
                 className={`h-px flex-1 mx-2 ${
-                  i < step ? 'bg-sejin/30' : 'bg-white/[0.06]'
+                  i < step ? 'bg-sejin/30' : 'bg-surface'
                 }`}
               />
             )}

@@ -50,7 +50,7 @@ export default function IncomeProfileCard({ profiles }: IncomeProfileCardProps) 
           <button
             type="button"
             onClick={() => setShowForm(true)}
-            className="px-4 py-2 text-[12px] font-semibold text-bright bg-white/[0.07] rounded-lg border border-white/[0.12] hover:bg-white/[0.10] transition-colors"
+            className="px-4 py-2 text-[12px] font-semibold text-bright bg-surface rounded-lg border border-border-hover hover:bg-surface-hover transition-colors"
           >
             프로필 등록
           </button>
@@ -81,7 +81,7 @@ export default function IncomeProfileCard({ profiles }: IncomeProfileCardProps) 
                   <button
                     type="button"
                     onClick={() => setEditingId(p.id)}
-                    className="px-2 py-1 text-[10px] font-semibold text-sub rounded border border-white/[0.06] hover:bg-white/[0.04] transition-colors"
+                    className="px-2 py-1 text-[10px] font-semibold text-sub rounded border border-border hover:bg-surface-dim transition-colors"
                   >
                     수정
                   </button>
@@ -97,7 +97,7 @@ export default function IncomeProfileCard({ profiles }: IncomeProfileCardProps) 
                       <button
                         type="button"
                         onClick={() => setDeletingId(null)}
-                        className="px-2 py-1 text-[10px] font-semibold text-sub rounded border border-white/[0.06] hover:bg-white/[0.04] transition-colors"
+                        className="px-2 py-1 text-[10px] font-semibold text-sub rounded border border-border hover:bg-surface-dim transition-colors"
                       >
                         취소
                       </button>
@@ -106,7 +106,7 @@ export default function IncomeProfileCard({ profiles }: IncomeProfileCardProps) 
                     <button
                       type="button"
                       onClick={() => setDeletingId(p.id)}
-                      className="px-2 py-1 text-[10px] font-semibold text-sub rounded border border-white/[0.06] hover:bg-white/[0.04] transition-colors"
+                      className="px-2 py-1 text-[10px] font-semibold text-sub rounded border border-border hover:bg-surface-dim transition-colors"
                     >
                       삭제
                     </button>
@@ -139,7 +139,7 @@ export default function IncomeProfileCard({ profiles }: IncomeProfileCardProps) 
                 </div>
                 {p.prepaidTax > 0 && (
                   <>
-                    <div className="h-px bg-white/[0.04]" />
+                    <div className="h-px bg-surface-dim" />
                     <div className="flex items-center justify-between">
                       <span className="text-[12px] text-sub">기납부 세액</span>
                       <span className="text-[12px] text-muted tabular-nums">
@@ -167,7 +167,7 @@ export default function IncomeProfileCard({ profiles }: IncomeProfileCardProps) 
         <button
           type="button"
           onClick={() => setShowForm(true)}
-          className="self-start px-4 py-2 text-[12px] font-semibold text-sub rounded-lg border border-white/[0.06] hover:bg-white/[0.04] hover:text-muted transition-colors"
+          className="self-start px-4 py-2 text-[12px] font-semibold text-sub rounded-lg border border-border hover:bg-surface-dim hover:text-muted transition-colors"
         >
           + 연도 추가
         </button>
