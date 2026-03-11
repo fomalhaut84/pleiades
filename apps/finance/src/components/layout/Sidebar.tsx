@@ -10,6 +10,8 @@ interface SidebarProps {
 export default function Sidebar({ accounts }: SidebarProps) {
   const pathname = usePathname()
 
+  if (pathname.startsWith('/auth')) return null
+
   const colorMap: Record<string, string> = {
     '세진': 'bg-sejin',
     '소담': 'bg-sodam',

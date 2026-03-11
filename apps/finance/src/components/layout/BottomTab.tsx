@@ -27,6 +27,8 @@ export default function BottomTab({ accounts }: BottomTabProps) {
   const pathname = usePathname()
   const [moreOpen, setMoreOpen] = useState(false)
 
+  if (pathname.startsWith('/auth')) return null
+
   const FIXED_TAB_PATHS = ['/', '/trades', '/tax']
   const isMoreActive = (
     MORE_ITEMS.some((item) => pathname.startsWith(item.href))

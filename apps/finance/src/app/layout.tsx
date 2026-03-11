@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 import Sidebar from '@/components/layout/Sidebar'
 import BottomTab from '@/components/layout/BottomTab'
+import MainContent from '@/components/layout/MainContent'
+import AuthProvider from '@/components/auth/AuthProvider'
 import { prisma } from '@/lib/prisma'
 
 export const metadata: Metadata = {
@@ -27,11 +29,13 @@ export default async function RootLayout({
   return (
     <html lang="ko">
       <body className="antialiased">
-        <Sidebar accounts={accounts} />
-        <BottomTab accounts={accounts} />
-        <main className="lg:ml-[220px] min-h-screen pb-20 lg:pb-0">
-          {children}
-        </main>
+        <AuthProvider>
+          <Sidebar accounts={accounts} />
+          <BottomTab accounts={accounts} />
+          <MainContent>
+            {children}
+          </MainContent>
+        </AuthProvider>
       </body>
     </html>
   )
