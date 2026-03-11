@@ -132,7 +132,7 @@ export default async function AccountDetailPage({ params }: PageProps) {
       <Header title={`${account.name} 포트폴리오`} sub={headerSub}>
         <RefreshButton lastUpdatedAt={lastUpdatedAt?.toISOString() ?? null} />
       </Header>
-      <div className="px-8 py-7 max-w-[960px]">
+      <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-7 max-w-[960px]">
         {/* Back link */}
         <div className="mb-7">
           <Link

@@ -77,7 +77,7 @@ export default async function SimulatorPage() {
   })
 
   return (
-    <div className="px-8 py-7 max-w-[1100px]">
+    <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-7 max-w-[1100px]">
       <Header title="복리 시뮬레이터" sub="계좌별 미래 자산 예측 · 시나리오 비교" />
       <SimulatorClient accounts={accountData} />
       <p className="mt-6 text-[11px] text-dim">

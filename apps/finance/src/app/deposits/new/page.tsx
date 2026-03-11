@@ -10,7 +10,7 @@ export default async function NewDepositPage() {
   })
 
   return (
-    <div className="px-8 py-7 max-w-[960px]">
+    <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-7 max-w-[960px]">
       <Header title="입금 기록">
         <Link
           href="/deposits"

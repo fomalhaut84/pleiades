@@ -221,7 +221,7 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
   const years = [currentYear, currentYear - 1, currentYear - 2]
 
   return (
-    <div className="px-8 py-7 max-w-[960px]">
+    <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-7 max-w-[960px]">
       <Header title="세금 센터" sub="양도세 · 근로소득세 통합 시뮬레이션 · 증여세 · 배당소득세" />
 
       {/* 연도 선택 */}

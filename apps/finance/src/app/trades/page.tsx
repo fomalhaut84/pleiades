@@ -51,7 +51,7 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
   }))
 
   return (
-    <div className="px-8 py-7 max-w-[960px]">
+    <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-7 max-w-[960px]">
       <Header title="거래 내역" sub={`총 ${total}건`}>
         <Link
           href="/trades/import"

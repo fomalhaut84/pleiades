@@ -13,7 +13,7 @@ export default async function PerformancePage() {
   const snapshotCount = await prisma.portfolioSnapshot.count()
 
   return (
-    <div className="px-8 py-7 max-w-[1100px]">
+    <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-7 max-w-[1100px]">
       <Header title="수익률 분석" sub="TWR 기반 운용 성과 · 벤치마크 비교 · 종목 기여도" />
       <PerformanceClient
         accounts={accounts}

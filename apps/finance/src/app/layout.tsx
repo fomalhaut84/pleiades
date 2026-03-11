@@ -29,7 +29,7 @@ export default async function RootLayout({
       <body className="antialiased">
         <Sidebar accounts={accounts} />
         <BottomTab accounts={accounts} />
-        <main className="lg:ml-[220px] min-h-screen">
+        <main className="lg:ml-[220px] min-h-screen pb-20 lg:pb-0">
           {children}
         </main>
       </body>

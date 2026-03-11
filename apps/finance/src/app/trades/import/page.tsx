@@ -12,7 +12,7 @@ export default async function ImportPage() {
   })
 
   return (
-    <div className="px-8 py-7 max-w-[960px]">
+    <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-7 max-w-[960px]">
       <Header title="CSV 가져오기" sub="증권사 거래내역 일괄 등록">
         <Link
           href="/trades"

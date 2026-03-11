@@ -23,7 +23,7 @@ export default async function NewTradePage() {
   })
 
   return (
-    <div className="px-8 py-7 max-w-[960px]">
+    <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-7 max-w-[960px]">
       <Header title="새 거래">
         <Link
           href="/trades"
