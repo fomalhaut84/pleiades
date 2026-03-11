@@ -27,7 +27,9 @@ export const config = {
      * - /api/auth/ (NextAuth API)
      * - /_next/ (Next.js 내부)
      * - /favicon.ico, /icons/, /manifest.json (정적 리소스)
+     * - /sw.js (서비스 워커)
+     * - /offline (오프라인 페이지)
      */
-    '/((?!auth/|api/auth/|_next/|favicon\\.ico|icons/|manifest\\.json).*)',
+    '/((?!auth/|api/auth/|_next/|favicon\\.ico|icons/|manifest\\.json|sw\\.js$|offline$).*)',
   ],
 }
