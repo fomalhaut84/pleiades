@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import Header from '@/components/layout/Header'
+import ExportButton from '@/components/ui/ExportButton'
 import DividendFilters from '@/components/dividend/DividendFilters'
 import DividendTable from '@/components/dividend/DividendTable'
 import DividendSummary from '@/components/dividend/DividendSummary'
@@ -97,9 +98,13 @@ export default async function DividendsPage({ searchParams }: DividendsPageProps
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-7 max-w-[960px]">
       <Header title="배당금" sub={`총 ${total}건`}>
+        <ExportButton
+          href={`/api/exports/dividends${accountId || yearStr ? '?' : ''}${accountId ? `accountId=${accountId}` : ''}${accountId && yearStr ? '&' : ''}${yearStr ? `year=${yearStr}` : ''}`}
+          label="CSV 내보내기"
+        />
         <Link
           href="/dividends/new"
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sodam/15 text-sodam text-[13px] font-semibold border border-sodam/25 hover:bg-sodam/25 transition-all"
+          className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg bg-sodam/15 text-sodam text-[12px] sm:text-[13px] font-semibold border border-sodam/25 hover:bg-sodam/25 transition-all"
         >
           + 배당 기록
         </Link>

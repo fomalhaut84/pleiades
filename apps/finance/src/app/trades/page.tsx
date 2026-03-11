@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import Header from '@/components/layout/Header'
+import ExportButton from '@/components/ui/ExportButton'
 import TradeFilters from '@/components/trade/TradeFilters'
 import TradeTable from '@/components/trade/TradeTable'
 
@@ -53,17 +54,21 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-7 max-w-[960px]">
       <Header title="거래 내역" sub={`총 ${total}건`}>
+        <ExportButton
+          href={`/api/exports/trades${accountId || type ? '?' : ''}${accountId ? `accountId=${accountId}` : ''}${accountId && type ? '&' : ''}${type ? `type=${type}` : ''}`}
+          label="CSV 내보내기"
+        />
         <Link
           href="/trades/import"
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/[0.04] text-sub text-[13px] font-semibold border border-white/[0.06] hover:bg-white/[0.08] transition-all"
+          className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg bg-white/[0.04] text-sub text-[12px] sm:text-[13px] font-semibold border border-white/[0.06] hover:bg-white/[0.08] transition-all"
         >
-          CSV 가져오기
+          <span className="hidden sm:inline">CSV</span> 가져오기
         </Link>
         <Link
           href="/trades/new"
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sejin/15 text-sejin text-[13px] font-semibold border border-sejin/25 hover:bg-sejin/25 transition-all"
+          className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg bg-sejin/15 text-sejin text-[12px] sm:text-[13px] font-semibold border border-sejin/25 hover:bg-sejin/25 transition-all"
         >
-          + 새 거래
+          + <span className="hidden sm:inline">새 거래</span><span className="sm:hidden">추가</span>
         </Link>
       </Header>
 
