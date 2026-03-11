@@ -1,5 +1,6 @@
 import { Bot, webhookCallback } from 'grammy'
 import { registerCommands } from './commands/start'
+import { registerPortfolioCommands } from './commands/portfolio'
 import { authMiddleware } from './middleware/auth'
 
 let bot: Bot | null = null
@@ -17,6 +18,7 @@ function createBot(): Bot {
 
   // 커맨드 등록
   registerCommands(instance)
+  registerPortfolioCommands(instance)
 
   return instance
 }
