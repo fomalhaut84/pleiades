@@ -168,9 +168,9 @@ export default function IncomeProfileForm({ initial, onCancel }: IncomeProfileFo
             type="number"
             value={grossSalary}
             onChange={(e) => setGrossSalary(e.target.value)}
-            placeholder="예: 80000000"
+            placeholder="예: 765004700"
             min={0}
-            step={1000000}
+            step={1}
             className={inputClasses}
             disabled={isSubmitting}
           />
@@ -200,7 +200,7 @@ export default function IncomeProfileForm({ initial, onCancel }: IncomeProfileFo
             onChange={(e) => setTaxableIncome(e.target.value)}
             placeholder="예: 65000000"
             min={0}
-            step={1000000}
+            step={1}
             className={inputClasses}
             disabled={isSubmitting}
           />
@@ -217,9 +217,9 @@ export default function IncomeProfileForm({ initial, onCancel }: IncomeProfileFo
           type="number"
           value={prepaidTax}
           onChange={(e) => setPrepaidTax(e.target.value)}
-          placeholder="원천징수 합계 (선택)"
+          placeholder="예: 5597120"
           min={0}
-          step={100000}
+          step={1}
           className={inputClasses}
           disabled={isSubmitting}
         />
