@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createWebhookHandler } from '@/bot/index'
+
+const handler = createWebhookHandler()
 
 export async function POST(request: NextRequest): Promise<Response> {
   try {
@@ -8,13 +11,11 @@ export async function POST(request: NextRequest): Promise<Response> {
       return NextResponse.json({ error: 'Not configured' }, { status: 500 })
     }
 
-    const header = request.headers.get('x-telegram-bot-api-secret-token')
-    if (header !== secretToken) {
+    const receivedSecret = request.headers.get('x-telegram-bot-api-secret-token')
+    if (receivedSecret !== secretToken) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { createWebhookHandler } = await import('@/bot/index')
-    const handler = createWebhookHandler()
     return await handler(request)
   } catch (error) {
     console.error('[webhook] Error:', error)
