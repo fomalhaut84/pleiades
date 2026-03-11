@@ -14,7 +14,10 @@ export async function authMiddleware(
   next: NextFunction
 ): Promise<void> {
   const chatId = ctx.chat?.id
-  if (!chatId) return
+  if (!chatId) {
+    await next()
+    return
+  }
 
   if (allowedChatIds.size === 0) {
     console.error('[bot] TELEGRAM_ALLOWED_CHAT_IDS 미설정')

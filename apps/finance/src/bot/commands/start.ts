@@ -30,8 +30,23 @@ export function registerCommands(bot: Bot): void {
   })
 
   // 한글 명령어 — bot.hears로 매칭 (Telegram은 한글 /커맨드 미지원)
-  // 7-B~D에서 실제 구현 예정
-  bot.hears(/^(현황|계좌|주가|환율|매수|매도)/, async (ctx) => {
+  // 7-B~D에서 실제 구현 예정, 각각 별도 핸들러로 교체
+  bot.hears(/^현황$/, async (ctx) => {
+    await ctx.reply(PREPARING_MESSAGE)
+  })
+  bot.hears(/^계좌(\s+.+)?$/, async (ctx) => {
+    await ctx.reply(PREPARING_MESSAGE)
+  })
+  bot.hears(/^주가\s+.+$/, async (ctx) => {
+    await ctx.reply(PREPARING_MESSAGE)
+  })
+  bot.hears(/^환율$/, async (ctx) => {
+    await ctx.reply(PREPARING_MESSAGE)
+  })
+  bot.hears(/^매수(\s+.+)?$/, async (ctx) => {
+    await ctx.reply(PREPARING_MESSAGE)
+  })
+  bot.hears(/^매도(\s+.+)?$/, async (ctx) => {
     await ctx.reply(PREPARING_MESSAGE)
   })
 }
