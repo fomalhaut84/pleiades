@@ -25,11 +25,12 @@ export const config = {
      * 아래 경로를 제외한 모든 요청에 미들웨어 적용:
      * - /auth/ (로그인 페이지)
      * - /api/auth/ (NextAuth API)
+     * - /api/bot/webhook (Telegram webhook)
      * - /_next/ (Next.js 내부)
      * - /favicon.ico, /icons/, /manifest.json (정적 리소스)
      * - /sw.js (서비스 워커)
      * - /offline (오프라인 페이지)
      */
-    '/((?!auth/|api/auth/|_next/|favicon\\.ico|icons/|manifest\\.json|sw\\.js$|offline$).*)',
+    '/((?!auth/|api/auth/|api/bot/webhook$|_next/|favicon\\.ico|icons/|manifest\\.json|sw\\.js$|offline$).*)',
   ],
 }
