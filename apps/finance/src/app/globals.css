@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+/* Light mode */
+:root {
+  --bg: #f5f5f7;
+  --bg-raised: #ffffff;
+  --card: rgba(0, 0, 0, 0.02);
+  --card-hover: rgba(0, 0, 0, 0.05);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.15);
+  --dim: #9ca3af;
+  --sub: #6b7280;
+  --text: #374151;
+  --bright: #111827;
+  --sejin: #059669;
+  --sodam: #2563eb;
+  --dasom: #ea580c;
+  --sidebar-w: 220px;
+  --surface-dim: rgba(0, 0, 0, 0.05);
+  --surface: rgba(0, 0, 0, 0.07);
+  --surface-hover: rgba(0, 0, 0, 0.08);
+  --surface-active: rgba(0, 0, 0, 0.12);
+  --header-blur: rgba(245, 245, 247, 0.85);
+}
+
+/* Dark mode */
+.dark {
+  --bg: #07080c;
+  --bg-raised: #0d0e14;
+  --card: rgba(255, 255, 255, 0.025);
+  --card-hover: rgba(255, 255, 255, 0.045);
+  --border: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.12);
+  --dim: #6e6e82;
+  --sub: #9494a8;
+  --text: #c8c8d4;
+  --bright: #eeeef2;
+  --sejin: #34d399;
+  --sodam: #60a5fa;
+  --dasom: #fb923c;
+  --surface-dim: rgba(255, 255, 255, 0.04);
+  --surface: rgba(255, 255, 255, 0.06);
+  --surface-hover: rgba(255, 255, 255, 0.1);
+  --surface-active: rgba(255, 255, 255, 0.15);
+  --header-blur: rgba(7, 8, 12, 0.85);
+}
+
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-hover);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--sub);
+}

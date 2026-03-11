@@ -1,0 +1,206 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                 String              @id @default(cuid())
+  name               String
+  ownerAge           Int?
+  strategy           String?
+  horizon            Int?
+  benchmarkTicker    String?
+  createdAt          DateTime            @default(now())
+  holdings           Holding[]
+  trades             Trade[]
+  deposits           Deposit[]
+  rsuSchedules       RSUSchedule[]
+  stockOptions       StockOption[]
+  dividends          Dividend[]
+  portfolioSnapshots PortfolioSnapshot[]
+}
+
+model Holding {
+  id          String  @id @default(cuid())
+  accountId   String
+  account     Account @relation(fields: [accountId], references: [id])
+  ticker      String
+  displayName String
+  market      String
+  shares      Int
+  avgPrice    Float
+  currency    String  @default("KRW")
+  avgPriceFx  Float?
+  avgFxRate   Float?
+
+  @@unique([accountId, ticker])
+}
+
+model Trade {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id])
+  ticker      String
+  displayName String
+  market      String
+  type        String
+  shares      Int
+  price       Float
+  currency    String
+  fxRate      Float?
+  totalKRW    Float
+  note        String?
+  tradedAt    DateTime
+  createdAt   DateTime @default(now())
+}
+
+model Deposit {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id])
+  amount      Float
+  source      String
+  note        String?
+  depositedAt DateTime
+  createdAt   DateTime @default(now())
+}
+
+model PriceCache {
+  ticker        String   @id
+  displayName   String
+  market        String
+  price         Float
+  currency      String
+  change        Float?
+  changePercent Float?
+  updatedAt     DateTime @updatedAt
+}
+
+model RSUSchedule {
+  id          String    @id @default(cuid())
+  accountId   String
+  account     Account   @relation(fields: [accountId], references: [id])
+  vestingDate DateTime
+  shares      Int
+  basisValue  Float
+  basisDate   DateTime?
+  basisPrice  Float?
+  vestPrice   Float?
+  status      String    @default("pending")
+  sellShares  Int?
+  keepShares  Int?
+  note        String?
+  vestedAt    DateTime?
+}
+
+model StockOption {
+  id              String               @id @default(cuid())
+  accountId       String
+  account         Account              @relation(fields: [accountId], references: [id])
+  ticker          String
+  displayName     String
+  grantDate       DateTime             // 부여일
+  expiryDate      DateTime             // 만료일
+  strikePrice     Float                // 행사가격
+  totalShares     Int                  // 총부여수량
+  cancelledShares Int      @default(0) // 취소수량
+  exercisedShares Int      @default(0) // 행사수량
+  adjustedShares  Int      @default(0) // 조정수량
+  remainingShares Int                  // 잔여수량
+  note            String?
+  createdAt       DateTime             @default(now())
+  vestings        StockOptionVesting[]
+
+  @@index([accountId, grantDate])
+}
+
+model StockOptionVesting {
+  id            String      @id @default(cuid())
+  stockOptionId String
+  stockOption   StockOption @relation(fields: [stockOptionId], references: [id])
+  vestingDate   DateTime    // 행사 가능일
+  shares        Int         // 행사 가능 수량
+  status        String      @default("pending") // pending | exercisable | exercised | expired
+  exercisedAt   DateTime?
+  note          String?
+
+  @@index([stockOptionId, vestingDate])
+}
+
+model IncomeProfile {
+  id              String   @id @default(cuid())
+  year            Int                         // 귀속 연도
+  inputType       String                      // "gross" | "taxable"
+  grossSalary     Float?                      // 세전 총급여 (inputType=gross 시)
+  earnedDeduction Float?                      // 근로소득공제 (자동 계산)
+  taxableIncome   Float                       // 종합소득 과세표준
+  prepaidTax      Float    @default(0)        // 기납부 세액 (원천징수 합계)
+  note            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([year])
+}
+
+model Dividend {
+  id          String    @id @default(cuid())
+  accountId   String
+  account     Account   @relation(fields: [accountId], references: [id])
+  ticker      String
+  displayName String
+  exDate      DateTime?
+  payDate     DateTime
+  amountGross Float
+  amountNet   Float
+  taxAmount   Float?
+  currency    String
+  fxRate      Float?
+  amountKRW   Float
+  reinvested  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  @@index([accountId, payDate])
+  @@index([payDate])
+}
+
+model PortfolioSnapshot {
+  id               String            @id @default(cuid())
+  accountId        String
+  account          Account           @relation(fields: [accountId], references: [id])
+  snapshotDate     DateTime
+  totalValueKRW    Float
+  totalCostKRW     Float
+  fxRate           Float
+  createdAt        DateTime          @default(now())
+  holdingSnapshots HoldingSnapshot[]
+
+  @@unique([accountId, snapshotDate])
+}
+
+model HoldingSnapshot {
+  id                  String            @id @default(cuid())
+  portfolioSnapshotId String
+  portfolioSnapshot   PortfolioSnapshot @relation(fields: [portfolioSnapshotId], references: [id], onDelete: Cascade)
+  ticker              String
+  displayName         String
+  shares              Float
+  price               Float
+  currency            String
+  valueKRW            Float
+
+  @@index([portfolioSnapshotId])
+}
+
+model BenchmarkPrice {
+  id        String   @id @default(cuid())
+  ticker    String
+  priceDate DateTime
+  close     Float
+  currency  String   @default("USD")
+
+  @@unique([ticker, priceDate])
+}

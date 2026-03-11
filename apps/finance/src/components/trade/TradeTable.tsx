@@ -1,0 +1,293 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import { formatKRW, formatUSD, formatDate } from '@/lib/format'
+import EditPanel from './EditPanel'
+import DeleteModal from './DeleteModal'
+
+interface Trade {
+  id: string
+  accountId: string
+  ticker: string
+  displayName: string
+  market: string
+  type: string
+  shares: number
+  price: number
+  currency: string
+  fxRate: number | null
+  totalKRW: number
+  note: string | null
+  tradedAt: string
+  account: { name: string }
+}
+
+interface TradeTableProps {
+  trades: Trade[]
+  total: number
+  limit: number
+  offset: number
+}
+
+const ACCOUNT_DOT_COLORS: Record<string, string> = {
+  '세진': 'bg-sejin',
+  '소담': 'bg-sodam',
+  '다솜': 'bg-dasom',
+}
+
+export default function TradeTable({ trades, total, limit, offset }: TradeTableProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [editTrade, setEditTrade] = useState<Trade | null>(null)
+  const [deleteTrade, setDeleteTrade] = useState<Trade | null>(null)
+
+  const totalPages = Math.ceil(total / limit)
+  const currentPage = Math.floor(offset / limit) + 1
+
+  const goToPage = (page: number) => {
+    const params = new URLSearchParams(searchParams.toString())
+    const newOffset = (page - 1) * limit
+    if (newOffset > 0) {
+      params.set('offset', String(newOffset))
+    } else {
+      params.delete('offset')
+    }
+    router.push(`${pathname}?${params.toString()}`)
+  }
+
+  const formatPrice = (price: number, currency: string) => {
+    return currency === 'USD' ? formatUSD(price) : formatKRW(price)
+  }
+
+  if (total === 0) {
+    return (
+      <div className="relative overflow-hidden rounded-[14px] border border-border bg-card p-12 text-center">
+        <div className="text-[14px] text-sub mb-4">거래 기록이 없습니다</div>
+        <button
+          onClick={() => router.push('/trades/new')}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sejin/15 text-sejin text-[13px] font-semibold border border-sejin/25 hover:bg-sejin/25 transition-all"
+        >
+          + 새 거래
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="relative overflow-hidden rounded-[14px] border border-border bg-card">
+        <div className="px-5 py-3.5 border-b border-border flex justify-between items-center">
+          <div className="text-[13px] font-bold text-bright">거래 목록</div>
+          <div className="text-[12px] text-sub">{total}건</div>
+        </div>
+
+        {/* Desktop table */}
+        <div className="overflow-x-auto hidden sm:block">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                {['거래일', '계좌', '종목', '유형', '수량', '단가', '총액', '메모', ''].map((col, i) => (
+                  <th
+                    key={i}
+                    className={`px-3 py-2.5 text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-card ${
+                      i >= 4 && i <= 6 ? 'text-right' : 'text-left'
+                    } ${i === 0 ? 'pl-4' : ''} ${i === 8 ? 'pr-4 w-16' : ''}`}
+                  >
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {trades.map((trade) => (
+                <tr key={trade.id} className="hover:bg-card">
+                  <td className="pl-4 px-3 py-3 text-[13px] text-muted border-b border-border tabular-nums whitespace-nowrap">
+                    {formatDate(trade.tradedAt)}
+                  </td>
+                  <td className="px-3 py-3 text-[13px] border-b border-border">
+                    <span className="flex items-center gap-1.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${ACCOUNT_DOT_COLORS[trade.account.name] ?? 'bg-dim'}`} />
+                      <span className="text-muted">{trade.account.name}</span>
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 text-[13px] border-b border-border">
+                    <span className="font-bold text-bright">{trade.displayName}</span>
+                    <span className="text-[11px] text-dim ml-1.5">{trade.ticker}</span>
+                  </td>
+                  <td className="px-3 py-3 border-b border-border">
+                    <span
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded ${
+                        trade.type === 'BUY'
+                          ? 'bg-sejin/10 text-sejin'
+                          : 'bg-red-500/10 text-red-500'
+                      }`}
+                    >
+                      {trade.type === 'BUY' ? '매수' : '매도'}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 text-[13px] text-right text-muted border-b border-border tabular-nums">
+                    {trade.shares}주
+                  </td>
+                  <td className="px-3 py-3 text-right border-b border-border">
+                    <span className="text-[12px] text-muted tabular-nums">
+                      {formatPrice(trade.price, trade.currency)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 text-right border-b border-border">
+                    <span className="text-[13px] font-semibold text-muted tabular-nums">
+                      {formatKRW(trade.totalKRW)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 text-[12px] text-dim border-b border-border max-w-[120px] truncate">
+                    {trade.note ?? ''}
+                  </td>
+                  <td className="pr-4 px-3 py-3 border-b border-border">
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setEditTrade(trade)}
+                        className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all"
+                        title="수정"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => setDeleteTrade(trade)}
+                        className="p-1.5 rounded-md text-dim hover:text-red-400 hover:bg-red-500/10 transition-all"
+                        title="삭제"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 011.334-1.334h2.666a1.333 1.333 0 011.334 1.334V4m2 0v9.333a1.333 1.333 0 01-1.334 1.334H4.667a1.333 1.333 0 01-1.334-1.334V4h9.334z" />
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile card view */}
+        <div className="sm:hidden divide-y divide-border">
+          {trades.map((trade) => (
+            <div key={trade.id} className="px-4 py-3.5 hover:bg-card">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className={`w-1.5 h-1.5 rounded-full ${ACCOUNT_DOT_COLORS[trade.account.name] ?? 'bg-dim'}`} />
+                  <span className="text-[13px] font-bold text-bright">{trade.displayName}</span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      trade.type === 'BUY'
+                        ? 'bg-sejin/10 text-sejin'
+                        : 'bg-red-500/10 text-red-500'
+                    }`}
+                  >
+                    {trade.type === 'BUY' ? '매수' : '매도'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setEditTrade(trade)}
+                    className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setDeleteTrade(trade)}
+                    className="p-1.5 rounded-md text-dim hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 011.334-1.334h2.666a1.333 1.333 0 011.334 1.334V4m2 0v9.333a1.333 1.333 0 01-1.334 1.334H4.667a1.333 1.333 0 01-1.334-1.334V4h9.334z" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-[12px]">
+                <span className="text-dim tabular-nums">{formatDate(trade.tradedAt)}</span>
+                <div className="text-right">
+                  <span className="text-muted tabular-nums">{trade.shares}주 × {formatPrice(trade.price, trade.currency)}</span>
+                  <span className="text-sub font-semibold ml-2 tabular-nums">{formatKRW(trade.totalKRW)}</span>
+                </div>
+              </div>
+              {trade.note && (
+                <div className="text-[11px] text-dim mt-1.5 truncate">{trade.note}</div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="px-5 py-3.5 border-t border-border flex items-center justify-between">
+            <div className="text-[12px] text-dim">
+              {offset + 1}–{Math.min(offset + limit, total)} / {total}건
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage <= 1}
+                className="px-2.5 py-1.5 rounded-md text-[12px] text-sub border border-border hover:bg-surface-dim disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                이전
+              </button>
+              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                let page: number
+                if (totalPages <= 5) {
+                  page = i + 1
+                } else if (currentPage <= 3) {
+                  page = i + 1
+                } else if (currentPage >= totalPages - 2) {
+                  page = totalPages - 4 + i
+                } else {
+                  page = currentPage - 2 + i
+                }
+                return (
+                  <button
+                    key={page}
+                    onClick={() => goToPage(page)}
+                    className={`w-8 h-8 rounded-md text-[12px] font-semibold transition-all ${
+                      page === currentPage
+                        ? 'bg-surface-hover text-bright border border-border-hover'
+                        : 'text-sub hover:bg-surface-dim'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                )
+              })}
+              <button
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage >= totalPages}
+                className="px-2.5 py-1.5 rounded-md text-[12px] text-sub border border-border hover:bg-surface-dim disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                다음
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Edit Panel */}
+      {editTrade && (
+        <EditPanel
+          trade={editTrade}
+          onClose={() => setEditTrade(null)}
+        />
+      )}
+
+      {/* Delete Modal */}
+      {deleteTrade && (
+        <DeleteModal
+          trade={deleteTrade}
+          onClose={() => setDeleteTrade(null)}
+        />
+      )}
+    </>
+  )
+}

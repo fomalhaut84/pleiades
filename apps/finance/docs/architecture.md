@@ -28,7 +28,7 @@ yahoo-finance2 npm 패키지로 미국주 + 한국주/ETF + 환율을 일괄 조
 | SOL 미국배당미국채혼합50 | 472150.KS | KR |
 | 카카오 | 035720.KS | KR |
 | 두산로보틱스 | 454910.KS | KR |
-| 컨텍 | 241560.KQ | KR |
+| 컨텍 | 451760.KQ | KR |
 | 환율 USD/KRW | USDKRW=X | FX |
 
 ### Cron Schedule
