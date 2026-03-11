@@ -1,5 +1,7 @@
 import { Bot } from 'grammy'
 
+const PREPARING = '🚧 준비 중인 기능입니다.'
+
 export function registerCommands(bot: Bot): void {
   bot.command('start', async (ctx) => {
     const name = ctx.from?.first_name ?? '사용자'
@@ -30,4 +32,11 @@ export function registerCommands(bot: Bot): void {
         `  /매도 [계좌] [종목] [수량] [가격]`
     )
   })
+
+  // 미구현 커맨드 stub — 7-B~D에서 구현 예정
+  for (const cmd of ['현황', '계좌', '주가', '환율', '매수', '매도']) {
+    bot.command(cmd, async (ctx) => {
+      await ctx.reply(PREPARING)
+    })
+  }
 }

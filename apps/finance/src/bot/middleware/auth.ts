@@ -1,16 +1,13 @@
 import { Context, NextFunction } from 'grammy'
 
-function getAllowedChatIds(): Set<number> {
-  const raw = process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? ''
-  const ids = raw
+const allowedChatIds: Set<number> = new Set(
+  (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
     .map(Number)
     .filter((n) => !isNaN(n))
-
-  return new Set(ids)
-}
+)
 
 export async function authMiddleware(
   ctx: Context,
@@ -19,17 +16,17 @@ export async function authMiddleware(
   const chatId = ctx.chat?.id
   if (!chatId) return
 
-  const allowed = getAllowedChatIds()
-
-  if (allowed.size === 0) {
-    await ctx.reply('⚠️ TELEGRAM_ALLOWED_CHAT_IDS가 설정되지 않았습니다.')
+  if (allowedChatIds.size === 0) {
+    console.error('[bot] TELEGRAM_ALLOWED_CHAT_IDS 미설정')
     return
   }
 
-  if (!allowed.has(chatId)) {
-    await ctx.reply(
-      `⛔ 접근 권한이 없습니다.\n\n이 봇은 등록된 사용자만 이용할 수 있습니다.\nChat ID: ${chatId}`
-    )
+  if (!allowedChatIds.has(chatId)) {
+    try {
+      await ctx.reply(`⛔ 접근 권한이 없습니다.\nChat ID: ${chatId}`)
+    } catch {
+      // 응답 실패 무시 — webhook 200 유지
+    }
     return
   }
 
