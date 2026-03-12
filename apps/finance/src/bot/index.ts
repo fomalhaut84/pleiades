@@ -2,6 +2,7 @@ import { Bot, webhookCallback } from 'grammy'
 import { registerCommands } from './commands/start'
 import { registerPortfolioCommands } from './commands/portfolio'
 import { registerPriceCommands } from './commands/price'
+import { registerTradeCommands } from './commands/trade'
 import { authMiddleware } from './middleware/auth'
 
 let bot: Bot | null = null
@@ -21,6 +22,7 @@ function createBot(): Bot {
   registerCommands(instance)
   registerPortfolioCommands(instance)
   registerPriceCommands(instance)
+  registerTradeCommands(instance)
 
   return instance
 }
