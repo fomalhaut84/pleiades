@@ -29,13 +29,7 @@ export function registerCommands(bot: Bot): void {
     await ctx.reply(COMMANDS_HELP)
   })
 
-  // 미구현 한글 명령어 stub — 7-C~D에서 구현 예정
-  bot.hears(/^주가\s+.+$/, async (ctx) => {
-    await ctx.reply(PREPARING_MESSAGE)
-  })
-  bot.hears(/^환율$/, async (ctx) => {
-    await ctx.reply(PREPARING_MESSAGE)
-  })
+  // 미구현 한글 명령어 stub — 7-D에서 구현 예정
   bot.hears(/^매수(\s+.+)?$/, async (ctx) => {
     await ctx.reply(PREPARING_MESSAGE)
   })
