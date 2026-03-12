@@ -101,7 +101,10 @@ async function main() {
 
   // === 삭제 + 생성을 단일 트랜잭션으로 실행 (all-or-nothing) ===
   await prisma.$transaction(async (tx) => {
-    // 기존 데이터 정리
+    // 기존 데이터 정리 (FK 순서)
+    await tx.transaction.deleteMany()
+    await tx.budget.deleteMany()
+    await tx.category.deleteMany()
     await tx.holdingSnapshot.deleteMany()
     await tx.portfolioSnapshot.deleteMany()
     await tx.benchmarkPrice.deleteMany()
@@ -285,6 +288,26 @@ async function main() {
         })),
       })
     }
+
+    // === 카테고리 시드 ===
+    const categories = [
+      // 소비
+      { slug: 'food', name: '식비', type: 'expense', icon: '🍚', keywords: ['점심', '저녁', '아침', '커피', '카페', '배달', '식사', '간식', '음료', '밥'], sortOrder: 1 },
+      { slug: 'transport', name: '교통', type: 'expense', icon: '🚗', keywords: ['택시', '버스', '지하철', '주유', '기름', '톨비', '주차', '교통'], sortOrder: 2 },
+      { slug: 'living', name: '생활', type: 'expense', icon: '🏠', keywords: ['마트', '생필품', '세탁', '관리비', '공과금', '전기', '수도', '가스'], sortOrder: 3 },
+      { slug: 'medical', name: '의료', type: 'expense', icon: '🏥', keywords: ['병원', '약국', '치과', '안과', '건강검진', '약'], sortOrder: 4 },
+      { slug: 'education', name: '교육', type: 'expense', icon: '📚', keywords: ['학원', '교재', '학비', '수업', '강의', '책'], sortOrder: 5 },
+      { slug: 'shopping', name: '쇼핑', type: 'expense', icon: '🛍️', keywords: ['쇼핑', '옷', '신발', '가전', '전자기기'], sortOrder: 6 },
+      { slug: 'leisure', name: '여가', type: 'expense', icon: '🎮', keywords: ['영화', '게임', '여행', '숙소', '운동', '헬스', '넷플릭스'], sortOrder: 7 },
+      { slug: 'social', name: '경조사', type: 'expense', icon: '💐', keywords: ['축의금', '조의금', '선물', '생일', '꽃'], sortOrder: 8 },
+      { slug: 'etc-expense', name: '기타', type: 'expense', icon: '📦', keywords: [], sortOrder: 99 },
+      // 수입
+      { slug: 'salary', name: '월급', type: 'income', icon: '💰', keywords: ['월급', '급여', '보너스', '상여', '성과급'], sortOrder: 1 },
+      { slug: 'side-income', name: '부수입', type: 'income', icon: '💵', keywords: ['부수입', '알바', '프리랜서', '용돈'], sortOrder: 2 },
+      { slug: 'etc-income', name: '기타수입', type: 'income', icon: '📥', keywords: [], sortOrder: 99 },
+    ]
+
+    await tx.category.createMany({ data: categories })
   })
 
   const totalHoldings = sejinHoldings.length + sodamHoldings.length + dasomHoldings.length
@@ -295,6 +318,7 @@ async function main() {
   console.log('  RSU Schedules: 2')
   console.log('  Deposits: 4')
   console.log('  Stock Options: 4 (카카오, 베스팅 7건)')
+  console.log('  Categories: 12 (소비 9 + 수입 3)')
 }
 
 main()

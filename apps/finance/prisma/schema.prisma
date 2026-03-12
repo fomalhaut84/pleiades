@@ -195,6 +195,47 @@ model HoldingSnapshot {
   @@index([portfolioSnapshotId])
 }
 
+model Category {
+  id           String        @id @default(cuid())
+  slug         String        @unique // 변경 불가 식별자 ("food", "transport" 등)
+  name         String        @unique // 표시명 ("식비", "교통" 등)
+  type         String        // "expense" | "income"
+  icon         String?
+  keywords     String[]      @default([])
+  sortOrder    Int           @default(0)
+  createdAt    DateTime      @default(now())
+  transactions Transaction[]
+  budgets      Budget[]
+}
+
+model Transaction {
+  id           String   @id @default(cuid())
+  amount       Int
+  description  String
+  categoryId   String
+  category     Category @relation(fields: [categoryId], references: [id])
+  userId       String?
+  transactedAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([transactedAt])
+  @@index([categoryId])
+  @@index([userId])
+}
+
+model Budget {
+  id         String    @id @default(cuid())
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  year       Int
+  month      Int
+  amount     Int
+  createdAt  DateTime  @default(now())
+
+  @@unique([categoryId, year, month])
+  @@index([year, month])
+}
+
 model BenchmarkPrice {
   id        String   @id @default(cuid())
   ticker    String
