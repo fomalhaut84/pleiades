@@ -118,6 +118,18 @@ export default function Sidebar({ accounts }: SidebarProps) {
         </Link>
 
         <Link
+          href="/categories"
+          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
+            ${pathname.startsWith('/categories')
+              ? 'bg-surface text-bright font-semibold border-border'
+              : 'text-sub hover:bg-surface-dim hover:text-muted'
+            }`}
+        >
+          <span className="text-[15px] w-5 text-center">🏷️</span>
+          카테고리
+        </Link>
+
+        <Link
           href="/simulator"
           className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
             ${pathname.startsWith('/simulator')
