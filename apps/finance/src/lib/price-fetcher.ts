@@ -71,6 +71,29 @@ export async function fetchQuote(ticker: string): Promise<QuoteResult> {
   return { ticker, displayName, price, currency, market, change, changePercent: changePct }
 }
 
+/** yahoo-finance2 search API로 종목명 검색 (영문) */
+export async function searchYahooByName(
+  query: string,
+  maxResults = 5
+): Promise<{ symbol: string; shortname: string; exchange: string; quoteType: string }[]> {
+  try {
+    const result = await yahooFinance.search(query, {
+      quotesCount: maxResults,
+      newsCount: 0,
+    })
+    return (result.quotes ?? [])
+      .filter((q: Record<string, unknown>) => q.isYahooFinance === true)
+      .map((q: Record<string, unknown>) => ({
+        symbol: (q.symbol as string) ?? '',
+        shortname: (q.shortname as string) ?? (q.longname as string) ?? '',
+        exchange: (q.exchDisp as string) ?? (q.exchange as string) ?? '',
+        quoteType: (q.typeDisp as string) ?? (q.quoteType as string) ?? '',
+      }))
+  } catch {
+    return []
+  }
+}
+
 let isRefreshing = false
 
 /**

@@ -1,6 +1,8 @@
 import cron from 'node-cron'
 import { refreshPrices } from './price-fetcher'
 import { takeAllSnapshots } from './performance/snapshot'
+import { syncKrxStocks } from './krx-stocks'
+import { prisma } from './prisma'
 
 /** 현재 시각을 KST 기준으로 반환 (시, 분, 요일) */
 function getKSTTime(): { h: number; m: number; day: number } {
@@ -95,4 +97,44 @@ export function scheduleSnapshots(): void {
   )
 
   console.log('[cron] 스냅샷 스케줄러 등록 (매일 06:05 KST, 월~토)')
+}
+
+/**
+ * KRX 종목 리스트 동기화 스케줄러.
+ * 매주 월요일 07:00 KST 실행.
+ */
+export function scheduleKrxSync(): void {
+  // 주간 동기화 (매주 월 07:00 KST)
+  cron.schedule(
+    '0 7 * * 1',
+    async () => {
+      try {
+        const result = await syncKrxStocks()
+        console.log(
+          `[cron] KRX 종목 동기화 완료: ${result.total}개 (추가 ${result.added}, 수정 ${result.updated}, 삭제 ${result.removed})`
+        )
+      } catch (error) {
+        console.error('[cron] KRX 종목 동기화 실패:', error)
+      }
+    },
+    { timezone: 'Asia/Seoul' }
+  )
+
+  // 초기 데이터가 없으면 서버 시작 시 자동 동기화
+  void (async () => {
+    try {
+      const count = await prisma.krxStock.count()
+      if (count === 0) {
+        console.log('[cron] KRX 종목 데이터 없음, 초기 동기화 시작...')
+        const result = await syncKrxStocks()
+        console.log(
+          `[cron] KRX 초기 동기화 완료: ${result.total}개`
+        )
+      }
+    } catch (error) {
+      console.error('[cron] KRX 초기 동기화 실패:', error)
+    }
+  })()
+
+  console.log('[cron] KRX 종목 동기화 스케줄러 등록 (매주 월 07:00 KST)')
 }

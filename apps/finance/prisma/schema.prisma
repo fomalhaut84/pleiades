@@ -236,6 +236,18 @@ model Budget {
   @@index([year, month])
 }
 
+// KRX 상장 종목 캐시 (한글 종목명 → yahoo ticker 매핑)
+model KrxStock {
+  id          String   @id @default(cuid())
+  code        String   @unique // KRX 종목코드 (예: 005930)
+  name        String   // 한글 종목명 (예: 삼성전자)
+  market      String   // 유가(KOSPI), 코스닥(KOSDAQ)
+  yahooTicker String   // yahoo finance 티커 (예: 005930.KS)
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+}
+
 model BenchmarkPrice {
   id        String   @id @default(cuid())
   ticker    String

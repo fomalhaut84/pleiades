@@ -1,6 +1,7 @@
 import { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
-import { fetchQuote, InvalidTickerError, type QuoteResult } from '@/lib/price-fetcher'
+import { fetchQuote, InvalidTickerError, searchYahooByName, type QuoteResult } from '@/lib/price-fetcher'
+import { searchKrxByName } from '@/lib/krx-stocks'
 import { formatUSD, splitMessage } from '../utils/formatter'
 
 function formatChange(change: number, currency: string): string {
@@ -21,7 +22,7 @@ async function handlePrice(ctx: Context): Promise<void> {
   const query = match?.[1]?.trim()
 
   if (!query) {
-    await ctx.reply('사용법: 주가 [종목명 또는 티커]\n예: 주가 AAPL, 주가 카카오')
+    await ctx.reply('사용법: 주가 [종목명 또는 티커]\n예: 주가 AAPL, 주가 삼성전자, 주가 카카오')
     return
   }
 
@@ -41,12 +42,61 @@ async function handlePrice(ctx: Context): Promise<void> {
     return
   }
 
-  // 2. PriceCache 미매칭 → ticker 포맷 검증 후 yahoo-finance2 직접 조회
-  if (!/^[A-Z0-9.\-=^]+$/.test(upperQuery)) {
-    await ctx.reply(`⚠️ 종목을 찾을 수 없습니다: ${query}\n\n영문 티커를 입력해주세요.\n예: AAPL, 005930.KS, TSLA`)
+  // 2. PriceCache 미매칭 → 종목명 검색 시도
+
+  // 2-a. 한글 입력 → KRX DB에서 한국 종목 검색
+  if (/[가-힣]/.test(query)) {
+    const krxResults = await searchKrxByName(query)
+    if (krxResults.length === 1) {
+      await fetchAndReply(ctx, krxResults[0].ticker)
+      return
+    }
+    if (krxResults.length > 1) {
+      const candidates = krxResults
+        .slice(0, 10)
+        .map((r) => `${r.name} (${r.ticker}) [${r.market}]`)
+        .join('\n  ')
+      const suffix = krxResults.length > 10 ? '\n  외 다수' : ''
+      for (const chunk of splitMessage(
+        `여러 종목이 검색됩니다:\n  ${candidates}${suffix}\n\n정확한 종목명 또는 티커를 입력해주세요.`
+      )) {
+        await ctx.reply(chunk)
+      }
+      return
+    }
+    // KRX 미매칭 → 종목 못 찾음
+    await ctx.reply(`⚠️ 종목을 찾을 수 없습니다: ${query}\n\n정확한 종목명 또는 티커를 입력해주세요.\n예: 삼성전자, AAPL, 005930.KS`)
     return
   }
-  await fetchAndReply(ctx, upperQuery)
+
+  // 2-b. 영문 ticker 포맷 → yahoo-finance2 직접 조회
+  // 원본 입력이 대문자+숫자+기호만이면 ticker로 간주 (예: AAPL, 005930.KS)
+  // 소문자 포함 시(예: Apple, Tesla) 종목명 검색으로 fallthrough
+  if (/^[A-Z0-9.\-=^]+$/.test(query)) {
+    await fetchAndReply(ctx, upperQuery)
+    return
+  }
+
+  // 2-c. 영문 종목명 → yahoo-finance2 search API
+  const yahooResults = await searchYahooByName(query)
+  if (yahooResults.length === 1) {
+    await fetchAndReply(ctx, yahooResults[0].symbol)
+    return
+  }
+  if (yahooResults.length > 1) {
+    const candidates = yahooResults
+      .slice(0, 10)
+      .map((r) => `${r.shortname} (${r.symbol}) [${r.exchange}]`)
+      .join('\n  ')
+    for (const chunk of splitMessage(
+      `여러 종목이 검색됩니다:\n  ${candidates}\n\n정확한 티커를 입력해주세요.`
+    )) {
+      await ctx.reply(chunk)
+    }
+    return
+  }
+
+  await ctx.reply(`⚠️ 종목을 찾을 수 없습니다: ${query}\n\n종목명 또는 티커를 입력해주세요.\n예: 삼성전자, Apple, AAPL`)
 }
 
 /**
