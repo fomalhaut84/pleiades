@@ -130,7 +130,8 @@
 
 ## Phase 9: Claude AI 어드바이저
 
-- [ ] Claude Code CLI 연동 (subprocess `claude -p` + MCP 서버)
+- [x] MCP 서버 구현 (9개 도구: 포트폴리오, 세금, 소비, 시뮬레이션, 시세)
+- [ ] Claude Code CLI 연동 (subprocess `claude -p`)
 - [ ] 포트폴리오 조회/분석 도구 정의
 - [ ] 시스템 프롬프트 (운영 원칙, 세금 규칙)
 - [ ] 텔레그램 자연어 질문 → AI 응답
