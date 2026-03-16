@@ -4,6 +4,36 @@ import { takeAllSnapshots } from './performance/snapshot'
 import { syncKrxStocks } from './krx-stocks'
 import { prisma } from './prisma'
 
+/**
+ * Cron 작업 mutex + 타임아웃 가드.
+ * - 중복 실행 방지 (isRunning 플래그)
+ * - 타임아웃 시 mutex 강제 해제 (stale lock 방지)
+ */
+function createCronGuard(label: string, timeoutMs: number) {
+  let isRunning = false
+
+  return async (task: () => Promise<void>): Promise<void> => {
+    if (isRunning) {
+      console.warn(`[cron] ${label} 이미 실행 중, 건너뜀`)
+      return
+    }
+    isRunning = true
+
+    const timer = setTimeout(() => {
+      console.error(`[cron] ${label} 타임아웃 경고 (${timeoutMs / 1000}s 초과) — 작업 완료 대기 중`)
+    }, timeoutMs)
+
+    try {
+      await task()
+    } catch (error) {
+      console.error(`[cron] ${label} 실패:`, error)
+    } finally {
+      clearTimeout(timer)
+      isRunning = false
+    }
+  }
+}
+
 /** 현재 시각을 KST 기준으로 반환 (시, 분, 요일) */
 function getKSTTime(): { h: number; m: number; day: number } {
   const now = new Date()
@@ -84,15 +114,11 @@ export function schedulePriceUpdates(): void {
  * 매일 06:05 KST (월~토) 실행. 미국장 종료 후 최신가 반영.
  */
 export function scheduleSnapshots(): void {
+  const guard = createCronGuard('스냅샷', 10 * 60 * 1000)
+
   cron.schedule(
     '5 6 * * 1-6',
-    async () => {
-      try {
-        await takeAllSnapshots()
-      } catch (error) {
-        console.error('[cron] Snapshot failed:', error)
-      }
-    },
+    () => { void guard(async () => { await takeAllSnapshots() }) },
     { timezone: 'Asia/Seoul' }
   )
 
@@ -104,21 +130,19 @@ export function scheduleSnapshots(): void {
  * 매주 월요일 07:00 KST 실행.
  */
 export function scheduleKrxSync(): void {
+  const guard = createCronGuard('KRX 동기화', 5 * 60 * 1000)
+
+  async function runSync(): Promise<void> {
+    await guard(async () => {
+      const result = await syncKrxStocks()
+      console.log(
+        `[cron] KRX 종목 동기화 완료: ${result.total}개 (추가 ${result.added}, 수정 ${result.updated}, 삭제 ${result.removed})`
+      )
+    })
+  }
+
   // 주간 동기화 (매주 월 07:00 KST)
-  cron.schedule(
-    '0 7 * * 1',
-    async () => {
-      try {
-        const result = await syncKrxStocks()
-        console.log(
-          `[cron] KRX 종목 동기화 완료: ${result.total}개 (추가 ${result.added}, 수정 ${result.updated}, 삭제 ${result.removed})`
-        )
-      } catch (error) {
-        console.error('[cron] KRX 종목 동기화 실패:', error)
-      }
-    },
-    { timezone: 'Asia/Seoul' }
-  )
+  cron.schedule('0 7 * * 1', () => { void runSync() }, { timezone: 'Asia/Seoul' })
 
   // 초기 데이터가 없으면 서버 시작 시 자동 동기화
   void (async () => {
@@ -126,10 +150,7 @@ export function scheduleKrxSync(): void {
       const count = await prisma.krxStock.count()
       if (count === 0) {
         console.log('[cron] KRX 종목 데이터 없음, 초기 동기화 시작...')
-        const result = await syncKrxStocks()
-        console.log(
-          `[cron] KRX 초기 동기화 완료: ${result.total}개`
-        )
+        await runSync()
       }
     } catch (error) {
       console.error('[cron] KRX 초기 동기화 실패:', error)
