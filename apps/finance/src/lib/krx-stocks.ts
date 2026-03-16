@@ -18,9 +18,10 @@ interface KrxStockEntry {
 
 /**
  * KRX HTML 테이블을 파싱하여 종목 리스트를 반환한다.
- * 컬럼 순서: 회사명(0), 종목코드(1), 업종(2), ...
+ * 컬럼 순서: 회사명(0), 시장구분(1), 종목코드(2), 업종(3), ...
+ * 시장구분 값에 줄바꿈/공백이 많으므로 HTML 태그 제거 + 공백 정리 필수.
  */
-function parseKrxHtml(html: string, market: string, suffix: string): KrxStockEntry[] {
+function parseKrxHtml(html: string): KrxStockEntry[] {
   const entries: KrxStockEntry[] = []
   const rowRegex = /<tr>([\s\S]*?)<\/tr>/g
   let match: RegExpExecArray | null
@@ -36,19 +37,26 @@ function parseKrxHtml(html: string, market: string, suffix: string): KrxStockEnt
     const cells: string[] = []
     let cellMatch: RegExpExecArray | null
     while ((cellMatch = cellRegex.exec(match[1])) !== null) {
-      cells.push(cellMatch[1].trim())
+      // HTML 태그 제거 + 공백 정리
+      cells.push(cellMatch[1].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim())
     }
 
-    if (cells.length < 2) continue
+    if (cells.length < 3) continue
 
-    const name = cells[0].trim()
-    const code = cells[1].trim()
+    const name = cells[0]
+    const marketRaw = cells[1]
+    const code = cells[2]
 
     // 6자리 숫자 종목코드만 처리
     if (!/^\d{6}$/.test(code)) continue
     if (!name) continue
 
+    const marketMap: Record<string, string> = { '유가': 'KOSPI', '코스닥': 'KOSDAQ' }
+    const market = marketMap[marketRaw]
+    if (!market) continue
+    const suffix = market === 'KOSPI' ? '.KS' : '.KQ'
     const yahooTicker = `${code}${suffix}`
+
     entries.push({ code, name, market, yahooTicker })
   }
 
@@ -56,11 +64,11 @@ function parseKrxHtml(html: string, market: string, suffix: string): KrxStockEnt
 }
 
 /**
- * KRX에서 시장별 종목 리스트를 다운로드한다.
+ * KRX에서 시장별 종목 리스트 HTML을 다운로드한다.
  */
-async function fetchKrxMarket(marketType: string): Promise<string> {
+async function fetchKrxHtml(marketType: string): Promise<string> {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 10_000)
+  const timeout = setTimeout(() => controller.abort(), 15_000)
 
   const url = `${KRX_BASE_URL}&marketType=${marketType}`
   const res = await fetch(url, {
@@ -77,18 +85,15 @@ async function fetchKrxMarket(marketType: string): Promise<string> {
 }
 
 /**
- * KOSPI + KOSDAQ 종목 리스트를 합쳐서 반환한다.
+ * KOSPI + KOSDAQ 종목 리스트를 병렬로 가져와 합친다.
  */
 async function fetchKrxStockList(): Promise<KrxStockEntry[]> {
   const [kospiHtml, kosdaqHtml] = await Promise.all([
-    fetchKrxMarket('stockMkt'),
-    fetchKrxMarket('kosdaqMkt'),
+    fetchKrxHtml('stockMkt'),
+    fetchKrxHtml('kosdaqMkt'),
   ])
 
-  const kospi = parseKrxHtml(kospiHtml, 'KOSPI', '.KS')
-  const kosdaq = parseKrxHtml(kosdaqHtml, 'KOSDAQ', '.KQ')
-
-  return [...kospi, ...kosdaq]
+  return [...parseKrxHtml(kospiHtml), ...parseKrxHtml(kosdaqHtml)]
 }
 
 /**
