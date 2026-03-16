@@ -4,6 +4,7 @@ import { registerPortfolioCommands } from './commands/portfolio'
 import { registerPriceCommands } from './commands/price'
 import { registerTradeCommands } from './commands/trade'
 import { registerExpenseCommands, registerExpenseFallback } from './commands/expense'
+import { registerBudgetCommands } from './commands/budget'
 import { authMiddleware } from './middleware/auth'
 
 let bot: Bot | null = null
@@ -25,6 +26,7 @@ function createBot(): Bot {
   registerPriceCommands(instance)
   registerTradeCommands(instance)
   registerExpenseCommands(instance)
+  registerBudgetCommands(instance)
 
   // 자연어 소비 입력은 반드시 마지막에 등록 (fallback)
   registerExpenseFallback(instance)

@@ -299,14 +299,8 @@ async function createTransaction(
 }
 
 export function registerExpenseCommands(bot: Bot): void {
-  // "수입 ..." 명시적 prefix
-  bot.hears(/^수입(?:\s+.*)?$/, async (ctx) => {
-    const text = ctx.message?.text ?? ''
-    const args = text.replace(/^수입\s*/, '').trim()
-    if (!args) {
-      await ctx.reply('사용법: 수입 [내용] [금액]\n예: 수입 월급 5000000')
-      return
-    }
+  // "수입 ..." 명시적 prefix (인자 필수 — "수입" 단독은 budget 핸들러가 처리)
+  bot.hears(/^수입\s+.+$/, async (ctx) => {
     try {
       await handleExpenseInput(ctx)
     } catch (error) {
@@ -342,7 +336,9 @@ export function registerExpenseFallback(bot: Bot): void {
     if (text.startsWith('/')) return
     // 기존 커맨드 패턴은 무시 (이미 다른 핸들러에서 처리됨)
     // 커맨드 단어 뒤에 공백 또는 문자열 끝이어야 매칭 (예: "매수수수료"는 통과)
-    if (/^(현황|계좌|주가|환율|매수|매도|수입)(\s|$)/i.test(text)) return
+    // "수입 ..."은 expense 핸들러가 처리, "소비"/"수입" 단독은 budget 핸들러가 처리
+    if (/^(현황|계좌|주가|환율|매수|매도|수입|예산설정)(\s|$)/i.test(text)) return
+    if (/^(소비|예산)\s*$/i.test(text)) return
 
     // 숫자가 포함되어 있어야 소비 입력으로 간주
     if (!/\d/.test(text)) return

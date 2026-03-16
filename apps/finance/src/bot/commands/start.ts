@@ -14,7 +14,12 @@ const COMMANDS_HELP =
   `소비/수입 기록 (자연어 입력):\n` +
   `점심 12000 — 소비 기록 + 카테고리 자동 분류\n` +
   `택시 4500 — 소비 기록\n` +
-  `수입 월급 5000000 — 수입 기록`
+  `수입 월급 5000000 — 수입 기록\n\n` +
+  `가계부 조회:\n` +
+  `소비 — 이번 달 소비 요약\n` +
+  `수입 — 이번 달 수입 요약\n` +
+  `예산 — 이번 달 예산 현황\n` +
+  `예산설정 [금액] — 월 예산 설정`
 
 export function registerCommands(bot: Bot): void {
   bot.command('start', async (ctx) => {
