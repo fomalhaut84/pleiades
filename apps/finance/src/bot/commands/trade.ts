@@ -364,12 +364,17 @@ export function registerTradeCommands(bot: Bot): void {
     }
   })
 
-  bot.on('callback_query:data', async (ctx) => {
-    try {
-      await handleTradeCallback(ctx)
-    } catch (error) {
-      console.error('[bot] 콜백 처리 실패:', error)
-      await ctx.answerCallbackQuery({ text: '⚠️ 처리 중 오류가 발생했습니다.' })
+  bot.on('callback_query:data', async (ctx, next) => {
+    const data = ctx.callbackQuery?.data
+    if (data?.startsWith('trade:')) {
+      try {
+        await handleTradeCallback(ctx)
+      } catch (error) {
+        console.error('[bot] 콜백 처리 실패:', error)
+        await ctx.answerCallbackQuery({ text: '⚠️ 처리 중 오류가 발생했습니다.' })
+      }
+    } else {
+      await next()
     }
   })
 }
