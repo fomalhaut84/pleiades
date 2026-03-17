@@ -134,7 +134,7 @@
 - [x] Claude Code CLI 래퍼 + 시스템 프롬프트 (askAdvisor, rate limiter, MCP 연동)
 - [x] 텔레그램 AI 질문 연동 (/ai 커맨드 + 자연어 fallback)
 - [x] 웹 AI 분석 페이지 (/ai 채팅 UI + 프리셋 질문 + marked 렌더링)
-- [ ] 자연어 거래 입력 파싱 (Phase 7 대화형 업그레이드)
+- [x] 자연어 거래 입력 파싱 (AI 파싱 + 확인 키보드)
 - [ ] 텔레그램 AI 응답 포맷 개선 (표→리스트, HTML parse_mode)
 
 ## Phase 10: 알림 + 자동화
