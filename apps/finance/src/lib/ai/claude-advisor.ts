@@ -125,7 +125,7 @@ export async function askAdvisor(
     '--allowedTools', ALLOWED_TOOLS,
     '--tools', '',
     '--max-budget-usd', String(maxBudgetUsd),
-    '--permission-mode', 'auto',
+    '--permission-mode', 'dontAsk',
     '--no-session-persistence',
   ]
 
