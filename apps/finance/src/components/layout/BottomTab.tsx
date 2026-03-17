@@ -22,6 +22,7 @@ const MORE_ITEMS = [
   { href: '/stock-options', icon: '📊', label: '스톡옵션' },
   { href: '/simulator', icon: '🔮', label: '시뮬레이터' },
   { href: '/performance', icon: '📈', label: '수익률 분석' },
+  { href: '/ai', icon: '🤖', label: 'AI 분석' },
 ]
 
 export default function BottomTab({ accounts }: BottomTabProps) {
