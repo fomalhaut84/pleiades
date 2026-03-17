@@ -4,9 +4,11 @@
  */
 
 import cron from 'node-cron'
+import { prisma } from '@/lib/prisma'
 import { sendQuarterlyReminder } from './quarterly'
 import { sendRSUReminders } from './rsu'
 import { sendMonthlyReminder } from './monthly'
+import { sendDailySummary } from './daily'
 
 function getAllowedChatIds(): number[] {
   return (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
@@ -34,6 +36,29 @@ export function scheduleNotifications(): void {
   }
 
   try {
+    // 일일 포트폴리오 요약: 매시 정각 체크 → AlertConfig.daily_summary_hour 매칭 시 발송
+    cron.schedule(
+      '0 * * * *',
+      async () => {
+        try {
+          const config = await prisma.alertConfig.findUnique({
+            where: { key: 'daily_summary_hour' },
+          })
+          const rawHour = parseInt(config?.value ?? '8', 10)
+          const hour = Number.isInteger(rawHour) && rawHour >= 0 && rawHour <= 23
+            ? rawHour : 8
+          const now = new Date()
+          const kstHour = (now.getUTCHours() + 9) % 24
+          if (kstHour === hour) {
+            await sendDailySummary(chatIds)
+          }
+        } catch (error) {
+          console.error('[notification] 일일 요약 실패:', error)
+        }
+      },
+      { timezone: 'Asia/Seoul' }
+    )
+
     // 분기 점검: 1/4/7/10월 1일 09:00 KST
     cron.schedule(
       '0 9 1 1,4,7,10 *',
@@ -74,7 +99,7 @@ export function scheduleNotifications(): void {
     )
 
     scheduled = true
-    console.log('[notification] 알림 스케줄러 등록 (분기점검 + RSU D-7/D-1 + 월적립)')
+    console.log('[notification] 알림 스케줄러 등록 (일일요약 + 분기점검 + RSU D-7/D-1 + 월적립)')
   } catch (error) {
     console.error('[notification] 알림 스케줄러 등록 실패:', error)
   }
