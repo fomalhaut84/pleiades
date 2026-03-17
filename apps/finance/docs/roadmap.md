@@ -132,7 +132,7 @@
 
 - [x] MCP 서버 구현 (9개 도구: 포트폴리오, 세금, 소비, 시뮬레이션, 시세)
 - [x] Claude Code CLI 래퍼 + 시스템 프롬프트 (askAdvisor, rate limiter, MCP 연동)
-- [ ] 텔레그램 자연어 질문 → AI 응답
+- [x] 텔레그램 AI 질문 연동 (/ai 커맨드 + 자연어 fallback)
 - [ ] 웹 "AI 분석" 탭 + 분기 리뷰 리포트
 - [ ] 자연어 거래 입력 파싱 (Phase 7 대화형 업그레이드)
 
