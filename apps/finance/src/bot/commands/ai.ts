@@ -9,6 +9,7 @@ import { createTrade } from '@/lib/trade-service'
 import { splitMessage, formatKRWFull, formatUSD } from '../utils/formatter'
 import { isAiQuestion } from '../utils/ai-trigger'
 import { isTradeMessage } from '../utils/trade-trigger'
+import { markdownToTelegramHtml } from '../utils/markdown'
 
 const TYPING_INTERVAL_MS = 5000
 const MIN_AI_TEXT_LENGTH = 3
@@ -28,9 +29,20 @@ function fireAiQuestion(ctx: Context, question: string): void {
 
   askAdvisor(question)
     .then(async (result) => {
-      const chunks = splitMessage(result.response)
-      for (const chunk of chunks) {
-        await ctx.reply(chunk)
+      const html = markdownToTelegramHtml(result.response)
+      // HTML 전체를 한 번에 전송 시도, 4096자 초과 시 plain text fallback
+      if (html.length <= 4096) {
+        try {
+          await ctx.reply(html, { parse_mode: 'HTML' })
+        } catch {
+          await ctx.reply(result.response)
+        }
+      } else {
+        // 긴 응답: HTML 태그 분할 문제를 피하기 위해 plain text로 전송
+        const chunks = splitMessage(result.response)
+        for (const chunk of chunks) {
+          await ctx.reply(chunk)
+        }
       }
     })
     .catch(async (error) => {
