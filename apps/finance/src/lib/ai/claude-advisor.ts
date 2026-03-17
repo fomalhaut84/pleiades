@@ -1,4 +1,4 @@
-import { execFile } from 'child_process'
+import { spawn } from 'child_process'
 import path from 'path'
 import { SYSTEM_PROMPT } from './system-prompt'
 import { checkAndIncrement, decrement, getRateLimitStatus } from './rate-limiter'
@@ -8,7 +8,7 @@ export type AdvisorModel = 'haiku' | 'sonnet'
 export interface AdvisorOptions {
   /** 모델 선택 (기본: haiku) */
   model?: AdvisorModel
-  /** 타임아웃 ms (기본: 120_000) */
+  /** 타임아웃 ms (기본: 180_000) */
   timeout?: number
   /** API 비용 상한 USD (기본: 0.50) */
   maxBudgetUsd?: number
@@ -50,7 +50,7 @@ export class AdvisorError extends Error {
   }
 }
 
-/** 허용된 MCP 읽기 전용 도구 목록 (와일드카드 대신 명시적 allowlist) */
+/** 허용된 MCP 읽기 전용 도구 목록 */
 const ALLOWED_TOOLS = [
   'mcp__myfinance__get_portfolio',
   'mcp__myfinance__get_trades',
@@ -71,10 +71,17 @@ interface ClaudeJsonOutput {
 }
 
 /**
+ * 문자열을 shell 인자로 안전하게 이스케이프
+ */
+function shellEscape(s: string): string {
+  return "'" + s.replace(/'/g, "'\\''") + "'"
+}
+
+/**
  * Claude Code CLI를 subprocess로 호출하여 AI 어드바이저 응답을 생성한다.
  *
- * MCP 서버(myfinance)를 연결하여 DB 데이터를 자동 조회.
- * 빌트인 도구는 비활성화하고 읽기 전용 MCP 도구만 허용.
+ * shell 경유 실행 (spawn with shell: true)으로
+ * 긴 시스템 프롬프트와 빈 문자열 인자를 안전하게 전달.
  */
 export async function askAdvisor(
   prompt: string,
@@ -87,7 +94,7 @@ export async function askAdvisor(
     dailyLimit = 30,
   } = options
 
-  // 프롬프트 길이 제한 (10,000자)
+  // 프롬프트 길이 제한
   const MAX_PROMPT_LENGTH = 10_000
   if (!prompt || prompt.trim().length === 0) {
     throw new AdvisorError('질문을 입력해주세요.')
@@ -107,7 +114,7 @@ export async function askAdvisor(
     throw new AdvisorError('dailyLimit은 양의 정수여야 합니다.')
   }
 
-  // Rate limit 체크 (skipRateLimit: 외부에서 선체크한 경우 건너뛰기)
+  // Rate limit 체크
   const rateLimit = options.skipRateLimit
     ? getRateLimitStatus(dailyLimit)
     : checkAndIncrement(dailyLimit)
@@ -119,65 +126,82 @@ export async function askAdvisor(
   const mcpConfigPath = process.env.MCP_CONFIG_PATH
     ?? path.join(projectRoot, 'src/lib/ai/mcp-config.json')
 
-  const args = [
-    '-p', prompt,
+  // shell 경유로 실행 — 긴 시스템 프롬프트와 빈 문자열 인자 안전 전달
+  const cmd = [
+    'claude',
+    '-p', shellEscape(prompt),
     '--output-format', 'json',
     '--model', model,
-    '--system-prompt', SYSTEM_PROMPT,
-    '--mcp-config', mcpConfigPath,
+    '--system-prompt', shellEscape(SYSTEM_PROMPT),
+    '--mcp-config', shellEscape(mcpConfigPath),
     '--strict-mcp-config',
-    '--allowedTools', ALLOWED_TOOLS,
-    '--tools', '',
+    '--allowedTools', shellEscape(ALLOWED_TOOLS),
+    '--tools', '""',
     '--max-budget-usd', String(maxBudgetUsd),
     '--permission-mode', 'dontAsk',
     '--no-session-persistence',
-  ]
+  ].join(' ')
 
   return new Promise<AdvisorResult>((resolve, reject) => {
-    execFile(
-      'claude',
-      args,
-      {
-        cwd: projectRoot,
-        timeout,
-        killSignal: 'SIGKILL', // 타임아웃 시 강제 종료 보장
-        maxBuffer: 8 * 1024 * 1024, // 8MB
-        env: { ...process.env },
-      },
-      (error, stdout) => {
-        if (error) {
-          // 실패 시 rate limit 롤백
-          if (!options.skipRateLimit) decrement()
+    const chunks: Buffer[] = []
+    let timedOut = false
 
-          if (error.killed || error.code === 'ETIMEDOUT') {
-            reject(new AdvisorTimeoutError(timeout))
-            return
-          }
-          reject(new AdvisorError(`Claude CLI 실행 오류: ${error.message}`))
+    const child = spawn('sh', ['-c', cmd], {
+      cwd: projectRoot,
+      env: { ...process.env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+
+    const timer = setTimeout(() => {
+      timedOut = true
+      child.kill('SIGKILL')
+    }, timeout)
+
+    child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
+
+    child.on('close', (code) => {
+      clearTimeout(timer)
+
+      if (timedOut) {
+        if (!options.skipRateLimit) decrement()
+        reject(new AdvisorTimeoutError(timeout))
+        return
+      }
+
+      const stdout = Buffer.concat(chunks).toString('utf-8')
+
+      if (code !== 0) {
+        if (!options.skipRateLimit) decrement()
+        reject(new AdvisorError(`Claude CLI 종료 코드: ${code}`))
+        return
+      }
+
+      try {
+        const output: ClaudeJsonOutput = JSON.parse(stdout)
+
+        if (output.is_error) {
+          if (!options.skipRateLimit) decrement()
+          reject(new AdvisorError(`AI 응답 오류: ${output.result}`))
           return
         }
 
-        try {
-          const output: ClaudeJsonOutput = JSON.parse(stdout)
-
-          if (output.is_error) {
-            if (!options.skipRateLimit) decrement()
-            reject(new AdvisorError(`AI 응답 오류: ${output.result}`))
-            return
-          }
-
-          resolve({
-            response: output.result,
-            model,
-            durationMs: output.duration_ms,
-            costUsd: output.total_cost_usd,
-            rateLimitRemaining: rateLimit.remaining,
-          })
-        } catch {
-          if (!options.skipRateLimit) decrement()
-          reject(new AdvisorError('AI 응답을 파싱할 수 없습니다.'))
-        }
+        resolve({
+          response: output.result,
+          model,
+          durationMs: output.duration_ms,
+          costUsd: output.total_cost_usd,
+          rateLimitRemaining: rateLimit.remaining,
+        })
+      } catch {
+        if (!options.skipRateLimit) decrement()
+        reject(new AdvisorError('AI 응답을 파싱할 수 없습니다.'))
       }
-    )
+    })
+
+    child.on('error', (error) => {
+      clearTimeout(timer)
+      if (!options.skipRateLimit) decrement()
+      reject(new AdvisorError(`Claude CLI 실행 오류: ${error.message}`))
+    })
   })
 }
