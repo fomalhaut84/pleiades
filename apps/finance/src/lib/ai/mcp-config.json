@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "myfinance": {
-      "command": "npx",
-      "args": ["tsx", "src/mcp/server.ts"]
+      "command": "node",
+      "args": ["dist/mcp/server.cjs"]
     }
   }
 }
