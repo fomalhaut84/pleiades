@@ -82,7 +82,7 @@ export async function askAdvisor(
 ): Promise<AdvisorResult> {
   const {
     model = 'haiku',
-    timeout = 120_000,
+    timeout = 180_000,
     maxBudgetUsd = 0.50,
     dailyLimit = 30,
   } = options
