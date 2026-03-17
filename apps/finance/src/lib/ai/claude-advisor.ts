@@ -1,7 +1,6 @@
 import { spawn } from 'child_process'
 import path from 'path'
 import { SYSTEM_PROMPT } from './system-prompt'
-import { checkAndIncrement, decrement, getRateLimitStatus } from './rate-limiter'
 
 export type AdvisorModel = 'haiku' | 'sonnet'
 
@@ -12,10 +11,6 @@ export interface AdvisorOptions {
   timeout?: number
   /** API 비용 상한 USD (기본: 0.50) */
   maxBudgetUsd?: number
-  /** 일일 호출 제한 (기본: 30) */
-  dailyLimit?: number
-  /** rate limit 체크 건너뛰기 (외부에서 선체크한 경우) */
-  skipRateLimit?: boolean
 }
 
 export interface AdvisorResult {
@@ -23,17 +18,6 @@ export interface AdvisorResult {
   model: AdvisorModel
   durationMs: number
   costUsd: number
-  rateLimitRemaining: number
-}
-
-export class AdvisorRateLimitError extends Error {
-  constructor(
-    public remaining: number,
-    public resetDate: string
-  ) {
-    super(`일일 AI 호출 한도에 도달했습니다. (리셋: ${resetDate})`)
-    this.name = 'AdvisorRateLimitError'
-  }
 }
 
 export class AdvisorTimeoutError extends Error {
@@ -91,7 +75,6 @@ export async function askAdvisor(
     model = 'haiku',
     timeout = 180_000,
     maxBudgetUsd = 0.50,
-    dailyLimit = 30,
   } = options
 
   // 프롬프트 길이 제한
@@ -110,23 +93,11 @@ export async function askAdvisor(
   if (!Number.isFinite(maxBudgetUsd) || maxBudgetUsd <= 0) {
     throw new AdvisorError('maxBudgetUsd는 양수여야 합니다.')
   }
-  if (!Number.isInteger(dailyLimit) || dailyLimit <= 0) {
-    throw new AdvisorError('dailyLimit은 양의 정수여야 합니다.')
-  }
-
-  // Rate limit 체크
-  const rateLimit = options.skipRateLimit
-    ? getRateLimitStatus(dailyLimit)
-    : checkAndIncrement(dailyLimit)
-  if (!rateLimit.allowed) {
-    throw new AdvisorRateLimitError(rateLimit.remaining, rateLimit.resetDate)
-  }
 
   const projectRoot = process.env.MYFINANCE_ROOT ?? process.cwd()
   const mcpConfigPath = process.env.MCP_CONFIG_PATH
     ?? path.join(projectRoot, 'src/lib/ai/mcp-config.json')
 
-  // shell 경유로 실행 — 긴 시스템 프롬프트와 빈 문자열 인자 안전 전달
   const cmd = [
     'claude',
     '-p', shellEscape(prompt),
@@ -163,7 +134,6 @@ export async function askAdvisor(
       clearTimeout(timer)
 
       if (timedOut) {
-        if (!options.skipRateLimit) decrement()
         reject(new AdvisorTimeoutError(timeout))
         return
       }
@@ -171,7 +141,6 @@ export async function askAdvisor(
       const stdout = Buffer.concat(chunks).toString('utf-8')
 
       if (code !== 0) {
-        if (!options.skipRateLimit) decrement()
         reject(new AdvisorError(`Claude CLI 종료 코드: ${code}`))
         return
       }
@@ -180,7 +149,6 @@ export async function askAdvisor(
         const output: ClaudeJsonOutput = JSON.parse(stdout)
 
         if (output.is_error) {
-          if (!options.skipRateLimit) decrement()
           reject(new AdvisorError(`AI 응답 오류: ${output.result}`))
           return
         }
@@ -190,17 +158,14 @@ export async function askAdvisor(
           model,
           durationMs: output.duration_ms,
           costUsd: output.total_cost_usd,
-          rateLimitRemaining: rateLimit.remaining,
         })
       } catch {
-        if (!options.skipRateLimit) decrement()
         reject(new AdvisorError('AI 응답을 파싱할 수 없습니다.'))
       }
     })
 
     child.on('error', (error) => {
       clearTimeout(timer)
-      if (!options.skipRateLimit) decrement()
       reject(new AdvisorError(`Claude CLI 실행 오류: ${error.message}`))
     })
   })
