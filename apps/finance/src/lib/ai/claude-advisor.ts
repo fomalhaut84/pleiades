@@ -107,7 +107,7 @@ export async function askAdvisor(
     '--mcp-config', shellEscape(mcpConfigPath),
     '--strict-mcp-config',
     '--allowedTools', shellEscape(ALLOWED_TOOLS),
-    '--tools', '""',
+    '--tools', '"WebSearch,WebFetch"',
     '--max-budget-usd', String(maxBudgetUsd),
     '--permission-mode', 'dontAsk',
     '--no-session-persistence',
