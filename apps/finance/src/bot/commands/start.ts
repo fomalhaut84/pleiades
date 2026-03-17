@@ -19,7 +19,10 @@ const COMMANDS_HELP =
   `소비 — 이번 달 소비 요약\n` +
   `수입 — 이번 달 수입 요약\n` +
   `예산 — 이번 달 예산 현황\n` +
-  `예산설정 [금액] — 월 예산 설정`
+  `예산설정 [금액] — 월 예산 설정\n\n` +
+  `AI 어드바이저:\n` +
+  `/ai [질문] — AI에게 질문\n` +
+  `자연어 질문도 가능 (예: "다솜 계좌 어때?")`
 
 export function registerCommands(bot: Bot): void {
   bot.command('start', async (ctx) => {
