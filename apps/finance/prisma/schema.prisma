@@ -257,3 +257,11 @@ model BenchmarkPrice {
 
   @@unique([ticker, priceDate])
 }
+
+model AlertConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique // "price_drop_pct", "fx_change_krw" 등
+  value     String           // "-5", "50" 등
+  label     String           // "급락 알림 (%)" — 사용자 표시용
+  updatedAt DateTime @updatedAt
+}

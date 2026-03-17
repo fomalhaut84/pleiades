@@ -23,7 +23,10 @@ const COMMANDS_HELP =
   `AI 어드바이저:\n` +
   `/ai [질문] — AI에게 질문\n` +
   `자연어 질문도 가능 (예: "다솜 계좌 어때?")\n` +
-  `자연어 거래도 가능 (예: "소담 AAPL 5주 250달러에 샀어")`
+  `자연어 거래도 가능 (예: "소담 AAPL 5주 250달러에 샀어")\n\n` +
+  `알림 설정:\n` +
+  `알림설정 — 현재 알림 설정 조회\n` +
+  `알림설정 [항목] [값] — 임계값 변경 (급락, 급등, 환율, 예산)`
 
 export function registerCommands(bot: Bot): void {
   bot.command('start', async (ctx) => {

@@ -310,6 +310,23 @@ async function main() {
     await tx.category.createMany({ data: categories })
   })
 
+  // AlertConfig 기본값 (upsert — 기존 값 유지)
+  const alertDefaults = [
+    { key: 'price_drop_pct', value: '-5', label: '급락 알림 (%)' },
+    { key: 'price_surge_pct', value: '5', label: '급등 알림 (%)' },
+    { key: 'fx_change_krw', value: '50', label: '환율 변동 알림 (원)' },
+    { key: 'budget_warn_pct', value: '80', label: '예산 경고 (%)' },
+    { key: 'daily_summary_hour', value: '8', label: '일일 요약 시각 (KST)' },
+    { key: 'monthly_report_day', value: '1', label: '월간 리포트 발송일' },
+  ]
+  for (const cfg of alertDefaults) {
+    await prisma.alertConfig.upsert({
+      where: { key: cfg.key },
+      update: {},
+      create: cfg,
+    })
+  }
+
   const totalHoldings = sejinHoldings.length + sodamHoldings.length + dasomHoldings.length
   console.log('Seed completed:')
   console.log(`  Accounts: 3`)
@@ -319,6 +336,7 @@ async function main() {
   console.log('  Deposits: 4')
   console.log('  Stock Options: 4 (카카오, 베스팅 7건)')
   console.log('  Categories: 12 (소비 9 + 수입 3)')
+  console.log(`  AlertConfig: ${alertDefaults.length}`)
 }
 
 main()
