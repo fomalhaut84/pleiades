@@ -3,6 +3,10 @@
     "myfinance": {
       "command": "node",
       "args": ["dist/mcp/server.cjs"]
+    },
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"]
     }
   }
 }

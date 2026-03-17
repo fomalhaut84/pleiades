@@ -45,6 +45,8 @@ const ALLOWED_TOOLS = [
   'mcp__myfinance__simulate_growth',
   'mcp__myfinance__get_prices',
   'mcp__myfinance__get_fx_rate',
+  'mcp__firecrawl__firecrawl_search',
+  'mcp__firecrawl__firecrawl_scrape',
 ].join(',')
 
 interface ClaudeJsonOutput {
@@ -107,7 +109,7 @@ export async function askAdvisor(
     '--mcp-config', shellEscape(mcpConfigPath),
     '--strict-mcp-config',
     '--allowedTools', shellEscape(ALLOWED_TOOLS),
-    '--tools', '"WebSearch,WebFetch"',
+    '--tools', '""',
     '--max-budget-usd', String(maxBudgetUsd),
     '--permission-mode', 'dontAsk',
     '--no-session-persistence',
