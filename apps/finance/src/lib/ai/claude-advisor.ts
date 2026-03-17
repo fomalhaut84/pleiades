@@ -1,7 +1,7 @@
 import { execFile } from 'child_process'
 import path from 'path'
 import { SYSTEM_PROMPT } from './system-prompt'
-import { checkAndIncrement, decrement } from './rate-limiter'
+import { checkAndIncrement, decrement, getRateLimitStatus } from './rate-limiter'
 
 export type AdvisorModel = 'haiku' | 'sonnet'
 
@@ -14,6 +14,8 @@ export interface AdvisorOptions {
   maxBudgetUsd?: number
   /** 일일 호출 제한 (기본: 30) */
   dailyLimit?: number
+  /** rate limit 체크 건너뛰기 (외부에서 선체크한 경우) */
+  skipRateLimit?: boolean
 }
 
 export interface AdvisorResult {
@@ -105,8 +107,10 @@ export async function askAdvisor(
     throw new AdvisorError('dailyLimit은 양의 정수여야 합니다.')
   }
 
-  // Rate limit 체크
-  const rateLimit = checkAndIncrement(dailyLimit)
+  // Rate limit 체크 (skipRateLimit: 외부에서 선체크한 경우 건너뛰기)
+  const rateLimit = options.skipRateLimit
+    ? getRateLimitStatus(dailyLimit)
+    : checkAndIncrement(dailyLimit)
   if (!rateLimit.allowed) {
     throw new AdvisorRateLimitError(rateLimit.remaining, rateLimit.resetDate)
   }
@@ -143,7 +147,7 @@ export async function askAdvisor(
       (error, stdout) => {
         if (error) {
           // 실패 시 rate limit 롤백
-          decrement()
+          if (!options.skipRateLimit) decrement()
 
           if (error.killed || error.code === 'ETIMEDOUT') {
             reject(new AdvisorTimeoutError(timeout))
@@ -157,7 +161,7 @@ export async function askAdvisor(
           const output: ClaudeJsonOutput = JSON.parse(stdout)
 
           if (output.is_error) {
-            decrement()
+            if (!options.skipRateLimit) decrement()
             reject(new AdvisorError(`AI 응답 오류: ${output.result}`))
             return
           }
@@ -170,7 +174,7 @@ export async function askAdvisor(
             rateLimitRemaining: rateLimit.remaining,
           })
         } catch {
-          decrement()
+          if (!options.skipRateLimit) decrement()
           reject(new AdvisorError('AI 응답을 파싱할 수 없습니다.'))
         }
       }
