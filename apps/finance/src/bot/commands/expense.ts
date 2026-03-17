@@ -4,6 +4,7 @@ import { parseExpenseInput, isParseError } from '@/lib/expense-parser'
 import { matchCategory, getAllCategories, type MatchedCategory } from '@/lib/category-matcher'
 import { formatKRWFull } from '../utils/formatter'
 import { isAiQuestion } from '../utils/ai-trigger'
+import { isTradeMessage } from '../utils/trade-trigger'
 
 interface PendingTransaction {
   requestedByUserId: number
@@ -347,6 +348,10 @@ export function registerExpenseFallback(bot: Bot): void {
     // 숫자 포함이지만 질문형 키워드가 있으면 AI fallback으로 전달
     // (예: "테슬라 2026 전망 알려줘")
     if (isAiQuestion(text)) return next()
+
+    // 숫자 포함이지만 거래 키워드가 있으면 AI 거래 파싱으로 전달
+    // (예: "소담 TIGER S&P500 10주 24900원에 샀어")
+    if (isTradeMessage(text)) return next()
 
     try {
       await handleExpenseInput(ctx)
