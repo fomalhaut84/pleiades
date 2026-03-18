@@ -34,7 +34,9 @@ const COMMANDS_HELP =
   `관심종목:\n` +
   `관심 [종목] — 관심종목 추가\n` +
   `관심삭제 [종목] — 관심종목 제거\n` +
-  `관심목록 — 관심종목 현황 + 현재가`
+  `관심목록 — 관심종목 현황 + 현재가\n\n` +
+  `기술적 분석:\n` +
+  `분석 [종목] — TA 리포트 (RSI, MACD, BB, SMA, 시그널)`
 
 export function registerCommands(bot: Bot): void {
   bot.command('start', async (ctx) => {

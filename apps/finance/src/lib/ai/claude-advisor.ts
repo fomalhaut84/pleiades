@@ -45,6 +45,7 @@ const ALLOWED_TOOLS = [
   'mcp__myfinance__simulate_growth',
   'mcp__myfinance__get_prices',
   'mcp__myfinance__get_fx_rate',
+  'mcp__myfinance__get_technical_analysis',
   'mcp__firecrawl__firecrawl_search',
   'mcp__firecrawl__firecrawl_scrape',
 ].join(',')

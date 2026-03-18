@@ -8,6 +8,7 @@ import { getGiftTaxStatus, getDividends } from './tools/tax'
 import { getSpendingSummary } from './tools/spending'
 import { getPrices, getFxRate } from './tools/market'
 import { simulateGrowth } from './tools/simulator'
+import { getTechnicalAnalysis } from './tools/ta'
 
 const ACCOUNT_NAMES = ['세진', '소담', '다솜', '전체'] as const
 const PERIODS = ['1M', '3M', '6M', '1Y', 'ALL'] as const
@@ -111,6 +112,17 @@ server.tool(
   '현재 원/달러(USD/KRW) 환율',
   {},
   async () => getFxRate()
+)
+
+// --- 기술적 분석 ---
+
+server.tool(
+  'get_technical_analysis',
+  '종목의 기술적 분석 리포트 (RSI, MACD, BB, SMA, 지지/저항, 종합 시그널)',
+  {
+    ticker: z.string().describe('Yahoo Finance 티커 (예: AAPL, NVDA)'),
+  },
+  async (args) => getTechnicalAnalysis(args)
 )
 
 // --- 서버 시작 ---
