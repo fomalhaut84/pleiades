@@ -280,3 +280,17 @@ model AlertConfig {
   label     String           // "급락 알림 (%)" — 사용자 표시용
   updatedAt DateTime @updatedAt
 }
+
+model Watchlist {
+  id          String   @id @default(cuid())
+  ticker      String   @unique
+  displayName String
+  market      String             // "US", "KR"
+  strategy    String   @default("swing") // swing, momentum, value, scalp
+  memo        String?
+  targetBuy   Float?             // 목표 매수가
+  entryLow    Float?             // 매수 구간 하한
+  entryHigh   Float?             // 매수 구간 상한
+  addedAt     DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

@@ -30,7 +30,11 @@ const COMMANDS_HELP =
   `전략 관리:\n` +
   `전략 [종목] — 현재 전략 조회\n` +
   `전략 [종목] [전략] — 전략 변경 (장기보유/스윙/모멘텀/가치/감시/단타)\n` +
-  `전략목록 — 전체 종목 전략 현황`
+  `전략목록 — 전체 종목 전략 현황\n\n` +
+  `관심종목:\n` +
+  `관심 [종목] — 관심종목 추가\n` +
+  `관심삭제 [종목] — 관심종목 제거\n` +
+  `관심목록 — 관심종목 현황 + 현재가`
 
 export function registerCommands(bot: Bot): void {
   bot.command('start', async (ctx) => {
