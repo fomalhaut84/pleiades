@@ -5,6 +5,7 @@ import { matchCategory, getAllCategories, type MatchedCategory } from '@/lib/cat
 import { formatKRWFull } from '../utils/formatter'
 import { isAiQuestion } from '../utils/ai-trigger'
 import { isTradeMessage } from '../utils/trade-trigger'
+import { checkBudgetUsage } from '../notifications/budget-alert'
 
 interface PendingTransaction {
   requestedByUserId: number
@@ -292,6 +293,13 @@ async function createTransaction(
         `금액: ${formatKRWFull(pending.amount)}\n` +
         `카테고리: ${catLabel}`
     )
+
+    // 소비 기록 후 예산 사용률 체크 (비동기, 실패해도 무시)
+    if (pending.type === 'expense') {
+      checkBudgetUsage().catch((e) =>
+        console.error('[bot] 예산 경고 체크 실패:', e)
+      )
+    }
   } catch (error) {
     console.error('[bot] 거래 기록 실패:', error)
     await ctx.answerCallbackQuery({ text: '⚠️ 기록에 실패했습니다.' })

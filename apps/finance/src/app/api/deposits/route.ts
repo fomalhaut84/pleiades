@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { validateDepositInput } from '@/lib/deposit-utils'
+import { isGiftSource } from '@/lib/tax/gift-tax'
+import { checkGiftTaxLimit } from '@/bot/notifications/budget-alert'
 
 export const dynamic = 'force-dynamic'
 
@@ -89,6 +91,13 @@ export async function POST(request: NextRequest) {
         depositedAt: new Date(depositedAt as string),
       },
     })
+
+    // 증여 입금 시 비과세 한도 체크 (비동기, 실패해도 무시)
+    if (isGiftSource((source as string).trim())) {
+      checkGiftTaxLimit(accountId as string).catch((e) =>
+        console.error('[notification] 증여세 한도 체크 실패:', e)
+      )
+    }
 
     return NextResponse.json(deposit, { status: 201 })
   } catch (error) {
