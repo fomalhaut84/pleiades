@@ -25,19 +25,34 @@ model Account {
 }
 
 model Holding {
-  id          String  @id @default(cuid())
+  id          String           @id @default(cuid())
   accountId   String
-  account     Account @relation(fields: [accountId], references: [id])
+  account     Account          @relation(fields: [accountId], references: [id])
   ticker      String
   displayName String
   market      String
   shares      Int
   avgPrice    Float
-  currency    String  @default("KRW")
+  currency    String           @default("KRW")
   avgPriceFx  Float?
   avgFxRate   Float?
+  strategy    HoldingStrategy?
 
   @@unique([accountId, ticker])
+}
+
+model HoldingStrategy {
+  id          String    @id @default(cuid())
+  holdingId   String    @unique
+  holding     Holding   @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  strategy    String    @default("long_hold") // long_hold, swing, momentum, value, watch, scalp
+  memo        String?
+  targetPrice Float?
+  stopLoss    Float?
+  entryLow    Float?
+  entryHigh   Float?
+  reviewDate  DateTime?
+  updatedAt   DateTime  @updatedAt
 }
 
 model Trade {
