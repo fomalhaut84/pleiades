@@ -9,6 +9,7 @@ import { sendQuarterlyReminder } from './quarterly'
 import { sendRSUReminders } from './rsu'
 import { sendMonthlyReminder } from './monthly'
 import { sendDailySummary } from './daily'
+import { sendMonthlyReport } from './monthly-report'
 
 function getAllowedChatIds(): number[] {
   return (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
@@ -98,8 +99,34 @@ export function scheduleNotifications(): void {
       { timezone: 'Asia/Seoul' }
     )
 
+    // 월간 리포트: 매일 09:30 KST → monthly_report_day 매칭 시 발송
+    cron.schedule(
+      '30 9 * * *',
+      async () => {
+        try {
+          const config = await prisma.alertConfig.findUnique({
+            where: { key: 'monthly_report_day' },
+          })
+          const rawDay = parseInt(config?.value ?? '1', 10)
+          const configDay = Number.isInteger(rawDay) && rawDay >= 1 && rawDay <= 31
+            ? rawDay : 1
+          const now = new Date()
+          const kst = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
+          // 말일 보정: 설정일이 해당 월 일수 초과 시 말일에 발송
+          const daysInMonth = new Date(kst.getFullYear(), kst.getMonth() + 1, 0).getDate()
+          const day = Math.min(configDay, daysInMonth)
+          if (kst.getDate() === day) {
+            await sendMonthlyReport(chatIds)
+          }
+        } catch (error) {
+          console.error('[notification] 월간 리포트 실패:', error)
+        }
+      },
+      { timezone: 'Asia/Seoul' }
+    )
+
     scheduled = true
-    console.log('[notification] 알림 스케줄러 등록 (일일요약 + 분기점검 + RSU D-7/D-1 + 월적립)')
+    console.log('[notification] 알림 스케줄러 등록 (일일요약 + 분기점검 + RSU D-7/D-1 + 월적립 + 월간리포트)')
   } catch (error) {
     console.error('[notification] 알림 스케줄러 등록 실패:', error)
   }
