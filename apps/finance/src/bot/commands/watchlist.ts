@@ -79,7 +79,7 @@ async function handleWatch(ctx: Context): Promise<void> {
   }
 
   // 보유 종목 재확인 (resolved ticker로)
-  if (resolvedTicker !== resolvedTicker) {
+  if (resolvedTicker !== tickerInput) {
     const holdingCheck = await prisma.holding.findFirst({
       where: { ticker: resolvedTicker },
     })

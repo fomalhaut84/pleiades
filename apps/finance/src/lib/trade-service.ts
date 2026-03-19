@@ -63,6 +63,17 @@ export async function createTrade(input: CreateTradeInput): Promise<CreateTradeR
     throw new Error(`${ticker}은(는) 이미 ${existingTrade.market}/${existingTrade.currency}로 등록되어 있습니다.`)
   }
 
+  // Holding-only 상태 (시드 데이터, Trade 없음)에서도 market/currency 검증
+  if (!existingTrade) {
+    const existingHolding = await prisma.holding.findUnique({
+      where: { accountId_ticker: { accountId, ticker } },
+      select: { market: true, currency: true },
+    })
+    if (existingHolding && (existingHolding.market !== market || existingHolding.currency !== currency)) {
+      throw new Error(`${ticker}은(는) 이미 ${existingHolding.market}/${existingHolding.currency}로 등록되어 있습니다.`)
+    }
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     // SELL: 보유수량 확인
     if (type === 'SELL') {
