@@ -10,6 +10,7 @@ import { sendRSUReminders } from './rsu'
 import { sendMonthlyReminder } from './monthly'
 import { sendDailySummary } from './daily'
 import { sendMonthlyReport } from './monthly-report'
+import { sendBriefing } from './briefing'
 
 function getAllowedChatIds(): number[] {
   return (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
@@ -125,8 +126,34 @@ export function scheduleNotifications(): void {
       { timezone: 'Asia/Seoul' }
     )
 
+    // 모닝 브리핑: 한국장 08:30 KST (월~금)
+    cron.schedule(
+      '30 8 * * 1-5',
+      async () => {
+        try {
+          await sendBriefing(chatIds, 'KR')
+        } catch (error) {
+          console.error('[notification] 한국장 브리핑 실패:', error)
+        }
+      },
+      { timezone: 'Asia/Seoul' }
+    )
+
+    // 모닝 브리핑: 미국장 23:00 KST (월~금)
+    cron.schedule(
+      '0 23 * * 1-5',
+      async () => {
+        try {
+          await sendBriefing(chatIds, 'US')
+        } catch (error) {
+          console.error('[notification] 미국장 브리핑 실패:', error)
+        }
+      },
+      { timezone: 'Asia/Seoul' }
+    )
+
     scheduled = true
-    console.log('[notification] 알림 스케줄러 등록 (일일요약 + 분기점검 + RSU D-7/D-1 + 월적립 + 월간리포트)')
+    console.log('[notification] 알림 스케줄러 등록 (일일요약 + 브리핑 + 분기점검 + RSU + 월적립 + 월간리포트)')
   } catch (error) {
     console.error('[notification] 알림 스케줄러 등록 실패:', error)
   }

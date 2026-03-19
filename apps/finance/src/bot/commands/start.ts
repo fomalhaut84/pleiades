@@ -36,7 +36,10 @@ const COMMANDS_HELP =
   `관심삭제 [종목] — 관심종목 제거\n` +
   `관심목록 — 관심종목 현황 + 현재가\n\n` +
   `기술적 분석:\n` +
-  `분석 [종목] — TA 리포트 (RSI, MACD, BB, SMA, 시그널)`
+  `분석 [종목] — TA 리포트 (RSI, MACD, BB, SMA, 시그널)\n\n` +
+  `모닝 브리핑:\n` +
+  `브리핑 — 모닝 브리핑 수동 발송\n` +
+  `브리핑 한국/미국 — 특정 시장 브리핑`
 
 export function registerCommands(bot: Bot): void {
   bot.command('start', async (ctx) => {
