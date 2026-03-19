@@ -1,5 +1,6 @@
 import { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
+import { replyHtml, escapeHtml, h } from '../utils/telegram'
 
 const STRATEGY_LABELS: Record<string, string> = {
   long_hold: '📦 장기보유',
@@ -259,25 +260,25 @@ async function handleStrategyList(ctx: Context): Promise<void> {
     orderBy: { createdAt: 'asc' },
   })
 
-  const lines = ['📋 종목별 전략 현황\n']
+  const lines = [`📋 ${h.b('종목별 전략 현황')}\n`]
 
   for (const account of accounts) {
     if (account.holdings.length === 0) continue
-    lines.push(`**${account.name}**`)
-    for (const h of account.holdings) {
-      const s = h.strategy
+    lines.push(h.b(escapeHtml(account.name)))
+    for (const holding of account.holdings) {
+      const s = holding.strategy
       const strat = formatStrategy(s?.strategy ?? 'long_hold')
-      let detail = `- ${h.displayName} (${h.ticker}): ${strat}`
-      if (s?.targetPrice != null) detail += ` | 목표 ${s.targetPrice}`
-      if (s?.stopLoss != null) detail += ` | 손절 ${s.stopLoss}`
-      if (s?.memo) detail += ` | ${s.memo}`
-      if (s?.reviewDate) detail += ` | 점검 ${s.reviewDate.toISOString().slice(0, 10)}`
+      let detail = `  ${escapeHtml(holding.displayName)} (${escapeHtml(holding.ticker)}): ${strat}`
+      if (s?.targetPrice != null) detail += ` · 목표 ${s.targetPrice}`
+      if (s?.stopLoss != null) detail += ` · 손절 ${s.stopLoss}`
+      if (s?.memo) detail += `\n    💬 ${escapeHtml(s.memo)}`
+      if (s?.reviewDate) detail += `\n    📅 점검 ${s.reviewDate.toISOString().slice(0, 10)}`
       lines.push(detail)
     }
     lines.push('')
   }
 
-  await ctx.reply(lines.join('\n'))
+  await replyHtml(ctx, lines.join('\n'))
 }
 
 export function registerStrategyCommands(bot: Bot): void {

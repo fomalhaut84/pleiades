@@ -14,8 +14,8 @@ import {
   accountEmoji,
   formatKRWCompact,
   formatPercent,
-  splitMessage,
 } from '@/bot/utils/formatter'
+import { sendHtml } from '@/bot/utils/telegram'
 
 export async function sendDailySummary(chatIds: number[]): Promise<void> {
   const bot = getBot()
@@ -82,21 +82,19 @@ export async function sendDailySummary(chatIds: number[]): Promise<void> {
   const dateStr = `${kst.getFullYear()}.${String(kst.getMonth() + 1).padStart(2, '0')}.${String(kst.getDate()).padStart(2, '0')}`
 
   const lines = [
-    `📊 일일 포트폴리오 요약 (${dateStr})\n`,
-    `💰 총 평가금: ${formatKRWCompact(grandTotal)} (${formatPercent(grandReturn)})`,
+    `📊 <b>일일 포트폴리오 요약</b> (${dateStr})\n`,
+    `💰 총 평가금: <b>${formatKRWCompact(grandTotal)}</b> (${formatPercent(grandReturn)})`,
     '',
     ...accountLines,
     '',
-    `환율: ${fxRate.toLocaleString('ko-KR')}원/달러`,
+    `💱 환율: ${fxRate.toLocaleString('ko-KR')}원/달러`,
   ]
 
   const fullMessage = lines.join('\n')
 
   for (const chatId of chatIds) {
     try {
-      for (const chunk of splitMessage(fullMessage)) {
-        await bot.api.sendMessage(chatId, chunk)
-      }
+      await sendHtml(bot, chatId, fullMessage)
     } catch (error) {
       console.error(`[notification] 일일 요약 발송 실패 (chatId: ${chatId}):`, error)
     }

@@ -8,7 +8,8 @@
 
 import { prisma } from '@/lib/prisma'
 import { getBot } from '@/bot/index'
-import { formatPercent, splitMessage } from '@/bot/utils/formatter'
+import { formatPercent } from '@/bot/utils/formatter'
+import { sendHtml } from '@/bot/utils/telegram'
 
 /** 당일 알림 발송 기록 (ticker → date string) */
 const sentToday = new Map<string, string>()
@@ -114,13 +115,11 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
   if (alerts.length === 0) return
 
   const bot = getBot()
-  const message = `⚡ 변동 알림\n\n${alerts.join('\n')}`
+  const message = `⚡ <b>변동 알림</b>\n\n${alerts.join('\n')}`
 
   for (const chatId of chatIds) {
     try {
-      for (const chunk of splitMessage(message)) {
-        await bot.api.sendMessage(chatId, chunk)
-      }
+      await sendHtml(bot, chatId, message)
     } catch (error) {
       console.error(`[notification] 변동 알림 발송 실패 (chatId: ${chatId}):`, error)
     }
