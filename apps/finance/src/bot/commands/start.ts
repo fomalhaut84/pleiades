@@ -40,7 +40,12 @@ const COMMANDS_HELP =
   `분석 [종목] — TA 리포트 (RSI, MACD, BB, SMA, 시그널)\n\n` +
   `${h.b('모닝 브리핑:')}\n` +
   `브리핑 — 모닝 브리핑 수동 발송\n` +
-  `브리핑 한국/미국 — 특정 시장 브리핑`
+  `브리핑 한국/미국 — 특정 시장 브리핑\n\n` +
+  `${h.b('순자산:')}\n` +
+  `순자산 — 가족 순자산 요약\n` +
+  `자산목록 — 전체 자산/부채 현황\n` +
+  `자산추가 [이름] [카테고리] [금액] — 자산 등록\n` +
+  `자산수정 [이름] [금액] — 금액 수정`
 
 export function registerCommands(bot: Bot): void {
   bot.command('start', async (ctx) => {
