@@ -7,7 +7,7 @@
 
 ## 서브 이슈
 
-- [ ] **12-A**: Asset + NetWorthSnapshot DB 모델 + CRUD API
+- [x] **12-A**: Asset + NetWorthSnapshot DB 모델 + CRUD API
 - [ ] **12-B**: 텔레그램 /순자산, /자산 커맨드
 - [ ] **12-C**: 순자산 스냅샷 자동화 (월별 cron)
 - [ ] **12-D**: 웹 순자산 대시보드 페이지

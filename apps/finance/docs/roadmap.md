@@ -165,7 +165,7 @@
 
 ## Phase 12: 순자산 대시보드 (Net Worth Tracker)
 
-- [ ] Asset 모델 (예적금, 보험, 부동산, 연금, 대출 등 비주식 자산)
+- [x] Asset + NetWorthSnapshot DB 모델 + CRUD API
 - [ ] 자산 카테고리별 비중 파이차트 (주식 vs 부동산 vs 현금 vs 보험 등)
 - [ ] 월별 순자산 스냅샷 자동 저장 (NetWorthSnapshot)
 - [ ] 순자산 추이 라인차트 (월별/연별)
