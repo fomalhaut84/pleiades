@@ -9,6 +9,7 @@ import { getSpendingSummary } from './tools/spending'
 import { getPrices, getFxRate } from './tools/market'
 import { simulateGrowth } from './tools/simulator'
 import { getTechnicalAnalysis } from './tools/ta'
+import { getHoldingStrategy, getAllStrategies } from './tools/strategy'
 
 const ACCOUNT_NAMES = ['세진', '소담', '다솜', '전체'] as const
 const PERIODS = ['1M', '3M', '6M', '1Y', 'ALL'] as const
@@ -123,6 +124,24 @@ server.tool(
     ticker: z.string().describe('Yahoo Finance 티커 (예: AAPL, NVDA)'),
   },
   async (args) => getTechnicalAnalysis(args)
+)
+
+// --- 전략 ---
+
+server.tool(
+  'get_holding_strategy',
+  '종목의 전략 태그, 목표가, 손절가, 메모, 점검일 조회',
+  {
+    ticker: z.string().describe('티커 (예: NVDA, AAPL)'),
+  },
+  async (args) => getHoldingStrategy(args)
+)
+
+server.tool(
+  'get_all_strategies',
+  '전체 보유 종목의 전략 현황 (계좌별)',
+  {},
+  async () => getAllStrategies()
 )
 
 // --- 서버 시작 ---
