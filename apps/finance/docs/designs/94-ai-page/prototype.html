@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>myFinance — AI 분석</title>
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #07080c;
+      --bg-raised: #0d0e14;
+      --card: rgba(255,255,255,0.025);
+      --card-hover: rgba(255,255,255,0.045);
+      --border: rgba(255,255,255,0.06);
+      --border-hover: rgba(255,255,255,0.12);
+      --dim: #6e6e82;
+      --sub: #9494a8;
+      --text: #c8c8d4;
+      --bright: #eeeef2;
+      --sejin: #34d399;
+      --surface-dim: rgba(255,255,255,0.04);
+      --surface: rgba(255,255,255,0.06);
+      --header-blur: rgba(7,8,12,0.85);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ========== Header ========== */
+    .header {
+      position: sticky; top: 0; z-index: 40;
+      padding: 16px 32px;
+      background: var(--header-blur);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .header-title { font-size: 15px; font-weight: 700; color: var(--bright); }
+    .header-sub { font-size: 12px; color: var(--sub); margin-top: 2px; }
+    .header-btn {
+      font-size: 12px; color: var(--sub); background: var(--surface-dim);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 6px 14px; cursor: pointer; transition: all 0.2s;
+    }
+    .header-btn:hover { background: var(--surface); color: var(--bright); }
+
+    /* ========== Layout ========== */
+    .chat-container {
+      display: flex; flex-direction: column;
+      height: calc(100vh - 57px);
+    }
+    .messages-area {
+      flex: 1; overflow-y: auto;
+      padding: 24px 32px;
+    }
+    .input-area {
+      border-top: 1px solid var(--border);
+      background: var(--bg-raised);
+      padding: 16px 32px;
+    }
+
+    /* ========== 빈 상태 ========== */
+    .empty-state {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      height: 100%;
+      max-width: 640px; margin: 0 auto;
+    }
+    .empty-icon {
+      width: 64px; height: 64px;
+      border-radius: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 30px; margin-bottom: 16px;
+    }
+    .empty-title { font-size: 18px; font-weight: 700; color: var(--bright); }
+    .empty-desc { font-size: 13px; color: var(--sub); margin-top: 4px; }
+
+    /* 프리셋 그리드 */
+    .presets {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px; width: 100%;
+      margin-top: 32px;
+    }
+    @media (max-width: 640px) {
+      .presets { grid-template-columns: repeat(2, 1fr); }
+      .messages-area { padding: 16px; }
+      .input-area { padding: 12px 16px; }
+      .header { padding: 16px; }
+    }
+    .preset-btn {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 8px;
+      padding: 16px 8px;
+      border-radius: 12px;
+      background: var(--surface-dim);
+      border: 1px solid var(--border);
+      cursor: pointer; transition: all 0.2s;
+      color: var(--sub); font-size: 12px; font-weight: 500;
+    }
+    .preset-btn:hover {
+      background: var(--surface);
+      border-color: var(--border-hover);
+      color: var(--bright);
+    }
+    .preset-btn:hover .preset-emoji { transform: scale(1.15); }
+    .preset-emoji { font-size: 24px; transition: transform 0.2s; }
+
+    /* ========== 메시지 ========== */
+    .messages { max-width: 720px; margin: 0 auto; }
+    .msg-row { display: flex; margin-bottom: 20px; }
+    .msg-row.user { justify-content: flex-end; }
+    .msg-row.ai { justify-content: flex-start; }
+
+    .ai-avatar {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; margin-right: 12px; flex-shrink: 0; margin-top: 4px;
+    }
+
+    .msg-bubble {
+      max-width: 75%;
+      border-radius: 16px;
+      padding: 12px 16px;
+      font-size: 13px; line-height: 1.7;
+    }
+    @media (max-width: 640px) { .msg-bubble { max-width: 85%; } }
+
+    .msg-bubble.user {
+      background: rgba(52,211,153,0.12);
+      color: var(--bright);
+      border-bottom-right-radius: 6px;
+    }
+    .msg-bubble.ai {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-bottom-left-radius: 6px;
+    }
+
+    /* AI 응답 내 마크다운 스타일 */
+    .msg-bubble.ai h2, .msg-bubble.ai h3 {
+      font-size: 14px; font-weight: 700;
+      color: var(--bright); margin: 16px 0 8px;
+    }
+    .msg-bubble.ai h2:first-child, .msg-bubble.ai h3:first-child { margin-top: 0; }
+    .msg-bubble.ai strong { color: var(--bright); }
+    .msg-bubble.ai em { color: var(--sub); font-style: italic; }
+    .msg-bubble.ai code {
+      background: var(--surface); color: var(--sejin);
+      padding: 1px 5px; border-radius: 4px; font-size: 12px;
+    }
+    .msg-bubble.ai hr {
+      border: none; border-top: 1px solid var(--border);
+      margin: 12px 0;
+    }
+    .msg-bubble.ai ul, .msg-bubble.ai ol {
+      padding-left: 20px; margin: 6px 0;
+    }
+    .msg-bubble.ai li { margin: 3px 0; }
+    .msg-bubble.ai table {
+      width: 100%; border-collapse: collapse;
+      font-size: 12px; margin: 8px 0;
+      border: 1px solid var(--border); border-radius: 8px;
+      overflow: hidden;
+    }
+    .msg-bubble.ai th {
+      background: var(--surface); text-align: left;
+      padding: 8px 12px; color: var(--sub); font-weight: 500;
+    }
+    .msg-bubble.ai td {
+      padding: 8px 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* 로딩 인디케이터 */
+    .loading-dots { display: flex; align-items: center; gap: 6px; padding: 4px 0; }
+    .loading-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(52,211,153,0.5);
+      animation: bounce 1.2s infinite;
+    }
+    .loading-dot:nth-child(2) { animation-delay: 150ms; }
+    .loading-dot:nth-child(3) { animation-delay: 300ms; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); }
+      40% { transform: translateY(-8px); }
+    }
+
+    /* ========== 입력 ========== */
+    .input-form {
+      max-width: 720px; margin: 0 auto;
+      display: flex; gap: 12px;
+    }
+    .input-field {
+      flex: 1; background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 12px 16px;
+      font-size: 13px; color: var(--text);
+      font-family: inherit; outline: none;
+      transition: all 0.2s;
+    }
+    .input-field::placeholder { color: var(--dim); }
+    .input-field:focus {
+      border-color: rgba(52,211,153,0.4);
+      box-shadow: 0 0 0 2px rgba(52,211,153,0.1);
+    }
+    .send-btn {
+      padding: 12px 20px;
+      background: rgba(52,211,153,0.12);
+      color: var(--sejin);
+      border: 1px solid rgba(52,211,153,0.2);
+      border-radius: 12px; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+      font-family: inherit; flex-shrink: 0;
+    }
+    .send-btn:hover { background: rgba(52,211,153,0.2); }
+    .send-btn:disabled { opacity: 0.3; cursor: default; }
+
+    /* 프리셋 칩 (대화 중) */
+    .preset-chips {
+      max-width: 720px; margin: 12px auto 0;
+      display: flex; gap: 8px; overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .preset-chip {
+      flex-shrink: 0;
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px;
+      background: var(--surface-dim);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 11px; color: var(--sub);
+      cursor: pointer; transition: all 0.2s;
+      white-space: nowrap; font-family: inherit;
+    }
+    .preset-chip:hover { background: var(--surface); color: var(--bright); }
+
+    /* 스크롤바 */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <div class="header-title">AI 분석</div>
+      <div class="header-sub">포트폴리오 · 세금 · 소비 분석</div>
+    </div>
+    <button class="header-btn" onclick="showEmpty()">새 대화</button>
+  </div>
+
+  <div class="chat-container">
+    <!-- ============ 빈 상태 ============ -->
+    <div class="messages-area" id="emptyView">
+      <div class="empty-state">
+        <div class="empty-icon">🤖</div>
+        <div class="empty-title">AI 어드바이저</div>
+        <div class="empty-desc">포트폴리오, 세금, 소비 현황을 분석해드립니다</div>
+        <div class="presets">
+          <button class="preset-btn" onclick="ask('전체 포트폴리오 현황을 분석해줘')">
+            <span class="preset-emoji">📊</span>전체 현황
+          </button>
+          <button class="preset-btn" onclick="ask('소담 계좌 현황과 증여세 한도를 확인해줘')">
+            <span class="preset-emoji">👧</span>소담 계좌
+          </button>
+          <button class="preset-btn" onclick="ask('다솜 계좌 현황과 증여세 한도를 확인해줘')">
+            <span class="preset-emoji">👶</span>다솜 계좌
+          </button>
+          <button class="preset-btn" onclick="ask('세진 계좌 상세 현황과 수익률을 분석해줘')">
+            <span class="preset-emoji">💼</span>세진 계좌
+          </button>
+          <button class="preset-btn" onclick="ask('전체 계좌의 최근 3개월 수익률을 비교 분석해줘')">
+            <span class="preset-emoji">📈</span>수익률 비교
+          </button>
+          <button class="preset-btn" onclick="ask('이번 달 소비/수입 현황을 분석해줘')">
+            <span class="preset-emoji">💸</span>이번 달 소비
+          </button>
+          <button class="preset-btn" onclick="ask('소담, 다솜 계좌의 10년 성장 시뮬레이션을 해줘')">
+            <span class="preset-emoji">🔮</span>성장 시뮬
+          </button>
+          <button class="preset-btn" onclick="ask('현재 환율과 보유 종목 시세를 알려줘')">
+            <span class="preset-emoji">💱</span>환율 현황
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 대화 뷰 (기본 숨김) ============ -->
+    <div class="messages-area" id="chatView" style="display:none;">
+      <div class="messages" id="messageList">
+        <!-- 데모 메시지 -->
+      </div>
+    </div>
+
+    <!-- ============ 하단 입력 ============ -->
+    <div class="input-area">
+      <form class="input-form" onsubmit="handleSubmit(event)">
+        <input type="text" class="input-field" id="inputField"
+          placeholder="질문을 입력하세요..." autocomplete="off" />
+        <button type="submit" class="send-btn" id="sendBtn">전송</button>
+      </form>
+      <div class="preset-chips" id="presetChips" style="display:none;">
+        <button class="preset-chip" onclick="ask('전체 포트폴리오 현황을 분석해줘')">📊 전체 현황</button>
+        <button class="preset-chip" onclick="ask('소담 계좌 현황과 증여세 한도를 확인해줘')">👧 소담 계좌</button>
+        <button class="preset-chip" onclick="ask('이번 달 소비/수입 현황을 분석해줘')">💸 이번 달 소비</button>
+        <button class="preset-chip" onclick="ask('현재 환율과 보유 종목 시세를 알려줘')">💱 환율</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let isLoading = false;
+
+    // 데모용 AI 응답 (실제로는 API 호출)
+    const DEMO_RESPONSE = `## 세진 계좌 현황
+
+**포트폴리오 요약**
+- 평가금: **9,529,009원**
+- 매입금: 5,029,040원
+- 손익: **+4,499,969원** (+89.5%)
+
+**보유 종목**
+- 🇺🇸 **AAPL** 6주 × $252.82 = 2,263,366원 (+145.9%)
+- 🇺🇸 **NVDA** 10주 × $183.22 = 2,733,789원 (+56.4%)
+- 🇺🇸 **MSFT** 4주 × $399.95 = 2,387,030원 (+28.8%)
+- 🇺🇸 **RKLB** 16주 × $71.31 = 1,702,404원 (**+1112.8%** 🚀)
+- 🇰🇷 카카오 1주 = 51,100원 (+13.6%)
+- 🇰🇷 두산로보틱스 2주 = 179,400원 (+245.0%)
+- 🇰🇷 컨텍 12주 = 211,920원 (-21.5%)
+
+---
+
+**최근 1개월 TWR**: -0.75% (소폭 조정)
+
+주요 드래그 요인은 AAPL(-1.8%), NVDA(-1.0%) 하락이며, RKLB는 소폭 상승했습니다.
+
+> 투자 권유가 아닌 정보 제공입니다.`;
+
+    function showEmpty() {
+      document.getElementById('emptyView').style.display = '';
+      document.getElementById('chatView').style.display = 'none';
+      document.getElementById('presetChips').style.display = 'none';
+      document.getElementById('messageList').innerHTML = '';
+    }
+
+    function showChat() {
+      document.getElementById('emptyView').style.display = 'none';
+      document.getElementById('chatView').style.display = '';
+      document.getElementById('presetChips').style.display = 'flex';
+    }
+
+    function addMessage(role, content) {
+      const list = document.getElementById('messageList');
+      const row = document.createElement('div');
+      row.className = `msg-row ${role}`;
+
+      if (role === 'ai') {
+        row.innerHTML = `
+          <div class="ai-avatar">🤖</div>
+          <div class="msg-bubble ai">${renderMarkdown(content)}</div>
+        `;
+      } else {
+        row.innerHTML = `<div class="msg-bubble user">${escapeHtml(content)}</div>`;
+      }
+
+      list.appendChild(row);
+      scrollToBottom();
+    }
+
+    function addLoading() {
+      const list = document.getElementById('messageList');
+      const row = document.createElement('div');
+      row.className = 'msg-row ai';
+      row.id = 'loadingRow';
+      row.innerHTML = `
+        <div class="ai-avatar">🤖</div>
+        <div class="msg-bubble ai">
+          <div class="loading-dots">
+            <div class="loading-dot"></div>
+            <div class="loading-dot"></div>
+            <div class="loading-dot"></div>
+          </div>
+        </div>
+      `;
+      list.appendChild(row);
+      scrollToBottom();
+    }
+
+    function removeLoading() {
+      const el = document.getElementById('loadingRow');
+      if (el) el.remove();
+    }
+
+    function scrollToBottom() {
+      const area = document.getElementById('chatView');
+      area.scrollTop = area.scrollHeight;
+    }
+
+    function ask(prompt) {
+      if (isLoading) return;
+      showChat();
+      addMessage('user', prompt);
+      isLoading = true;
+      addLoading();
+      document.getElementById('sendBtn').disabled = true;
+
+      // 데모: 2초 후 응답
+      setTimeout(() => {
+        removeLoading();
+        addMessage('ai', DEMO_RESPONSE);
+        isLoading = false;
+        document.getElementById('sendBtn').disabled = false;
+      }, 2000);
+    }
+
+    function handleSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('inputField');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      ask(text);
+    }
+
+    // 간단 마크다운 → HTML
+    function renderMarkdown(text) {
+      return escapeHtml(text)
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code>$1</code>')
+        .replace(/^---$/gm, '<hr>')
+        .replace(/^&gt; (.+)$/gm, '<blockquote style="border-left:2px solid var(--border);padding-left:12px;color:var(--sub);margin:8px 0;">$1</blockquote>')
+        .replace(/^- (.+)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+        .replace(/\n\n/g, '<br><br>')
+        .replace(/\n/g, '<br>');
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+  </script>
+</body>
+</html>

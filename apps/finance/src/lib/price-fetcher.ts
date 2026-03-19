@@ -12,6 +12,88 @@ interface RefreshResult {
   updatedAt: Date
 }
 
+/** 유효한 시세를 가져올 수 없을 때 발생하는 에러 */
+export class InvalidTickerError extends Error {
+  constructor(ticker: string) {
+    super(`유효한 시세를 가져올 수 없습니다: ${ticker}`)
+    this.name = 'InvalidTickerError'
+  }
+}
+
+/** 단일 종목 실시간 시세 조회 결과 */
+export interface QuoteResult {
+  ticker: string
+  displayName: string
+  price: number
+  currency: string
+  market: string
+  change: number | null
+  changePercent: number | null
+}
+
+/**
+ * yahoo-finance2로 단일 종목 실시간 시세 조회.
+ * 보유 종목이면 PriceCache도 갱신한다.
+ */
+export async function fetchQuote(ticker: string): Promise<QuoteResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let quote: any
+  try {
+    quote = await yahooFinance.quote(ticker)
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : ''
+    if (message.includes('not found') || message.includes('no data') || message.includes('invalid symbol') || message.includes('delisted')) {
+      throw new InvalidTickerError(ticker)
+    }
+    throw error
+  }
+  const price = Number(quote?.regularMarketPrice)
+  if (!Number.isFinite(price)) {
+    throw new InvalidTickerError(ticker)
+  }
+
+  const change = quote.regularMarketChange != null ? Number(quote.regularMarketChange) : null
+  const changePct = quote.regularMarketChangePercent != null ? Number(quote.regularMarketChangePercent) : null
+  const currency = quote.currency ?? 'USD'
+  const market = quote.exchange ?? 'unknown'
+  const displayName = quote.shortName ?? quote.longName ?? ticker
+
+  // 보유 종목(PriceCache에 존재)이면 캐시 갱신 (실패해도 조회 결과는 반환)
+  try {
+    await prisma.priceCache.updateMany({
+      where: { ticker },
+      data: { price, change, changePercent: changePct },
+    })
+  } catch (error) {
+    console.error(`[price-fetcher] 캐시 갱신 실패 (${ticker}):`, error)
+  }
+
+  return { ticker, displayName, price, currency, market, change, changePercent: changePct }
+}
+
+/** yahoo-finance2 search API로 종목명 검색 (영문) */
+export async function searchYahooByName(
+  query: string,
+  maxResults = 5
+): Promise<{ symbol: string; shortname: string; exchange: string; quoteType: string }[]> {
+  try {
+    const result = await yahooFinance.search(query, {
+      quotesCount: maxResults,
+      newsCount: 0,
+    })
+    return (result.quotes ?? [])
+      .filter((q: Record<string, unknown>) => q.isYahooFinance === true)
+      .map((q: Record<string, unknown>) => ({
+        symbol: (q.symbol as string) ?? '',
+        shortname: (q.shortname as string) ?? (q.longname as string) ?? '',
+        exchange: (q.exchDisp as string) ?? (q.exchange as string) ?? '',
+        quoteType: (q.typeDisp as string) ?? (q.quoteType as string) ?? '',
+      }))
+  } catch {
+    return []
+  }
+}
+
 let isRefreshing = false
 
 /**

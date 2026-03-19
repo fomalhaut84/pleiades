@@ -25,19 +25,34 @@ model Account {
 }
 
 model Holding {
-  id          String  @id @default(cuid())
+  id          String           @id @default(cuid())
   accountId   String
-  account     Account @relation(fields: [accountId], references: [id])
+  account     Account          @relation(fields: [accountId], references: [id])
   ticker      String
   displayName String
   market      String
   shares      Int
   avgPrice    Float
-  currency    String  @default("KRW")
+  currency    String           @default("KRW")
   avgPriceFx  Float?
   avgFxRate   Float?
+  strategy    HoldingStrategy?
 
   @@unique([accountId, ticker])
+}
+
+model HoldingStrategy {
+  id          String    @id @default(cuid())
+  holdingId   String    @unique
+  holding     Holding   @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  strategy    String    @default("long_hold") // long_hold, swing, momentum, value, watch, scalp
+  memo        String?
+  targetPrice Float?
+  stopLoss    Float?
+  entryLow    Float?
+  entryHigh   Float?
+  reviewDate  DateTime?
+  updatedAt   DateTime  @updatedAt
 }
 
 model Trade {
@@ -195,6 +210,59 @@ model HoldingSnapshot {
   @@index([portfolioSnapshotId])
 }
 
+model Category {
+  id           String        @id @default(cuid())
+  slug         String        @unique // 변경 불가 식별자 ("food", "transport" 등)
+  name         String        @unique // 표시명 ("식비", "교통" 등)
+  type         String        // "expense" | "income"
+  icon         String?
+  keywords     String[]      @default([])
+  sortOrder    Int           @default(0)
+  createdAt    DateTime      @default(now())
+  transactions Transaction[]
+  budgets      Budget[]
+}
+
+model Transaction {
+  id           String   @id @default(cuid())
+  amount       Int
+  description  String
+  categoryId   String
+  category     Category @relation(fields: [categoryId], references: [id])
+  userId       String?
+  transactedAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([transactedAt])
+  @@index([categoryId])
+  @@index([userId])
+}
+
+model Budget {
+  id         String    @id @default(cuid())
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  year       Int
+  month      Int
+  amount     Int
+  createdAt  DateTime  @default(now())
+
+  @@unique([categoryId, year, month])
+  @@index([year, month])
+}
+
+// KRX 상장 종목 캐시 (한글 종목명 → yahoo ticker 매핑)
+model KrxStock {
+  id          String   @id @default(cuid())
+  code        String   @unique // KRX 종목코드 (예: 005930)
+  name        String   // 한글 종목명 (예: 삼성전자)
+  market      String   // 유가(KOSPI), 코스닥(KOSDAQ)
+  yahooTicker String   // yahoo finance 티커 (예: 005930.KS)
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+}
+
 model BenchmarkPrice {
   id        String   @id @default(cuid())
   ticker    String
@@ -203,4 +271,26 @@ model BenchmarkPrice {
   currency  String   @default("USD")
 
   @@unique([ticker, priceDate])
+}
+
+model AlertConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique // "price_drop_pct", "fx_change_krw" 등
+  value     String           // "-5", "50" 등
+  label     String           // "급락 알림 (%)" — 사용자 표시용
+  updatedAt DateTime @updatedAt
+}
+
+model Watchlist {
+  id          String   @id @default(cuid())
+  ticker      String   @unique
+  displayName String
+  market      String             // "US", "KR"
+  strategy    String   @default("swing") // swing, momentum, value, scalp
+  memo        String?
+  targetBuy   Float?             // 목표 매수가
+  entryLow    Float?             // 매수 구간 하한
+  entryHigh   Float?             // 매수 구간 상한
+  addedAt     DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

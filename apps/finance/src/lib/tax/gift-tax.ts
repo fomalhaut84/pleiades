@@ -59,7 +59,7 @@ function subYears(date: Date, years: number): Date {
   return result
 }
 
-function isGiftSource(source: string): boolean {
+export function isGiftSource(source: string): boolean {
   return GIFT_SOURCES.includes(source.toLowerCase())
 }
 

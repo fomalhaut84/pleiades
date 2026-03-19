@@ -118,6 +118,30 @@ export default function Sidebar({ accounts }: SidebarProps) {
         </Link>
 
         <Link
+          href="/expenses"
+          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
+            ${pathname.startsWith('/expenses')
+              ? 'bg-surface text-bright font-semibold border-border'
+              : 'text-sub hover:bg-surface-dim hover:text-muted'
+            }`}
+        >
+          <span className="text-[15px] w-5 text-center">💸</span>
+          가계부
+        </Link>
+
+        <Link
+          href="/categories"
+          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
+            ${pathname.startsWith('/categories')
+              ? 'bg-surface text-bright font-semibold border-border'
+              : 'text-sub hover:bg-surface-dim hover:text-muted'
+            }`}
+        >
+          <span className="text-[15px] w-5 text-center">🏷️</span>
+          카테고리
+        </Link>
+
+        <Link
           href="/simulator"
           className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
             ${pathname.startsWith('/simulator')
@@ -139,6 +163,18 @@ export default function Sidebar({ accounts }: SidebarProps) {
         >
           <span className="text-[15px] w-5 text-center">📈</span>
           수익률 분석
+        </Link>
+
+        <Link
+          href="/ai"
+          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all border border-transparent
+            ${pathname.startsWith('/ai')
+              ? 'bg-surface text-bright font-semibold border-border'
+              : 'text-sub hover:bg-surface-dim hover:text-muted'
+            }`}
+        >
+          <span className="text-[15px] w-5 text-center">🤖</span>
+          AI 분석
         </Link>
 
         <div className="text-[10px] font-bold text-dim tracking-[1.5px] uppercase px-3 pt-4 pb-2">
