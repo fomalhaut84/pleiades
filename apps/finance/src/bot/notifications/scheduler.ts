@@ -11,6 +11,7 @@ import { sendMonthlyReminder } from './monthly'
 import { sendDailySummary } from './daily'
 import { sendMonthlyReport } from './monthly-report'
 import { sendBriefing } from './briefing'
+import { takeNetWorthSnapshot } from './networth-snapshot'
 
 function getAllowedChatIds(): number[] {
   return (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
@@ -100,6 +101,19 @@ export function scheduleNotifications(): void {
       { timezone: 'Asia/Seoul' }
     )
 
+    // 순자산 스냅샷: 매월 1일 06:30 KST (스냅샷 후 월적립 리마인더)
+    cron.schedule(
+      '30 6 1 * *',
+      async () => {
+        try {
+          await takeNetWorthSnapshot(chatIds)
+        } catch (error) {
+          console.error('[notification] 순자산 스냅샷 실패:', error)
+        }
+      },
+      { timezone: 'Asia/Seoul' }
+    )
+
     // 월간 리포트: 매일 09:30 KST → monthly_report_day 매칭 시 발송
     cron.schedule(
       '30 9 * * *',
@@ -153,7 +167,7 @@ export function scheduleNotifications(): void {
     )
 
     scheduled = true
-    console.log('[notification] 알림 스케줄러 등록 (일일요약 + 브리핑 + 분기점검 + RSU + 월적립 + 월간리포트)')
+    console.log('[notification] 알림 스케줄러 등록 (일일요약 + 브리핑 + 순자산 + 분기점검 + RSU + 월적립 + 월간리포트)')
   } catch (error) {
     console.error('[notification] 알림 스케줄러 등록 실패:', error)
   }
