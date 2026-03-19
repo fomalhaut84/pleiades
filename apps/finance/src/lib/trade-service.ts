@@ -99,7 +99,7 @@ export async function createTrade(input: CreateTradeInput): Promise<CreateTradeR
             fxRate: existingHolding.avgFxRate,
             totalKRW: baselineTotalKRW,
             note: '시드 데이터 기준선',
-            tradedAt: new Date('2024-01-01'),
+            tradedAt: new Date(input.tradedAt.getTime() - 86400000), // 사용자 거래보다 1일 전
           },
         })
       }

@@ -56,12 +56,40 @@ async function handleWatch(ctx: Context): Promise<void> {
     return
   }
 
-  // PriceCache에서 종목 정보 조회
-  const priceData = await prisma.priceCache.findUnique({
-    where: { ticker: tickerInput },
+  // PriceCache에서 종목 정보 조회 (ticker → displayName 순서)
+  let resolvedTicker = tickerInput
+  let priceData = await prisma.priceCache.findUnique({
+    where: { ticker: resolvedTicker },
   })
 
-  const displayName = priceData?.displayName ?? tickerInput
+  // ticker 매칭 실패 시 displayName으로 검색 (한글 종목명 지원)
+  if (!priceData) {
+    const byName = await prisma.priceCache.findMany({
+      where: { displayName: { equals: tickerInput, mode: 'insensitive' } },
+      take: 2,
+    })
+    if (byName.length === 1) {
+      priceData = byName[0]
+      resolvedTicker = byName[0].ticker
+    } else if (byName.length > 1) {
+      const candidates = byName.map((p) => `${escapeHtml(p.displayName)} (${escapeHtml(p.ticker)})`).join('\n  ')
+      await replyHtml(ctx, `여러 종목이 매칭됩니다:\n  ${candidates}\n\n티커를 정확히 입력해주세요.`)
+      return
+    }
+  }
+
+  // 보유 종목 재확인 (resolved ticker로)
+  if (resolvedTicker !== resolvedTicker) {
+    const holdingCheck = await prisma.holding.findFirst({
+      where: { ticker: resolvedTicker },
+    })
+    if (holdingCheck) {
+      await ctx.reply(`⚠️ ${escapeHtml(resolvedTicker)}은(는) 이미 보유 중입니다. /전략 커맨드로 관리하세요.`)
+      return
+    }
+  }
+
+  const displayName = priceData?.displayName ?? resolvedTicker
   const market = priceData?.market ?? 'US'
 
   // 서브커맨드 처리
@@ -72,11 +100,11 @@ async function handleWatch(ctx: Context): Promise<void> {
       return
     }
     await prisma.watchlist.upsert({
-      where: { ticker: tickerInput },
+      where: { ticker: resolvedTicker },
       update: { targetBuy: price },
-      create: { ticker: tickerInput, displayName, market, targetBuy: price },
+      create: { ticker: resolvedTicker, displayName, market, targetBuy: price },
     })
-    await replyHtml(ctx, `✅ ${escapeHtml(displayName)} (${escapeHtml(tickerInput)}) 목표 매수가: ${price}`)
+    await replyHtml(ctx, `✅ ${escapeHtml(displayName)} (${escapeHtml(resolvedTicker)}) 목표 매수가: ${price}`)
     return
   }
 
@@ -88,11 +116,11 @@ async function handleWatch(ctx: Context): Promise<void> {
       return
     }
     await prisma.watchlist.upsert({
-      where: { ticker: tickerInput },
+      where: { ticker: resolvedTicker },
       update: { entryLow: low, entryHigh: high },
-      create: { ticker: tickerInput, displayName, market, entryLow: low, entryHigh: high },
+      create: { ticker: resolvedTicker, displayName, market, entryLow: low, entryHigh: high },
     })
-    await replyHtml(ctx, `✅ ${escapeHtml(displayName)} (${escapeHtml(tickerInput)}) 매수구간: ${low} ~ ${high}`)
+    await replyHtml(ctx, `✅ ${escapeHtml(displayName)} (${escapeHtml(resolvedTicker)}) 매수구간: ${low} ~ ${high}`)
     return
   }
 
@@ -101,14 +129,14 @@ async function handleWatch(ctx: Context): Promise<void> {
   const memo = parts.length >= 3 ? parts.slice(2).join(' ').replace(/^["']|["']$/g, '') : null
 
   await prisma.watchlist.upsert({
-    where: { ticker: tickerInput },
+    where: { ticker: resolvedTicker },
     update: { strategy, ...(memo ? { memo } : {}), displayName, market },
-    create: { ticker: tickerInput, displayName, market, strategy, memo },
+    create: { ticker: resolvedTicker, displayName, market, strategy, memo },
   })
 
   const stratLabel = STRATEGY_LABELS[strategy] ?? strategy
   await replyHtml(ctx,
-    `✅ 관심종목 추가: ${h.b(escapeHtml(displayName))} (${escapeHtml(tickerInput)})\n` +
+    `✅ 관심종목 추가: ${h.b(escapeHtml(displayName))} (${escapeHtml(resolvedTicker)})\n` +
     `전략: ${stratLabel}` +
     (memo ? `\n메모: ${escapeHtml(memo)}` : '')
   )
