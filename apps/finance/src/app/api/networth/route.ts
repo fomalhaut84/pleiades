@@ -61,12 +61,19 @@ export async function GET() {
       breakdown[key] = (breakdown[key] ?? 0) + a.value
     }
 
-    // 전월 스냅샷 (현재 월 제외, 직전 월)
+    // 전월 스냅샷 (KST 기준 현재 월 제외)
     const now = new Date()
-    const firstOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+    const kst = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
+    const firstOfMonth = new Date(Date.UTC(kst.getFullYear(), kst.getMonth(), 1))
     const latestSnapshot = await prisma.netWorthSnapshot.findFirst({
       where: { date: { lt: firstOfMonth } },
       orderBy: { date: 'desc' },
+    })
+
+    // 스냅샷 추이 (최근 12개월)
+    const snapshots = await prisma.netWorthSnapshot.findMany({
+      orderBy: { date: 'desc' },
+      take: 12,
     })
 
     return NextResponse.json({
@@ -76,6 +83,7 @@ export async function GET() {
       liabilityKRW,
       breakdown,
       fxRate,
+      assets,
       previousSnapshot: latestSnapshot
         ? {
             date: latestSnapshot.date,
@@ -86,6 +94,13 @@ export async function GET() {
               : 0,
           }
         : null,
+      snapshots: snapshots.reverse().map((s) => ({
+        date: s.date,
+        netWorthKRW: s.netWorthKRW,
+        stockValueKRW: s.stockValueKRW,
+        assetValueKRW: s.assetValueKRW,
+        liabilityKRW: s.liabilityKRW,
+      })),
     })
   } catch (error) {
     console.error('GET /api/networth error:', error)

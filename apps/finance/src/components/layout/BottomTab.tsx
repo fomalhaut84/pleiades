@@ -23,6 +23,7 @@ const MORE_ITEMS = [
   { href: '/simulator', icon: '🔮', label: '시뮬레이터' },
   { href: '/performance', icon: '📈', label: '수익률 분석' },
   { href: '/ai', icon: '🤖', label: 'AI 분석' },
+  { href: '/networth', icon: '💰', label: '순자산' },
 ]
 
 export default function BottomTab({ accounts }: BottomTabProps) {
