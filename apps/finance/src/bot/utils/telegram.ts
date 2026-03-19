@@ -39,10 +39,11 @@ export async function replyHtml(ctx: Context, html: string): Promise<void> {
     try {
       await ctx.reply(chunk, { parse_mode: 'HTML' })
     } catch (error) {
-      // HTML 파싱 오류(400)만 fallback, 그 외는 재시도 안 함
       if (isParseError(error)) {
         const plain = chunk.replace(/<[^>]+>/g, '')
         await ctx.reply(plain)
+      } else {
+        throw error
       }
     }
   }
@@ -64,6 +65,8 @@ export async function sendHtml(
       if (isParseError(error)) {
         const plain = chunk.replace(/<[^>]+>/g, '')
         await bot.api.sendMessage(chatId, plain)
+      } else {
+        throw error
       }
     }
   }

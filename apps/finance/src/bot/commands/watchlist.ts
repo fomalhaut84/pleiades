@@ -1,6 +1,7 @@
 import { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { formatKRWFull, formatUSD, formatPercent } from '../utils/formatter'
+import { replyHtml, escapeHtml, h } from '../utils/telegram'
 
 const STRATEGY_LABELS: Record<string, string> = {
   swing: '🔄 스윙',
@@ -51,7 +52,7 @@ async function handleWatch(ctx: Context): Promise<void> {
     where: { ticker: tickerInput },
   })
   if (holding) {
-    await ctx.reply(`⚠️ ${tickerInput}은(는) 이미 보유 중입니다. /전략 커맨드로 관리하세요.`)
+    await ctx.reply(`⚠️ ${escapeHtml(tickerInput)}은(는) 이미 보유 중입니다. /전략 커맨드로 관리하세요.`)
     return
   }
 
@@ -75,7 +76,7 @@ async function handleWatch(ctx: Context): Promise<void> {
       update: { targetBuy: price },
       create: { ticker: tickerInput, displayName, market, targetBuy: price },
     })
-    await ctx.reply(`✅ ${displayName} (${tickerInput}) 목표 매수가: ${price}`)
+    await replyHtml(ctx, `✅ ${escapeHtml(displayName)} (${escapeHtml(tickerInput)}) 목표 매수가: ${price}`)
     return
   }
 
@@ -91,7 +92,7 @@ async function handleWatch(ctx: Context): Promise<void> {
       update: { entryLow: low, entryHigh: high },
       create: { ticker: tickerInput, displayName, market, entryLow: low, entryHigh: high },
     })
-    await ctx.reply(`✅ ${displayName} (${tickerInput}) 매수구간: ${low} ~ ${high}`)
+    await replyHtml(ctx, `✅ ${escapeHtml(displayName)} (${escapeHtml(tickerInput)}) 매수구간: ${low} ~ ${high}`)
     return
   }
 
@@ -106,10 +107,10 @@ async function handleWatch(ctx: Context): Promise<void> {
   })
 
   const stratLabel = STRATEGY_LABELS[strategy] ?? strategy
-  await ctx.reply(
-    `✅ 관심종목 추가: ${displayName} (${tickerInput})\n` +
+  await replyHtml(ctx,
+    `✅ 관심종목 추가: ${h.b(escapeHtml(displayName))} (${escapeHtml(tickerInput)})\n` +
     `전략: ${stratLabel}` +
-    (memo ? `\n메모: ${memo}` : '')
+    (memo ? `\n메모: ${escapeHtml(memo)}` : '')
   )
 }
 
@@ -127,12 +128,12 @@ async function handleUnwatch(ctx: Context): Promise<void> {
 
   const existing = await prisma.watchlist.findUnique({ where: { ticker } })
   if (!existing) {
-    await ctx.reply(`⚠️ 관심종목에 없습니다: ${ticker}`)
+    await ctx.reply(`⚠️ 관심종목에 없습니다: ${escapeHtml(ticker)}`)
     return
   }
 
   await prisma.watchlist.delete({ where: { ticker } })
-  await ctx.reply(`✅ 관심종목 제거: ${existing.displayName} (${ticker})`)
+  await replyHtml(ctx, `✅ 관심종목 제거: ${escapeHtml(existing.displayName)} (${escapeHtml(ticker)})`)
 }
 
 /**
@@ -155,7 +156,7 @@ async function handleWatchlist(ctx: Context): Promise<void> {
   })
   const priceMap = new Map(prices.map((p) => [p.ticker, p]))
 
-  const lines = [`👀 관심종목 (${items.length})\n`]
+  const lines = [`👀 ${h.b('관심종목')} (${items.length})\n`]
 
   for (const w of items) {
     const price = priceMap.get(w.ticker)
@@ -172,7 +173,7 @@ async function handleWatchlist(ctx: Context): Promise<void> {
       priceInfo = `${priceStr}${changeStr}`
     }
 
-    lines.push(`${w.displayName} (${w.ticker}) — ${stratLabel}`)
+    lines.push(`${h.b(escapeHtml(w.displayName))} (${escapeHtml(w.ticker)}) — ${stratLabel}`)
     lines.push(`  현재가: ${priceInfo}`)
 
     if (w.targetBuy != null) {
@@ -186,12 +187,12 @@ async function handleWatchlist(ctx: Context): Promise<void> {
       }
     }
     if (w.memo) {
-      lines.push(`  메모: ${w.memo}`)
+      lines.push(`  메모: ${escapeHtml(w.memo)}`)
     }
     lines.push('')
   }
 
-  await ctx.reply(lines.join('\n'))
+  await replyHtml(ctx, lines.join('\n'))
 }
 
 export function registerWatchlistCommands(bot: Bot): void {

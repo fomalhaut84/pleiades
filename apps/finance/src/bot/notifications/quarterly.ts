@@ -15,8 +15,8 @@ import {
   accountEmoji,
   formatKRWFull,
   formatKRWCompact,
-  splitMessage,
 } from '@/bot/utils/formatter'
+import { sendHtml, escapeHtml, h } from '@/bot/utils/telegram'
 
 function getQuarterLabel(month: number): string {
   if (month <= 3) return 'Q1'
@@ -57,20 +57,20 @@ export async function sendQuarterlyReminder(chatIds: number[]): Promise<void> {
   const year = kst.getFullYear()
   const quarter = getQuarterLabel(kst.getMonth() + 1)
 
-  const lines = [`📋 ${year}년 ${quarter} 분기 점검 리마인더\n`]
+  const lines = [`📋 ${h.b(year + '년 ' + quarter + ' 분기 점검 리마인더')}\n`]
 
   let totalValue = 0
   for (const account of accounts) {
-    const value = account.holdings.reduce((sum, h) => {
-      const price = priceMap.get(h.ticker)
-      if (!price) return sum + calcCostKRW(h)
-      return sum + calcCurrentValueKRW(h, price.price, currentFxRate)
+    const value = account.holdings.reduce((sum, holding) => {
+      const price = priceMap.get(holding.ticker)
+      if (!price) return sum + calcCostKRW(holding)
+      return sum + calcCurrentValueKRW(holding, price.price, currentFxRate)
     }, 0)
     totalValue += value
-    lines.push(`${accountEmoji(account.name)} ${account.name}: ${formatKRWFull(value)}`)
+    lines.push(`${accountEmoji(account.name)} ${h.b(escapeHtml(account.name))}: ${formatKRWFull(value)}`)
   }
 
-  lines.push(`\n💰 합계: ${formatKRWFull(totalValue)}`)
+  lines.push(`\n💰 ${h.b('합계')}: ${formatKRWFull(totalValue)}`)
 
   if (fxData) {
     lines.push(`💱 환율: $1 = ₩${fxData.price.toFixed(2)}`)
@@ -84,17 +84,17 @@ export async function sendQuarterlyReminder(chatIds: number[]): Promise<void> {
     if (summary.totalGifted > 0) {
       const pct = (summary.usageRate * 100).toFixed(1)
       giftLines.push(
-        `  ${account.name}: ${formatKRWFull(summary.totalGifted)} (${pct}% / ${formatKRWCompact(summary.exemptLimit)})`
+        `  ${escapeHtml(account.name)}: ${formatKRWFull(summary.totalGifted)} (${pct}% / ${formatKRWCompact(summary.exemptLimit)})`
       )
     }
   }
 
   if (giftLines.length > 0) {
-    lines.push('\n🎁 증여 누적 (10년 기준):')
+    lines.push(`\n🎁 ${h.b('증여 누적 (10년 기준):')}`)
     lines.push(...giftLines)
   }
 
-  lines.push('\n📌 점검 사항:')
+  lines.push(`\n📌 ${h.b('점검 사항:')}`)
   lines.push('  • 자산배분 비율 확인')
   lines.push('  • 리밸런싱 필요 여부')
   lines.push('  • 증여 한도 확인')
@@ -104,9 +104,7 @@ export async function sendQuarterlyReminder(chatIds: number[]): Promise<void> {
 
   for (const chatId of chatIds) {
     try {
-      for (const chunk of splitMessage(fullMessage)) {
-        await bot.api.sendMessage(chatId, chunk)
-      }
+      await sendHtml(bot, chatId, fullMessage)
     } catch (error) {
       console.error(`[notification] 분기 점검 발송 실패 (chatId: ${chatId}):`, error)
     }

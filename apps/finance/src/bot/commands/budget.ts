@@ -1,6 +1,7 @@
 import { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { formatKRWFull } from '../utils/formatter'
+import { replyHtml, escapeHtml, h } from '../utils/telegram'
 
 /** 현재 KST 기준 연/월 */
 function getCurrentYearMonth(): { year: number; month: number } {
@@ -69,15 +70,15 @@ async function handleTransactionSummary(
   items.sort((a, b) => b.total - a.total)
 
   const lines = items.map((cat) => {
-    const label = cat.icon ? `${cat.icon} ${cat.name}` : cat.name
+    const label = cat.icon ? `${cat.icon} ${escapeHtml(cat.name)}` : escapeHtml(cat.name)
     const pct = grandTotal > 0 ? ((cat.total / grandTotal) * 100).toFixed(0) : '0'
     return `${label}: ${formatKRWFull(cat.total)} (${pct}%, ${cat.count}건)`
   })
 
-  await ctx.reply(
-    `📊 ${month}월 ${typeLabel} 요약\n\n` +
+  await replyHtml(ctx,
+    `📊 ${h.b(month + '월 ' + typeLabel + ' 요약')}\n\n` +
       lines.join('\n') +
-      `\n\n💰 ${totalLabel}: ${formatKRWFull(grandTotal)} (${totalCount}건)`
+      `\n\n💰 ${h.b(totalLabel)}: ${formatKRWFull(grandTotal)} (${totalCount}건)`
   )
 }
 
@@ -124,7 +125,7 @@ async function handleBudgetStatus(ctx: Context): Promise<void> {
     const remaining = totalBudget.amount - totalSpent
     const pct = totalBudget.amount > 0 ? ((totalSpent / totalBudget.amount) * 100).toFixed(0) : '0'
     const emoji = remaining >= 0 ? '🟢' : '🔴'
-    lines.push(`${emoji} 전체 예산: ${formatKRWFull(totalBudget.amount)}`)
+    lines.push(`${emoji} ${h.b('전체 예산')}: ${formatKRWFull(totalBudget.amount)}`)
     lines.push(`   소비: ${formatKRWFull(totalSpent)} (${pct}%)`)
     lines.push(`   잔여: ${formatKRWFull(remaining)}`)
   }
@@ -141,20 +142,21 @@ async function handleBudgetStatus(ctx: Context): Promise<void> {
     const spentMap = new Map(catSpent.map((c) => [c.categoryId, c._sum.amount ?? 0]))
 
     if (lines.length > 0) lines.push('')
-    lines.push('카테고리별 예산:')
+    lines.push(h.b('카테고리별 예산:'))
 
     for (const budget of categoryBudgets) {
       const spent = spentMap.get(budget.categoryId!) ?? 0
       const remaining = budget.amount - spent
+      const catName = budget.category?.name ?? '알 수 없음'
       const label = budget.category?.icon
-        ? `${budget.category.icon} ${budget.category.name}`
-        : budget.category?.name ?? '알 수 없음'
+        ? `${budget.category.icon} ${escapeHtml(catName)}`
+        : escapeHtml(catName)
       const emoji = remaining >= 0 ? '🟢' : '🔴'
       lines.push(`${emoji} ${label}: ${formatKRWFull(spent)} / ${formatKRWFull(budget.amount)}`)
     }
   }
 
-  await ctx.reply(`📋 ${month}월 예산 현황\n\n` + lines.join('\n'))
+  await replyHtml(ctx, `📋 ${h.b(month + '월 예산 현황')}\n\n` + lines.join('\n'))
 }
 
 /**
@@ -193,9 +195,9 @@ async function handleBudgetSet(ctx: Context): Promise<void> {
     })
   }
 
-  await ctx.reply(
+  await replyHtml(ctx,
     `✅ ${month}월 전체 예산이 설정되었습니다.\n\n` +
-      `예산: ${formatKRWFull(amount)}`
+      `예산: ${h.b(formatKRWFull(amount))}`
   )
 }
 

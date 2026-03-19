@@ -2,6 +2,7 @@ import { Bot, Context, InlineKeyboard } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { createTrade } from '@/lib/trade-service'
 import { formatKRWFull, formatUSD } from '../utils/formatter'
+import { escapeHtml, h } from '../utils/telegram'
 
 interface PendingTrade {
   requestedByUserId: number
@@ -44,10 +45,10 @@ function formatTradePreview(type: 'BUY' | 'SELL', pending: PendingTrade): string
     : Math.round(pending.price * pending.shares)
 
   const lines = [
-    `${typeLabel} 확인`,
+    `${h.b(typeLabel + ' 확인')}`,
     '',
-    `계좌: ${pending.accountName}`,
-    `종목: ${pending.displayName} (${pending.ticker})`,
+    `계좌: ${escapeHtml(pending.accountName)}`,
+    `종목: ${escapeHtml(pending.displayName)} (${escapeHtml(pending.ticker)})`,
     `수량: ${pending.shares}주`,
     `단가: ${priceStr}`,
   ]
@@ -56,7 +57,7 @@ function formatTradePreview(type: 'BUY' | 'SELL', pending: PendingTrade): string
     lines.push(`환율: ₩${pending.fxRate.toFixed(2)}`)
   }
 
-  lines.push(`총액: ${formatKRWFull(totalKRW)}`)
+  lines.push(`${h.b('총액')}: ${formatKRWFull(totalKRW)}`)
   lines.push('')
   lines.push('거래를 기록하시겠습니까?')
 
@@ -120,7 +121,7 @@ async function handleTrade(ctx: Context, type: 'BUY' | 'SELL'): Promise<void> {
   if (matchedAccounts.length === 0) {
     const allAccounts = await prisma.account.findMany({ select: { name: true } })
     const names = allAccounts.map((a) => a.name).join(', ')
-    await ctx.reply(`⚠️ 계좌를 찾을 수 없습니다: ${accountName}\n사용 가능: ${names}`)
+    await ctx.reply(`⚠️ 계좌를 찾을 수 없습니다: ${escapeHtml(accountName)}\n사용 가능: ${escapeHtml(names)}`)
     return
   }
   if (matchedAccounts.length > 1) {
@@ -163,7 +164,7 @@ async function handleTrade(ctx: Context, type: 'BUY' | 'SELL'): Promise<void> {
         .map((p) => `${p.displayName} (${p.ticker})`)
         .join('\n  ')
       await ctx.reply(
-        `여러 종목이 매칭됩니다:\n  ${candidates}\n\n티커를 입력해주세요.`
+        `여러 종목이 매칭됩니다:\n  ${escapeHtml(candidates)}\n\n티커를 입력해주세요.`
       )
       return
     } else {
@@ -183,7 +184,7 @@ async function handleTrade(ctx: Context, type: 'BUY' | 'SELL'): Promise<void> {
         market = holding.market
         currency = holding.currency
       } else {
-        await ctx.reply(`⚠️ 종목을 찾을 수 없습니다: ${tickerOrName}`)
+        await ctx.reply(`⚠️ 종목을 찾을 수 없습니다: ${escapeHtml(tickerOrName)}`)
         return
       }
     }
@@ -242,6 +243,7 @@ async function handleTrade(ctx: Context, type: 'BUY' | 'SELL'): Promise<void> {
     .text('❌ 취소', `trade:cancel:${tradeId}`)
 
   const sent = await ctx.reply(formatTradePreview(type, pending), {
+    parse_mode: 'HTML',
     reply_markup: keyboard,
   })
 
@@ -322,11 +324,12 @@ async function handleTradeCallback(ctx: Context): Promise<void> {
       await ctx.answerCallbackQuery({ text: '거래 기록 완료!' })
       await ctx.editMessageReplyMarkup({ reply_markup: undefined })
       await ctx.editMessageText(
-        `✅ ${typeLabel} 완료\n\n` +
-        `${pending.displayName} (${pending.ticker})\n` +
+        `✅ ${h.b(typeLabel + ' 완료')}\n\n` +
+        `${escapeHtml(pending.displayName)} (${escapeHtml(pending.ticker)})\n` +
         `${pending.shares}주 × ${pending.currency === 'USD' ? formatUSD(pending.price) : formatKRWFull(pending.price)}\n` +
-        `총액: ${formatKRWFull(result.trade.totalKRW)}\n` +
-        `${holdingInfo}`
+        `${h.b('총액')}: ${formatKRWFull(result.trade.totalKRW)}\n` +
+        `${holdingInfo}`,
+        { parse_mode: 'HTML' }
       )
     } catch (error) {
       const rawMsg = error instanceof Error ? error.message : ''

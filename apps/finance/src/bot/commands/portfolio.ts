@@ -13,8 +13,8 @@ import {
   formatSignedKRW,
   formatUSD,
   profitEmoji,
-  splitMessage,
 } from '../utils/formatter'
+import { replyHtml, escapeHtml, h } from '../utils/telegram'
 
 interface AccountSummary {
   name: string
@@ -68,25 +68,23 @@ async function handlePortfolioSummary(ctx: Context): Promise<void> {
   const totalCost = summaries.reduce((s, a) => s + a.costKRW, 0)
   const totalReturnPct = totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0
 
-  const lines = ['📊 포트폴리오 현황\n']
+  const lines = [`📊 ${h.b('포트폴리오 현황')}\n`]
 
   for (const s of summaries) {
     const emoji = accountEmoji(s.name)
     lines.push(
-      `${emoji} ${s.name}  ${formatKRWFull(s.currentValueKRW)}  (${formatPercent(s.returnPct)})`
+      `${emoji} ${h.b(escapeHtml(s.name))}  ${formatKRWFull(s.currentValueKRW)}  (${formatPercent(s.returnPct)})`
     )
   }
 
   lines.push('─────────────────────')
-  lines.push(`합계    ${formatKRWFull(totalValue)}  (${formatPercent(totalReturnPct)})`)
+  lines.push(`${h.b('합계')}    ${formatKRWFull(totalValue)}  (${formatPercent(totalReturnPct)})`)
 
   if (fxPrice) {
     lines.push(`\n환율: $1 = ₩${fxPrice.toFixed(2)}`)
   }
 
-  for (const chunk of splitMessage(lines.join('\n'))) {
-    await ctx.reply(chunk)
-  }
+  await replyHtml(ctx, lines.join('\n'))
 }
 
 async function handleAccountDetail(ctx: Context): Promise<void> {
@@ -108,14 +106,14 @@ async function handleAccountDetail(ctx: Context): Promise<void> {
     : accounts.filter((a) => a.name.includes(accountName))
 
   if (candidates.length === 0) {
-    const names = accounts.map((a) => a.name).join(', ')
-    await ctx.reply(`계좌를 찾을 수 없습니다: ${accountName}\n사용 가능: ${names}`)
+    const names = accounts.map((a) => escapeHtml(a.name)).join(', ')
+    await replyHtml(ctx, `계좌를 찾을 수 없습니다: ${escapeHtml(accountName!)}\n사용 가능: ${names}`)
     return
   }
 
   if (candidates.length > 1) {
-    const names = candidates.map((a) => a.name).join(', ')
-    await ctx.reply(`여러 계좌가 매칭됩니다: ${names}\n정확한 이름을 입력해주세요.`)
+    const names = candidates.map((a) => escapeHtml(a.name)).join(', ')
+    await replyHtml(ctx, `여러 계좌가 매칭됩니다: ${names}\n정확한 이름을 입력해주세요.`)
     return
   }
 
@@ -123,31 +121,29 @@ async function handleAccountDetail(ctx: Context): Promise<void> {
 
   const summary = buildAccountSummary(account, priceMap, currentFxRate)
 
-  const lines = [`${accountEmoji(account.name)} ${account.name} 계좌 상세\n`]
+  const lines = [`${accountEmoji(account.name)} ${h.b(escapeHtml(account.name) + ' 계좌 상세')}\n`]
 
-  for (const h of account.holdings) {
-    const price = priceMap.get(h.ticker)
+  for (const holding of account.holdings) {
+    const price = priceMap.get(holding.ticker)
     if (!price) {
-      lines.push(`${h.displayName}  ${h.shares}주  (가격 미수신)`)
+      lines.push(`${escapeHtml(holding.displayName)}  ${holding.shares}주  (가격 미수신)`)
       continue
     }
 
-    const pl = calcProfitLoss(h, price.price, currentFxRate)
+    const pl = calcProfitLoss(holding, price.price, currentFxRate)
     const emoji = profitEmoji(pl.returnPct)
-    const priceStr = h.currency === 'USD' ? formatUSD(price.price) : `₩${price.price.toLocaleString('ko-KR')}`
+    const priceStr = holding.currency === 'USD' ? formatUSD(price.price) : `₩${price.price.toLocaleString('ko-KR')}`
 
     lines.push(
-      `${h.displayName}  ${h.shares}주  ${priceStr}  ${formatSignedKRW(pl.totalPL)} (${formatPercent(pl.returnPct)}) ${emoji}`
+      `${escapeHtml(holding.displayName)}  ${holding.shares}주  ${priceStr}  ${formatSignedKRW(pl.totalPL)} (${formatPercent(pl.returnPct)}) ${emoji}`
     )
   }
 
   lines.push('─────────────────────')
-  lines.push(`총 평가액: ${formatKRWFull(summary.currentValueKRW)}`)
-  lines.push(`총 수익률: ${formatPercent(summary.returnPct)}`)
+  lines.push(`${h.b('총 평가액')}: ${formatKRWFull(summary.currentValueKRW)}`)
+  lines.push(`${h.b('총 수익률')}: ${formatPercent(summary.returnPct)}`)
 
-  for (const chunk of splitMessage(lines.join('\n'))) {
-    await ctx.reply(chunk)
-  }
+  await replyHtml(ctx, lines.join('\n'))
 }
 
 export function registerPortfolioCommands(bot: Bot): void {

@@ -1,5 +1,6 @@
 import { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
+import { replyHtml, escapeHtml, h } from '../utils/telegram'
 
 /** 키 → 사용자 친화적 별칭 매핑 */
 const KEY_ALIASES: Record<string, string> = {
@@ -39,17 +40,17 @@ async function handler(ctx: Context) {
           return
         }
 
-        const lines = ['⚙️ 알림 설정 현황\n']
+        const lines = [`⚙️ ${h.b('알림 설정 현황')}\n`]
         for (const cfg of configs) {
           const alias = Object.entries(KEY_ALIASES)
             .find(([, v]) => v === cfg.key)?.[0] ?? cfg.key
-          lines.push(`- ${cfg.label}: ${cfg.value} (/${alias})`)
+          lines.push(`- ${escapeHtml(cfg.label)}: ${h.b(escapeHtml(cfg.value))} (/${escapeHtml(alias)})`)
         }
         lines.push('\n변경: /알림설정 [항목] [값]')
         lines.push('예: /알림설정 급락 -3')
         lines.push(`사용 가능: ${Object.keys(KEY_ALIASES).join(', ')}`)
 
-        await ctx.reply(lines.join('\n'))
+        await replyHtml(ctx, lines.join('\n'))
         return
       }
 
@@ -92,9 +93,9 @@ async function handler(ctx: Context) {
         data: { value },
       })
 
-      await ctx.reply(
-        `✅ ${updated.label} 변경 완료\n` +
-        `이전: ${existing.value} → 변경: ${updated.value}`
+      await replyHtml(ctx,
+        `✅ ${h.b(escapeHtml(updated.label))} 변경 완료\n` +
+        `이전: ${escapeHtml(existing.value)} → 변경: ${h.b(escapeHtml(updated.value))}`
       )
     } catch (error) {
       console.error('[bot] 알림설정 실패:', error)

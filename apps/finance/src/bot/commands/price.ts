@@ -2,7 +2,8 @@ import { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { fetchQuote, InvalidTickerError, searchYahooByName, type QuoteResult } from '@/lib/price-fetcher'
 import { searchKrxByName } from '@/lib/krx-stocks'
-import { formatUSD, splitMessage } from '../utils/formatter'
+import { formatUSD } from '../utils/formatter'
+import { replyHtml, escapeHtml, h } from '../utils/telegram'
 
 function formatChange(change: number, currency: string): string {
   const sign = change >= 0 ? '+' : ''
@@ -54,14 +55,12 @@ async function handlePrice(ctx: Context): Promise<void> {
     if (krxResults.length > 1) {
       const candidates = krxResults
         .slice(0, 10)
-        .map((r) => `${r.name} (${r.ticker}) [${r.market}]`)
+        .map((r) => `${escapeHtml(r.name)} (${escapeHtml(r.ticker)}) [${escapeHtml(r.market)}]`)
         .join('\n  ')
       const suffix = krxResults.length > 10 ? '\n  외 다수' : ''
-      for (const chunk of splitMessage(
+      await replyHtml(ctx,
         `여러 종목이 검색됩니다:\n  ${candidates}${suffix}\n\n정확한 종목명 또는 티커를 입력해주세요.`
-      )) {
-        await ctx.reply(chunk)
-      }
+      )
       return
     }
     // KRX 미매칭 → 종목 못 찾음
@@ -86,13 +85,11 @@ async function handlePrice(ctx: Context): Promise<void> {
   if (yahooResults.length > 1) {
     const candidates = yahooResults
       .slice(0, 10)
-      .map((r) => `${r.shortname} (${r.symbol}) [${r.exchange}]`)
+      .map((r) => `${escapeHtml(r.shortname ?? '')} (${escapeHtml(r.symbol)}) [${escapeHtml(r.exchange ?? '')}]`)
       .join('\n  ')
-    for (const chunk of splitMessage(
+    await replyHtml(ctx,
       `여러 종목이 검색됩니다:\n  ${candidates}\n\n정확한 티커를 입력해주세요.`
-    )) {
-      await ctx.reply(chunk)
-    }
+    )
     return
   }
 
@@ -125,10 +122,8 @@ async function resolveTickerFromCache(
   })
   if (exactByName.length === 1) return exactByName[0].ticker
   if (exactByName.length > 1) {
-    const candidates = exactByName.map((p) => `${p.displayName} (${p.ticker})`).join('\n  ')
-    for (const chunk of splitMessage(`여러 종목이 매칭됩니다:\n  ${candidates}\n\n티커를 입력해주세요.`)) {
-      await ctx.reply(chunk)
-    }
+    const candidates = exactByName.map((p) => `${escapeHtml(p.displayName)} (${escapeHtml(p.ticker)})`).join('\n  ')
+    await replyHtml(ctx, `여러 종목이 매칭됩니다:\n  ${candidates}\n\n티커를 입력해주세요.`)
     return null
   }
 
@@ -149,12 +144,10 @@ async function resolveTickerFromCache(
   if (partialMatches.length > 1) {
     const candidates = partialMatches
       .slice(0, 10)
-      .map((p) => `${p.displayName} (${p.ticker})`)
+      .map((p) => `${escapeHtml(p.displayName)} (${escapeHtml(p.ticker)})`)
       .join('\n  ')
     const suffix = partialMatches.length > 10 ? '\n  외 다수' : ''
-    for (const chunk of splitMessage(`여러 종목이 매칭됩니다:\n  ${candidates}${suffix}\n\n정확한 종목명 또는 티커를 입력해주세요.`)) {
-      await ctx.reply(chunk)
-    }
+    await replyHtml(ctx, `여러 종목이 매칭됩니다:\n  ${candidates}${suffix}\n\n정확한 종목명 또는 티커를 입력해주세요.`)
     return null
   }
 
@@ -220,9 +213,9 @@ async function replyQuote(ctx: Context, quote: QuoteResult, suffix?: string): Pr
   const priceStr = formatPrice(quote.price, quote.currency)
   const suffixLine = suffix ? `\n\n${suffix}` : ''
 
-  await ctx.reply(
-    `📈 ${quote.displayName} (${quote.ticker})\n\n` +
-      `현재가: ${priceStr} ${emoji}\n` +
+  await replyHtml(ctx,
+    `📈 ${h.b(escapeHtml(quote.displayName))} (${escapeHtml(quote.ticker)})\n\n` +
+      `현재가: ${h.b(priceStr)} ${emoji}\n` +
       `변동: ${changeStr}${changePctStr}${suffixLine}`
   )
 }
@@ -242,9 +235,9 @@ async function handleFxRate(ctx: Context): Promise<void> {
 
   const updatedAt = fxData.updatedAt.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
 
-  await ctx.reply(
-    `💱 USD/KRW 환율\n\n` +
-      `$1 = ₩${fxData.price.toFixed(2)}\n` +
+  await replyHtml(ctx,
+    `💱 ${h.b('USD/KRW 환율')}\n\n` +
+      `$1 = ${h.b('₩' + fxData.price.toFixed(2))}\n` +
       `변동: ${changeStr}${changePctStr}\n` +
       `갱신: ${updatedAt}`
   )

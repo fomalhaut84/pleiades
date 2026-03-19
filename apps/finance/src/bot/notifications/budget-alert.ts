@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma'
 import { getBot } from '@/bot/index'
 import { calcGiftTaxSummary } from '@/lib/tax/gift-tax'
 import { formatKRWFull } from '@/bot/utils/formatter'
+import { sendHtml, escapeHtml, h } from '@/bot/utils/telegram'
 
 function getAllowedChatIds(): number[] {
   return (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
@@ -72,14 +73,14 @@ export async function checkBudgetUsage(): Promise<void> {
   const bot = getBot()
   const emoji = usagePct >= 100 ? '🚨' : '⚠️'
   const message =
-    `${emoji} 예산 경고 (${year}년 ${month}월)\n\n` +
+    `${emoji} ${h.b('예산 경고')} (${year}년 ${month}월)\n\n` +
     `예산: ${formatKRWFull(totalBudget)}\n` +
-    `소비: ${formatKRWFull(totalSpent)} (${usagePct.toFixed(0)}%)\n` +
+    `소비: ${h.b(formatKRWFull(totalSpent))} (${usagePct.toFixed(0)}%)\n` +
     `남은 예산: ${formatKRWFull(totalBudget - totalSpent)}`
 
   for (const chatId of chatIds) {
     try {
-      await bot.api.sendMessage(chatId, message)
+      await sendHtml(bot, chatId, message)
     } catch (error) {
       console.error(`[notification] 예산 경고 발송 실패 (chatId: ${chatId}):`, error)
     }
@@ -112,15 +113,15 @@ export async function checkGiftTaxLimit(accountId: string): Promise<void> {
   const emoji = summary.usageRate >= 1.0 ? '🚨' : '⚠️'
   const pct = (summary.usageRate * 100).toFixed(0)
   const message =
-    `${emoji} 증여세 한도 경고 (${account.name})\n\n` +
+    `${emoji} ${h.b('증여세 한도 경고')} (${escapeHtml(account.name)})\n\n` +
     `비과세 한도: ${formatKRWFull(summary.exemptLimit)}\n` +
-    `10년 윈도우 증여 합계: ${formatKRWFull(summary.totalGifted)} (${pct}%)\n` +
+    `10년 윈도우 증여 합계: ${h.b(formatKRWFull(summary.totalGifted))} (${pct}%)\n` +
     `잔여 한도: ${formatKRWFull(summary.remaining)}\n\n` +
-    `※ 참고용이며 법적 조언이 아닙니다.`
+    `${h.i('※ 참고용이며 법적 조언이 아닙니다.')}`
 
   for (const chatId of chatIds) {
     try {
-      await bot.api.sendMessage(chatId, message)
+      await sendHtml(bot, chatId, message)
     } catch (error) {
       console.error(`[notification] 증여세 경고 발송 실패 (chatId: ${chatId}):`, error)
     }

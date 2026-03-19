@@ -5,7 +5,8 @@
 
 import { prisma } from '@/lib/prisma'
 import { getBot } from '@/bot/index'
-import { formatKRWFull, splitMessage } from '@/bot/utils/formatter'
+import { formatKRWFull } from '@/bot/utils/formatter'
+import { sendHtml, escapeHtml, h } from '@/bot/utils/telegram'
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })
@@ -51,8 +52,8 @@ export async function sendRSUReminders(chatIds: number[]): Promise<void> {
     if (daysLeft === 7 || daysLeft === 1) {
       const label = daysLeft === 1 ? '⚠️ D-1' : '📅 D-7'
       lines.push(
-        `${label} RSU 베스팅\n` +
-        `  ${rsu.account.name} | ${rsu.shares}주\n` +
+        `${h.b(label + ' RSU 베스팅')}\n` +
+        `  ${escapeHtml(rsu.account.name)} | ${rsu.shares}주\n` +
         `  베스팅일: ${formatDate(rsu.vestingDate)}\n` +
         `  기준가: ${formatKRWFull(rsu.basisValue)}`
       )
@@ -78,8 +79,8 @@ export async function sendRSUReminders(chatIds: number[]): Promise<void> {
     if (daysLeft === 7 || daysLeft === 1) {
       const label = daysLeft === 1 ? '⚠️ D-1' : '📅 D-7'
       lines.push(
-        `${label} 스톡옵션 행사 가능\n` +
-        `  ${vest.stockOption.displayName} | ${vest.shares}주\n` +
+        `${h.b(label + ' 스톡옵션 행사 가능')}\n` +
+        `  ${escapeHtml(vest.stockOption.displayName)} | ${vest.shares}주\n` +
         `  행사가: ${formatKRWFull(vest.stockOption.strikePrice)}\n` +
         `  행사 가능일: ${formatDate(vest.vestingDate)}`
       )
@@ -88,13 +89,11 @@ export async function sendRSUReminders(chatIds: number[]): Promise<void> {
 
   if (lines.length === 0) return
 
-  const fullMessage = `🔔 RSU/스톡옵션 리마인더\n\n${lines.join('\n\n')}`
+  const fullMessage = `🔔 ${h.b('RSU/스톡옵션 리마인더')}\n\n${lines.join('\n\n')}`
 
   for (const chatId of chatIds) {
     try {
-      for (const chunk of splitMessage(fullMessage)) {
-        await bot.api.sendMessage(chatId, chunk)
-      }
+      await sendHtml(bot, chatId, fullMessage)
     } catch (error) {
       console.error(`[notification] RSU 리마인더 발송 실패 (chatId: ${chatId}):`, error)
     }
