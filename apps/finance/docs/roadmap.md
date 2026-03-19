@@ -166,6 +166,7 @@
 ## Phase 12: 순자산 대시보드 (Net Worth Tracker)
 
 - [x] Asset + NetWorthSnapshot DB 모델 + CRUD API
+- [x] 텔레그램 순자산/자산 커맨드 (순자산, 자산목록, 자산추가, 자산수정)
 - [ ] 자산 카테고리별 비중 파이차트 (주식 vs 부동산 vs 현금 vs 보험 등)
 - [ ] 월별 순자산 스냅샷 자동 저장 (NetWorthSnapshot)
 - [ ] 순자산 추이 라인차트 (월별/연별)
