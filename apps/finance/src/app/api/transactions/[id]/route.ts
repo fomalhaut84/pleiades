@@ -76,8 +76,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       currency: 'KRW',
     })
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return NextResponse.json({ error: '존재하지 않는 내역입니다.' }, { status: 404 })
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2025') {
+        return NextResponse.json({ error: '존재하지 않는 내역입니다.' }, { status: 404 })
+      }
+      if (error.code === 'P2003') {
+        return NextResponse.json({ error: '존재하지 않는 카테고리입니다.' }, { status: 400 })
+      }
     }
     console.error('[api/transactions/[id]] PUT 실패:', error)
     return NextResponse.json({ error: '내역 수정에 실패했습니다.' }, { status: 500 })

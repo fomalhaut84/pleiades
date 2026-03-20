@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { validateTransactionInput } from '@/lib/transaction-utils'
 import { sendToWhooing } from '@/lib/whooing-webhook'
 
@@ -272,6 +273,9 @@ export async function POST(request: NextRequest) {
       currency: 'KRW',
     }, { status: 201 })
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+      return NextResponse.json({ error: '존재하지 않는 카테고리입니다.' }, { status: 400 })
+    }
     console.error('[api/transactions] POST 실패:', error)
     return NextResponse.json({ error: '내역 생성에 실패했습니다.' }, { status: 500 })
   }
