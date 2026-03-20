@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>소담이의 투자 일기</title>
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet" />
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Pretendard',sans-serif; background:linear-gradient(135deg,#0f1729 0%,#1a1040 50%,#0f1729 100%); color:#eee; min-height:100vh; padding:24px; }
+
+    .header { text-align:center; margin-bottom:32px; }
+    .header h1 { font-size:28px; font-weight:800; }
+    .header h1 span { font-size:36px; }
+    .header .sub { font-size:14px; color:#9494a8; margin-top:4px; }
+
+    /* 총 자산 카드 */
+    .total-card {
+      background:linear-gradient(135deg,rgba(96,165,250,0.15),rgba(96,165,250,0.05));
+      border:1px solid rgba(96,165,250,0.2); border-radius:20px;
+      padding:28px; text-align:center; margin-bottom:24px;
+      position:relative; overflow:hidden;
+    }
+    .total-card .glow { position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,#60a5fa,transparent); opacity:0.6; }
+    .total-label { font-size:14px; color:#9494a8; }
+    .total-amount { font-size:36px; font-weight:800; color:#fff; margin:8px 0; }
+    .total-growth { font-size:16px; color:#34d399; font-weight:600; }
+    .total-growth.negative { color:#ef4444; }
+
+    /* 종목 카드 */
+    .holdings { display:flex; flex-direction:column; gap:12px; margin-bottom:24px; }
+    .holding-card {
+      background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08);
+      border-radius:16px; padding:16px 20px;
+      display:flex; align-items:center; gap:16px;
+    }
+    .holding-emoji { font-size:32px; }
+    .holding-info { flex:1; }
+    .holding-name { font-size:15px; font-weight:700; color:#fff; }
+    .holding-desc { font-size:12px; color:#9494a8; margin-top:2px; }
+    .holding-value { text-align:right; }
+    .holding-amount { font-size:14px; font-weight:600; color:#fff; }
+    .holding-return { font-size:13px; font-weight:600; }
+    .holding-return.positive { color:#34d399; }
+    .holding-return.negative { color:#ef4444; }
+
+    /* 배당 섹션 */
+    .section-title { font-size:18px; font-weight:700; margin-bottom:12px; }
+    .dividend-card {
+      background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.15);
+      border-radius:16px; padding:20px; margin-bottom:24px; text-align:center;
+    }
+    .dividend-emoji { font-size:40px; margin-bottom:8px; }
+    .dividend-text { font-size:14px; color:#fbbf24; }
+    .dividend-amount { font-size:20px; font-weight:700; color:#fff; margin-top:4px; }
+
+    /* 복리 미리보기 */
+    .compound-card {
+      background:rgba(52,211,153,0.08); border:1px solid rgba(52,211,153,0.15);
+      border-radius:16px; padding:20px; text-align:center;
+    }
+    .compound-text { font-size:14px; color:#34d399; }
+    .compound-amount { font-size:24px; font-weight:800; color:#fff; margin-top:4px; }
+    .compound-sub { font-size:12px; color:#9494a8; margin-top:4px; }
+
+    /* 뷰 전환 */
+    .view-toggle { display:flex; justify-content:center; gap:8px; margin-bottom:24px; }
+    .view-btn { padding:8px 16px; border-radius:20px; border:1px solid rgba(255,255,255,0.1); background:transparent; color:#9494a8; font-size:12px; cursor:pointer; font-family:inherit; }
+    .view-btn.active { background:rgba(96,165,250,0.15); border-color:rgba(96,165,250,0.3); color:#60a5fa; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1><span>👧</span> 소담이의 투자 일기</h1>
+    <div class="sub">🌿 새싹 레벨 (9세)</div>
+  </div>
+
+  <div class="view-toggle">
+    <button class="view-btn active">📊 내 투자</button>
+    <button class="view-btn">📖 투자 이야기</button>
+    <button class="view-btn">🔮 미래 보기</button>
+  </div>
+
+  <div class="total-card">
+    <div class="glow"></div>
+    <div class="total-label">💰 내 투자 총액</div>
+    <div class="total-amount">₩4,523,000</div>
+    <div class="total-growth">📈 +₩1,523,000 자랐어! (+50.8%)</div>
+  </div>
+
+  <div class="section-title">🏢 내가 가진 회사들</div>
+  <div class="holdings">
+    <div class="holding-card">
+      <div class="holding-emoji">🍎</div>
+      <div class="holding-info">
+        <div class="holding-name">애플 (AAPL)</div>
+        <div class="holding-desc">아이폰, 맥북 만드는 회사</div>
+      </div>
+      <div class="holding-value">
+        <div class="holding-amount">₩1,520,000</div>
+        <div class="holding-return positive">+45.2% 📈</div>
+      </div>
+    </div>
+    <div class="holding-card">
+      <div class="holding-emoji">🚀</div>
+      <div class="holding-info">
+        <div class="holding-name">로켓랩 (RKLB)</div>
+        <div class="holding-desc">우주로 로켓 쏘는 회사</div>
+      </div>
+      <div class="holding-value">
+        <div class="holding-amount">₩1,890,000</div>
+        <div class="holding-return positive">+120.3% 🚀</div>
+      </div>
+    </div>
+    <div class="holding-card">
+      <div class="holding-emoji">🐯</div>
+      <div class="holding-info">
+        <div class="holding-name">TIGER S&P500</div>
+        <div class="holding-desc">미국 500대 회사에 골고루 투자</div>
+      </div>
+      <div class="holding-value">
+        <div class="holding-amount">₩1,113,000</div>
+        <div class="holding-return positive">+11.3% 📈</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">🎁 회사가 준 용돈 (배당금)</div>
+  <div class="dividend-card">
+    <div class="dividend-emoji">🎁</div>
+    <div class="dividend-text">올해 회사들이 소담이에게 준 용돈</div>
+    <div class="dividend-amount">₩12,500</div>
+  </div>
+
+  <div class="section-title">🔮 미래 미리보기</div>
+  <div class="compound-card">
+    <div class="compound-text">매달 5만원씩 넣으면 20살 때</div>
+    <div class="compound-amount">약 ₩1,500만원!</div>
+    <div class="compound-sub">지금 가진 돈이 계속 자라면서 + 매달 조금씩 넣으면 이렇게 돼요</div>
+  </div>
+</body>
+</html>
