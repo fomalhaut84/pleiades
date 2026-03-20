@@ -52,7 +52,7 @@ export default function BottomTab({ accounts }: BottomTabProps) {
         >
           <div className="absolute inset-0 bg-black/50" />
           <div
-            className="absolute bottom-[60px] left-0 right-0 bg-bg-raised border-t border-border rounded-t-2xl px-4 pt-4 pb-2"
+            className="absolute bottom-[60px] left-0 right-0 bg-bg-raised border-t border-border rounded-t-2xl px-4 pt-4 pb-2 max-h-[70vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="grid grid-cols-4 gap-1 mb-3">

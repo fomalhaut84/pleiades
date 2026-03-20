@@ -75,7 +75,7 @@ export default function Sidebar({ accounts }: SidebarProps) {
 
   useEffect(() => {
     if (hydrated) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(collapsedMap))
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(collapsedMap)) } catch { /* ignore */ }
     }
   }, [collapsedMap, hydrated])
 

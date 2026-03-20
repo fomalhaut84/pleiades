@@ -44,7 +44,7 @@ export const NAV_GROUPS: NavGroup[] = [
 
 export function isPathActive(pathname: string, href: string): boolean {
   if (href === '/') return pathname === '/'
-  return pathname.startsWith(href)
+  return pathname === href || pathname.startsWith(`${href}/`)
 }
 
 export function findActiveGroup(pathname: string): string | null {
