@@ -149,7 +149,7 @@ export default async function AccountDetailPage({ params }: PageProps) {
               </span>
             )}
           </div>
-          <div className="flex gap-4 mt-2">
+          <div className="flex flex-wrap items-center gap-4 mt-2">
             <span
               className="text-[12px] font-semibold px-2.5 py-1 rounded"
               style={{ color: colors.color, background: colors.tagBg }}
@@ -164,6 +164,14 @@ export default async function AccountDetailPage({ params }: PageProps) {
             <span className="text-[12px] font-semibold text-sub bg-surface-dim px-2.5 py-1 rounded">
               {account.holdings.length}종목
             </span>
+            {account.ownerAge != null && (
+              <Link
+                href={`/kids/${account.id}`}
+                className="text-[12px] font-semibold text-bright bg-surface border border-border px-3 py-1 rounded hover:bg-surface-hover transition-colors ml-auto inline-flex items-center gap-1.5"
+              >
+                🎒 교육 뷰 →
+              </Link>
+            )}
           </div>
         </div>
 
