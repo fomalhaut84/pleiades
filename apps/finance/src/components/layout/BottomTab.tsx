@@ -25,6 +25,7 @@ const MORE_ITEMS = [
   { href: '/ai', icon: '🤖', label: 'AI 분석' },
   { href: '/networth', icon: '💰', label: '순자산' },
   { href: '/reports', icon: '📋', label: '리포트' },
+  { href: '/backtest', icon: '🧪', label: '백테스팅' },
 ]
 
 export default function BottomTab({ accounts }: BottomTabProps) {
