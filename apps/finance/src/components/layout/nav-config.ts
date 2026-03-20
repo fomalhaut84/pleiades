@@ -14,7 +14,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: '포트폴리오',
     items: [
       { href: '/', icon: '📊', label: '대시보드' },
-      { href: '/trades', icon: '📝', label: '거래' },
+      { href: '/trades', icon: '📝', label: '종목 거래' },
       { href: '/rsu', icon: '🏢', label: 'RSU' },
       { href: '/dividends', icon: '💰', label: '배당금' },
       { href: '/deposits', icon: '🎁', label: '입금/증여' },
@@ -22,11 +22,16 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    title: '가계부',
+    items: [
+      { href: '/expenses', icon: '💸', label: '가계부' },
+      { href: '/categories', icon: '🏷️', label: '카테고리' },
+    ],
+  },
+  {
     title: '분석',
     items: [
       { href: '/tax', icon: '🧾', label: '세금' },
-      { href: '/expenses', icon: '💸', label: '가계부' },
-      { href: '/categories', icon: '🏷️', label: '카테고리' },
       { href: '/simulator', icon: '🔮', label: '시뮬레이터' },
       { href: '/performance', icon: '📈', label: '수익률 분석' },
     ],
