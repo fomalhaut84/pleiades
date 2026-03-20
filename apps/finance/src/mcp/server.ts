@@ -10,6 +10,7 @@ import { getPrices, getFxRate } from './tools/market'
 import { simulateGrowth } from './tools/simulator'
 import { getTechnicalAnalysis } from './tools/ta'
 import { getHoldingStrategy, getAllStrategies } from './tools/strategy'
+import { getNetWorth } from './tools/networth'
 
 const ACCOUNT_NAMES = ['세진', '소담', '다솜', '전체'] as const
 const PERIODS = ['1M', '3M', '6M', '1Y', 'ALL'] as const
@@ -142,6 +143,15 @@ server.tool(
   '전체 보유 종목의 전략 현황 (계좌별)',
   {},
   async () => getAllStrategies()
+)
+
+// --- 순자산 ---
+
+server.tool(
+  'get_networth',
+  '현재 순자산 요약 (주식 + 비주식 자산 - 부채 + 카테고리별 + 스냅샷 추이)',
+  {},
+  async () => getNetWorth()
 )
 
 // --- 서버 시작 ---

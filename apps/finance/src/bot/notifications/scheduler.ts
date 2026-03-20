@@ -11,6 +11,8 @@ import { sendMonthlyReminder } from './monthly'
 import { sendDailySummary } from './daily'
 import { sendMonthlyReport } from './monthly-report'
 import { sendBriefing } from './briefing'
+import { takeNetWorthSnapshot } from './networth-snapshot'
+import { sendQuarterlyReport } from './quarterly-report'
 
 function getAllowedChatIds(): number[] {
   return (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
@@ -74,6 +76,19 @@ export function scheduleNotifications(): void {
       { timezone: 'Asia/Seoul' }
     )
 
+    // 분기 리포트 PDF: 1/4/7/10월 7일 10:00 KST (분기 점검 1주 후)
+    cron.schedule(
+      '0 10 7 1,4,7,10 *',
+      async () => {
+        try {
+          await sendQuarterlyReport(chatIds)
+        } catch (error) {
+          console.error('[notification] 분기 리포트 실패:', error)
+        }
+      },
+      { timezone: 'Asia/Seoul' }
+    )
+
     // RSU/스톡옵션 리마인더: 매일 09:00 KST (D-7, D-1 대상만 발송)
     cron.schedule(
       '0 9 * * *',
@@ -95,6 +110,19 @@ export function scheduleNotifications(): void {
           await sendMonthlyReminder(chatIds)
         } catch (error) {
           console.error('[notification] 월 적립 리마인더 실패:', error)
+        }
+      },
+      { timezone: 'Asia/Seoul' }
+    )
+
+    // 순자산 스냅샷: 매월 1일 06:30 KST (스냅샷 후 월적립 리마인더)
+    cron.schedule(
+      '30 6 1 * *',
+      async () => {
+        try {
+          await takeNetWorthSnapshot(chatIds)
+        } catch (error) {
+          console.error('[notification] 순자산 스냅샷 실패:', error)
         }
       },
       { timezone: 'Asia/Seoul' }
@@ -153,7 +181,7 @@ export function scheduleNotifications(): void {
     )
 
     scheduled = true
-    console.log('[notification] 알림 스케줄러 등록 (일일요약 + 브리핑 + 분기점검 + RSU + 월적립 + 월간리포트)')
+    console.log('[notification] 알림 스케줄러 등록 (일일요약 + 브리핑 + 순자산 + 분기점검 + RSU + 월적립 + 월간리포트)')
   } catch (error) {
     console.error('[notification] 알림 스케줄러 등록 실패:', error)
   }

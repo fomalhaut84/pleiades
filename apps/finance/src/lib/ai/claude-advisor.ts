@@ -48,6 +48,7 @@ const ALLOWED_TOOLS = [
   'mcp__myfinance__get_technical_analysis',
   'mcp__myfinance__get_holding_strategy',
   'mcp__myfinance__get_all_strategies',
+  'mcp__myfinance__get_networth',
   'mcp__firecrawl__firecrawl_search',
   'mcp__firecrawl__firecrawl_scrape',
 ].join(',')

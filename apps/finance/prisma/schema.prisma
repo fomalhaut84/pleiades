@@ -281,6 +281,44 @@ model AlertConfig {
   updatedAt DateTime @updatedAt
 }
 
+model Asset {
+  id           String    @id @default(cuid())
+  name         String                         // "신한 적금", "전세 보증금"
+  category     String                         // "savings", "insurance", "real_estate", "pension", "loan", "cash", "other"
+  owner        String                         // "세진", "공동", "소담" 등
+  value        Float                          // 현재 평가액 (원)
+  isLiability  Boolean   @default(false)       // true면 부채
+  interestRate Float?                          // 이율 (적금, 대출)
+  maturityDate DateTime?                       // 만기일
+  note         String?
+  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime  @default(now())
+}
+
+model NetWorthSnapshot {
+  id            String   @id @default(cuid())
+  date          DateTime @unique               // 스냅샷 날짜 (매월 1일)
+  stockValueKRW Float                          // 주식 포트폴리오 총 평가액
+  assetValueKRW Float                          // 비주식 자산 총액
+  liabilityKRW  Float                          // 부채 총액
+  netWorthKRW   Float                          // 순자산 = 주식 + 자산 - 부채
+  breakdown     Json                           // 카테고리별 상세
+  createdAt     DateTime @default(now())
+}
+
+model QuarterlyReport {
+  id          String   @id @default(cuid())
+  year        Int
+  quarter     Int                              // 1, 2, 3, 4
+  title       String                           // "2026년 1분기 리포트"
+  summary     Json                             // 데이터 요약 (성과, 배당, 세금 등)
+  aiComment   String?                          // AI 분석 코멘트
+  pdfPath     String?                          // PDF 파일 경로 (생성 후)
+  createdAt   DateTime @default(now())
+
+  @@unique([year, quarter])
+}
+
 model Watchlist {
   id          String   @id @default(cuid())
   ticker      String   @unique
