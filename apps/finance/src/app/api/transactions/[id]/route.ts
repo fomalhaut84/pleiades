@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { validateTransactionInput } from '@/lib/transaction-utils'
 
 interface RouteParams {
@@ -32,17 +33,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const description = (body.description as string).trim()
     const categoryId = body.categoryId as string
 
-    const existing = await prisma.transaction.findUnique({ where: { id } })
-    if (!existing) {
-      return NextResponse.json({ error: '존재하지 않는 내역입니다.' }, { status: 404 })
-    }
-
     const category = await prisma.category.findUnique({
       where: { id: categoryId },
       select: { id: true },
     })
     if (!category) {
       return NextResponse.json({ error: '존재하지 않는 카테고리입니다.' }, { status: 400 })
+    }
+
+    // transactedAt 미전달 시 기존값 유지를 위해 사전 조회
+    const existing = await prisma.transaction.findUnique({ where: { id } })
+    if (!existing) {
+      return NextResponse.json({ error: '존재하지 않는 내역입니다.' }, { status: 404 })
     }
 
     const transactedAt = body.transactedAt
@@ -74,6 +76,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       currency: 'KRW',
     })
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return NextResponse.json({ error: '존재하지 않는 내역입니다.' }, { status: 404 })
+    }
     console.error('[api/transactions/[id]] PUT 실패:', error)
     return NextResponse.json({ error: '내역 수정에 실패했습니다.' }, { status: 500 })
   }
@@ -85,16 +90,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params
-
-    const existing = await prisma.transaction.findUnique({ where: { id } })
-    if (!existing) {
-      return NextResponse.json({ error: '존재하지 않는 내역입니다.' }, { status: 404 })
-    }
-
     await prisma.transaction.delete({ where: { id } })
-
     return new NextResponse(null, { status: 204 })
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return NextResponse.json({ error: '존재하지 않는 내역입니다.' }, { status: 404 })
+    }
     console.error('[api/transactions/[id]] DELETE 실패:', error)
     return NextResponse.json({ error: '내역 삭제에 실패했습니다.' }, { status: 500 })
   }

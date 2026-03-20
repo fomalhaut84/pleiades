@@ -248,13 +248,17 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 후잉 웹훅 전송 (비차단)
-    sendToWhooing({
-      amount: transaction.amount,
-      description: transaction.description,
-      categoryId: transaction.categoryId,
-      transactedAt: transaction.transactedAt,
-    }).catch((err) => console.error('[whooing] 전송 실패:', err))
+    // 후잉 웹훅 전송 (실패해도 거래 생성은 정상 완료)
+    try {
+      await sendToWhooing({
+        amount: transaction.amount,
+        description: transaction.description,
+        categoryId: transaction.categoryId,
+        transactedAt: transaction.transactedAt,
+      })
+    } catch (err) {
+      console.error('[whooing] 전송 실패:', err)
+    }
 
     return NextResponse.json({
       id: transaction.id,

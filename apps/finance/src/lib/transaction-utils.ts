@@ -14,6 +14,8 @@ export function validateTransactionInput(body: Record<string, unknown>): Transac
     errors.push({ field: 'amount', message: '금액을 입력해주세요.' })
   } else if (typeof body.amount !== 'number' || !Number.isInteger(body.amount) || body.amount <= 0) {
     errors.push({ field: 'amount', message: '금액은 1 이상의 정수여야 합니다.' })
+  } else if (body.amount > 2_147_483_647) {
+    errors.push({ field: 'amount', message: '금액이 허용 범위를 초과했습니다.' })
   }
 
   if (!body.description || typeof body.description !== 'string' || !body.description.trim()) {
