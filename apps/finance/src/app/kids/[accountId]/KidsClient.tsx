@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 interface HoldingData {
   ticker: string
   displayName: string
@@ -12,6 +14,7 @@ interface HoldingData {
 }
 
 interface Props {
+  accountId: string
   accountName: string
   ownerAge: number | null
   level: { level: number; label: string; emoji: string }
@@ -34,7 +37,7 @@ function formatKRW(n: number): string {
 const ACCOUNT_EMOJI: Record<string, string> = { '소담': '👧', '다솜': '👶' }
 
 export default function KidsClient({
-  accountName, ownerAge, level, totalValue, totalCost, totalReturn,
+  accountId, accountName, ownerAge, level, totalValue, totalCost, totalReturn,
   holdings, dividendTotal, compoundFinalValue, compoundYears, compoundMonthly,
 }: Props) {
   const accountEmoji = ACCOUNT_EMOJI[accountName] ?? '👤'
@@ -109,6 +112,17 @@ export default function KidsClient({
           지금 가진 돈이 계속 자라면서 + 매달 조금씩 넣으면 이렇게 돼요 ✨
         </div>
       </div>
+
+      {/* 타임라인 링크 */}
+      <Link
+        href={`/kids/${accountId}/timeline`}
+        className="block mt-6 rounded-[16px] border border-border bg-card p-5 text-center
+          hover:bg-card-hover hover:border-border-hover transition-all"
+      >
+        <span className="text-[24px]">📖</span>
+        <div className="text-[14px] font-bold text-bright mt-2">내 투자 이야기 보기</div>
+        <div className="text-[12px] text-sub mt-1">투자를 시작한 날부터 지금까지</div>
+      </Link>
     </div>
   )
 }

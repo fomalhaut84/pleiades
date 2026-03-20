@@ -106,6 +106,7 @@ export default async function KidsPage({
 
   return (
     <KidsClient
+      accountId={account.id}
       accountName={account.name}
       ownerAge={account.ownerAge}
       level={level}
