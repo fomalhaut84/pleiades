@@ -12,6 +12,7 @@ import { sendDailySummary } from './daily'
 import { sendMonthlyReport } from './monthly-report'
 import { sendBriefing } from './briefing'
 import { takeNetWorthSnapshot } from './networth-snapshot'
+import { sendQuarterlyReport } from './quarterly-report'
 
 function getAllowedChatIds(): number[] {
   return (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
@@ -70,6 +71,19 @@ export function scheduleNotifications(): void {
           await sendQuarterlyReminder(chatIds)
         } catch (error) {
           console.error('[notification] 분기 점검 실패:', error)
+        }
+      },
+      { timezone: 'Asia/Seoul' }
+    )
+
+    // 분기 리포트 PDF: 1/4/7/10월 7일 10:00 KST (분기 점검 1주 후)
+    cron.schedule(
+      '0 10 7 1,4,7,10 *',
+      async () => {
+        try {
+          await sendQuarterlyReport(chatIds)
+        } catch (error) {
+          console.error('[notification] 분기 리포트 실패:', error)
         }
       },
       { timezone: 'Asia/Seoul' }

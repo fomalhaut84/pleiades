@@ -45,7 +45,10 @@ const COMMANDS_HELP =
   `순자산 — 가족 순자산 요약\n` +
   `자산목록 — 전체 자산/부채 현황\n` +
   `자산추가 [이름] [카테고리] [금액] — 자산 등록\n` +
-  `자산수정 [이름] [금액] — 금액 수정`
+  `자산수정 [이름] [금액] — 금액 수정\n\n` +
+  `${h.b('분기 리포트:')}\n` +
+  `리포트 — 직전 분기 리포트 PDF 생성\n` +
+  `리포트 [년도] [분기] — 특정 분기 리포트`
 
 export function registerCommands(bot: Bot): void {
   bot.command('start', async (ctx) => {
