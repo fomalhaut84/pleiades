@@ -48,8 +48,10 @@ export async function sendToWhooing(data: WhooingTransactionData): Promise<void>
 }
 
 function formatWhooingDate(date: Date): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
+  // KST (UTC+9) 기준 날짜 — 서버 타임존 무관하게 일관된 결과
+  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000)
+  const y = kst.getUTCFullYear()
+  const m = String(kst.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(kst.getUTCDate()).padStart(2, '0')
   return `${y}${m}${d}`
 }

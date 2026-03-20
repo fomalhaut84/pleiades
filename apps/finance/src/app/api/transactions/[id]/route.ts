@@ -14,11 +14,23 @@ interface RouteParams {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params
-    const body = await request.json()
+    let body: Record<string, unknown>
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 })
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: '유효한 JSON 객체가 아닙니다.' }, { status: 400 })
+    }
     const errors = validateTransactionInput(body)
     if (errors.length > 0) {
       return NextResponse.json({ error: errors[0].message, errors }, { status: 400 })
     }
+
+    const amount = body.amount as number
+    const description = (body.description as string).trim()
+    const categoryId = body.categoryId as string
 
     const existing = await prisma.transaction.findUnique({ where: { id } })
     if (!existing) {
@@ -26,20 +38,24 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     const category = await prisma.category.findUnique({
-      where: { id: body.categoryId },
+      where: { id: categoryId },
       select: { id: true },
     })
     if (!category) {
       return NextResponse.json({ error: '존재하지 않는 카테고리입니다.' }, { status: 400 })
     }
 
+    const transactedAt = body.transactedAt
+      ? new Date(body.transactedAt as string)
+      : existing.transactedAt
+
     const updated = await prisma.transaction.update({
       where: { id },
       data: {
-        amount: body.amount,
-        description: body.description.trim(),
-        categoryId: body.categoryId,
-        transactedAt: body.transactedAt ? new Date(body.transactedAt) : existing.transactedAt,
+        amount,
+        description,
+        categoryId,
+        transactedAt,
       },
       include: {
         category: { select: { name: true, icon: true, type: true } },

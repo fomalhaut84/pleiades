@@ -207,14 +207,29 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    let body: Record<string, unknown>
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 })
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: '유효한 JSON 객체가 아닙니다.' }, { status: 400 })
+    }
     const errors = validateTransactionInput(body)
     if (errors.length > 0) {
       return NextResponse.json({ error: errors[0].message, errors }, { status: 400 })
     }
 
+    const amount = body.amount as number
+    const description = (body.description as string).trim()
+    const categoryId = body.categoryId as string
+    const transactedAt = body.transactedAt
+      ? new Date(body.transactedAt as string)
+      : new Date()
+
     const category = await prisma.category.findUnique({
-      where: { id: body.categoryId },
+      where: { id: categoryId },
       select: { id: true, name: true, icon: true, type: true },
     })
     if (!category) {
@@ -223,10 +238,10 @@ export async function POST(request: NextRequest) {
 
     const transaction = await prisma.transaction.create({
       data: {
-        amount: body.amount,
-        description: body.description.trim(),
-        categoryId: body.categoryId,
-        transactedAt: body.transactedAt ? new Date(body.transactedAt) : new Date(),
+        amount,
+        description,
+        categoryId,
+        transactedAt,
       },
       include: {
         category: { select: { name: true, icon: true, type: true } },
