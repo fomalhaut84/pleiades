@@ -20,6 +20,8 @@ const MORE_ITEMS = [
   { href: '/dividends', icon: '💰', label: '배당금' },
   { href: '/deposits', icon: '🎁', label: '입금/증여' },
   { href: '/stock-options', icon: '📊', label: '스톡옵션' },
+  { href: '/expenses', icon: '💸', label: '가계부' },
+  { href: '/categories', icon: '🏷️', label: '카테고리' },
   { href: '/simulator', icon: '🔮', label: '시뮬레이터' },
   { href: '/performance', icon: '📈', label: '수익률 분석' },
   { href: '/ai', icon: '🤖', label: 'AI 분석' },

@@ -164,6 +164,14 @@ export default async function AccountDetailPage({ params }: PageProps) {
             <span className="text-[12px] font-semibold text-sub bg-surface-dim px-2.5 py-1 rounded">
               {account.holdings.length}종목
             </span>
+            {account.ownerAge != null && (
+              <Link
+                href={`/kids/${account.id}`}
+                className="text-[12px] font-semibold text-bright bg-surface border border-border px-3 py-1 rounded hover:bg-surface-hover transition-colors ml-auto inline-flex items-center gap-1.5"
+              >
+                🎒 교육 뷰 →
+              </Link>
+            )}
           </div>
         </div>
 
