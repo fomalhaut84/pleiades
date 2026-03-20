@@ -123,6 +123,17 @@ export default function KidsClient({
         <div className="text-[14px] font-bold text-bright mt-2">내 투자 이야기 보기</div>
         <div className="text-[12px] text-sub mt-1">투자를 시작한 날부터 지금까지</div>
       </Link>
+
+      {/* 시뮬레이터 링크 */}
+      <Link
+        href={`/kids/${accountId}/simulator`}
+        className="block mt-3 rounded-[16px] border border-border bg-card p-5 text-center
+          hover:bg-card-hover hover:border-border-hover transition-all"
+      >
+        <span className="text-[24px]">🔮</span>
+        <div className="text-[14px] font-bold text-bright mt-2">미래 시뮬레이터</div>
+        <div className="text-[12px] text-sub mt-1">용돈을 넣으면 얼마나 자랄까?</div>
+      </Link>
     </div>
   )
 }
