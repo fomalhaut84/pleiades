@@ -48,7 +48,10 @@ const COMMANDS_HELP =
   `자산수정 [이름] [금액] — 금액 수정\n\n` +
   `${h.b('분기 리포트:')}\n` +
   `리포트 — 직전 분기 리포트 PDF 생성\n` +
-  `리포트 [년도] [분기] — 특정 분기 리포트`
+  `리포트 [년도] [분기] — 특정 분기 리포트\n\n` +
+  `${h.b('백테스팅:')}\n` +
+  `백테스트 [종목] [전략] [기간] — 과거 전략 시뮬레이션\n` +
+  `전략: rsi, 골든크로스, bb, sma`
 
 export function registerCommands(bot: Bot): void {
   bot.command('start', async (ctx) => {

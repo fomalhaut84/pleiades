@@ -13,6 +13,7 @@ import { registerAnalysisCommands } from './commands/analysis'
 import { registerBriefingCommands } from './commands/briefing'
 import { registerNetWorthCommands } from './commands/networth'
 import { registerReportCommands } from './commands/report'
+import { registerBacktestCommands } from './commands/backtest'
 import { authMiddleware } from './middleware/auth'
 
 let bot: Bot | null = null
@@ -43,6 +44,7 @@ function createBot(): Bot {
   registerBriefingCommands(instance)
   registerNetWorthCommands(instance)
   registerReportCommands(instance)
+  registerBacktestCommands(instance)
 
   // fallback 순서: 소비 입력 → AI 질문 (질문형 키워드 포함 시)
   registerExpenseFallback(instance)
