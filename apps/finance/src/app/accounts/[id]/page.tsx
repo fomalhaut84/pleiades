@@ -149,7 +149,7 @@ export default async function AccountDetailPage({ params }: PageProps) {
               </span>
             )}
           </div>
-          <div className="flex gap-4 mt-2">
+          <div className="flex flex-wrap items-center gap-4 mt-2">
             <span
               className="text-[12px] font-semibold px-2.5 py-1 rounded"
               style={{ color: colors.color, background: colors.tagBg }}

@@ -67,7 +67,10 @@ export default function Sidebar({ accounts }: SidebarProps) {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
-        setCollapsedMap(JSON.parse(stored))
+        const parsed = JSON.parse(stored)
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          setCollapsedMap(parsed)
+        }
       }
     } catch { /* ignore */ }
     setHydrated(true)
