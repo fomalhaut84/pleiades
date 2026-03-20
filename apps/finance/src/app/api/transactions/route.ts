@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { validateTransactionInput } from '@/lib/transaction-utils'
+import { sendToWhooing } from '@/lib/whooing-webhook'
 
 export const dynamic = 'force-dynamic'
 
@@ -195,5 +197,63 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[api/transactions] GET 실패:', error)
     return NextResponse.json({ error: '거래 내역 조회에 실패했습니다.' }, { status: 500 })
+  }
+}
+
+/**
+ * POST /api/transactions
+ *
+ * Body: { amount: number, description: string, categoryId: string, transactedAt?: string }
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const errors = validateTransactionInput(body)
+    if (errors.length > 0) {
+      return NextResponse.json({ error: errors[0].message, errors }, { status: 400 })
+    }
+
+    const category = await prisma.category.findUnique({
+      where: { id: body.categoryId },
+      select: { id: true, name: true, icon: true, type: true },
+    })
+    if (!category) {
+      return NextResponse.json({ error: '존재하지 않는 카테고리입니다.' }, { status: 400 })
+    }
+
+    const transaction = await prisma.transaction.create({
+      data: {
+        amount: body.amount,
+        description: body.description.trim(),
+        categoryId: body.categoryId,
+        transactedAt: body.transactedAt ? new Date(body.transactedAt) : new Date(),
+      },
+      include: {
+        category: { select: { name: true, icon: true, type: true } },
+      },
+    })
+
+    // 후잉 웹훅 전송 (비차단)
+    sendToWhooing({
+      amount: transaction.amount,
+      description: transaction.description,
+      categoryId: transaction.categoryId,
+      transactedAt: transaction.transactedAt,
+    }).catch((err) => console.error('[whooing] 전송 실패:', err))
+
+    return NextResponse.json({
+      id: transaction.id,
+      amount: transaction.amount,
+      description: transaction.description,
+      categoryId: transaction.categoryId,
+      categoryName: transaction.category.name,
+      categoryIcon: transaction.category.icon,
+      categoryType: transaction.category.type,
+      transactedAt: transaction.transactedAt.toISOString(),
+      currency: 'KRW',
+    }, { status: 201 })
+  } catch (error) {
+    console.error('[api/transactions] POST 실패:', error)
+    return NextResponse.json({ error: '내역 생성에 실패했습니다.' }, { status: 500 })
   }
 }
