@@ -93,6 +93,7 @@ export default function Sidebar({ accounts }: SidebarProps) {
   }
 
   const toggleSection = (title: string) => {
+    if (activeGroup === title) return
     setCollapsedMap((prev) => ({ ...prev, [title]: !prev[title] }))
   }
 
