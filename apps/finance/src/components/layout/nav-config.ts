@@ -26,6 +26,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/expenses', icon: '💸', label: '가계부' },
       { href: '/categories', icon: '🏷️', label: '카테고리' },
+      { href: '/budgets', icon: '📋', label: '예산' },
     ],
   },
   {
