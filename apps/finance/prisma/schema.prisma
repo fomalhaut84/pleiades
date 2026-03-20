@@ -306,6 +306,19 @@ model NetWorthSnapshot {
   createdAt     DateTime @default(now())
 }
 
+model QuarterlyReport {
+  id          String   @id @default(cuid())
+  year        Int
+  quarter     Int                              // 1, 2, 3, 4
+  title       String                           // "2026년 1분기 리포트"
+  summary     Json                             // 데이터 요약 (성과, 배당, 세금 등)
+  aiComment   String?                          // AI 분석 코멘트
+  pdfPath     String?                          // PDF 파일 경로 (생성 후)
+  createdAt   DateTime @default(now())
+
+  @@unique([year, quarter])
+}
+
 model Watchlist {
   id          String   @id @default(cuid())
   ticker      String   @unique
