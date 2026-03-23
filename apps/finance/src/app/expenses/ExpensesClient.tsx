@@ -7,6 +7,8 @@ import CategoryPieChart from '@/components/expense/CategoryPieChart'
 import TransactionTable, { type TransactionRow } from '@/components/expense/TransactionTable'
 import TransactionForm from '@/components/expense/TransactionForm'
 import TransactionDeleteModal from '@/components/expense/TransactionDeleteModal'
+import MonthCompare from '@/components/expense/MonthCompare'
+import SpendingTrend from '@/components/expense/SpendingTrend'
 
 interface MonthlyData {
   month: number
@@ -68,6 +70,13 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
   const abortRef = useRef<AbortController | null>(null)
   const isInitialMount = useRef(true)
 
+  // 분석 데이터
+  const [analysisData, setAnalysisData] = useState<{
+    monthCompare: { groupId: string; groupName: string; groupIcon: string | null; current: number; previous: number; change: number; changePct: number }[]
+    prevMonthSummary: { totalExpense: number; totalIncome: number; count: number }
+    trend: { months: { year: number; month: number }[]; groups: { groupId: string; groupName: string; groupIcon: string | null; values: number[]; avg: number; anomalies: boolean[] }[] }
+  } | null>(null)
+
   // CRUD 상태
   const [showForm, setShowForm] = useState(false)
   const [editingTx, setEditingTx] = useState<TransactionRow | null>(null)
@@ -109,9 +118,26 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
         setData(json)
         setOffset(0)
       }
+      // 월 선택 시 분석 데이터도 조회 (소비 탭 또는 전체 탭에서만)
+      if (m && t !== 'income') {
+        try {
+          const analysisRes = await fetch(`/api/transactions/analysis?year=${y}&month=${m}`, { signal: controller.signal })
+          if (analysisRes.ok) {
+            setAnalysisData(await analysisRes.json())
+          } else {
+            setAnalysisData(null)
+          }
+        } catch (ae) {
+          if (ae instanceof DOMException && ae.name === 'AbortError') return
+          setAnalysisData(null)
+        }
+      } else {
+        setAnalysisData(null)
+      }
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return
       console.error('[expenses] 데이터 조회 실패:', e)
+      setAnalysisData(null)
     } finally {
       if (!controller.signal.aborted) {
         setLoading(false)
@@ -269,6 +295,7 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
           count={data.summary.count}
           year={year}
           month={month}
+          prevMonth={tab === 'all' ? analysisData?.prevMonthSummary : undefined}
         />
       </div>
 
@@ -293,6 +320,21 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
           )}
         </div>
       </div>
+
+      {/* 분석 섹션 (월 선택 + 전체/소비 탭) */}
+      {analysisData && month && tab !== 'income' && (
+        <div className="flex flex-col gap-5 mb-5">
+          <MonthCompare
+            data={analysisData.monthCompare}
+            currentMonth={month}
+            prevMonth={month === 1 ? 12 : month - 1}
+          />
+          <SpendingTrend
+            months={analysisData.trend.months}
+            groups={analysisData.trend.groups}
+          />
+        </div>
+      )}
 
       {/* 내역 테이블 */}
       <TransactionTable
