@@ -82,8 +82,9 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
   const [editingTx, setEditingTx] = useState<TransactionRow | null>(null)
   const [deletingTx, setDeletingTx] = useState<TransactionRow | null>(null)
   const [categories, setCategories] = useState<CategoryOption[]>([])
+  const [assets, setAssets] = useState<{ id: string; name: string; category: string; value: number; isLiability: boolean }[]>([])
 
-  // 카테고리 목록 fetch (폼 select용)
+  // 카테고리 + 자산 목록 fetch (폼 select용)
   useEffect(() => {
     fetch('/api/categories')
       .then((res) => res.ok ? res.json() : null)
@@ -97,6 +98,13 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
             type: c.type as 'expense' | 'income',
           })))
         }
+      })
+      .catch(() => {})
+    fetch('/api/assets')
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        const list = data?.assets ?? data
+        if (Array.isArray(list)) setAssets(list)
       })
       .catch(() => {})
   }, [])
@@ -352,6 +360,7 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
         <TransactionForm
           mode="create"
           categories={categories}
+          assets={assets}
           onClose={() => setShowForm(false)}
           onSaved={handleSaved}
         />
@@ -361,12 +370,15 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
       {editingTx && (
         <TransactionForm
           mode="edit"
+          assets={assets}
           transaction={{
             id: editingTx.id,
             amount: editingTx.amount,
             description: editingTx.description,
             categoryId: editingTx.categoryId,
             transactedAt: editingTx.transactedAt,
+            type: editingTx.type,
+            linkedAssetId: editingTx.linkedAssetId,
           }}
           categories={categories}
           onClose={() => setEditingTx(null)}

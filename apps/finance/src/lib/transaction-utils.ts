@@ -28,6 +28,19 @@ export function validateTransactionInput(body: Record<string, unknown>): Transac
     errors.push({ field: 'categoryId', message: '카테고리를 선택해주세요.' })
   }
 
+  // type 검증 (transfer 유형)
+  const validTypes = ['transfer_out', 'transfer_in']
+  if (body.type !== undefined && body.type !== null) {
+    if (typeof body.type !== 'string' || !validTypes.includes(body.type)) {
+      errors.push({ field: 'type', message: '유형은 transfer_out 또는 transfer_in만 허용됩니다.' })
+    } else {
+      // transfer 유형은 linkedAssetId 필수
+      if (!body.linkedAssetId || typeof body.linkedAssetId !== 'string') {
+        errors.push({ field: 'linkedAssetId', message: '출금/입금 시 연결 자산을 선택해주세요.' })
+      }
+    }
+  }
+
   if (body.transactedAt !== undefined && body.transactedAt !== null) {
     if (typeof body.transactedAt !== 'string') {
       errors.push({ field: 'transactedAt', message: '날짜는 문자열이어야 합니다.' })

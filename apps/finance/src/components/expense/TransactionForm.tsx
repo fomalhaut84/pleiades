@@ -9,18 +9,31 @@ interface CategoryOption {
   type: 'expense' | 'income'
 }
 
+interface AssetOption {
+  id: string
+  name: string
+  category: string
+  value: number
+  isLiability: boolean
+}
+
 interface TransactionData {
   id: string
   amount: number
   description: string
   categoryId: string
   transactedAt: string
+  type?: string | null
+  linkedAssetId?: string | null
 }
+
+type TxType = 'expense' | 'income' | 'transfer_out' | 'transfer_in'
 
 interface TransactionFormProps {
   mode: 'create' | 'edit'
   transaction?: TransactionData
   categories: CategoryOption[]
+  assets?: AssetOption[]
   onClose: () => void
   onSaved: () => void
 }
@@ -35,20 +48,32 @@ function toDateInputValue(isoString?: string): string {
   return isoString.slice(0, 10)
 }
 
+function inferTxType(transaction?: TransactionData): TxType {
+  if (transaction?.type === 'transfer_out') return 'transfer_out'
+  if (transaction?.type === 'transfer_in') return 'transfer_in'
+  return 'expense'
+}
+
 export default function TransactionForm({
   mode,
   transaction,
   categories,
+  assets = [],
   onClose,
   onSaved,
 }: TransactionFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [txType, setTxType] = useState<TxType>(() => inferTxType(transaction))
   const [amount, setAmount] = useState(transaction ? String(transaction.amount) : '')
   const [description, setDescription] = useState(transaction?.description ?? '')
   const [categoryId, setCategoryId] = useState(transaction?.categoryId ?? '')
+  const [linkedAssetId, setLinkedAssetId] = useState(transaction?.linkedAssetId ?? '')
   const [transactedAt, setTransactedAt] = useState(toDateInputValue(transaction?.transactedAt))
+
+  const isTransfer = txType === 'transfer_out' || txType === 'transfer_in'
+  const selectedAsset = assets.find((a) => a.id === linkedAssetId)
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -82,6 +107,11 @@ export default function TransactionForm({
       setIsSubmitting(false)
       return
     }
+    if (isTransfer && !linkedAssetId) {
+      setError('연결 자산을 선택해주세요.')
+      setIsSubmitting(false)
+      return
+    }
 
     try {
       const url = mode === 'edit'
@@ -97,6 +127,8 @@ export default function TransactionForm({
           description: description.trim(),
           categoryId,
           transactedAt: `${transactedAt}T00:00:00.000Z`,
+          type: isTransfer ? txType : null,
+          linkedAssetId: isTransfer ? linkedAssetId : null,
         }),
       })
 
@@ -133,6 +165,30 @@ export default function TransactionForm({
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 flex flex-col gap-5">
+          {/* 유형 */}
+          <div>
+            <label className={labelClasses}>유형</label>
+            <div className="flex gap-0.5 bg-card border border-border rounded-lg p-1">
+              {([
+                { value: 'expense' as TxType, label: '소비', activeClass: 'bg-red-500/12 text-red-400' },
+                { value: 'income' as TxType, label: '수입', activeClass: 'bg-emerald-500/12 text-emerald-400' },
+                { value: 'transfer_out' as TxType, label: '출금', activeClass: 'bg-sodam/15 text-sodam' },
+                { value: 'transfer_in' as TxType, label: '입금', activeClass: 'bg-teal-500/12 text-teal-400' },
+              ]).map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => setTxType(t.value)}
+                  className={`flex-1 py-2 rounded-md text-[12px] font-semibold transition-all ${
+                    txType === t.value ? t.activeClass : 'text-sub'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* 금액 */}
           <div>
             <label className={labelClasses}>금액</label>
@@ -192,6 +248,44 @@ export default function TransactionForm({
               )}
             </select>
           </div>
+
+          {/* 자산 (transfer 유형만) */}
+          {isTransfer && assets.length > 0 && (
+            <div className={`border rounded-[10px] p-3 ${txType === 'transfer_out' ? 'border-sodam/25 bg-sodam/[0.04]' : 'border-teal-500/25 bg-teal-500/[0.04]'}`}>
+              <label className={labelClasses}>연결 자산</label>
+              <select
+                value={linkedAssetId}
+                onChange={(e) => setLinkedAssetId(e.target.value)}
+                className={`${inputClasses} appearance-none cursor-pointer`}
+                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236e6e82' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 14px center' }}
+              >
+                <option value="">자산 선택</option>
+                {assets.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} [{a.category}] {a.value.toLocaleString('ko-KR')}원
+                  </option>
+                ))}
+              </select>
+              {selectedAsset && amount && (
+                <div className="mt-2 bg-surface-dim border border-border rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-1.5 text-[12px] tabular-nums">
+                    <span className="text-sub">{selectedAsset.name}:</span>
+                    <span className="text-text">{selectedAsset.value.toLocaleString('ko-KR')}원</span>
+                    <span className="text-dim">→</span>
+                    <span className="text-bright font-bold">
+                      {(txType === 'transfer_out'
+                        ? selectedAsset.value - parseInt(amount.replace(/,/g, '') || '0')
+                        : selectedAsset.value + parseInt(amount.replace(/,/g, '') || '0')
+                      ).toLocaleString('ko-KR')}원
+                    </span>
+                    <span className={`text-[11px] font-semibold ${txType === 'transfer_out' ? 'text-emerald-400' : 'text-sodam'}`}>
+                      ({txType === 'transfer_out' ? '-' : '+'}{parseInt(amount.replace(/,/g, '') || '0').toLocaleString('ko-KR')})
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 날짜 */}
           <div>

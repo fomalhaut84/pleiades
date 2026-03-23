@@ -83,6 +83,7 @@ export async function GET(request: NextRequest) {
         take: limit,
         include: {
           category: { select: { name: true, icon: true, type: true } },
+          linkedAsset: { select: { id: true, name: true } },
         },
       }),
       prisma.transaction.count({ where: baseWhere }),
@@ -96,6 +97,9 @@ export async function GET(request: NextRequest) {
       categoryName: tx.category.name,
       categoryIcon: tx.category.icon,
       categoryType: tx.category.type,
+      type: tx.type,
+      linkedAssetId: tx.linkedAssetId,
+      linkedAssetName: tx.linkedAsset?.name ?? null,
       transactedAt: tx.transactedAt.toISOString(),
       currency: 'KRW',
     }))
@@ -228,6 +232,8 @@ export async function POST(request: NextRequest) {
     const transactedAt = body.transactedAt
       ? new Date(body.transactedAt as string)
       : new Date()
+    const txType = (body.type as string | null) ?? null
+    const linkedAssetId = (body.linkedAssetId as string | null) ?? null
 
     const category = await prisma.category.findUnique({
       where: { id: categoryId },
@@ -237,16 +243,46 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '존재하지 않는 카테고리입니다.' }, { status: 400 })
     }
 
-    const transaction = await prisma.transaction.create({
-      data: {
-        amount,
-        description,
-        categoryId,
-        transactedAt,
-      },
-      include: {
-        category: { select: { name: true, icon: true, type: true } },
-      },
+    // transfer 유형은 expense 카테고리만 허용
+    if (txType && category.type !== 'expense') {
+      return NextResponse.json({ error: '출금/입금은 소비 카테고리에서만 사용할 수 있습니다.' }, { status: 400 })
+    }
+
+    // 자산 존재 확인 (transfer 유형)
+    if (linkedAssetId) {
+      const asset = await prisma.asset.findUnique({ where: { id: linkedAssetId }, select: { id: true } })
+      if (!asset) {
+        return NextResponse.json({ error: '존재하지 않는 자산입니다.' }, { status: 400 })
+      }
+    }
+
+    // Transaction 생성 + Asset 업데이트 (트랜잭션)
+    const transaction = await prisma.$transaction(async (tx) => {
+      const created = await tx.transaction.create({
+        data: {
+          amount,
+          description,
+          categoryId,
+          transactedAt,
+          type: txType,
+          linkedAssetId,
+        },
+        include: {
+          category: { select: { name: true, icon: true, type: true } },
+          linkedAsset: { select: { id: true, name: true } },
+        },
+      })
+
+      // Asset 업데이트
+      if (linkedAssetId && txType) {
+        const delta = txType === 'transfer_out' ? -amount : amount
+        await tx.asset.update({
+          where: { id: linkedAssetId },
+          data: { value: { increment: delta } },
+        })
+      }
+
+      return created
     })
 
     // 후잉 웹훅 전송 (실패해도 거래 생성은 정상 완료)
@@ -269,6 +305,9 @@ export async function POST(request: NextRequest) {
       categoryName: transaction.category.name,
       categoryIcon: transaction.category.icon,
       categoryType: transaction.category.type,
+      type: transaction.type,
+      linkedAssetId: transaction.linkedAssetId,
+      linkedAssetName: transaction.linkedAsset?.name ?? null,
       transactedAt: transaction.transactedAt.toISOString(),
       currency: 'KRW',
     }, { status: 201 })

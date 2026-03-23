@@ -239,18 +239,22 @@ model Category {
 }
 
 model Transaction {
-  id           String   @id @default(cuid())
-  amount       Int
-  description  String
-  categoryId   String
-  category     Category @relation(fields: [categoryId], references: [id])
-  userId       String?
-  transactedAt DateTime @default(now())
-  createdAt    DateTime @default(now())
+  id             String   @id @default(cuid())
+  amount         Int
+  description    String
+  categoryId     String
+  category       Category @relation(fields: [categoryId], references: [id])
+  userId         String?
+  type           String?  // "transfer_out" | "transfer_in" (null = 카테고리 type 사용)
+  linkedAssetId  String?
+  linkedAsset    Asset?   @relation(fields: [linkedAssetId], references: [id])
+  transactedAt   DateTime @default(now())
+  createdAt      DateTime @default(now())
 
   @@index([transactedAt])
   @@index([categoryId])
   @@index([userId])
+  @@index([linkedAssetId])
 }
 
 model RecurringTransaction {
@@ -330,6 +334,7 @@ model Asset {
   note         String?
   updatedAt    DateTime  @updatedAt
   createdAt    DateTime  @default(now())
+  transactions Transaction[]
 }
 
 model NetWorthSnapshot {

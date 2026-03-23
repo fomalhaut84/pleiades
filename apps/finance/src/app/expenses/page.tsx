@@ -23,6 +23,7 @@ async function fetchInitialData() {
       take: 20,
       include: {
         category: { select: { name: true, icon: true, type: true } },
+        linkedAsset: { select: { id: true, name: true } },
       },
     }),
     prisma.transaction.count({
@@ -91,6 +92,9 @@ async function fetchInitialData() {
     categoryName: tx.category.name,
     categoryIcon: tx.category.icon,
     categoryType: tx.category.type as 'expense' | 'income',
+    type: tx.type ?? null,
+    linkedAssetId: tx.linkedAssetId ?? null,
+    linkedAssetName: tx.linkedAsset?.name ?? null,
     transactedAt: tx.transactedAt.toISOString(),
     currency: 'KRW' as const,
   }))

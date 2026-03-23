@@ -10,6 +10,9 @@ export interface TransactionRow {
   categoryName: string
   categoryIcon: string | null
   categoryType: 'expense' | 'income'
+  type?: string | null
+  linkedAssetId?: string | null
+  linkedAssetName?: string | null
   transactedAt: string
 }
 
@@ -79,6 +82,16 @@ export default function TransactionTable({
                       </td>
                       <td className="px-4 py-3 text-bright">
                         {tx.description}
+                        {tx.type === 'transfer_out' && tx.linkedAssetName && (
+                          <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold text-sodam bg-sodam/15 px-2 py-0.5 rounded">
+                            출금 → {tx.linkedAssetName}
+                          </span>
+                        )}
+                        {tx.type === 'transfer_in' && tx.linkedAssetName && (
+                          <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold text-teal-400 bg-teal-500/12 px-2 py-0.5 rounded">
+                            입금 → {tx.linkedAssetName}
+                          </span>
+                        )}
                       </td>
                       <td className={`px-4 py-3 text-right font-semibold tabular-nums whitespace-nowrap ${isExpense ? 'text-red-400' : 'text-emerald-400'}`}>
                         {isExpense ? '-' : '+'}{formatKRW(tx.amount)}
