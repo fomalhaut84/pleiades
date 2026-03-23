@@ -210,17 +210,31 @@ model HoldingSnapshot {
   @@index([portfolioSnapshotId])
 }
 
+model CategoryGroup {
+  id         String     @id @default(cuid())
+  name       String     @unique
+  icon       String?
+  sortOrder  Int        @default(0)
+  createdAt  DateTime   @default(now())
+  categories Category[]
+  budgets    Budget[]
+}
+
 model Category {
-  id           String        @id @default(cuid())
-  slug         String        @unique // 변경 불가 식별자 ("food", "transport" 등)
-  name         String        @unique // 표시명 ("식비", "교통" 등)
-  type         String        // "expense" | "income"
+  id           String         @id @default(cuid())
+  slug         String         @unique // 변경 불가 식별자 ("food", "transport" 등)
+  name         String         @unique // 표시명 ("식비", "교통" 등)
+  type         String         // "expense" | "income"
   icon         String?
-  keywords     String[]      @default([])
-  sortOrder    Int           @default(0)
-  createdAt    DateTime      @default(now())
+  keywords     String[]       @default([])
+  sortOrder    Int            @default(0)
+  groupId      String?
+  group        CategoryGroup? @relation(fields: [groupId], references: [id])
+  createdAt    DateTime       @default(now())
   transactions Transaction[]
   budgets      Budget[]
+
+  @@index([groupId])
 }
 
 model Transaction {
@@ -239,15 +253,18 @@ model Transaction {
 }
 
 model Budget {
-  id         String    @id @default(cuid())
+  id         String         @id @default(cuid())
   categoryId String?
-  category   Category? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  category   Category?      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  groupId    String?
+  group      CategoryGroup? @relation(fields: [groupId], references: [id], onDelete: Restrict)
   year       Int
   month      Int
   amount     Int
-  createdAt  DateTime  @default(now())
+  createdAt  DateTime       @default(now())
 
   @@unique([categoryId, year, month])
+  @@unique([groupId, year, month])
   @@index([year, month])
 }
 

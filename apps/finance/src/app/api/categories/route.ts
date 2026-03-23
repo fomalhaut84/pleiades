@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
       where,
       orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
       include: {
+        group: { select: { id: true, name: true, icon: true } },
         _count: { select: { transactions: true, budgets: true } },
       },
     })
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: errors[0].message, errors }, { status: 400 })
     }
 
-    const { name, type, icon, keywords, sortOrder } = body as Record<string, unknown>
+    const { name, type, icon, keywords, sortOrder, groupId } = body as Record<string, unknown>
     const trimmedName = (name as string).trim()
 
     const cleanedKeywords = Array.isArray(keywords)
@@ -73,20 +74,26 @@ export async function POST(request: NextRequest) {
             icon: typeof icon === 'string' ? (icon.trim() || null) : null,
             keywords: cleanedKeywords,
             sortOrder: typeof sortOrder === 'number' ? Math.round(sortOrder) : 0,
+            groupId: typeof groupId === 'string' ? groupId : null,
           },
         })
         return NextResponse.json(category, { status: 201 })
       } catch (error) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-          const target = (error.meta?.target as string[]) ?? []
-          if (target.includes('name')) {
-            return NextResponse.json({ error: '이미 존재하는 카테고리 이름입니다.' }, { status: 409 })
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+          if (error.code === 'P2002') {
+            const target = (error.meta?.target as string[]) ?? []
+            if (target.includes('name')) {
+              return NextResponse.json({ error: '이미 존재하는 카테고리 이름입니다.' }, { status: 409 })
+            }
+            // slug 충돌 → 다음 attempt에서 suffix 추가
+            if (attempt === MAX_SLUG_RETRIES - 1) {
+              return NextResponse.json({ error: '카테고리 생성에 실패했습니다. 다시 시도해주세요.' }, { status: 409 })
+            }
+            continue
           }
-          // slug 충돌 → 다음 attempt에서 suffix 추가
-          if (attempt === MAX_SLUG_RETRIES - 1) {
-            return NextResponse.json({ error: '카테고리 생성에 실패했습니다. 다시 시도해주세요.' }, { status: 409 })
+          if (error.code === 'P2003') {
+            return NextResponse.json({ error: '존재하지 않는 그룹입니다.' }, { status: 400 })
           }
-          continue
         }
         throw error
       }

@@ -34,6 +34,10 @@ export function validateBudgetInput(body: Record<string, unknown>): BudgetValida
     errors.push({ field: 'categoryId', message: '카테고리 ID는 문자열이어야 합니다.' })
   }
 
+  if (body.groupId !== undefined && body.groupId !== null && typeof body.groupId !== 'string') {
+    errors.push({ field: 'groupId', message: '그룹 ID는 문자열이어야 합니다.' })
+  }
+
   return errors
 }
 

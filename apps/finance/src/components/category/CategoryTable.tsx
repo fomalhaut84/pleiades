@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import CategoryEditPanel from './CategoryEditPanel'
 import CategoryDeleteModal from './CategoryDeleteModal'
 
@@ -12,6 +12,8 @@ export interface CategoryRow {
   icon: string | null
   keywords: string[]
   sortOrder: number
+  groupId: string | null
+  group: { id: string; name: string; icon: string | null } | null
   _count: { transactions: number; budgets: number }
 }
 
@@ -21,11 +23,93 @@ interface CategoryTableProps {
   onTabChange: (tab: 'expense' | 'income') => void
 }
 
+function CategoryRowDesktop({ c, onEdit, onDelete }: { c: CategoryRow; onEdit: (c: CategoryRow) => void; onDelete: (c: CategoryRow) => void }) {
+  return (
+    <tr className="hover:bg-card">
+      <td className="pl-4 px-3 py-3 text-[13px] text-dim border-b border-border text-center tabular-nums">
+        {c.sortOrder}
+      </td>
+      <td className="px-3 py-3 text-[16px] border-b border-border">
+        {c.icon ?? '-'}
+      </td>
+      <td className="px-3 py-3 text-[13px] font-semibold text-bright border-b border-border">
+        {c.name}
+      </td>
+      <td className="px-3 py-3 border-b border-border">
+        <div className="flex flex-wrap gap-1">
+          {c.keywords.length > 0 ? (
+            c.keywords.map((k, idx) => (
+              <span key={`${k}-${idx}`} className="px-1.5 py-0.5 rounded bg-surface-dim text-[11px] text-dim">{k}</span>
+            ))
+          ) : (
+            <span className="text-[12px] text-dim">-</span>
+          )}
+        </div>
+      </td>
+      <td className="px-3 py-3 text-[13px] text-muted border-b border-border text-center tabular-nums">
+        {c._count.transactions}
+      </td>
+      <td className="pr-4 px-3 py-3 border-b border-border">
+        <div className="flex items-center gap-1">
+          <button onClick={() => onEdit(c)} className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all" title="수정">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" /></svg>
+          </button>
+          <button onClick={() => onDelete(c)} className="p-1.5 rounded-md text-dim hover:text-red-400 hover:bg-red-500/10 transition-all" title="삭제">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 011.334-1.334h2.666a1.333 1.333 0 011.334 1.334V4m2 0v9.333a1.333 1.333 0 01-1.334 1.334H4.667a1.333 1.333 0 01-1.334-1.334V4h9.334z" /></svg>
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+interface GroupedCategories {
+  groupId: string | null
+  groupName: string
+  groupIcon: string | null
+  categories: CategoryRow[]
+}
+
+function groupCategories(cats: CategoryRow[]): GroupedCategories[] {
+  const groups = new Map<string | null, GroupedCategories>()
+  for (const c of cats) {
+    const gId = c.groupId
+    if (!groups.has(gId)) {
+      groups.set(gId, {
+        groupId: gId,
+        groupName: c.group?.name ?? '미분류',
+        groupIcon: c.group?.icon ?? null,
+        categories: [],
+      })
+    }
+    groups.get(gId)!.categories.push(c)
+  }
+  // 그룹 있는 것 먼저, 미분류(null) 마지막
+  const result = Array.from(groups.values())
+  result.sort((a, b) => {
+    if (a.groupId === null) return 1
+    if (b.groupId === null) return -1
+    return a.groupName.localeCompare(b.groupName)
+  })
+  return result
+}
+
 export default function CategoryTable({ categories, activeTab, onTabChange }: CategoryTableProps) {
   const [editItem, setEditItem] = useState<CategoryRow | null>(null)
   const [deleteItem, setDeleteItem] = useState<CategoryRow | null>(null)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string | null>>(new Set())
 
   const filtered = categories.filter((c) => c.type === activeTab)
+  const grouped = activeTab === 'expense' ? groupCategories(filtered) : null
+
+  const toggleGroup = (gId: string | null) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(gId)) next.delete(gId)
+      else next.add(gId)
+      return next
+    })
+  }
 
   return (
     <>
@@ -78,59 +162,37 @@ export default function CategoryTable({ categories, activeTab, onTabChange }: Ca
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((c) => (
-                    <tr key={c.id} className="hover:bg-card">
-                      <td className="pl-4 px-3 py-3 text-[13px] text-dim border-b border-border text-center tabular-nums">
-                        {c.sortOrder}
-                      </td>
-                      <td className="px-3 py-3 text-[16px] border-b border-border">
-                        {c.icon ?? '-'}
-                      </td>
-                      <td className="px-3 py-3 text-[13px] font-semibold text-bright border-b border-border">
-                        {c.name}
-                      </td>
-                      <td className="px-3 py-3 border-b border-border">
-                        <div className="flex flex-wrap gap-1">
-                          {c.keywords.length > 0 ? (
-                            c.keywords.map((k, idx) => (
-                              <span
-                                key={`${k}-${idx}`}
-                                className="px-1.5 py-0.5 rounded bg-surface-dim text-[11px] text-dim"
-                              >
-                                {k}
+                  {grouped ? grouped.map((g) => {
+                    const isCollapsed = collapsedGroups.has(g.groupId)
+                    return (
+                      <React.Fragment key={g.groupId ?? '_ungrouped'}>
+                        {/* 그룹 헤더 */}
+                        <tr
+                          className="cursor-pointer hover:bg-white/[0.02]"
+                          onClick={() => toggleGroup(g.groupId)}
+                        >
+                          <td colSpan={6} className="px-4 py-2.5 border-b border-border bg-white/[0.018]">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] text-dim transition-transform ${isCollapsed ? '-rotate-90' : ''}`}>
+                                ▾
                               </span>
-                            ))
-                          ) : (
-                            <span className="text-[12px] text-dim">-</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-[13px] text-muted border-b border-border text-center tabular-nums">
-                        {c._count.transactions}
-                      </td>
-                      <td className="pr-4 px-3 py-3 border-b border-border">
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => setEditItem(c)}
-                            className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all"
-                            title="수정"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                              <path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => setDeleteItem(c)}
-                            className="p-1.5 rounded-md text-dim hover:text-red-400 hover:bg-red-500/10 transition-all"
-                            title="삭제"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                              <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 011.334-1.334h2.666a1.333 1.333 0 011.334 1.334V4m2 0v9.333a1.333 1.333 0 01-1.334 1.334H4.667a1.333 1.333 0 01-1.334-1.334V4h9.334z" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                              <span className="text-[12px] font-bold text-bright">
+                                {g.groupIcon ? `${g.groupIcon} ` : ''}{g.groupName}
+                              </span>
+                              <span className="text-[10px] font-semibold text-sub bg-surface px-2 py-0.5 rounded">
+                                {g.categories.length}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                        {/* 그룹 내 카테고리 */}
+                        {!isCollapsed && g.categories.map((c) => (
+                          <CategoryRowDesktop key={c.id} c={c} onEdit={setEditItem} onDelete={setDeleteItem} />
+                        ))}
+                      </React.Fragment>
+                    )
+                  }) : filtered.map((c) => (
+                    <CategoryRowDesktop key={c.id} c={c} onEdit={setEditItem} onDelete={setDeleteItem} />
                   ))}
                 </tbody>
               </table>

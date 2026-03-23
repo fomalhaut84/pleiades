@@ -20,8 +20,19 @@ export default function CategoryEditPanel({ category, onClose }: CategoryEditPan
   const [icon, setIcon] = useState(category.icon ?? '')
   const [keywordsText, setKeywordsText] = useState(category.keywords.join(', '))
   const [sortOrder, setSortOrder] = useState(String(category.sortOrder))
+  const [groupId, setGroupId] = useState(category.groupId ?? '')
+  const [groups, setGroups] = useState<{ id: string; name: string; icon: string | null }[]>([])
 
   const hasLinkedData = category._count.transactions > 0 || category._count.budgets > 0
+
+  useEffect(() => {
+    fetch('/api/category-groups')
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.groups) setGroups(data.groups)
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -57,6 +68,7 @@ export default function CategoryEditPanel({ category, onClose }: CategoryEditPan
           icon: icon.trim() || null,
           keywords,
           sortOrder: sortOrder.trim() === '' ? 0 : Number(sortOrder),
+          groupId: groupId || null,
         }),
       })
 
@@ -162,6 +174,30 @@ export default function CategoryEditPanel({ category, onClose }: CategoryEditPan
             />
             <p className="text-[11px] text-dim mt-1">텔레그램 자연어 입력 시 자동 분류에 사용됩니다.</p>
           </div>
+
+          {/* 그룹 */}
+          {type === 'expense' && (
+            <div>
+              <label className={labelClasses}>그룹</label>
+              <select
+                value={groupId}
+                onChange={(e) => setGroupId(e.target.value)}
+                className={`${inputClasses} appearance-none cursor-pointer`}
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236e6e82' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 14px center',
+                }}
+              >
+                <option value="">미분류</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.icon ? `${g.icon} ` : ''}{g.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* 정렬 순서 */}
           <div>

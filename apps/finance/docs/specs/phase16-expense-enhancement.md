@@ -98,6 +98,53 @@
   - API: `GET/POST /api/recurring`, `PUT/DELETE /api/recurring/[id]`
 - [ ] nav-config: 가계부 그룹에 "반복 거래" 메뉴 추가
 
+### 16-C2: 카테고리 그루핑
+
+- [ ] `CategoryGroup` 모델 추가 (name, icon, sortOrder)
+- [ ] `Category`에 `groupId` FK 추가
+- [ ] `Budget`에 `groupId` FK 추가 (그룹별 예산 지원)
+- [ ] 마이그레이션 + 기존 카테고리에 그룹 배정 데이터 마이그레이션
+- [ ] CategoryGroup 웹 CRUD (그룹 관리)
+- [ ] 카테고리 관리에 그룹 배정 기능
+- [ ] 예산 페이지에 그룹별 예산/진행률 추가
+- [ ] 가계부 페이지에 그룹별 집계 표시
+
+그룹 매핑 (서버 DB 기준):
+| 그룹 | 카테고리 |
+|------|----------|
+| 생활비 | 식료품, 외식, 생활용품, 커피_카드충전, 커피_음료, 간식, 의류, 미용, 장난감 |
+| 공과금 | 전기요금, 가스요금, 통신비, 세금 |
+| 여가 | 여행_숙박, 여행_교통, 여행_식사, 여행_기타, 전시및관람 |
+| 교육 | 도서, 온라인강의, 학비, 학원 |
+| 주거 | 관리비, 쓰레기처리비용 |
+| 의료/건강 | 약국, 병원, 건강보조 |
+| 금융 | 보험, 이자, 연회비 |
+| 앱결제 | 앱결제_구독료, 앱결제_비정기 |
+| 교통 | 차량정비, 주유, 주차, 대중교통, 세차 |
+| 기타 | 기부_정기후원, 세진물품, 선물, 경조사 |
+
+수입 카테고리(정기수입, 비정기수입)는 그룹 미배정 (groupId=null).
+
+### 16-F: 가계부 자산 연동
+
+- [ ] Transaction 모델에 `type`(transfer_out/transfer_in), `linkedAssetId` 추가
+- [ ] 거래 유형 확장: expense | income | transfer_out | transfer_in
+  - `transfer_out` + linkedAssetId → 거래 생성 시 Asset.value -= amount
+  - `transfer_in` + linkedAssetId → 거래 생성 시 Asset.value += amount
+- [ ] 거래 수정 시 이전 자산 효과 역산 후 새 효과 적용
+- [ ] 거래 삭제 시 자산 효과 역산
+- [ ] TransactionForm에 유형 선택 (소비/수입/출금/입금) + 자산 select
+- [ ] 가계부 테이블에 transfer 유형 표시
+- [ ] 후잉 전송 시 transfer 유형 매핑:
+  - transfer_out: left=카테고리, right=자산명
+  - transfer_in: left=자산명, right=결제수단
+  - 완벽하지 않을 수 있으므로 후잉에서 수정 전제
+
+사용 시나리오:
+- 대출 원리금 상환: 이자 5만(expense/금융) + 원금 45만(transfer_out/대출자산)
+- 적금 납입: 30만(transfer_in/적금자산)
+- 보험 납입: 10만(transfer_in/저축성보험자산)
+
 ## 용어 정리
 
 | 모델 | 현재 UI | 변경 후 UI | 비고 |
