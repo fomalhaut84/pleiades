@@ -231,8 +231,9 @@ model Category {
   groupId      String?
   group        CategoryGroup? @relation(fields: [groupId], references: [id])
   createdAt    DateTime       @default(now())
-  transactions Transaction[]
-  budgets      Budget[]
+  transactions          Transaction[]
+  budgets               Budget[]
+  recurringTransactions RecurringTransaction[]
 
   @@index([groupId])
 }
@@ -250,6 +251,25 @@ model Transaction {
   @@index([transactedAt])
   @@index([categoryId])
   @@index([userId])
+}
+
+model RecurringTransaction {
+  id          String    @id @default(cuid())
+  amount      Int
+  description String
+  categoryId  String
+  category    Category  @relation(fields: [categoryId], references: [id])
+  frequency   String    // "monthly" | "weekly" | "yearly"
+  dayOfMonth  Int?      // 1~31 (monthly)
+  dayOfWeek   Int?      // 0=일~6=토 (weekly)
+  monthOfYear Int?      // 1~12 (yearly)
+  isActive    Boolean   @default(true)
+  nextRunAt   DateTime
+  lastRunAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([isActive, nextRunAt])
+  @@index([categoryId])
 }
 
 model Budget {

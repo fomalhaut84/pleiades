@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>반복 거래 디자인 시안 — #177</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<style>
+  :root {
+    --bg: #07080c;
+    --bg-raised: #0d0e14;
+    --card: rgba(255,255,255,0.025);
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.12);
+    --dim: #6e6e82;
+    --sub: #9494a8;
+    --text: #c8c8d4;
+    --bright: #eeeef2;
+    --surface-dim: rgba(255,255,255,0.04);
+    --surface: rgba(255,255,255,0.06);
+    --red: #f87171;
+    --emerald: #34d399;
+    --sodam: #60a5fa;
+    --sodam-dim: rgba(96,165,250,0.15);
+    --sodam-border: rgba(96,165,250,0.25);
+    --red-dim: rgba(248,113,113,0.1);
+    --red-border: rgba(248,113,113,0.25);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 64px;
+  }
+
+  .proto-section { max-width: 960px; margin: 0 auto; padding: 0 32px 40px; }
+  .proto-label {
+    font-size: 11px; font-weight: 700; color: var(--dim);
+    letter-spacing: 1.5px; text-transform: uppercase;
+    margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  .proto-note {
+    font-size: 11px; color: var(--sub); margin-top: 12px;
+    padding: 8px 12px; background: var(--surface-dim); border-radius: 8px; line-height: 1.6;
+  }
+  .proto-title { text-align: center; padding: 24px 32px 32px; }
+  .proto-title h1 { font-size: 15px; font-weight: 800; color: var(--bright); }
+  .proto-title p { font-size: 12px; color: var(--sub); margin-top: 4px; }
+  .proto-row { display: flex; gap: 32px; }
+  .hint {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--dim); background: var(--surface-dim);
+    padding: 3px 8px; border-radius: 4px; margin-left: 8px;
+    text-transform: none; letter-spacing: 0; font-weight: 500;
+  }
+
+  /* ─── 페이지 헤더 ─── */
+  .page-header {
+    display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px;
+  }
+  .page-header h1 { font-size: 20px; font-weight: 800; color: var(--bright); }
+  .page-header .sub { font-size: 12px; color: var(--sub); margin-top: 2px; }
+  .btn-add {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: 8px;
+    background: var(--sodam-dim); color: var(--sodam);
+    font-size: 13px; font-weight: 600;
+    border: 1px solid var(--sodam-border); cursor: pointer; transition: all 0.15s;
+  }
+  .btn-add:hover { background: rgba(96,165,250,0.25); }
+
+  /* ─── 테이블 ─── */
+  .card-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .card-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .card-header .title { font-size: 13px; font-weight: 700; color: var(--bright); }
+  .card-header .count { font-size: 11px; color: var(--sub); }
+
+  .rec-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .rec-table thead tr { border-bottom: 1px solid var(--border); background: var(--surface-dim); }
+  .rec-table th {
+    padding: 10px 16px; text-align: left; font-size: 11px;
+    font-weight: 600; color: var(--dim); letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .rec-table th.right { text-align: right; }
+  .rec-table th.center { text-align: center; }
+  .rec-table tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  .rec-table tbody tr:last-child { border-bottom: none; }
+  .rec-table tbody tr:hover { background: var(--surface-dim); }
+  .rec-table tbody tr.inactive { opacity: 0.5; }
+  .rec-table td { padding: 12px 16px; white-space: nowrap; }
+  .rec-table td.center { text-align: center; }
+  .rec-table td.right { text-align: right; }
+
+  /* 활성 토글 */
+  .toggle-dot {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .toggle-dot.on { background: var(--emerald); box-shadow: 0 0 6px rgba(52,211,153,0.4); }
+  .toggle-dot.off { background: var(--dim); }
+
+  .cat-name { color: var(--bright); font-weight: 500; }
+  .desc { color: var(--text); }
+  .amount { color: var(--red); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .freq { color: var(--sub); }
+  .next-run { color: var(--sub); font-variant-numeric: tabular-nums; }
+
+  .action-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 6px; border: none;
+    background: transparent; color: var(--dim); cursor: pointer; transition: all 0.15s;
+  }
+  .action-btn:hover { background: var(--surface); color: var(--text); }
+  .action-btn.delete:hover { background: var(--red-dim); color: var(--red); }
+  .action-btn svg { width: 13px; height: 13px; }
+
+  /* ─── 슬라이드 패널 ─── */
+  .panel-demo {
+    width: 420px; min-width: 420px; height: 680px;
+    background: var(--bg-raised); border: 1px solid var(--border);
+    border-radius: 16px; overflow-y: auto; display: flex; flex-direction: column;
+  }
+  .panel-header {
+    padding: 20px 24px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  }
+  .panel-header h2 { font-size: 15px; font-weight: 700; color: var(--bright); }
+  .panel-close {
+    width: 28px; height: 28px; border-radius: 6px; border: none;
+    background: transparent; color: var(--sub); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+  }
+  .panel-close:hover { background: var(--surface); color: var(--bright); }
+  .panel-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 18px; flex: 1; }
+
+  .field-label { display: block; font-size: 12px; font-weight: 600; color: var(--sub); margin-bottom: 6px; }
+  .field-input {
+    width: 100%; background: var(--surface-dim); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--bright);
+    font-family: inherit; outline: none; transition: all 0.15s;
+  }
+  .field-input::placeholder { color: var(--dim); }
+  .field-input:focus { background: var(--surface); border-color: var(--border-hover); }
+
+  .field-select {
+    width: 100%; background: var(--surface-dim); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--bright);
+    font-family: inherit; outline: none; appearance: none; cursor: pointer; transition: all 0.15s;
+    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236e6e82' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 14px center;
+  }
+  .field-select:focus { background-color: var(--surface); border-color: var(--border-hover); }
+
+  /* 세그먼트 컨트롤 */
+  .segment-group {
+    display: flex; gap: 2px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 3px;
+  }
+  .segment-btn {
+    flex: 1; padding: 7px 0; border-radius: 6px; font-size: 12px; font-weight: 600;
+    color: var(--sub); background: transparent; border: none; cursor: pointer; transition: all 0.15s;
+    text-align: center;
+  }
+  .segment-btn:hover { color: var(--text); }
+  .segment-btn.active { background: var(--surface); color: var(--bright); }
+
+  /* 요일 버튼 그리드 */
+  .day-grid {
+    display: flex; gap: 4px;
+  }
+  .day-btn {
+    flex: 1; padding: 8px 0; border-radius: 6px; font-size: 12px; font-weight: 600;
+    color: var(--sub); background: var(--surface-dim); border: 1px solid var(--border);
+    cursor: pointer; transition: all 0.15s; text-align: center;
+  }
+  .day-btn:hover { border-color: var(--border-hover); color: var(--text); }
+  .day-btn.active { background: var(--sodam-dim); color: var(--sodam); border-color: var(--sodam-border); }
+
+  .panel-actions { display: flex; gap: 12px; padding-top: 4px; }
+  .btn-cancel {
+    flex: 1; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    color: var(--sub); border: 1px solid var(--border); background: transparent; cursor: pointer;
+  }
+  .btn-submit {
+    flex: 1; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 700;
+    color: var(--sodam); background: var(--sodam-dim); border: 1px solid var(--sodam-border); cursor: pointer;
+  }
+
+  /* ─── 삭제 모달 ─── */
+  .modal-demo {
+    position: relative; width: 420px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal-backdrop {
+    position: absolute; inset: 0; background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px); border-radius: 16px;
+  }
+  .modal-card {
+    position: relative; z-index: 1; width: 380px;
+    background: var(--bg-raised); border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden;
+  }
+  .modal-body { padding: 24px; }
+  .modal-body h2 { font-size: 15px; font-weight: 700; color: var(--bright); margin-bottom: 16px; }
+  .modal-info {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .modal-info-row { display: flex; align-items: center; justify-content: space-between; }
+  .modal-info-row .k { font-size: 11px; color: var(--dim); }
+  .modal-info-row .v { font-size: 13px; color: var(--bright); font-weight: 500; }
+  .modal-info-row .v.expense { color: var(--red); font-weight: 600; }
+  .modal-warn { font-size: 12px; color: rgba(248,113,113,0.8); line-height: 1.5; }
+  .modal-actions {
+    padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 12px;
+  }
+  .btn-delete {
+    flex: 1; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 700;
+    color: var(--red); background: var(--red-dim); border: 1px solid var(--red-border); cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="proto-title">
+  <h1>반복 거래 디자인 시안 — Issue #177</h1>
+  <p>RecurringTransaction 모델 + cron 자동 생성 + 관리 UI</p>
+</div>
+
+<!-- ━━━ Scene 1 & 2: 페이지 헤더 + 테이블 ━━━ -->
+<div class="proto-section">
+  <div class="proto-label">Scene 1 & 2 — 반복 거래 페이지 + 테이블</div>
+
+  <div class="page-header">
+    <div>
+      <h1>반복 거래</h1>
+      <div class="sub">자동 생성되는 정기 내역</div>
+    </div>
+    <button class="btn-add">+ 반복 거래 추가</button>
+  </div>
+
+  <div class="card-wrap">
+    <div class="card-header">
+      <span class="title">반복 거래 목록</span>
+      <span class="count">4건 (활성 3)</span>
+    </div>
+    <table class="rec-table">
+      <thead>
+        <tr>
+          <th class="center" style="width: 50px;">활성</th>
+          <th>카테고리</th>
+          <th>내용</th>
+          <th class="right">금액</th>
+          <th>주기</th>
+          <th>다음 실행</th>
+          <th class="center" style="width: 70px;">액션</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="center"><span class="toggle-dot on" title="활성"></span></td>
+          <td class="cat-name">🏠 관리비</td>
+          <td class="desc">관리비</td>
+          <td class="right amount">350,000원</td>
+          <td class="freq">매월 25일</td>
+          <td class="next-run">2026.04.25</td>
+          <td class="center">
+            <button class="action-btn" title="수정"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+            <button class="action-btn delete" title="삭제"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/></svg></button>
+          </td>
+        </tr>
+        <tr>
+          <td class="center"><span class="toggle-dot on" title="활성"></span></td>
+          <td class="cat-name">📱 통신비</td>
+          <td class="desc">KT 인터넷</td>
+          <td class="right amount">33,000원</td>
+          <td class="freq">매월 15일</td>
+          <td class="next-run">2026.04.15</td>
+          <td class="center">
+            <button class="action-btn" title="수정"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+            <button class="action-btn delete" title="삭제"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/></svg></button>
+          </td>
+        </tr>
+        <tr>
+          <td class="center"><span class="toggle-dot on" title="활성"></span></td>
+          <td class="cat-name">📱 앱결제_구독료</td>
+          <td class="desc">넷플릭스</td>
+          <td class="right amount">17,000원</td>
+          <td class="freq">매월 1일</td>
+          <td class="next-run">2026.04.01</td>
+          <td class="center">
+            <button class="action-btn" title="수정"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+            <button class="action-btn delete" title="삭제"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/></svg></button>
+          </td>
+        </tr>
+        <tr class="inactive">
+          <td class="center"><span class="toggle-dot off" title="비활성"></span></td>
+          <td class="cat-name">🏦 보험</td>
+          <td class="desc">자동차보험</td>
+          <td class="right amount">450,000원</td>
+          <td class="freq">매년 3월</td>
+          <td class="next-run">2027.03.01</td>
+          <td class="center">
+            <button class="action-btn" title="수정"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+            <button class="action-btn delete" title="삭제"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/></svg></button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="proto-note">
+    <strong>활성 토글:</strong> 초록 원 = ON, 회색 원 = OFF. 클릭으로 토글<br>
+    <strong>비활성 행:</strong> opacity 0.5로 시각적 구분<br>
+    <strong>정렬:</strong> nextRunAt 오름차순 (가장 빨리 실행될 것이 위)<br>
+    <strong>주기 표시:</strong> "매월 N일", "매주 X요일", "매년 N월"
+  </div>
+</div>
+
+<!-- ━━━ Scene 3 & 4: 폼 + 삭제 모달 ━━━ -->
+<div class="proto-section">
+  <div class="proto-row">
+    <!-- Scene 3: 폼 -->
+    <div>
+      <div class="proto-label">Scene 3 — 반복 거래 추가 폼 (슬라이드 패널)</div>
+      <div class="panel-demo">
+        <div class="panel-header">
+          <h2>반복 거래 추가</h2>
+          <button class="panel-close">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+          </button>
+        </div>
+        <div class="panel-body">
+          <!-- 금액 -->
+          <div>
+            <label class="field-label">금액</label>
+            <input type="text" class="field-input" placeholder="0" inputmode="numeric">
+          </div>
+
+          <!-- 내용 -->
+          <div>
+            <label class="field-label">내용</label>
+            <input type="text" class="field-input" placeholder="관리비, 넷플릭스 등">
+          </div>
+
+          <!-- 카테고리 -->
+          <div>
+            <label class="field-label">카테고리</label>
+            <select class="field-select">
+              <option value="" disabled selected>카테고리 선택</option>
+              <optgroup label="소비">
+                <option>🏠 관리비</option>
+                <option>📱 통신비</option>
+                <option>📱 앱결제_구독료</option>
+                <option>🏦 보험</option>
+              </optgroup>
+              <optgroup label="수입">
+                <option>💰 정기수입</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <!-- 주기 -->
+          <div>
+            <label class="field-label">주기</label>
+            <div class="segment-group">
+              <button class="segment-btn active">매월</button>
+              <button class="segment-btn">매주</button>
+              <button class="segment-btn">매년</button>
+            </div>
+          </div>
+
+          <!-- 실행일 (매월 모드) -->
+          <div>
+            <label class="field-label">실행일</label>
+            <select class="field-select" style="width: 120px;">
+              <option>1일</option>
+              <option>5일</option>
+              <option>10일</option>
+              <option>15일</option>
+              <option>20일</option>
+              <option selected>25일</option>
+              <option>말일</option>
+            </select>
+            <p style="font-size: 11px; color: var(--dim); margin-top: 6px;">매월 25일에 자동 생성됩니다.</p>
+          </div>
+
+          <!-- 실행일 (매주 모드) — 주석으로 대안 표시 -->
+          <div style="display: none;">
+            <label class="field-label">실행 요일</label>
+            <div class="day-grid">
+              <button class="day-btn">월</button>
+              <button class="day-btn">화</button>
+              <button class="day-btn">수</button>
+              <button class="day-btn">목</button>
+              <button class="day-btn active">금</button>
+              <button class="day-btn">토</button>
+              <button class="day-btn">일</button>
+            </div>
+          </div>
+
+          <!-- 시작일 -->
+          <div>
+            <label class="field-label">시작일 (첫 실행일)</label>
+            <input type="date" class="field-input" value="2026-04-25">
+          </div>
+
+          <!-- 버튼 -->
+          <div class="panel-actions">
+            <button class="btn-cancel">취소</button>
+            <button class="btn-submit">추가</button>
+          </div>
+        </div>
+      </div>
+      <div class="proto-note">
+        <strong>주기 세그먼트:</strong> 매월/매주/매년 전환 시 실행일 입력 변경<br>
+        <strong>매월:</strong> 날짜 select (1~31 + 말일)<br>
+        <strong>매주:</strong> 요일 버튼 그리드 (월~일)<br>
+        <strong>매년:</strong> 월 select + 날짜 select<br>
+        <strong>시작일:</strong> nextRunAt 초기값. 이후 cron이 자동 갱신
+      </div>
+    </div>
+
+    <!-- Scene 3b: 매주 모드 폼 변형 -->
+    <div>
+      <div class="proto-label">Scene 3b — 매주 모드 (실행 요일)</div>
+      <div style="background: var(--bg-raised); border: 1px solid var(--border); border-radius: 14px; padding: 20px;">
+        <div style="margin-bottom: 12px;">
+          <label class="field-label">주기</label>
+          <div class="segment-group">
+            <button class="segment-btn">매월</button>
+            <button class="segment-btn active">매주</button>
+            <button class="segment-btn">매년</button>
+          </div>
+        </div>
+        <div>
+          <label class="field-label">실행 요일</label>
+          <div class="day-grid">
+            <button class="day-btn">월</button>
+            <button class="day-btn">화</button>
+            <button class="day-btn">수</button>
+            <button class="day-btn">목</button>
+            <button class="day-btn active">금</button>
+            <button class="day-btn">토</button>
+            <button class="day-btn">일</button>
+          </div>
+          <p style="font-size: 11px; color: var(--dim); margin-top: 6px;">매주 금요일에 자동 생성됩니다.</p>
+        </div>
+      </div>
+
+      <div class="proto-label" style="margin-top: 24px;">Scene 3c — 매년 모드 (월 + 일)</div>
+      <div style="background: var(--bg-raised); border: 1px solid var(--border); border-radius: 14px; padding: 20px;">
+        <div style="margin-bottom: 12px;">
+          <label class="field-label">주기</label>
+          <div class="segment-group">
+            <button class="segment-btn">매월</button>
+            <button class="segment-btn">매주</button>
+            <button class="segment-btn active">매년</button>
+          </div>
+        </div>
+        <div>
+          <label class="field-label">실행일</label>
+          <div style="display: flex; gap: 8px;">
+            <select class="field-select" style="width: 100px;">
+              <option selected>3월</option>
+            </select>
+            <select class="field-select" style="width: 80px;">
+              <option selected>1일</option>
+            </select>
+          </div>
+          <p style="font-size: 11px; color: var(--dim); margin-top: 6px;">매년 3월 1일에 자동 생성됩니다.</p>
+        </div>
+      </div>
+
+      <!-- Scene 4: 삭제 모달 -->
+      <div class="proto-label" style="margin-top: 24px;">Scene 4 — 삭제 확인 모달</div>
+      <div class="modal-demo">
+        <div class="modal-backdrop"></div>
+        <div class="modal-card">
+          <div class="modal-body">
+            <h2>반복 거래 삭제</h2>
+            <div class="modal-info">
+              <div class="modal-info-row">
+                <span class="k">카테고리</span>
+                <span class="v">📱 앱결제_구독료</span>
+              </div>
+              <div class="modal-info-row">
+                <span class="k">내용</span>
+                <span class="v">넷플릭스</span>
+              </div>
+              <div class="modal-info-row">
+                <span class="k">금액</span>
+                <span class="v expense">17,000원</span>
+              </div>
+              <div class="modal-info-row">
+                <span class="k">주기</span>
+                <span class="v">매월 1일</span>
+              </div>
+            </div>
+            <p class="modal-warn">삭제하면 이후 자동 생성이 중단됩니다. 이미 생성된 내역은 유지됩니다.</p>
+          </div>
+          <div class="modal-actions">
+            <button class="btn-cancel">취소</button>
+            <button class="btn-delete">삭제</button>
+          </div>
+        </div>
+      </div>
+      <div class="proto-note">
+        <strong>삭제 경고:</strong> "이후 자동 생성 중단, 기존 내역은 유지"<br>
+        <strong>비활성화 권장:</strong> 완전 삭제 대신 비활성 토글을 안내할 수도 있음
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
