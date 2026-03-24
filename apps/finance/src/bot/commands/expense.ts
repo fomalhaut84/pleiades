@@ -6,6 +6,7 @@ import { formatKRWFull } from '../utils/formatter'
 import { isAiQuestion } from '../utils/ai-trigger'
 import { isTradeMessage } from '../utils/trade-trigger'
 import { checkBudgetUsage } from '../notifications/budget-alert'
+import { sendToWhooing } from '@/lib/whooing-webhook'
 
 interface PendingTransaction {
   requestedByUserId: number
@@ -271,7 +272,7 @@ async function createTransaction(
       select: { icon: true, name: true },
     })
 
-    await prisma.transaction.create({
+    const created = await prisma.transaction.create({
       data: {
         amount: pending.amount,
         description: pending.description,
@@ -280,6 +281,18 @@ async function createTransaction(
         transactedAt: new Date(),
       },
     })
+
+    // 후잉 웹훅 전송 (별도 try-catch, 실패해도 거래 기록·텔레그램 응답에 영향 없음)
+    try {
+      await sendToWhooing({
+        amount: created.amount,
+        description: created.description,
+        categoryId: created.categoryId,
+        transactedAt: created.transactedAt,
+      })
+    } catch (error) {
+      console.error('[bot/expense] 후잉 전송 실패:', error)
+    }
 
     const catLabel = category?.icon
       ? `${category.icon} ${category.name}`
@@ -296,12 +309,12 @@ async function createTransaction(
 
     // 소비 기록 후 예산 사용률 체크 (비동기, 실패해도 무시)
     if (pending.type === 'expense') {
-      checkBudgetUsage().catch((e) =>
-        console.error('[bot] 예산 경고 체크 실패:', e)
+      checkBudgetUsage().catch((error) =>
+        console.error('[bot/expense] 예산 경고 체크 실패:', error)
       )
     }
   } catch (error) {
-    console.error('[bot] 거래 기록 실패:', error)
+    console.error('[bot/expense] 거래 기록 실패:', error)
     await ctx.answerCallbackQuery({ text: '⚠️ 기록에 실패했습니다.' })
     await ctx.editMessageReplyMarkup({ reply_markup: undefined })
     await ctx.editMessageText(`⚠️ ${typeLabel} 기록에 실패했습니다. 잠시 후 다시 시도해주세요.`)
