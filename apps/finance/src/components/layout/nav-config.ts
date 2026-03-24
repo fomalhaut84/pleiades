@@ -14,19 +14,27 @@ export const NAV_GROUPS: NavGroup[] = [
     title: '포트폴리오',
     items: [
       { href: '/', icon: '📊', label: '대시보드' },
-      { href: '/trades', icon: '📝', label: '거래' },
+      { href: '/trades', icon: '📝', label: '종목 거래' },
       { href: '/rsu', icon: '🏢', label: 'RSU' },
       { href: '/dividends', icon: '💰', label: '배당금' },
       { href: '/deposits', icon: '🎁', label: '입금/증여' },
       { href: '/stock-options', icon: '📊', label: '스톡옵션' },
+      { href: '/watchlist', icon: '👀', label: '관심종목' },
+    ],
+  },
+  {
+    title: '가계부',
+    items: [
+      { href: '/expenses', icon: '💸', label: '가계부' },
+      { href: '/categories', icon: '🏷️', label: '카테고리' },
+      { href: '/budgets', icon: '📋', label: '예산' },
+      { href: '/recurring', icon: '🔄', label: '반복 거래' },
     ],
   },
   {
     title: '분석',
     items: [
       { href: '/tax', icon: '🧾', label: '세금' },
-      { href: '/expenses', icon: '💸', label: '가계부' },
-      { href: '/categories', icon: '🏷️', label: '카테고리' },
       { href: '/simulator', icon: '🔮', label: '시뮬레이터' },
       { href: '/performance', icon: '📈', label: '수익률 분석' },
     ],
@@ -38,6 +46,12 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/networth', icon: '💰', label: '순자산' },
       { href: '/reports', icon: '📋', label: '분기 리포트' },
       { href: '/backtest', icon: '🧪', label: '백테스팅' },
+    ],
+  },
+  {
+    title: '설정',
+    items: [
+      { href: '/settings', icon: '⚙️', label: '설정' },
     ],
   },
 ]

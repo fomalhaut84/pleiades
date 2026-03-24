@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import Card from '@/components/ui/Card'
 import { formatKRW, formatDate } from '@/lib/format'
+import RSUForm from './RSUForm'
+import RSUDeleteModal from './RSUDeleteModal'
 
 interface RSUSchedule {
   id: string
@@ -10,6 +12,7 @@ interface RSUSchedule {
   vestingDate: string
   shares: number
   basisValue: number
+  basisDate: string | null
   vestPrice: number | null
   status: string
   sellShares: number | null
@@ -21,15 +24,31 @@ interface RSUSchedule {
 
 interface RSUDashboardProps {
   schedules: RSUSchedule[]
+  accounts?: { id: string; name: string }[]
 }
 
-export default function RSUDashboard({ schedules: initialSchedules }: RSUDashboardProps) {
+export default function RSUDashboard({ schedules: initialSchedules, accounts = [] }: RSUDashboardProps) {
   const [schedules, setSchedules] = useState(initialSchedules)
   const [vestingId, setVestingId] = useState<string | null>(null)
   const [vestPrice, setVestPrice] = useState('')
   const [autoSell, setAutoSell] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // CRUD 상태
+  const [showForm, setShowForm] = useState(false)
+  const [editingItem, setEditingItem] = useState<RSUSchedule | null>(null)
+  const [deletingItem, setDeletingItem] = useState<RSUSchedule | null>(null)
+
+  const refreshSchedules = async () => {
+    try {
+      const res = await fetch('/api/rsu')
+      if (res.ok) {
+        const data = await res.json()
+        setSchedules(data.schedules ?? [])
+      }
+    } catch {}
+  }
 
   const handleVest = async (id: string) => {
     const price = parseFloat(vestPrice)
@@ -89,6 +108,16 @@ export default function RSUDashboard({ schedules: initialSchedules }: RSUDashboa
 
   return (
     <div className="space-y-4">
+      {/* 추가 버튼 */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => setShowForm(true)}
+          className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg bg-sodam/15 text-sodam text-[12px] sm:text-[13px] font-semibold border border-sodam/25 hover:bg-sodam/25 transition-all"
+        >
+          + RSU 추가
+        </button>
+      </div>
+
       {schedules.map((schedule) => (
         <Card key={schedule.id}>
           <div className="flex items-start justify-between gap-4">
@@ -131,25 +160,43 @@ export default function RSUDashboard({ schedules: initialSchedules }: RSUDashboa
               )}
             </div>
 
-            {schedule.status === 'pending' && (
-              <div className="flex-shrink-0">
-                {vestingId === schedule.id ? (
-                  <button
-                    onClick={() => { setVestingId(null); setError(null) }}
-                    className="text-[12px] text-sub hover:text-muted"
-                  >
-                    취소
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setVestingId(schedule.id)}
-                    className="px-3 py-1.5 rounded-lg bg-sejin/15 text-sejin text-[12px] font-semibold border border-sejin/25 hover:bg-sejin/25 transition-all"
-                  >
-                    베스팅 처리
-                  </button>
-                )}
-              </div>
-            )}
+            <div className="flex-shrink-0 flex items-center gap-1.5">
+              {schedule.status === 'pending' && (
+                <>
+                  {vestingId === schedule.id ? (
+                    <button
+                      onClick={() => { setVestingId(null); setError(null) }}
+                      className="text-[12px] text-sub hover:text-muted"
+                    >
+                      취소
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setVestingId(schedule.id)}
+                        className="px-3 py-1.5 rounded-lg bg-sejin/15 text-sejin text-[12px] font-semibold border border-sejin/25 hover:bg-sejin/25 transition-all"
+                      >
+                        베스팅
+                      </button>
+                      <button
+                        onClick={() => setEditingItem(schedule)}
+                        className="p-1.5 rounded-md text-dim hover:text-text hover:bg-surface transition-all"
+                        title="수정"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z" /></svg>
+                      </button>
+                      <button
+                        onClick={() => setDeletingItem(schedule)}
+                        className="p-1.5 rounded-md text-dim hover:text-red-400 hover:bg-red-500/10 transition-all"
+                        title="삭제"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4" /></svg>
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
           {/* 인라인 베스팅 폼 */}
@@ -220,6 +267,37 @@ export default function RSUDashboard({ schedules: initialSchedules }: RSUDashboa
       <div className="text-[11px] text-dim mt-4 px-1">
         RSU 근로소득세는 회사에서 원천징수됩니다. 이 계산은 참고용이며 법적 조언이 아닙니다.
       </div>
+
+      {/* RSU 추가/수정 폼 */}
+      {showForm && (
+        <RSUForm mode="create" accounts={accounts} onClose={() => setShowForm(false)} onSaved={refreshSchedules} />
+      )}
+      {editingItem && (
+        <RSUForm
+          mode="edit"
+          item={{
+            id: editingItem.id,
+            accountId: editingItem.accountId,
+            vestingDate: editingItem.vestingDate,
+            shares: editingItem.shares,
+            basisValue: editingItem.basisValue,
+            basisDate: editingItem.basisDate,
+            sellShares: editingItem.sellShares,
+            keepShares: editingItem.keepShares,
+            note: editingItem.note,
+          }}
+          accounts={accounts}
+          onClose={() => setEditingItem(null)}
+          onSaved={refreshSchedules}
+        />
+      )}
+      {deletingItem && (
+        <RSUDeleteModal
+          item={{ id: deletingItem.id, vestingDate: deletingItem.vestingDate, shares: deletingItem.shares, basisValue: deletingItem.basisValue }}
+          onClose={() => setDeletingItem(null)}
+          onDeleted={refreshSchedules}
+        />
+      )}
     </div>
   )
 }

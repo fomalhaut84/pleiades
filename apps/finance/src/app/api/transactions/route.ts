@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
+import { validateTransactionInput } from '@/lib/transaction-utils'
+import { sendToWhooing } from '@/lib/whooing-webhook'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,6 +83,7 @@ export async function GET(request: NextRequest) {
         take: limit,
         include: {
           category: { select: { name: true, icon: true, type: true } },
+          linkedAsset: { select: { id: true, name: true } },
         },
       }),
       prisma.transaction.count({ where: baseWhere }),
@@ -93,6 +97,9 @@ export async function GET(request: NextRequest) {
       categoryName: tx.category.name,
       categoryIcon: tx.category.icon,
       categoryType: tx.category.type,
+      type: tx.type,
+      linkedAssetId: tx.linkedAssetId,
+      linkedAssetName: tx.linkedAsset?.name ?? null,
       transactedAt: tx.transactedAt.toISOString(),
       currency: 'KRW',
     }))
@@ -195,5 +202,120 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[api/transactions] GET 실패:', error)
     return NextResponse.json({ error: '거래 내역 조회에 실패했습니다.' }, { status: 500 })
+  }
+}
+
+/**
+ * POST /api/transactions
+ *
+ * Body: { amount: number, description: string, categoryId: string, transactedAt?: string }
+ */
+export async function POST(request: NextRequest) {
+  try {
+    let body: Record<string, unknown>
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 })
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: '유효한 JSON 객체가 아닙니다.' }, { status: 400 })
+    }
+    const errors = validateTransactionInput(body)
+    if (errors.length > 0) {
+      return NextResponse.json({ error: errors[0].message, errors }, { status: 400 })
+    }
+
+    const amount = body.amount as number
+    const description = (body.description as string).trim()
+    const categoryId = body.categoryId as string
+    const transactedAt = body.transactedAt
+      ? new Date(body.transactedAt as string)
+      : new Date()
+    const txType = (body.type as string | null) ?? null
+    const linkedAssetId = (body.linkedAssetId as string | null) ?? null
+
+    const category = await prisma.category.findUnique({
+      where: { id: categoryId },
+      select: { id: true, name: true, icon: true, type: true },
+    })
+    if (!category) {
+      return NextResponse.json({ error: '존재하지 않는 카테고리입니다.' }, { status: 400 })
+    }
+
+    // transfer 유형은 expense 카테고리만 허용
+    if (txType && category.type !== 'expense') {
+      return NextResponse.json({ error: '출금/입금은 소비 카테고리에서만 사용할 수 있습니다.' }, { status: 400 })
+    }
+
+    // 자산 존재 확인 (transfer 유형)
+    if (linkedAssetId) {
+      const asset = await prisma.asset.findUnique({ where: { id: linkedAssetId }, select: { id: true } })
+      if (!asset) {
+        return NextResponse.json({ error: '존재하지 않는 자산입니다.' }, { status: 400 })
+      }
+    }
+
+    // Transaction 생성 + Asset 업데이트 (트랜잭션)
+    const transaction = await prisma.$transaction(async (tx) => {
+      const created = await tx.transaction.create({
+        data: {
+          amount,
+          description,
+          categoryId,
+          transactedAt,
+          type: txType,
+          linkedAssetId,
+        },
+        include: {
+          category: { select: { name: true, icon: true, type: true } },
+          linkedAsset: { select: { id: true, name: true } },
+        },
+      })
+
+      // Asset 업데이트
+      if (linkedAssetId && txType) {
+        const delta = txType === 'transfer_out' ? -amount : amount
+        await tx.asset.update({
+          where: { id: linkedAssetId },
+          data: { value: { increment: delta } },
+        })
+      }
+
+      return created
+    })
+
+    // 후잉 웹훅 전송 (실패해도 거래 생성은 정상 완료)
+    try {
+      await sendToWhooing({
+        amount: transaction.amount,
+        description: transaction.description,
+        categoryId: transaction.categoryId,
+        transactedAt: transaction.transactedAt,
+      })
+    } catch (err) {
+      console.error('[whooing] 전송 실패:', err)
+    }
+
+    return NextResponse.json({
+      id: transaction.id,
+      amount: transaction.amount,
+      description: transaction.description,
+      categoryId: transaction.categoryId,
+      categoryName: transaction.category.name,
+      categoryIcon: transaction.category.icon,
+      categoryType: transaction.category.type,
+      type: transaction.type,
+      linkedAssetId: transaction.linkedAssetId,
+      linkedAssetName: transaction.linkedAsset?.name ?? null,
+      transactedAt: transaction.transactedAt.toISOString(),
+      currency: 'KRW',
+    }, { status: 201 })
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+      return NextResponse.json({ error: '존재하지 않는 카테고리입니다.' }, { status: 400 })
+    }
+    console.error('[api/transactions] POST 실패:', error)
+    return NextResponse.json({ error: '내역 생성에 실패했습니다.' }, { status: 500 })
   }
 }

@@ -20,8 +20,8 @@ const MORE_ITEMS = [
   { href: '/dividends', icon: '💰', label: '배당금' },
   { href: '/deposits', icon: '🎁', label: '입금/증여' },
   { href: '/stock-options', icon: '📊', label: '스톡옵션' },
-  { href: '/expenses', icon: '💸', label: '가계부' },
   { href: '/categories', icon: '🏷️', label: '카테고리' },
+  { href: '/tax', icon: '🧾', label: '세금' },
   { href: '/simulator', icon: '🔮', label: '시뮬레이터' },
   { href: '/performance', icon: '📈', label: '수익률 분석' },
   { href: '/ai', icon: '🤖', label: 'AI 분석' },
@@ -36,7 +36,7 @@ export default function BottomTab({ accounts }: BottomTabProps) {
 
   if (pathname.startsWith('/auth') || pathname === '/offline') return null
 
-  const FIXED_TAB_PATHS = ['/', '/trades', '/tax']
+  const FIXED_TAB_PATHS = ['/', '/trades', '/expenses']
   const isMoreActive = (
     MORE_ITEMS.some((item) => pathname.startsWith(item.href))
     || accounts.some((a) => pathname === `/accounts/${a.id}`)
@@ -117,17 +117,17 @@ export default function BottomTab({ accounts }: BottomTabProps) {
             }`}
           >
             <span className="text-lg">📝</span>
-            <span className="text-[10px] font-semibold">거래</span>
+            <span className="text-[10px] font-semibold">종목 거래</span>
           </Link>
 
           <Link
-            href="/tax"
+            href="/expenses"
             className={`flex flex-col items-center gap-0.5 py-2 px-3 ${
-              pathname.startsWith('/tax') ? 'text-bright' : 'text-dim'
+              pathname.startsWith('/expenses') ? 'text-bright' : 'text-dim'
             }`}
           >
-            <span className="text-lg">🧾</span>
-            <span className="text-[10px] font-semibold">세금</span>
+            <span className="text-lg">💸</span>
+            <span className="text-[10px] font-semibold">가계부</span>
           </Link>
 
           <button

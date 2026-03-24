@@ -4,6 +4,8 @@ import { takeAllSnapshots } from './performance/snapshot'
 import { syncKrxStocks } from './krx-stocks'
 import { prisma } from './prisma'
 import { checkPriceAlerts } from '@/bot/notifications/price-alert'
+import { calculateNextRunAt, type Frequency } from './recurring-utils'
+import { sendToWhooing } from './whooing-webhook'
 
 function getAllowedChatIds(): number[] {
   return (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
@@ -175,4 +177,82 @@ export function scheduleKrxSync(): void {
   })()
 
   console.log('[cron] KRX 종목 동기화 스케줄러 등록 (매주 월 07:00 KST)')
+}
+
+/**
+ * 반복 거래 자동 실행 스케줄러.
+ * 매일 00:05 KST 실행. isActive=true AND nextRunAt <= now인 항목 처리.
+ */
+export function scheduleRecurring(): void {
+  const guard = createCronGuard('반복거래', 5 * 60 * 1000)
+
+  cron.schedule(
+    '5 9 * * *',
+    () => {
+      void guard(async () => {
+        const now = new Date()
+        const items = await prisma.recurringTransaction.findMany({
+          where: {
+            isActive: true,
+            nextRunAt: { lte: now },
+          },
+        })
+
+        if (items.length === 0) return
+
+        let created = 0
+        for (const item of items) {
+          try {
+            // Transaction 생성 + nextRunAt 갱신을 트랜잭션으로 묶기
+            const nextRun = calculateNextRunAt(
+              item.frequency as Frequency,
+              item.nextRunAt,
+              item.dayOfMonth,
+              item.dayOfWeek,
+              item.monthOfYear,
+            )
+
+            const tx = await prisma.$transaction(async (db) => {
+              const created = await db.transaction.create({
+                data: {
+                  amount: item.amount,
+                  description: item.description,
+                  categoryId: item.categoryId,
+                  transactedAt: item.nextRunAt,
+                },
+              })
+              await db.recurringTransaction.update({
+                where: { id: item.id },
+                data: { nextRunAt: nextRun, lastRunAt: now },
+              })
+              return created
+            })
+
+            // 후잉 웹훅 (트랜잭션 외부, 비차단)
+            try {
+              await sendToWhooing({
+                amount: tx.amount,
+                description: tx.description,
+                categoryId: tx.categoryId,
+                transactedAt: tx.transactedAt,
+              })
+            } catch (err) {
+              console.error('[cron/recurring] 후잉 전송 실패:', err)
+            }
+
+            created++
+          } catch (err) {
+            console.error(`[cron/recurring] 항목 ${item.id} 처리 실패:`, err)
+          }
+        }
+
+        if (created > 0) {
+          console.log(`[cron] 반복 거래 ${created}건 자동 생성 완료`)
+        }
+      })
+    },
+    { timezone: 'Asia/Seoul' }
+  )
+
+  console.log('[cron] 반복 거래 스케줄러 등록 (매일 09:05 KST)')
 }

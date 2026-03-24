@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>예산 관리 디자인 시안 — #175</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<style>
+  :root {
+    --bg: #07080c;
+    --bg-raised: #0d0e14;
+    --card: rgba(255,255,255,0.025);
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.12);
+    --dim: #6e6e82;
+    --sub: #9494a8;
+    --text: #c8c8d4;
+    --bright: #eeeef2;
+    --sejin: #34d399;
+    --sodam: #60a5fa;
+    --dasom: #fb923c;
+    --surface-dim: rgba(255,255,255,0.04);
+    --surface: rgba(255,255,255,0.06);
+    --red: #f87171;
+    --red-dim: rgba(248,113,113,0.1);
+    --red-border: rgba(248,113,113,0.25);
+    --emerald: #34d399;
+    --emerald-dim: rgba(52,211,153,0.1);
+    --yellow: #fbbf24;
+    --yellow-dim: rgba(251,191,36,0.15);
+    --sodam-dim: rgba(96,165,250,0.15);
+    --sodam-border: rgba(96,165,250,0.25);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 64px;
+  }
+
+  /* ─── 프로토타입 공통 ─── */
+  .proto-section {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 32px 40px;
+  }
+
+  .proto-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .proto-note {
+    font-size: 11px;
+    color: var(--sub);
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: var(--surface-dim);
+    border-radius: 8px;
+    line-height: 1.6;
+  }
+
+  .proto-title {
+    text-align: center;
+    padding: 24px 32px 32px;
+  }
+  .proto-title h1 {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--bright);
+    letter-spacing: -0.3px;
+  }
+  .proto-title p {
+    font-size: 12px;
+    color: var(--sub);
+    margin-top: 4px;
+  }
+
+  .hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--dim);
+    background: var(--surface-dim);
+    padding: 3px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 500;
+  }
+
+  /* ─── Scene 1: 페이지 헤더 ─── */
+  .page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .page-header h1 {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--bright);
+    letter-spacing: -0.3px;
+  }
+  .page-header .sub {
+    font-size: 12px;
+    color: var(--sub);
+    margin-top: 2px;
+  }
+
+  .month-nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .month-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--sub);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 14px;
+  }
+  .month-nav-btn:hover {
+    background: var(--surface-dim);
+    color: var(--bright);
+  }
+  .month-label {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--bright);
+    min-width: 120px;
+    text-align: center;
+  }
+
+  .btn-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    background: var(--sodam-dim);
+    color: var(--sodam);
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--sodam-border);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-copy:hover {
+    background: rgba(96,165,250,0.25);
+  }
+
+  /* ─── Scene 2: 전체 예산 요약 ─── */
+  .budget-summary {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .budget-summary-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .budget-summary-header .label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--dim);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .budget-edit-btn {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--sub);
+    background: var(--surface-dim);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .budget-edit-btn:hover {
+    background: var(--surface);
+    color: var(--bright);
+  }
+
+  .budget-amount {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--bright);
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 16px;
+  }
+
+  .budget-stats {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 16px;
+  }
+  .budget-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .budget-stat .k {
+    font-size: 11px;
+    color: var(--dim);
+  }
+  .budget-stat .v {
+    font-size: 15px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .budget-stat .v.expense { color: var(--red); }
+  .budget-stat .v.remaining { color: var(--emerald); }
+  .budget-stat .v.over { color: var(--red); }
+
+  /* 프로그레스 바 */
+  .progress-wrap {
+    position: relative;
+    height: 8px;
+    background: var(--surface-dim);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+  }
+  .progress-fill.green { background: var(--emerald); }
+  .progress-fill.yellow { background: var(--yellow); }
+  .progress-fill.red { background: var(--red); }
+
+  .progress-label {
+    font-size: 11px;
+    color: var(--sub);
+    margin-top: 6px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─── Scene 3: 카테고리별 예산 ─── */
+  .cat-budget-wrap {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .cat-budget-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .cat-budget-header .title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--bright);
+  }
+
+  .cat-budget-row {
+    display: grid;
+    grid-template-columns: 140px 1fr 100px 100px 40px;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  .cat-budget-row:last-child { border-bottom: none; }
+  .cat-budget-row:hover { background: var(--surface-dim); }
+
+  .cat-name {
+    font-size: 13px;
+    color: var(--bright);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .cat-progress-area {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .cat-progress-bar {
+    height: 6px;
+    background: var(--surface-dim);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .cat-progress-bar .fill {
+    height: 100%;
+    border-radius: 3px;
+  }
+  .cat-progress-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--sub);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cat-amount {
+    font-size: 12px;
+    font-weight: 600;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .cat-amount.expense { color: var(--red); }
+  .cat-amount.remaining { color: var(--emerald); }
+  .cat-amount.over { color: var(--red); }
+
+  .cat-actions {
+    display: flex;
+    gap: 2px;
+    justify-content: center;
+  }
+
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--dim);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .action-btn:hover {
+    background: var(--surface);
+    color: var(--text);
+  }
+  .action-btn.delete:hover {
+    background: var(--red-dim);
+    color: var(--red);
+  }
+  .action-btn svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .cat-unset {
+    display: grid;
+    grid-template-columns: 140px 1fr 40px;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cat-unset:last-child { border-bottom: none; }
+  .set-btn {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--sodam);
+    background: var(--sodam-dim);
+    border: 1px solid var(--sodam-border);
+    border-radius: 6px;
+    padding: 4px 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .set-btn:hover {
+    background: rgba(96,165,250,0.25);
+  }
+
+  .cat-budget-footer {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+  }
+  .btn-add-cat {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--sodam);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px 0;
+    transition: color 0.15s;
+  }
+  .btn-add-cat:hover { color: var(--bright); }
+
+  /* ─── Scene 4: 인라인 편집 ─── */
+  .cat-budget-row.editing {
+    background: var(--surface-dim);
+  }
+  .inline-input {
+    width: 120px;
+    background: var(--surface);
+    border: 1px solid var(--border-hover);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 13px;
+    color: var(--bright);
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    outline: none;
+    text-align: right;
+  }
+  .inline-actions {
+    display: flex;
+    gap: 4px;
+  }
+  .inline-save {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--sodam);
+    background: var(--sodam-dim);
+    border: 1px solid var(--sodam-border);
+    border-radius: 5px;
+    padding: 3px 8px;
+    cursor: pointer;
+  }
+  .inline-cancel {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--sub);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 3px 8px;
+    cursor: pointer;
+  }
+
+  /* ─── Scene 5: 복사 모달 ─── */
+  .modal-demo {
+    position: relative;
+    width: 420px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+    border-radius: 16px;
+  }
+  .modal-card {
+    position: relative;
+    z-index: 1;
+    width: 380px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .modal-body {
+    padding: 24px;
+  }
+  .modal-body h2 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--bright);
+    margin-bottom: 12px;
+  }
+  .modal-body p {
+    font-size: 12px;
+    color: var(--sub);
+    margin-bottom: 16px;
+    line-height: 1.5;
+  }
+  .modal-list {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .modal-list-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+  }
+  .modal-list-item .k { color: var(--sub); }
+  .modal-list-item .v {
+    color: var(--bright);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .modal-actions {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 12px;
+  }
+  .btn-modal-cancel {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--sub);
+    border: 1px solid var(--border);
+    background: transparent;
+    cursor: pointer;
+  }
+  .btn-modal-confirm {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--sodam);
+    background: var(--sodam-dim);
+    border: 1px solid var(--sodam-border);
+    cursor: pointer;
+  }
+
+  /* ─── 레이아웃 ─── */
+  .proto-row {
+    display: flex;
+    gap: 48px;
+  }
+</style>
+</head>
+<body>
+
+<div class="proto-title">
+  <h1>예산 관리 디자인 시안 — Issue #175</h1>
+  <p>월별 카테고리별 예산 설정 + 진행률 + 예산 복사</p>
+</div>
+
+<!-- ━━━ Scene 1 & 2: 헤더 + 전체 예산 요약 ━━━ -->
+<div class="proto-section">
+  <div class="proto-label">Scene 1 & 2 — 예산 페이지 헤더 + 전체 예산 요약</div>
+
+  <div class="page-header">
+    <div>
+      <h1>예산</h1>
+      <div class="sub">월별 예산 설정 및 소비 현황</div>
+    </div>
+    <button class="btn-copy">예산 복사 →</button>
+  </div>
+
+  <!-- 월 네비게이션 -->
+  <div class="month-nav">
+    <button class="month-nav-btn">&lsaquo;</button>
+    <span class="month-label">2026년 3월</span>
+    <button class="month-nav-btn">&rsaquo;</button>
+  </div>
+
+  <!-- 전체 예산 요약 카드 -->
+  <div class="budget-summary">
+    <div class="budget-summary-header">
+      <span class="label">전체 예산</span>
+      <button class="budget-edit-btn">금액 수정</button>
+    </div>
+    <div class="budget-amount">2,000,000원</div>
+    <div class="budget-stats">
+      <div class="budget-stat">
+        <span class="k">소비</span>
+        <span class="v expense">1,245,800원</span>
+      </div>
+      <div class="budget-stat">
+        <span class="k">잔여</span>
+        <span class="v remaining">754,200원</span>
+      </div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-fill yellow" style="width: 62%;"></div>
+    </div>
+    <div class="progress-label">62% 소진</div>
+  </div>
+
+  <div class="proto-note">
+    <strong>전체 예산:</strong> categoryId=null인 Budget 레코드<br>
+    <strong>진행률 색상:</strong> &lt;70% 초록, 70~100% 노랑, &gt;100% 빨강<br>
+    <strong>"금액 수정":</strong> 인라인 입력으로 전환하거나 모달로 수정<br>
+    <strong>"예산 복사":</strong> 이번 달 예산을 다음 달로 복사 (Scene 5 모달)
+  </div>
+</div>
+
+<!-- ━━━ Scene 3: 카테고리별 예산 ━━━ -->
+<div class="proto-section">
+  <div class="proto-label">Scene 3 — 카테고리별 예산 (BudgetManager)</div>
+
+  <div class="cat-budget-wrap">
+    <div class="cat-budget-header">
+      <span class="title">카테고리별 예산</span>
+      <span style="font-size: 11px; color: var(--sub);">4개 설정됨</span>
+    </div>
+
+    <!-- 식비: 64% (초록) -->
+    <div class="cat-budget-row">
+      <span class="cat-name">🍚 식비</span>
+      <div class="cat-progress-area">
+        <div class="cat-progress-bar">
+          <div class="fill" style="width: 64%; background: var(--emerald);"></div>
+        </div>
+        <div class="cat-progress-info">
+          <span>예산 500,000원</span>
+          <span>64%</span>
+        </div>
+      </div>
+      <span class="cat-amount expense">320,000원</span>
+      <span class="cat-amount remaining">180,000원</span>
+      <div class="cat-actions">
+        <button class="action-btn" title="수정">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg>
+        </button>
+        <button class="action-btn delete" title="삭제">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 교통: 92% (노랑) -->
+    <div class="cat-budget-row">
+      <span class="cat-name">🚗 교통</span>
+      <div class="cat-progress-area">
+        <div class="cat-progress-bar">
+          <div class="fill" style="width: 92%; background: var(--yellow);"></div>
+        </div>
+        <div class="cat-progress-info">
+          <span>예산 200,000원</span>
+          <span style="color: var(--yellow);">92%</span>
+        </div>
+      </div>
+      <span class="cat-amount expense">185,000원</span>
+      <span class="cat-amount remaining" style="color: var(--yellow);">15,000원</span>
+      <div class="cat-actions">
+        <button class="action-btn" title="수정">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg>
+        </button>
+        <button class="action-btn delete" title="삭제">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 쇼핑: 117% (빨강, 초과) -->
+    <div class="cat-budget-row">
+      <span class="cat-name">🛍️ 쇼핑</span>
+      <div class="cat-progress-area">
+        <div class="cat-progress-bar">
+          <div class="fill" style="width: 100%; background: var(--red);"></div>
+        </div>
+        <div class="cat-progress-info">
+          <span>예산 300,000원</span>
+          <span style="color: var(--red);">117% 초과</span>
+        </div>
+      </div>
+      <span class="cat-amount expense">350,000원</span>
+      <span class="cat-amount over">-50,000원</span>
+      <div class="cat-actions">
+        <button class="action-btn" title="수정">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg>
+        </button>
+        <button class="action-btn delete" title="삭제">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 여가: 45% (초록) -->
+    <div class="cat-budget-row">
+      <span class="cat-name">🎮 여가</span>
+      <div class="cat-progress-area">
+        <div class="cat-progress-bar">
+          <div class="fill" style="width: 45%; background: var(--emerald);"></div>
+        </div>
+        <div class="cat-progress-info">
+          <span>예산 100,000원</span>
+          <span>45%</span>
+        </div>
+      </div>
+      <span class="cat-amount expense">45,000원</span>
+      <span class="cat-amount remaining">55,000원</span>
+      <div class="cat-actions">
+        <button class="action-btn" title="수정">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg>
+        </button>
+        <button class="action-btn delete" title="삭제">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 생활: 예산 미설정 -->
+    <div class="cat-unset">
+      <span class="cat-name" style="color: var(--sub);">🏠 생활</span>
+      <div style="font-size: 12px; color: var(--dim);">예산 미설정</div>
+      <button class="set-btn">설정</button>
+    </div>
+
+    <div class="cat-budget-footer">
+      <button class="btn-add-cat">+ 카테고리 예산 추가</button>
+    </div>
+  </div>
+
+  <div class="proto-note">
+    <strong>그리드 컬럼:</strong> 카테고리명 | 진행률 바+정보 | 소비액 | 잔여액 | 액션<br>
+    <strong>진행률 색상:</strong> &lt;70% 초록, 70~100% 노랑, &gt;100% 빨강<br>
+    <strong>초과 표시:</strong> 100% 넘으면 "117% 초과" 빨간 텍스트 + 잔여 마이너스<br>
+    <strong>미설정:</strong> 예산 없는 카테고리는 "설정" 버튼으로 바로 추가<br>
+    <strong>모바일:</strong> 카드 형태로 스택 (그리드 → flex-col)
+  </div>
+</div>
+
+<!-- ━━━ Scene 4 & 5: 인라인 편집 + 복사 모달 ━━━ -->
+<div class="proto-section">
+  <div class="proto-row">
+    <!-- Scene 4: 인라인 편집 -->
+    <div style="flex: 1;">
+      <div class="proto-label">Scene 4 — 인라인 예산 편집</div>
+      <div class="cat-budget-wrap">
+        <div class="cat-budget-header">
+          <span class="title">카테고리별 예산</span>
+        </div>
+
+        <!-- 편집 중인 행 -->
+        <div class="cat-budget-row editing">
+          <span class="cat-name">🍚 식비</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <input class="inline-input" value="500,000" />
+            <span style="font-size: 12px; color: var(--dim);">원</span>
+          </div>
+          <div class="inline-actions" style="grid-column: span 2;">
+            <button class="inline-save">저장</button>
+            <button class="inline-cancel">취소</button>
+          </div>
+          <div></div>
+        </div>
+
+        <!-- 일반 행 -->
+        <div class="cat-budget-row">
+          <span class="cat-name">🚗 교통</span>
+          <div class="cat-progress-area">
+            <div class="cat-progress-bar">
+              <div class="fill" style="width: 92%; background: var(--yellow);"></div>
+            </div>
+            <div class="cat-progress-info">
+              <span>예산 200,000원</span>
+              <span style="color: var(--yellow);">92%</span>
+            </div>
+          </div>
+          <span class="cat-amount expense">185,000원</span>
+          <span class="cat-amount remaining" style="color: var(--yellow);">15,000원</span>
+          <div class="cat-actions">
+            <button class="action-btn" title="수정">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg>
+            </button>
+            <button class="action-btn delete" title="삭제">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="proto-note">
+        <strong>인라인 편집:</strong> 연필 클릭 → 진행률 영역이 입력 필드로 교체<br>
+        <strong>저장/취소:</strong> 소형 버튼으로 확인<br>
+        <strong>API:</strong> POST /api/budgets (upsert: categoryId + year + month)
+      </div>
+    </div>
+
+    <!-- Scene 5: 복사 모달 -->
+    <div>
+      <div class="proto-label">Scene 5 — 예산 복사 확인 모달</div>
+      <div class="modal-demo">
+        <div class="modal-backdrop"></div>
+        <div class="modal-card">
+          <div class="modal-body">
+            <h2>예산 복사</h2>
+            <p>3월 예산을 4월로 복사하시겠습니까?</p>
+            <div class="modal-list">
+              <div class="modal-list-item">
+                <span class="k">전체 예산</span>
+                <span class="v">2,000,000원</span>
+              </div>
+              <div class="modal-list-item">
+                <span class="k">🍚 식비</span>
+                <span class="v">500,000원</span>
+              </div>
+              <div class="modal-list-item">
+                <span class="k">🚗 교통</span>
+                <span class="v">200,000원</span>
+              </div>
+              <div class="modal-list-item">
+                <span class="k">🛍️ 쇼핑</span>
+                <span class="v">300,000원</span>
+              </div>
+              <div class="modal-list-item">
+                <span class="k">🎮 여가</span>
+                <span class="v">100,000원</span>
+              </div>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn-modal-cancel">취소</button>
+            <button class="btn-modal-confirm">복사</button>
+          </div>
+        </div>
+      </div>
+      <div class="proto-note">
+        <strong>복사 대상:</strong> 현재 월의 전체 예산 + 카테고리별 예산<br>
+        <strong>동작:</strong> 다음 달에 동일 예산 upsert (기존 있으면 덮어쓰기)<br>
+        <strong>API:</strong> POST /api/budgets/copy (source year+month → target)
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

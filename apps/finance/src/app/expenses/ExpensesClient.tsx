@@ -4,7 +4,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import ExpenseSummary from '@/components/expense/ExpenseSummary'
 import MonthlyChart from '@/components/expense/MonthlyChart'
 import CategoryPieChart from '@/components/expense/CategoryPieChart'
-import TransactionTable from '@/components/expense/TransactionTable'
+import TransactionTable, { type TransactionRow } from '@/components/expense/TransactionTable'
+import TransactionForm from '@/components/expense/TransactionForm'
+import TransactionDeleteModal from '@/components/expense/TransactionDeleteModal'
+import MonthCompare from '@/components/expense/MonthCompare'
+import SpendingTrend from '@/components/expense/SpendingTrend'
 
 interface MonthlyData {
   month: number
@@ -23,14 +27,11 @@ interface CategoryData {
   count: number
 }
 
-interface TransactionRow {
+interface CategoryOption {
   id: string
-  amount: number
-  description: string
-  categoryName: string
-  categoryIcon: string | null
-  categoryType: TransactionType
-  transactedAt: string
+  name: string
+  icon: string | null
+  type: 'expense' | 'income'
 }
 
 interface ApiResponse {
@@ -69,6 +70,45 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
   const abortRef = useRef<AbortController | null>(null)
   const isInitialMount = useRef(true)
 
+  // 분석 데이터
+  const [analysisData, setAnalysisData] = useState<{
+    monthCompare: { groupId: string; groupName: string; groupIcon: string | null; current: number; previous: number; change: number; changePct: number }[]
+    prevMonthSummary: { totalExpense: number; totalIncome: number; count: number }
+    trend: { months: { year: number; month: number }[]; groups: { groupId: string; groupName: string; groupIcon: string | null; values: number[]; avg: number; anomalies: boolean[] }[] }
+  } | null>(null)
+
+  // CRUD 상태
+  const [showForm, setShowForm] = useState(false)
+  const [editingTx, setEditingTx] = useState<TransactionRow | null>(null)
+  const [deletingTx, setDeletingTx] = useState<TransactionRow | null>(null)
+  const [categories, setCategories] = useState<CategoryOption[]>([])
+  const [assets, setAssets] = useState<{ id: string; name: string; category: string; value: number; isLiability: boolean }[]>([])
+
+  // 카테고리 + 자산 목록 fetch (폼 select용)
+  useEffect(() => {
+    fetch('/api/categories')
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        const cats = data?.categories
+        if (Array.isArray(cats)) {
+          setCategories(cats.map((c: { id: string; name: string; icon: string | null; type: string }) => ({
+            id: c.id,
+            name: c.name,
+            icon: c.icon,
+            type: c.type as 'expense' | 'income',
+          })))
+        }
+      })
+      .catch(() => {})
+    fetch('/api/assets')
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        const list = data?.assets ?? data
+        if (Array.isArray(list)) setAssets(list)
+      })
+      .catch(() => {})
+  }, [])
+
   const fetchData = useCallback(async (y: number, m: number | undefined, t: TabType) => {
     abortRef.current?.abort()
     const controller = new AbortController()
@@ -86,9 +126,26 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
         setData(json)
         setOffset(0)
       }
+      // 월 선택 시 분석 데이터도 조회 (소비 탭 또는 전체 탭에서만)
+      if (m && t !== 'income') {
+        try {
+          const analysisRes = await fetch(`/api/transactions/analysis?year=${y}&month=${m}`, { signal: controller.signal })
+          if (analysisRes.ok) {
+            setAnalysisData(await analysisRes.json())
+          } else {
+            setAnalysisData(null)
+          }
+        } catch (ae) {
+          if (ae instanceof DOMException && ae.name === 'AbortError') return
+          setAnalysisData(null)
+        }
+      } else {
+        setAnalysisData(null)
+      }
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return
       console.error('[expenses] 데이터 조회 실패:', e)
+      setAnalysisData(null)
     } finally {
       if (!controller.signal.aborted) {
         setLoading(false)
@@ -148,6 +205,18 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
   const handleMonthChange = (m: number | undefined) => setMonth(m)
   const handleTabChange = (t: TabType) => setTab(t)
 
+  const handleSaved = () => {
+    fetchData(year, month, tab)
+  }
+
+  const handleEdit = (tx: TransactionRow) => {
+    setEditingTx(tx)
+  }
+
+  const handleDelete = (tx: TransactionRow) => {
+    setDeletingTx(tx)
+  }
+
   const segmentBase = 'px-3 py-1.5 text-[12px] font-semibold rounded-md transition-all cursor-pointer'
   const segmentActive = 'bg-surface text-bright'
   const segmentInactive = 'text-sub hover:text-muted hover:bg-surface-dim'
@@ -157,6 +226,17 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
 
   return (
     <div className={loading ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
+      {/* 헤더 + 추가 버튼 */}
+      <div className="flex items-center justify-between mb-4">
+        <div />
+        <button
+          onClick={() => setShowForm(true)}
+          className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg bg-sodam/15 text-sodam text-[12px] sm:text-[13px] font-semibold border border-sodam/25 hover:bg-sodam/25 transition-all"
+        >
+          + 내역 추가
+        </button>
+      </div>
+
       {/* 필터 */}
       <div className="flex flex-wrap items-center gap-4 mb-5">
         {/* 연도 */}
@@ -223,6 +303,7 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
           count={data.summary.count}
           year={year}
           month={month}
+          prevMonth={tab === 'all' ? analysisData?.prevMonthSummary : undefined}
         />
       </div>
 
@@ -248,14 +329,71 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
         </div>
       </div>
 
-      {/* 거래 내역 테이블 */}
+      {/* 분석 섹션 (월 선택 + 전체/소비 탭) */}
+      {analysisData && month && tab !== 'income' && (
+        <div className="flex flex-col gap-5 mb-5">
+          <MonthCompare
+            data={analysisData.monthCompare}
+            currentMonth={month}
+            prevMonth={month === 1 ? 12 : month - 1}
+          />
+          <SpendingTrend
+            months={analysisData.trend.months}
+            groups={analysisData.trend.groups}
+          />
+        </div>
+      )}
+
+      {/* 내역 테이블 */}
       <TransactionTable
         transactions={data.transactions}
         total={data.total}
         limit={data.limit}
         offset={offset}
         onPageChange={handlePageChange}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
       />
+
+      {/* 내역 추가 폼 */}
+      {showForm && (
+        <TransactionForm
+          mode="create"
+          categories={categories}
+          assets={assets}
+          onClose={() => setShowForm(false)}
+          onSaved={handleSaved}
+        />
+      )}
+
+      {/* 내역 수정 폼 */}
+      {editingTx && (
+        <TransactionForm
+          mode="edit"
+          assets={assets}
+          transaction={{
+            id: editingTx.id,
+            amount: editingTx.amount,
+            description: editingTx.description,
+            categoryId: editingTx.categoryId,
+            transactedAt: editingTx.transactedAt,
+            type: editingTx.type,
+            linkedAssetId: editingTx.linkedAssetId,
+          }}
+          categories={categories}
+          onClose={() => setEditingTx(null)}
+          onSaved={handleSaved}
+        />
+      )}
+
+      {/* 내역 삭제 모달 */}
+      {deletingTx && (
+        <TransactionDeleteModal
+          transaction={deletingTx}
+          onClose={() => setDeletingTx(null)}
+          onDeleted={handleSaved}
+        />
+      )}
     </div>
   )
 }

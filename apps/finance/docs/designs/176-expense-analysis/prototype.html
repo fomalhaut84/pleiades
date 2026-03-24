@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>가계부 분석 강화 디자인 시안 — #176</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<style>
+  :root {
+    --bg: #07080c;
+    --bg-raised: #0d0e14;
+    --card: rgba(255,255,255,0.025);
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.12);
+    --dim: #6e6e82;
+    --sub: #9494a8;
+    --text: #c8c8d4;
+    --bright: #eeeef2;
+    --surface-dim: rgba(255,255,255,0.04);
+    --surface: rgba(255,255,255,0.06);
+    --red: #f87171;
+    --emerald: #34d399;
+    --yellow: #fbbf24;
+    --sodam: #60a5fa;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 64px;
+  }
+
+  .proto-section { max-width: 960px; margin: 0 auto; padding: 0 32px 40px; }
+  .proto-label {
+    font-size: 11px; font-weight: 700; color: var(--dim);
+    letter-spacing: 1.5px; text-transform: uppercase;
+    margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  .proto-note {
+    font-size: 11px; color: var(--sub); margin-top: 12px;
+    padding: 8px 12px; background: var(--surface-dim); border-radius: 8px; line-height: 1.6;
+  }
+  .proto-title { text-align: center; padding: 24px 32px 32px; }
+  .proto-title h1 { font-size: 15px; font-weight: 800; color: var(--bright); }
+  .proto-title p { font-size: 12px; color: var(--sub); margin-top: 4px; }
+  .hint {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--dim); background: var(--surface-dim);
+    padding: 3px 8px; border-radius: 4px; margin-left: 8px;
+    text-transform: none; letter-spacing: 0; font-weight: 500;
+  }
+
+  /* ─── Scene 1: 요약 카드 + 전월 대비 ─── */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .summary-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .summary-card .label {
+    font-size: 11px; font-weight: 600; color: var(--dim);
+    letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px;
+  }
+  .summary-card .value {
+    font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums;
+  }
+  .summary-card .value.expense { color: var(--red); }
+  .summary-card .value.income { color: var(--emerald); }
+  .summary-card .value.net { color: var(--emerald); }
+  .summary-card .value.neutral { color: var(--bright); }
+
+  .compare-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 11px; font-weight: 600; margin-top: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+  .compare-badge.up-bad { color: var(--red); }
+  .compare-badge.down-good { color: var(--emerald); }
+  .compare-badge.down-bad { color: var(--red); }
+  .compare-badge.neutral { color: var(--dim); }
+
+  /* ─── Scene 2: 전월 대비 상세 테이블 ─── */
+  .card-wrap {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden;
+  }
+  .card-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .card-header .title { font-size: 13px; font-weight: 700; color: var(--bright); }
+  .card-header .sub { font-size: 11px; color: var(--sub); }
+
+  .compare-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .compare-table thead tr {
+    border-bottom: 1px solid var(--border); background: var(--surface-dim);
+  }
+  .compare-table th {
+    padding: 10px 16px; text-align: left; font-size: 11px;
+    font-weight: 600; color: var(--dim); letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .compare-table th.right { text-align: right; }
+  .compare-table tbody tr {
+    border-bottom: 1px solid var(--border); transition: background 0.1s;
+  }
+  .compare-table tbody tr:last-child { border-bottom: none; }
+  .compare-table tbody tr:hover { background: var(--surface-dim); }
+  .compare-table td {
+    padding: 12px 16px; white-space: nowrap;
+  }
+  .compare-table td.right {
+    text-align: right; font-variant-numeric: tabular-nums;
+  }
+  .compare-table td.group-name { color: var(--bright); font-weight: 500; }
+  .compare-table td.amount { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .compare-table td.change-up { color: var(--red); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .compare-table td.change-down { color: var(--emerald); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* 변동 바 */
+  .change-bar-wrap {
+    display: flex; align-items: center; gap: 8px; justify-content: flex-end;
+  }
+  .change-bar {
+    width: 60px; height: 4px; background: var(--surface-dim); border-radius: 2px;
+    position: relative; overflow: hidden;
+  }
+  .change-bar .fill {
+    position: absolute; top: 0; height: 100%; border-radius: 2px;
+  }
+  .change-bar .fill.red { background: var(--red); right: 50%; }
+  .change-bar .fill.green { background: var(--emerald); left: 50%; }
+
+  /* ─── Scene 3: 지출 트렌드 차트 ─── */
+  .trend-chart-area {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px;
+  }
+  .trend-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;
+  }
+  .trend-header .title { font-size: 13px; font-weight: 700; color: var(--bright); }
+
+  .period-toggle {
+    display: inline-flex; gap: 2px; background: var(--card);
+    border: 1px solid var(--border); border-radius: 8px; padding: 3px;
+  }
+  .period-btn {
+    padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    color: var(--sub); background: transparent; border: none; cursor: pointer; transition: all 0.15s;
+  }
+  .period-btn:hover { color: var(--text); }
+  .period-btn.active { background: var(--surface); color: var(--bright); }
+
+  /* 차트 시뮬레이션 (CSS) */
+  .chart-placeholder {
+    position: relative; height: 240px; border-left: 1px solid var(--border);
+    border-bottom: 1px solid var(--border); margin: 0 0 16px 40px;
+  }
+  .chart-y-labels {
+    position: absolute; left: -44px; top: 0; bottom: 0;
+    display: flex; flex-direction: column; justify-content: space-between;
+    font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums;
+  }
+  .chart-x-labels {
+    display: flex; justify-content: space-between; margin-left: 40px;
+    font-size: 10px; color: var(--dim); margin-top: 6px;
+  }
+  .chart-grid-line {
+    position: absolute; left: 0; right: 0; height: 1px;
+    background: var(--border); opacity: 0.5;
+  }
+
+  /* SVG 라인 차트 */
+  .trend-svg { width: 100%; height: 100%; }
+  .trend-line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .anomaly-dot { stroke-width: 2; }
+
+  /* 범례 */
+  .trend-legend {
+    display: flex; flex-wrap: wrap; gap: 16px; margin-top: 4px;
+  }
+  .trend-legend-item {
+    display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--sub);
+  }
+  .legend-line {
+    width: 16px; height: 2px; border-radius: 1px;
+  }
+
+  /* ─── Scene 4: 트렌드 테이블 ─── */
+  .trend-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .trend-table thead tr {
+    border-bottom: 1px solid var(--border); background: var(--surface-dim);
+  }
+  .trend-table th {
+    padding: 10px 14px; text-align: right; font-size: 11px;
+    font-weight: 600; color: var(--dim); letter-spacing: 0.5px;
+  }
+  .trend-table th:first-child { text-align: left; }
+  .trend-table tbody tr {
+    border-bottom: 1px solid var(--border); transition: background 0.1s;
+  }
+  .trend-table tbody tr:last-child { border-bottom: none; }
+  .trend-table tbody tr:hover { background: var(--surface-dim); }
+  .trend-table td {
+    padding: 11px 14px; text-align: right; font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .trend-table td:first-child { text-align: left; color: var(--bright); font-weight: 500; }
+  .trend-table td.above-avg { color: var(--red); font-weight: 600; }
+  .trend-table td.below-avg { color: var(--emerald); }
+  .trend-table td.normal { color: var(--text); }
+  .trend-table td.avg-col { color: var(--sub); }
+  .trend-table td.vs-avg { font-weight: 600; }
+
+  .view-toggle {
+    display: inline-flex; gap: 2px; background: var(--card);
+    border: 1px solid var(--border); border-radius: 8px; padding: 3px;
+  }
+  .view-btn {
+    padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    color: var(--sub); background: transparent; border: none; cursor: pointer; transition: all 0.15s;
+  }
+  .view-btn.active { background: var(--surface); color: var(--bright); }
+</style>
+</head>
+<body>
+
+<div class="proto-title">
+  <h1>가계부 분석 강화 디자인 시안 — Issue #176</h1>
+  <p>전월 대비 증감 + 지출 트렌드 (3~6개월) — 기존 가계부 페이지에 추가되는 분석 섹션</p>
+</div>
+
+<!-- ━━━ Scene 1: 요약 카드 + 전월 대비 화살표 ━━━ -->
+<div class="proto-section">
+  <div class="proto-label">Scene 1 — 요약 카드 + 전월 대비 비교 <span class="hint">ExpenseSummary 확장</span></div>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="label">3월 소비</div>
+      <div class="value expense">1,245,800원</div>
+      <div class="compare-badge up-bad">▲ +12.3% 전월 대비</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">3월 수입</div>
+      <div class="value income">5,000,000원</div>
+      <div class="compare-badge neutral">— 변동 없음</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">순수익</div>
+      <div class="value net">+3,754,200원</div>
+      <div class="compare-badge down-bad">▼ -5.2% 전월 대비</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">건수</div>
+      <div class="value neutral">142건</div>
+      <div class="compare-badge up-bad">▲ +8건 전월 대비</div>
+    </div>
+  </div>
+
+  <div class="proto-note">
+    <strong>전월 대비 표시:</strong> 각 카드 하단에 소형 뱃지<br>
+    <strong>소비 증가:</strong> ▲ 빨간색 (지출 증가는 부정적)<br>
+    <strong>소비 감소:</strong> ▼ 초록색 (지출 감소는 긍정적)<br>
+    <strong>수입 증가:</strong> ▲ 초록색 (수입 증가는 긍정적)<br>
+    <strong>순수익 감소:</strong> ▼ 빨간색 (여유 감소는 부정적)<br>
+    <strong>변동 없음:</strong> — 회색<br>
+    <strong>월 미선택:</strong> 전월 대비 숨김 (연간 조회 시)
+  </div>
+</div>
+
+<!-- ━━━ Scene 2: 전월 대비 그룹별 상세 ━━━ -->
+<div class="proto-section">
+  <div class="proto-label">Scene 2 — 전월 대비 그룹별 변동 상세</div>
+
+  <div class="card-wrap">
+    <div class="card-header">
+      <span class="title">전월 대비 그룹별 변동</span>
+      <span class="sub">3월 vs 2월</span>
+    </div>
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>그룹</th>
+          <th class="right">이번 달</th>
+          <th class="right">전월</th>
+          <th class="right">증감</th>
+          <th class="right">증감률</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="group-name">🛒 생활비</td>
+          <td class="right amount">620,000</td>
+          <td class="right" style="color: var(--sub);">550,000</td>
+          <td class="right change-up">+70,000</td>
+          <td class="right">
+            <div class="change-bar-wrap">
+              <span class="change-up">+12.7%</span>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td class="group-name">🚗 교통</td>
+          <td class="right amount">185,000</td>
+          <td class="right" style="color: var(--sub);">210,000</td>
+          <td class="right change-down">-25,000</td>
+          <td class="right">
+            <div class="change-bar-wrap">
+              <span class="change-down">-11.9%</span>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td class="group-name">💡 공과금</td>
+          <td class="right amount">210,000</td>
+          <td class="right" style="color: var(--sub);">200,000</td>
+          <td class="right change-up">+10,000</td>
+          <td class="right">
+            <div class="change-bar-wrap">
+              <span class="change-up">+5.0%</span>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td class="group-name">🎓 교육</td>
+          <td class="right amount">124,580</td>
+          <td class="right" style="color: var(--sub);">130,000</td>
+          <td class="right change-down">-5,420</td>
+          <td class="right">
+            <div class="change-bar-wrap">
+              <span class="change-down">-4.2%</span>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td class="group-name">🏥 의료/건강</td>
+          <td class="right amount">65,000</td>
+          <td class="right" style="color: var(--sub);">30,000</td>
+          <td class="right change-up">+35,000</td>
+          <td class="right">
+            <div class="change-bar-wrap">
+              <span class="change-up">+116.7%</span>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td class="group-name">📱 앱결제</td>
+          <td class="right amount">41,220</td>
+          <td class="right" style="color: var(--sub);">41,220</td>
+          <td class="right" style="color: var(--dim);">0</td>
+          <td class="right">
+            <div class="change-bar-wrap">
+              <span style="color: var(--dim);">0%</span>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="proto-note">
+    <strong>그룹 단위:</strong> CategoryGroup 기준 합산 비교<br>
+    <strong>정렬:</strong> 증감 절대값 내림차순<br>
+    <strong>색상:</strong> 증가(빨강) = 지출 증가 부정적 / 감소(초록) = 긍정적<br>
+    <strong>이상 지출:</strong> 150% 이상 증가 시 강조 (의료 +116.7%)
+  </div>
+</div>
+
+<!-- ━━━ Scene 3: 지출 트렌드 차트 ━━━ -->
+<div class="proto-section">
+  <div class="proto-label">Scene 3 — 지출 트렌드 차트 (3~6개월)</div>
+
+  <div class="trend-chart-area">
+    <div class="trend-header">
+      <span class="title">지출 트렌드</span>
+      <div class="period-toggle">
+        <button class="period-btn active">3개월</button>
+        <button class="period-btn">6개월</button>
+      </div>
+    </div>
+
+    <!-- 차트 (SVG 시뮬레이션) -->
+    <div class="chart-placeholder">
+      <div class="chart-y-labels">
+        <span>80만</span>
+        <span>60만</span>
+        <span>40만</span>
+        <span>20만</span>
+        <span>0</span>
+      </div>
+      <div class="chart-grid-line" style="top: 0%;"></div>
+      <div class="chart-grid-line" style="top: 25%;"></div>
+      <div class="chart-grid-line" style="top: 50%;"></div>
+      <div class="chart-grid-line" style="top: 75%;"></div>
+
+      <svg class="trend-svg" viewBox="0 0 400 240" preserveAspectRatio="none">
+        <!-- 생활비 (red) -->
+        <polyline class="trend-line" stroke="#f87171" points="20,90 200,105 380,72" />
+        <circle cx="20" cy="90" r="3" fill="#f87171" />
+        <circle cx="200" cy="105" r="3" fill="#f87171" />
+        <circle cx="380" cy="72" r="3" fill="#f87171" />
+
+        <!-- 교통 (blue) -->
+        <polyline class="trend-line" stroke="#60a5fa" points="20,168 200,150 380,165" />
+        <circle cx="20" cy="168" r="3" fill="#60a5fa" />
+        <circle cx="200" cy="150" r="3" fill="#60a5fa" />
+        <circle cx="380" cy="165" r="3" fill="#60a5fa" />
+
+        <!-- 공과금 (yellow) -->
+        <polyline class="trend-line" stroke="#fbbf24" points="20,180 200,186 380,174" />
+        <circle cx="20" cy="180" r="3" fill="#fbbf24" />
+        <circle cx="200" cy="186" r="3" fill="#fbbf24" />
+        <circle cx="380" cy="174" r="3" fill="#fbbf24" />
+
+        <!-- 의료 (emerald) — 이상치 표시 -->
+        <polyline class="trend-line" stroke="#34d399" points="20,222 200,210 380,195" />
+        <circle cx="20" cy="222" r="3" fill="#34d399" />
+        <circle cx="200" cy="210" r="3" fill="#34d399" />
+        <!-- 이상치: 빨간 테두리 원 -->
+        <circle cx="380" cy="195" r="5" fill="none" stroke="#f87171" stroke-width="2" class="anomaly-dot" />
+        <circle cx="380" cy="195" r="3" fill="#34d399" />
+      </svg>
+    </div>
+
+    <div class="chart-x-labels">
+      <span>1월</span>
+      <span>2월</span>
+      <span>3월</span>
+    </div>
+
+    <div class="trend-legend" style="margin-top: 16px;">
+      <div class="trend-legend-item">
+        <div class="legend-line" style="background: #f87171;"></div>
+        <span>🛒 생활비</span>
+      </div>
+      <div class="trend-legend-item">
+        <div class="legend-line" style="background: #60a5fa;"></div>
+        <span>🚗 교통</span>
+      </div>
+      <div class="trend-legend-item">
+        <div class="legend-line" style="background: #fbbf24;"></div>
+        <span>💡 공과금</span>
+      </div>
+      <div class="trend-legend-item">
+        <div class="legend-line" style="background: #34d399;"></div>
+        <span>🏥 의료/건강</span>
+      </div>
+      <div class="trend-legend-item" style="margin-left: auto;">
+        <circle style="display: inline-block; width: 10px; height: 10px; border: 2px solid var(--red); border-radius: 50%;"></circle>
+        <span style="color: var(--red);">이상 지출 (평균 150%+)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="proto-note">
+    <strong>Recharts LineChart:</strong> 그룹별 라인 (상위 4~5개 그룹)<br>
+    <strong>기간 선택:</strong> 3개월 / 6개월 토글<br>
+    <strong>이상 지출:</strong> 해당 그룹의 N개월 평균 대비 150% 이상 → 빨간 테두리 원<br>
+    <strong>호버:</strong> 툴팁에 그룹별 금액 표시
+  </div>
+</div>
+
+<!-- ━━━ Scene 4: 트렌드 테이블 (대안 뷰) ━━━ -->
+<div class="proto-section">
+  <div class="proto-label">Scene 4 — 지출 트렌드 테이블 뷰 <span class="hint">차트/테이블 토글</span></div>
+
+  <div class="card-wrap">
+    <div class="card-header">
+      <span class="title">지출 트렌드</span>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div class="period-toggle">
+          <button class="period-btn active">3개월</button>
+          <button class="period-btn">6개월</button>
+        </div>
+        <div class="view-toggle">
+          <button class="view-btn">차트</button>
+          <button class="view-btn active">테이블</button>
+        </div>
+      </div>
+    </div>
+    <table class="trend-table">
+      <thead>
+        <tr>
+          <th style="text-align: left;">그룹</th>
+          <th>1월</th>
+          <th>2월</th>
+          <th>3월</th>
+          <th>평균</th>
+          <th>이번 달 vs 평균</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>🛒 생활비</td>
+          <td class="normal">530,000</td>
+          <td class="normal">550,000</td>
+          <td class="above-avg">620,000</td>
+          <td class="avg-col">566,667</td>
+          <td class="vs-avg change-up">+9.4%</td>
+        </tr>
+        <tr>
+          <td>🚗 교통</td>
+          <td class="normal">195,000</td>
+          <td class="normal">210,000</td>
+          <td class="below-avg">185,000</td>
+          <td class="avg-col">196,667</td>
+          <td class="vs-avg change-down">-5.9%</td>
+        </tr>
+        <tr>
+          <td>💡 공과금</td>
+          <td class="normal">190,000</td>
+          <td class="normal">200,000</td>
+          <td class="above-avg">210,000</td>
+          <td class="avg-col">200,000</td>
+          <td class="vs-avg change-up">+5.0%</td>
+        </tr>
+        <tr>
+          <td>🎓 교육</td>
+          <td class="normal">120,000</td>
+          <td class="normal">130,000</td>
+          <td class="below-avg">124,580</td>
+          <td class="avg-col">124,860</td>
+          <td class="vs-avg" style="color: var(--dim);">-0.2%</td>
+        </tr>
+        <tr>
+          <td>🏥 의료/건강</td>
+          <td class="normal">25,000</td>
+          <td class="normal">30,000</td>
+          <td class="above-avg" style="color: var(--red); font-weight: 700;">65,000</td>
+          <td class="avg-col">40,000</td>
+          <td class="vs-avg change-up" style="font-weight: 800;">+62.5%</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="proto-note">
+    <strong>차트/테이블 토글:</strong> 같은 데이터를 차트 또는 숫자로 보기<br>
+    <strong>평균 대비:</strong> 이번 달 금액이 N개월 평균 대비 얼마나 차이나는지<br>
+    <strong>색상 규칙:</strong> 평균 초과 → 빨강 (지출 증가), 평균 이하 → 초록 (지출 감소)<br>
+    <strong>이상 지출 강조:</strong> 의료 65,000 (평균 40,000의 162%) → 빨강 + bold<br>
+    <strong>미세한 변동:</strong> ±5% 이내는 회색 (-0.2%)
+  </div>
+</div>
+
+</body>
+</html>

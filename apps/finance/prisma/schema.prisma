@@ -210,44 +210,86 @@ model HoldingSnapshot {
   @@index([portfolioSnapshotId])
 }
 
+model CategoryGroup {
+  id         String     @id @default(cuid())
+  name       String     @unique
+  icon       String?
+  sortOrder  Int        @default(0)
+  createdAt  DateTime   @default(now())
+  categories Category[]
+  budgets    Budget[]
+}
+
 model Category {
-  id           String        @id @default(cuid())
-  slug         String        @unique // 변경 불가 식별자 ("food", "transport" 등)
-  name         String        @unique // 표시명 ("식비", "교통" 등)
-  type         String        // "expense" | "income"
+  id           String         @id @default(cuid())
+  slug         String         @unique // 변경 불가 식별자 ("food", "transport" 등)
+  name         String         @unique // 표시명 ("식비", "교통" 등)
+  type         String         // "expense" | "income"
   icon         String?
-  keywords     String[]      @default([])
-  sortOrder    Int           @default(0)
-  createdAt    DateTime      @default(now())
-  transactions Transaction[]
-  budgets      Budget[]
+  keywords     String[]       @default([])
+  sortOrder    Int            @default(0)
+  groupId      String?
+  group        CategoryGroup? @relation(fields: [groupId], references: [id])
+  createdAt    DateTime       @default(now())
+  transactions          Transaction[]
+  budgets               Budget[]
+  recurringTransactions RecurringTransaction[]
+  whooingMap            WhooingCategoryMap?
+
+  @@index([groupId])
 }
 
 model Transaction {
-  id           String   @id @default(cuid())
-  amount       Int
-  description  String
-  categoryId   String
-  category     Category @relation(fields: [categoryId], references: [id])
-  userId       String?
-  transactedAt DateTime @default(now())
-  createdAt    DateTime @default(now())
+  id             String   @id @default(cuid())
+  amount         Int
+  description    String
+  categoryId     String
+  category       Category @relation(fields: [categoryId], references: [id])
+  userId         String?
+  type           String?  // "transfer_out" | "transfer_in" (null = 카테고리 type 사용)
+  linkedAssetId  String?
+  linkedAsset    Asset?   @relation(fields: [linkedAssetId], references: [id])
+  transactedAt   DateTime @default(now())
+  createdAt      DateTime @default(now())
 
   @@index([transactedAt])
   @@index([categoryId])
   @@index([userId])
+  @@index([linkedAssetId])
+}
+
+model RecurringTransaction {
+  id          String    @id @default(cuid())
+  amount      Int
+  description String
+  categoryId  String
+  category    Category  @relation(fields: [categoryId], references: [id])
+  frequency   String    // "monthly" | "weekly" | "yearly"
+  dayOfMonth  Int?      // 1~31 (monthly)
+  dayOfWeek   Int?      // 0=일~6=토 (weekly)
+  monthOfYear Int?      // 1~12 (yearly)
+  isActive    Boolean   @default(true)
+  nextRunAt   DateTime
+  lastRunAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([isActive, nextRunAt])
+  @@index([categoryId])
 }
 
 model Budget {
-  id         String    @id @default(cuid())
+  id         String         @id @default(cuid())
   categoryId String?
-  category   Category? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  category   Category?      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  groupId    String?
+  group      CategoryGroup? @relation(fields: [groupId], references: [id], onDelete: Restrict)
   year       Int
   month      Int
   amount     Int
-  createdAt  DateTime  @default(now())
+  createdAt  DateTime       @default(now())
 
   @@unique([categoryId, year, month])
+  @@unique([groupId, year, month])
   @@index([year, month])
 }
 
@@ -293,6 +335,7 @@ model Asset {
   note         String?
   updatedAt    DateTime  @updatedAt
   createdAt    DateTime  @default(now())
+  transactions Transaction[]
 }
 
 model NetWorthSnapshot {
@@ -331,4 +374,23 @@ model Watchlist {
   entryHigh   Float?             // 매수 구간 상한
   addedAt     DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model WhooingConfig {
+  id           String  @id @default(cuid())
+  webhookUrl   String?
+  isActive     Boolean @default(false)
+  defaultRight String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model WhooingCategoryMap {
+  id           String   @id @default(cuid())
+  categoryId   String   @unique
+  category     Category @relation(fields: [categoryId], references: [id])
+  whooingLeft  String
+  whooingRight String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
