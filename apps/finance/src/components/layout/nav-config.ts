@@ -47,6 +47,12 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/backtest', icon: '🧪', label: '백테스팅' },
     ],
   },
+  {
+    title: '설정',
+    items: [
+      { href: '/settings', icon: '⚙️', label: '설정' },
+    ],
+  },
 ]
 
 export function isPathActive(pathname: string, href: string): boolean {
