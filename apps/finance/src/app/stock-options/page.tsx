@@ -2,18 +2,23 @@ import { prisma } from '@/lib/prisma'
 import Header from '@/components/layout/Header'
 import StockOptionDashboard from '@/components/stock-option/StockOptionDashboard'
 import ExerciseSimulator from '@/components/stock-option/ExerciseSimulator'
+import StockOptionCRUD from '@/components/stock-option/StockOptionCRUD'
 import { calcStockOptionOverview } from '@/lib/stock-option-utils'
 import type { StockOptionWithVestings } from '@/lib/stock-option-utils'
 
 export const dynamic = 'force-dynamic'
 
 export default async function StockOptionsPage() {
-  const stockOptions = await prisma.stockOption.findMany({
-    include: {
-      vestings: { orderBy: { vestingDate: 'asc' } },
-    },
-    orderBy: { grantDate: 'asc' },
-  })
+  const [stockOptions, accounts] = await Promise.all([
+    prisma.stockOption.findMany({
+      include: {
+        vestings: { orderBy: { vestingDate: 'asc' } },
+        account: { select: { id: true, name: true } },
+      },
+      orderBy: { grantDate: 'asc' },
+    }),
+    prisma.account.findMany({ select: { id: true, name: true } }),
+  ])
 
   // 카카오 현재가 조회
   const kakaoPrice = await prisma.priceCache.findUnique({
@@ -51,6 +56,23 @@ export default async function StockOptionsPage() {
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-7 max-w-[960px]">
       <Header title="스톡옵션" sub="카카오 스톡옵션 현황 · 행사 시뮬레이터" />
+
+      <div className="mt-5 mb-4">
+        <StockOptionCRUD
+          stockOptions={stockOptions.map((so) => ({
+            id: so.id,
+            accountId: so.account?.id ?? '',
+            ticker: so.ticker,
+            displayName: so.displayName,
+            grantDate: so.grantDate.toISOString(),
+            expiryDate: so.expiryDate.toISOString(),
+            strikePrice: so.strikePrice,
+            totalShares: so.totalShares,
+            note: so.note,
+          }))}
+          accounts={accounts}
+        />
+      </div>
 
       {currentPrice == null ? (
         <div className="mt-5 mb-8">
