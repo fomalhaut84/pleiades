@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import CategoryEditPanel from './CategoryEditPanel'
 import CategoryDeleteModal from './CategoryDeleteModal'
 
@@ -23,7 +24,34 @@ interface CategoryTableProps {
   onTabChange: (tab: 'expense' | 'income') => void
 }
 
-function CategoryRowDesktop({ c, onEdit, onDelete }: { c: CategoryRow; onEdit: (c: CategoryRow) => void; onDelete: (c: CategoryRow) => void }) {
+function ArrowUpIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M8 13V3M4 7l4-4 4 4" />
+    </svg>
+  )
+}
+
+function ArrowDownIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M8 3v10M4 9l4 4 4-4" />
+    </svg>
+  )
+}
+
+function CategoryRowDesktop({
+  c, isFirst, isLast, isReordering, onMoveUp, onMoveDown, onEdit, onDelete,
+}: {
+  c: CategoryRow
+  isFirst: boolean
+  isLast: boolean
+  isReordering: boolean
+  onMoveUp: () => void
+  onMoveDown: () => void
+  onEdit: (c: CategoryRow) => void
+  onDelete: (c: CategoryRow) => void
+}) {
   return (
     <tr className="hover:bg-card">
       <td className="pl-4 px-3 py-3 text-[13px] text-dim border-b border-border text-center tabular-nums">
@@ -51,6 +79,22 @@ function CategoryRowDesktop({ c, onEdit, onDelete }: { c: CategoryRow; onEdit: (
       </td>
       <td className="pr-4 px-3 py-3 border-b border-border">
         <div className="flex items-center gap-1">
+          <button
+            onClick={onMoveUp}
+            disabled={isFirst || isReordering}
+            className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+            title="위로"
+          >
+            <ArrowUpIcon />
+          </button>
+          <button
+            onClick={onMoveDown}
+            disabled={isLast || isReordering}
+            className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+            title="아래로"
+          >
+            <ArrowDownIcon />
+          </button>
           <button onClick={() => onEdit(c)} className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all" title="수정">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" /></svg>
           </button>
@@ -84,7 +128,6 @@ function groupCategories(cats: CategoryRow[]): GroupedCategories[] {
     }
     groups.get(gId)!.categories.push(c)
   }
-  // 그룹 있는 것 먼저, 미분류(null) 마지막
   const result = Array.from(groups.values())
   result.sort((a, b) => {
     if (a.groupId === null) return 1
@@ -95,9 +138,11 @@ function groupCategories(cats: CategoryRow[]): GroupedCategories[] {
 }
 
 export default function CategoryTable({ categories, activeTab, onTabChange }: CategoryTableProps) {
+  const router = useRouter()
   const [editItem, setEditItem] = useState<CategoryRow | null>(null)
   const [deleteItem, setDeleteItem] = useState<CategoryRow | null>(null)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string | null>>(new Set())
+  const [reordering, setReordering] = useState(false)
 
   const filtered = categories.filter((c) => c.type === activeTab)
   const grouped = activeTab === 'expense' ? groupCategories(filtered) : null
@@ -109,6 +154,53 @@ export default function CategoryTable({ categories, activeTab, onTabChange }: Ca
       else next.add(gId)
       return next
     })
+  }
+
+  async function handleReorder(categoryId: string, direction: 'up' | 'down') {
+    if (reordering) return
+    setReordering(true)
+
+    try {
+      // expense: 그룹 내 이동, income: 플랫 리스트 이동
+      let list: CategoryRow[]
+      if (grouped) {
+        const group = grouped.find((g) => g.categories.some((c) => c.id === categoryId))
+        list = group?.categories ?? []
+      } else {
+        list = filtered
+      }
+
+      const idx = list.findIndex((c) => c.id === categoryId)
+      if (idx < 0) return
+
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+      if (swapIdx < 0 || swapIdx >= list.length) return
+
+      // 그룹/리스트 내 정규화 후 스왑 (sortOrder 중복/경계값 안전)
+      const normalized = list.map((c, i) => ({ id: c.id, sortOrder: i }))
+      const tmp = normalized[idx].sortOrder
+      normalized[idx] = { ...normalized[idx], sortOrder: normalized[swapIdx].sortOrder }
+      normalized[swapIdx] = { ...normalized[swapIdx], sortOrder: tmp }
+
+      const items = normalized
+
+      const res = await fetch('/api/categories/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error ?? '정렬 변경 실패')
+      }
+
+      router.refresh()
+    } catch (error) {
+      console.error('카테고리 정렬 실패:', error)
+    } finally {
+      setReordering(false)
+    }
   }
 
   return (
@@ -154,7 +246,7 @@ export default function CategoryTable({ categories, activeTab, onTabChange }: Ca
                         key={i}
                         className={`px-3 py-2.5 text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-card ${
                           i === 0 || i === 4 ? 'text-center' : 'text-left'
-                        } ${i === 0 ? 'pl-4 w-16' : ''} ${i === 5 ? 'pr-4 w-16' : ''}`}
+                        } ${i === 0 ? 'pl-4 w-16' : ''} ${i === 5 ? 'pr-4 w-28' : ''}`}
                       >
                         {col}
                       </th>
@@ -166,7 +258,6 @@ export default function CategoryTable({ categories, activeTab, onTabChange }: Ca
                     const isCollapsed = collapsedGroups.has(g.groupId)
                     return (
                       <React.Fragment key={g.groupId ?? '_ungrouped'}>
-                        {/* 그룹 헤더 */}
                         <tr
                           className="cursor-pointer hover:bg-white/[0.02]"
                           onClick={() => toggleGroup(g.groupId)}
@@ -185,14 +276,33 @@ export default function CategoryTable({ categories, activeTab, onTabChange }: Ca
                             </div>
                           </td>
                         </tr>
-                        {/* 그룹 내 카테고리 */}
-                        {!isCollapsed && g.categories.map((c) => (
-                          <CategoryRowDesktop key={c.id} c={c} onEdit={setEditItem} onDelete={setDeleteItem} />
+                        {!isCollapsed && g.categories.map((c, idx) => (
+                          <CategoryRowDesktop
+                            key={c.id}
+                            c={c}
+                            isFirst={idx === 0}
+                            isLast={idx === g.categories.length - 1}
+                            isReordering={reordering}
+                            onMoveUp={() => handleReorder(c.id, 'up')}
+                            onMoveDown={() => handleReorder(c.id, 'down')}
+                            onEdit={setEditItem}
+                            onDelete={setDeleteItem}
+                          />
                         ))}
                       </React.Fragment>
                     )
-                  }) : filtered.map((c) => (
-                    <CategoryRowDesktop key={c.id} c={c} onEdit={setEditItem} onDelete={setDeleteItem} />
+                  }) : filtered.map((c, idx) => (
+                    <CategoryRowDesktop
+                      key={c.id}
+                      c={c}
+                      isFirst={idx === 0}
+                      isLast={idx === filtered.length - 1}
+                      isReordering={reordering}
+                      onMoveUp={() => handleReorder(c.id, 'up')}
+                      onMoveDown={() => handleReorder(c.id, 'down')}
+                      onEdit={setEditItem}
+                      onDelete={setDeleteItem}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -200,51 +310,89 @@ export default function CategoryTable({ categories, activeTab, onTabChange }: Ca
 
             {/* Mobile card view */}
             <div className="sm:hidden divide-y divide-border">
-              {filtered.map((c) => (
-                <div key={c.id} className="px-4 py-3.5 hover:bg-card">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[16px]">{c.icon ?? '📦'}</span>
-                      <span className="text-[13px] font-bold text-bright">{c.name}</span>
-                      {c._count.transactions > 0 && (
-                        <span className="text-[11px] text-dim px-1.5 py-0.5 rounded bg-surface-dim">
-                          {c._count.transactions}건
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setEditItem(c)}
-                        className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all"
-                      >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                          <path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => setDeleteItem(c)}
-                        className="p-1.5 rounded-md text-dim hover:text-red-400 hover:bg-red-500/10 transition-all"
-                      >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                          <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 011.334-1.334h2.666a1.333 1.333 0 011.334 1.334V4m2 0v9.333a1.333 1.333 0 01-1.334 1.334H4.667a1.333 1.333 0 01-1.334-1.334V4h9.334z" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                  {c.keywords.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {c.keywords.map((k) => (
-                        <span
-                          key={k}
-                          className="px-1.5 py-0.5 rounded bg-surface-dim text-[11px] text-dim"
+              {(() => {
+                const renderCard = (c: CategoryRow, isFirst: boolean, isLast: boolean) => (
+                  <div key={c.id} className="px-4 py-3.5 hover:bg-card">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[16px]">{c.icon ?? '📦'}</span>
+                        <span className="text-[13px] font-bold text-bright">{c.name}</span>
+                        {c._count.transactions > 0 && (
+                          <span className="text-[11px] text-dim px-1.5 py-0.5 rounded bg-surface-dim">
+                            {c._count.transactions}건
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleReorder(c.id, 'up')}
+                          disabled={isFirst || reordering}
+                          className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all disabled:opacity-20 disabled:cursor-not-allowed"
                         >
-                          {k}
-                        </span>
-                      ))}
+                          <ArrowUpIcon size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleReorder(c.id, 'down')}
+                          disabled={isLast || reordering}
+                          className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+                        >
+                          <ArrowDownIcon size={12} />
+                        </button>
+                        <button
+                          onClick={() => setEditItem(c)}
+                          className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => setDeleteItem(c)}
+                          className="p-1.5 rounded-md text-dim hover:text-red-400 hover:bg-red-500/10 transition-all"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 011.334-1.334h2.666a1.333 1.333 0 011.334 1.334V4m2 0v9.333a1.333 1.333 0 01-1.334 1.334H4.667a1.333 1.333 0 01-1.334-1.334V4h9.334z" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
-              ))}
+                    {c.keywords.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {c.keywords.map((k) => (
+                          <span
+                            key={k}
+                            className="px-1.5 py-0.5 rounded bg-surface-dim text-[11px] text-dim"
+                          >
+                            {k}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+
+                if (grouped) {
+                  return grouped.map((g) => (
+                    <React.Fragment key={g.groupId ?? '_ungrouped'}>
+                      <div className="px-4 py-2.5 bg-white/[0.018]">
+                        <span className="text-[12px] font-bold text-bright">
+                          {g.groupIcon ? `${g.groupIcon} ` : ''}{g.groupName}
+                        </span>
+                        <span className="ml-2 text-[10px] font-semibold text-sub bg-surface px-2 py-0.5 rounded">
+                          {g.categories.length}
+                        </span>
+                      </div>
+                      {g.categories.map((c, idx) =>
+                        renderCard(c, idx === 0, idx === g.categories.length - 1)
+                      )}
+                    </React.Fragment>
+                  ))
+                }
+
+                return filtered.map((c, idx) =>
+                  renderCard(c, idx === 0, idx === filtered.length - 1)
+                )
+              })()}
             </div>
           </>
         )}
