@@ -10,6 +10,7 @@ export interface MatchedCategory {
   name: string
   icon: string | null
   type: string
+  count?: number
 }
 
 /**
@@ -45,6 +46,58 @@ export async function matchCategory(
   }
 
   return matched
+}
+
+const MAX_HISTORY_SUGGESTIONS = 5
+
+/**
+ * 과거 거래 히스토리 기반 카테고리 추천.
+ * 최근 6개월 거래에서 description 유사도(ILIKE) → categoryId별 count 순 정렬.
+ */
+export async function suggestByHistory(
+  description: string,
+  type?: 'expense' | 'income',
+  excludeIds?: string[]
+): Promise<MatchedCategory[]> {
+  const trimmed = description.trim().slice(0, 100)
+  if (trimmed.length < 2) return []
+
+  const sixMonthsAgo = new Date()
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+
+  const historyRows = await prisma.transaction.groupBy({
+    by: ['categoryId'],
+    where: {
+      description: { contains: trimmed, mode: 'insensitive' },
+      transactedAt: { gte: sixMonthsAgo },
+      ...(type ? { category: { type } } : {}),
+    },
+    _count: { categoryId: true },
+    orderBy: { _count: { categoryId: 'desc' } },
+    take: MAX_HISTORY_SUGGESTIONS * 3,
+  })
+
+  const excludeSet = new Set(excludeIds ?? [])
+  const categoryIds = historyRows
+    .filter((r) => !excludeSet.has(r.categoryId))
+    .map((r) => r.categoryId)
+
+  if (categoryIds.length === 0) return []
+
+  const categories = await prisma.category.findMany({
+    where: { id: { in: categoryIds } },
+    select: { id: true, name: true, icon: true, type: true },
+  })
+
+  const catMap = new Map(categories.map((c) => [c.id, c]))
+
+  return historyRows
+    .filter((r) => !excludeSet.has(r.categoryId) && catMap.has(r.categoryId))
+    .slice(0, MAX_HISTORY_SUGGESTIONS)
+    .map((r) => {
+      const cat = catMap.get(r.categoryId)!
+      return { id: cat.id, name: cat.name, icon: cat.icon, type: cat.type, count: r._count.categoryId }
+    })
 }
 
 /**

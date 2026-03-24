@@ -1,7 +1,7 @@
 import { Bot, Context, InlineKeyboard } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { parseExpenseInput, isParseError } from '@/lib/expense-parser'
-import { matchCategory, getAllCategories, type MatchedCategory } from '@/lib/category-matcher'
+import { matchCategory, suggestByHistory, getAllCategories, type MatchedCategory } from '@/lib/category-matcher'
 import { formatKRWFull } from '../utils/formatter'
 import { isAiQuestion } from '../utils/ai-trigger'
 import { isTradeMessage } from '../utils/trade-trigger'
@@ -115,8 +115,21 @@ async function handleExpenseInput(ctx: Context): Promise<void> {
     return
   }
 
-  // 다중 매칭 또는 미매칭 → 카테고리 선택
-  const categories = matched.length > 1 ? matched : await getAllCategories(type)
+  // 다중 매칭 → 그대로, 미매칭 → 히스토리 추천 → 없으면 전체 목록
+  let categories: MatchedCategory[]
+  let suggestionSource: 'keyword' | 'history' | 'all' = 'all'
+  if (matched.length > 1) {
+    categories = matched
+    suggestionSource = 'keyword'
+  } else {
+    const historySuggestions = await suggestByHistory(description, type)
+    if (historySuggestions.length > 0) {
+      categories = historySuggestions
+      suggestionSource = 'history'
+    } else {
+      categories = await getAllCategories(type)
+    }
+  }
 
   if (categories.length === 0) {
     await ctx.reply(`⚠️ ${typeLabel} 카테고리가 없습니다. 웹에서 카테고리를 추가해주세요.`)
@@ -136,11 +149,17 @@ async function handleExpenseInput(ctx: Context): Promise<void> {
   }
 
   const prompt =
-    matched.length > 1
+    suggestionSource === 'keyword'
       ? `여러 카테고리가 매칭됩니다. 선택해주세요:`
-      : `카테고리를 선택해주세요:`
+      : suggestionSource === 'history'
+        ? `추천 카테고리에서 선택해주세요:`
+        : `카테고리를 선택해주세요:`
 
   const keyboard = buildCategoryKeyboard(categories, txId)
+  if (suggestionSource === 'history') {
+    keyboard.text('📋 전체 카테고리', `tx:allcat:${txId}`)
+    keyboard.row()
+  }
   const sent = await ctx.reply(
     `📝 ${typeLabel} 기록\n\n` +
       `내용: ${description}\n` +
@@ -159,6 +178,7 @@ async function handleExpenseInput(ctx: Context): Promise<void> {
  * tx:cancel:{txId} — 취소
  * tx:cat:{txId}:{categoryId} — 카테고리 선택
  * tx:change:{txId} — 카테고리 변경
+ * tx:allcat:{txId} — 전체 카테고리 보기
  */
 async function handleExpenseCallback(ctx: Context): Promise<void> {
   const data = ctx.callbackQuery?.data
@@ -224,6 +244,27 @@ async function handleExpenseCallback(ctx: Context): Promise<void> {
     }
 
     await createTransaction(ctx, { ...pending, categoryId: category.id, categoryName: category.name })
+    return
+  }
+
+  if (action === 'allcat') {
+    // 전체 카테고리 목록 표시 (히스토리 추천에서 "전체 보기" 클릭)
+    const categories = await getAllCategories(pending.type)
+    if (categories.length === 0) {
+      await ctx.answerCallbackQuery({ text: '⚠️ 카테고리가 없습니다.' })
+      return
+    }
+
+    const typeLabel = pending.type === 'expense' ? '소비' : '수입'
+    const keyboard = buildCategoryKeyboard(categories, txId)
+    await ctx.answerCallbackQuery()
+    await ctx.editMessageText(
+      `📝 ${typeLabel} 기록\n\n` +
+        `내용: ${pending.description}\n` +
+        `금액: ${formatKRWFull(pending.amount)}\n\n` +
+        `카테고리를 선택해주세요:`,
+      { reply_markup: keyboard }
+    )
     return
   }
 
