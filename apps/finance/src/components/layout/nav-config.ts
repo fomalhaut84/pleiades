@@ -19,6 +19,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/dividends', icon: '💰', label: '배당금' },
       { href: '/deposits', icon: '🎁', label: '입금/증여' },
       { href: '/stock-options', icon: '📊', label: '스톡옵션' },
+      { href: '/watchlist', icon: '👀', label: '관심종목' },
     ],
   },
   {
