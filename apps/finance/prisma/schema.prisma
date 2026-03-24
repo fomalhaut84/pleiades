@@ -234,6 +234,7 @@ model Category {
   transactions          Transaction[]
   budgets               Budget[]
   recurringTransactions RecurringTransaction[]
+  whooingMap            WhooingCategoryMap?
 
   @@index([groupId])
 }
@@ -373,4 +374,23 @@ model Watchlist {
   entryHigh   Float?             // 매수 구간 상한
   addedAt     DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model WhooingConfig {
+  id           String  @id @default(cuid())
+  webhookUrl   String?
+  isActive     Boolean @default(false)
+  defaultRight String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model WhooingCategoryMap {
+  id           String   @id @default(cuid())
+  categoryId   String   @unique
+  category     Category @relation(fields: [categoryId], references: [id])
+  whooingLeft  String
+  whooingRight String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }

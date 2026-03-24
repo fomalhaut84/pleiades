@@ -2,9 +2,10 @@
  * 후잉 웹훅 전송 유틸
  *
  * 내역 생성 시 후잉에 자동 전송 (다이렉트 방식).
- * Phase 17-E에서 WhooingConfig/WhooingCategoryMap DB 모델이 추가되면
- * DB 기반 설정으로 전환. 현재는 환경변수 기반 스텁.
+ * WhooingConfig DB 설정 기반. 비활성이면 즉시 리턴.
  */
+
+import { prisma } from './prisma'
 
 interface WhooingTransactionData {
   amount: number
@@ -16,13 +17,23 @@ interface WhooingTransactionData {
 /**
  * 후잉 웹훅으로 거래 데이터를 전송한다.
  *
- * - WHOOING_WEBHOOK_URL 환경변수가 없으면 즉시 리턴 (비활성)
+ * - DB WhooingConfig가 없거나 비활성이면 즉시 리턴
+ * - 환경변수 WHOOING_WEBHOOK_URL도 fallback으로 지원
  * - 전송 실패 시 에러를 throw (호출부에서 catch 처리)
- * - Phase 17-E에서 DB 기반 설정 + 카테고리 매핑으로 고도화 예정
  */
 export async function sendToWhooing(data: WhooingTransactionData): Promise<void> {
-  const webhookUrl = process.env.WHOOING_WEBHOOK_URL
-  if (!webhookUrl) return
+  // DB 설정 조회 (싱글톤)
+  const config = await prisma.whooingConfig.findUnique({ where: { id: 'whooing-config' } })
+
+  const webhookUrl = config?.webhookUrl ?? process.env.WHOOING_WEBHOOK_URL
+  const isActive = config ? config.isActive : !!process.env.WHOOING_WEBHOOK_URL
+
+  if (!webhookUrl || !isActive) return
+
+  // 카테고리 매핑 조회
+  const mapping = await prisma.whooingCategoryMap.findUnique({
+    where: { categoryId: data.categoryId },
+  })
 
   const entryDate = formatWhooingDate(data.transactedAt)
 
@@ -30,8 +41,8 @@ export async function sendToWhooing(data: WhooingTransactionData): Promise<void>
     entry_date: entryDate,
     item: data.description,
     money: data.amount,
-    left: '',   // Phase 17-E에서 카테고리 매핑으로 채움
-    right: '',  // Phase 17-E에서 기본 결제수단 설정으로 채움
+    left: mapping?.whooingLeft ?? '',
+    right: mapping?.whooingRight ?? config?.defaultRight ?? '',
     memo: '',
   }
 

@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import AccountEditor from '@/components/settings/AccountEditor'
+import AlertConfigEditor from '@/components/settings/AlertConfigEditor'
+import IncomeProfileManager from '@/components/settings/IncomeProfileManager'
+import WhooingSettings from '@/components/settings/WhooingSettings'
 
 interface Account {
   id: string
@@ -64,25 +67,13 @@ export default function SettingsClient() {
       </div>
 
       {/* 탭 콘텐츠 */}
-      <div className={loading ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
+      <div className={loading && tab === 'accounts' ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
         {tab === 'accounts' && (
           <AccountEditor accounts={accounts} onRefresh={fetchAccounts} />
         )}
-        {tab === 'alerts' && (
-          <div className="rounded-[14px] border border-border bg-card p-8 text-center text-[13px] text-sub">
-            알림 설정 (17-E에서 구현 예정)
-          </div>
-        )}
-        {tab === 'income' && (
-          <div className="rounded-[14px] border border-border bg-card p-8 text-center text-[13px] text-sub">
-            근로소득 프로필 (17-E에서 구현 예정)
-          </div>
-        )}
-        {tab === 'whooing' && (
-          <div className="rounded-[14px] border border-border bg-card p-8 text-center text-[13px] text-sub">
-            후잉 연동 설정 (17-E에서 구현 예정)
-          </div>
-        )}
+        {tab === 'alerts' && <AlertConfigEditor />}
+        {tab === 'income' && <IncomeProfileManager />}
+        {tab === 'whooing' && <WhooingSettings />}
       </div>
     </div>
   )
