@@ -1,6 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+
+interface CategorySuggestion {
+  categoryId: string
+  categoryName: string
+  categoryIcon: string | null
+  source: 'keyword' | 'history'
+  count?: number
+}
 
 interface CategoryOption {
   id: string
@@ -71,6 +79,49 @@ export default function TransactionForm({
   const [categoryId, setCategoryId] = useState(transaction?.categoryId ?? '')
   const [linkedAssetId, setLinkedAssetId] = useState(transaction?.linkedAssetId ?? '')
   const [transactedAt, setTransactedAt] = useState(toDateInputValue(transaction?.transactedAt))
+
+  const [suggestions, setSuggestions] = useState<CategorySuggestion[]>([])
+  const abortRef = useRef<AbortController | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const fetchSuggestions = useCallback((query: string, type: TxType) => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    if (abortRef.current) abortRef.current.abort()
+
+    if (query.trim().length < 2) {
+      setSuggestions([])
+      return
+    }
+
+    const catType = type === 'income' ? 'income' : 'expense'
+
+    timerRef.current = setTimeout(async () => {
+      const controller = new AbortController()
+      abortRef.current = controller
+      try {
+        const res = await fetch(
+          `/api/transactions/suggest?q=${encodeURIComponent(query.trim())}&type=${catType}`,
+          { signal: controller.signal }
+        )
+        if (res.ok) {
+          const data = await res.json()
+          setSuggestions(data.suggestions ?? [])
+        } else {
+          setSuggestions([])
+        }
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        setSuggestions([])
+      }
+    }, 300)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+      if (abortRef.current) abortRef.current.abort()
+    }
+  }, [])
 
   const isTransfer = txType === 'transfer_out' || txType === 'transfer_in'
   const selectedAsset = assets.find((a) => a.id === linkedAssetId)
@@ -178,7 +229,14 @@ export default function TransactionForm({
                 <button
                   key={t.value}
                   type="button"
-                  onClick={() => setTxType(t.value)}
+                  onClick={() => {
+                    setTxType(t.value)
+                    if (description.trim().length >= 2) {
+                      fetchSuggestions(description, t.value)
+                    } else {
+                      setSuggestions([])
+                    }
+                  }}
                   className={`flex-1 py-2 rounded-md text-[12px] font-semibold transition-all ${
                     txType === t.value ? t.activeClass : 'text-sub'
                   }`}
@@ -209,7 +267,10 @@ export default function TransactionForm({
             <input
               type="text"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                setDescription(e.target.value)
+                fetchSuggestions(e.target.value, txType)
+              }}
               placeholder="점심, 택시, 월급 등"
               maxLength={200}
               className={inputClasses}
@@ -219,6 +280,33 @@ export default function TransactionForm({
           {/* 카테고리 */}
           <div>
             <label className={labelClasses}>카테고리</label>
+            {suggestions.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {suggestions.map((s) => (
+                  <button
+                    key={s.categoryId}
+                    type="button"
+                    onClick={() => {
+                      if (timerRef.current) clearTimeout(timerRef.current)
+                      if (abortRef.current) abortRef.current.abort()
+                      setCategoryId(s.categoryId)
+                      setSuggestions([])
+                    }}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-medium border transition-all ${
+                      categoryId === s.categoryId
+                        ? 'bg-sodam/15 border-sodam/30 text-sodam'
+                        : 'bg-surface border-border text-sub hover:text-bright hover:border-border-hover'
+                    }`}
+                  >
+                    {s.categoryIcon && <span>{s.categoryIcon}</span>}
+                    <span>{s.categoryName}</span>
+                    {s.source === 'history' && s.count && (
+                      <span className="text-dim text-[11px]">({s.count}건)</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
             <select
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
