@@ -7,6 +7,7 @@ import CategoryPieChart from '@/components/expense/CategoryPieChart'
 import TransactionTable, { type TransactionRow } from '@/components/expense/TransactionTable'
 import TransactionForm from '@/components/expense/TransactionForm'
 import TransactionDeleteModal from '@/components/expense/TransactionDeleteModal'
+import RecurringForm, { type RecurringPrefill } from '@/components/expense/RecurringForm'
 import MonthCompare from '@/components/expense/MonthCompare'
 import SpendingTrend from '@/components/expense/SpendingTrend'
 
@@ -83,6 +84,7 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
   const [deletingTx, setDeletingTx] = useState<TransactionRow | null>(null)
   const [categories, setCategories] = useState<CategoryOption[]>([])
   const [assets, setAssets] = useState<{ id: string; name: string; category: string; value: number; isLiability: boolean }[]>([])
+  const [recurringPrefill, setRecurringPrefill] = useState<RecurringPrefill | null>(null)
 
   // 카테고리 + 자산 목록 fetch (폼 select용)
   useEffect(() => {
@@ -215,6 +217,17 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
 
   const handleDelete = (tx: TransactionRow) => {
     setDeletingTx(tx)
+  }
+
+  const handleRegisterRecurring = (tx: TransactionRow) => {
+    if (tx.type === 'transfer_in' || tx.type === 'transfer_out') return
+    setShowForm(false)
+    setEditingTx(null)
+    setRecurringPrefill({
+      amount: tx.amount,
+      description: tx.description,
+      categoryId: tx.categoryId,
+    })
   }
 
   const segmentBase = 'px-3 py-1.5 text-[12px] font-semibold rounded-md transition-all cursor-pointer'
@@ -353,6 +366,7 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
         onPageChange={handlePageChange}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        onRegisterRecurring={handleRegisterRecurring}
       />
 
       {/* 내역 추가 폼 */}
@@ -392,6 +406,18 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
           transaction={deletingTx}
           onClose={() => setDeletingTx(null)}
           onDeleted={handleSaved}
+        />
+      )}
+
+      {/* 반복 거래 등록 폼 */}
+      {recurringPrefill && (
+        <RecurringForm
+          key={`${recurringPrefill.description}-${recurringPrefill.amount}`}
+          mode="create"
+          prefill={recurringPrefill}
+          categories={categories}
+          onClose={() => setRecurringPrefill(null)}
+          onSaved={handleSaved}
         />
       )}
     </div>

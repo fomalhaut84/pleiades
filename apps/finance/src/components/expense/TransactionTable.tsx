@@ -24,6 +24,7 @@ interface TransactionTableProps {
   onPageChange: (offset: number) => void
   onEdit?: (tx: TransactionRow) => void
   onDelete?: (tx: TransactionRow) => void
+  onRegisterRecurring?: (tx: TransactionRow) => void
 }
 
 export default function TransactionTable({
@@ -34,10 +35,11 @@ export default function TransactionTable({
   onPageChange,
   onEdit,
   onDelete,
+  onRegisterRecurring,
 }: TransactionTableProps) {
   const totalPages = Math.ceil(total / limit)
   const currentPage = Math.floor(offset / limit) + 1
-  const hasActions = onEdit || onDelete
+  const hasActions = onEdit || onDelete || onRegisterRecurring
 
   return (
     <div className="rounded-[14px] border border-border bg-card overflow-hidden">
@@ -117,6 +119,17 @@ export default function TransactionTable({
                             >
                               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                                 <path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4" />
+                              </svg>
+                            </button>
+                          )}
+                          {onRegisterRecurring && tx.type !== 'transfer_out' && tx.type !== 'transfer_in' && (
+                            <button
+                              onClick={() => onRegisterRecurring(tx)}
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-md text-dim hover:text-sodam hover:bg-sodam/10 transition-all"
+                              title="반복 등록"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                <path d="M13.5 8A5.5 5.5 0 113 5.5M3 2v3.5H6.5" />
                               </svg>
                             </button>
                           )}
