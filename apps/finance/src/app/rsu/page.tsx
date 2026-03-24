@@ -5,10 +5,13 @@ import RSUDashboard from '@/components/rsu/RSUDashboard'
 export const dynamic = 'force-dynamic'
 
 export default async function RSUPage() {
-  const schedules = await prisma.rSUSchedule.findMany({
-    orderBy: { vestingDate: 'asc' },
-    include: { account: { select: { id: true, name: true } } },
-  })
+  const [schedules, accounts] = await Promise.all([
+    prisma.rSUSchedule.findMany({
+      orderBy: { vestingDate: 'asc' },
+      include: { account: { select: { id: true, name: true } } },
+    }),
+    prisma.account.findMany({ select: { id: true, name: true } }),
+  ])
 
   const serialized = schedules.map((s) => ({
     ...s,
@@ -28,7 +31,7 @@ export default async function RSUPage() {
       />
 
       <div className="mt-5">
-        <RSUDashboard schedules={serialized} />
+        <RSUDashboard schedules={serialized} accounts={accounts} />
       </div>
     </div>
   )

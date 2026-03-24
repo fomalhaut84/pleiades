@@ -207,7 +207,7 @@
 
 ## Phase 17: 설정/관리 페이지 (Admin Center)
 
-- [ ] **17-A**: 계좌 관리 (PATCH API + AccountEditor)
+- [x] **17-A**: 계좌 관리 (PATCH API + AccountEditor)
 - [ ] **17-B**: RSU 스케줄 CRUD (추가/수정/삭제 API + UI)
 - [ ] **17-C**: 스톡옵션 CRUD (옵션 + 행사 스케줄 관리)
 - [ ] **17-D**: 관심종목 웹 관리 (API + /watchlist 페이지)
