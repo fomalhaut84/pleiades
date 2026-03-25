@@ -32,7 +32,7 @@ interface CategoryOption {
   id: string
   name: string
   icon: string | null
-  type: 'expense' | 'income'
+  type: 'expense' | 'income' | 'transfer'
 }
 
 interface ApiResponse {
@@ -97,7 +97,7 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
             id: c.id,
             name: c.name,
             icon: c.icon,
-            type: c.type as 'expense' | 'income',
+            type: c.type as 'expense' | 'income' | 'transfer',
           })))
         }
       })

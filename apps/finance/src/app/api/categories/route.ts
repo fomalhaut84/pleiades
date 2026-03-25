@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type')
 
     const where: Record<string, unknown> = {}
-    if (type === 'expense' || type === 'income') {
+    if (type === 'expense' || type === 'income' || type === 'transfer') {
       where.type = type
     }
 

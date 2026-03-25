@@ -54,7 +54,7 @@ async function fetchInitialData() {
     if (!cat) continue
     if (cat.type === 'expense') {
       byMonth[m].expense += tx.amount
-    } else {
+    } else if (cat.type === 'income') {
       byMonth[m].income += tx.amount
     }
   }
@@ -70,7 +70,7 @@ async function fetchInitialData() {
       if (!cat) return null
       const amount = row._sum.amount ?? 0
       if (cat.type === 'expense') totalExpense += amount
-      else totalIncome += amount
+      else if (cat.type === 'income') totalIncome += amount
       filteredCount += row._count
       return {
         categoryId: row.categoryId,

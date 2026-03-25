@@ -18,10 +18,12 @@ export interface CategoryRow {
   _count: { transactions: number; budgets: number }
 }
 
+type CategoryTab = 'expense' | 'income' | 'transfer'
+
 interface CategoryTableProps {
   categories: CategoryRow[]
-  activeTab: 'expense' | 'income'
-  onTabChange: (tab: 'expense' | 'income') => void
+  activeTab: CategoryTab
+  onTabChange: (tab: CategoryTab) => void
 }
 
 function ArrowUpIcon({ size = 14 }: { size?: number }) {
@@ -207,7 +209,7 @@ export default function CategoryTable({ categories, activeTab, onTabChange }: Ca
     <>
       {/* Tab */}
       <div className="flex gap-1 mb-4">
-        {([['expense', '소비'], ['income', '수입']] as const).map(([value, label]) => (
+        {([['expense', '소비'], ['income', '수입'], ['transfer', '이체']] as const).map(([value, label]) => (
           <button
             key={value}
             onClick={() => onTabChange(value)}
@@ -225,7 +227,7 @@ export default function CategoryTable({ categories, activeTab, onTabChange }: Ca
       <div className="relative overflow-hidden rounded-[14px] border border-border bg-card">
         <div className="px-5 py-3.5 border-b border-border flex justify-between items-center">
           <div className="text-[13px] font-bold text-bright">
-            {activeTab === 'expense' ? '소비' : '수입'} 카테고리
+            {activeTab === 'expense' ? '소비' : activeTab === 'income' ? '수입' : '이체'} 카테고리
           </div>
           <div className="text-[12px] text-sub">{filtered.length}개</div>
         </div>

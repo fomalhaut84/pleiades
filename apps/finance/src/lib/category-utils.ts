@@ -2,12 +2,13 @@
  * 카테고리 유틸리티: 입력 검증, 상수
  */
 
-export const CATEGORY_TYPES = ['expense', 'income'] as const
+export const CATEGORY_TYPES = ['expense', 'income', 'transfer'] as const
 export type CategoryType = (typeof CATEGORY_TYPES)[number]
 
 export const CATEGORY_TYPE_LABELS: Record<CategoryType, string> = {
   expense: '소비',
   income: '수입',
+  transfer: '이체',
 }
 
 export interface CategoryValidationError {
@@ -25,7 +26,7 @@ export function validateCategoryInput(body: Record<string, unknown>): CategoryVa
   }
 
   if (!body.type || typeof body.type !== 'string' || !(CATEGORY_TYPES as readonly string[]).includes(body.type)) {
-    errors.push({ field: 'type', message: '유형을 선택해주세요. (소비 또는 수입)' })
+    errors.push({ field: 'type', message: '유형을 선택해주세요. (소비, 수입 또는 이체)' })
   }
 
   if (body.icon !== undefined && body.icon !== null && typeof body.icon !== 'string') {

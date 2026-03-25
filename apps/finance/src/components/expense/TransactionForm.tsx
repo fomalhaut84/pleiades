@@ -14,7 +14,7 @@ interface CategoryOption {
   id: string
   name: string
   icon: string | null
-  type: 'expense' | 'income'
+  type: 'expense' | 'income' | 'transfer'
 }
 
 interface AssetOption {
@@ -88,7 +88,7 @@ export default function TransactionForm({
     if (timerRef.current) clearTimeout(timerRef.current)
     if (abortRef.current) abortRef.current.abort()
 
-    if (query.trim().length < 2) {
+    if (query.trim().length < 2 || type === 'transfer_out' || type === 'transfer_in') {
       setSuggestions([])
       return
     }
@@ -136,6 +136,7 @@ export default function TransactionForm({
 
   const expenseCategories = categories.filter((c) => c.type === 'expense')
   const incomeCategories = categories.filter((c) => c.type === 'income')
+  const transferCategories = categories.filter((c) => c.type === 'transfer')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -230,7 +231,10 @@ export default function TransactionForm({
                   key={t.value}
                   type="button"
                   onClick={() => {
+                    const wasTransfer = txType === 'transfer_out' || txType === 'transfer_in'
+                    const willBeTransfer = t.value === 'transfer_out' || t.value === 'transfer_in'
                     setTxType(t.value)
+                    if (wasTransfer !== willBeTransfer) setCategoryId('')
                     if (description.trim().length >= 2) {
                       fetchSuggestions(description, t.value)
                     } else {
@@ -316,23 +320,37 @@ export default function TransactionForm({
               }}
             >
               <option value="">카테고리 선택</option>
-              {expenseCategories.length > 0 && (
-                <optgroup label="소비">
-                  {expenseCategories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.icon ? `${c.icon} ` : ''}{c.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {incomeCategories.length > 0 && (
-                <optgroup label="수입">
-                  {incomeCategories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.icon ? `${c.icon} ` : ''}{c.name}
-                    </option>
-                  ))}
-                </optgroup>
+              {isTransfer ? (
+                transferCategories.length > 0 && (
+                  <optgroup label="이체">
+                    {transferCategories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.icon ? `${c.icon} ` : ''}{c.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )
+              ) : (
+                <>
+                  {expenseCategories.length > 0 && (
+                    <optgroup label="소비">
+                      {expenseCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.icon ? `${c.icon} ` : ''}{c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {incomeCategories.length > 0 && (
+                    <optgroup label="수입">
+                      {incomeCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.icon ? `${c.icon} ` : ''}{c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </>
               )}
             </select>
           </div>

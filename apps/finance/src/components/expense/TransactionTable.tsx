@@ -74,6 +74,7 @@ export default function TransactionTable({
               <tbody>
                 {transactions.map((tx) => {
                   const isExpense = tx.categoryType === 'expense'
+                  const isTransfer = tx.type === 'transfer_out' || tx.type === 'transfer_in'
                   return (
                     <tr key={tx.id} className="border-b border-border last:border-0 hover:bg-surface-dim transition-colors">
                       <td className="px-4 py-3 text-sub tabular-nums whitespace-nowrap">
@@ -95,8 +96,8 @@ export default function TransactionTable({
                           </span>
                         )}
                       </td>
-                      <td className={`px-4 py-3 text-right font-semibold tabular-nums whitespace-nowrap ${isExpense ? 'text-red-400' : 'text-emerald-400'}`}>
-                        {isExpense ? '-' : '+'}{formatKRW(tx.amount)}
+                      <td className={`px-4 py-3 text-right font-semibold tabular-nums whitespace-nowrap ${isTransfer ? 'text-sodam' : isExpense ? 'text-red-400' : 'text-emerald-400'}`}>
+                        {isTransfer ? (tx.type === 'transfer_out' ? '↑' : '↓') : isExpense ? '-' : '+'}{formatKRW(tx.amount)}
                       </td>
                       {hasActions && (
                         <td className="px-4 py-3 text-center whitespace-nowrap">

@@ -153,14 +153,14 @@ export default function WhooingSettings() {
               </tr>
             </thead>
             <tbody>
-              {(['expense', 'income'] as const).map((type) => {
+              {(['expense', 'income', 'transfer'] as const).map((type) => {
                 const grouped = categories.filter((c) => c.type === type)
                 if (grouped.length === 0) return null
                 return (
                   <Fragment key={type}>
                     <tr className="bg-surface-dim">
                       <td colSpan={3} className="px-4 py-2 text-[11px] font-bold text-sub uppercase tracking-wide">
-                        {type === 'expense' ? '소비' : '수입'}
+                        {type === 'expense' ? '소비' : type === 'income' ? '수입' : '이체'}
                       </td>
                     </tr>
                     {grouped.map((cat) => {
@@ -172,7 +172,7 @@ export default function WhooingSettings() {
                           </td>
                           <td className="px-4 py-2">
                             <input className={`w-full ${inputClasses} py-1.5`} value={m.left}
-                              onChange={(e) => updateMapping(cat.id, 'left', e.target.value)} placeholder={type === 'expense' ? '식료품' : '급여'} />
+                              onChange={(e) => updateMapping(cat.id, 'left', e.target.value)} placeholder={type === 'expense' ? '식료품' : type === 'income' ? '급여' : '적금'} />
                           </td>
                           <td className="px-4 py-2">
                             <input className={`w-full ${inputClasses} py-1.5`} value={m.right}

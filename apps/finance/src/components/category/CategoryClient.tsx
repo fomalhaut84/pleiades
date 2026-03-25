@@ -8,14 +8,18 @@ interface CategoryClientProps {
   categories: CategoryRow[]
 }
 
-function getInitialTab(categories: CategoryRow[]): 'expense' | 'income' {
+type CategoryTab = 'expense' | 'income' | 'transfer'
+
+function getInitialTab(categories: CategoryRow[]): CategoryTab {
   const hasExpense = categories.some((c) => c.type === 'expense')
   if (hasExpense) return 'expense'
-  return 'income'
+  const hasIncome = categories.some((c) => c.type === 'income')
+  if (hasIncome) return 'income'
+  return 'transfer'
 }
 
 export default function CategoryClient({ categories }: CategoryClientProps) {
-  const [activeTab, setActiveTab] = useState<'expense' | 'income'>(() => getInitialTab(categories))
+  const [activeTab, setActiveTab] = useState<CategoryTab>(() => getInitialTab(categories))
   const [showForm, setShowForm] = useState(false)
 
   return (
