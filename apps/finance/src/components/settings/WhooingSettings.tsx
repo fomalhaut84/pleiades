@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 
 interface WhooingConfig {
   webhookUrl: string | null
@@ -54,7 +54,7 @@ export default function WhooingSettings() {
         setLocalMappings(local)
       }
       if (cats?.categories) {
-        setCategories(cats.categories.filter((c: CategoryOption) => c.type === 'expense'))
+        setCategories(cats.categories)
       }
     }).catch(() => {})
   }, [])
@@ -148,27 +148,40 @@ export default function WhooingSettings() {
             <thead>
               <tr className="border-b border-border bg-surface-dim">
                 <th className="px-4 py-2.5 text-left text-dim font-semibold">카테고리</th>
-                <th className="px-4 py-2.5 text-left text-dim font-semibold">후잉 Left (지출 항목)</th>
+                <th className="px-4 py-2.5 text-left text-dim font-semibold">후잉 Left (항목)</th>
                 <th className="px-4 py-2.5 text-left text-dim font-semibold">후잉 Right (결제수단)</th>
               </tr>
             </thead>
             <tbody>
-              {categories.map((cat) => {
-                const m = localMappings[cat.id] ?? { left: '', right: '' }
+              {(['expense', 'income'] as const).map((type) => {
+                const grouped = categories.filter((c) => c.type === type)
+                if (grouped.length === 0) return null
                 return (
-                  <tr key={cat.id} className="border-b border-border last:border-0">
-                    <td className="px-4 py-2.5 text-bright font-medium whitespace-nowrap">
-                      {cat.icon ? `${cat.icon} ` : ''}{cat.name}
-                    </td>
-                    <td className="px-4 py-2">
-                      <input className={`w-full ${inputClasses} py-1.5`} value={m.left}
-                        onChange={(e) => updateMapping(cat.id, 'left', e.target.value)} placeholder="식료품" />
-                    </td>
-                    <td className="px-4 py-2">
-                      <input className={`w-full ${inputClasses} py-1.5`} value={m.right}
-                        onChange={(e) => updateMapping(cat.id, 'right', e.target.value)} placeholder="기본값 사용" />
-                    </td>
-                  </tr>
+                  <Fragment key={type}>
+                    <tr className="bg-surface-dim">
+                      <td colSpan={3} className="px-4 py-2 text-[11px] font-bold text-sub uppercase tracking-wide">
+                        {type === 'expense' ? '소비' : '수입'}
+                      </td>
+                    </tr>
+                    {grouped.map((cat) => {
+                      const m = localMappings[cat.id] ?? { left: '', right: '' }
+                      return (
+                        <tr key={cat.id} className="border-b border-border last:border-0">
+                          <td className="px-4 py-2.5 text-bright font-medium whitespace-nowrap">
+                            {cat.icon ? `${cat.icon} ` : ''}{cat.name}
+                          </td>
+                          <td className="px-4 py-2">
+                            <input className={`w-full ${inputClasses} py-1.5`} value={m.left}
+                              onChange={(e) => updateMapping(cat.id, 'left', e.target.value)} placeholder={type === 'expense' ? '식료품' : '급여'} />
+                          </td>
+                          <td className="px-4 py-2">
+                            <input className={`w-full ${inputClasses} py-1.5`} value={m.right}
+                              onChange={(e) => updateMapping(cat.id, 'right', e.target.value)} placeholder="기본값 사용" />
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </Fragment>
                 )
               })}
             </tbody>
