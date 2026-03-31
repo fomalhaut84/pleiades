@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { getPortfolio, getTrades } from './tools/portfolio'
 import { getPerformance } from './tools/performance'
 import { getGiftTaxStatus, getDividends } from './tools/tax'
-import { getSpendingSummary } from './tools/spending'
+import { getSpendingSummary, getTransactions } from './tools/spending'
 import { getPrices, getFxRate } from './tools/market'
 import { simulateGrowth } from './tools/simulator'
 import { getTechnicalAnalysis } from './tools/ta'
@@ -84,6 +84,17 @@ server.tool(
     month: z.number().int().min(1).max(12).describe('월 (1~12)'),
   },
   async (args) => getSpendingSummary(args)
+)
+
+server.tool(
+  'get_transactions',
+  '개별 거래 내역 조회 (기간/카테고리/타입 필터, 최대 50건)',
+  {
+    days: z.number().int().positive().max(365).optional().describe('조회 일수 (기본 7, 최대 365)'),
+    category: z.string().optional().describe('카테고리명 (부분 일치, 예: 식비)'),
+    type: z.enum(['expense', 'income', 'transfer']).optional().describe('타입 필터'),
+  },
+  async (args) => getTransactions(args)
 )
 
 // --- 시뮬레이션 ---

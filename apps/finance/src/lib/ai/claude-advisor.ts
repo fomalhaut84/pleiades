@@ -52,6 +52,7 @@ const ALLOWED_TOOLS = [
   'mcp__myfinance__get_rsu_schedule',
   'mcp__myfinance__get_stock_options',
   'mcp__myfinance__get_watchlist',
+  'mcp__myfinance__get_transactions',
   'mcp__firecrawl__firecrawl_search',
   'mcp__firecrawl__firecrawl_scrape',
 ].join(',')
