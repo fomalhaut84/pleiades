@@ -223,7 +223,7 @@
 
 - [x] **18-A**: RSU + 스톡옵션 조회 도구 (get_rsu_schedule, get_stock_options)
 - [x] **18-B**: 관심종목 조회 도구 (get_watchlist — 현재가 + 목표가 대비)
-- [ ] **18-C**: 가계부 상세 조회 도구 (get_transactions — 기간/카테고리 필터, 개별 내역)
+- [x] **18-C**: 가계부 상세 조회 도구 (get_transactions — 기간/카테고리 필터, 개별 내역)
 
 ## Phase 19: 텔레그램 가계부 입력 강화
 

@@ -2,6 +2,7 @@ import { Bot, Context, InlineKeyboard } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { parseExpenseInput, isParseError } from '@/lib/expense-parser'
 import { matchCategory, suggestByHistory, getAllCategories, type MatchedCategory } from '@/lib/category-matcher'
+import { askAdvisor } from '@/lib/ai/claude-advisor'
 import { formatKRWFull } from '../utils/formatter'
 import { isAiQuestion } from '../utils/ai-trigger'
 import { isTradeMessage } from '../utils/trade-trigger'
@@ -64,6 +65,15 @@ function buildCategoryKeyboard(
  */
 async function handleExpenseInput(ctx: Context): Promise<void> {
   const text = ctx.message?.text ?? ''
+
+  // 복수 건 감지: 금액 토큰(숫자+단위 or 3자리 이상 독립 숫자)이 2개 이상이면 AI 복수 파싱
+  // 날짜(N월/N일) 및 제품명 내 숫자(RTX4090)는 제외
+  const amountPattern = /(?<=^|[\s,])\d[\d,]*(만\s*원|원|만)(?=$|[\s,.])|(?<=^|[\s,])\d{3,}(?=$|[\s,.])/g
+  const amountCount = (text.match(amountPattern) ?? []).length
+  if (amountCount >= 2) {
+    fireMultiExpenseParse(ctx, text)
+    return
+  }
 
   const result = parseExpenseInput(text)
   if (isParseError(result)) {
@@ -362,6 +372,261 @@ async function createTransaction(
   }
 }
 
+// ============================================================
+// 복수 거래 AI 파싱
+// ============================================================
+
+interface ParsedMultiExpense {
+  date: string
+  description: string
+  amount: number
+  type: 'expense' | 'income'
+}
+
+interface PendingMultiExpense {
+  requestedByUserId: number
+  items: { parsed: ParsedMultiExpense; categoryId: string; categoryName: string }[]
+  expiresAt: number
+}
+
+const pendingMultiExpenses = new Map<string, PendingMultiExpense>()
+
+function cleanExpiredMulti(): void {
+  const now = Date.now()
+  pendingMultiExpenses.forEach((v, k) => {
+    if (v.expiresAt < now) pendingMultiExpenses.delete(k)
+  })
+}
+
+function buildMultiParsePrompt(): string {
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  const today = kst.toISOString().slice(0, 10)
+  return `다음 메시지에서 여러 건의 소비/수입 거래를 추출하세요.
+오늘 날짜: ${today}
+반드시 JSON 배열로만 응답하세요. 설명 없이 JSON만 출력하세요.
+
+형식:
+[{"date":"YYYY-MM-DD","description":"내용","amount":금액,"type":"expense또는income"}]
+
+규칙:
+- "오늘" → 오늘 날짜, "어제" → 어제 날짜, "그저께" → 그저께 날짜
+- "3월 29일" → 올해 3월 29일
+- 날짜 미지정 → 오늘 날짜
+- 금액: 만원→10000, 20만원→200000 등 정수 변환
+- type: 기본 "expense", "수입" 키워드 있으면 "income"
+- 파싱 불가능하면 {"error":"이유"} 반환
+
+메시지: `
+}
+
+function fireMultiExpenseParse(ctx: Context, text: string): void {
+  ctx.reply('📝 여러 건 파싱 중...')
+    .catch((e) => console.error('[bot] 복수 파싱 중 응답 실패:', e))
+
+  const typingInterval = setInterval(() => {
+    ctx.replyWithChatAction('typing').catch(() => {})
+  }, 5000)
+
+  askAdvisor(buildMultiParsePrompt() + text, { timeout: 60_000 })
+    .then(async (result) => {
+      await handleMultiExpenseParsed(ctx, result.response)
+    })
+    .catch(async (error) => {
+      console.error('[bot] 복수 거래 파싱 실패:', error)
+      await ctx.reply('⚠️ 여러 건 파싱에 실패했습니다. 한 건씩 입력해주세요.\n예: 점심 12000')
+    })
+    .finally(() => clearInterval(typingInterval))
+}
+
+async function handleMultiExpenseParsed(ctx: Context, response: string): Promise<void> {
+  const jsonMatch = response.match(/\[[\s\S]*\]/)
+  if (!jsonMatch) {
+    // 단일 에러 객체 체크
+    const errMatch = response.match(/\{[^}]*"error"[^}]*\}/)
+    if (errMatch) {
+      try {
+        const err = JSON.parse(errMatch[0])
+        await ctx.reply(`⚠️ 파싱 실패: ${err.error}`)
+        return
+      } catch { /* fall through */ }
+    }
+    await ctx.reply('⚠️ 거래 정보를 파싱할 수 없습니다. 한 건씩 입력해주세요.')
+    return
+  }
+
+  let items: ParsedMultiExpense[]
+  try {
+    const raw = JSON.parse(jsonMatch[0])
+    if (!Array.isArray(raw) || raw.length === 0) {
+      await ctx.reply('⚠️ 거래를 추출할 수 없습니다.')
+      return
+    }
+    items = raw.map((r: Record<string, unknown>) => ({
+      date: String(r.date ?? new Date().toISOString().slice(0, 10)),
+      description: String(r.description ?? ''),
+      amount: Math.round(Number(r.amount)),
+      type: r.type === 'income' ? 'income' as const : 'expense' as const,
+    }))
+  } catch {
+    await ctx.reply('⚠️ 파싱 결과를 해석할 수 없습니다.')
+    return
+  }
+
+  // 검증
+  const valid = items.filter((i) => i.description && i.amount > 0)
+  if (valid.length === 0) {
+    await ctx.reply('⚠️ 유효한 거래가 없습니다.')
+    return
+  }
+
+  // 카테고리 자동 매칭
+  const matched: PendingMultiExpense['items'] = []
+  for (const item of valid) {
+    const cats = await matchCategory(item.description, item.type)
+    const cat = cats.length > 0 ? cats[0] : null
+    if (!cat) {
+      const allCats = await getAllCategories(item.type)
+      const fallback = allCats.length > 0 ? allCats[0] : null
+      matched.push({
+        parsed: item,
+        categoryId: fallback?.id ?? '',
+        categoryName: fallback?.name ?? '미분류',
+      })
+    } else {
+      matched.push({
+        parsed: item,
+        categoryId: cat.id,
+        categoryName: cat.name,
+      })
+    }
+  }
+
+  // 확인 메시지
+  cleanExpiredMulti()
+  const txId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  const lines = [`📝 ${matched.length}건 거래 확인\n`]
+  for (const m of matched) {
+    const typeLabel = m.parsed.type === 'expense' ? '소비' : '수입'
+    lines.push(`${m.parsed.date} | ${typeLabel} | ${m.parsed.description} | ${formatKRWFull(m.parsed.amount)} | ${m.categoryName}`)
+  }
+  lines.push('\n기록하시겠습니까?')
+
+  const keyboard = new InlineKeyboard()
+    .text('✅ 전체 확인', `multi:confirm:${txId}`)
+    .text('❌ 취소', `multi:cancel:${txId}`)
+
+  const sent = await ctx.reply(lines.join('\n'), { reply_markup: keyboard })
+
+  const key = `${sent.chat.id}:${sent.message_id}:${txId}`
+  pendingMultiExpenses.set(key, {
+    requestedByUserId: ctx.from?.id ?? 0,
+    items: matched,
+    expiresAt: Date.now() + PENDING_TTL_MS,
+  })
+}
+
+async function handleMultiExpenseCallback(ctx: Context): Promise<void> {
+  const data = ctx.callbackQuery?.data
+  if (!data?.startsWith('multi:')) return
+
+  const parts = data.split(':')
+  const action = parts[1]
+  const txId = parts[2]
+  const message = ctx.callbackQuery?.message
+  if (!message || !txId) {
+    await ctx.answerCallbackQuery({ text: '⚠️ 메시지를 찾을 수 없습니다.' })
+    return
+  }
+
+  const key = `${message.chat.id}:${message.message_id}:${txId}`
+  const pending = pendingMultiExpenses.get(key)
+  if (pending) pendingMultiExpenses.delete(key)
+
+  if (!pending) {
+    await ctx.answerCallbackQuery({ text: '⚠️ 만료된 요청입니다.' })
+    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
+    return
+  }
+
+  if (ctx.from?.id !== pending.requestedByUserId) {
+    pendingMultiExpenses.set(key, pending)
+    await ctx.answerCallbackQuery({ text: '⚠️ 본인만 확인/취소할 수 있습니다.' })
+    return
+  }
+
+  if (pending.expiresAt < Date.now()) {
+    await ctx.answerCallbackQuery({ text: '⚠️ 요청이 만료되었습니다.' })
+    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
+    return
+  }
+
+  if (action === 'cancel') {
+    await ctx.answerCallbackQuery({ text: '취소되었습니다.' })
+    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
+    await ctx.editMessageText('❌ 기록이 취소되었습니다.')
+    return
+  }
+
+  if (action === 'confirm') {
+    try {
+      const skipped = pending.items.filter((m) => !m.categoryId)
+      const validItems = pending.items.filter((m) => m.categoryId)
+      if (validItems.length === 0) {
+        await ctx.answerCallbackQuery({ text: '⚠️ 유효한 거래가 없습니다.' })
+        await ctx.editMessageReplyMarkup({ reply_markup: undefined })
+        return
+      }
+
+      const created = await prisma.$transaction(
+        validItems.map((m) =>
+          prisma.transaction.create({
+            data: {
+              amount: m.parsed.amount,
+              description: m.parsed.description,
+              categoryId: m.categoryId,
+              userId: String(pending.requestedByUserId),
+              transactedAt: new Date(`${m.parsed.date}T00:00:00.000Z`),
+            },
+          })
+        )
+      )
+
+      // 후잉 전송 (트랜잭션 외부, 실패해도 거래 기록에 영향 없음)
+      for (const tx of created) {
+        try {
+          await sendToWhooing({
+            amount: tx.amount,
+            description: tx.description,
+            categoryId: tx.categoryId,
+            transactedAt: tx.transactedAt,
+          })
+        } catch (err) {
+          console.error('[bot/multi-expense] 후잉 전송 실패:', err)
+        }
+      }
+
+      const skippedMsg = skipped.length > 0
+        ? `\n⚠️ 카테고리 미설정 ${skipped.length}건 제외: ${skipped.map((s) => s.parsed.description).join(', ')}`
+        : ''
+      await ctx.answerCallbackQuery({ text: `${created.length}건 기록 완료!` })
+      await ctx.editMessageReplyMarkup({ reply_markup: undefined })
+      await ctx.editMessageText(`✅ ${created.length}건 거래 기록 완료${skippedMsg}`)
+
+      const hasExpense = validItems.some((m) => m.parsed.type === 'expense')
+      if (hasExpense) {
+        checkBudgetUsage().catch((error) =>
+          console.error('[bot/multi-expense] 예산 경고 체크 실패:', error)
+        )
+      }
+    } catch (error) {
+      console.error('[bot/multi-expense] 거래 기록 실패:', error)
+      await ctx.answerCallbackQuery({ text: '⚠️ 기록에 실패했습니다.' })
+      await ctx.editMessageReplyMarkup({ reply_markup: undefined })
+      await ctx.editMessageText('⚠️ 거래 기록에 실패했습니다.')
+    }
+  }
+}
+
 export function registerExpenseCommands(bot: Bot): void {
   // "수입 ..." 명시적 prefix (인자 필수 — "수입" 단독은 budget 핸들러가 처리)
   bot.hears(/^수입\s+.+$/, async (ctx) => {
@@ -373,7 +638,7 @@ export function registerExpenseCommands(bot: Bot): void {
     }
   })
 
-  // InlineKeyboard 콜백 (tx: prefix)
+  // InlineKeyboard 콜백 (tx: + multi: prefix)
   bot.on('callback_query:data', async (ctx, next) => {
     const data = ctx.callbackQuery?.data
     if (data?.startsWith('tx:')) {
@@ -381,6 +646,13 @@ export function registerExpenseCommands(bot: Bot): void {
         await handleExpenseCallback(ctx)
       } catch (error) {
         console.error('[bot] 콜백 처리 실패:', error)
+        await ctx.answerCallbackQuery({ text: '⚠️ 처리 중 오류가 발생했습니다.' })
+      }
+    } else if (data?.startsWith('multi:')) {
+      try {
+        await handleMultiExpenseCallback(ctx)
+      } catch (error) {
+        console.error('[bot] 복수 거래 콜백 실패:', error)
         await ctx.answerCallbackQuery({ text: '⚠️ 처리 중 오류가 발생했습니다.' })
       }
     } else {
