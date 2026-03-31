@@ -11,6 +11,7 @@ import { simulateGrowth } from './tools/simulator'
 import { getTechnicalAnalysis } from './tools/ta'
 import { getHoldingStrategy, getAllStrategies } from './tools/strategy'
 import { getNetWorth } from './tools/networth'
+import { getRsuSchedule, getStockOptions } from './tools/rsu-options'
 
 const ACCOUNT_NAMES = ['세진', '소담', '다솜', '전체'] as const
 const PERIODS = ['1M', '3M', '6M', '1Y', 'ALL'] as const
@@ -152,6 +153,26 @@ server.tool(
   '현재 순자산 요약 (주식 + 비주식 자산 - 부채 + 카테고리별 + 스냅샷 추이)',
   {},
   async () => getNetWorth()
+)
+
+// --- RSU / 스톡옵션 ---
+
+server.tool(
+  'get_rsu_schedule',
+  'RSU 베스팅 일정 조회 (계좌별, 상태, 주수, 금액)',
+  {
+    account_name: z.enum(ACCOUNT_NAMES).optional().describe('계좌명 (세진/소담/다솜/전체, 미지정 시 전체)'),
+  },
+  async (args) => getRsuSchedule(args)
+)
+
+server.tool(
+  'get_stock_options',
+  '스톡옵션 현황 + 베스팅 일정 조회 (행사가, 잔여수량, 만료일)',
+  {
+    account_name: z.enum(ACCOUNT_NAMES).optional().describe('계좌명 (세진/소담/다솜/전체, 미지정 시 전체)'),
+  },
+  async (args) => getStockOptions(args)
 )
 
 // --- 서버 시작 ---
