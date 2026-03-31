@@ -12,6 +12,7 @@ import { getTechnicalAnalysis } from './tools/ta'
 import { getHoldingStrategy, getAllStrategies } from './tools/strategy'
 import { getNetWorth } from './tools/networth'
 import { getRsuSchedule, getStockOptions } from './tools/rsu-options'
+import { getWatchlist } from './tools/watchlist'
 
 const ACCOUNT_NAMES = ['세진', '소담', '다솜', '전체'] as const
 const PERIODS = ['1M', '3M', '6M', '1Y', 'ALL'] as const
@@ -173,6 +174,15 @@ server.tool(
     account_name: z.enum(ACCOUNT_NAMES).optional().describe('계좌명 (세진/소담/다솜/전체, 미지정 시 전체)'),
   },
   async (args) => getStockOptions(args)
+)
+
+// --- 관심종목 ---
+
+server.tool(
+  'get_watchlist',
+  '관심종목 목록 + 현재가 + 목표 매수가/매수 구간 대비 현황',
+  {},
+  async () => getWatchlist()
 )
 
 // --- 서버 시작 ---
