@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && npm run build:mcp",
+    "build": "next build && npm run build:mcp && npm run build:bot",
     "build:mcp": "esbuild src/mcp/server.ts --bundle --platform=node --target=node20 --outfile=dist/mcp/server.cjs --alias:@=./src --external:@prisma/client --external:@modelcontextprotocol/sdk",
+    "build:bot": "esbuild src/bot/standalone.ts --bundle --platform=node --target=node20 --outfile=dist/bot/standalone.cjs --alias:@=./src --external:@prisma/client --external:grammy --external:node-cron --external:yahoo-finance2 --external:trading-signals --external:dotenv",
     "start": "next start",
     "lint": "next lint"
   },
@@ -28,6 +29,7 @@
     "react-dom": "^18",
     "recharts": "^3.7.0",
     "trading-signals": "^7.4.3",
+    "dotenv": "^17.3.1",
     "yahoo-finance2": "^3.13.2"
   },
   "devDependencies": {
@@ -37,7 +39,6 @@
     "@types/papaparse": "^5.5.2",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "dotenv": "^17.3.1",
     "esbuild": "^0.27.4",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",

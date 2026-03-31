@@ -31,8 +31,9 @@ npm run build
 
 echo "=== 6. PM2 Restart ==="
 pm2 startOrReload ecosystem.config.js --only myfinance
+pm2 startOrReload ecosystem.config.js --only myfinance-bot
 
 echo ""
 echo "=== Deploy complete: $TARGET ==="
-pm2 status myfinance
+pm2 status
 echo "https://finance.starryjeju.net"
