@@ -14,11 +14,34 @@ import { markdownToTelegramHtml } from '../utils/markdown'
 const TYPING_INTERVAL_MS = 5000
 const MIN_AI_TEXT_LENGTH = 3
 
+// chatId별 AI 세션 ID + 마지막 사용 시각 관리
+const chatSessions = new Map<number, { sessionId: string; lastUsed: number }>()
+// chatId별 진행 중 플래그 (직렬화)
+const chatBusy = new Set<number>()
+// 24시간 미사용 세션 정리
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000
+function cleanExpiredSessions(): void {
+  const now = Date.now()
+  chatSessions.forEach((v, k) => {
+    if (now - v.lastUsed > SESSION_TTL_MS) chatSessions.delete(k)
+  })
+}
+
 // ============================================================
 // AI 질문 처리
 // ============================================================
 
 function fireAiQuestion(ctx: Context, question: string): void {
+  const chatId = ctx.chat?.id
+  if (!chatId) return
+
+  if (chatBusy.has(chatId)) {
+    ctx.reply('⏳ 이전 질문을 처리 중입니다. 잠시 후 다시 시도해주세요.')
+      .catch(() => {})
+    return
+  }
+  chatBusy.add(chatId)
+
   ctx.reply('🤔 생각 중...')
     .catch((e) => console.error('[bot] 생각 중 응답 실패:', e))
 
@@ -27,8 +50,10 @@ function fireAiQuestion(ctx: Context, question: string): void {
       .catch(() => { /* 무시 */ })
   }, TYPING_INTERVAL_MS)
 
-  askAdvisor(question)
+  cleanExpiredSessions()
+  askAdvisor(question, { sessionId: chatSessions.get(chatId)?.sessionId, persist: true })
     .then(async (result) => {
+      if (result.sessionId) chatSessions.set(chatId, { sessionId: result.sessionId, lastUsed: Date.now() })
       const chunks = splitMessage(result.response)
       for (const chunk of chunks) {
         const chunkHtml = markdownToTelegramHtml(chunk)
@@ -50,7 +75,7 @@ function fireAiQuestion(ctx: Context, question: string): void {
       }
     })
     .catch((e) => console.error('[bot] AI 응답 전송 실패:', e))
-    .finally(() => clearInterval(typingInterval))
+    .finally(() => { clearInterval(typingInterval); chatBusy.delete(chatId) })
 }
 
 // ============================================================
@@ -412,6 +437,14 @@ export function registerAiCommands(bot: Bot): void {
     }
 
     fireAiQuestion(ctx, question)
+  })
+
+  // AI 세션 초기화
+  bot.command('reset', async (ctx) => {
+    const chatId = ctx.chat?.id
+    if (!chatId) return
+    chatSessions.delete(chatId)
+    await ctx.reply('🔄 AI 대화 세션이 초기화되었습니다.')
   })
 
   // aitrade: 콜백 처리

@@ -11,6 +11,10 @@ export interface AdvisorOptions {
   timeout?: number
   /** API 비용 상한 USD (기본: 0.50) */
   maxBudgetUsd?: number
+  /** 기존 세션 이어가기 */
+  sessionId?: string
+  /** 세션을 디스크에 저장 (기본: false). 텔레그램 AI만 true */
+  persist?: boolean
 }
 
 export interface AdvisorResult {
@@ -18,6 +22,7 @@ export interface AdvisorResult {
   model: AdvisorModel
   durationMs: number
   costUsd: number
+  sessionId: string
 }
 
 export class AdvisorTimeoutError extends Error {
@@ -62,6 +67,7 @@ interface ClaudeJsonOutput {
   result: string
   duration_ms: number
   total_cost_usd: number
+  session_id: string
 }
 
 /**
@@ -85,6 +91,8 @@ export async function askAdvisor(
     model = 'haiku',
     timeout = 180_000,
     maxBudgetUsd = 0.50,
+    sessionId,
+    persist = false,
   } = options
 
   // 프롬프트 길이 제한
@@ -108,20 +116,36 @@ export async function askAdvisor(
   const mcpConfigPath = process.env.MCP_CONFIG_PATH
     ?? path.join(projectRoot, 'src/lib/ai/mcp-config.json')
 
-  const cmd = [
+  const cmdParts = [
     'claude',
     '-p', shellEscape(prompt),
     '--output-format', 'json',
     '--model', model,
-    '--system-prompt', shellEscape(SYSTEM_PROMPT),
+  ]
+
+  if (sessionId) {
+    // 세션 이어가기: --resume 사용, system-prompt는 이미 세션에 포함
+    cmdParts.push('--resume', shellEscape(sessionId))
+  } else {
+    // 새 세션: system-prompt 포함
+    cmdParts.push('--system-prompt', shellEscape(SYSTEM_PROMPT))
+  }
+
+  cmdParts.push(
     '--mcp-config', shellEscape(mcpConfigPath),
     '--strict-mcp-config',
     '--allowedTools', shellEscape(ALLOWED_TOOLS),
     '--tools', '"WebSearch,WebFetch"',
     '--max-budget-usd', String(maxBudgetUsd),
     '--permission-mode', 'dontAsk',
-    '--no-session-persistence',
-  ].join(' ')
+  )
+
+  // 세션 저장: persist=true인 경우만 저장, 그 외 비저장
+  if (!persist) {
+    cmdParts.push('--no-session-persistence')
+  }
+
+  const cmd = cmdParts.join(' ')
 
   return new Promise<AdvisorResult>((resolve, reject) => {
     const chunks: Buffer[] = []
@@ -168,6 +192,7 @@ export async function askAdvisor(
           model,
           durationMs: output.duration_ms,
           costUsd: output.total_cost_usd,
+          sessionId: output.session_id ?? '',
         })
       } catch {
         reject(new AdvisorError('AI 응답을 파싱할 수 없습니다.'))
