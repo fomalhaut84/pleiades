@@ -256,3 +256,58 @@ export function scheduleRecurring(): void {
 
   console.log('[cron] 반복 거래 스케줄러 등록 (매일 09:05 KST)')
 }
+
+/**
+ * 스톡옵션 베스팅 상태 자동 전환 스케줄러.
+ * 매일 00:10 KST 실행.
+ * - pending + vestingDate <= today → exercisable
+ * - exercisable + StockOption.expiryDate < today → expired
+ */
+export function scheduleVestingStatusUpdate(): void {
+  const guard = createCronGuard('베스팅 상태', 2 * 60 * 1000)
+
+  cron.schedule(
+    '10 0 * * *',
+    () => {
+      void guard(async () => {
+        // KST 기준 오늘 자정 (23:59:59까지 포함하도록 내일 0시)
+        const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+        const todayEnd = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + 1))
+
+        // pending → exercisable (vestingDate < 내일 0시 UTC = 오늘까지)
+        const activated = await prisma.stockOptionVesting.updateMany({
+          where: {
+            status: 'pending',
+            vestingDate: { lt: todayEnd },
+          },
+          data: { status: 'exercisable' },
+        })
+
+        // exercisable → expired (만료일 지난 옵션, KST 기준 오늘 시작 이전)
+        const todayStart = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()))
+        const expiredOptions = await prisma.stockOption.findMany({
+          where: { expiryDate: { lt: todayStart } },
+          select: { id: true },
+        })
+        let expiredCount = 0
+        if (expiredOptions.length > 0) {
+          const result = await prisma.stockOptionVesting.updateMany({
+            where: {
+              status: 'exercisable',
+              stockOptionId: { in: expiredOptions.map((o) => o.id) },
+            },
+            data: { status: 'expired' },
+          })
+          expiredCount = result.count
+        }
+
+        if (activated.count > 0 || expiredCount > 0) {
+          console.log(`[cron] 베스팅 상태 전환: ${activated.count}건 행사가능, ${expiredCount}건 만료`)
+        }
+      })
+    },
+    { timezone: 'Asia/Seoul' }
+  )
+
+  console.log('[cron] 베스팅 상태 스케줄러 등록 (매일 00:10 KST)')
+}

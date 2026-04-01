@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { formatKRW, formatDate } from '@/lib/format'
 import type { StockOptionOverview } from '@/lib/stock-option-utils'
 
@@ -9,6 +11,26 @@ interface StockOptionDashboardProps {
 }
 
 export default function StockOptionDashboard({ overview, currentPrice }: StockOptionDashboardProps) {
+  const router = useRouter()
+  const [updating, setUpdating] = useState<string | null>(null)
+
+  const handleStatusChange = async (optionId: string, vestingId: string, newStatus: string) => {
+    setUpdating(vestingId)
+    try {
+      const res = await fetch(`/api/stock-options/${optionId}/vestings/${vestingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (res.ok) {
+        router.refresh()
+      }
+    } catch {
+      // 무시
+    } finally {
+      setUpdating(null)
+    }
+  }
   if (overview.options.length === 0) {
     return (
       <div className="relative overflow-hidden rounded-[14px] border border-border bg-card p-8 text-center">
@@ -106,7 +128,7 @@ export default function StockOptionDashboard({ overview, currentPrice }: StockOp
             </div>
 
             {/* 베스팅 일정 */}
-            {opt.vestings.length > 1 && (
+            {opt.vestings.length > 0 && (
               <div className="mt-3 bg-card rounded-lg px-3 py-2.5">
                 <div className="text-[11px] text-dim mb-1.5">베스팅 일정</div>
                 {opt.vestings.map((v) => (
@@ -125,7 +147,31 @@ export default function StockOptionDashboard({ overview, currentPrice }: StockOp
                           : '대기'}
                       </span>
                     </div>
-                    <span className="text-[11px] text-muted tabular-nums">{v.shares}주</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-muted tabular-nums">{v.shares}주</span>
+                      {v.status === 'exercisable' && (
+                        <button
+                          onClick={() => handleStatusChange(opt.id, v.id, 'exercised')}
+                          disabled={updating === v.id}
+                          className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 disabled:opacity-40 transition-all"
+                        >
+                          {updating === v.id ? '...' : '행사'}
+                        </button>
+                      )}
+                      {v.status === 'pending' && (() => {
+                        const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+                        const todayEnd = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + 1))
+                        return new Date(v.vestingDate) < todayEnd
+                      })() && (
+                        <button
+                          onClick={() => handleStatusChange(opt.id, v.id, 'exercisable')}
+                          disabled={updating === v.id}
+                          className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 disabled:opacity-40 transition-all"
+                        >
+                          {updating === v.id ? '...' : '활성화'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
