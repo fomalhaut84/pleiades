@@ -4,6 +4,7 @@ import { takeAllSnapshots } from './performance/snapshot'
 import { syncKrxStocks } from './krx-stocks'
 import { prisma } from './prisma'
 import { checkPriceAlerts } from '@/bot/notifications/price-alert'
+import { checkTASignals } from '@/bot/notifications/ta-signal-alert'
 import { calculateNextRunAt, type Frequency } from './recurring-utils'
 import { sendToWhooing } from './whooing-webhook'
 
@@ -115,6 +116,12 @@ export function schedulePriceUpdates(): void {
             const chatIds = getAllowedChatIds()
             if (chatIds.length > 0) {
               await checkPriceAlerts(chatIds)
+              // 장중에만 TA 시그널 체크 (API 비용 절약)
+              if (isMarketHours) {
+                checkTASignals(chatIds).catch((err) =>
+                  console.error('[cron] TA 시그널 체크 실패:', err)
+                )
+              }
             }
           }
         } catch (error) {
