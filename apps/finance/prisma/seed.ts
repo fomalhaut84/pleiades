@@ -323,6 +323,7 @@ async function main() {
     { key: 'budget_warn_pct', value: '80', label: '예산 경고 (%)' },
     { key: 'daily_summary_hour', value: '8', label: '일일 요약 시각 (KST)' },
     { key: 'monthly_report_day', value: '1', label: '월간 리포트 발송일' },
+    { key: 'ta_check_interval_min', value: '10', label: 'TA 모니터링 주기 (분)' },
   ]
   for (const cfg of alertDefaults) {
     await prisma.alertConfig.upsert({

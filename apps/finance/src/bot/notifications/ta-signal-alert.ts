@@ -7,6 +7,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { generateTAReport } from '@/lib/ta/engine'
+import { askAdvisor } from '@/lib/ai/claude-advisor'
 import { getBot } from '@/bot/index'
 import { sendHtml, escapeHtml } from '@/bot/utils/telegram'
 import type { TAReport } from '@/lib/ta/types'
@@ -174,12 +175,29 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
     swing: '스윙', momentum: '모멘텀', scalp: '단타', long_hold: '장기',
   }
 
+  // AI 간략 가이드 생성 (시그널 종목에 대해, 최대 3종목)
+  const aiGuides = new Map<string, string>()
+  const guideTargets = results.slice(0, 3)
+  for (const r of guideTargets) {
+    try {
+      const prompt = `${r.displayName}(${r.ticker})에서 다음 TA 시그널이 발생했다: ${r.signals.join(', ')}. stock-trading-method 프레임워크 기준으로 현재 상황 1~2줄 가이드를 작성해줘. 간결하게.`
+      const guide = await askAdvisor(prompt, { timeout: 30_000, maxBudgetUsd: 0.10 })
+      aiGuides.set(r.ticker, guide.response.trim())
+    } catch (error) {
+      console.warn(`[ta-signal] ${r.ticker} AI 가이드 실패:`, error instanceof Error ? error.message : error)
+    }
+  }
+
   const lines = ['📊 <b>TA 시그널 알림</b>\n']
   for (const r of results) {
-    const stratLabel = STRATEGY_LABELS[r.strategy] ?? r.strategy
+    const stratLabel = r.strategy.split('/').map((s) => STRATEGY_LABELS[s] ?? s).join('/')
     lines.push(`<b>${escapeHtml(r.displayName)}</b> (${escapeHtml(r.ticker)}) — ${stratLabel}`)
     for (const sig of r.signals) {
       lines.push(`  ${sig}`)
+    }
+    const guide = aiGuides.get(r.ticker)
+    if (guide) {
+      lines.push(`  💡 ${escapeHtml(guide.slice(0, 200))}`)
     }
     lines.push('')
   }

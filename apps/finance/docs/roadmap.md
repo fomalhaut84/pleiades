@@ -234,5 +234,5 @@
 - [x] **20-A**: 관심종목 시세 갱신 (refreshPrices에 Watchlist 티커 포함)
 - [x] **20-B**: 목표가 도달 알림 (보유/관심종목 targetBuy/targetPrice 도달 시 텔레그램 알림)
 - [x] **20-C**: 전략 기반 TA 시그널 알림 (스윙/모멘텀/단타 종목의 TA 조건 충족 시 자동 알림)
-- [ ] **20-D**: 매매 전략 스킬 연동 (stock-trading-method 스킬을 서버 rules에 배치)
+- [x] **20-D**: 매매 전략 스킬 연동 (stock-trading-method 스킬을 서버 rules에 배치)
 - [ ] **20-E**: 전략 종목 주기적 모니터링 (장중 TA + 스킬 기반 체크 → 시그널 알림, 주기 설정 가능)

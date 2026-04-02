@@ -95,6 +95,23 @@ function isUSMarketOpen(): boolean {
   return false
 }
 
+/** TA 체크 주기 제어: DB 설정(ta_check_interval_min) 기반 */
+let lastTACheckTime = 0
+
+async function shouldRunTACheck(): Promise<boolean> {
+  const config = await prisma.alertConfig.findUnique({
+    where: { key: 'ta_check_interval_min' },
+  })
+  const intervalMin = parseInt(config?.value ?? '10', 10)
+  const interval = (Number.isFinite(intervalMin) && intervalMin > 0 ? intervalMin : 10) * 60 * 1000
+
+  return Date.now() - lastTACheckTime >= interval
+}
+
+function markTACheckDone(): void {
+  lastTACheckTime = Date.now()
+}
+
 /**
  * 주가 갱신 스케줄러 등록.
  * 매 10분마다 실행, 장중이면 갱신, 장외에는 정각(매시 0분)에만 갱신.
@@ -116,11 +133,14 @@ export function schedulePriceUpdates(): void {
             const chatIds = getAllowedChatIds()
             if (chatIds.length > 0) {
               await checkPriceAlerts(chatIds)
-              // 장중에만 TA 시그널 체크 (API 비용 절약)
+              // 장중에만 TA 시그널 체크 (주기 DB 설정 기반)
               if (isMarketHours) {
-                checkTASignals(chatIds).catch((err) =>
-                  console.error('[cron] TA 시그널 체크 실패:', err)
-                )
+                const shouldRunTA = await shouldRunTACheck()
+                if (shouldRunTA) {
+                  checkTASignals(chatIds)
+                    .then(() => markTACheckDone())
+                    .catch((err) => console.error('[cron] TA 시그널 체크 실패:', err))
+                }
               }
             }
           }
