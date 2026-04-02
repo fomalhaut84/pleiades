@@ -60,6 +60,8 @@ const ALLOWED_TOOLS = [
   'mcp__myfinance__get_transactions',
   'mcp__firecrawl__firecrawl_search',
   'mcp__firecrawl__firecrawl_scrape',
+  'WebSearch',
+  'WebFetch',
 ].join(',')
 
 interface ClaudeJsonOutput {

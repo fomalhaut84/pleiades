@@ -58,11 +58,12 @@ export async function fetchQuote(ticker: string): Promise<QuoteResult> {
   const market = quote.exchange ?? 'unknown'
   const displayName = quote.shortName ?? quote.longName ?? ticker
 
-  // 보유 종목(PriceCache에 존재)이면 캐시 갱신 (실패해도 조회 결과는 반환)
+  // PriceCache upsert — 존재하면 갱신, 없으면 생성 (fallback 조회 시 캐시 적재)
   try {
-    await prisma.priceCache.updateMany({
+    await prisma.priceCache.upsert({
       where: { ticker },
-      data: { price, change, changePercent: changePct },
+      update: { price, change, changePercent: changePct },
+      create: { ticker, displayName, market, currency, price, change, changePercent: changePct },
     })
   } catch (error) {
     console.error(`[price-fetcher] 캐시 갱신 실패 (${ticker}):`, error)

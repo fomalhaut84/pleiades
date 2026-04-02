@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { fetchQuote } from '@/lib/price-fetcher'
 import { toolResult, toolError, formatMoney } from '../utils'
 
 const STRATEGY_LABELS: Record<string, string> = {
@@ -33,7 +34,18 @@ export async function getWatchlist() {
 
     for (const w of items) {
       const strategy = STRATEGY_LABELS[w.strategy] ?? w.strategy
-      const price = priceMap.get(w.ticker)
+      let price = priceMap.get(w.ticker)
+
+      // PriceCache 미스 시 실시간 조회 fallback
+      if (!price) {
+        try {
+          const quote = await fetchQuote(w.ticker)
+          price = { price: quote.price, currency: quote.currency } as unknown as typeof price
+        } catch {
+          // 조회 실패 시 무시
+        }
+      }
+
       const currentPrice = price?.price ?? null
       const currency = price?.currency ?? (w.market === 'US' ? 'USD' : 'KRW')
 

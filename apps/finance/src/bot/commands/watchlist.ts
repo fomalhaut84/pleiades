@@ -1,5 +1,6 @@
 import { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
+import { fetchQuote } from '@/lib/price-fetcher'
 import { formatKRWFull, formatUSD, formatPercent } from '../utils/formatter'
 import { replyHtml, escapeHtml, h } from '../utils/telegram'
 
@@ -187,8 +188,18 @@ async function handleWatchlist(ctx: Context): Promise<void> {
   const lines = [`👀 ${h.b('관심종목')} (${items.length})\n`]
 
   for (const w of items) {
-    const price = priceMap.get(w.ticker)
+    let price = priceMap.get(w.ticker)
     const stratLabel = STRATEGY_LABELS[w.strategy] ?? w.strategy
+
+    // PriceCache 미스 시 실시간 조회 fallback
+    if (!price) {
+      try {
+        const quote = await fetchQuote(w.ticker)
+        price = { price: quote.price, currency: quote.currency, changePercent: quote.changePercent ?? null } as unknown as typeof price
+      } catch {
+        // 조회 실패 시 무시
+      }
+    }
 
     let priceInfo = '시세 없음'
     if (price) {
