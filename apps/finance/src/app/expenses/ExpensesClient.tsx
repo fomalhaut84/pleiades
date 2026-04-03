@@ -111,22 +111,37 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
       .catch(() => {})
   }, [])
 
-  const fetchData = useCallback(async (y: number, m: number | undefined, t: TabType) => {
+  const fetchData = useCallback(async (y: number, m: number | undefined, t: TabType, keepOffset?: number) => {
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
 
+    const requestOffset = keepOffset ?? 0
     setLoading(true)
     try {
-      const params = new URLSearchParams({ year: String(y), offset: '0' })
+      const params = new URLSearchParams({ year: String(y), offset: String(requestOffset) })
       if (m) params.set('month', String(m))
       if (t !== 'all') params.set('type', t)
 
       const res = await fetch(`/api/transactions?${params}`, { signal: controller.signal })
       if (res.ok) {
         const json: ApiResponse = await res.json()
-        setData(json)
-        setOffset(0)
+        // 삭제 후 offset >= total이면 마지막 유효 페이지로 보정
+        if (requestOffset > 0 && json.transactions.length === 0 && json.total > 0) {
+          const corrected = Math.max(0, Math.floor((json.total - 1) / json.limit) * json.limit)
+          setOffset(corrected)
+          // 보정된 offset으로 재조회
+          const retryParams = new URLSearchParams({ year: String(y), offset: String(corrected) })
+          if (m) retryParams.set('month', String(m))
+          if (t !== 'all') retryParams.set('type', t)
+          const retryRes = await fetch(`/api/transactions?${retryParams}`, { signal: controller.signal })
+          if (retryRes.ok) {
+            setData(await retryRes.json())
+          }
+        } else {
+          setData(json)
+          setOffset(requestOffset)
+        }
       }
       // 월 선택 시 분석 데이터도 조회 (소비 탭 또는 전체 탭에서만)
       if (m && t !== 'income') {
@@ -207,8 +222,8 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
   const handleMonthChange = (m: number | undefined) => setMonth(m)
   const handleTabChange = (t: TabType) => setTab(t)
 
-  const handleSaved = () => {
-    fetchData(year, month, tab)
+  const handleSaved = (keepCurrentPage = true) => {
+    fetchData(year, month, tab, keepCurrentPage ? offset : undefined)
   }
 
   const handleEdit = (tx: TransactionRow) => {
@@ -376,7 +391,7 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
           categories={categories}
           assets={assets}
           onClose={() => setShowForm(false)}
-          onSaved={handleSaved}
+          onSaved={() => handleSaved(false)}
         />
       )}
 
