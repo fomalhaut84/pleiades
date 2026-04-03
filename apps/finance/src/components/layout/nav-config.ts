@@ -44,6 +44,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/ai', icon: '🤖', label: 'AI 분석' },
       { href: '/networth', icon: '💰', label: '순자산' },
+      { href: '/assets', icon: '🏦', label: '자산 관리' },
       { href: '/reports', icon: '📋', label: '분기 리포트' },
       { href: '/backtest', icon: '🧪', label: '백테스팅' },
     ],
