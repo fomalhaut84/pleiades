@@ -13,6 +13,8 @@ interface GiftTaxGaugeProps {
   estimatedTax: number
   resetDate: string | null
   firstGiftDate: string | null
+  accountGifted?: number
+  assetGifted?: number
 }
 
 const ACCOUNT_COLORS: Record<string, { bar: string; text: string; bg: string }> = {
@@ -32,6 +34,8 @@ export default function GiftTaxGauge({
   estimatedTax,
   resetDate,
   firstGiftDate,
+  accountGifted,
+  assetGifted,
 }: GiftTaxGaugeProps) {
   const colors = ACCOUNT_COLORS[accountName] ?? { bar: 'bg-dim', text: 'text-muted', bg: 'bg-surface' }
   const clampedRate = Math.min(usageRate, 1)
@@ -85,6 +89,24 @@ export default function GiftTaxGauge({
             {isOver ? `${formatKRW(Math.abs(remaining))} 초과` : `${formatKRW(remaining)} 잔여`}
           </span>
         </div>
+
+        {/* 주식/비주식 분리 */}
+        {(accountGifted != null || assetGifted != null) && (accountGifted !== 0 || assetGifted !== 0) && (
+          <div className="flex gap-3 mb-3">
+            {accountGifted != null && accountGifted > 0 && (
+              <div className="flex-1 bg-surface-dim rounded-lg px-3 py-2">
+                <div className="text-[10px] text-dim mb-0.5">주식 계좌</div>
+                <div className="text-[12px] text-muted tabular-nums font-semibold">{formatKRW(accountGifted)}</div>
+              </div>
+            )}
+            {assetGifted != null && assetGifted > 0 && (
+              <div className="flex-1 bg-surface-dim rounded-lg px-3 py-2">
+                <div className="text-[10px] text-dim mb-0.5">비주식 자산</div>
+                <div className="text-[12px] text-muted tabular-nums font-semibold">{formatKRW(assetGifted)}</div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Details */}
         <div className="grid grid-cols-2 gap-3">
