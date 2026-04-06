@@ -2,15 +2,20 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { formatKRW, formatDate } from '@/lib/format'
+import { formatKRW, formatUSD, formatDate } from '@/lib/format'
 import type { StockOptionOverview } from '@/lib/stock-option-utils'
 
 interface StockOptionDashboardProps {
   overview: StockOptionOverview
   currentPrice: number
+  currency?: string
 }
 
-export default function StockOptionDashboard({ overview, currentPrice }: StockOptionDashboardProps) {
+function fmt(value: number, currency: string): string {
+  return currency === 'USD' ? formatUSD(value) : formatKRW(value)
+}
+
+export default function StockOptionDashboard({ overview, currentPrice, currency = 'KRW' }: StockOptionDashboardProps) {
   const router = useRouter()
   const [updating, setUpdating] = useState<string | null>(null)
 
@@ -49,13 +54,13 @@ export default function StockOptionDashboard({ overview, currentPrice }: StockOp
             <div className={`text-[17px] font-bold tabular-nums ${
               overview.totalIntrinsicValue > 0 ? 'text-green-400' : 'text-muted'
             }`}>
-              {formatKRW(overview.totalIntrinsicValue)}
+              {fmt(overview.totalIntrinsicValue, currency)}
             </div>
           </div>
           <div>
             <div className="text-[11px] text-dim mb-0.5">행사 가능분</div>
             <div className="text-[15px] font-bold text-bright tabular-nums">
-              {formatKRW(overview.totalExercisableValue)}
+              {fmt(overview.totalExercisableValue, currency)}
             </div>
           </div>
           <div>
@@ -67,7 +72,7 @@ export default function StockOptionDashboard({ overview, currentPrice }: StockOp
           <div>
             <div className="text-[11px] text-dim mb-0.5">현재 주가</div>
             <div className="text-[15px] font-semibold text-muted tabular-nums">
-              {formatKRW(currentPrice)}
+              {fmt(currentPrice, currency)}
             </div>
           </div>
         </div>
@@ -100,14 +105,14 @@ export default function StockOptionDashboard({ overview, currentPrice }: StockOp
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <span className="text-[12px] text-sub">행사가</span>
-                <span className="text-[12px] text-muted tabular-nums">{formatKRW(opt.strikePrice)}</span>
+                <span className="text-[12px] text-muted tabular-nums">{fmt(opt.strikePrice, currency)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[12px] text-sub">1주당 내가치</span>
                 <span className={`text-[12px] tabular-nums ${
                   opt.perShareValue > 0 ? 'text-green-400' : 'text-dim'
                 }`}>
-                  {opt.perShareValue > 0 ? formatKRW(opt.perShareValue) : '-'}
+                  {opt.perShareValue > 0 ? fmt(opt.perShareValue, currency) : '-'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -122,7 +127,7 @@ export default function StockOptionDashboard({ overview, currentPrice }: StockOp
                 <span className={`text-[14px] font-bold tabular-nums ${
                   opt.intrinsicValue > 0 ? 'text-green-400' : 'text-dim'
                 }`}>
-                  {opt.intrinsicValue > 0 ? formatKRW(opt.intrinsicValue) : '-'}
+                  {opt.intrinsicValue > 0 ? fmt(opt.intrinsicValue, currency) : '-'}
                 </span>
               </div>
             </div>

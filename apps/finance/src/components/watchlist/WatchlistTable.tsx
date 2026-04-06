@@ -1,6 +1,10 @@
 'use client'
 
-import { formatKRW } from '@/lib/format'
+import { formatKRW, formatUSD } from '@/lib/format'
+
+function formatPrice(value: number, market: string): string {
+  return market === 'US' ? formatUSD(value) : formatKRW(value)
+}
 
 export interface WatchlistRow {
   id: string
@@ -70,14 +74,14 @@ export default function WatchlistTable({ items, onEdit, onDelete }: WatchlistTab
                       </span>
                     </td>
                     <td className={`px-4 py-3 text-right font-semibold tabular-nums ${isNearTarget || isInRange ? 'text-emerald-400' : 'text-bright'}`}>
-                      {item.currentPrice !== null ? formatKRW(item.currentPrice) : '-'}
+                      {item.currentPrice !== null ? formatPrice(item.currentPrice, item.market) : '-'}
                     </td>
                     <td className="px-4 py-3 text-right text-sub tabular-nums">
-                      {item.targetBuy !== null ? formatKRW(item.targetBuy) : '-'}
+                      {item.targetBuy !== null ? formatPrice(item.targetBuy, item.market) : '-'}
                     </td>
                     <td className="px-4 py-3 text-right text-sub tabular-nums whitespace-nowrap">
                       {item.entryLow !== null && item.entryHigh !== null
-                        ? `${formatKRW(item.entryLow)} ~ ${formatKRW(item.entryHigh)}`
+                        ? `${formatPrice(item.entryLow, item.market)} ~ ${formatPrice(item.entryHigh, item.market)}`
                         : '-'}
                     </td>
                     <td className="px-4 py-3 text-sub max-w-[200px] truncate">
