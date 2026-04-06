@@ -16,8 +16,11 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 50 : rawLimit, 200)
     const offset = isNaN(rawOffset) || rawOffset < 0 ? 0 : rawOffset
 
+    const assetId = searchParams.get('assetId')
+
     const where: Record<string, unknown> = {}
     if (accountId) where.accountId = accountId
+    if (assetId) where.assetId = assetId
     if (year) {
       if (!/^\d{4}$/.test(year)) {
         return NextResponse.json({ error: '유효한 연도를 입력해주세요.' }, { status: 400 })
@@ -35,7 +38,10 @@ export async function GET(request: NextRequest) {
         orderBy: [{ depositedAt: 'desc' }, { createdAt: 'desc' }],
         take: limit,
         skip: offset,
-        include: { account: { select: { name: true } } },
+        include: {
+          account: { select: { name: true } },
+          asset: { select: { name: true } },
+        },
       }),
       prisma.deposit.count({ where }),
     ])
@@ -66,15 +72,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: errors[0].message, errors }, { status: 400 })
     }
 
-    const { accountId, amount, source, note, depositedAt } = body as Record<string, unknown>
+    const { accountId, assetId, amount, source, note, depositedAt } = body as Record<string, unknown>
 
     if (note !== undefined && note !== null && typeof note !== 'string') {
       return NextResponse.json({ error: '메모는 문자열이어야 합니다.' }, { status: 400 })
     }
 
-    const account = await prisma.account.findUnique({ where: { id: accountId as string } })
-    if (!account) {
-      return NextResponse.json({ error: '계좌를 찾을 수 없습니다.' }, { status: 404 })
+    if (accountId) {
+      const account = await prisma.account.findUnique({ where: { id: accountId as string } })
+      if (!account) return NextResponse.json({ error: '계좌를 찾을 수 없습니다.' }, { status: 404 })
+    }
+    if (assetId) {
+      const asset = await prisma.asset.findUnique({ where: { id: assetId as string } })
+      if (!asset) return NextResponse.json({ error: '자산을 찾을 수 없습니다.' }, { status: 404 })
     }
 
     const roundedAmount = Math.round(amount as number)
@@ -82,18 +92,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '금액은 1원 이상이어야 합니다.' }, { status: 400 })
     }
 
-    const deposit = await prisma.deposit.create({
-      data: {
-        accountId: accountId as string,
-        amount: roundedAmount,
-        source: (source as string).trim(),
-        note: typeof note === 'string' ? (note.trim() || null) : null,
-        depositedAt: new Date(depositedAt as string),
-      },
+    const deposit = await prisma.$transaction(async (tx) => {
+      const created = await tx.deposit.create({
+        data: {
+          accountId: accountId ? (accountId as string) : null,
+          assetId: assetId ? (assetId as string) : null,
+          amount: roundedAmount,
+          source: (source as string).trim(),
+          note: typeof note === 'string' ? (note.trim() || null) : null,
+          depositedAt: new Date(depositedAt as string),
+        },
+      })
+
+      if (assetId) {
+        await tx.asset.update({
+          where: { id: assetId as string },
+          data: { value: { increment: roundedAmount } },
+        })
+      }
+
+      return created
     })
 
-    // 증여 입금 시 비과세 한도 체크 (비동기, 실패해도 무시)
-    if (isGiftSource((source as string).trim())) {
+    if (isGiftSource((source as string).trim()) && accountId) {
       checkGiftTaxLimit(accountId as string).catch((e) =>
         console.error('[notification] 증여세 한도 체크 실패:', e)
       )

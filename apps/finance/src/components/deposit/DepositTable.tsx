@@ -8,12 +8,14 @@ import DepositDeleteModal from './DepositDeleteModal'
 
 export interface DepositRow {
   id: string
-  accountId: string
+  accountId: string | null
+  assetId?: string | null
   amount: number
   source: string
   note: string | null
   depositedAt: string
-  account: { name: string }
+  account: { name: string } | null
+  asset?: { name: string } | null
 }
 
 interface DepositTableProps {
@@ -97,8 +99,8 @@ export default function DepositTable({ deposits, total, limit, offset }: Deposit
                   </td>
                   <td className="px-3 py-3 text-[13px] border-b border-border">
                     <span className="flex items-center gap-1.5">
-                      <span className={`w-1.5 h-1.5 rounded-full ${ACCOUNT_DOT_COLORS[d.account.name] ?? 'bg-dim'}`} />
-                      <span className="text-muted">{d.account.name}</span>
+                      <span className={`w-1.5 h-1.5 rounded-full ${ACCOUNT_DOT_COLORS[d.account?.name ?? d.asset?.name ?? '자산'] ?? 'bg-dim'}`} />
+                      <span className="text-muted">{d.account?.name ?? d.asset?.name ?? '자산'}</span>
                     </span>
                   </td>
                   <td className="px-3 py-3 text-right border-b border-border">
@@ -146,8 +148,8 @@ export default function DepositTable({ deposits, total, limit, offset }: Deposit
             <div key={d.id} className="px-4 py-3.5 hover:bg-card">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className={`w-1.5 h-1.5 rounded-full ${ACCOUNT_DOT_COLORS[d.account.name] ?? 'bg-dim'}`} />
-                  <span className="text-[13px] font-bold text-bright">{d.account.name}</span>
+                  <span className={`w-1.5 h-1.5 rounded-full ${ACCOUNT_DOT_COLORS[d.account?.name ?? d.asset?.name ?? '자산'] ?? 'bg-dim'}`} />
+                  <span className="text-[13px] font-bold text-bright">{d.account?.name ?? d.asset?.name ?? '자산'}</span>
                   <span className="text-[11px] text-dim px-1.5 py-0.5 rounded bg-surface-dim">{d.source}</span>
                 </div>
                 <div className="flex items-center gap-1">

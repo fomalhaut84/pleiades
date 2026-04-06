@@ -105,8 +105,8 @@ export default function DepositEditPanel({ deposit, onClose }: DepositEditPanelP
           {/* 고정 정보 */}
           <div className="bg-card rounded-lg px-4 py-3 flex items-center justify-between">
             <span className="text-[11px] text-dim">계좌</span>
-            <span className={`text-[13px] font-semibold ${ACCOUNT_COLORS[deposit.account.name] ?? 'text-muted'}`}>
-              {deposit.account.name}
+            <span className={`text-[13px] font-semibold ${ACCOUNT_COLORS[deposit.account?.name ?? ''] ?? 'text-muted'}`}>
+              {deposit.account?.name ?? deposit.asset?.name ?? '-'}
             </span>
           </div>
 

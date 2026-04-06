@@ -55,7 +55,7 @@ export default function DepositDeleteModal({ deposit, onClose }: DepositDeleteMo
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] text-dim">계좌</span>
-                  <span className="text-[13px] font-semibold text-bright">{deposit.account.name}</span>
+                  <span className="text-[13px] font-semibold text-bright">{deposit.account?.name ?? deposit.asset?.name ?? '-'}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] text-dim">금액</span>
