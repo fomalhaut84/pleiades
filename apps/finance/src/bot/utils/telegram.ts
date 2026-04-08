@@ -37,11 +37,11 @@ export async function replyHtml(ctx: Context, html: string): Promise<void> {
   const chunks = splitMessage(html)
   for (const chunk of chunks) {
     try {
-      await ctx.reply(chunk, { parse_mode: 'HTML' })
+      await withRetry(() => ctx.reply(chunk, { parse_mode: 'HTML' }))
     } catch (error) {
       if (isParseError(error)) {
         const plain = chunk.replace(/<[^>]+>/g, '')
-        await ctx.reply(plain)
+        await withRetry(() => ctx.reply(plain))
       } else {
         throw error
       }
@@ -60,11 +60,11 @@ export async function sendHtml(
   const chunks = splitMessage(html)
   for (const chunk of chunks) {
     try {
-      await bot.api.sendMessage(chatId, chunk, { parse_mode: 'HTML' })
+      await withRetry(() => bot.api.sendMessage(chatId, chunk, { parse_mode: 'HTML' }))
     } catch (error) {
       if (isParseError(error)) {
         const plain = chunk.replace(/<[^>]+>/g, '')
-        await bot.api.sendMessage(chatId, plain)
+        await withRetry(() => bot.api.sendMessage(chatId, plain))
       } else {
         throw error
       }
@@ -84,4 +84,33 @@ function isParseError(error: unknown): boolean {
     return true
   }
   return false
+}
+
+/**
+ * 안전하게 재시도 가능한 네트워크 에러 판별.
+ * ETIMEDOUT/ENOTFOUND만 재시도 (연결 자체 실패 → 요청 미도달 보장).
+ * ECONNRESET은 요청 도달 후 응답 실패일 수 있어 중복 메시지 위험 → 재시도 안 함.
+ */
+function isRetryableNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const inner = (error as { error?: { code?: string } }).error
+  return inner?.code === 'ETIMEDOUT' || inner?.code === 'ENOTFOUND'
+}
+
+/**
+ * 재시도 래퍼: 네트워크 에러 시 지수 백오프로 재시도 (최대 2회)
+ */
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (error) {
+      lastError = error
+      if (!isRetryableNetworkError(error) || attempt === maxRetries) throw error
+      const delay = 1000 * (attempt + 1) // 1초, 2초
+      await new Promise((r) => setTimeout(r, delay))
+    }
+  }
+  throw lastError
 }
