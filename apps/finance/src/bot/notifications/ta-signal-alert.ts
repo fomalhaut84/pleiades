@@ -10,6 +10,7 @@ import { generateTAReport } from '@/lib/ta/engine'
 import { askAdvisor } from '@/lib/ai/claude-advisor'
 import { getBot } from '@/bot/index'
 import { sendHtml, escapeHtml } from '@/bot/utils/telegram'
+import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 import type { TAReport } from '@/lib/ta/types'
 
 /** 당일 시그널 발송 기록 (키 → date string) */
@@ -197,7 +198,9 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
     }
     const guide = aiGuides.get(r.ticker)
     if (guide) {
-      lines.push(`  💡 ${escapeHtml(guide.slice(0, 200))}`)
+      const guideHtml = markdownToTelegramHtml(guide.slice(0, 300))
+      lines.push('')
+      lines.push(`  💡 ${guideHtml}`)
     }
     lines.push('')
   }
