@@ -34,6 +34,11 @@ export function formatSignedKRW(amount: number): string {
   return `${sign}₩${Math.round(amount).toLocaleString('ko-KR')}`
 }
 
+export function formatSignedKRWCompact(amount: number): string {
+  const sign = amount >= 0 ? '+' : ''
+  return `${sign}${formatKRWCompact(amount)}`
+}
+
 export function profitEmoji(returnPct: number): string {
   return returnPct >= 0 ? '🟢' : '🔴'
 }

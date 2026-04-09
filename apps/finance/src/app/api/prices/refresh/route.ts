@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { refreshPrices } from '@/lib/price-fetcher'
 
+export const dynamic = 'force-dynamic'
+
 /** 최소 갱신 간격 (ms) — 연속 호출 방지 */
 const MIN_REFRESH_INTERVAL_MS = 30_000
 

@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { calcCostKRW, calcCurrentValueKRW, getLastUpdatedAt, DEFAULT_FX_RATE_USD_KRW } from '@/lib/format'
+
+export const dynamic = 'force-dynamic'
 import Header from '@/components/layout/Header'
 import FamilyTotalCard from '@/components/dashboard/FamilyTotalCard'
 import AccountSummaryCard from '@/components/dashboard/AccountSummaryCard'
