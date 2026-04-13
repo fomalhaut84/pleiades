@@ -10,6 +10,7 @@ import { prisma } from '@/lib/prisma'
 import { getBot } from '@/bot/index'
 import { formatPercent } from '@/bot/utils/formatter'
 import { sendHtml, escapeHtml } from '@/bot/utils/telegram'
+import { isMarketOpenFor } from '@/lib/market-hours'
 
 /** 당일 알림 발송 기록 (ticker → date string) */
 const sentToday = new Map<string, string>()
@@ -98,9 +99,12 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
       continue
     }
 
-    // 주가 급등락
+    // 주가 급등락 — 해당 시장 거래시간일 때만 알림 (장외 허위 변동 차단)
     if (p.changePercent == null) continue
     if (!holdingTickers.has(p.ticker)) continue
+
+    // PriceCache.market을 단일 소스로 사용 (ticker 기준 결정적)
+    if (!isMarketOpenFor(p.market, p.ticker)) continue
 
     const key = `price:${p.ticker}`
     if (sentToday.get(key) === today) continue
