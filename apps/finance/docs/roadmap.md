@@ -247,3 +247,26 @@
 
 - [x] AI 주가 실시간 조회 (get_prices에서 fetchQuote 직접 호출)
 - [x] 가계부 수정 시 페이징 초기화 버그 수정
+
+---
+
+# 6차 마일스톤
+
+> 6차 마일스톤: AI 어드바이저 풀 액세스 — **"AI가 myFinance의 모든 데이터에 읽고 쓸 수 있는 완전 자율 어드바이저로 진화"**
+
+## Phase 22: AI 시스템 안내 강화
+
+- [ ] **22-A**: 시스템 프롬프트에 봇 기능 + 쓰기 도구 사용 규칙 명시 (CLAUDE.md 직접 참조 금지, 사용자 확인 규칙)
+
+## Phase 23: AI 쓰기 도구 (Tier 1)
+
+- [ ] **23-A**: 관심종목 CRUD MCP 도구 (add/update/delete_watchlist)
+- [ ] **23-B**: 보유 종목 전략 설정 MCP 도구 (set_holding_strategy)
+- [ ] **23-C**: 가계부 거래 CRUD MCP 도구 (create/update/delete_transaction)
+- [ ] **23-D**: 카테고리 CRUD MCP 도구 (create/update/delete_category)
+
+## Phase 24: AI 쓰기 도구 (Tier 2)
+
+- [ ] **24-A**: 자산 + 자산 입금/이체 CRUD (create/update/delete_asset, create_asset_deposit)
+- [ ] **24-B**: 예산 + 반복거래 + 알림 설정 (set_budget, recurring_transaction, update_alert_config)
+- [ ] **24-C**: RSU + 스톡옵션 관리 (create/update_rsu_schedule, stock_option, exercise_vesting)
