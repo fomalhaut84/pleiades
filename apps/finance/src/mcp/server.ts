@@ -14,6 +14,7 @@ import { getNetWorth } from './tools/networth'
 import { getRsuSchedule, getStockOptions } from './tools/rsu-options'
 import { getWatchlist, addWatchlist, updateWatchlist, deleteWatchlist } from './tools/watchlist'
 import { createCategory, updateCategory, deleteCategory } from './tools/category'
+import { listAssets, createAsset, updateAsset, deleteAsset, createAssetDeposit } from './tools/asset'
 
 const ACCOUNT_NAMES = ['세진', '소담', '다솜', '전체'] as const
 const PERIODS = ['1M', '3M', '6M', '1Y', 'ALL'] as const
@@ -319,6 +320,70 @@ server.tool(
     name: z.string().describe('삭제할 카테고리 이름'),
   },
   async (args) => deleteCategory(args)
+)
+
+// --- 자산 관리 ---
+
+server.tool(
+  'list_assets',
+  '비주식 자산 목록 조회 (이름, 소유자, 카테고리, 금액).',
+  {},
+  async () => listAssets()
+)
+
+server.tool(
+  'create_asset',
+  '비주식 자산 생성 (적금/입출금/보험/부동산 등). 사용자 확인 후 호출.',
+  {
+    name: z.string().min(1).max(100).describe('자산명'),
+    category: z.enum(['savings', 'insurance', 'real_estate', 'pension', 'loan', 'cash', 'other']).describe('카테고리'),
+    owner: z.string().min(1).describe('소유자 (세진/소담/다솜/공동)'),
+    value: z.number().nonnegative().describe('현재 평가액 (원)'),
+    isLiability: z.boolean().optional().describe('부채 여부 (기본 false)'),
+    interestRate: z.number().optional().describe('이율 (%)'),
+    maturityDate: z.string().optional().describe('만기일 YYYY-MM-DD'),
+    note: z.string().max(200).optional(),
+  },
+  async (args) => createAsset(args)
+)
+
+server.tool(
+  'update_asset',
+  '자산 부분 수정 (name으로 식별). 사용자 확인 후 호출.',
+  {
+    name: z.string().describe('대상 자산명'),
+    newName: z.string().min(1).max(100).optional(),
+    category: z.enum(['savings', 'insurance', 'real_estate', 'pension', 'loan', 'cash', 'other']).optional(),
+    owner: z.string().min(1).optional(),
+    value: z.number().nonnegative().optional(),
+    isLiability: z.boolean().optional(),
+    interestRate: z.number().nullable().optional(),
+    maturityDate: z.string().nullable().optional().describe('YYYY-MM-DD, null 전달 시 초기화'),
+    note: z.string().max(200).nullable().optional(),
+  },
+  async (args) => updateAsset(args)
+)
+
+server.tool(
+  'delete_asset',
+  '자산 삭제 (연결 거래/입금 있으면 거부). 사용자의 명시적 동의 후에만 호출.',
+  {
+    name: z.string().describe('삭제할 자산명'),
+  },
+  async (args) => deleteAsset(args)
+)
+
+server.tool(
+  'create_asset_deposit',
+  '자산 입금 기록 + Asset.value 자동 반영. 증여/이체 추적용. 사용자 확인 후 호출.',
+  {
+    assetName: z.string().describe('대상 자산명'),
+    amount: z.number().positive().describe('입금액 (원)'),
+    source: z.string().describe('출처 (예: 증여, 이체, 급여)'),
+    depositedAt: z.string().optional().describe('YYYY-MM-DD (미지정 시 오늘)'),
+    note: z.string().max(200).optional(),
+  },
+  async (args) => createAssetDeposit(args)
 )
 
 // --- 서버 시작 ---

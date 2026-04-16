@@ -260,10 +260,10 @@
 
 ## Phase 23: AI 쓰기 도구 (Tier 1)
 
-- [ ] **23-A**: 관심종목 CRUD MCP 도구 (add/update/delete_watchlist)
-- [ ] **23-B**: 보유 종목 전략 설정 MCP 도구 (set_holding_strategy)
-- [ ] **23-C**: 가계부 거래 CRUD MCP 도구 (create/update/delete_transaction)
-- [ ] **23-D**: 카테고리 CRUD MCP 도구 (create/update/delete_category)
+- [x] **23-A**: 관심종목 CRUD MCP 도구 (add/update/delete_watchlist)
+- [x] **23-B**: 보유 종목 전략 설정 MCP 도구 (set_holding_strategy)
+- [x] **23-C**: 가계부 거래 CRUD MCP 도구 (create/update/delete_transaction)
+- [x] **23-D**: 카테고리 CRUD MCP 도구 (create/update/delete_category)
 
 ## Phase 24: AI 쓰기 도구 (Tier 2)
 
