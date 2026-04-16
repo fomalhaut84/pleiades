@@ -15,6 +15,9 @@ import { getRsuSchedule, getStockOptions } from './tools/rsu-options'
 import { getWatchlist, addWatchlist, updateWatchlist, deleteWatchlist } from './tools/watchlist'
 import { createCategory, updateCategory, deleteCategory } from './tools/category'
 import { listAssets, createAsset, updateAsset, deleteAsset, createAssetDeposit } from './tools/asset'
+import { listBudgets, setBudget, deleteBudget } from './tools/budget'
+import { listRecurringTransactions, createRecurringTransaction, updateRecurringTransaction, deleteRecurringTransaction } from './tools/recurring'
+import { listAlertConfigs, updateAlertConfig } from './tools/alert'
 
 const ACCOUNT_NAMES = ['세진', '소담', '다솜', '전체'] as const
 const PERIODS = ['1M', '3M', '6M', '1Y', 'ALL'] as const
@@ -384,6 +387,106 @@ server.tool(
     note: z.string().max(200).optional(),
   },
   async (args) => createAssetDeposit(args)
+)
+
+// --- 예산 ---
+
+server.tool(
+  'list_budgets',
+  '월 예산 목록 조회 (연/월 필터)',
+  {
+    year: z.number().int().min(2000).max(2100).optional(),
+    month: z.number().int().min(1).max(12).optional(),
+  },
+  async (args) => listBudgets(args)
+)
+
+server.tool(
+  'set_budget',
+  '카테고리별 월 예산 설정 (upsert). 사용자 확인 후 호출.',
+  {
+    categoryName: z.string().describe('카테고리명 (대소문자 무시 정확 일치)'),
+    year: z.number().int().min(2000).max(2100),
+    month: z.number().int().min(1).max(12),
+    amount: z.number().nonnegative().describe('예산 금액 (원)'),
+  },
+  async (args) => setBudget(args)
+)
+
+server.tool(
+  'delete_budget',
+  '예산 삭제 (ID 기반). 사용자의 명시적 동의 후에만 호출.',
+  { id: z.string().describe('예산 ID') },
+  async (args) => deleteBudget(args)
+)
+
+// --- 반복 거래 ---
+
+server.tool(
+  'list_recurring_transactions',
+  '반복 거래 목록 조회',
+  {},
+  async () => listRecurringTransactions()
+)
+
+server.tool(
+  'create_recurring_transaction',
+  '반복 거래 신규 등록. 사용자 확인 후 호출.',
+  {
+    amount: z.number().positive(),
+    description: z.string().min(1).max(200),
+    categoryName: z.string().describe('카테고리명 (대소문자 무시 정확 일치)'),
+    frequency: z.enum(['monthly', 'weekly', 'yearly']),
+    dayOfMonth: z.number().int().min(1).max(31).optional(),
+    dayOfWeek: z.number().int().min(0).max(6).optional().describe('0=일, 6=토'),
+    monthOfYear: z.number().int().min(1).max(12).optional(),
+    nextRunAt: z.string().describe('YYYY-MM-DD'),
+  },
+  async (args) => createRecurringTransaction(args)
+)
+
+server.tool(
+  'update_recurring_transaction',
+  '반복 거래 수정 (ID 기반). 사용자 확인 후 호출.',
+  {
+    id: z.string(),
+    amount: z.number().positive().optional(),
+    description: z.string().min(1).max(200).optional(),
+    categoryName: z.string().optional().describe('카테고리명 (대소문자 무시 정확 일치)'),
+    isActive: z.boolean().optional(),
+    frequency: z.enum(['monthly', 'weekly', 'yearly']).optional(),
+    dayOfMonth: z.number().int().min(1).max(31).nullable().optional(),
+    dayOfWeek: z.number().int().min(0).max(6).nullable().optional().describe('0=일, 6=토'),
+    monthOfYear: z.number().int().min(1).max(12).nullable().optional(),
+    nextRunAt: z.string().optional().describe('YYYY-MM-DD'),
+  },
+  async (args) => updateRecurringTransaction(args)
+)
+
+server.tool(
+  'delete_recurring_transaction',
+  '반복 거래 삭제 (ID 기반). 사용자의 명시적 동의 후에만 호출.',
+  { id: z.string() },
+  async (args) => deleteRecurringTransaction(args)
+)
+
+// --- 알림 설정 ---
+
+server.tool(
+  'list_alert_configs',
+  '알림 설정 현황 (급등락/환율/예산/요약시각 등)',
+  {},
+  async () => listAlertConfigs()
+)
+
+server.tool(
+  'update_alert_config',
+  '알림 설정 값 변경 (기존 키만). 사용자 확인 후 호출.',
+  {
+    key: z.string().describe('예: price_drop_pct, fx_change_krw, budget_warn_pct, daily_summary_hour, ta_check_interval_min'),
+    value: z.string().describe('숫자 문자열'),
+  },
+  async (args) => updateAlertConfig(args)
 )
 
 // --- 서버 시작 ---
