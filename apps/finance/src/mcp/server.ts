@@ -18,8 +18,19 @@ import { listAssets, createAsset, updateAsset, deleteAsset, createAssetDeposit }
 import { listBudgets, setBudget, deleteBudget } from './tools/budget'
 import { listRecurringTransactions, createRecurringTransaction, updateRecurringTransaction, deleteRecurringTransaction } from './tools/recurring'
 import { listAlertConfigs, updateAlertConfig } from './tools/alert'
+import { createRsuSchedule, updateRsuSchedule, deleteRsuSchedule } from './tools/rsu-write'
+import {
+  createStockOption,
+  updateStockOption,
+  deleteStockOption,
+  createStockOptionVesting,
+  updateStockOptionVesting,
+  deleteStockOptionVesting,
+  exerciseVesting,
+} from './tools/stock-option-write'
 
 const ACCOUNT_NAMES = ['세진', '소담', '다솜', '전체'] as const
+const WRITE_ACCOUNT_NAMES = ['세진', '소담', '다솜'] as const  // '전체' 제외 (쓰기 도구용)
 const PERIODS = ['1M', '3M', '6M', '1Y', 'ALL'] as const
 
 const server = new McpServer({
@@ -487,6 +498,133 @@ server.tool(
     value: z.string().describe('숫자 문자열'),
   },
   async (args) => updateAlertConfig(args)
+)
+
+// --- RSU 스케줄 쓰기 ---
+
+server.tool(
+  'create_rsu_schedule',
+  'RSU 베스팅 일정 신규 등록. 사용자 확인 후 호출.',
+  {
+    account_name: z.enum(WRITE_ACCOUNT_NAMES).describe('계좌명 (세진/소담/다솜)'),
+    vestingDate: z.string().describe('YYYY-MM-DD 베스팅일'),
+    shares: z.number().int().positive().describe('베스팅 수량'),
+    basisValue: z.number().nonnegative().describe('기준금액 (원)'),
+    basisDate: z.string().optional().describe('YYYY-MM-DD 기준일'),
+    basisPrice: z.number().nonnegative().optional().describe('기준 주가'),
+    sellShares: z.number().int().nonnegative().optional().describe('매도 예정 수량 (≤ shares)'),
+    keepShares: z.number().int().nonnegative().optional().describe('보유 예정 수량 (≤ shares)'),
+    note: z.string().max(500).optional(),
+  },
+  async (args) => createRsuSchedule(args)
+)
+
+server.tool(
+  'update_rsu_schedule',
+  'RSU 스케줄 수정 (ID 기반, pending만). 사용자 확인 후 호출.',
+  {
+    id: z.string(),
+    vestingDate: z.string().optional().describe('YYYY-MM-DD'),
+    shares: z.number().int().positive().optional(),
+    basisValue: z.number().nonnegative().optional(),
+    basisDate: z.string().nullable().optional(),
+    basisPrice: z.number().nonnegative().nullable().optional(),
+    sellShares: z.number().int().nonnegative().nullable().optional(),
+    keepShares: z.number().int().nonnegative().nullable().optional(),
+    note: z.string().max(500).nullable().optional(),
+  },
+  async (args) => updateRsuSchedule(args)
+)
+
+server.tool(
+  'delete_rsu_schedule',
+  'RSU 스케줄 삭제 (pending만). 사용자의 명시적 동의 후에만 호출.',
+  { id: z.string() },
+  async (args) => deleteRsuSchedule(args)
+)
+
+// --- 스톡옵션 쓰기 ---
+
+server.tool(
+  'create_stock_option',
+  '스톡옵션 신규 등록. 사용자 확인 후 호출.',
+  {
+    account_name: z.enum(WRITE_ACCOUNT_NAMES).describe('계좌명 (세진/소담/다솜)'),
+    ticker: z.string().min(1),
+    displayName: z.string().min(1),
+    grantDate: z.string().describe('YYYY-MM-DD 부여일'),
+    expiryDate: z.string().describe('YYYY-MM-DD 만료일'),
+    strikePrice: z.number().nonnegative().describe('행사가격'),
+    totalShares: z.number().int().positive().describe('총부여수량'),
+    note: z.string().max(500).optional(),
+  },
+  async (args) => createStockOption(args)
+)
+
+server.tool(
+  'update_stock_option',
+  '스톡옵션 수정 (remainingShares 자동 재계산). 사용자 확인 후 호출.',
+  {
+    id: z.string(),
+    ticker: z.string().min(1).optional(),
+    displayName: z.string().min(1).optional(),
+    grantDate: z.string().optional().describe('YYYY-MM-DD'),
+    expiryDate: z.string().optional().describe('YYYY-MM-DD'),
+    strikePrice: z.number().nonnegative().optional(),
+    totalShares: z.number().int().positive().optional(),
+    cancelledShares: z.number().int().nonnegative().optional(),
+    adjustedShares: z.number().int().optional(),
+    note: z.string().max(500).nullable().optional(),
+  },
+  async (args) => updateStockOption(args)
+)
+
+server.tool(
+  'delete_stock_option',
+  '스톡옵션 삭제 (행사 스케줄도 함께 삭제). 사용자의 명시적 동의 후에만 호출.',
+  { id: z.string() },
+  async (args) => deleteStockOption(args)
+)
+
+server.tool(
+  'create_stock_option_vesting',
+  '스톡옵션 행사 스케줄 추가. 사용자 확인 후 호출.',
+  {
+    stockOptionId: z.string(),
+    vestingDate: z.string().describe('YYYY-MM-DD 행사가능일'),
+    shares: z.number().int().positive(),
+    note: z.string().max(500).optional(),
+  },
+  async (args) => createStockOptionVesting(args)
+)
+
+server.tool(
+  'update_stock_option_vesting',
+  '행사 스케줄 수정 (pending만). 사용자 확인 후 호출.',
+  {
+    id: z.string(),
+    vestingDate: z.string().optional().describe('YYYY-MM-DD'),
+    shares: z.number().int().positive().optional(),
+    note: z.string().max(500).nullable().optional(),
+  },
+  async (args) => updateStockOptionVesting(args)
+)
+
+server.tool(
+  'delete_stock_option_vesting',
+  '행사 스케줄 삭제 (exercised 제외). 사용자의 명시적 동의 후에만 호출.',
+  { id: z.string() },
+  async (args) => deleteStockOptionVesting(args)
+)
+
+server.tool(
+  'exercise_vesting',
+  '베스팅 상태 전환 (activate: pending→exercisable, exercise: exercisable→exercised, expire: exercisable→expired). 사용자 확인 후 호출.',
+  {
+    vestingId: z.string(),
+    action: z.enum(['activate', 'exercise', 'expire']),
+  },
+  async (args) => exerciseVesting(args)
 )
 
 // --- 서버 시작 ---
