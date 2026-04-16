@@ -267,6 +267,6 @@
 
 ## Phase 24: AI 쓰기 도구 (Tier 2)
 
-- [ ] **24-A**: 자산 + 자산 입금/이체 CRUD (create/update/delete_asset, create_asset_deposit)
-- [ ] **24-B**: 예산 + 반복거래 + 알림 설정 (set_budget, recurring_transaction, update_alert_config)
-- [ ] **24-C**: RSU + 스톡옵션 관리 (create/update_rsu_schedule, stock_option, exercise_vesting)
+- [x] **24-A**: 자산 + 자산 입금/이체 CRUD (create/update/delete_asset, create_asset_deposit)
+- [x] **24-B**: 예산 + 반복거래 + 알림 설정 (set_budget, recurring_transaction, update_alert_config)
+- [x] **24-C**: RSU + 스톡옵션 관리 (create/update_rsu_schedule, stock_option, exercise_vesting)
