@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { getPortfolio, getTrades } from './tools/portfolio'
 import { getPerformance } from './tools/performance'
 import { getGiftTaxStatus, getDividends } from './tools/tax'
-import { getSpendingSummary, getTransactions } from './tools/spending'
+import { getSpendingSummary, getTransactions, createTransaction, updateTransaction, deleteTransaction } from './tools/spending'
 import { getPrices, getFxRate } from './tools/market'
 import { simulateGrowth } from './tools/simulator'
 import { getTechnicalAnalysis } from './tools/ta'
@@ -95,6 +95,40 @@ server.tool(
     type: z.enum(['expense', 'income', 'transfer']).optional().describe('타입 필터'),
   },
   async (args) => getTransactions(args)
+)
+
+server.tool(
+  'create_transaction',
+  '가계부 거래 생성. 카테고리명으로 매칭. 사용자 확인 후 호출.',
+  {
+    amount: z.number().positive().describe('금액 (원)'),
+    description: z.string().min(1).max(200).describe('내용'),
+    categoryName: z.string().describe('카테고리명 (부분 일치)'),
+    transactedAt: z.string().optional().describe('YYYY-MM-DD (미지정 시 오늘)'),
+  },
+  async (args) => createTransaction(args)
+)
+
+server.tool(
+  'update_transaction',
+  '가계부 거래 수정 (ID 기반, 제공 필드만 변경). 사용자 확인 후 호출.',
+  {
+    id: z.string().describe('거래 ID'),
+    amount: z.number().positive().optional(),
+    description: z.string().min(1).max(200).optional(),
+    categoryName: z.string().optional().describe('변경할 카테고리명'),
+    transactedAt: z.string().optional().describe('YYYY-MM-DD'),
+  },
+  async (args) => updateTransaction(args)
+)
+
+server.tool(
+  'delete_transaction',
+  '가계부 거래 삭제. 사용자의 명시적 동의 후에만 호출.',
+  {
+    id: z.string().describe('삭제할 거래 ID'),
+  },
+  async (args) => deleteTransaction(args)
 )
 
 // --- 시뮬레이션 ---
