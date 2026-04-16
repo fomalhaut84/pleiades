@@ -53,6 +53,7 @@ const ALLOWED_TOOLS = [
   'mcp__myfinance__get_technical_analysis',
   'mcp__myfinance__get_holding_strategy',
   'mcp__myfinance__get_all_strategies',
+  'mcp__myfinance__set_holding_strategy',
   'mcp__myfinance__get_networth',
   'mcp__myfinance__get_rsu_schedule',
   'mcp__myfinance__get_stock_options',

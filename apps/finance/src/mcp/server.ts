@@ -9,7 +9,7 @@ import { getSpendingSummary, getTransactions } from './tools/spending'
 import { getPrices, getFxRate } from './tools/market'
 import { simulateGrowth } from './tools/simulator'
 import { getTechnicalAnalysis } from './tools/ta'
-import { getHoldingStrategy, getAllStrategies } from './tools/strategy'
+import { getHoldingStrategy, getAllStrategies, setHoldingStrategy } from './tools/strategy'
 import { getNetWorth } from './tools/networth'
 import { getRsuSchedule, getStockOptions } from './tools/rsu-options'
 import { getWatchlist, addWatchlist, updateWatchlist, deleteWatchlist } from './tools/watchlist'
@@ -156,6 +156,23 @@ server.tool(
   '전체 보유 종목의 전략 현황 (계좌별)',
   {},
   async () => getAllStrategies()
+)
+
+server.tool(
+  'set_holding_strategy',
+  '보유 종목의 전략/목표가/손절가/매수구간/메모/점검일 설정 (upsert). 같은 ticker를 여러 계좌가 보유할 경우 account_name 필수. null 전달 시 필드 초기화. 사용자 확인 후 호출.',
+  {
+    ticker: z.string().describe('대상 티커'),
+    account_name: z.enum(['세진', '소담', '다솜']).optional().describe('여러 계좌 보유 시 대상 특정'),
+    strategy: z.enum(['long_hold', 'swing', 'momentum', 'value', 'watch', 'scalp']).optional(),
+    targetPrice: z.number().positive().nullable().optional(),
+    stopLoss: z.number().positive().nullable().optional(),
+    entryLow: z.number().positive().nullable().optional(),
+    entryHigh: z.number().positive().nullable().optional(),
+    reviewDate: z.string().nullable().optional().describe('YYYY-MM-DD'),
+    memo: z.string().max(500).nullable().optional(),
+  },
+  async (args) => setHoldingStrategy(args)
 )
 
 // --- 순자산 ---
