@@ -13,6 +13,7 @@ import { getHoldingStrategy, getAllStrategies, setHoldingStrategy } from './tool
 import { getNetWorth } from './tools/networth'
 import { getRsuSchedule, getStockOptions } from './tools/rsu-options'
 import { getWatchlist, addWatchlist, updateWatchlist, deleteWatchlist } from './tools/watchlist'
+import { createCategory, updateCategory, deleteCategory } from './tools/category'
 
 const ACCOUNT_NAMES = ['세진', '소담', '다솜', '전체'] as const
 const PERIODS = ['1M', '3M', '6M', '1Y', 'ALL'] as const
@@ -282,6 +283,42 @@ server.tool(
     ticker: z.string().describe('삭제할 티커'),
   },
   async (args) => deleteWatchlist(args)
+)
+
+// --- 카테고리 ---
+
+server.tool(
+  'create_category',
+  '가계부 카테고리 생성. 사용자 확인 후 호출.',
+  {
+    name: z.string().min(1).max(50).describe('카테고리 이름'),
+    type: z.enum(['expense', 'income', 'transfer']).describe('유형'),
+    icon: z.string().max(4).optional().describe('이모지 아이콘'),
+    keywords: z.array(z.string()).optional().describe('자동 분류 키워드'),
+  },
+  async (args) => createCategory(args)
+)
+
+server.tool(
+  'update_category',
+  '카테고리 부분 수정 (name으로 식별). 사용자 확인 후 호출.',
+  {
+    name: z.string().describe('대상 카테고리 이름'),
+    newName: z.string().min(1).max(50).optional().describe('변경할 이름'),
+    type: z.enum(['expense', 'income', 'transfer']).optional(),
+    icon: z.string().max(4).nullable().optional(),
+    keywords: z.array(z.string()).optional(),
+  },
+  async (args) => updateCategory(args)
+)
+
+server.tool(
+  'delete_category',
+  '카테고리 삭제 (연결 거래/예산 있으면 거부). 사용자의 명시적 동의 후에만 호출.',
+  {
+    name: z.string().describe('삭제할 카테고리 이름'),
+  },
+  async (args) => deleteCategory(args)
 )
 
 // --- 서버 시작 ---
