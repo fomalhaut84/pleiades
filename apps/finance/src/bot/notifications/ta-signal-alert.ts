@@ -11,6 +11,7 @@ import { askAdvisor } from '@/lib/ai/claude-advisor'
 import { getBot } from '@/bot/index'
 import { sendHtml, escapeHtml } from '@/bot/utils/telegram'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
+import { isMarketOpenFor } from '@/lib/market-hours'
 import type { TAReport } from '@/lib/ta/types'
 
 /** 당일 시그널 발송 기록 (키 → date string) */
@@ -40,6 +41,12 @@ interface SignalResult {
 interface Signal {
   id: string
   message: string
+}
+
+interface TickerMeta {
+  displayName: string
+  market: string
+  strategies: Set<string>
 }
 
 /** 전략별 시그널 조건 매칭 — id는 중복 방지 키에 사용 */
@@ -106,7 +113,7 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
   const allStrategies = ['swing', 'momentum', 'scalp', 'long_hold']
   const holdings = await prisma.holdingStrategy.findMany({
     where: { strategy: { in: allStrategies } },
-    include: { holding: { select: { ticker: true, displayName: true } } },
+    include: { holding: { select: { ticker: true, displayName: true, market: true } } },
   })
 
   // 관심종목 중 액티브 전략 (long_hold 제외 — 관심종목에 장기보유는 해당 없음)
@@ -115,13 +122,17 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
   })
 
   // 티커별 전략 수집 (다중 전략 지원)
-  const tickerStrategies = new Map<string, { displayName: string; strategies: Set<string> }>()
+  const tickerStrategies = new Map<string, TickerMeta>()
   for (const h of holdings) {
     const existing = tickerStrategies.get(h.holding.ticker)
     if (existing) {
       existing.strategies.add(h.strategy)
     } else {
-      tickerStrategies.set(h.holding.ticker, { displayName: h.holding.displayName, strategies: new Set([h.strategy]) })
+      tickerStrategies.set(h.holding.ticker, {
+        displayName: h.holding.displayName,
+        market: h.holding.market,
+        strategies: new Set([h.strategy]),
+      })
     }
   }
   for (const w of watchlist) {
@@ -129,15 +140,37 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
     if (existing) {
       existing.strategies.add(w.strategy)
     } else {
-      tickerStrategies.set(w.ticker, { displayName: w.displayName, strategies: new Set([w.strategy]) })
+      tickerStrategies.set(w.ticker, {
+        displayName: w.displayName,
+        market: w.market,
+        strategies: new Set([w.strategy]),
+      })
     }
   }
 
   if (tickerStrategies.size === 0) return
 
+  // PriceCache.market을 결정적 소스로 사용 (Holding/Watchlist 간 market 불일치 방지)
+  // price-alert.ts와 동일한 패턴 (#261)
+  const priceCaches = await prisma.priceCache.findMany({
+    where: { ticker: { in: Array.from(tickerStrategies.keys()) } },
+    select: { ticker: true, market: true },
+  })
+  const marketByTicker = new Map(priceCaches.map((p) => [p.ticker, p.market]))
+
   const results: SignalResult[] = []
 
   for (const [ticker, meta] of Array.from(tickerStrategies)) {
+    // 거래시간 필터: 해당 종목 시장이 닫혀 있으면 분석/알림 스킵 (장외 허위 시그널 차단)
+    // PriceCache.market을 단일 결정적 소스로 사용 (Holding/Watchlist 간 불일치 방지)
+    // PriceCache 미존재 시 안전 차단 — 다음 cron 주기에 캐시가 채워지면 자연 복구됨
+    const market = marketByTicker.get(ticker)
+    if (!market) {
+      console.warn(`[ta-signal] ${ticker} PriceCache 미존재 — 시그널 스킵 (meta.market=${meta.market})`)
+      continue
+    }
+    if (!isMarketOpenFor(market, ticker)) continue
+
     try {
       const report = await generateTAReport(ticker)
 
