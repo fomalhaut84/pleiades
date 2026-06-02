@@ -270,3 +270,17 @@
 - [x] **24-A**: 자산 + 자산 입금/이체 CRUD (create/update/delete_asset, create_asset_deposit)
 - [x] **24-B**: 예산 + 반복거래 + 알림 설정 (set_budget, recurring_transaction, update_alert_config)
 - [x] **24-C**: RSU + 스톡옵션 관리 (create/update_rsu_schedule, stock_option, exercise_vesting)
+
+# 7차 마일스톤
+
+> 7차 마일스톤: 웹 버그 수정 + 사용성/기능 개선 — **"웹 UI의 데이터 정합성과 일상 사용성 강화"**
+
+## Phase 25: 웹 버그 수정 + UX 개선
+
+- [x] **25-A**: market 코드 정규화 통일 (price-fetcher/trade-service/import + 마이그레이션 스크립트)
+- [ ] **25-B**: 보유종목 dropdown 필터링 (shares > 0)
+- [ ] **25-C**: Trade import market 검증 강화
+- [ ] **25-D**: USD 거래/배당 환율 검증
+- [ ] **25-E**: API 응답 형식 일관화
+- [ ] **25-F**: 입력 검증 Zod 통합 (핵심 입력 경로 한정)
+- [ ] **25-G**: UX 개선 묶음 (dropdown 항상 렌더, Holding diff 토스트, 면책 강조, 베스팅 캘린더)
