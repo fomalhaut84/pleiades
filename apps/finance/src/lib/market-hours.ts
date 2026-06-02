@@ -71,7 +71,7 @@ const FX_MARKETS = new Set(['FX', 'CCY'])
  * market이 모호하면 ticker suffix(`.KS`, `.KQ`)로 fallback.
  */
 export function normalizeMarket(market: string, ticker?: string): 'KR' | 'US' | 'FX' | 'OTHER' {
-  const upper = market.toUpperCase()
+  const upper = (market ?? '').trim().toUpperCase()
   if (KR_MARKETS.has(upper)) return 'KR'
   if (US_MARKETS.has(upper)) return 'US'
   if (FX_MARKETS.has(upper)) return 'FX'
