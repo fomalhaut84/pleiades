@@ -1,10 +1,9 @@
-import { getToken } from 'next-auth/jwt'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
 
-export async function middleware(request: NextRequest) {
-  const token = await getToken({ req: request })
-
-  if (!token) {
+// Auth.js v5: auth()를 미들웨어로 직접 export하면 req.auth로 세션 접근 가능
+export default auth((request) => {
+  if (!request.auth) {
     // API 요청은 401 JSON 반환 (리다이렉트하면 클라이언트 파싱 에러)
     if (request.nextUrl.pathname.startsWith('/api/')) {
       return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 })
@@ -17,7 +16,7 @@ export async function middleware(request: NextRequest) {
   }
 
   return NextResponse.next()
-}
+})
 
 export const config = {
   matcher: [

@@ -30,11 +30,16 @@ export default function SignInPage() {
       })
 
       if (!result || result.error || !result.ok) {
-        setError(
-          result?.error?.includes('너무 많은 시도')
-            ? '너무 많은 시도입니다. 5분 후 다시 시도하세요.'
-            : 'PIN이 올바르지 않습니다',
-        )
+        // Auth.js v5는 CredentialsSignin 서브클래스의 code를 클라이언트로 전달한다
+        // (일반 Error message는 sanitize됨)
+        const code = result?.code
+        if (code === 'rate_limited') {
+          setError('너무 많은 시도입니다. 5분 후 다시 시도하세요.')
+        } else if (code === 'missing_auth_pin') {
+          setError('서버 설정 오류: AUTH_PIN 환경변수가 없습니다')
+        } else {
+          setError('PIN이 올바르지 않습니다')
+        }
         setPin('')
         return
       }
