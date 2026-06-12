@@ -285,4 +285,4 @@
 - [ ] **25-F**: 입력 검증 Zod 통합 (핵심 입력 경로 한정)
 - [ ] **25-G**: UX 개선 묶음 (dropdown 항상 렌더, Holding diff 토스트, 면책 강조, 베스팅 캘린더)
 - [x] **25-H-1**: Next.js 14 → 15.5.19 마이그레이션 (Dependabot HIGH 4 + MEDIUM 다수 해결)
-- [ ] **25-H-2**: next-auth 4 → Auth.js v5 마이그레이션
+- [x] **25-H-2**: next-auth 4 → Auth.js v5 마이그레이션 (uuid 권고 해결, next HIGH→moderate)
