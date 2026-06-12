@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
 interface RouteParams {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: NextRequest, props: RouteParams) {
+  const params = await props.params;
   try {
     const existing = await prisma.deposit.findUnique({ where: { id: params.id } })
     if (!existing) {
@@ -43,14 +44,29 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    const updated = await prisma.deposit.update({
-      where: { id: params.id },
-      data: {
-        amount: typeof amount === 'number' ? Math.round(amount) : undefined,
-        source: typeof source === 'string' ? source.trim() : undefined,
-        note: note !== undefined ? (typeof note === 'string' ? (note.trim() || null) : null) : undefined,
-        depositedAt: typeof depositedAt === 'string' ? new Date(depositedAt) : undefined,
-      },
+    const newAmount = typeof amount === 'number' ? Math.round(amount) : undefined
+    const amountDiff = newAmount != null ? newAmount - existing.amount : 0
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.deposit.update({
+        where: { id: params.id },
+        data: {
+          amount: newAmount,
+          source: typeof source === 'string' ? source.trim() : undefined,
+          note: note !== undefined ? (typeof note === 'string' ? (note.trim() || null) : null) : undefined,
+          depositedAt: typeof depositedAt === 'string' ? new Date(depositedAt) : undefined,
+        },
+      })
+
+      // 자산 입금 금액 변경 시 Asset.value 보정
+      if (existing.assetId && amountDiff !== 0) {
+        await tx.asset.update({
+          where: { id: existing.assetId },
+          data: { value: { increment: amountDiff } },
+        })
+      }
+
+      return result
     })
 
     return NextResponse.json(updated)
@@ -60,14 +76,25 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export async function DELETE(_request: NextRequest, props: RouteParams) {
+  const params = await props.params;
   try {
     const existing = await prisma.deposit.findUnique({ where: { id: params.id } })
     if (!existing) {
       return NextResponse.json({ error: '입금 기록을 찾을 수 없습니다.' }, { status: 404 })
     }
 
-    await prisma.deposit.delete({ where: { id: params.id } })
+    await prisma.$transaction(async (tx) => {
+      await tx.deposit.delete({ where: { id: params.id } })
+
+      // 자산 입금 삭제 시 Asset.value 역보정
+      if (existing.assetId) {
+        await tx.asset.update({
+          where: { id: existing.assetId },
+          data: { value: { decrement: existing.amount } },
+        })
+      }
+    })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('DELETE /api/deposits/[id] error:', error)

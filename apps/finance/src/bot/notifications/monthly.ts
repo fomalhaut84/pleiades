@@ -39,7 +39,10 @@ export async function sendMonthlyReminder(chatIds: number[]): Promise<void> {
     where: {
       depositedAt: { gte: startOfMonth, lt: endOfMonth },
     },
-    include: { account: { select: { name: true } } },
+    include: {
+      account: { select: { name: true } },
+      asset: { select: { name: true } },
+    },
   })
 
   if (monthDeposits.length > 0) {
@@ -47,7 +50,8 @@ export async function sendMonthlyReminder(chatIds: number[]): Promise<void> {
     for (const d of monthDeposits) {
       const isGift = isGiftSource(d.source)
       const sourceLabel = isGift ? '증여' : '입금'
-      lines.push(`  ${escapeHtml(d.account.name)}: ${formatKRWFull(d.amount)} (${sourceLabel})`)
+      const target = d.account?.name ?? d.asset?.name ?? '자산'
+      lines.push(`  ${escapeHtml(target)}: ${formatKRWFull(d.amount)} (${sourceLabel})`)
     }
   }
 

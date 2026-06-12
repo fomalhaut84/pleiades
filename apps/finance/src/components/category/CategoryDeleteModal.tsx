@@ -62,7 +62,7 @@ export default function CategoryDeleteModal({ category, onClose }: CategoryDelet
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] text-dim">유형</span>
                   <span className="text-[13px] text-muted">
-                    {category.type === 'expense' ? '소비' : '수입'}
+                    {category.type === 'expense' ? '소비' : category.type === 'income' ? '수입' : '이체'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">

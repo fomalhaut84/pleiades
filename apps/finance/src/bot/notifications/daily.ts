@@ -13,7 +13,9 @@ import {
 import {
   accountEmoji,
   formatKRWCompact,
+  formatSignedKRWCompact,
   formatPercent,
+  profitEmoji,
 } from '@/bot/utils/formatter'
 import { sendHtml } from '@/bot/utils/telegram'
 
@@ -41,8 +43,18 @@ export async function sendDailySummary(chatIds: number[]): Promise<void> {
     : []
   const priceMap = new Map(prices.map((p) => [p.ticker, p]))
 
+  // 전일 스냅샷 조회 (D-1 변동 계산용)
+  const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  const yesterday = new Date(Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate() - 1))
+  const prevSnapshots = await prisma.portfolioSnapshot.findMany({
+    where: { snapshotDate: yesterday },
+  })
+  const prevMap = new Map(prevSnapshots.map((s) => [s.accountId, s]))
+
   let grandTotal = 0
   let grandCost = 0
+  let grandPrevTotal = 0
+  let hasPrevData = false
   const accountLines: string[] = []
 
   for (const account of accounts) {
@@ -69,8 +81,16 @@ export async function sendDailySummary(chatIds: number[]): Promise<void> {
     const returnPct = accountCost > 0 ? (pl / accountCost) * 100 : 0
 
     const emoji = accountEmoji(account.name)
+    const prev = prevMap.get(account.id)
+    let changeSuffix = ''
+    if (prev) {
+      hasPrevData = true
+      grandPrevTotal += prev.totalValueKRW
+      const change = accountValue - prev.totalValueKRW
+      changeSuffix = ` | ${formatSignedKRWCompact(change)} ${profitEmoji(change)}`
+    }
     accountLines.push(
-      `${emoji} ${account.name}: ${formatKRWCompact(accountValue)} (${formatPercent(returnPct)})`
+      `${emoji} ${account.name}: ${formatKRWCompact(accountValue)} (${formatPercent(returnPct)})${changeSuffix}`
     )
   }
 
@@ -81,9 +101,26 @@ export async function sendDailySummary(chatIds: number[]): Promise<void> {
   const kst = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
   const dateStr = `${kst.getFullYear()}.${String(kst.getMonth() + 1).padStart(2, '0')}.${String(kst.getDate()).padStart(2, '0')}`
 
+  // 총합 D-1: 전일 데이터가 있는 계좌만 비교 (일부 누락 시 왜곡 방지)
+  const grandCurrentForCompare = accounts
+    .filter((a) => prevMap.has(a.id))
+    .reduce((s, a) => {
+      let v = 0
+      for (const h of a.holdings) {
+        const p = priceMap.get(h.ticker)
+        if (p) { v += calcCurrentValueKRW(h, p.price, h.currency === 'USD' ? fxRate : 1) }
+        else { v += calcCostKRW(h) }
+      }
+      return s + v
+    }, 0)
+  const grandChangeLine = hasPrevData && grandPrevTotal > 0
+    ? `📈 전일 대비: ${formatSignedKRWCompact(grandCurrentForCompare - grandPrevTotal)} (${formatPercent(((grandCurrentForCompare - grandPrevTotal) / grandPrevTotal) * 100)}) ${profitEmoji(grandCurrentForCompare - grandPrevTotal)}`
+    : null
+
   const lines = [
     `📊 <b>일일 포트폴리오 요약</b> (${dateStr})\n`,
     `💰 총 평가금: <b>${formatKRWCompact(grandTotal)}</b> (${formatPercent(grandReturn)})`,
+    ...(grandChangeLine ? [grandChangeLine] : []),
     '',
     ...accountLines,
     '',

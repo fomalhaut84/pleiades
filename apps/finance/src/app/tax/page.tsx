@@ -16,16 +16,17 @@ import { calcDividendTaxSummary } from '@/lib/tax/dividend-tax'
 export const dynamic = 'force-dynamic'
 
 interface TaxPageProps {
-  searchParams: {
+  searchParams: Promise<{
     year?: string | string[]
-  }
+  }>
 }
 
 function first(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v
 }
 
-export default async function TaxPage({ searchParams }: TaxPageProps) {
+export default async function TaxPage(props: TaxPageProps) {
+  const searchParams = await props.searchParams;
   const currentYear = new Date().getFullYear()
   const yearStr = first(searchParams.year)
   const year = yearStr && /^\d{4}$/.test(yearStr) ? parseInt(yearStr) : currentYear
@@ -45,9 +46,38 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
     orderBy: { createdAt: 'asc' },
   })
 
+  // 비주식 자산 증여 (owner별)
+  const assetGiftDeposits = await prisma.deposit.findMany({
+    where: { assetId: { not: null }, source: { in: GIFT_SOURCES } },
+    select: { amount: true, source: true, depositedAt: true, asset: { select: { owner: true } } },
+    orderBy: { depositedAt: 'asc' },
+  })
+  const assetDepositsByOwner = new Map<string, { amount: number; source: string; depositedAt: Date }[]>()
+  for (const d of assetGiftDeposits) {
+    const owner = d.asset?.owner ?? ''
+    if (!owner) continue
+    const list = assetDepositsByOwner.get(owner) ?? []
+    list.push({ amount: d.amount, source: d.source, depositedAt: d.depositedAt })
+    assetDepositsByOwner.set(owner, list)
+  }
+
+  // owner별 비주식 증여는 첫 매칭 계좌에만 합산 (중복 방지)
+  const usedOwners = new Set<string>()
   const giftSummaries = accounts.map((account) => {
     const isMinor = account.ownerAge != null && account.ownerAge < 19
-    const summary = calcGiftTaxSummary(account.deposits, isMinor)
+    const ownerAssetDeposits = usedOwners.has(account.name)
+      ? []
+      : assetDepositsByOwner.get(account.name) ?? []
+    usedOwners.add(account.name)
+    const allDeposits = [...account.deposits, ...ownerAssetDeposits]
+      .sort((a, b) => new Date(a.depositedAt).getTime() - new Date(b.depositedAt).getTime())
+    const summary = calcGiftTaxSummary(allDeposits, isMinor)
+
+    // 10년 윈도우 기준 분리 합계 (totalGifted와 일치)
+    const tenYearsAgo = new Date()
+    tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10)
+    const inWindow = (d: { depositedAt: Date }) => new Date(d.depositedAt) >= tenYearsAgo
+
     return {
       accountId: account.id,
       accountName: account.name,
@@ -56,6 +86,8 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
       ...summary,
       resetDate: summary.resetDate?.toISOString() ?? null,
       firstGiftDate: summary.firstGiftDate?.toISOString() ?? null,
+      accountGifted: account.deposits.filter(inWindow).reduce((s, d) => s + d.amount, 0),
+      assetGifted: ownerAssetDeposits.filter(inWindow).reduce((s, d) => s + d.amount, 0),
     }
   })
 
@@ -305,6 +337,8 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
                 estimatedTax={s.estimatedTax}
                 resetDate={s.resetDate}
                 firstGiftDate={s.firstGiftDate}
+                accountGifted={s.accountGifted}
+                assetGifted={s.assetGifted}
               />
             ))}
           </div>

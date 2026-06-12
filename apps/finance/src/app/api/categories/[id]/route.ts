@@ -4,10 +4,11 @@ import { prisma } from '@/lib/prisma'
 import { CATEGORY_TYPES } from '@/lib/category-utils'
 
 interface RouteParams {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: NextRequest, props: RouteParams) {
+  const params = await props.params;
   try {
     const existing = await prisma.category.findUnique({
       where: { id: params.id },
@@ -83,11 +84,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // type 변경 시 트랜잭션으로 체크+업데이트 원자 실행
     if (isTypeChange) {
-      // income으로 변경 시 groupId 초기화 (그룹은 expense 전용)
+      // income/transfer로 변경 시 groupId 초기화 (그룹은 expense 전용)
       const updateDataWithType = {
         ...baseUpdateData,
         type: type as string,
-        ...(type === 'income' ? { groupId: null } : {}),
+        ...(type !== 'expense' ? { groupId: null } : {}),
       }
       const updated = await prisma.$transaction(async (tx) => {
         const fresh = await tx.category.findUnique({
@@ -139,7 +140,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export async function DELETE(_request: NextRequest, props: RouteParams) {
+  const params = await props.params;
   try {
     const existing = await prisma.category.findUnique({
       where: { id: params.id },

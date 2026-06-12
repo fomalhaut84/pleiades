@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { recalcHolding, calcTotalKRW, validateTradeInput } from '@/lib/trade-utils'
+import { normalizeMarket } from '@/lib/market-hours'
 import type { ImportResult } from '@/types/csv-import'
 
 export const dynamic = 'force-dynamic'
@@ -114,10 +115,12 @@ export async function POST(request: NextRequest) {
       select: { ticker: true, market: true, currency: true },
       distinct: ['ticker'],
     })
+    // market은 정규화된 값으로 비교 (raw Yahoo 코드 NCM/NYQ 등과 정규화된 US/KR이 혼재 가능)
     for (const meta of existingMeta) {
-      if (meta.market !== market || meta.currency !== currency) {
+      const normalizedExisting = normalizeMarket(meta.market, meta.ticker)
+      if (normalizedExisting !== market || meta.currency !== currency) {
         return NextResponse.json(
-          { error: `${meta.ticker}은(는) 이미 ${meta.market}/${meta.currency}로 등록되어 있습니다.` },
+          { error: `${meta.ticker}은(는) 이미 ${normalizedExisting}/${meta.currency}로 등록되어 있습니다.` },
           { status: 400 }
         )
       }
@@ -128,9 +131,10 @@ export async function POST(request: NextRequest) {
       select: { ticker: true, market: true, currency: true },
     })
     for (const h of existingHoldings) {
-      if (h.market !== market || h.currency !== currency) {
+      const normalizedExisting = normalizeMarket(h.market, h.ticker)
+      if (normalizedExisting !== market || h.currency !== currency) {
         return NextResponse.json(
-          { error: `${h.ticker}은(는) 이미 ${h.market}/${h.currency}로 등록되어 있습니다.` },
+          { error: `${h.ticker}은(는) 이미 ${normalizedExisting}/${h.currency}로 등록되어 있습니다.` },
           { status: 400 }
         )
       }
@@ -206,7 +210,8 @@ export async function POST(request: NextRequest) {
                 accountId,
                 ticker: existingHolding.ticker,
                 displayName: existingHolding.displayName,
-                market: existingHolding.market,
+                // 사전 검증에서 normalize(existing) === market 임이 확인됨 — 입력값 그대로 사용
+                market,
                 type: 'BUY',
                 shares: existingHolding.shares,
                 price: baselinePrice,

@@ -90,3 +90,16 @@ export function toolError(error: unknown) {
 export function formatMoney(amount: number, currency: string): string {
   return currency === 'USD' ? formatUSD(amount) : formatKRW(amount)
 }
+
+/**
+ * YYYY-MM-DD 문자열을 UTC 자정 Date로 엄격 파싱.
+ * 형식 불일치 또는 실존하지 않는 날짜(2026-02-30 등)는 null 반환.
+ */
+export function parseDateStrict(str: string): Date | null {
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return null
+  const [, y, m, d] = match.map(Number)
+  const date = new Date(Date.UTC(y, m - 1, d))
+  if (date.getUTCFullYear() !== y || date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) return null
+  return date
+}

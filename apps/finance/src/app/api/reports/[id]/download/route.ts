@@ -8,10 +8,8 @@ const REPORTS_DIR = path.join(process.cwd(), 'reports')
 /**
  * GET /api/reports/[id]/download — PDF 다운로드
  */
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(_request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const report = await prisma.quarterlyReport.findUnique({
       where: { id: params.id },

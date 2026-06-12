@@ -50,20 +50,16 @@ export async function sendBriefing(
       maxBudgetUsd: 1.0,
     })
 
-    const html = markdownToTelegramHtml(result.response)
+    const chunks = splitMessage(result.response)
+    const htmlChunks = chunks.map((chunk) => markdownToTelegramHtml(chunk))
 
     for (const chatId of chatIds) {
       try {
-        if (html.length <= 4096) {
+        for (let i = 0; i < chunks.length; i++) {
           try {
-            await bot.api.sendMessage(chatId, html, { parse_mode: 'HTML' })
+            await bot.api.sendMessage(chatId, htmlChunks[i], { parse_mode: 'HTML' })
           } catch {
-            await bot.api.sendMessage(chatId, result.response)
-          }
-        } else {
-          const chunks = splitMessage(result.response)
-          for (const chunk of chunks) {
-            await bot.api.sendMessage(chatId, chunk)
+            await bot.api.sendMessage(chatId, chunks[i])
           }
         }
       } catch (error) {

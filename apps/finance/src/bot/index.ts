@@ -1,4 +1,4 @@
-import { Bot, webhookCallback } from 'grammy'
+import { Bot } from 'grammy'
 import { registerCommands } from './commands/start'
 import { registerPortfolioCommands } from './commands/portfolio'
 import { registerPriceCommands } from './commands/price'
@@ -60,6 +60,3 @@ export function getBot(): Bot {
   return bot
 }
 
-export function createWebhookHandler() {
-  return webhookCallback(getBot(), 'std/http')
-}

@@ -9,7 +9,8 @@ interface TransactionForDelete {
   description: string
   categoryName: string
   categoryIcon: string | null
-  categoryType: 'expense' | 'income'
+  categoryType: string
+  type?: string | null
   transactedAt: string
 }
 
@@ -56,6 +57,7 @@ export default function TransactionDeleteModal({
   }
 
   const isExpense = transaction.categoryType === 'expense'
+  const isTransfer = transaction.type === 'transfer_out' || transaction.type === 'transfer_in'
 
   return (
     <>
@@ -84,8 +86,8 @@ export default function TransactionDeleteModal({
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] text-dim">금액</span>
-                  <span className={`text-[13px] font-semibold tabular-nums ${isExpense ? 'text-red-400' : 'text-emerald-400'}`}>
-                    {isExpense ? '-' : '+'}{formatKRW(transaction.amount)}
+                  <span className={`text-[13px] font-semibold tabular-nums ${isTransfer ? 'text-sodam' : isExpense ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {isTransfer ? (transaction.type === 'transfer_out' ? '↑' : '↓') : isExpense ? '-' : '+'}{formatKRW(transaction.amount)}
                   </span>
                 </div>
               </div>

@@ -10,18 +10,19 @@ import DividendCalendar from '@/components/dividend/DividendCalendar'
 export const dynamic = 'force-dynamic'
 
 interface DividendsPageProps {
-  searchParams: {
+  searchParams: Promise<{
     accountId?: string | string[]
     year?: string | string[]
     offset?: string | string[]
-  }
+  }>
 }
 
 function first(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v
 }
 
-export default async function DividendsPage({ searchParams }: DividendsPageProps) {
+export default async function DividendsPage(props: DividendsPageProps) {
+  const searchParams = await props.searchParams;
   const accountId = first(searchParams.accountId)
   const yearStr = first(searchParams.year)
   const rawOffset = parseInt(first(searchParams.offset) ?? '0')

@@ -7,6 +7,7 @@ import CategoryPieChart from '@/components/expense/CategoryPieChart'
 import TransactionTable, { type TransactionRow } from '@/components/expense/TransactionTable'
 import TransactionForm from '@/components/expense/TransactionForm'
 import TransactionDeleteModal from '@/components/expense/TransactionDeleteModal'
+import RecurringForm, { type RecurringPrefill } from '@/components/expense/RecurringForm'
 import MonthCompare from '@/components/expense/MonthCompare'
 import SpendingTrend from '@/components/expense/SpendingTrend'
 
@@ -31,7 +32,7 @@ interface CategoryOption {
   id: string
   name: string
   icon: string | null
-  type: 'expense' | 'income'
+  type: 'expense' | 'income' | 'transfer'
 }
 
 interface ApiResponse {
@@ -83,6 +84,7 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
   const [deletingTx, setDeletingTx] = useState<TransactionRow | null>(null)
   const [categories, setCategories] = useState<CategoryOption[]>([])
   const [assets, setAssets] = useState<{ id: string; name: string; category: string; value: number; isLiability: boolean }[]>([])
+  const [recurringPrefill, setRecurringPrefill] = useState<RecurringPrefill | null>(null)
 
   // 카테고리 + 자산 목록 fetch (폼 select용)
   useEffect(() => {
@@ -95,7 +97,7 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
             id: c.id,
             name: c.name,
             icon: c.icon,
-            type: c.type as 'expense' | 'income',
+            type: c.type as 'expense' | 'income' | 'transfer',
           })))
         }
       })
@@ -109,22 +111,37 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
       .catch(() => {})
   }, [])
 
-  const fetchData = useCallback(async (y: number, m: number | undefined, t: TabType) => {
+  const fetchData = useCallback(async (y: number, m: number | undefined, t: TabType, keepOffset?: number) => {
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
 
+    const requestOffset = keepOffset ?? 0
     setLoading(true)
     try {
-      const params = new URLSearchParams({ year: String(y), offset: '0' })
+      const params = new URLSearchParams({ year: String(y), offset: String(requestOffset) })
       if (m) params.set('month', String(m))
       if (t !== 'all') params.set('type', t)
 
       const res = await fetch(`/api/transactions?${params}`, { signal: controller.signal })
       if (res.ok) {
         const json: ApiResponse = await res.json()
-        setData(json)
-        setOffset(0)
+        // 삭제 후 offset >= total이면 마지막 유효 페이지로 보정
+        if (requestOffset > 0 && json.transactions.length === 0 && json.total > 0) {
+          const corrected = Math.max(0, Math.floor((json.total - 1) / json.limit) * json.limit)
+          setOffset(corrected)
+          // 보정된 offset으로 재조회
+          const retryParams = new URLSearchParams({ year: String(y), offset: String(corrected) })
+          if (m) retryParams.set('month', String(m))
+          if (t !== 'all') retryParams.set('type', t)
+          const retryRes = await fetch(`/api/transactions?${retryParams}`, { signal: controller.signal })
+          if (retryRes.ok) {
+            setData(await retryRes.json())
+          }
+        } else {
+          setData(json)
+          setOffset(requestOffset)
+        }
       }
       // 월 선택 시 분석 데이터도 조회 (소비 탭 또는 전체 탭에서만)
       if (m && t !== 'income') {
@@ -205,8 +222,8 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
   const handleMonthChange = (m: number | undefined) => setMonth(m)
   const handleTabChange = (t: TabType) => setTab(t)
 
-  const handleSaved = () => {
-    fetchData(year, month, tab)
+  const handleSaved = (keepCurrentPage = true) => {
+    fetchData(year, month, tab, keepCurrentPage ? offset : undefined)
   }
 
   const handleEdit = (tx: TransactionRow) => {
@@ -215,6 +232,17 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
 
   const handleDelete = (tx: TransactionRow) => {
     setDeletingTx(tx)
+  }
+
+  const handleRegisterRecurring = (tx: TransactionRow) => {
+    if (tx.type === 'transfer_in' || tx.type === 'transfer_out') return
+    setShowForm(false)
+    setEditingTx(null)
+    setRecurringPrefill({
+      amount: tx.amount,
+      description: tx.description,
+      categoryId: tx.categoryId,
+    })
   }
 
   const segmentBase = 'px-3 py-1.5 text-[12px] font-semibold rounded-md transition-all cursor-pointer'
@@ -353,6 +381,7 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
         onPageChange={handlePageChange}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        onRegisterRecurring={handleRegisterRecurring}
       />
 
       {/* 내역 추가 폼 */}
@@ -362,7 +391,7 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
           categories={categories}
           assets={assets}
           onClose={() => setShowForm(false)}
-          onSaved={handleSaved}
+          onSaved={() => handleSaved(false)}
         />
       )}
 
@@ -392,6 +421,18 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
           transaction={deletingTx}
           onClose={() => setDeletingTx(null)}
           onDeleted={handleSaved}
+        />
+      )}
+
+      {/* 반복 거래 등록 폼 */}
+      {recurringPrefill && (
+        <RecurringForm
+          key={`${recurringPrefill.description}-${recurringPrefill.amount}`}
+          mode="create"
+          prefill={recurringPrefill}
+          categories={categories}
+          onClose={() => setRecurringPrefill(null)}
+          onSaved={handleSaved}
         />
       )}
     </div>

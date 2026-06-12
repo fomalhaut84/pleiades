@@ -29,20 +29,23 @@ export async function GET(request: NextRequest) {
       where,
       orderBy: [{ depositedAt: 'desc' }],
       take: 10000,
-      include: { account: { select: { name: true } } },
+      include: {
+        account: { select: { name: true } },
+        asset: { select: { name: true } },
+      },
     })
 
-    const headers = ['입금일', '계좌', '금액(원)', '구분', '메모']
+    const headers = ['입금일', '계좌/자산', '금액(원)', '구분', '메모']
     const rows = deposits.map((d) => [
       formatDate(d.depositedAt),
-      d.account.name,
+      d.account?.name ?? d.asset?.name ?? '',
       String(Math.round(d.amount)),
       d.source,
       d.note ?? '',
     ])
 
     const csv = toCSV(headers, rows)
-    const suffix = accountId ? `_${deposits[0]?.account.name ?? ''}` : ''
+    const suffix = accountId ? `_${deposits[0]?.account?.name ?? ''}` : ''
     const yearSuffix = year ?? 'all'
     return csvResponse(csv, `deposits${suffix}_${yearSuffix}.csv`)
   } catch (error) {

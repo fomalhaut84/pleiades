@@ -5,7 +5,7 @@
  */
 
 import React from 'react'
-import { renderToBuffer } from '@react-pdf/renderer'
+import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { prisma } from '@/lib/prisma'
@@ -31,7 +31,7 @@ export async function generateReportPDF(
   // 3. PDF 생성
   // renderToBuffer expects a Document element directly
   const pdfBuffer = await renderToBuffer(
-    React.createElement(QuarterlyReportPDF, { data, aiComment }) as React.ReactElement
+    React.createElement(QuarterlyReportPDF, { data, aiComment }) as React.ReactElement<DocumentProps>
   )
 
   // 4. 파일 저장

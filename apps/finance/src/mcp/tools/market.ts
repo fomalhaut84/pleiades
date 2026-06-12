@@ -1,25 +1,59 @@
 import { prisma } from '@/lib/prisma'
+import { fetchQuote } from '@/lib/price-fetcher'
 import { formatDate, DEFAULT_FX_RATE_USD_KRW } from '@/lib/format'
 import { toolResult, toolError, formatMoney } from '../utils'
 
 /**
  * get_prices: 보유 종목 또는 지정 종목의 현재 시세
+ *
+ * 지정 종목: fetchQuote로 실시간 조회 (최신가 보장)
+ * 전체 보유종목: PriceCache에서 조회 (종목 수가 많을 수 있어 API 부하 방지)
  */
 export async function getPrices(args: { tickers?: string[] }) {
   try {
-    let tickers: string[]
-    if (args.tickers && args.tickers.length > 0) {
-      tickers = args.tickers
-    } else {
-      // 보유 종목 ticker만 조회
-      const holdings = await prisma.holding.findMany({
-        select: { ticker: true },
-        distinct: ['ticker'],
-      })
-      tickers = holdings.map((h) => h.ticker)
-      if (tickers.length === 0) {
-        return toolResult('보유 종목이 없습니다.')
+    const isExplicit = args.tickers && args.tickers.length > 0
+
+    // 지정 종목: 실시간 조회 (병렬, 실패 시 캐시 fallback)
+    if (isExplicit) {
+      const requestedTickers = args.tickers!
+      const results = await Promise.allSettled(
+        requestedTickers.map((ticker) => fetchQuote(ticker))
+      )
+
+      const lines = [`## 실시간 시세 (${requestedTickers.length}종목)`]
+      for (let i = 0; i < requestedTickers.length; i++) {
+        const ticker = requestedTickers[i]
+        const result = results[i]
+        if (result.status === 'fulfilled') {
+          const quote = result.value
+          const priceStr = formatMoney(quote.price, quote.currency)
+          const changeStr = quote.changePercent != null
+            ? ` (${quote.changePercent >= 0 ? '+' : ''}${quote.changePercent.toFixed(2)}%)`
+            : ''
+          lines.push(`- ${quote.displayName} (${ticker}): ${priceStr}${changeStr}`)
+        } else {
+          // 실시간 실패 → PriceCache fallback
+          const cached = await prisma.priceCache.findUnique({ where: { ticker } })
+          if (cached) {
+            const priceStr = formatMoney(cached.price, cached.currency)
+            lines.push(`- ${cached.displayName} (${ticker}): ${priceStr} [캐시]`)
+          } else {
+            lines.push(`- ${ticker}: 조회 실패`)
+          }
+        }
       }
+      lines.push(`\n조회 시각: ${formatDate(new Date())}`)
+      return toolResult(lines.join('\n'))
+    }
+
+    // 전체 보유종목: PriceCache에서 조회
+    const holdings = await prisma.holding.findMany({
+      select: { ticker: true },
+      distinct: ['ticker'],
+    })
+    const tickers = holdings.map((h) => h.ticker)
+    if (tickers.length === 0) {
+      return toolResult('보유 종목이 없습니다.')
     }
 
     const prices = await prisma.priceCache.findMany({
@@ -27,33 +61,18 @@ export async function getPrices(args: { tickers?: string[] }) {
       orderBy: { ticker: 'asc' },
     })
 
-    if (prices.length === 0) {
-      return toolResult('캐시된 시세 데이터가 없습니다.')
-    }
-
-    // 명시적 tickers 지정 시 환율 포함 허용, 미지정 시 환율 제외
-    const isExplicit = args.tickers && args.tickers.length > 0
-    const displayPrices = isExplicit
-      ? prices
-      : prices.filter((p) => p.ticker !== 'USDKRW=X')
-
+    const displayPrices = prices.filter((p) => p.ticker !== 'USDKRW=X')
     if (displayPrices.length === 0) {
-      return toolResult('캐시된 시세 데이터가 없습니다.')
+      return toolResult('시세 데이터가 없습니다.')
     }
 
     const lines = [`## 시세 (${displayPrices.length}종목)`]
-
     for (const p of displayPrices) {
-
       const priceStr = formatMoney(p.price, p.currency)
-      const changeStr =
-        p.changePercent != null
-          ? ` (${p.changePercent >= 0 ? '+' : ''}${p.changePercent.toFixed(2)}%)`
-          : ''
-
-      lines.push(
-        `- ${p.displayName} (${p.ticker}): ${priceStr}${changeStr} [${p.market}]`
-      )
+      const changeStr = p.changePercent != null
+        ? ` (${p.changePercent >= 0 ? '+' : ''}${p.changePercent.toFixed(2)}%)`
+        : ''
+      lines.push(`- ${p.displayName} (${p.ticker}): ${priceStr}${changeStr} [${p.market}]`)
     }
 
     const latestUpdate = displayPrices.reduce(

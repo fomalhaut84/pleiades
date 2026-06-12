@@ -4,6 +4,8 @@ import { takeAllSnapshots } from './performance/snapshot'
 import { syncKrxStocks } from './krx-stocks'
 import { prisma } from './prisma'
 import { checkPriceAlerts } from '@/bot/notifications/price-alert'
+import { checkTASignals } from '@/bot/notifications/ta-signal-alert'
+import { isKRMarketOpen, isUSMarketOpen } from './market-hours'
 import { calculateNextRunAt, type Frequency } from './recurring-utils'
 import { sendToWhooing } from './whooing-webhook'
 
@@ -47,51 +49,28 @@ function createCronGuard(label: string, timeoutMs: number) {
 }
 
 /** 현재 시각을 KST 기준으로 반환 (시, 분, 요일) */
-function getKSTTime(): { h: number; m: number; day: number } {
+/** KST 기준 분 단위 시간 (cron 내부 전용) */
+function getKSTMinutes(): number {
   const now = new Date()
   const kst = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
-  return {
-    h: kst.getHours(),
-    m: kst.getMinutes(),
-    day: kst.getDay(), // 0=Sun, 6=Sat
-  }
+  return kst.getHours() * 60 + kst.getMinutes()
 }
 
-/** 한국 주식시장 개장 여부 (09:00~15:30 KST, 평일) */
-function isKRMarketOpen(): boolean {
-  const { h, m, day } = getKSTTime()
-  if (day === 0 || day === 6) return false
-  const minutes = h * 60 + m
-  return minutes >= 540 && minutes <= 930 // 09:00 ~ 15:30
+/** TA 체크 주기 제어: DB 설정(ta_check_interval_min) 기반 */
+let lastTACheckTime = 0
+
+async function shouldRunTACheck(): Promise<boolean> {
+  const config = await prisma.alertConfig.findUnique({
+    where: { key: 'ta_check_interval_min' },
+  })
+  const intervalMin = parseInt(config?.value ?? '10', 10)
+  const interval = (Number.isFinite(intervalMin) && intervalMin > 0 ? intervalMin : 10) * 60 * 1000
+
+  return Date.now() - lastTACheckTime >= interval
 }
 
-/** 현재 미국 서머타임(EDT) 여부를 America/New_York 시간대로 판별 */
-function isUSDST(): boolean {
-  const now = new Date()
-  const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
-  const utc = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }))
-  const diffHours = (utc.getTime() - et.getTime()) / (1000 * 60 * 60)
-  return Math.round(diffHours) === 4 // EDT=UTC-4, EST=UTC-5
-}
-
-/**
- * 미국 주식시장 개장 여부 (평일→익일, KST 기준)
- * - 서머타임(EDT): 22:30~05:00 KST
- * - 비서머타임(EST): 23:30~06:00 KST
- */
-function isUSMarketOpen(): boolean {
-  const { h, m, day } = getKSTTime()
-  const minutes = h * 60 + m
-  const dst = isUSDST()
-  const openMin = dst ? 1350 : 1410   // 22:30 or 23:30
-  const closeMin = dst ? 300 : 360    // 05:00 or 06:00
-
-  // 저녁 세션: openMin~23:59 (월~금)
-  if (day >= 1 && day <= 5 && minutes >= openMin) return true
-  // 새벽 세션: 00:00~closeMin (화~토 = 월~금 야간)
-  if (day >= 2 && day <= 6 && minutes <= closeMin) return true
-
-  return false
+function markTACheckDone(): void {
+  lastTACheckTime = Date.now()
 }
 
 /**
@@ -103,9 +82,9 @@ export function schedulePriceUpdates(): void {
   cron.schedule(
     '*/10 * * * *',
     async () => {
-      const { m } = getKSTTime()
+      const kstMinutes = getKSTMinutes()
       const isMarketHours = isKRMarketOpen() || isUSMarketOpen()
-      const isTopOfHour = m < 10 // 매시 0~9분 구간
+      const isTopOfHour = kstMinutes % 60 < 10 // 매시 0~9분 구간
 
       if (isMarketHours || isTopOfHour) {
         try {
@@ -115,6 +94,15 @@ export function schedulePriceUpdates(): void {
             const chatIds = getAllowedChatIds()
             if (chatIds.length > 0) {
               await checkPriceAlerts(chatIds)
+              // 장중에만 TA 시그널 체크 (주기 DB 설정 기반)
+              if (isMarketHours) {
+                const shouldRunTA = await shouldRunTACheck()
+                if (shouldRunTA) {
+                  checkTASignals(chatIds)
+                    .then(() => markTACheckDone())
+                    .catch((err) => console.error('[cron] TA 시그널 체크 실패:', err))
+                }
+              }
             }
           }
         } catch (error) {
@@ -255,4 +243,59 @@ export function scheduleRecurring(): void {
   )
 
   console.log('[cron] 반복 거래 스케줄러 등록 (매일 09:05 KST)')
+}
+
+/**
+ * 스톡옵션 베스팅 상태 자동 전환 스케줄러.
+ * 매일 00:10 KST 실행.
+ * - pending + vestingDate <= today → exercisable
+ * - exercisable + StockOption.expiryDate < today → expired
+ */
+export function scheduleVestingStatusUpdate(): void {
+  const guard = createCronGuard('베스팅 상태', 2 * 60 * 1000)
+
+  cron.schedule(
+    '10 0 * * *',
+    () => {
+      void guard(async () => {
+        // KST 기준 오늘 자정 (23:59:59까지 포함하도록 내일 0시)
+        const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+        const todayEnd = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + 1))
+
+        // pending → exercisable (vestingDate < 내일 0시 UTC = 오늘까지)
+        const activated = await prisma.stockOptionVesting.updateMany({
+          where: {
+            status: 'pending',
+            vestingDate: { lt: todayEnd },
+          },
+          data: { status: 'exercisable' },
+        })
+
+        // exercisable → expired (만료일 지난 옵션, KST 기준 오늘 시작 이전)
+        const todayStart = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()))
+        const expiredOptions = await prisma.stockOption.findMany({
+          where: { expiryDate: { lt: todayStart } },
+          select: { id: true },
+        })
+        let expiredCount = 0
+        if (expiredOptions.length > 0) {
+          const result = await prisma.stockOptionVesting.updateMany({
+            where: {
+              status: 'exercisable',
+              stockOptionId: { in: expiredOptions.map((o) => o.id) },
+            },
+            data: { status: 'expired' },
+          })
+          expiredCount = result.count
+        }
+
+        if (activated.count > 0 || expiredCount > 0) {
+          console.log(`[cron] 베스팅 상태 전환: ${activated.count}건 행사가능, ${expiredCount}건 만료`)
+        }
+      })
+    },
+    { timezone: 'Asia/Seoul' }
+  )
+
+  console.log('[cron] 베스팅 상태 스케줄러 등록 (매일 00:10 KST)')
 }

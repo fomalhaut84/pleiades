@@ -1,11 +1,3 @@
 export async function register() {
-  if (process.env.NEXT_RUNTIME === 'nodejs') {
-    const { schedulePriceUpdates, scheduleSnapshots, scheduleKrxSync, scheduleRecurring } = await import('./lib/cron')
-    const { scheduleNotifications } = await import('./bot/notifications/scheduler')
-    schedulePriceUpdates()
-    scheduleSnapshots()
-    scheduleKrxSync()
-    scheduleRecurring()
-    scheduleNotifications()
-  }
+  // cron + 알림 스케줄러는 standalone 봇 프로세스에서 실행 (dist/bot/standalone.cjs)
 }

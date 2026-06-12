@@ -75,13 +75,17 @@ model Trade {
 
 model Deposit {
   id          String   @id @default(cuid())
-  accountId   String
-  account     Account  @relation(fields: [accountId], references: [id])
+  accountId   String?
+  account     Account? @relation(fields: [accountId], references: [id])
+  assetId     String?
+  asset       Asset?   @relation(fields: [assetId], references: [id])
   amount      Float
   source      String
   note        String?
   depositedAt DateTime
   createdAt   DateTime @default(now())
+
+  @@index([assetId, depositedAt])
 }
 
 model PriceCache {
@@ -336,6 +340,7 @@ model Asset {
   updatedAt    DateTime  @updatedAt
   createdAt    DateTime  @default(now())
   transactions Transaction[]
+  deposits     Deposit[]
 }
 
 model NetWorthSnapshot {

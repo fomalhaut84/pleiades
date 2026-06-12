@@ -212,3 +212,77 @@
 - [x] **17-C**: 스톡옵션 CRUD (옵션 + 행사 스케줄 관리)
 - [x] **17-D**: 관심종목 웹 관리 (API + /watchlist 페이지)
 - [x] **17-E**: 설정 통합 페이지 (계좌, 알림, 근로소득, 후잉 연동)
+
+---
+
+# 5차 마일스톤
+
+> 5차 마일스톤: AI 어드바이저 데이터 확장 + 가계부 입력 개선 — **"AI가 모든 데이터에 접근하고, 텔레그램 입력이 더 편리한 시스템"**
+
+## Phase 18: AI 어드바이저 MCP 도구 확장
+
+- [x] **18-A**: RSU + 스톡옵션 조회 도구 (get_rsu_schedule, get_stock_options)
+- [x] **18-B**: 관심종목 조회 도구 (get_watchlist — 현재가 + 목표가 대비)
+- [x] **18-C**: 가계부 상세 조회 도구 (get_transactions — 기간/카테고리 필터, 개별 내역)
+
+## Phase 19: 텔레그램 가계부 입력 강화
+
+- [x] **19-A**: 복수 항목 자연어 입력 (한 메시지에 여러 거래 + 날짜 파싱)
+
+## Phase 20: 트레이딩 알림 + AI 매매 가이드
+
+- [x] **20-A**: 관심종목 시세 갱신 (refreshPrices에 Watchlist 티커 포함)
+- [x] **20-B**: 목표가 도달 알림 (보유/관심종목 targetBuy/targetPrice 도달 시 텔레그램 알림)
+- [x] **20-C**: 전략 기반 TA 시그널 알림 (스윙/모멘텀/단타 종목의 TA 조건 충족 시 자동 알림)
+- [x] **20-D**: 매매 전략 스킬 연동 (stock-trading-method 스킬을 서버 rules에 배치)
+- [x] **20-E**: 전략 종목 주기적 모니터링 (장중 TA + 스킬 기반 체크 → 시그널 알림, 주기 설정 가능)
+
+## Phase 21: 아이들 자산 + 증여 통합 관리
+
+- [x] **21-A**: 웹 자산 관리 페이지 (Asset CRUD UI — 추가/수정/삭제)
+- [x] **21-B**: 비주식 자산 증여 추적 (Deposit 모델을 Asset에도 연결, 아이별 입금/이체 기록)
+- [x] **21-C**: 아이별 통합 증여 현황 (주식 + 비주식 합산 뷰, 비과세 한도 대비)
+
+## 기타 개선
+
+- [x] AI 주가 실시간 조회 (get_prices에서 fetchQuote 직접 호출)
+- [x] 가계부 수정 시 페이징 초기화 버그 수정
+
+---
+
+# 6차 마일스톤
+
+> 6차 마일스톤: AI 어드바이저 풀 액세스 — **"AI가 myFinance의 모든 데이터에 읽고 쓸 수 있는 완전 자율 어드바이저로 진화"**
+
+## Phase 22: AI 시스템 안내 강화
+
+- [x] **22-A**: 시스템 프롬프트에 봇 기능 + 쓰기 도구 사용 규칙 명시 (CLAUDE.md 직접 참조 금지, 사용자 확인 규칙)
+
+## Phase 23: AI 쓰기 도구 (Tier 1)
+
+- [x] **23-A**: 관심종목 CRUD MCP 도구 (add/update/delete_watchlist)
+- [x] **23-B**: 보유 종목 전략 설정 MCP 도구 (set_holding_strategy)
+- [x] **23-C**: 가계부 거래 CRUD MCP 도구 (create/update/delete_transaction)
+- [x] **23-D**: 카테고리 CRUD MCP 도구 (create/update/delete_category)
+
+## Phase 24: AI 쓰기 도구 (Tier 2)
+
+- [x] **24-A**: 자산 + 자산 입금/이체 CRUD (create/update/delete_asset, create_asset_deposit)
+- [x] **24-B**: 예산 + 반복거래 + 알림 설정 (set_budget, recurring_transaction, update_alert_config)
+- [x] **24-C**: RSU + 스톡옵션 관리 (create/update_rsu_schedule, stock_option, exercise_vesting)
+
+# 7차 마일스톤
+
+> 7차 마일스톤: 웹 버그 수정 + 사용성/기능 개선 — **"웹 UI의 데이터 정합성과 일상 사용성 강화"**
+
+## Phase 25: 웹 버그 수정 + UX 개선
+
+- [x] **25-A**: market 코드 정규화 통일 (price-fetcher/trade-service/import + 마이그레이션 스크립트)
+- [ ] **25-B**: 보유종목 dropdown 필터링 (shares > 0)
+- [ ] **25-C**: Trade import market 검증 강화
+- [ ] **25-D**: USD 거래/배당 환율 검증
+- [ ] **25-E**: API 응답 형식 일관화
+- [ ] **25-F**: 입력 검증 Zod 통합 (핵심 입력 경로 한정)
+- [ ] **25-G**: UX 개선 묶음 (dropdown 항상 렌더, Holding diff 토스트, 면책 강조, 베스팅 캘린더)
+- [x] **25-H-1**: Next.js 14 → 15.5.19 마이그레이션 (Dependabot HIGH 4 + MEDIUM 다수 해결)
+- [x] **25-H-2**: next-auth 4 → Auth.js v5 마이그레이션 (uuid 권고 해결, next HIGH→moderate)

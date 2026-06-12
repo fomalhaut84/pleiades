@@ -9,11 +9,12 @@ import SimulatorClient from './SimulatorClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function KidsSimulatorPage({
-  params,
-}: {
-  params: { accountId: string }
-}) {
+export default async function KidsSimulatorPage(
+  props: {
+    params: Promise<{ accountId: string }>
+  }
+) {
+  const params = await props.params;
   const account = await prisma.account.findUnique({
     where: { id: params.accountId },
     include: { holdings: true },

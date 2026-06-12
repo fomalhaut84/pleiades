@@ -7,10 +7,8 @@ const RSU_DISPLAY_NAME = '카카오'
 const RSU_MARKET = 'KR'
 const RSU_CURRENCY = 'KRW'
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const { id } = params
 

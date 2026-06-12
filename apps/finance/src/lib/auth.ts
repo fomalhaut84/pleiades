@@ -1,5 +1,16 @@
-import type { NextAuthOptions } from 'next-auth'
-import CredentialsProvider from 'next-auth/providers/credentials'
+import NextAuth, { CredentialsSignin } from 'next-auth'
+import Credentials from 'next-auth/providers/credentials'
+
+// Auth.js v5는 authorize 내부에서 throw된 일반 Error의 message를 클라이언트로
+// 노출하지 않고 모두 'CredentialsSignin'으로 sanitize한다.
+// CredentialsSignin을 상속하면 code 필드가 client signIn 결과로 전달돼,
+// signin 페이지에서 케이스별 메시지 분기가 가능해진다.
+class RateLimitedError extends CredentialsSignin {
+  code = 'rate_limited'
+}
+class MissingAuthPinError extends CredentialsSignin {
+  code = 'missing_auth_pin'
+}
 
 const MAX_ATTEMPTS = 5
 const LOCKOUT_MS = 5 * 60 * 1000 // 5분
@@ -61,25 +72,27 @@ function clearFailures(key: string): void {
   failedAttempts.delete(key)
 }
 
-export const authOptions: NextAuthOptions = {
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  // v5는 AUTH_SECRET을 우선 사용하고, NEXTAUTH_SECRET도 자동 fallback한다
+  // (node_modules/next-auth/lib/env.js). 명시적 지정 없음.
   providers: [
-    CredentialsProvider({
+    Credentials({
       name: 'PIN',
       credentials: {
         pin: { label: 'PIN', type: 'password' },
       },
-      async authorize(credentials, req) {
+      async authorize(credentials, request) {
         const pin = process.env.AUTH_PIN
         if (!pin) {
-          throw new Error('AUTH_PIN 환경변수가 설정되지 않았습니다')
+          throw new MissingAuthPinError()
         }
 
-        const forwarded = req?.headers?.['x-forwarded-for']
-        const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded
-        const rateLimitKey = raw?.split(',')[0]?.trim() || 'unknown'
+        // v5에서는 Request 객체로 헤더 접근 (next-auth v4는 NodeJS req였음)
+        const forwarded = request.headers.get('x-forwarded-for')
+        const rateLimitKey = forwarded?.split(',')[0]?.trim() || 'unknown'
 
         if (!checkRateLimit(rateLimitKey)) {
-          throw new Error('너무 많은 시도입니다. 5분 후 다시 시도하세요.')
+          throw new RateLimitedError()
         }
 
         if (credentials?.pin === pin) {
@@ -113,4 +126,4 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: '/auth/signin',
   },
-}
+})

@@ -1,5 +1,6 @@
 import YahooFinance from 'yahoo-finance2'
 import { prisma } from './prisma'
+import { normalizeMarket } from './market-hours'
 
 const yahooFinance = new YahooFinance()
 
@@ -55,14 +56,17 @@ export async function fetchQuote(ticker: string): Promise<QuoteResult> {
   const change = quote.regularMarketChange != null ? Number(quote.regularMarketChange) : null
   const changePct = quote.regularMarketChangePercent != null ? Number(quote.regularMarketChangePercent) : null
   const currency = quote.currency ?? 'USD'
-  const market = quote.exchange ?? 'unknown'
+  // Yahoo의 raw exchange 코드(NCM/NYQ/KSC 등)를 정규화해 저장 — 비교 일관성 보장
+  const market = normalizeMarket(quote.exchange ?? '', ticker)
   const displayName = quote.shortName ?? quote.longName ?? ticker
 
-  // 보유 종목(PriceCache에 존재)이면 캐시 갱신 (실패해도 조회 결과는 반환)
+  // PriceCache upsert — 존재하면 갱신, 없으면 생성 (fallback 조회 시 캐시 적재)
+  // market은 update 분기에도 포함 — 기존 raw 코드가 신규 정규화 코드로 자연 수렴되도록 보장
   try {
-    await prisma.priceCache.updateMany({
+    await prisma.priceCache.upsert({
       where: { ticker },
-      data: { price, change, changePercent: changePct },
+      update: { price, change, changePercent: changePct, market },
+      create: { ticker, displayName, market, currency, price, change, changePercent: changePct },
     })
   } catch (error) {
     console.error(`[price-fetcher] 캐시 갱신 실패 (${ticker}):`, error)
@@ -97,7 +101,7 @@ export async function searchYahooByName(
 let isRefreshing = false
 
 /**
- * DB의 Holding에서 고유 ticker 목록을 가져와
+ * DB의 Holding + Watchlist에서 고유 ticker 목록을 가져와
  * yahoo-finance2로 현재가를 조회하고 PriceCache에 upsert한다.
  * 프로세스 전역 mutex로 cron/API 동시 실행 방지.
  */
@@ -125,6 +129,20 @@ async function doRefreshPrices(): Promise<RefreshResult> {
     holdings.map((h) => [h.ticker, { displayName: h.displayName, market: h.market, currency: h.currency }])
   )
 
+  // 관심종목 티커 추가 (보유 종목과 중복 시 보유 종목 메타 우선)
+  const watchlistItems = await prisma.watchlist.findMany({
+    select: { ticker: true, displayName: true, market: true },
+  })
+  for (const w of watchlistItems) {
+    if (!tickerMeta.has(w.ticker)) {
+      tickerMeta.set(w.ticker, {
+        displayName: w.displayName,
+        market: w.market,
+        currency: w.market === 'US' ? 'USD' : 'KRW',
+      })
+    }
+  }
+
   // FX 환율 추가
   tickerMeta.set(FX_TICKER, { displayName: 'USD/KRW', market: 'FX', currency: 'KRW' })
 
@@ -148,6 +166,7 @@ async function doRefreshPrices(): Promise<RefreshResult> {
       const change = quote.regularMarketChange != null ? Number(quote.regularMarketChange) : null
       const changePct = quote.regularMarketChangePercent != null ? Number(quote.regularMarketChangePercent) : null
 
+      const normalizedMarket = normalizeMarket(meta.market, ticker)
       await prisma.priceCache.upsert({
         where: { ticker },
         update: {
@@ -155,11 +174,12 @@ async function doRefreshPrices(): Promise<RefreshResult> {
           change,
           changePercent: changePct,
           displayName: meta.displayName,
+          market: normalizedMarket,
         },
         create: {
           ticker,
           displayName: meta.displayName,
-          market: meta.market,
+          market: normalizedMarket,
           price,
           currency: meta.currency,
           change,

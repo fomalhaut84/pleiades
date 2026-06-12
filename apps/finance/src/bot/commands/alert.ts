@@ -10,6 +10,7 @@ const KEY_ALIASES: Record<string, string> = {
   '예산': 'budget_warn_pct',
   '요약시각': 'daily_summary_hour',
   '리포트일': 'monthly_report_day',
+  '모니터링주기': 'ta_check_interval_min',
 }
 
 /** 값 형식 검증 (숫자만 허용) */

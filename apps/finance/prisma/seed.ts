@@ -305,6 +305,11 @@ async function main() {
       { slug: 'salary', name: '월급', type: 'income', icon: '💰', keywords: ['월급', '급여', '보너스', '상여', '성과급'], sortOrder: 1 },
       { slug: 'side-income', name: '부수입', type: 'income', icon: '💵', keywords: ['부수입', '알바', '프리랜서', '용돈'], sortOrder: 2 },
       { slug: 'etc-income', name: '기타수입', type: 'income', icon: '📥', keywords: [], sortOrder: 99 },
+      // 이체
+      { slug: 'savings', name: '적금', type: 'transfer', icon: '🏦', keywords: ['적금', '저축'], sortOrder: 1 },
+      { slug: 'deposit', name: '예금', type: 'transfer', icon: '💳', keywords: ['예금', '정기예금'], sortOrder: 2 },
+      { slug: 'investment', name: '투자계좌', type: 'transfer', icon: '📈', keywords: ['투자', '증권', '주식계좌'], sortOrder: 3 },
+      { slug: 'etc-transfer', name: '기타이체', type: 'transfer', icon: '🔄', keywords: ['이체', '송금'], sortOrder: 99 },
     ]
 
     await tx.category.createMany({ data: categories })
@@ -318,6 +323,7 @@ async function main() {
     { key: 'budget_warn_pct', value: '80', label: '예산 경고 (%)' },
     { key: 'daily_summary_hour', value: '8', label: '일일 요약 시각 (KST)' },
     { key: 'monthly_report_day', value: '1', label: '월간 리포트 발송일' },
+    { key: 'ta_check_interval_min', value: '10', label: 'TA 모니터링 주기 (분)' },
   ]
   for (const cfg of alertDefaults) {
     await prisma.alertConfig.upsert({
@@ -335,7 +341,7 @@ async function main() {
   console.log('  RSU Schedules: 2')
   console.log('  Deposits: 4')
   console.log('  Stock Options: 4 (카카오, 베스팅 7건)')
-  console.log('  Categories: 12 (소비 9 + 수입 3)')
+  console.log('  Categories: 16 (소비 9 + 수입 3 + 이체 4)')
   console.log(`  AlertConfig: ${alertDefaults.length}`)
 }
 

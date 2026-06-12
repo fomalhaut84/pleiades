@@ -10,9 +10,16 @@ interface CategoryOption {
   type: string
 }
 
+export interface RecurringPrefill {
+  amount: number
+  description: string
+  categoryId: string
+}
+
 interface RecurringFormProps {
   mode: 'create' | 'edit'
   item?: RecurringRow
+  prefill?: RecurringPrefill
   categories: CategoryOption[]
   onClose: () => void
   onSaved: () => void
@@ -22,13 +29,13 @@ type Frequency = 'monthly' | 'weekly' | 'yearly'
 
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토']
 
-export default function RecurringForm({ mode, item, categories, onClose, onSaved }: RecurringFormProps) {
+export default function RecurringForm({ mode, item, prefill, categories, onClose, onSaved }: RecurringFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [amount, setAmount] = useState(item ? String(item.amount) : '')
-  const [description, setDescription] = useState(item?.description ?? '')
-  const [categoryId, setCategoryId] = useState(item?.categoryId ?? '')
+  const [amount, setAmount] = useState(item ? String(item.amount) : prefill ? String(prefill.amount) : '')
+  const [description, setDescription] = useState(item?.description ?? prefill?.description ?? '')
+  const [categoryId, setCategoryId] = useState(item?.categoryId ?? prefill?.categoryId ?? '')
   const [frequency, setFrequency] = useState<Frequency>((item?.frequency as Frequency) ?? 'monthly')
   const [dayOfMonth, setDayOfMonth] = useState(item?.dayOfMonth ?? 1)
   const [dayOfWeek, setDayOfWeek] = useState(item?.dayOfWeek ?? 1)

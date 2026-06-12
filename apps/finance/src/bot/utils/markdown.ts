@@ -89,3 +89,15 @@ export function markdownToTelegramHtml(text: string): string {
 
   return result.trim()
 }
+
+/**
+ * HTML 태그 + 엔티티를 제거하여 plain text로 변환.
+ * parse_mode: 'HTML' 실패 시 fallback용.
+ */
+export function stripHtml(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+}

@@ -5,11 +5,22 @@
  */
 
 import React from 'react'
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
+import path from 'path'
+import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer'
 import type { QuarterlyData } from './data-collector'
 
+const FONT_DIR = path.join(process.cwd(), 'assets', 'fonts')
+
+Font.register({
+  family: 'NotoSansKR',
+  fonts: [
+    { src: path.join(FONT_DIR, 'NotoSansKR-Regular.ttf'), fontWeight: 400 },
+    { src: path.join(FONT_DIR, 'NotoSansKR-Bold.ttf'), fontWeight: 700 },
+  ],
+})
+
 const styles = StyleSheet.create({
-  page: { padding: 40, fontFamily: 'Helvetica', fontSize: 10, color: '#333' },
+  page: { padding: 40, fontFamily: 'NotoSansKR', fontSize: 10, color: '#333' },
   // 커버
   cover: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   coverTitle: { fontSize: 28, fontWeight: 'bold', color: '#1a1a2e', marginBottom: 8 },
@@ -30,7 +41,7 @@ const styles = StyleSheet.create({
   // 푸터
   footer: { position: 'absolute', bottom: 20, left: 40, right: 40, textAlign: 'center', fontSize: 8, color: '#999' },
   // 면책
-  disclaimer: { fontSize: 7, color: '#999', marginTop: 8, fontStyle: 'italic' },
+  disclaimer: { fontSize: 7, color: '#999', marginTop: 8 },
 })
 
 function formatKRW(n: number): string {

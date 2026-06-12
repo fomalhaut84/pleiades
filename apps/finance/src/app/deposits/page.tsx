@@ -8,18 +8,19 @@ import DepositTable from '@/components/deposit/DepositTable'
 export const dynamic = 'force-dynamic'
 
 interface DepositsPageProps {
-  searchParams: {
+  searchParams: Promise<{
     accountId?: string | string[]
     year?: string | string[]
     offset?: string | string[]
-  }
+  }>
 }
 
 function first(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v
 }
 
-export default async function DepositsPage({ searchParams }: DepositsPageProps) {
+export default async function DepositsPage(props: DepositsPageProps) {
+  const searchParams = await props.searchParams;
   const accountId = first(searchParams.accountId)
   const yearStr = first(searchParams.year)
   const rawOffset = parseInt(first(searchParams.offset) ?? '0')
