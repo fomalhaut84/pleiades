@@ -2,6 +2,8 @@
  * 배당금 유틸리티: 세율 상수, 입력 검증, 세금 자동 계산
  */
 
+import { validateFxRateForUSD } from './trade-utils'
+
 /** US 배당 원천징수 세율 15% */
 export const US_DIVIDEND_TAX_RATE = 0.15
 
@@ -40,8 +42,9 @@ export function validateDividendInput(body: {
   if (!body.currency || !['USD', 'KRW'].includes(body.currency)) {
     errors.push({ field: 'currency', message: '통화를 선택해주세요 (USD/KRW).' })
   }
-  if (body.currency === 'USD' && (typeof body.fxRate !== 'number' || !Number.isFinite(body.fxRate) || body.fxRate <= 0)) {
-    errors.push({ field: 'fxRate', message: 'USD 배당은 유효한 환율을 입력해야 합니다.' })
+  if (body.currency === 'USD') {
+    const fxError = validateFxRateForUSD(body.fxRate, 'USD 배당')
+    if (fxError) errors.push({ field: 'fxRate', message: fxError })
   }
 
   return errors

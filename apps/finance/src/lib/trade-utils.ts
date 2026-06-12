@@ -103,6 +103,18 @@ function toKSTDateString(ms: number): string {
 }
 
 /**
+ * USD 거래/배당의 환율을 검증한다. 통과 시 null, 실패 시 사용자 메시지.
+ * 양수 + finite number만 허용. null/undefined/0/NaN 모두 거부.
+ * @param label 에러 메시지의 도메인 라벨 (예: 'USD 종목', 'USD 배당')
+ */
+export function validateFxRateForUSD(fxRate: unknown, label = 'USD 종목'): string | null {
+  if (typeof fxRate !== 'number' || !Number.isFinite(fxRate) || fxRate <= 0) {
+    return `${label}은 유효한 환율이 필요합니다.`
+  }
+  return null
+}
+
+/**
  * 거래일 문자열을 검증한다. 통과 시 null, 실패 시 사용자 메시지 반환.
  * - parse 불가
  * - KST 캘린더 기준 오늘보다 미래 (사용자 KST 기준 "내일 이후" 입력 차단)
@@ -152,8 +164,9 @@ export function validateTradeInput(body: {
   if (!body.currency || !['USD', 'KRW'].includes(body.currency)) {
     errors.push({ field: 'currency', message: '통화를 선택해주세요 (USD/KRW).' })
   }
-  if (body.currency === 'USD' && (typeof body.fxRate !== 'number' || !Number.isFinite(body.fxRate) || body.fxRate <= 0)) {
-    errors.push({ field: 'fxRate', message: 'USD 종목은 유효한 환율을 입력해야 합니다.' })
+  if (body.currency === 'USD') {
+    const fxError = validateFxRateForUSD(body.fxRate)
+    if (fxError) errors.push({ field: 'fxRate', message: fxError })
   }
   if (body.market === 'US' && body.currency && body.currency !== 'USD') {
     errors.push({ field: 'currency', message: 'US 시장은 USD 통화만 가능합니다.' })

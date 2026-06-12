@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { calcAmountKRW } from '@/lib/dividend-utils'
+import { validateFxRateForUSD } from '@/lib/trade-utils'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -32,8 +33,9 @@ export async function PUT(request: NextRequest, props: RouteParams) {
     if (taxAmount !== undefined && taxAmount !== null && (typeof taxAmount !== 'number' || !Number.isFinite(taxAmount) || taxAmount < 0)) {
       return NextResponse.json({ error: '세금은 0 이상이어야 합니다.' }, { status: 400 })
     }
-    if (fxRate !== undefined && fxRate !== null && existing.currency === 'USD' && (typeof fxRate !== 'number' || !Number.isFinite(fxRate) || fxRate <= 0)) {
-      return NextResponse.json({ error: 'USD 배당은 유효한 환율이 필요합니다.' }, { status: 400 })
+    if (fxRate !== undefined && fxRate !== null && existing.currency === 'USD') {
+      const fxError = validateFxRateForUSD(fxRate, 'USD 배당')
+      if (fxError) return NextResponse.json({ error: fxError }, { status: 400 })
     }
     if (reinvested !== undefined && typeof reinvested !== 'boolean') {
       return NextResponse.json({ error: '재투자 여부는 true/false여야 합니다.' }, { status: 400 })
@@ -55,9 +57,10 @@ export async function PUT(request: NextRequest, props: RouteParams) {
       return NextResponse.json({ error: '세금이 세전 금액을 초과할 수 없습니다.' }, { status: 400 })
     }
 
-    // USD는 반드시 유효한 fxRate가 있어야 함
-    if (existing.currency === 'USD' && (!nextFxRate || !Number.isFinite(nextFxRate) || nextFxRate <= 0)) {
-      return NextResponse.json({ error: 'USD 배당은 유효한 환율이 필요합니다.' }, { status: 400 })
+    // USD는 최종 fxRate가 항상 양수 보장 — stored 값이 손상되었을 때 silent 0 차단
+    if (existing.currency === 'USD') {
+      const fxError = validateFxRateForUSD(nextFxRate, 'USD 배당')
+      if (fxError) return NextResponse.json({ error: fxError }, { status: 400 })
     }
 
     // 서버 측 amountKRW 재계산

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { recalcHolding, validateTradedAt } from '@/lib/trade-utils'
+import { recalcHolding, validateTradedAt, validateFxRateForUSD } from '@/lib/trade-utils'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -68,8 +68,9 @@ export async function PUT(request: NextRequest, props: RouteParams) {
     if (price !== undefined && (typeof price !== 'number' || !Number.isFinite(price) || price <= 0)) {
       return NextResponse.json({ error: '단가는 0보다 큰 숫자여야 합니다.' }, { status: 400 })
     }
-    if (fxRate !== undefined && trade.currency === 'USD' && (typeof fxRate !== 'number' || !Number.isFinite(fxRate) || fxRate <= 0)) {
-      return NextResponse.json({ error: 'USD 종목은 유효한 환율이 필요합니다.' }, { status: 400 })
+    if (fxRate !== undefined && trade.currency === 'USD') {
+      const fxError = validateFxRateForUSD(fxRate)
+      if (fxError) return NextResponse.json({ error: fxError }, { status: 400 })
     }
     if (tradedAt !== undefined) {
       if (typeof tradedAt !== 'string') {
@@ -84,8 +85,15 @@ export async function PUT(request: NextRequest, props: RouteParams) {
     const updatedShares = shares ?? trade.shares
     const updatedPrice = price ?? trade.price
     const updatedFxRate = fxRate !== undefined ? fxRate : trade.fxRate
+
+    // USD는 최종 fxRate가 항상 양수 보장 — stored 값이 손상되었을 때 silent 0 차단
+    if (trade.currency === 'USD') {
+      const fxError = validateFxRateForUSD(updatedFxRate)
+      if (fxError) return NextResponse.json({ error: fxError }, { status: 400 })
+    }
+
     const updatedTotalKRW = trade.currency === 'USD'
-      ? Math.round(updatedPrice * updatedShares * (updatedFxRate ?? 0))
+      ? Math.round(updatedPrice * updatedShares * (updatedFxRate as number))
       : Math.round(updatedPrice * updatedShares)
 
     const result = await prisma.$transaction(async (tx) => {
