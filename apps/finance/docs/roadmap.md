@@ -278,9 +278,9 @@
 ## Phase 25: 웹 버그 수정 + UX 개선
 
 - [x] **25-A**: market 코드 정규화 통일 (price-fetcher/trade-service/import + 마이그레이션 스크립트)
-- [ ] **25-B**: 보유종목 dropdown 필터링 (shares > 0)
-- [ ] **25-C**: Trade import market 검증 강화
-- [ ] **25-D**: USD 거래/배당 환율 검증
+- [x] **25-B**: 보유종목 dropdown 필터링 (shares > 0)
+- [x] **25-C**: Trade import 검증 강화 (날짜 범위 + ticker 정규화)
+- [x] **25-D**: USD 거래/배당 환율 검증 (헬퍼 추출 + 편집 silent 0 차단)
 - [ ] **25-E**: API 응답 형식 일관화
 - [ ] **25-F**: 입력 검증 Zod 통합 (핵심 입력 경로 한정)
 - [ ] **25-G**: UX 개선 묶음 (dropdown 항상 렌더, Holding diff 토스트, 면책 강조, 베스팅 캘린더)
