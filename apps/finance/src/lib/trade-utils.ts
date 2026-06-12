@@ -93,6 +93,33 @@ export interface TradeValidationError {
   message: string
 }
 
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000
+const MIN_TRADE_DATE = '2000-01-01'
+
+/** ms 타임스탬프를 KST 캘린더 날짜 문자열(YYYY-MM-DD)로 변환 */
+function toKSTDateString(ms: number): string {
+  const d = new Date(ms + KST_OFFSET_MS)
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+}
+
+/**
+ * 거래일 문자열을 검증한다. 통과 시 null, 실패 시 사용자 메시지 반환.
+ * - parse 불가
+ * - KST 캘린더 기준 오늘보다 미래 (사용자 KST 기준 "내일 이후" 입력 차단)
+ * - 2000-01-01 미만
+ *
+ * 단순한 `Date.now() + 1일` grace는 KST 사용자가 오후~저녁에 내일 날짜(UTC midnight
+ * 기준 < now+24h)를 입력하면 통과시키는 결함이 있어, KST 캘린더 날짜로 직접 비교.
+ */
+export function validateTradedAt(tradedAt: string | undefined | null): string | null {
+  if (!tradedAt || isNaN(Date.parse(tradedAt))) return '유효한 거래일을 입력해주세요.'
+  const tradedAtKST = toKSTDateString(Date.parse(tradedAt))
+  const todayKST = toKSTDateString(Date.now())
+  if (tradedAtKST > todayKST) return '미래 날짜는 입력할 수 없습니다.'
+  if (tradedAtKST < MIN_TRADE_DATE) return '2000-01-01 이후 날짜를 입력해주세요.'
+  return null
+}
+
 export function validateTradeInput(body: {
   accountId?: string
   ticker?: string
@@ -134,9 +161,8 @@ export function validateTradeInput(body: {
   if (body.market === 'KR' && body.currency && body.currency !== 'KRW') {
     errors.push({ field: 'currency', message: 'KR 시장은 KRW 통화만 가능합니다.' })
   }
-  if (!body.tradedAt || isNaN(Date.parse(body.tradedAt))) {
-    errors.push({ field: 'tradedAt', message: '유효한 거래일을 입력해주세요.' })
-  }
+  const tradedAtError = validateTradedAt(body.tradedAt)
+  if (tradedAtError) errors.push({ field: 'tradedAt', message: tradedAtError })
 
   return errors
 }

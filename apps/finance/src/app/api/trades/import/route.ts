@@ -69,8 +69,11 @@ export async function POST(request: NextRequest) {
         resultErrors.push({ row: i + 1, field: 'row', message: '잘못된 데이터 형식입니다.' })
         continue
       }
-      const ticker = typeof t.ticker === 'string' ? t.ticker : String(t.ticker ?? '')
-      const displayName = typeof t.displayName === 'string' ? t.displayName : ticker
+      // ticker 사전 정규화 — validation/storage 모두 동일 값 사용
+      const rawTicker = typeof t.ticker === 'string' ? t.ticker : String(t.ticker ?? '')
+      const ticker = rawTicker.trim().toUpperCase()
+      const rawDisplayName = typeof t.displayName === 'string' ? t.displayName.trim() : ''
+      const displayName = rawDisplayName || ticker
       const tradeType = typeof t.type === 'string' ? t.type : String(t.type ?? '')
       const shares = typeof t.shares === 'number' ? t.shares : Number(t.shares)
       const price = typeof t.price === 'number' ? t.price : Number(t.price)
@@ -79,7 +82,7 @@ export async function POST(request: NextRequest) {
       const errors = validateTradeInput({
         accountId,
         ticker,
-        displayName: displayName || ticker,
+        displayName,
         market,
         type: tradeType,
         shares,
@@ -96,8 +99,8 @@ export async function POST(request: NextRequest) {
       } else {
         validTrades.push({
           index: i,
-          ticker: ticker.toUpperCase().trim(),
-          displayName: displayName || ticker,
+          ticker,
+          displayName,
           type: tradeType as 'BUY' | 'SELL',
           shares,
           price,

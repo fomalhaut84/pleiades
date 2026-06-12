@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { recalcHolding } from '@/lib/trade-utils'
+import { recalcHolding, validateTradedAt } from '@/lib/trade-utils'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -71,8 +71,14 @@ export async function PUT(request: NextRequest, props: RouteParams) {
     if (fxRate !== undefined && trade.currency === 'USD' && (typeof fxRate !== 'number' || !Number.isFinite(fxRate) || fxRate <= 0)) {
       return NextResponse.json({ error: 'USD 종목은 유효한 환율이 필요합니다.' }, { status: 400 })
     }
-    if (tradedAt !== undefined && (typeof tradedAt !== 'string' || isNaN(Date.parse(tradedAt)))) {
-      return NextResponse.json({ error: '유효한 거래일을 입력해주세요.' }, { status: 400 })
+    if (tradedAt !== undefined) {
+      if (typeof tradedAt !== 'string') {
+        return NextResponse.json({ error: '유효한 거래일을 입력해주세요.' }, { status: 400 })
+      }
+      const tradedAtError = validateTradedAt(tradedAt)
+      if (tradedAtError) {
+        return NextResponse.json({ error: tradedAtError }, { status: 400 })
+      }
     }
 
     const updatedShares = shares ?? trade.shares
