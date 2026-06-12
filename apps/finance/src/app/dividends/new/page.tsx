@@ -9,6 +9,7 @@ export default async function NewDividendPage() {
       id: true,
       name: true,
       holdings: {
+        where: { shares: { gt: 0 } },
         select: {
           ticker: true,
           displayName: true,
