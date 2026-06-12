@@ -29,11 +29,12 @@ function getLevel(age: number | null): { level: number; label: string; emoji: st
   return { level: 4, label: '산', emoji: '🏔️' }
 }
 
-export default async function KidsPage({
-  params,
-}: {
-  params: { accountId: string }
-}) {
+export default async function KidsPage(
+  props: {
+    params: Promise<{ accountId: string }>
+  }
+) {
+  const params = await props.params;
   const account = await prisma.account.findUnique({
     where: { id: params.accountId },
     include: { holdings: true },

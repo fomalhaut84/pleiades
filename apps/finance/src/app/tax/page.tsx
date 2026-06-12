@@ -16,16 +16,17 @@ import { calcDividendTaxSummary } from '@/lib/tax/dividend-tax'
 export const dynamic = 'force-dynamic'
 
 interface TaxPageProps {
-  searchParams: {
+  searchParams: Promise<{
     year?: string | string[]
-  }
+  }>
 }
 
 function first(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v
 }
 
-export default async function TaxPage({ searchParams }: TaxPageProps) {
+export default async function TaxPage(props: TaxPageProps) {
+  const searchParams = await props.searchParams;
   const currentYear = new Date().getFullYear()
   const yearStr = first(searchParams.year)
   const year = yearStr && /^\d{4}$/.test(yearStr) ? parseInt(yearStr) : currentYear

@@ -8,18 +8,19 @@ import TradeTable from '@/components/trade/TradeTable'
 export const dynamic = 'force-dynamic'
 
 interface TradesPageProps {
-  searchParams: {
+  searchParams: Promise<{
     accountId?: string | string[]
     type?: string | string[]
     offset?: string | string[]
-  }
+  }>
 }
 
 function first(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v
 }
 
-export default async function TradesPage({ searchParams }: TradesPageProps) {
+export default async function TradesPage(props: TradesPageProps) {
+  const searchParams = await props.searchParams;
   const accountId = first(searchParams.accountId)
   const type = first(searchParams.type)
   const rawOffset = parseInt(first(searchParams.offset) ?? '0')

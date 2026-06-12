@@ -21,10 +21,8 @@ function handlePrismaError(error: unknown, context: string) {
 }
 
 /** PUT /api/income-profiles/[id] — 수정 */
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } },
-) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const { id } = params
 
@@ -75,10 +73,8 @@ export async function PUT(
 }
 
 /** DELETE /api/income-profiles/[id] — 삭제 */
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: { id: string } },
-) {
+export async function DELETE(_request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const { id } = params
     await prisma.incomeProfile.delete({ where: { id } })

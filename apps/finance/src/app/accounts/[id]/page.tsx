@@ -14,7 +14,7 @@ import RefreshButton from '@/components/dashboard/RefreshButton'
 import Link from 'next/link'
 
 interface PageProps {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 const COLOR_MAP: Record<string, { color: string; text: string; tagBg: string }> = {
@@ -33,7 +33,8 @@ function formatTotalShort(amount: number): string {
   return `${Math.round(amount).toLocaleString('ko-KR')}`
 }
 
-export default async function AccountDetailPage({ params }: PageProps) {
+export default async function AccountDetailPage(props: PageProps) {
+  const params = await props.params;
   const [account, prices] = await Promise.all([
     prisma.account.findUnique({
       where: { id: params.id },

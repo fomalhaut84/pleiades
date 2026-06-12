@@ -4,10 +4,11 @@ import { prisma } from '@/lib/prisma'
 import { CATEGORY_TYPES } from '@/lib/category-utils'
 
 interface RouteParams {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: NextRequest, props: RouteParams) {
+  const params = await props.params;
   try {
     const existing = await prisma.category.findUnique({
       where: { id: params.id },
@@ -139,7 +140,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export async function DELETE(_request: NextRequest, props: RouteParams) {
+  const params = await props.params;
   try {
     const existing = await prisma.category.findUnique({
       where: { id: params.id },

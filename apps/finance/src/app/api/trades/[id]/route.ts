@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { recalcHolding } from '@/lib/trade-utils'
 
 interface RouteParams {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 /**
@@ -51,7 +51,8 @@ async function recalcHoldingFromTrades(
   }
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: NextRequest, props: RouteParams) {
+  const params = await props.params;
   try {
     const trade = await prisma.trade.findUnique({ where: { id: params.id } })
     if (!trade) {
@@ -112,7 +113,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export async function DELETE(_request: NextRequest, props: RouteParams) {
+  const params = await props.params;
   try {
     const trade = await prisma.trade.findUnique({ where: { id: params.id } })
     if (!trade) {
