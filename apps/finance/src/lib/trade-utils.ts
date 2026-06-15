@@ -3,6 +3,9 @@
  * 순수 함수로 구성하여 API route에서 호출.
  */
 
+import { z } from 'zod'
+import { zodErrorsToValidation, type ValidationError } from './zod-utils'
+
 interface TradeInput {
   type: string       // "BUY" | "SELL"
   shares: number
@@ -88,10 +91,7 @@ export function calcTotalKRW(
 /**
  * 거래 입력 검증
  */
-export interface TradeValidationError {
-  field: string
-  message: string
-}
+export type TradeValidationError = ValidationError
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000
 const MIN_TRADE_DATE = '2000-01-01'
@@ -123,8 +123,10 @@ export function validateFxRateForUSD(fxRate: unknown, label = 'USD 종목'): str
  * 단순한 `Date.now() + 1일` grace는 KST 사용자가 오후~저녁에 내일 날짜(UTC midnight
  * 기준 < now+24h)를 입력하면 통과시키는 결함이 있어, KST 캘린더 날짜로 직접 비교.
  */
-export function validateTradedAt(tradedAt: string | undefined | null): string | null {
-  if (!tradedAt || isNaN(Date.parse(tradedAt))) return '유효한 거래일을 입력해주세요.'
+export function validateTradedAt(tradedAt: unknown): string | null {
+  if (typeof tradedAt !== 'string' || isNaN(Date.parse(tradedAt))) {
+    return '유효한 거래일을 입력해주세요.'
+  }
   const tradedAtKST = toKSTDateString(Date.parse(tradedAt))
   const todayKST = toKSTDateString(Date.now())
   if (tradedAtKST > todayKST) return '미래 날짜는 입력할 수 없습니다.'
@@ -132,50 +134,54 @@ export function validateTradedAt(tradedAt: string | undefined | null): string | 
   return null
 }
 
-export function validateTradeInput(body: {
-  accountId?: string
-  ticker?: string
-  displayName?: string
-  market?: string
-  type?: string
-  shares?: number
-  price?: number
-  currency?: string
-  fxRate?: number | null
-  tradedAt?: string
-}): TradeValidationError[] {
-  const errors: TradeValidationError[] = []
+const TradeInputSchema = z
+  .object({
+    accountId: z
+      .string({ message: '계좌를 선택해주세요.' })
+      .min(1, { message: '계좌를 선택해주세요.' }),
+    ticker: z
+      .string({ message: '종목을 선택해주세요.' })
+      .trim()
+      .min(1, { message: '종목을 선택해주세요.' }),
+    displayName: z
+      .string({ message: '종목명을 입력해주세요.' })
+      .trim()
+      .min(1, { message: '종목명을 입력해주세요.' }),
+    market: z.enum(['US', 'KR'], { message: '시장을 선택해주세요 (US/KR).' }),
+    type: z.enum(['BUY', 'SELL'], { message: '거래 유형을 선택해주세요 (BUY/SELL).' }),
+    shares: z
+      .number({ message: '수량은 1 이상의 정수여야 합니다.' })
+      .int({ message: '수량은 1 이상의 정수여야 합니다.' })
+      .positive({ message: '수량은 1 이상의 정수여야 합니다.' })
+      .finite({ message: '수량은 1 이상의 정수여야 합니다.' }),
+    price: z
+      .number({ message: '단가는 0보다 큰 숫자여야 합니다.' })
+      .positive({ message: '단가는 0보다 큰 숫자여야 합니다.' })
+      .finite({ message: '단가는 0보다 큰 숫자여야 합니다.' }),
+    currency: z.enum(['USD', 'KRW'], { message: '통화를 선택해주세요 (USD/KRW).' }),
+    // fxRate / tradedAt 의 형식 검증은 USD 분기 + validateTradedAt 헬퍼가 한국어 메시지로
+    // 통일 처리하므로 schema 단계에서는 type-level 영문 메시지가 노출되지 않도록 unknown 으로 받는다.
+    // (CSV import 가 Number(...) 변환 결과 NaN 을 전달하는 케이스도 동일 흐름)
+    fxRate: z.unknown().optional(),
+    tradedAt: z.unknown().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.currency === 'USD') {
+      const fxError = validateFxRateForUSD(data.fxRate)
+      if (fxError) ctx.addIssue({ code: 'custom', path: ['fxRate'], message: fxError })
+    }
+    if (data.market === 'US' && data.currency !== 'USD') {
+      ctx.addIssue({ code: 'custom', path: ['currency'], message: 'US 시장은 USD 통화만 가능합니다.' })
+    }
+    if (data.market === 'KR' && data.currency !== 'KRW') {
+      ctx.addIssue({ code: 'custom', path: ['currency'], message: 'KR 시장은 KRW 통화만 가능합니다.' })
+    }
+    const tradedAtError = validateTradedAt(data.tradedAt)
+    if (tradedAtError) ctx.addIssue({ code: 'custom', path: ['tradedAt'], message: tradedAtError })
+  })
 
-  if (!body.accountId) errors.push({ field: 'accountId', message: '계좌를 선택해주세요.' })
-  if (!body.ticker?.trim()) errors.push({ field: 'ticker', message: '종목을 선택해주세요.' })
-  if (!body.displayName?.trim()) errors.push({ field: 'displayName', message: '종목명을 입력해주세요.' })
-  if (!body.market || !['US', 'KR'].includes(body.market)) {
-    errors.push({ field: 'market', message: '시장을 선택해주세요 (US/KR).' })
-  }
-  if (!body.type || !['BUY', 'SELL'].includes(body.type)) {
-    errors.push({ field: 'type', message: '거래 유형을 선택해주세요 (BUY/SELL).' })
-  }
-  if (typeof body.shares !== 'number' || !Number.isFinite(body.shares) || body.shares <= 0 || !Number.isInteger(body.shares)) {
-    errors.push({ field: 'shares', message: '수량은 1 이상의 정수여야 합니다.' })
-  }
-  if (typeof body.price !== 'number' || !Number.isFinite(body.price) || body.price <= 0) {
-    errors.push({ field: 'price', message: '단가는 0보다 큰 숫자여야 합니다.' })
-  }
-  if (!body.currency || !['USD', 'KRW'].includes(body.currency)) {
-    errors.push({ field: 'currency', message: '통화를 선택해주세요 (USD/KRW).' })
-  }
-  if (body.currency === 'USD') {
-    const fxError = validateFxRateForUSD(body.fxRate)
-    if (fxError) errors.push({ field: 'fxRate', message: fxError })
-  }
-  if (body.market === 'US' && body.currency && body.currency !== 'USD') {
-    errors.push({ field: 'currency', message: 'US 시장은 USD 통화만 가능합니다.' })
-  }
-  if (body.market === 'KR' && body.currency && body.currency !== 'KRW') {
-    errors.push({ field: 'currency', message: 'KR 시장은 KRW 통화만 가능합니다.' })
-  }
-  const tradedAtError = validateTradedAt(body.tradedAt)
-  if (tradedAtError) errors.push({ field: 'tradedAt', message: tradedAtError })
-
-  return errors
+export function validateTradeInput(body: unknown): TradeValidationError[] {
+  const result = TradeInputSchema.safeParse(body)
+  if (result.success) return []
+  return zodErrorsToValidation(result.error)
 }

@@ -2,7 +2,9 @@
  * 배당금 유틸리티: 세율 상수, 입력 검증, 세금 자동 계산
  */
 
+import { z } from 'zod'
 import { validateFxRateForUSD } from './trade-utils'
+import { zodErrorsToValidation, type ValidationError } from './zod-utils'
 
 /** US 배당 원천징수 세율 15% */
 export const US_DIVIDEND_TAX_RATE = 0.15
@@ -10,44 +12,48 @@ export const US_DIVIDEND_TAX_RATE = 0.15
 /** KR 배당소득세율 15.4% (소득세 14% + 지방소득세 1.4%) */
 export const KR_DIVIDEND_TAX_RATE = 0.154
 
-export interface DividendValidationError {
-  field: string
-  message: string
-}
+export type DividendValidationError = ValidationError
 
-export function validateDividendInput(body: {
-  accountId?: string
-  ticker?: string
-  displayName?: string
-  payDate?: string
-  amountGross?: number
-  amountNet?: number
-  currency?: string
-  fxRate?: number | null
-}): DividendValidationError[] {
-  const errors: DividendValidationError[] = []
+const DividendInputSchema = z
+  .object({
+    accountId: z
+      .string({ message: '계좌를 선택해주세요.' })
+      .min(1, { message: '계좌를 선택해주세요.' }),
+    ticker: z
+      .string({ message: '종목을 선택해주세요.' })
+      .trim()
+      .min(1, { message: '종목을 선택해주세요.' }),
+    displayName: z
+      .string({ message: '종목명을 입력해주세요.' })
+      .trim()
+      .min(1, { message: '종목명을 입력해주세요.' }),
+    payDate: z
+      .string({ message: '유효한 지급일을 입력해주세요.' })
+      .refine((s) => !isNaN(Date.parse(s)), { message: '유효한 지급일을 입력해주세요.' }),
+    amountGross: z
+      .number({ message: '세전 금액은 0보다 커야 합니다.' })
+      .positive({ message: '세전 금액은 0보다 커야 합니다.' })
+      .finite({ message: '세전 금액은 0보다 커야 합니다.' }),
+    amountNet: z
+      .number({ message: '세후 금액은 0 이상이어야 합니다.' })
+      .nonnegative({ message: '세후 금액은 0 이상이어야 합니다.' })
+      .finite({ message: '세후 금액은 0 이상이어야 합니다.' }),
+    currency: z.enum(['USD', 'KRW'], { message: '통화를 선택해주세요 (USD/KRW).' }),
+    // fxRate 의 형식 검증은 USD 분기 + validateFxRateForUSD 헬퍼가 한국어 메시지로
+    // 통일 처리. type-level 영문 메시지 누출 방지를 위해 unknown 으로 받는다.
+    fxRate: z.unknown().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.currency === 'USD') {
+      const fxError = validateFxRateForUSD(data.fxRate, 'USD 배당')
+      if (fxError) ctx.addIssue({ code: 'custom', path: ['fxRate'], message: fxError })
+    }
+  })
 
-  if (!body.accountId || typeof body.accountId !== 'string') errors.push({ field: 'accountId', message: '계좌를 선택해주세요.' })
-  if (typeof body.ticker !== 'string' || !body.ticker.trim()) errors.push({ field: 'ticker', message: '종목을 선택해주세요.' })
-  if (typeof body.displayName !== 'string' || !body.displayName.trim()) errors.push({ field: 'displayName', message: '종목명을 입력해주세요.' })
-  if (!body.payDate || isNaN(Date.parse(body.payDate))) {
-    errors.push({ field: 'payDate', message: '유효한 지급일을 입력해주세요.' })
-  }
-  if (typeof body.amountGross !== 'number' || !Number.isFinite(body.amountGross) || body.amountGross <= 0) {
-    errors.push({ field: 'amountGross', message: '세전 금액은 0보다 커야 합니다.' })
-  }
-  if (typeof body.amountNet !== 'number' || !Number.isFinite(body.amountNet) || body.amountNet < 0) {
-    errors.push({ field: 'amountNet', message: '세후 금액은 0 이상이어야 합니다.' })
-  }
-  if (!body.currency || !['USD', 'KRW'].includes(body.currency)) {
-    errors.push({ field: 'currency', message: '통화를 선택해주세요 (USD/KRW).' })
-  }
-  if (body.currency === 'USD') {
-    const fxError = validateFxRateForUSD(body.fxRate, 'USD 배당')
-    if (fxError) errors.push({ field: 'fxRate', message: fxError })
-  }
-
-  return errors
+export function validateDividendInput(body: unknown): DividendValidationError[] {
+  const result = DividendInputSchema.safeParse(body)
+  if (result.success) return []
+  return zodErrorsToValidation(result.error)
 }
 
 /**
