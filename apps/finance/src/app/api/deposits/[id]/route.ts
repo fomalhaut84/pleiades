@@ -95,7 +95,7 @@ export async function DELETE(_request: NextRequest, props: RouteParams) {
         })
       }
     })
-    return NextResponse.json({ success: true })
+    return new NextResponse(null, { status: 204 })
   } catch (error) {
     console.error('DELETE /api/deposits/[id] error:', error)
     return NextResponse.json({ error: '입금 삭제에 실패했습니다.' }, { status: 500 })

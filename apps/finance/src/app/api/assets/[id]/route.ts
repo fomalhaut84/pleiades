@@ -117,7 +117,7 @@ export async function DELETE(_request: NextRequest, props: { params: Promise<{ i
     }
 
     await prisma.asset.delete({ where: { id } })
-    return NextResponse.json({ success: true })
+    return new NextResponse(null, { status: 204 })
   } catch (error) {
     console.error('DELETE /api/assets/[id] error:', error)
     return NextResponse.json({ error: '자산 삭제에 실패했습니다.' }, { status: 500 })

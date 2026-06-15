@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { validateTradeInput } from '@/lib/trade-utils'
 import { createTrade } from '@/lib/trade-service'
+import { businessErrorResponse } from '@/lib/api-errors'
 
 export const dynamic = 'force-dynamic'
 
@@ -102,13 +103,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result, { status: 201 })
   } catch (error) {
-    if (error instanceof Error && (
-      error.message.includes('초과합니다') ||
-      error.message.startsWith('보유 수량 부족') ||
-      error.message.includes('이미')
-    )) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
+    const businessResponse = businessErrorResponse(error)
+    if (businessResponse) return businessResponse
     console.error('POST /api/trades error:', error)
     return NextResponse.json(
       { error: '거래 기록에 실패했습니다.' },

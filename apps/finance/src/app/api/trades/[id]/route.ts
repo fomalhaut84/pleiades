@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { recalcHolding, validateTradedAt, validateFxRateForUSD } from '@/lib/trade-utils'
+import { businessErrorResponse, isSafeBusinessError } from '@/lib/api-errors'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -119,9 +120,8 @@ export async function PUT(request: NextRequest, props: RouteParams) {
 
     return NextResponse.json(result)
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('보유 수량 부족')) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
+    const businessResponse = businessErrorResponse(error)
+    if (businessResponse) return businessResponse
     console.error('PUT /api/trades/[id] error:', error)
     return NextResponse.json({ error: '거래 수정에 실패했습니다.' }, { status: 500 })
   }
@@ -144,9 +144,9 @@ export async function DELETE(_request: NextRequest, props: RouteParams) {
       )
     }, { isolationLevel: 'Serializable' })
 
-    return NextResponse.json({ success: true })
+    return new NextResponse(null, { status: 204 })
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('보유 수량 부족')) {
+    if (isSafeBusinessError(error) && error.message.startsWith('보유 수량 부족')) {
       return NextResponse.json({ error: '이 거래를 삭제하면 보유 수량이 음수가 됩니다.' }, { status: 400 })
     }
     console.error('DELETE /api/trades/[id] error:', error)

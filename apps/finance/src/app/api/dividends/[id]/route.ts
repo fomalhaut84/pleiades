@@ -96,7 +96,7 @@ export async function DELETE(_request: NextRequest, props: RouteParams) {
     }
 
     await prisma.dividend.delete({ where: { id: params.id } })
-    return NextResponse.json({ success: true })
+    return new NextResponse(null, { status: 204 })
   } catch (error) {
     console.error('DELETE /api/dividends/[id] error:', error)
     return NextResponse.json({ error: '배당 삭제에 실패했습니다.' }, { status: 500 })
