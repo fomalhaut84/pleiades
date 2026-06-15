@@ -282,7 +282,7 @@
 - [x] **25-C**: Trade import 검증 강화 (날짜 범위 + ticker 정규화)
 - [x] **25-D**: USD 거래/배당 환율 검증 (헬퍼 추출 + 편집 silent 0 차단)
 - [x] **25-E**: API 응답 형식 일관화 (DELETE 204 통일 + 비즈니스 에러 화이트리스트 헬퍼)
-- [ ] **25-F**: 입력 검증 Zod 통합 (핵심 입력 경로 한정)
+- [x] **25-F**: 입력 검증 Zod 통합 (핵심 입력 경로 한정 + vitest 도입 + 69 단위 테스트)
 - [ ] **25-G**: UX 개선 묶음 (dropdown 항상 렌더, Holding diff 토스트, 면책 강조, 베스팅 캘린더)
 - [x] **25-H-1**: Next.js 14 → 15.5.19 마이그레이션 (Dependabot HIGH 4 + MEDIUM 다수 해결)
 - [x] **25-H-2**: next-auth 4 → Auth.js v5 마이그레이션 (uuid 권고 해결, next HIGH→moderate)
