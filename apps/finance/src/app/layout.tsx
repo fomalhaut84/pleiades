@@ -5,6 +5,7 @@ import BottomTab from '@/components/layout/BottomTab'
 import MainContent from '@/components/layout/MainContent'
 import AuthProvider from '@/components/auth/AuthProvider'
 import ThemeProvider from '@/components/theme/ThemeProvider'
+import { ToastProvider } from '@/components/ui/Toast'
 import ServiceWorkerRegister from '@/components/pwa/ServiceWorkerRegister'
 import { prisma } from '@/lib/prisma'
 
@@ -49,11 +50,13 @@ export default async function RootLayout({
         <ServiceWorkerRegister />
         <ThemeProvider>
           <AuthProvider>
-            <Sidebar accounts={accounts} />
-            <BottomTab accounts={accounts} />
-            <MainContent>
-              {children}
-            </MainContent>
+            <ToastProvider>
+              <Sidebar accounts={accounts} />
+              <BottomTab accounts={accounts} />
+              <MainContent>
+                {children}
+              </MainContent>
+            </ToastProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

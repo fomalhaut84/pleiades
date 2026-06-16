@@ -7,8 +7,16 @@ interface RouteParams {
   params: Promise<{ id: string }>
 }
 
+interface HoldingSnapshot {
+  shares: number
+  avgPrice: number
+  avgPriceFx: number | null
+  avgFxRate: number | null
+}
+
 /**
  * 거래의 계좌+종목에 대해 남은 전체 거래로 Holding을 재계산한다.
+ * 갱신된 holding 스냅샷을 반환한다 (전량 매도 시 null).
  */
 async function recalcHoldingFromTrades(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
@@ -17,7 +25,7 @@ async function recalcHoldingFromTrades(
   displayName: string,
   market: string,
   currency: string
-) {
+): Promise<HoldingSnapshot | null> {
   const remainingTrades = await tx.trade.findMany({
     where: { accountId, ticker },
     orderBy: [{ tradedAt: 'asc' }, { createdAt: 'asc' }],
@@ -27,7 +35,7 @@ async function recalcHoldingFromTrades(
   const holdingState = recalcHolding(remainingTrades)
 
   if (holdingState.shares > 0) {
-    await tx.holding.upsert({
+    const upserted = await tx.holding.upsert({
       where: { accountId_ticker: { accountId, ticker } },
       update: {
         shares: holdingState.shares,
@@ -47,9 +55,16 @@ async function recalcHoldingFromTrades(
         avgFxRate: holdingState.avgFxRate,
       },
     })
-  } else {
-    await tx.holding.deleteMany({ where: { accountId, ticker } })
+    return {
+      shares: upserted.shares,
+      avgPrice: upserted.avgPrice,
+      avgPriceFx: upserted.avgPriceFx,
+      avgFxRate: upserted.avgFxRate,
+    }
   }
+
+  await tx.holding.deleteMany({ where: { accountId, ticker } })
+  return null
 }
 
 export async function PUT(request: NextRequest, props: RouteParams) {
@@ -98,6 +113,18 @@ export async function PUT(request: NextRequest, props: RouteParams) {
       : Math.round(updatedPrice * updatedShares)
 
     const result = await prisma.$transaction(async (tx) => {
+      const priorHolding = await tx.holding.findUnique({
+        where: { accountId_ticker: { accountId: trade.accountId, ticker: trade.ticker } },
+      })
+      const holdingBefore = priorHolding
+        ? {
+            shares: priorHolding.shares,
+            avgPrice: priorHolding.avgPrice,
+            avgPriceFx: priorHolding.avgPriceFx,
+            avgFxRate: priorHolding.avgFxRate,
+          }
+        : null
+
       const updated = await tx.trade.update({
         where: { id: params.id },
         data: {
@@ -110,12 +137,12 @@ export async function PUT(request: NextRequest, props: RouteParams) {
         },
       })
 
-      await recalcHoldingFromTrades(
+      const holding = await recalcHoldingFromTrades(
         tx, trade.accountId, trade.ticker,
         trade.displayName, trade.market, trade.currency
       )
 
-      return updated
+      return { trade: updated, holding, holdingBefore }
     }, { isolationLevel: 'Serializable' })
 
     return NextResponse.json(result)

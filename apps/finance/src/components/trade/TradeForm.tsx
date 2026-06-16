@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
+import { useToast } from '@/components/ui/Toast'
+import { formatHoldingDiff } from '@/lib/holding-diff'
 
 interface Account {
   id: string
@@ -28,6 +30,7 @@ const ACCOUNT_COLORS: Record<string, { border: string; bg: string; text: string 
 
 export default function TradeForm({ accounts }: TradeFormProps) {
   const router = useRouter()
+  const { show } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -158,6 +161,20 @@ export default function TradeForm({ accounts }: TradeFormProps) {
         const data = await res.json().catch(() => null)
         setError(data?.error ?? '거래 기록에 실패했습니다.')
         return
+      }
+
+      const result = await res.json().catch(() => null)
+      if (result?.holding !== undefined && result?.holdingBefore !== undefined) {
+        const diff = formatHoldingDiff({
+          ticker,
+          displayName,
+          type: tradeType,
+          shares: parsedShares,
+          before: result.holdingBefore,
+          after: result.holding,
+          currency,
+        })
+        show({ variant: 'success', title: diff.title, description: diff.description })
       }
 
       router.push('/trades')
