@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
 import { calcDividendTax, calcAmountKRW } from '@/lib/dividend-utils'
+import Disclaimer from '@/components/ui/Disclaimer'
 
 interface Account {
   id: string
@@ -411,9 +412,7 @@ export default function DividendForm({ accounts }: DividendFormProps) {
         )}
 
         {/* 면책 문구 */}
-        <p className="text-[11px] text-dim leading-relaxed">
-          배당소득세 정보는 참고용이며 법적 조언이 아닙니다.
-        </p>
+        <Disclaimer>배당소득세 정보는 참고용이며 법적 조언이 아닙니다.</Disclaimer>
 
         {/* 에러 */}
         {error && (

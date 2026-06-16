@@ -3,6 +3,7 @@ import Header from '@/components/layout/Header'
 import SimulatorClient from './SimulatorClient'
 import { GIFT_SOURCES } from '@/lib/tax/gift-tax'
 import { DEFAULT_FX_RATE_USD_KRW } from '@/lib/format'
+import Disclaimer from '@/components/ui/Disclaimer'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,9 +81,9 @@ export default async function SimulatorPage() {
     <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-7 max-w-[1100px]">
       <Header title="복리 시뮬레이터" sub="계좌별 미래 자산 예측 · 시나리오 비교" />
       <SimulatorClient accounts={accountData} />
-      <p className="mt-6 text-[11px] text-dim">
+      <Disclaimer className="mt-6">
         시뮬레이션 결과는 가정된 수익률에 기반한 참고용이며, 실제 수익을 보장하지 않습니다.
-      </p>
+      </Disclaimer>
     </div>
   )
 }

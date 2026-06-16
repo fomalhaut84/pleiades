@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 import { formatKRW } from '@/lib/format'
 import { calcIntegratedTax } from '@/lib/tax/integrated-tax'
+import Disclaimer from '@/components/ui/Disclaimer'
 
 interface IntegratedTaxCardProps {
   /** 선택 연도 */
@@ -197,14 +198,12 @@ export default function IntegratedTaxCard({
       )}
 
       {/* 안내 */}
-      <div className="bg-yellow-500/5 border border-yellow-500/10 rounded-lg px-3 py-2">
-        <span className="text-[11px] text-yellow-400/70">
-          {result.stockOptionGain > 0
-            ? '스톡옵션 행사 이익은 현재 주가 기준 예상치이며, 실제 행사 시점의 시가에 따라 달라집니다. '
-            : ''}
-          인적공제·특별공제 등이 미반영된 참고용 추정치입니다. 정확한 세금 계산은 세무사에게 문의하세요.
-        </span>
-      </div>
+      <Disclaimer>
+        {result.stockOptionGain > 0
+          ? '스톡옵션 행사 이익은 현재 주가 기준 예상치이며, 실제 행사 시점의 시가에 따라 달라집니다. '
+          : ''}
+        인적공제·특별공제 등이 미반영된 참고용 추정치입니다. 정확한 세금 계산은 세무사에게 문의하세요.
+      </Disclaimer>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import Header from '@/components/layout/Header'
 import PerformanceClient from './PerformanceClient'
+import Disclaimer from '@/components/ui/Disclaimer'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,9 +20,9 @@ export default async function PerformancePage() {
         accounts={accounts}
         hasSnapshots={snapshotCount >= 2}
       />
-      <p className="mt-6 text-[11px] text-dim">
+      <Disclaimer className="mt-6">
         수익률은 TWR(시간가중수익률) 기반 참고용이며, 실제 투자 성과와 다를 수 있습니다.
-      </p>
+      </Disclaimer>
     </div>
   )
 }
