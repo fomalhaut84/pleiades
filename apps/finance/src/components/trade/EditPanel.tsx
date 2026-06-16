@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatUSD } from '@/lib/format'
+import { useToast } from '@/components/ui/Toast'
+import { formatHoldingEditDiff } from '@/lib/holding-diff'
 
 interface Trade {
   id: string
@@ -33,6 +35,7 @@ const ACCOUNT_COLORS: Record<string, string> = {
 
 export default function EditPanel({ trade, onClose }: EditPanelProps) {
   const router = useRouter()
+  const { show } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -84,6 +87,18 @@ export default function EditPanel({ trade, onClose }: EditPanelProps) {
         const data = await res.json().catch(() => null)
         setError(data?.error ?? '수정에 실패했습니다.')
         return
+      }
+
+      const result = await res.json().catch(() => null)
+      if (result?.holding !== undefined && result?.holdingBefore !== undefined) {
+        const diff = formatHoldingEditDiff({
+          ticker: trade.ticker,
+          displayName: trade.displayName,
+          before: result.holdingBefore,
+          after: result.holding,
+          currency: trade.currency,
+        })
+        show({ variant: 'success', title: diff.title, description: diff.description })
       }
 
       onClose()

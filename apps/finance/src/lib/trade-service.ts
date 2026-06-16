@@ -43,6 +43,13 @@ export interface CreateTradeResult {
     avgPriceFx: number | null
     avgFxRate: number | null
   } | null
+  /** 거래 적용 전 holding 스냅샷 (없으면 신규 보유). 토스트 diff 계산용. */
+  holdingBefore: {
+    shares: number
+    avgPrice: number
+    avgPriceFx: number | null
+    avgFxRate: number | null
+  } | null
 }
 
 export async function createTrade(input: CreateTradeInput): Promise<CreateTradeResult> {
@@ -94,13 +101,23 @@ export async function createTrade(input: CreateTradeInput): Promise<CreateTradeR
   }
 
   const result = await prisma.$transaction(async (tx) => {
+    // 거래 적용 전 holding 스냅샷 (토스트 diff 계산용)
+    const priorHolding = await tx.holding.findUnique({
+      where: { accountId_ticker: { accountId, ticker } },
+    })
+    const holdingBefore = priorHolding
+      ? {
+          shares: priorHolding.shares,
+          avgPrice: priorHolding.avgPrice,
+          avgPriceFx: priorHolding.avgPriceFx,
+          avgFxRate: priorHolding.avgFxRate,
+        }
+      : null
+
     // SELL: 보유수량 확인
     if (type === 'SELL') {
-      const holding = await tx.holding.findUnique({
-        where: { accountId_ticker: { accountId, ticker } },
-      })
-      if (!holding || holding.shares < shares) {
-        const current = holding?.shares ?? 0
+      if (!priorHolding || priorHolding.shares < shares) {
+        const current = priorHolding?.shares ?? 0
         throw new Error(`보유 수량(${current}주)을 초과합니다.`)
       }
     }
@@ -194,7 +211,7 @@ export async function createTrade(input: CreateTradeInput): Promise<CreateTradeR
       await tx.holding.deleteMany({ where: { accountId, ticker } })
     }
 
-    return { trade, holding }
+    return { trade, holding, holdingBefore }
   }, { isolationLevel: 'Serializable' })
 
   return result

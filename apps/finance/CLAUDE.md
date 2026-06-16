@@ -37,7 +37,7 @@ npx prisma studio        # DB 브라우저 GUI
 
 검증 순서 (PR 전 필수):
 ```bash
-npm run lint && npx tsc --noEmit && npm run build
+npm run lint && npx tsc --noEmit && npm run test:run && npm run build
 ```
 
 배포 (서버):

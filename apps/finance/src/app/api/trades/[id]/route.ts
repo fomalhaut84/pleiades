@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { recalcHolding } from '@/lib/trade-utils'
+import { recalcHolding, validateTradedAt, validateFxRateForUSD } from '@/lib/trade-utils'
+import { businessErrorResponse, isSafeBusinessError } from '@/lib/api-errors'
 
 interface RouteParams {
   params: Promise<{ id: string }>
 }
 
+interface HoldingSnapshot {
+  shares: number
+  avgPrice: number
+  avgPriceFx: number | null
+  avgFxRate: number | null
+}
+
 /**
  * 거래의 계좌+종목에 대해 남은 전체 거래로 Holding을 재계산한다.
+ * 갱신된 holding 스냅샷을 반환한다 (전량 매도 시 null).
  */
 async function recalcHoldingFromTrades(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
@@ -16,7 +25,7 @@ async function recalcHoldingFromTrades(
   displayName: string,
   market: string,
   currency: string
-) {
+): Promise<HoldingSnapshot | null> {
   const remainingTrades = await tx.trade.findMany({
     where: { accountId, ticker },
     orderBy: [{ tradedAt: 'asc' }, { createdAt: 'asc' }],
@@ -26,7 +35,7 @@ async function recalcHoldingFromTrades(
   const holdingState = recalcHolding(remainingTrades)
 
   if (holdingState.shares > 0) {
-    await tx.holding.upsert({
+    const upserted = await tx.holding.upsert({
       where: { accountId_ticker: { accountId, ticker } },
       update: {
         shares: holdingState.shares,
@@ -46,9 +55,16 @@ async function recalcHoldingFromTrades(
         avgFxRate: holdingState.avgFxRate,
       },
     })
-  } else {
-    await tx.holding.deleteMany({ where: { accountId, ticker } })
+    return {
+      shares: upserted.shares,
+      avgPrice: upserted.avgPrice,
+      avgPriceFx: upserted.avgPriceFx,
+      avgFxRate: upserted.avgFxRate,
+    }
   }
+
+  await tx.holding.deleteMany({ where: { accountId, ticker } })
+  return null
 }
 
 export async function PUT(request: NextRequest, props: RouteParams) {
@@ -68,21 +84,47 @@ export async function PUT(request: NextRequest, props: RouteParams) {
     if (price !== undefined && (typeof price !== 'number' || !Number.isFinite(price) || price <= 0)) {
       return NextResponse.json({ error: '단가는 0보다 큰 숫자여야 합니다.' }, { status: 400 })
     }
-    if (fxRate !== undefined && trade.currency === 'USD' && (typeof fxRate !== 'number' || !Number.isFinite(fxRate) || fxRate <= 0)) {
-      return NextResponse.json({ error: 'USD 종목은 유효한 환율이 필요합니다.' }, { status: 400 })
+    if (fxRate !== undefined && trade.currency === 'USD') {
+      const fxError = validateFxRateForUSD(fxRate)
+      if (fxError) return NextResponse.json({ error: fxError }, { status: 400 })
     }
-    if (tradedAt !== undefined && (typeof tradedAt !== 'string' || isNaN(Date.parse(tradedAt)))) {
-      return NextResponse.json({ error: '유효한 거래일을 입력해주세요.' }, { status: 400 })
+    if (tradedAt !== undefined) {
+      if (typeof tradedAt !== 'string') {
+        return NextResponse.json({ error: '유효한 거래일을 입력해주세요.' }, { status: 400 })
+      }
+      const tradedAtError = validateTradedAt(tradedAt)
+      if (tradedAtError) {
+        return NextResponse.json({ error: tradedAtError }, { status: 400 })
+      }
     }
 
     const updatedShares = shares ?? trade.shares
     const updatedPrice = price ?? trade.price
     const updatedFxRate = fxRate !== undefined ? fxRate : trade.fxRate
+
+    // USD는 최종 fxRate가 항상 양수 보장 — stored 값이 손상되었을 때 silent 0 차단
+    if (trade.currency === 'USD') {
+      const fxError = validateFxRateForUSD(updatedFxRate)
+      if (fxError) return NextResponse.json({ error: fxError }, { status: 400 })
+    }
+
     const updatedTotalKRW = trade.currency === 'USD'
-      ? Math.round(updatedPrice * updatedShares * (updatedFxRate ?? 0))
+      ? Math.round(updatedPrice * updatedShares * (updatedFxRate as number))
       : Math.round(updatedPrice * updatedShares)
 
     const result = await prisma.$transaction(async (tx) => {
+      const priorHolding = await tx.holding.findUnique({
+        where: { accountId_ticker: { accountId: trade.accountId, ticker: trade.ticker } },
+      })
+      const holdingBefore = priorHolding
+        ? {
+            shares: priorHolding.shares,
+            avgPrice: priorHolding.avgPrice,
+            avgPriceFx: priorHolding.avgPriceFx,
+            avgFxRate: priorHolding.avgFxRate,
+          }
+        : null
+
       const updated = await tx.trade.update({
         where: { id: params.id },
         data: {
@@ -95,19 +137,18 @@ export async function PUT(request: NextRequest, props: RouteParams) {
         },
       })
 
-      await recalcHoldingFromTrades(
+      const holding = await recalcHoldingFromTrades(
         tx, trade.accountId, trade.ticker,
         trade.displayName, trade.market, trade.currency
       )
 
-      return updated
+      return { trade: updated, holding, holdingBefore }
     }, { isolationLevel: 'Serializable' })
 
     return NextResponse.json(result)
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('보유 수량 부족')) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
+    const businessResponse = businessErrorResponse(error)
+    if (businessResponse) return businessResponse
     console.error('PUT /api/trades/[id] error:', error)
     return NextResponse.json({ error: '거래 수정에 실패했습니다.' }, { status: 500 })
   }
@@ -130,9 +171,9 @@ export async function DELETE(_request: NextRequest, props: RouteParams) {
       )
     }, { isolationLevel: 'Serializable' })
 
-    return NextResponse.json({ success: true })
+    return new NextResponse(null, { status: 204 })
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('보유 수량 부족')) {
+    if (isSafeBusinessError(error) && error.message.startsWith('보유 수량 부족')) {
       return NextResponse.json({ error: '이 거래를 삭제하면 보유 수량이 음수가 됩니다.' }, { status: 400 })
     }
     console.error('DELETE /api/trades/[id] error:', error)

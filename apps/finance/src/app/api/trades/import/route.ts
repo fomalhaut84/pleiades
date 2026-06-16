@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { recalcHolding, calcTotalKRW, validateTradeInput } from '@/lib/trade-utils'
 import { normalizeMarket } from '@/lib/market-hours'
+import { businessErrorResponse } from '@/lib/api-errors'
 import type { ImportResult } from '@/types/csv-import'
 
 export const dynamic = 'force-dynamic'
@@ -69,8 +70,11 @@ export async function POST(request: NextRequest) {
         resultErrors.push({ row: i + 1, field: 'row', message: '잘못된 데이터 형식입니다.' })
         continue
       }
-      const ticker = typeof t.ticker === 'string' ? t.ticker : String(t.ticker ?? '')
-      const displayName = typeof t.displayName === 'string' ? t.displayName : ticker
+      // ticker 사전 정규화 — validation/storage 모두 동일 값 사용
+      const rawTicker = typeof t.ticker === 'string' ? t.ticker : String(t.ticker ?? '')
+      const ticker = rawTicker.trim().toUpperCase()
+      const rawDisplayName = typeof t.displayName === 'string' ? t.displayName.trim() : ''
+      const displayName = rawDisplayName || ticker
       const tradeType = typeof t.type === 'string' ? t.type : String(t.type ?? '')
       const shares = typeof t.shares === 'number' ? t.shares : Number(t.shares)
       const price = typeof t.price === 'number' ? t.price : Number(t.price)
@@ -79,7 +83,7 @@ export async function POST(request: NextRequest) {
       const errors = validateTradeInput({
         accountId,
         ticker,
-        displayName: displayName || ticker,
+        displayName,
         market,
         type: tradeType,
         shares,
@@ -96,8 +100,8 @@ export async function POST(request: NextRequest) {
       } else {
         validTrades.push({
           index: i,
-          ticker: ticker.toUpperCase().trim(),
-          displayName: displayName || ticker,
+          ticker,
+          displayName,
           type: tradeType as 'BUY' | 'SELL',
           shares,
           price,
@@ -300,9 +304,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ result }, { status: 201 })
   } catch (error) {
-    if (error instanceof Error && (error.message.includes('초과합니다') || error.message.startsWith('보유 수량 부족'))) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
+    const businessResponse = businessErrorResponse(error)
+    if (businessResponse) return businessResponse
     console.error('POST /api/trades/import error:', error)
     return NextResponse.json(
       { error: '거래 일괄 등록에 실패했습니다.' },

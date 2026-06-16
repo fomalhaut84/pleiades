@@ -3,6 +3,7 @@ import Header from '@/components/layout/Header'
 import StockOptionDashboard from '@/components/stock-option/StockOptionDashboard'
 import ExerciseSimulator from '@/components/stock-option/ExerciseSimulator'
 import StockOptionCRUD from '@/components/stock-option/StockOptionCRUD'
+import Disclaimer from '@/components/ui/Disclaimer'
 import { calcStockOptionOverview } from '@/lib/stock-option-utils'
 import type { StockOptionWithVestings } from '@/lib/stock-option-utils'
 
@@ -98,9 +99,9 @@ export default async function StockOptionsPage() {
         </>
       )}
 
-      <p className="text-[11px] text-dim">
+      <Disclaimer>
         세금 정보는 참고용이며 법적 조언이 아닙니다. 행사 이익만 기준 추정이며, 기존 연봉 합산 시 세율이 달라질 수 있습니다.
-      </p>
+      </Disclaimer>
     </div>
   )
 }

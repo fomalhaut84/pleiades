@@ -78,7 +78,7 @@ export async function DELETE(_request: NextRequest, props: { params: Promise<{ i
   try {
     const { id } = params
     await prisma.incomeProfile.delete({ where: { id } })
-    return NextResponse.json({ success: true })
+    return new NextResponse(null, { status: 204 })
   } catch (error) {
     return handlePrismaError(error, '근로소득 프로필 삭제')
   }

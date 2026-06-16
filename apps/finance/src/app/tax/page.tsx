@@ -8,6 +8,7 @@ import SellTaxSimulator from '@/components/tax/SellTaxSimulator'
 import DividendTaxCard from '@/components/tax/DividendTaxCard'
 import IncomeProfileCard from '@/components/tax/IncomeProfileCard'
 import IntegratedTaxCard from '@/components/tax/IntegratedTaxCard'
+import Disclaimer from '@/components/ui/Disclaimer'
 import { calcGiftTaxSummary, GIFT_SOURCES } from '@/lib/tax/gift-tax'
 import { calcRealizedGains, calcCapitalGainsSummary } from '@/lib/tax/capital-gains-tax'
 import { calcRSUTaxSummary } from '@/lib/tax/income-tax'
@@ -401,9 +402,9 @@ export default async function TaxPage(props: TaxPageProps) {
         <IncomeProfileCard profiles={incomeProfiles} />
       </div>
 
-      <p className="text-[11px] text-dim">
+      <Disclaimer>
         세금 정보는 참고용이며 법적 조언이 아닙니다. 정확한 세금 계산은 세무사에게 문의하세요.
-      </p>
+      </Disclaimer>
     </div>
   )
 }

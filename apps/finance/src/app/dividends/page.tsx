@@ -6,6 +6,7 @@ import DividendFilters from '@/components/dividend/DividendFilters'
 import DividendTable from '@/components/dividend/DividendTable'
 import DividendSummary from '@/components/dividend/DividendSummary'
 import DividendCalendar from '@/components/dividend/DividendCalendar'
+import Disclaimer from '@/components/ui/Disclaimer'
 
 export const dynamic = 'force-dynamic'
 
@@ -136,9 +137,7 @@ export default async function DividendsPage(props: DividendsPageProps) {
         offset={clampedOffset}
       />
 
-      <p className="text-[11px] text-dim mt-4">
-        배당소득세 정보는 참고용이며 법적 조언이 아닙니다.
-      </p>
+      <Disclaimer className="mt-4">배당소득세 정보는 참고용이며 법적 조언이 아닙니다.</Disclaimer>
     </div>
   )
 }

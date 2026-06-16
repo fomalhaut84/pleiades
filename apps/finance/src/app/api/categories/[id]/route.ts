@@ -166,7 +166,7 @@ export async function DELETE(_request: NextRequest, props: RouteParams) {
     }
 
     await prisma.category.delete({ where: { id: params.id } })
-    return NextResponse.json({ success: true })
+    return new NextResponse(null, { status: 204 })
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2003') {

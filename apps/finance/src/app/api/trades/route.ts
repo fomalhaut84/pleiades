@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { validateTradeInput } from '@/lib/trade-utils'
 import { createTrade } from '@/lib/trade-service'
+import { businessErrorResponse } from '@/lib/api-errors'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,13 +61,25 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const errors = validateTradeInput(body)
+    // ticker / displayName 사전 정규화 — validation/storage 모두 동일 값 사용.
+    // displayName 누락 시 normalized ticker로 fallback (import 경로와 동일 거동).
+    const normalizedTicker = typeof body.ticker === 'string'
+      ? body.ticker.trim().toUpperCase()
+      : ''
+    const rawDisplayName = typeof body.displayName === 'string' ? body.displayName.trim() : ''
+    const normalizedDisplayName = rawDisplayName || normalizedTicker
+    const errors = validateTradeInput({
+      ...body,
+      ticker: normalizedTicker,
+      displayName: normalizedDisplayName,
+    })
     if (errors.length > 0) {
       return NextResponse.json({ error: errors[0].message, errors }, { status: 400 })
     }
 
-    const { accountId, displayName, market, type, shares, price, currency, fxRate, note, tradedAt } = body
-    const ticker = (body.ticker as string).toUpperCase().trim()
+    const { accountId, market, type, shares, price, currency, fxRate, note, tradedAt } = body
+    const ticker = normalizedTicker
+    const displayName = normalizedDisplayName
 
     // 계좌 존재 확인
     const account = await prisma.account.findUnique({ where: { id: accountId } })
@@ -90,13 +103,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result, { status: 201 })
   } catch (error) {
-    if (error instanceof Error && (
-      error.message.includes('초과합니다') ||
-      error.message.startsWith('보유 수량 부족') ||
-      error.message.includes('이미')
-    )) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
+    const businessResponse = businessErrorResponse(error)
+    if (businessResponse) return businessResponse
     console.error('POST /api/trades error:', error)
     return NextResponse.json(
       { error: '거래 기록에 실패했습니다.' },

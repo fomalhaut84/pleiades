@@ -4,6 +4,7 @@ import Header from '@/components/layout/Header'
 import ExportButton from '@/components/ui/ExportButton'
 import DepositFilters from '@/components/deposit/DepositFilters'
 import DepositTable from '@/components/deposit/DepositTable'
+import Disclaimer from '@/components/ui/Disclaimer'
 
 export const dynamic = 'force-dynamic'
 
@@ -112,9 +113,7 @@ export default async function DepositsPage(props: DepositsPageProps) {
         offset={clampedOffset}
       />
 
-      <p className="text-[11px] text-dim mt-4">
-        증여세 정보는 참고용이며 법적 조언이 아닙니다.
-      </p>
+      <Disclaimer className="mt-4">증여세 정보는 참고용이며 법적 조언이 아닙니다.</Disclaimer>
     </div>
   )
 }

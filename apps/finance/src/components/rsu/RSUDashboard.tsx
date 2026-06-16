@@ -5,6 +5,7 @@ import Card from '@/components/ui/Card'
 import { formatKRW, formatDate } from '@/lib/format'
 import RSUForm from './RSUForm'
 import RSUDeleteModal from './RSUDeleteModal'
+import Disclaimer from '@/components/ui/Disclaimer'
 
 interface RSUSchedule {
   id: string
@@ -264,9 +265,9 @@ export default function RSUDashboard({ schedules: initialSchedules, accounts = [
         </div>
       )}
 
-      <div className="text-[11px] text-dim mt-4 px-1">
+      <Disclaimer className="mt-4">
         RSU 근로소득세는 회사에서 원천징수됩니다. 이 계산은 참고용이며 법적 조언이 아닙니다.
-      </div>
+      </Disclaimer>
 
       {/* RSU 추가/수정 폼 */}
       {showForm && (
