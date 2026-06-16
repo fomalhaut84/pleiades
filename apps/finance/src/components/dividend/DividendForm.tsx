@@ -102,6 +102,12 @@ export default function DividendForm({ accounts }: DividendFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+
+    if (!accountId) {
+      setError('계좌를 먼저 선택해주세요.')
+      return
+    }
+
     setIsSubmitting(true)
 
     const ticker = tickerMode === 'select' ? selectedTicker : manualTicker.toUpperCase().trim()
@@ -178,7 +184,20 @@ export default function DividendForm({ accounts }: DividendFormProps) {
         {/* 종목 선택 */}
         <div>
           <label className={labelClasses}>종목</label>
-          {accountId && holdings.length > 0 ? (
+
+          {!accountId && (
+            <div className="bg-surface-dim border border-border rounded-lg px-4 py-3 text-[13px] text-sub">
+              계좌를 먼저 선택하세요.
+            </div>
+          )}
+
+          {accountId && holdings.length === 0 && (
+            <div className="bg-surface-dim border border-border rounded-lg px-4 py-3 text-[13px] text-sub mb-3">
+              이 계좌에 보유 종목이 없습니다. 종목 정보를 직접 입력해주세요.
+            </div>
+          )}
+
+          {accountId && holdings.length > 0 && (
             <select
               value={tickerMode === 'select' ? selectedTicker : '__manual__'}
               onChange={(e) => {
@@ -200,7 +219,7 @@ export default function DividendForm({ accounts }: DividendFormProps) {
               ))}
               <option value="__manual__">직접 입력</option>
             </select>
-          ) : null}
+          )}
 
           {tickerMode === 'manual' && accountId && (
             <div className="mt-3 grid grid-cols-2 gap-3">
@@ -255,6 +274,8 @@ export default function DividendForm({ accounts }: DividendFormProps) {
           )}
         </div>
 
+        {accountId && (
+        <>
         {/* 날짜 */}
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -409,6 +430,8 @@ export default function DividendForm({ accounts }: DividendFormProps) {
         >
           {isSubmitting ? '처리 중...' : '배당 기록'}
         </button>
+        </>
+        )}
       </form>
     </Card>
   )

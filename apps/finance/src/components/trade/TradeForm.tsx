@@ -108,9 +108,23 @@ export default function TradeForm({ accounts }: TradeFormProps) {
     ? Math.round(parsedPrice * parsedShares * parsedFxRate)
     : Math.round(parsedPrice * parsedShares)
 
+  const isSellWithoutHoldings =
+    !!accountId && holdings.length === 0 && tradeType === 'SELL'
+  const showTradeBody = !!accountId && !isSellWithoutHoldings
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+
+    if (!accountId) {
+      setError('계좌를 먼저 선택해주세요.')
+      return
+    }
+    if (isSellWithoutHoldings) {
+      setError('이 계좌에는 매도할 보유 종목이 없습니다.')
+      return
+    }
+
     setIsSubmitting(true)
 
     const ticker = tickerMode === 'select' ? selectedTicker : manualTicker.toUpperCase()
@@ -218,7 +232,35 @@ export default function TradeForm({ accounts }: TradeFormProps) {
         {/* 종목 선택 */}
         <div>
           <label className={labelClasses}>종목</label>
-          {accountId && holdings.length > 0 ? (
+
+          {!accountId && (
+            <div className="bg-surface-dim border border-border rounded-lg px-4 py-3 text-[13px] text-sub">
+              계좌를 먼저 선택하세요.
+            </div>
+          )}
+
+          {isSellWithoutHoldings && (
+            <div className="bg-surface-dim border border-border rounded-lg px-4 py-3 flex flex-col gap-3">
+              <p className="text-[13px] text-amber-400">
+                ⚠ 매도할 보유 종목이 없습니다.
+              </p>
+              <button
+                type="button"
+                onClick={() => setTradeType('BUY')}
+                className="self-start px-3.5 py-1.5 rounded-md text-[12px] font-semibold bg-sejin/15 text-sejin hover:bg-sejin/25 border border-sejin/30 transition-colors"
+              >
+                매수로 전환
+              </button>
+            </div>
+          )}
+
+          {accountId && holdings.length === 0 && tradeType === 'BUY' && (
+            <div className="bg-surface-dim border border-border rounded-lg px-4 py-3 text-[13px] text-sub mb-3">
+              이 계좌에 보유 종목이 없습니다. 첫 매수로 직접 입력해주세요.
+            </div>
+          )}
+
+          {accountId && holdings.length > 0 && (
             <select
               value={tickerMode === 'select' ? selectedTicker : '__manual__'}
               onChange={(e) => {
@@ -240,9 +282,9 @@ export default function TradeForm({ accounts }: TradeFormProps) {
               ))}
               <option value="__manual__">직접 입력</option>
             </select>
-          ) : null}
+          )}
 
-          {tickerMode === 'manual' && accountId && (
+          {tickerMode === 'manual' && accountId && !isSellWithoutHoldings && (
             <div className="mt-3 flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -305,6 +347,8 @@ export default function TradeForm({ accounts }: TradeFormProps) {
           )}
         </div>
 
+        {showTradeBody && (
+        <>
         {/* 수량 */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
@@ -429,6 +473,8 @@ export default function TradeForm({ accounts }: TradeFormProps) {
         >
           {isSubmitting ? '처리 중...' : tradeType === 'BUY' ? '매수 기록' : '매도 기록'}
         </button>
+        </>
+        )}
       </form>
     </Card>
   )
