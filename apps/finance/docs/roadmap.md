@@ -286,7 +286,7 @@
 - [ ] **25-G**: UX 개선 묶음 (sub-issue 분할)
   - [x] **25-G-1**: 거래/배당 새 입력 빈 상태 안내
   - [x] **25-G-2**: 면책 강조 (Disclaimer 컴포넌트 9개 사용처 통합 + light 모드 대응)
-  - [ ] **25-G-3**: Holding diff 토스트
+  - [x] **25-G-3**: Holding diff 토스트 (토스트 인프라 신규 + 거래 생성/수정 시 보유 변동 알림)
   - [ ] **25-G-4**: 베스팅 캘린더
 - [x] **25-H-1**: Next.js 14 → 15.5.19 마이그레이션 (Dependabot HIGH 4 + MEDIUM 다수 해결)
 - [x] **25-H-2**: next-auth 4 → Auth.js v5 마이그레이션 (uuid 권고 해결, next HIGH→moderate)
