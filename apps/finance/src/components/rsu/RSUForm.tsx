@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useToast } from '@/components/ui/Toast'
 
 interface AccountOption {
   id: string
@@ -28,6 +29,8 @@ interface RSUFormProps {
 }
 
 export default function RSUForm({ mode, item, accounts, onClose, onSaved }: RSUFormProps) {
+  const { show } = useToast()
+  const isEdit = mode === 'edit'
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -77,6 +80,10 @@ export default function RSUForm({ mode, item, accounts, onClose, onSaved }: RSUF
         setError(data?.error ?? '저장에 실패했습니다.')
         return
       }
+      show({
+        variant: 'success',
+        title: isEdit ? 'RSU가 수정되었습니다' : 'RSU가 추가되었습니다',
+      })
       onSaved()
       onClose()
     } catch {
@@ -88,7 +95,6 @@ export default function RSUForm({ mode, item, accounts, onClose, onSaved }: RSUF
 
   const inputClasses = 'w-full bg-surface-dim border border-border rounded-lg px-3.5 py-2.5 text-[13px] text-bright placeholder-dim focus:outline-none focus:bg-surface focus:border-border-hover transition-colors'
   const labelClasses = 'block text-[12px] font-semibold text-sub mb-1.5'
-  const isEdit = mode === 'edit'
 
   return (
     <>

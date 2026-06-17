@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
 import { calcDividendTax, calcAmountKRW } from '@/lib/dividend-utils'
 import Disclaimer from '@/components/ui/Disclaimer'
+import { useToast } from '@/components/ui/Toast'
 
 interface Account {
   id: string
@@ -29,6 +30,7 @@ const ACCOUNT_COLORS: Record<string, { border: string; bg: string; text: string 
 
 export default function DividendForm({ accounts }: DividendFormProps) {
   const router = useRouter()
+  const { show } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -142,6 +144,7 @@ export default function DividendForm({ accounts }: DividendFormProps) {
         return
       }
 
+      show({ variant: 'success', title: '배당이 등록되었습니다' })
       router.push('/dividends')
       router.refresh()
     } catch {

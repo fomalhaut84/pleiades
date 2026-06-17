@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useToast } from '@/components/ui/Toast'
 import type { WatchlistRow } from './WatchlistTable'
 
 interface WatchlistFormProps {
@@ -13,6 +14,7 @@ interface WatchlistFormProps {
 const STRATEGIES = ['swing', 'momentum', 'value', 'scalp'] as const
 
 export default function WatchlistForm({ mode, item, onClose, onSaved }: WatchlistFormProps) {
+  const { show } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -61,6 +63,10 @@ export default function WatchlistForm({ mode, item, onClose, onSaved }: Watchlis
         setError(data?.error ?? '저장에 실패했습니다.')
         return
       }
+      show({
+        variant: 'success',
+        title: mode === 'edit' ? '관심종목이 수정되었습니다' : '관심종목이 추가되었습니다',
+      })
       onSaved()
       onClose()
     } catch {

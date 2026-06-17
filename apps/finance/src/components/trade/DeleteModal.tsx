@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatKRW, formatUSD, formatDate } from '@/lib/format'
+import { useToast } from '@/components/ui/Toast'
 
 interface Trade {
   id: string
@@ -24,6 +25,7 @@ interface DeleteModalProps {
 
 export default function DeleteModal({ trade, onClose }: DeleteModalProps) {
   const router = useRouter()
+  const { show } = useToast()
   const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -51,6 +53,7 @@ export default function DeleteModal({ trade, onClose }: DeleteModalProps) {
         return
       }
 
+      show({ variant: 'success', title: '거래가 삭제되었습니다' })
       onClose()
       router.refresh()
     } catch {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useToast } from '@/components/ui/Toast'
 import type { RecurringRow } from './RecurringTable'
 
 interface CategoryOption {
@@ -30,6 +31,7 @@ type Frequency = 'monthly' | 'weekly' | 'yearly'
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토']
 
 export default function RecurringForm({ mode, item, prefill, categories, onClose, onSaved }: RecurringFormProps) {
+  const { show } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -89,6 +91,7 @@ export default function RecurringForm({ mode, item, prefill, categories, onClose
         setError(data?.error ?? '저장에 실패했습니다.')
         return
       }
+      show({ variant: 'success', title: '반복거래가 저장되었습니다' })
       onSaved()
       onClose()
     } catch {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { CATEGORY_TYPES, CATEGORY_TYPE_LABELS } from '@/lib/category-utils'
+import { useToast } from '@/components/ui/Toast'
 import type { CategoryRow } from './CategoryTable'
 
 interface CategoryEditPanelProps {
@@ -12,6 +13,7 @@ interface CategoryEditPanelProps {
 
 export default function CategoryEditPanel({ category, onClose }: CategoryEditPanelProps) {
   const router = useRouter()
+  const { show } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -78,6 +80,7 @@ export default function CategoryEditPanel({ category, onClose }: CategoryEditPan
         return
       }
 
+      show({ variant: 'success', title: '카테고리가 수정되었습니다' })
       onClose()
       router.refresh()
     } catch {

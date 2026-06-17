@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
 import { DEPOSIT_SOURCES } from '@/lib/deposit-utils'
+import { useToast } from '@/components/ui/Toast'
 
 interface Account {
   id: string
@@ -22,6 +23,7 @@ const ACCOUNT_COLORS: Record<string, { border: string; bg: string; text: string 
 
 export default function DepositForm({ accounts }: DepositFormProps) {
   const router = useRouter()
+  const { show } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -62,6 +64,7 @@ export default function DepositForm({ accounts }: DepositFormProps) {
         return
       }
 
+      show({ variant: 'success', title: '입금이 등록되었습니다' })
       router.push('/deposits')
       router.refresh()
     } catch {

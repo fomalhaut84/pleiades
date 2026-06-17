@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { CATEGORY_TYPES, CATEGORY_TYPE_LABELS } from '@/lib/category-utils'
+import { useToast } from '@/components/ui/Toast'
 
 interface CategoryFormProps {
   onClose: () => void
@@ -10,6 +11,7 @@ interface CategoryFormProps {
 
 export default function CategoryForm({ onClose }: CategoryFormProps) {
   const router = useRouter()
+  const { show } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -62,6 +64,7 @@ export default function CategoryForm({ onClose }: CategoryFormProps) {
         return
       }
 
+      show({ variant: 'success', title: '카테고리가 추가되었습니다' })
       onClose()
       router.refresh()
     } catch {
