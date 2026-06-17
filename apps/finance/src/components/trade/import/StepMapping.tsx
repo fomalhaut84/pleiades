@@ -12,6 +12,7 @@ import {
   TRADE_FIELD_LABELS as LABELS,
   REQUIRED_FIELDS as REQUIRED,
 } from '@/types/csv-import'
+import Notice from '@/components/ui/Notice'
 
 interface StepMappingProps {
   headers: string[]
@@ -128,11 +129,9 @@ export default function StepMapping({
         </div>
 
         {missingRequired.length > 0 && (
-          <div className="mt-4 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-            <p className="text-[11px] text-amber-400">
-              필수 필드 미매핑: {missingRequired.map((f) => LABELS[f]).join(', ')}
-            </p>
-          </div>
+          <Notice variant="error" className="mt-4">
+            필수 필드 미매핑: {missingRequired.map((f) => LABELS[f]).join(', ')}
+          </Notice>
         )}
       </Card>
 

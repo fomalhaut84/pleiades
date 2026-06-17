@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatKRW, formatUSD, formatDate } from '@/lib/format'
 import type { StockOptionOverview } from '@/lib/stock-option-utils'
+import Notice from '@/components/ui/Notice'
 
 interface StockOptionDashboardProps {
   overview: StockOptionOverview
@@ -184,11 +185,9 @@ export default function StockOptionDashboard({ overview, currentPrice, currency 
 
             {/* 만료일 경고 */}
             {opt.daysToExpiry <= 365 && opt.daysToExpiry > 0 && (
-              <div className="mt-3 bg-yellow-500/5 border border-yellow-500/10 rounded-lg px-3 py-2">
-                <span className="text-[11px] text-yellow-400/70">
-                  만료까지 {opt.daysToExpiry}일 남았습니다.
-                </span>
-              </div>
+              <Notice variant="warning" className="mt-3">
+                만료까지 {opt.daysToExpiry}일 남았습니다.
+              </Notice>
             )}
           </div>
         </div>

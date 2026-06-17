@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { formatKRW } from '@/lib/format'
 import { simulateExercise, calcIncomeTaxOnExercise } from '@/lib/stock-option-utils'
 import type { StockOptionWithVestings } from '@/lib/stock-option-utils'
+import Notice from '@/components/ui/Notice'
 
 interface ExerciseSimulatorProps {
   stockOptions: StockOptionWithVestings[]
@@ -120,12 +121,10 @@ export default function ExerciseSimulator({ stockOptions, currentPrice }: Exerci
                   </span>
                 </div>
 
-                <div className="mt-1 bg-yellow-500/5 border border-yellow-500/10 rounded-lg px-3 py-2">
-                  <span className="text-[11px] text-yellow-400/70">
-                    행사 이익만 기준 추정입니다. 기존 연봉 합산 시 세율이 높아질 수 있습니다.
-                    정확한 계산은 근로소득 프로필 등록 후 통합 세금 시뮬레이션을 이용하세요.
-                  </span>
-                </div>
+                <Notice variant="warning" className="mt-1">
+                  행사 이익만 기준 추정입니다. 기존 연봉 합산 시 세율이 높아질 수 있습니다.
+                  정확한 계산은 근로소득 프로필 등록 후 통합 세금 시뮬레이션을 이용하세요.
+                </Notice>
               </>
             )}
           </div>
