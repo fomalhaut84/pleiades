@@ -300,7 +300,7 @@
 ## Phase 26: 정합성 + 호환성
 
 - [x] **26-A**: Prisma TransactionClient 타입 정리 (Codex P1 권고 빚 청산)
-- [ ] **26-B**: yellow 톤 안내 박스 → `<Notice>` 컴포넌트 통합 (4 사용처)
+- [x] **26-B**: yellow 톤 안내 박스 → `<Notice>` 컴포넌트 통합 (5+1 사용처, 3 variants, WCAG AAA)
 - [ ] **26-C**: GET 쿼리 파라미터 Zod 검증 (~15 라우트, 25-F 후속)
 - [ ] **26-D**: Generic 성공/실패 토스트 적용 (배당/거래/자산 등, G-3 후속)
 - [ ] **26-F**: 베스팅 iCal 내보내기 (RFC 5545, G-4 후속)
