@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { takeAllSnapshots } from '@/lib/performance/snapshot'
 import { BENCHMARK_DISPLAY_NAMES } from '@/lib/performance/constants'
+import { dateRangeSchema } from '@/lib/zod-schemas'
+import { zodErrorsToValidation } from '@/lib/zod-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,26 +20,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'accountId는 필수입니다.' }, { status: 400 })
     }
 
-    const from = searchParams.get('from')
-    const to = searchParams.get('to')
+    const dateResult = dateRangeSchema.safeParse({
+      from: searchParams.get('from'),
+      to: searchParams.get('to'),
+    })
+    if (!dateResult.success) {
+      const errs = zodErrorsToValidation(dateResult.error)
+      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+    }
+    const { from, to } = dateResult.data
 
     const where: Record<string, unknown> = { accountId }
     if (from || to) {
       const dateFilter: Record<string, Date> = {}
-      if (from) {
-        const d = new Date(from)
-        if (isNaN(d.getTime())) {
-          return NextResponse.json({ error: '유효한 시작일을 입력해주세요.' }, { status: 400 })
-        }
-        dateFilter.gte = d
-      }
-      if (to) {
-        const d = new Date(to)
-        if (isNaN(d.getTime())) {
-          return NextResponse.json({ error: '유효한 종료일을 입력해주세요.' }, { status: 400 })
-        }
-        dateFilter.lte = d
-      }
+      if (from) dateFilter.gte = new Date(from)
+      if (to) dateFilter.lte = new Date(to)
       where.snapshotDate = dateFilter
     }
 

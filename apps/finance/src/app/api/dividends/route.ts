@@ -1,31 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { validateDividendInput, calcAmountKRW } from '@/lib/dividend-utils'
+import { paginationSchema, yearSchema } from '@/lib/zod-schemas'
+import { zodErrorsToValidation } from '@/lib/zod-utils'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = request.nextUrl
+
+    const paginationResult = paginationSchema.safeParse({
+      limit: searchParams.get('limit'),
+      offset: searchParams.get('offset'),
+    })
+    if (!paginationResult.success) {
+      const errs = zodErrorsToValidation(paginationResult.error)
+      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+    }
+    const { limit, offset } = paginationResult.data
+
+    const yearResult = yearSchema.safeParse(searchParams.get('year'))
+    if (!yearResult.success) {
+      const errs = zodErrorsToValidation(yearResult.error)
+      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+    }
+    const year = yearResult.data
+
     const accountId = searchParams.get('accountId')
     const ticker = searchParams.get('ticker')
-    const year = searchParams.get('year')
-    const rawLimit = parseInt(searchParams.get('limit') ?? '50')
-    const rawOffset = parseInt(searchParams.get('offset') ?? '0')
-    const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 50 : rawLimit, 200)
-    const offset = isNaN(rawOffset) || rawOffset < 0 ? 0 : rawOffset
 
     const where: Record<string, unknown> = {}
     if (accountId) where.accountId = accountId
     if (ticker) where.ticker = ticker
-    if (year) {
-      if (!/^\d{4}$/.test(year)) {
-        return NextResponse.json({ error: '유효한 연도를 입력해주세요.' }, { status: 400 })
-      }
-      const y = parseInt(year)
+    if (year !== undefined) {
       where.payDate = {
-        gte: new Date(`${y}-01-01`),
-        lt: new Date(`${y + 1}-01-01`),
+        gte: new Date(`${year}-01-01`),
+        lt: new Date(`${year + 1}-01-01`),
       }
     }
 

@@ -1,7 +1,9 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { toCSV, csvResponse } from '@/lib/csv'
 import { formatDate } from '@/lib/format'
+import { yearSchema } from '@/lib/zod-schemas'
+import { zodErrorsToValidation } from '@/lib/zod-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,16 +14,21 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = request.nextUrl
+    const yearResult = yearSchema.safeParse(searchParams.get('year'))
+    if (!yearResult.success) {
+      const errs = zodErrorsToValidation(yearResult.error)
+      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+    }
+    const year = yearResult.data
+
     const accountId = searchParams.get('accountId')
-    const year = searchParams.get('year')
 
     const where: Record<string, unknown> = {}
     if (accountId) where.accountId = accountId
-    if (year && /^\d{4}$/.test(year)) {
-      const y = parseInt(year)
+    if (year !== undefined) {
       where.depositedAt = {
-        gte: new Date(`${y}-01-01`),
-        lt: new Date(`${y + 1}-01-01`),
+        gte: new Date(`${year}-01-01`),
+        lt: new Date(`${year + 1}-01-01`),
       }
     }
 
@@ -46,7 +53,7 @@ export async function GET(request: NextRequest) {
 
     const csv = toCSV(headers, rows)
     const suffix = accountId ? `_${deposits[0]?.account?.name ?? ''}` : ''
-    const yearSuffix = year ?? 'all'
+    const yearSuffix = year !== undefined ? String(year) : 'all'
     return csvResponse(csv, `deposits${suffix}_${yearSuffix}.csv`)
   } catch (error) {
     console.error('GET /api/exports/deposits error:', error)
