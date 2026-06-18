@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { formatKRW } from '@/lib/format'
+import { useToast } from '@/components/ui/Toast'
 
 interface StockOptionDeleteModalProps {
   item: { id: string; displayName: string; strikePrice: number; totalShares: number }
@@ -10,6 +11,7 @@ interface StockOptionDeleteModalProps {
 }
 
 export default function StockOptionDeleteModal({ item, onClose, onDeleted }: StockOptionDeleteModalProps) {
+  const { show } = useToast()
   const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -29,6 +31,7 @@ export default function StockOptionDeleteModal({ item, onClose, onDeleted }: Sto
         setError(data?.error ?? '삭제에 실패했습니다.')
         return
       }
+      show({ variant: 'success', title: '스톡옵션이 삭제되었습니다' })
       onDeleted()
       onClose()
     } catch {

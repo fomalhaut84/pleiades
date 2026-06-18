@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { validateBudgetInput } from '@/lib/budget-utils'
+import { yearMonthSchema } from '@/lib/zod-schemas'
+import { zodErrorsToValidation } from '@/lib/zod-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,17 +15,17 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: NextRequest) {
   try {
     const sp = request.nextUrl.searchParams
-    const yearStr = sp.get('year')
-    const monthStr = sp.get('month')
-
-    if (!yearStr || !monthStr) {
-      return NextResponse.json({ error: 'year, month 파라미터가 필요합니다.' }, { status: 400 })
+    const ymResult = yearMonthSchema.safeParse({
+      year: sp.get('year'),
+      month: sp.get('month'),
+    })
+    if (!ymResult.success) {
+      const errs = zodErrorsToValidation(ymResult.error)
+      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
     }
-
-    const year = parseInt(yearStr)
-    const month = parseInt(monthStr)
-    if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
-      return NextResponse.json({ error: '유효한 year, month를 입력해주세요.' }, { status: 400 })
+    const { year, month } = ymResult.data
+    if (year === undefined || month === undefined) {
+      return NextResponse.json({ error: 'year, month 파라미터가 필요합니다.' }, { status: 400 })
     }
 
     // 예산 조회

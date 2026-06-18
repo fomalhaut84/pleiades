@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useToast } from '@/components/ui/Toast'
 import type { AssetRow } from './AssetTable'
 
 const CATEGORIES = [
@@ -24,6 +25,8 @@ interface AssetFormProps {
 
 export default function AssetForm({ mode, asset, onClose }: AssetFormProps) {
   const router = useRouter()
+  const { show } = useToast()
+  const isEdit = mode === 'edit'
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -87,6 +90,10 @@ export default function AssetForm({ mode, asset, onClose }: AssetFormProps) {
         setError(data?.error ?? '저장에 실패했습니다.')
         return
       }
+      show({
+        variant: 'success',
+        title: isEdit ? '자산이 수정되었습니다' : '자산이 추가되었습니다',
+      })
       onClose()
       router.refresh()
     } catch {
@@ -98,7 +105,6 @@ export default function AssetForm({ mode, asset, onClose }: AssetFormProps) {
 
   const inputClasses = 'w-full bg-surface-dim border border-border rounded-lg px-3.5 py-2.5 text-[13px] text-bright placeholder-dim focus:outline-none focus:bg-surface focus:border-border-hover transition-colors'
   const labelClasses = 'block text-[12px] font-semibold text-sub mb-1.5'
-  const isEdit = mode === 'edit'
   const selectStyle = {
     backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236e6e82' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")`,
     backgroundRepeat: 'no-repeat',

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { formatKRW, formatDate } from '@/lib/format'
+import { useToast } from '@/components/ui/Toast'
 
 interface TransactionForDelete {
   id: string
@@ -25,6 +26,7 @@ export default function TransactionDeleteModal({
   onClose,
   onDeleted,
 }: TransactionDeleteModalProps) {
+  const { show } = useToast()
   const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -47,6 +49,7 @@ export default function TransactionDeleteModal({
         setError(data?.error ?? '삭제에 실패했습니다.')
         return
       }
+      show({ variant: 'success', title: '내역이 삭제되었습니다' })
       onDeleted()
       onClose()
     } catch {

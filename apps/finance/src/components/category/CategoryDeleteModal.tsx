@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useToast } from '@/components/ui/Toast'
 import type { CategoryRow } from './CategoryTable'
 
 interface CategoryDeleteModalProps {
@@ -11,6 +12,7 @@ interface CategoryDeleteModalProps {
 
 export default function CategoryDeleteModal({ category, onClose }: CategoryDeleteModalProps) {
   const router = useRouter()
+  const { show } = useToast()
   const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -33,6 +35,7 @@ export default function CategoryDeleteModal({ category, onClose }: CategoryDelet
         setError(data?.error ?? '삭제에 실패했습니다.')
         return
       }
+      show({ variant: 'success', title: '카테고리가 삭제되었습니다' })
       onClose()
       router.refresh()
     } catch {

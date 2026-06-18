@@ -2,6 +2,7 @@
 
 import { formatKRW } from '@/lib/format'
 import type { AccountSimulation } from '@/lib/simulator/compound-engine'
+import Notice from '@/components/ui/Notice'
 
 const ACCOUNT_COLORS: Record<string, string> = {
   세진: '#34d399',
@@ -116,19 +117,15 @@ export default function SimulatorSummary({ simulations, years }: SimulatorSummar
                   <>
                     <div className="h-px bg-surface-dim" />
                     {sim.giftLimitMonth === 0 ? (
-                      <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-1.5">
-                        <span className="text-[11px] text-red-400">
-                          증여세 비과세 한도 (2,000만원) 초과
-                        </span>
-                      </div>
+                      <Notice variant="error">
+                        증여세 비과세 한도 (2,000만원) 초과
+                      </Notice>
                     ) : (
-                      <div className="bg-yellow-500/5 border border-yellow-500/10 rounded-lg px-3 py-1.5">
-                        <span className="text-[11px] text-yellow-400/70">
-                          현재 적립 속도 기준 약 {Math.floor(sim.giftLimitMonth / 12)}년{' '}
-                          {sim.giftLimitMonth % 12 > 0 ? `${sim.giftLimitMonth % 12}개월` : ''} 후
-                          증여세 비과세 한도 도달 예상
-                        </span>
-                      </div>
+                      <Notice variant="warning">
+                        현재 적립 속도 기준 약 {Math.floor(sim.giftLimitMonth / 12)}년{' '}
+                        {sim.giftLimitMonth % 12 > 0 ? `${sim.giftLimitMonth % 12}개월` : ''} 후
+                        증여세 비과세 한도 도달 예상
+                      </Notice>
                     )}
                   </>
                 )}

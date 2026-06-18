@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { formatKRW, formatDate } from '@/lib/format'
+import { useToast } from '@/components/ui/Toast'
 
 interface RSUDeleteModalProps {
   item: { id: string; vestingDate: string; shares: number; basisValue: number }
@@ -10,6 +11,7 @@ interface RSUDeleteModalProps {
 }
 
 export default function RSUDeleteModal({ item, onClose, onDeleted }: RSUDeleteModalProps) {
+  const { show } = useToast()
   const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -29,6 +31,7 @@ export default function RSUDeleteModal({ item, onClose, onDeleted }: RSUDeleteMo
         setError(data?.error ?? '삭제에 실패했습니다.')
         return
       }
+      show({ variant: 'success', title: 'RSU가 삭제되었습니다' })
       onDeleted()
       onClose()
     } catch {

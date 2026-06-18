@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatUSD } from '@/lib/format'
 import { calcDividendTax, calcAmountKRW } from '@/lib/dividend-utils'
+import { useToast } from '@/components/ui/Toast'
 import type { DividendRow } from './DividendTable'
 
 interface DividendEditPanelProps {
@@ -19,6 +20,7 @@ const ACCOUNT_COLORS: Record<string, string> = {
 
 export default function DividendEditPanel({ dividend, onClose }: DividendEditPanelProps) {
   const router = useRouter()
+  const { show } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -105,6 +107,7 @@ export default function DividendEditPanel({ dividend, onClose }: DividendEditPan
         return
       }
 
+      show({ variant: 'success', title: '배당이 수정되었습니다' })
       onClose()
       router.refresh()
     } catch {

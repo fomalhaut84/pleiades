@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { yearSchema } from '@/lib/zod-schemas'
+import { zodErrorsToValidation } from '@/lib/zod-utils'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = request.nextUrl
-    const yearStr = searchParams.get('year')
-    const accountId = searchParams.get('accountId')
-    if (yearStr && !/^\d{4}$/.test(yearStr)) {
-      return NextResponse.json({ error: '유효한 연도를 입력해주세요.' }, { status: 400 })
+    const yearResult = yearSchema.safeParse(searchParams.get('year'))
+    if (!yearResult.success) {
+      const errs = zodErrorsToValidation(yearResult.error)
+      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
     }
-    const year = yearStr ? parseInt(yearStr) : new Date().getFullYear()
+    const year = yearResult.data ?? new Date().getFullYear()
+    const accountId = searchParams.get('accountId')
 
     const where: Record<string, unknown> = {
       payDate: {

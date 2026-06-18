@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { DEPOSIT_SOURCES } from '@/lib/deposit-utils'
+import { useToast } from '@/components/ui/Toast'
 import type { DepositRow } from './DepositTable'
 
 interface DepositEditPanelProps {
@@ -18,6 +19,7 @@ const ACCOUNT_COLORS: Record<string, string> = {
 
 export default function DepositEditPanel({ deposit, onClose }: DepositEditPanelProps) {
   const router = useRouter()
+  const { show } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -76,6 +78,7 @@ export default function DepositEditPanel({ deposit, onClose }: DepositEditPanelP
         return
       }
 
+      show({ variant: 'success', title: '입금이 수정되었습니다' })
       onClose()
       router.refresh()
     } catch {

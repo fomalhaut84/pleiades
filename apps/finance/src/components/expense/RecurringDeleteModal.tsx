@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { formatKRW } from '@/lib/format'
 import { formatFrequency } from '@/lib/recurring-utils'
+import { useToast } from '@/components/ui/Toast'
 import type { RecurringRow } from './RecurringTable'
 
 interface RecurringDeleteModalProps {
@@ -12,6 +13,7 @@ interface RecurringDeleteModalProps {
 }
 
 export default function RecurringDeleteModal({ item, onClose, onDeleted }: RecurringDeleteModalProps) {
+  const { show } = useToast()
   const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -31,6 +33,7 @@ export default function RecurringDeleteModal({ item, onClose, onDeleted }: Recur
         setError(data?.error ?? '삭제에 실패했습니다.')
         return
       }
+      show({ variant: 'success', title: '반복 거래가 삭제되었습니다' })
       onDeleted()
       onClose()
     } catch {

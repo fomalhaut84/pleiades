@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatKRW } from '@/lib/format'
+import { useToast } from '@/components/ui/Toast'
 
 interface IncomeProfileFormProps {
   /** 수정 모드 시 기존 데이터 */
@@ -32,6 +33,7 @@ const inputClasses = 'w-full bg-surface-dim border border-border rounded-lg px-3
 
 export default function IncomeProfileForm({ initial, onCancel }: IncomeProfileFormProps) {
   const router = useRouter()
+  const { show } = useToast()
   const isEdit = !!initial
 
   const currentYear = new Date().getFullYear()
@@ -107,6 +109,7 @@ export default function IncomeProfileForm({ initial, onCancel }: IncomeProfileFo
         return
       }
 
+      show({ variant: 'success', title: '소득정보가 저장되었습니다' })
       onCancel?.()
       router.refresh()
     } catch {

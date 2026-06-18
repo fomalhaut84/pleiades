@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { recalcHolding, validateTradedAt, validateFxRateForUSD } from '@/lib/trade-utils'
 import { businessErrorResponse, isSafeBusinessError } from '@/lib/api-errors'
@@ -19,7 +20,7 @@ interface HoldingSnapshot {
  * 갱신된 holding 스냅샷을 반환한다 (전량 매도 시 null).
  */
 async function recalcHoldingFromTrades(
-  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  tx: Prisma.TransactionClient,
   accountId: string,
   ticker: string,
   displayName: string,

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useToast } from '@/components/ui/Toast'
 
 interface AccountOption { id: string; name: string }
 
@@ -25,6 +26,7 @@ interface StockOptionFormProps {
 }
 
 export default function StockOptionForm({ mode, item, accounts, onClose, onSaved }: StockOptionFormProps) {
+  const { show } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -79,6 +81,10 @@ export default function StockOptionForm({ mode, item, accounts, onClose, onSaved
         setError(data?.error ?? '저장에 실패했습니다.')
         return
       }
+      show({
+        variant: 'success',
+        title: mode === 'edit' ? '스톡옵션이 수정되었습니다' : '스톡옵션이 추가되었습니다',
+      })
       onSaved()
       onClose()
     } catch {

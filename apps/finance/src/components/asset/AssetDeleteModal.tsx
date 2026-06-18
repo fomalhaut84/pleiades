@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatKRW } from '@/lib/format'
+import { useToast } from '@/components/ui/Toast'
 import type { AssetRow } from './AssetTable'
 
 interface AssetDeleteModalProps {
@@ -12,6 +13,7 @@ interface AssetDeleteModalProps {
 
 export default function AssetDeleteModal({ asset, onClose }: AssetDeleteModalProps) {
   const router = useRouter()
+  const { show } = useToast()
   const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -21,6 +23,7 @@ export default function AssetDeleteModal({ asset, onClose }: AssetDeleteModalPro
     try {
       const res = await fetch(`/api/assets/${asset.id}`, { method: 'DELETE' })
       if (res.ok) {
+        show({ variant: 'success', title: '자산이 삭제되었습니다' })
         onClose()
         router.refresh()
       } else {

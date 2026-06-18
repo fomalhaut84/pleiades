@@ -2,6 +2,7 @@
 
 import { formatKRW, formatDate, formatPercent } from '@/lib/format'
 import type { RSUTaxEstimate } from '@/lib/tax/income-tax'
+import Notice from '@/components/ui/Notice'
 
 interface RSUTaxCardProps {
   estimates: RSUTaxEstimate[]
@@ -91,11 +92,9 @@ export default function RSUTaxCard({ estimates, totalGrossIncome, totalTax }: RS
               </div>
             )}
             {e.status === 'pending' && e.grossIncome > 0 && (
-              <div className="mt-3 bg-yellow-500/5 border border-yellow-500/10 rounded-lg px-3 py-2">
-                <span className="text-[11px] text-yellow-400/70">
-                  베스팅 전 예상치입니다. 실제 세금은 베스팅일 종가에 따라 변동됩니다.
-                </span>
-              </div>
+              <Notice variant="warning" className="mt-3">
+                베스팅 전 예상치입니다. 실제 세금은 베스팅일 종가에 따라 변동됩니다.
+              </Notice>
             )}
           </div>
         </div>

@@ -290,3 +290,17 @@
   - [x] **25-G-4**: 베스팅 캘린더 (RSU + 스톡옵션 통합 월별 캘린더 + 다가오는 90일 리스트)
 - [x] **25-H-1**: Next.js 14 → 15.5.19 마이그레이션 (Dependabot HIGH 4 + MEDIUM 다수 해결)
 - [x] **25-H-2**: next-auth 4 → Auth.js v5 마이그레이션 (uuid 권고 해결, next HIGH→moderate)
+
+---
+
+# 8차 마일스톤 — 내부 정합성 + 외부 호환성
+
+> 7차에서 남긴 빚 청산 + 동일 패턴 일반화 + 외부 표준 호환. **응답 envelope (Phase 27) 은 영향 범위가 커 단독 마일스톤으로 분리.**
+
+## Phase 26: 정합성 + 호환성
+
+- [x] **26-A**: Prisma TransactionClient 타입 정리 (Codex P1 권고 빚 청산)
+- [x] **26-B**: yellow 톤 안내 박스 → `<Notice>` 컴포넌트 통합 (5+1 사용처, 3 variants, WCAG AAA)
+- [x] **26-C**: GET 쿼리 파라미터 Zod 검증 (zod-schemas lib + 8 라우트 + 26 단위 테스트)
+- [x] **26-D**: Generic 성공 토스트 확장 (22 컴포넌트: 9 DeleteModal + 13 Form/EditPanel)
+- [x] **26-F**: 베스팅 iCal 내보내기 (RFC 5545 + line folding + CR 정규화 + 145 단위 테스트)

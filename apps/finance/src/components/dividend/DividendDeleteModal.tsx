@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatKRW, formatUSD, formatDate } from '@/lib/format'
+import { useToast } from '@/components/ui/Toast'
 import type { DividendRow } from './DividendTable'
 
 interface DividendDeleteModalProps {
@@ -12,6 +13,7 @@ interface DividendDeleteModalProps {
 
 export default function DividendDeleteModal({ dividend, onClose }: DividendDeleteModalProps) {
   const router = useRouter()
+  const { show } = useToast()
   const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -34,6 +36,7 @@ export default function DividendDeleteModal({ dividend, onClose }: DividendDelet
         setError(data?.error ?? '삭제에 실패했습니다.')
         return
       }
+      show({ variant: 'success', title: '배당이 삭제되었습니다' })
       onClose()
       router.refresh()
     } catch {

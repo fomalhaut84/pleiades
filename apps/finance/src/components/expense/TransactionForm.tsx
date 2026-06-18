@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useToast } from '@/components/ui/Toast'
 
 interface CategorySuggestion {
   categoryId: string
@@ -70,6 +71,7 @@ export default function TransactionForm({
   onClose,
   onSaved,
 }: TransactionFormProps) {
+  const { show } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -190,6 +192,10 @@ export default function TransactionForm({
         return
       }
 
+      show({
+        variant: 'success',
+        title: mode === 'edit' ? '내역이 수정되었습니다' : '내역이 등록되었습니다',
+      })
       onSaved()
       onClose()
     } catch {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatKRW, formatDate } from '@/lib/format'
+import { useToast } from '@/components/ui/Toast'
 import type { DepositRow } from './DepositTable'
 
 interface DepositDeleteModalProps {
@@ -12,6 +13,7 @@ interface DepositDeleteModalProps {
 
 export default function DepositDeleteModal({ deposit, onClose }: DepositDeleteModalProps) {
   const router = useRouter()
+  const { show } = useToast()
   const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -34,6 +36,7 @@ export default function DepositDeleteModal({ deposit, onClose }: DepositDeleteMo
         setError(data?.error ?? '삭제에 실패했습니다.')
         return
       }
+      show({ variant: 'success', title: '입금이 삭제되었습니다' })
       onClose()
       router.refresh()
     } catch {
