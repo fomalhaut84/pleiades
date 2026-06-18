@@ -303,4 +303,4 @@
 - [x] **26-B**: yellow 톤 안내 박스 → `<Notice>` 컴포넌트 통합 (5+1 사용처, 3 variants, WCAG AAA)
 - [x] **26-C**: GET 쿼리 파라미터 Zod 검증 (zod-schemas lib + 8 라우트 + 26 단위 테스트)
 - [x] **26-D**: Generic 성공 토스트 확장 (22 컴포넌트: 9 DeleteModal + 13 Form/EditPanel)
-- [ ] **26-F**: 베스팅 iCal 내보내기 (RFC 5545, G-4 후속)
+- [x] **26-F**: 베스팅 iCal 내보내기 (RFC 5545 + line folding + CR 정규화 + 145 단위 테스트)
