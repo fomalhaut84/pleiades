@@ -304,3 +304,17 @@
 - [x] **26-C**: GET 쿼리 파라미터 Zod 검증 (zod-schemas lib + 8 라우트 + 26 단위 테스트)
 - [x] **26-D**: Generic 성공 토스트 확장 (22 컴포넌트: 9 DeleteModal + 13 Form/EditPanel)
 - [x] **26-F**: 베스팅 iCal 내보내기 (RFC 5545 + line folding + CR 정규화 + 145 단위 테스트)
+
+---
+
+# 9차 마일스톤 — 응답 envelope `ApiResponse<T>` 전면 도입
+
+> 25-E (API 응답 형식 일관화) 후속 — DELETE 204 / 비즈니스 에러 헬퍼는 끝났지만 **성공 응답 형식** 은 라우트마다 다름. 53 라우트 + 40+ 클라이언트 fetcher 영향 범위 → 단독 마일스톤. 점진 적용 (sub-phase 단위) 으로 안전하게.
+
+## Phase 27: ApiResponse envelope 전면 도입
+
+- [ ] **27-A**: `ApiResponse<T>` 타입 + 헬퍼 (`ok`, `fail`, `paginated`) + 단위 테스트
+- [ ] **27-B**: 신규/단순 GET 라우트 마이그 (~15) + 클라이언트 fetcher 업데이트
+- [ ] **27-C**: POST/PUT/DELETE 마이그 (단일 도메인씩, ~20 라우트 + Form/EditPanel)
+- [ ] **27-D**: pagination meta 통일 + 복잡한 GET (trades/deposits/dividends/exports/*, 8 라우트)
+- [ ] **27-E**: 가이드 문서 갱신 (`.claude/rules/api-routes.md`, `CLAUDE.md`)
