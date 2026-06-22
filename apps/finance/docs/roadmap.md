@@ -315,11 +315,11 @@
 
 - [x] **27-A**: `ApiResponse<T>` 타입 + 헬퍼 (`ok` / `fail` / `paginated` / `noContent`) + 16 단위 테스트
 - [x] **27-B**: 단순 GET 라우트 마이그 (10 라우트 + 13 fetcher, atomic)
-- [ ] **27-C**: POST/PUT/DELETE + 일부 GET 마이그 (5 sub-PR 분할)
+- [x] **27-C**: POST/PUT/DELETE + 일부 GET 마이그 (5 sub-PR 완료)
   - [x] **27-C-1**: Watchlist + Recurring + Settings + IncomeProfile (7 라우트 16 메소드)
   - [x] **27-C-2**: Category + Budget + Asset (9 라우트 + 2 fetcher)
   - [x] **27-C-3**: Dividend + Deposit + Transaction (9 라우트 + 2 fetcher)
   - [x] **27-C-4**: RSU + StockOption (7 라우트 + 1 fetcher)
-  - [ ] **27-C-5**: Trade
+  - [x] **27-C-5**: Trade (3 라우트 + 3 fetcher + api-errors 헬퍼 통일)
 - [ ] **27-D**: pagination meta 통일 + 복잡한 GET (trades/deposits/dividends/exports/*, 8 라우트)
 - [ ] **27-E**: 가이드 문서 갱신 (`.claude/rules/api-routes.md`, `CLAUDE.md`)
