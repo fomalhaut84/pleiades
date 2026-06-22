@@ -321,5 +321,5 @@
   - [x] **27-C-3**: Dividend + Deposit + Transaction (9 라우트 + 2 fetcher)
   - [x] **27-C-4**: RSU + StockOption (7 라우트 + 1 fetcher)
   - [x] **27-C-5**: Trade (3 라우트 + 3 fetcher + api-errors 헬퍼 통일)
-- [ ] **27-D**: pagination meta 통일 + 복잡한 GET (trades/deposits/dividends/exports/*, 8 라우트)
+- [x] **27-D**: pagination meta 통일 + 복잡한 GET (8 라우트 + ExpensesClient/ImportWizard unwrap)
 - [ ] **27-E**: 가이드 문서 갱신 (`.claude/rules/api-routes.md`, `CLAUDE.md`)
