@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { fail } from './api-response'
 
 // 사용자에게 노출해도 안전한 비즈니스 예외 메시지를 식별하는 화이트리스트.
 // 새 메시지를 추가할 때는 우연 매칭을 피하기 위해 메시지 형식을 명시적으로 잠근다.
@@ -14,5 +15,5 @@ export function isSafeBusinessError(err: unknown): err is Error {
 
 export function businessErrorResponse(err: unknown): NextResponse | null {
   if (!isSafeBusinessError(err)) return null
-  return NextResponse.json({ error: err.message }, { status: 400 })
+  return fail(err.message, 400)
 }

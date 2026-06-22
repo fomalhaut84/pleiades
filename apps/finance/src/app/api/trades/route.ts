@@ -5,6 +5,7 @@ import { createTrade } from '@/lib/trade-service'
 import { businessErrorResponse } from '@/lib/api-errors'
 import { paginationSchema, dateRangeSchema } from '@/lib/zod-schemas'
 import { zodErrorsToValidation } from '@/lib/zod-utils'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -89,7 +90,7 @@ export async function POST(request: NextRequest) {
       displayName: normalizedDisplayName,
     })
     if (errors.length > 0) {
-      return NextResponse.json({ error: errors[0].message, errors }, { status: 400 })
+      return fail(errors[0].message, 400)
     }
 
     const { accountId, market, type, shares, price, currency, fxRate, note, tradedAt } = body
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
     // 계좌 존재 확인
     const account = await prisma.account.findUnique({ where: { id: accountId } })
     if (!account) {
-      return NextResponse.json({ error: '계좌를 찾을 수 없습니다.' }, { status: 404 })
+      return fail('계좌를 찾을 수 없습니다.', 404)
     }
 
     const result = await createTrade({
@@ -116,14 +117,11 @@ export async function POST(request: NextRequest) {
       tradedAt: new Date(tradedAt),
     })
 
-    return NextResponse.json(result, { status: 201 })
+    return ok(result, { status: 201 })
   } catch (error) {
     const businessResponse = businessErrorResponse(error)
     if (businessResponse) return businessResponse
     console.error('POST /api/trades error:', error)
-    return NextResponse.json(
-      { error: '거래 기록에 실패했습니다.' },
-      { status: 500 }
-    )
+    return fail('거래 기록에 실패했습니다.', 500)
   }
 }

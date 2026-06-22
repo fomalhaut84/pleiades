@@ -163,7 +163,8 @@ export default function TradeForm({ accounts }: TradeFormProps) {
         return
       }
 
-      const result = await res.json().catch(() => null)
+      const json = await res.json().catch(() => null)
+      const result = json?.data
       if (result?.holding !== undefined && result?.holdingBefore !== undefined) {
         const diff = formatHoldingDiff({
           ticker,

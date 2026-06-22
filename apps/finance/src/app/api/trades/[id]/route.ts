@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { recalcHolding, validateTradedAt, validateFxRateForUSD } from '@/lib/trade-utils'
 import { businessErrorResponse, isSafeBusinessError } from '@/lib/api-errors'
+import { ok, fail, noContent } from '@/lib/api-response'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -73,29 +74,29 @@ export async function PUT(request: NextRequest, props: RouteParams) {
   try {
     const trade = await prisma.trade.findUnique({ where: { id: params.id } })
     if (!trade) {
-      return NextResponse.json({ error: '거래를 찾을 수 없습니다.' }, { status: 404 })
+      return fail('거래를 찾을 수 없습니다.', 404)
     }
 
     const body = await request.json()
     const { shares, price, fxRate, note, tradedAt } = body
 
     if (shares !== undefined && (typeof shares !== 'number' || !Number.isFinite(shares) || shares <= 0 || !Number.isInteger(shares))) {
-      return NextResponse.json({ error: '수량은 1 이상의 정수여야 합니다.' }, { status: 400 })
+      return fail('수량은 1 이상의 정수여야 합니다.', 400)
     }
     if (price !== undefined && (typeof price !== 'number' || !Number.isFinite(price) || price <= 0)) {
-      return NextResponse.json({ error: '단가는 0보다 큰 숫자여야 합니다.' }, { status: 400 })
+      return fail('단가는 0보다 큰 숫자여야 합니다.', 400)
     }
     if (fxRate !== undefined && trade.currency === 'USD') {
       const fxError = validateFxRateForUSD(fxRate)
-      if (fxError) return NextResponse.json({ error: fxError }, { status: 400 })
+      if (fxError) return fail(fxError, 400)
     }
     if (tradedAt !== undefined) {
       if (typeof tradedAt !== 'string') {
-        return NextResponse.json({ error: '유효한 거래일을 입력해주세요.' }, { status: 400 })
+        return fail('유효한 거래일을 입력해주세요.', 400)
       }
       const tradedAtError = validateTradedAt(tradedAt)
       if (tradedAtError) {
-        return NextResponse.json({ error: tradedAtError }, { status: 400 })
+        return fail(tradedAtError, 400)
       }
     }
 
@@ -106,7 +107,7 @@ export async function PUT(request: NextRequest, props: RouteParams) {
     // USD는 최종 fxRate가 항상 양수 보장 — stored 값이 손상되었을 때 silent 0 차단
     if (trade.currency === 'USD') {
       const fxError = validateFxRateForUSD(updatedFxRate)
-      if (fxError) return NextResponse.json({ error: fxError }, { status: 400 })
+      if (fxError) return fail(fxError, 400)
     }
 
     const updatedTotalKRW = trade.currency === 'USD'
@@ -146,12 +147,12 @@ export async function PUT(request: NextRequest, props: RouteParams) {
       return { trade: updated, holding, holdingBefore }
     }, { isolationLevel: 'Serializable' })
 
-    return NextResponse.json(result)
+    return ok(result)
   } catch (error) {
     const businessResponse = businessErrorResponse(error)
     if (businessResponse) return businessResponse
     console.error('PUT /api/trades/[id] error:', error)
-    return NextResponse.json({ error: '거래 수정에 실패했습니다.' }, { status: 500 })
+    return fail('거래 수정에 실패했습니다.', 500)
   }
 }
 
@@ -160,7 +161,7 @@ export async function DELETE(_request: NextRequest, props: RouteParams) {
   try {
     const trade = await prisma.trade.findUnique({ where: { id: params.id } })
     if (!trade) {
-      return NextResponse.json({ error: '거래를 찾을 수 없습니다.' }, { status: 404 })
+      return fail('거래를 찾을 수 없습니다.', 404)
     }
 
     await prisma.$transaction(async (tx) => {
@@ -172,12 +173,12 @@ export async function DELETE(_request: NextRequest, props: RouteParams) {
       )
     }, { isolationLevel: 'Serializable' })
 
-    return new NextResponse(null, { status: 204 })
+    return noContent()
   } catch (error) {
     if (isSafeBusinessError(error) && error.message.startsWith('보유 수량 부족')) {
-      return NextResponse.json({ error: '이 거래를 삭제하면 보유 수량이 음수가 됩니다.' }, { status: 400 })
+      return fail('이 거래를 삭제하면 보유 수량이 음수가 됩니다.', 400)
     }
     console.error('DELETE /api/trades/[id] error:', error)
-    return NextResponse.json({ error: '거래 삭제에 실패했습니다.' }, { status: 500 })
+    return fail('거래 삭제에 실패했습니다.', 500)
   }
 }

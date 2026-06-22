@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { recalcHolding, calcTotalKRW, validateTradeInput } from '@/lib/trade-utils'
 import { normalizeMarket } from '@/lib/market-hours'
 import { businessErrorResponse } from '@/lib/api-errors'
+import { ok, fail } from '@/lib/api-response'
 import type { ImportResult } from '@/types/csv-import'
 
 export const dynamic = 'force-dynamic'
@@ -15,39 +16,33 @@ export async function POST(request: NextRequest) {
     const { accountId, market, currency, skipDuplicates, trades } = body
 
     if (!accountId || !market || !currency || !Array.isArray(trades)) {
-      return NextResponse.json(
-        { error: '필수 필드가 누락되었습니다.' },
-        { status: 400 }
-      )
+      return fail('필수 필드가 누락되었습니다.', 400)
     }
 
     if (!['US', 'KR'].includes(market)) {
-      return NextResponse.json({ error: '잘못된 시장입니다.' }, { status: 400 })
+      return fail('잘못된 시장입니다.', 400)
     }
     if (!['USD', 'KRW'].includes(currency)) {
-      return NextResponse.json({ error: '잘못된 통화입니다.' }, { status: 400 })
+      return fail('잘못된 통화입니다.', 400)
     }
     if (market === 'US' && currency !== 'USD') {
-      return NextResponse.json({ error: 'US 시장은 USD만 가능합니다.' }, { status: 400 })
+      return fail('US 시장은 USD만 가능합니다.', 400)
     }
     if (market === 'KR' && currency !== 'KRW') {
-      return NextResponse.json({ error: 'KR 시장은 KRW만 가능합니다.' }, { status: 400 })
+      return fail('KR 시장은 KRW만 가능합니다.', 400)
     }
 
     if (trades.length === 0) {
-      return NextResponse.json({ error: '임포트할 거래가 없습니다.' }, { status: 400 })
+      return fail('임포트할 거래가 없습니다.', 400)
     }
     if (trades.length > MAX_ROWS) {
-      return NextResponse.json(
-        { error: `최대 ${MAX_ROWS}건까지 임포트 가능합니다.` },
-        { status: 400 }
-      )
+      return fail(`최대 ${MAX_ROWS}건까지 임포트 가능합니다.`, 400)
     }
 
     // 계좌 존재 확인
     const account = await prisma.account.findUnique({ where: { id: accountId } })
     if (!account) {
-      return NextResponse.json({ error: '계좌를 찾을 수 없습니다.' }, { status: 404 })
+      return fail('계좌를 찾을 수 없습니다.', 404)
     }
 
     // 각 행 검증
@@ -123,10 +118,7 @@ export async function POST(request: NextRequest) {
     for (const meta of existingMeta) {
       const normalizedExisting = normalizeMarket(meta.market, meta.ticker)
       if (normalizedExisting !== market || meta.currency !== currency) {
-        return NextResponse.json(
-          { error: `${meta.ticker}은(는) 이미 ${normalizedExisting}/${meta.currency}로 등록되어 있습니다.` },
-          { status: 400 }
-        )
+        return fail(`${meta.ticker}은(는) 이미 ${normalizedExisting}/${meta.currency}로 등록되어 있습니다.`, 400)
       }
     }
     // Holding 테이블도 검증 (Trade 없이 Holding만 있는 시드 데이터 대응)
@@ -137,10 +129,7 @@ export async function POST(request: NextRequest) {
     for (const h of existingHoldings) {
       const normalizedExisting = normalizeMarket(h.market, h.ticker)
       if (normalizedExisting !== market || h.currency !== currency) {
-        return NextResponse.json(
-          { error: `${h.ticker}은(는) 이미 ${normalizedExisting}/${h.currency}로 등록되어 있습니다.` },
-          { status: 400 }
-        )
+        return fail(`${h.ticker}은(는) 이미 ${normalizedExisting}/${h.currency}로 등록되어 있습니다.`, 400)
       }
     }
 
@@ -183,7 +172,7 @@ export async function POST(request: NextRequest) {
         failed: resultErrors.length > 0 ? trades.length - skipped : 0,
         errors: resultErrors,
       }
-      return NextResponse.json({ result }, { status: 201 })
+      return ok(result, { status: 201 })
     }
 
     // Serializable 트랜잭션: 일괄 생성 + Holding 재계산
@@ -302,14 +291,11 @@ export async function POST(request: NextRequest) {
       errors: resultErrors,
     }
 
-    return NextResponse.json({ result }, { status: 201 })
+    return ok(result, { status: 201 })
   } catch (error) {
     const businessResponse = businessErrorResponse(error)
     if (businessResponse) return businessResponse
     console.error('POST /api/trades/import error:', error)
-    return NextResponse.json(
-      { error: '거래 일괄 등록에 실패했습니다.' },
-      { status: 500 }
-    )
+    return fail('거래 일괄 등록에 실패했습니다.', 500)
   }
 }

@@ -89,7 +89,8 @@ export default function EditPanel({ trade, onClose }: EditPanelProps) {
         return
       }
 
-      const result = await res.json().catch(() => null)
+      const json = await res.json().catch(() => null)
+      const result = json?.data
       if (result?.holding !== undefined && result?.holdingBefore !== undefined) {
         const diff = formatHoldingEditDiff({
           ticker: trade.ticker,
