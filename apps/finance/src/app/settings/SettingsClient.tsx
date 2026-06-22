@@ -33,8 +33,8 @@ export default function SettingsClient() {
     try {
       const res = await fetch('/api/accounts')
       if (res.ok) {
-        const data = await res.json()
-        setAccounts(Array.isArray(data) ? data : [])
+        const json = await res.json()
+        setAccounts(Array.isArray(json.data) ? json.data : [])
       }
     } catch (e) {
       console.error('[settings] 계좌 조회 실패:', e)

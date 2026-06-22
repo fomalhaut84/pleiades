@@ -6,6 +6,7 @@ import {
   calcTaxableFromGross,
   type IncomeProfileInput,
 } from '@/lib/tax/income-profile-utils'
+import { ok } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +16,7 @@ export async function GET() {
     const profiles = await prisma.incomeProfile.findMany({
       orderBy: { year: 'desc' },
     })
-    return NextResponse.json(profiles)
+    return ok(profiles)
   } catch (error) {
     console.error('GET /api/income-profiles error:', error)
     return NextResponse.json(

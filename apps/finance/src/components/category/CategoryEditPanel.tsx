@@ -30,8 +30,8 @@ export default function CategoryEditPanel({ category, onClose }: CategoryEditPan
   useEffect(() => {
     fetch('/api/category-groups')
       .then((res) => res.ok ? res.json() : null)
-      .then((data) => {
-        if (data?.groups) setGroups(data.groups)
+      .then((json) => {
+        if (Array.isArray(json?.data)) setGroups(json.data)
       })
       .catch(() => {})
   }, [])

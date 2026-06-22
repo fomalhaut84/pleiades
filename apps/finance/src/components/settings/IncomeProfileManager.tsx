@@ -21,7 +21,10 @@ export default function IncomeProfileManager() {
   const fetchProfiles = useCallback(async () => {
     try {
       const res = await fetch('/api/income-profiles')
-      if (res.ok) setProfiles(await res.json())
+      if (res.ok) {
+        const json = await res.json()
+        setProfiles(Array.isArray(json?.data) ? json.data : [])
+      }
     } catch {}
   }, [])
 

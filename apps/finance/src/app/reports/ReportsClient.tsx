@@ -28,7 +28,7 @@ export default function ReportsClient() {
         if (!r.ok) throw new Error('API error')
         return r.json()
       })
-      .then((d) => setReports(d.reports ?? []))
+      .then((d) => setReports(Array.isArray(d?.data) ? d.data : []))
       .catch(console.error)
       .finally(() => setLoading(false))
   }

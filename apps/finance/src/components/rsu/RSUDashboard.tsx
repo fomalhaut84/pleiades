@@ -45,8 +45,8 @@ export default function RSUDashboard({ schedules: initialSchedules, accounts = [
     try {
       const res = await fetch('/api/rsu')
       if (res.ok) {
-        const data = await res.json()
-        setSchedules(data.schedules ?? [])
+        const json = await res.json()
+        setSchedules(Array.isArray(json.data) ? json.data : [])
       }
     } catch {}
   }

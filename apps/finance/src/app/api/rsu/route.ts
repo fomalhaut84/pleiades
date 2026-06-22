@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
+import { ok } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +12,7 @@ export async function GET() {
       include: { account: { select: { id: true, name: true } } },
     })
 
-    return NextResponse.json({ schedules })
+    return ok(schedules)
   } catch (error) {
     console.error('GET /api/rsu error:', error)
     return NextResponse.json(

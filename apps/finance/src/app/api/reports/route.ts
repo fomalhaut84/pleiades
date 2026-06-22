@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateReportPDF } from '@/lib/report/pdf-generator'
+import { ok } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -13,7 +14,7 @@ export async function GET() {
     const reports = await prisma.quarterlyReport.findMany({
       orderBy: [{ year: 'desc' }, { quarter: 'desc' }],
     })
-    return NextResponse.json({ reports })
+    return ok(reports)
   } catch (error) {
     console.error('GET /api/reports error:', error)
     return NextResponse.json({ error: '리포트 목록을 불러올 수 없습니다.' }, { status: 500 })

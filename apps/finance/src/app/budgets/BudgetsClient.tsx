@@ -77,8 +77,8 @@ export default function BudgetsClient() {
     fetch('/api/categories')
       .then((res) => res.ok ? res.json() : null)
       .then((d) => {
-        if (d?.categories) {
-          setCategories(d.categories)
+        if (Array.isArray(d?.data)) {
+          setCategories(d.data)
         }
       })
       .catch(() => {})

@@ -53,8 +53,8 @@ export default function WhooingSettings() {
         }
         setLocalMappings(local)
       }
-      if (cats?.categories) {
-        setCategories(cats.categories)
+      if (Array.isArray(cats?.data)) {
+        setCategories(cats.data)
       }
     }).catch(() => {})
   }, [])

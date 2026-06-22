@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getLastUpdatedAt } from '@/lib/format'
+import { ok } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +13,7 @@ export async function GET() {
 
     const lastUpdatedAt = getLastUpdatedAt(prices)
 
-    return NextResponse.json({ prices, lastUpdatedAt })
+    return ok({ prices, lastUpdatedAt })
   } catch (error) {
     console.error('GET /api/prices error:', error)
     return NextResponse.json(

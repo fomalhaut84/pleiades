@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { ok } from '@/lib/api-response'
 
 export async function GET() {
   try {
@@ -13,7 +14,7 @@ export async function GET() {
       orderBy: { createdAt: 'asc' },
     })
 
-    return NextResponse.json(accounts)
+    return ok(accounts)
   } catch (error) {
     console.error('GET /api/accounts error:', error)
     return NextResponse.json(

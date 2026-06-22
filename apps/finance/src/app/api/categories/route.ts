@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { validateCategoryInput, generateSlug } from '@/lib/category-utils'
+import { ok } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({ categories })
+    return ok(categories)
   } catch (error) {
     console.error('GET /api/categories error:', error)
     return NextResponse.json(

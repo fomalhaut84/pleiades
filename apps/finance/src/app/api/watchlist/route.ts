@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { ok } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,7 +30,7 @@ export async function GET() {
       updatedAt: i.updatedAt.toISOString(),
     }))
 
-    return NextResponse.json({ items: serialized })
+    return ok(serialized)
   } catch (error) {
     console.error('[api/watchlist] GET 실패:', error)
     return NextResponse.json({ error: '관심종목 조회에 실패했습니다.' }, { status: 500 })

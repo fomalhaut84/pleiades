@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
+import { ok } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
       orderBy: { grantDate: 'asc' },
     })
 
-    return NextResponse.json({ stockOptions })
+    return ok(stockOptions)
   } catch (err) {
     console.error('GET /api/stock-options error:', err)
     return NextResponse.json({ error: '스톡옵션 조회 실패' }, { status: 500 })

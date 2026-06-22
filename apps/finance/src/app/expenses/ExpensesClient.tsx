@@ -90,8 +90,8 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
   useEffect(() => {
     fetch('/api/categories')
       .then((res) => res.ok ? res.json() : null)
-      .then((data) => {
-        const cats = data?.categories
+      .then((json) => {
+        const cats = json?.data
         if (Array.isArray(cats)) {
           setCategories(cats.map((c: { id: string; name: string; icon: string | null; type: string }) => ({
             id: c.id,

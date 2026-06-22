@@ -15,8 +15,8 @@ export default function WatchlistClient() {
     try {
       const res = await fetch('/api/watchlist')
       if (res.ok) {
-        const data = await res.json()
-        setItems(data.items ?? [])
+        const json = await res.json()
+        setItems(Array.isArray(json.data) ? json.data : [])
       }
     } catch (e) {
       console.error('[watchlist] 조회 실패:', e)

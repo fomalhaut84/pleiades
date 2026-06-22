@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { ok } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +13,7 @@ export async function GET() {
       orderBy: { sortOrder: 'asc' },
       include: { _count: { select: { categories: true } } },
     })
-    return NextResponse.json({ groups })
+    return ok(groups)
   } catch (error) {
     console.error('[api/category-groups] GET 실패:', error)
     return NextResponse.json({ error: '그룹 조회에 실패했습니다.' }, { status: 500 })

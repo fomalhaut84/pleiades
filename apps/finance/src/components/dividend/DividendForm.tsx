@@ -74,8 +74,8 @@ export default function DividendForm({ accounts }: DividendFormProps) {
     if (!isUSD) return
     fetch('/api/prices')
       .then((r) => r.json())
-      .then((data) => {
-        const fx = data.prices?.find((p: { ticker: string }) => p.ticker === 'USDKRW=X')
+      .then((json) => {
+        const fx = json?.data?.prices?.find((p: { ticker: string }) => p.ticker === 'USDKRW=X')
         if (fx) setFxRate(String(Math.round(fx.price)))
       })
       .catch(() => {})
