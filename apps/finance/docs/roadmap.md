@@ -318,7 +318,7 @@
 - [ ] **27-C**: POST/PUT/DELETE + 일부 GET 마이그 (5 sub-PR 분할)
   - [x] **27-C-1**: Watchlist + Recurring + Settings + IncomeProfile (7 라우트 16 메소드)
   - [x] **27-C-2**: Category + Budget + Asset (9 라우트 + 2 fetcher)
-  - [ ] **27-C-3**: Dividend + Deposit + Transaction
+  - [x] **27-C-3**: Dividend + Deposit + Transaction (9 라우트 + 2 fetcher)
   - [ ] **27-C-4**: RSU + StockOption
   - [ ] **27-C-5**: Trade
 - [ ] **27-D**: pagination meta 통일 + 복잡한 GET (trades/deposits/dividends/exports/*, 8 라우트)
