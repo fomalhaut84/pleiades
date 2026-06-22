@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
+import { ok, fail, noContent } from '@/lib/api-response'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -16,14 +17,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 })
+      return fail('유효한 JSON 형식이 아닙니다.', 400)
     }
 
     if (typeof body.shares === 'number' && (!Number.isInteger(body.shares) || body.shares <= 0)) {
-      return NextResponse.json({ error: '수량은 1 이상의 정수여야 합니다.' }, { status: 400 })
+      return fail('수량은 1 이상의 정수여야 합니다.', 400)
     }
     if (typeof body.basisValue === 'number' && body.basisValue < 0) {
-      return NextResponse.json({ error: '기준금액은 0 이상이어야 합니다.' }, { status: 400 })
+      return fail('기준금액은 0 이상이어야 합니다.', 400)
     }
 
     const data: Record<string, unknown> = {}
@@ -48,17 +49,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       })
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 
-    return NextResponse.json(updated)
+    return ok(updated)
   } catch (error) {
     if (error instanceof Error) {
-      if (error.message === 'NOT_FOUND') return NextResponse.json({ error: '존재하지 않는 RSU 스케줄입니다.' }, { status: 404 })
-      if (error.message === 'NOT_PENDING') return NextResponse.json({ error: '베스팅 완료된 스케줄은 수정할 수 없습니다.' }, { status: 400 })
+      if (error.message === 'NOT_FOUND') return fail('존재하지 않는 RSU 스케줄입니다.', 404)
+      if (error.message === 'NOT_PENDING') return fail('베스팅 완료된 스케줄은 수정할 수 없습니다.', 400)
     }
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return NextResponse.json({ error: '존재하지 않는 RSU 스케줄입니다.' }, { status: 404 })
+      return fail('존재하지 않는 RSU 스케줄입니다.', 404)
     }
     console.error('PUT /api/rsu/[id] error:', error)
-    return NextResponse.json({ error: 'RSU 스케줄 수정에 실패했습니다.' }, { status: 500 })
+    return fail('RSU 스케줄 수정에 실패했습니다.', 500)
   }
 }
 
@@ -77,16 +78,16 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       await tx.rSUSchedule.delete({ where: { id } })
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 
-    return new NextResponse(null, { status: 204 })
+    return noContent()
   } catch (error) {
     if (error instanceof Error) {
-      if (error.message === 'NOT_FOUND') return NextResponse.json({ error: '존재하지 않는 RSU 스케줄입니다.' }, { status: 404 })
-      if (error.message === 'NOT_PENDING') return NextResponse.json({ error: '베스팅 완료된 스케줄은 삭제할 수 없습니다.' }, { status: 400 })
+      if (error.message === 'NOT_FOUND') return fail('존재하지 않는 RSU 스케줄입니다.', 404)
+      if (error.message === 'NOT_PENDING') return fail('베스팅 완료된 스케줄은 삭제할 수 없습니다.', 400)
     }
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return NextResponse.json({ error: '존재하지 않는 RSU 스케줄입니다.' }, { status: 404 })
+      return fail('존재하지 않는 RSU 스케줄입니다.', 404)
     }
     console.error('DELETE /api/rsu/[id] error:', error)
-    return NextResponse.json({ error: 'RSU 스케줄 삭제에 실패했습니다.' }, { status: 500 })
+    return fail('RSU 스케줄 삭제에 실패했습니다.', 500)
   }
 }

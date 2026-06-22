@@ -74,7 +74,12 @@ export default function RSUDashboard({ schedules: initialSchedules, accounts = [
         return
       }
 
-      const { schedule: updated } = await res.json()
+      const json = await res.json()
+      const updated = json?.data?.schedule
+      if (!updated) {
+        setError('베스팅 처리 결과를 받지 못했습니다.')
+        return
+      }
 
       setSchedules((prev) =>
         prev.map((s) =>

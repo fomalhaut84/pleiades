@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
-import { ok } from '@/lib/api-response'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     return ok(stockOptions)
   } catch (err) {
     console.error('GET /api/stock-options error:', err)
-    return NextResponse.json({ error: '스톡옵션 조회 실패' }, { status: 500 })
+    return fail('스톡옵션 조회 실패', 500)
   }
 }
 
@@ -42,15 +42,15 @@ export async function GET(request: Request) {
 export async function POST(request: NextRequest) {
   try {
     let body: Record<string, unknown>
-    try { body = await request.json() } catch { return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 }) }
+    try { body = await request.json() } catch { return fail('유효한 JSON 형식이 아닙니다.', 400) }
 
-    if (!body.accountId || typeof body.accountId !== 'string') return NextResponse.json({ error: '계좌를 선택해주세요.' }, { status: 400 })
-    if (!body.ticker || typeof body.ticker !== 'string') return NextResponse.json({ error: '종목 티커를 입력해주세요.' }, { status: 400 })
-    if (!body.displayName || typeof body.displayName !== 'string') return NextResponse.json({ error: '종목명을 입력해주세요.' }, { status: 400 })
-    if (!body.grantDate || typeof body.grantDate !== 'string') return NextResponse.json({ error: '부여일을 입력해주세요.' }, { status: 400 })
-    if (!body.expiryDate || typeof body.expiryDate !== 'string') return NextResponse.json({ error: '만료일을 입력해주세요.' }, { status: 400 })
-    if (typeof body.strikePrice !== 'number' || body.strikePrice < 0) return NextResponse.json({ error: '행사가격은 0 이상이어야 합니다.' }, { status: 400 })
-    if (typeof body.totalShares !== 'number' || !Number.isInteger(body.totalShares) || body.totalShares <= 0) return NextResponse.json({ error: '총부여수량은 1 이상의 정수여야 합니다.' }, { status: 400 })
+    if (!body.accountId || typeof body.accountId !== 'string') return fail('계좌를 선택해주세요.', 400)
+    if (!body.ticker || typeof body.ticker !== 'string') return fail('종목 티커를 입력해주세요.', 400)
+    if (!body.displayName || typeof body.displayName !== 'string') return fail('종목명을 입력해주세요.', 400)
+    if (!body.grantDate || typeof body.grantDate !== 'string') return fail('부여일을 입력해주세요.', 400)
+    if (!body.expiryDate || typeof body.expiryDate !== 'string') return fail('만료일을 입력해주세요.', 400)
+    if (typeof body.strikePrice !== 'number' || body.strikePrice < 0) return fail('행사가격은 0 이상이어야 합니다.', 400)
+    if (typeof body.totalShares !== 'number' || !Number.isInteger(body.totalShares) || body.totalShares <= 0) return fail('총부여수량은 1 이상의 정수여야 합니다.', 400)
 
     const option = await prisma.stockOption.create({
       data: {
@@ -67,12 +67,12 @@ export async function POST(request: NextRequest) {
       include: { vestings: true, account: { select: { name: true } } },
     })
 
-    return NextResponse.json(option, { status: 201 })
+    return ok(option, { status: 201 })
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
-      return NextResponse.json({ error: '존재하지 않는 계좌입니다.' }, { status: 400 })
+      return fail('존재하지 않는 계좌입니다.', 400)
     }
     console.error('POST /api/stock-options error:', error)
-    return NextResponse.json({ error: '스톡옵션 생성에 실패했습니다.' }, { status: 500 })
+    return fail('스톡옵션 생성에 실패했습니다.', 500)
   }
 }
