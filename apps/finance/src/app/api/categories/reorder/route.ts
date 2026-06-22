@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { fail, noContent } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,17 +16,17 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: '잘못된 요청 형식입니다.' }, { status: 400 })
+      return fail('잘못된 요청 형식입니다.', 400)
     }
 
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return NextResponse.json({ error: '잘못된 요청 형식입니다.' }, { status: 400 })
+      return fail('잘못된 요청 형식입니다.', 400)
     }
 
     const { items } = body as { items?: unknown }
 
     if (!Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: 'items 배열이 필요합니다.' }, { status: 400 })
+      return fail('items 배열이 필요합니다.', 400)
     }
 
     const validItems: ReorderItem[] = []
@@ -39,10 +40,7 @@ export async function POST(request: NextRequest) {
         (item as ReorderItem).sortOrder > 999 ||
         !Number.isInteger((item as ReorderItem).sortOrder)
       ) {
-        return NextResponse.json(
-          { error: '각 항목은 id(string)와 sortOrder(0-999 정수)가 필요합니다.' },
-          { status: 400 }
-        )
+        return fail('각 항목은 id(string)와 sortOrder(0-999 정수)가 필요합니다.', 400)
       }
       validItems.push({ id: (item as ReorderItem).id, sortOrder: (item as ReorderItem).sortOrder })
     }
@@ -50,7 +48,7 @@ export async function POST(request: NextRequest) {
     // id 유니크 검증
     const uniqueIds = new Set(validItems.map((item) => item.id))
     if (uniqueIds.size !== validItems.length) {
-      return NextResponse.json({ error: '중복된 카테고리 ID가 있습니다.' }, { status: 400 })
+      return fail('중복된 카테고리 ID가 있습니다.', 400)
     }
 
     await prisma.$transaction(
@@ -62,18 +60,12 @@ export async function POST(request: NextRequest) {
       )
     )
 
-    return new NextResponse(null, { status: 204 })
+    return noContent()
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return NextResponse.json(
-        { error: '존재하지 않는 카테고리가 포함되어 있습니다.' },
-        { status: 404 }
-      )
+      return fail('존재하지 않는 카테고리가 포함되어 있습니다.', 404)
     }
     console.error('POST /api/categories/reorder error:', error)
-    return NextResponse.json(
-      { error: '정렬 순서 변경에 실패했습니다.' },
-      { status: 500 }
-    )
+    return fail('정렬 순서 변경에 실패했습니다.', 500)
   }
 }

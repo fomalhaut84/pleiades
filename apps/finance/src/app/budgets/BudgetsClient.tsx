@@ -57,7 +57,8 @@ export default function BudgetsClient() {
     try {
       const res = await fetch(`/api/budgets?year=${year}&month=${month}`, { signal: controller.signal })
       if (res.ok) {
-        setData(await res.json())
+        const json = await res.json()
+        if (json?.data) setData(json.data)
       }
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return

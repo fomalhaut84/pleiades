@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { validateBudgetInput } from '@/lib/budget-utils'
 import { yearMonthSchema } from '@/lib/zod-schemas'
 import { zodErrorsToValidation } from '@/lib/zod-utils'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,11 +22,11 @@ export async function GET(request: NextRequest) {
     })
     if (!ymResult.success) {
       const errs = zodErrorsToValidation(ymResult.error)
-      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+      return fail(errs[0].message, 400)
     }
     const { year, month } = ymResult.data
     if (year === undefined || month === undefined) {
-      return NextResponse.json({ error: 'year, month 파라미터가 필요합니다.' }, { status: 400 })
+      return fail('year, month 파라미터가 필요합니다.', 400)
     }
 
     // 예산 조회
@@ -158,7 +159,7 @@ export async function GET(request: NextRequest) {
       spentByGroup[gId].total += amt
     })
 
-    return NextResponse.json({
+    return ok({
       year,
       month,
       totalBudget,
@@ -168,7 +169,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('[api/budgets] GET 실패:', error)
-    return NextResponse.json({ error: '예산 조회에 실패했습니다.' }, { status: 500 })
+    return fail('예산 조회에 실패했습니다.', 500)
   }
 }
 
@@ -184,10 +185,10 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 })
+      return fail('유효한 JSON 형식이 아닙니다.', 400)
     }
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return NextResponse.json({ error: '유효한 JSON 객체가 아닙니다.' }, { status: 400 })
+      return fail('유효한 JSON 객체가 아닙니다.', 400)
     }
 
     // 복사 액션
@@ -198,7 +199,7 @@ export async function POST(request: NextRequest) {
     // 일반 upsert
     const errors = validateBudgetInput(body)
     if (errors.length > 0) {
-      return NextResponse.json({ error: errors[0].message, errors }, { status: 400 })
+      return fail(errors[0].message, 400)
     }
 
     const amount = body.amount as number
@@ -209,14 +210,14 @@ export async function POST(request: NextRequest) {
 
     // categoryId와 groupId 동시 설정 불가
     if (categoryId && groupId) {
-      return NextResponse.json({ error: '카테고리와 그룹을 동시에 지정할 수 없습니다.' }, { status: 400 })
+      return fail('카테고리와 그룹을 동시에 지정할 수 없습니다.', 400)
     }
 
     // 그룹 존재 확인
     if (groupId) {
       const grp = await prisma.categoryGroup.findUnique({ where: { id: groupId }, select: { id: true } })
       if (!grp) {
-        return NextResponse.json({ error: '존재하지 않는 그룹입니다.' }, { status: 400 })
+        return fail('존재하지 않는 그룹입니다.', 400)
       }
     }
 
@@ -227,10 +228,10 @@ export async function POST(request: NextRequest) {
         select: { id: true, type: true },
       })
       if (!cat) {
-        return NextResponse.json({ error: '존재하지 않는 카테고리입니다.' }, { status: 400 })
+        return fail('존재하지 않는 카테고리입니다.', 400)
       }
       if (cat.type !== 'expense') {
-        return NextResponse.json({ error: '예산은 소비 카테고리에만 설정할 수 있습니다.' }, { status: 400 })
+        return fail('예산은 소비 카테고리에만 설정할 수 있습니다.', 400)
       }
     }
 
@@ -252,13 +253,13 @@ export async function POST(request: NextRequest) {
       return { budget: created, created: true }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 
-    return NextResponse.json(result.budget, { status: result.created ? 201 : 200 })
+    return ok(result.budget, { status: result.created ? 201 : 200 })
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
-      return NextResponse.json({ error: '존재하지 않는 카테고리입니다.' }, { status: 400 })
+      return fail('존재하지 않는 카테고리입니다.', 400)
     }
     console.error('[api/budgets] POST 실패:', error)
-    return NextResponse.json({ error: '예산 저장에 실패했습니다.' }, { status: 500 })
+    return fail('예산 저장에 실패했습니다.', 500)
   }
 }
 
@@ -273,7 +274,7 @@ async function handleCopy(body: Record<string, unknown>) {
     !Number.isInteger(targetYear) || !Number.isInteger(targetMonth) ||
     sourceMonth < 1 || sourceMonth > 12 || targetMonth < 1 || targetMonth > 12
   ) {
-    return NextResponse.json({ error: '유효한 sourceYear, sourceMonth, targetYear, targetMonth를 입력해주세요.' }, { status: 400 })
+    return fail('유효한 sourceYear, sourceMonth, targetYear, targetMonth를 입력해주세요.', 400)
   }
 
   const sourceBudgets = await prisma.budget.findMany({
@@ -281,7 +282,7 @@ async function handleCopy(body: Record<string, unknown>) {
   })
 
   if (sourceBudgets.length === 0) {
-    return NextResponse.json({ error: '복사할 예산이 없습니다.' }, { status: 400 })
+    return fail('복사할 예산이 없습니다.', 400)
   }
 
   const copied = await prisma.$transaction(async (tx) => {
@@ -310,5 +311,5 @@ async function handleCopy(body: Record<string, unknown>) {
     return count
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 
-  return NextResponse.json({ copied, targetYear, targetMonth })
+  return ok({ copied, targetYear, targetMonth })
 }

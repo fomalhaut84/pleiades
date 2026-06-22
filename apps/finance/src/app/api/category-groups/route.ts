@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { ok } from '@/lib/api-response'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +16,7 @@ export async function GET() {
     return ok(groups)
   } catch (error) {
     console.error('[api/category-groups] GET 실패:', error)
-    return NextResponse.json({ error: '그룹 조회에 실패했습니다.' }, { status: 500 })
+    return fail('그룹 조회에 실패했습니다.', 500)
   }
 }
 
@@ -29,15 +29,15 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 })
+      return fail('유효한 JSON 형식이 아닙니다.', 400)
     }
 
     const name = typeof body.name === 'string' ? body.name.trim() : ''
     if (!name) {
-      return NextResponse.json({ error: '그룹 이름을 입력해주세요.' }, { status: 400 })
+      return fail('그룹 이름을 입력해주세요.', 400)
     }
     if (name.length > 50) {
-      return NextResponse.json({ error: '이름은 50자 이내로 입력해주세요.' }, { status: 400 })
+      return fail('이름은 50자 이내로 입력해주세요.', 400)
     }
 
     const icon = typeof body.icon === 'string' ? body.icon.trim() || null : null
@@ -48,12 +48,12 @@ export async function POST(request: NextRequest) {
       data: { name, icon, sortOrder },
     })
 
-    return NextResponse.json(group, { status: 201 })
+    return ok(group, { status: 201 })
   } catch (error) {
     if ((error as { code?: string }).code === 'P2002') {
-      return NextResponse.json({ error: '이미 존재하는 그룹 이름입니다.' }, { status: 409 })
+      return fail('이미 존재하는 그룹 이름입니다.', 409)
     }
     console.error('[api/category-groups] POST 실패:', error)
-    return NextResponse.json({ error: '그룹 생성에 실패했습니다.' }, { status: 500 })
+    return fail('그룹 생성에 실패했습니다.', 500)
   }
 }

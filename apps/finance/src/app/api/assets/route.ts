@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
       .filter((a) => a.isLiability)
       .reduce((sum, a) => sum + a.value, 0)
 
-    return NextResponse.json({
+    return ok({
       assets,
       totalAssets,
       totalLiabilities,
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('GET /api/assets error:', error)
-    return NextResponse.json({ error: '자산 목록을 불러올 수 없습니다.' }, { status: 500 })
+    return fail('자산 목록을 불러올 수 없습니다.', 500)
   }
 }
 
@@ -57,40 +58,37 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: '잘못된 요청 형식입니다.' }, { status: 400 })
+      return fail('잘못된 요청 형식입니다.', 400)
     }
 
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return NextResponse.json({ error: '잘못된 요청 형식입니다.' }, { status: 400 })
+      return fail('잘못된 요청 형식입니다.', 400)
     }
 
     const { name, category, owner, value, isLiability, interestRate, maturityDate, note } =
       body as Record<string, unknown>
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return NextResponse.json({ error: '자산명을 입력해주세요.' }, { status: 400 })
+      return fail('자산명을 입력해주세요.', 400)
     }
     if (!category || typeof category !== 'string' || !VALID_CATEGORIES.includes(category)) {
-      return NextResponse.json(
-        { error: `유효한 카테고리를 선택해주세요: ${VALID_CATEGORIES.join(', ')}` },
-        { status: 400 }
-      )
+      return fail(`유효한 카테고리를 선택해주세요: ${VALID_CATEGORIES.join(', ')}`, 400)
     }
     if (!owner || typeof owner !== 'string' || (owner as string).trim().length === 0) {
-      return NextResponse.json({ error: '소유자를 입력해주세요.' }, { status: 400 })
+      return fail('소유자를 입력해주세요.', 400)
     }
     if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-      return NextResponse.json({ error: '유효한 금액을 입력해주세요.' }, { status: 400 })
+      return fail('유효한 금액을 입력해주세요.', 400)
     }
     if (isLiability !== undefined && typeof isLiability !== 'boolean') {
-      return NextResponse.json({ error: 'isLiability는 boolean이어야 합니다.' }, { status: 400 })
+      return fail('isLiability는 boolean이어야 합니다.', 400)
     }
 
     // optional 필드 검증 (제공된 경우 타입/값 확인)
     let validatedInterestRate: number | null = null
     if (interestRate !== undefined && interestRate !== null) {
       if (typeof interestRate !== 'number' || !Number.isFinite(interestRate)) {
-        return NextResponse.json({ error: '이율은 숫자여야 합니다.' }, { status: 400 })
+        return fail('이율은 숫자여야 합니다.', 400)
       }
       validatedInterestRate = interestRate
     }
@@ -98,11 +96,11 @@ export async function POST(request: NextRequest) {
     let validatedMaturityDate: Date | null = null
     if (maturityDate !== undefined && maturityDate !== null) {
       if (typeof maturityDate !== 'string') {
-        return NextResponse.json({ error: '만기일은 YYYY-MM-DD 형식이어야 합니다.' }, { status: 400 })
+        return fail('만기일은 YYYY-MM-DD 형식이어야 합니다.', 400)
       }
       const d = parseStrictDate(maturityDate)
       if (!d) {
-        return NextResponse.json({ error: '유효하지 않은 만기일입니다.' }, { status: 400 })
+        return fail('유효하지 않은 만기일입니다.', 400)
       }
       validatedMaturityDate = d
     }
@@ -120,9 +118,9 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json(asset, { status: 201 })
+    return ok(asset, { status: 201 })
   } catch (error) {
     console.error('POST /api/assets error:', error)
-    return NextResponse.json({ error: '자산 등록에 실패했습니다.' }, { status: 500 })
+    return fail('자산 등록에 실패했습니다.', 500)
   }
 }
