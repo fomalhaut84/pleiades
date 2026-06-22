@@ -314,7 +314,7 @@
 ## Phase 27: ApiResponse envelope 전면 도입
 
 - [x] **27-A**: `ApiResponse<T>` 타입 + 헬퍼 (`ok` / `fail` / `paginated` / `noContent`) + 16 단위 테스트
-- [ ] **27-B**: 신규/단순 GET 라우트 마이그 (~15) + 클라이언트 fetcher 업데이트
+- [x] **27-B**: 단순 GET 라우트 마이그 (10 라우트 + 13 fetcher, atomic)
 - [ ] **27-C**: POST/PUT/DELETE 마이그 (단일 도메인씩, ~20 라우트 + Form/EditPanel)
 - [ ] **27-D**: pagination meta 통일 + 복잡한 GET (trades/deposits/dividends/exports/*, 8 라우트)
 - [ ] **27-E**: 가이드 문서 갱신 (`.claude/rules/api-routes.md`, `CLAUDE.md`)
