@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { validateDividendInput, calcAmountKRW } from '@/lib/dividend-utils'
 import { paginationSchema, yearSchema } from '@/lib/zod-schemas'
 import { zodErrorsToValidation } from '@/lib/zod-utils'
-import { ok, fail } from '@/lib/api-response'
+import { ok, fail, paginated } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,14 +17,14 @@ export async function GET(request: NextRequest) {
     })
     if (!paginationResult.success) {
       const errs = zodErrorsToValidation(paginationResult.error)
-      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+      return fail(errs[0].message, 400)
     }
     const { limit, offset } = paginationResult.data
 
     const yearResult = yearSchema.safeParse(searchParams.get('year'))
     if (!yearResult.success) {
       const errs = zodErrorsToValidation(yearResult.error)
-      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+      return fail(errs[0].message, 400)
     }
     const year = yearResult.data
 
@@ -52,13 +52,10 @@ export async function GET(request: NextRequest) {
       prisma.dividend.count({ where }),
     ])
 
-    return NextResponse.json({ dividends, total, limit, offset })
+    return paginated(dividends, total, limit, offset)
   } catch (error) {
     console.error('GET /api/dividends error:', error)
-    return NextResponse.json(
-      { error: '배당 내역을 불러올 수 없습니다.' },
-      { status: 500 }
-    )
+    return fail('배당 내역을 불러올 수 없습니다.', 500)
   }
 }
 

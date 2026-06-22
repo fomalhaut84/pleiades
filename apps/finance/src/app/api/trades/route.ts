@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { validateTradeInput } from '@/lib/trade-utils'
 import { createTrade } from '@/lib/trade-service'
 import { businessErrorResponse } from '@/lib/api-errors'
 import { paginationSchema, dateRangeSchema } from '@/lib/zod-schemas'
 import { zodErrorsToValidation } from '@/lib/zod-utils'
-import { ok, fail } from '@/lib/api-response'
+import { ok, fail, paginated } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     })
     if (!paginationResult.success) {
       const errs = zodErrorsToValidation(paginationResult.error)
-      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+      return fail(errs[0].message, 400)
     }
     const { limit, offset } = paginationResult.data
 
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     })
     if (!dateResult.success) {
       const errs = zodErrorsToValidation(dateResult.error)
-      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+      return fail(errs[0].message, 400)
     }
     const { from, to } = dateResult.data
 
@@ -64,13 +64,10 @@ export async function GET(request: NextRequest) {
       prisma.trade.count({ where }),
     ])
 
-    return NextResponse.json({ trades, total, limit, offset })
+    return paginated(trades, total, limit, offset)
   } catch (error) {
     console.error('GET /api/trades error:', error)
-    return NextResponse.json(
-      { error: '거래 내역을 불러올 수 없습니다.' },
-      { status: 500 }
-    )
+    return fail('거래 내역을 불러올 수 없습니다.', 500)
   }
 }
 

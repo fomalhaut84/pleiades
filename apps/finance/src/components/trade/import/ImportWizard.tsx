@@ -60,9 +60,10 @@ export default function ImportWizard({ accounts }: ImportWizardProps) {
             `/api/trades?accountId=${accountId}&limit=${limit}&offset=${offset}`,
             { signal: controller.signal }
           )
-          const data = await res.json()
-          if (data.trades && data.trades.length > 0) {
-            for (const t of data.trades as Array<{ ticker: string; type: string; tradedAt: string; shares: number; price: number }>) {
+          const json = await res.json()
+          const trades = Array.isArray(json?.data) ? json.data : []
+          if (trades.length > 0) {
+            for (const t of trades as Array<{ ticker: string; type: string; tradedAt: string; shares: number; price: number }>) {
               allTrades.push({
                 ticker: t.ticker,
                 type: t.type,
@@ -72,7 +73,7 @@ export default function ImportWizard({ accounts }: ImportWizardProps) {
               })
             }
             offset += limit
-            hasMore = data.trades.length === limit
+            hasMore = trades.length === limit
           } else {
             hasMore = false
           }

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { validateTransactionInput } from '@/lib/transaction-utils'
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     const sp = request.nextUrl.searchParams
     const rawType = sp.get('type')
     if (rawType && rawType !== 'expense' && rawType !== 'income') {
-      return NextResponse.json({ error: 'type은 expense 또는 income만 허용됩니다.' }, { status: 400 })
+      return fail('type은 expense 또는 income만 허용됩니다.', 400)
     }
     const type = rawType ?? undefined
     const yearStr = sp.get('year')
@@ -107,13 +107,10 @@ export async function GET(request: NextRequest) {
 
     // listOnly 모드: 페이지 이동 시 집계 스킵
     if (listOnly) {
-      return NextResponse.json({
-        transactions: serialized,
-        total,
-        offset,
-        limit,
-        year,
-      })
+      return ok(
+        { transactions: serialized, year },
+        { meta: { total, limit, offset } },
+      )
     }
 
     // 집계 조회 (필터 변경 시에만)
@@ -184,25 +181,25 @@ export async function GET(request: NextRequest) {
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .sort((a, b) => b.total - a.total)
 
-    return NextResponse.json({
-      transactions: serialized,
-      total,
-      offset,
-      limit,
-      summary: {
-        totalExpense,
-        totalIncome,
-        net: totalIncome - totalExpense,
-        count: filteredCount,
-        currency: 'KRW',
+    return ok(
+      {
+        transactions: serialized,
+        summary: {
+          totalExpense,
+          totalIncome,
+          net: totalIncome - totalExpense,
+          count: filteredCount,
+          currency: 'KRW',
+        },
+        byMonth,
+        byCategory,
+        year,
       },
-      byMonth,
-      byCategory,
-      year,
-    })
+      { meta: { total, limit, offset } },
+    )
   } catch (error) {
     console.error('[api/transactions] GET 실패:', error)
-    return NextResponse.json({ error: '거래 내역 조회에 실패했습니다.' }, { status: 500 })
+    return fail('거래 내역 조회에 실패했습니다.', 500)
   }
 }
 

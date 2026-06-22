@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { validateDepositInput } from '@/lib/deposit-utils'
 import { isGiftSource } from '@/lib/tax/gift-tax'
 import { checkGiftTaxLimit } from '@/bot/notifications/budget-alert'
 import { paginationSchema, yearSchema } from '@/lib/zod-schemas'
 import { zodErrorsToValidation } from '@/lib/zod-utils'
-import { ok, fail } from '@/lib/api-response'
+import { ok, fail, paginated } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,14 +19,14 @@ export async function GET(request: NextRequest) {
     })
     if (!paginationResult.success) {
       const errs = zodErrorsToValidation(paginationResult.error)
-      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+      return fail(errs[0].message, 400)
     }
     const { limit, offset } = paginationResult.data
 
     const yearResult = yearSchema.safeParse(searchParams.get('year'))
     if (!yearResult.success) {
       const errs = zodErrorsToValidation(yearResult.error)
-      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+      return fail(errs[0].message, 400)
     }
     const year = yearResult.data
 
@@ -57,13 +57,10 @@ export async function GET(request: NextRequest) {
       prisma.deposit.count({ where }),
     ])
 
-    return NextResponse.json({ deposits, total, limit, offset })
+    return paginated(deposits, total, limit, offset)
   } catch (error) {
     console.error('GET /api/deposits error:', error)
-    return NextResponse.json(
-      { error: '입금 내역을 불러올 수 없습니다.' },
-      { status: 500 }
-    )
+    return fail('입금 내역을 불러올 수 없습니다.', 500)
   }
 }
 
