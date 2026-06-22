@@ -322,4 +322,12 @@
   - [x] **27-C-4**: RSU + StockOption (7 라우트 + 1 fetcher)
   - [x] **27-C-5**: Trade (3 라우트 + 3 fetcher + api-errors 헬퍼 통일)
 - [x] **27-D**: pagination meta 통일 + 복잡한 GET (8 라우트 + ExpensesClient/ImportWizard unwrap)
-- [ ] **27-E**: 가이드 문서 갱신 (`.claude/rules/api-routes.md`, `CLAUDE.md`)
+- [x] **27-E**: 가이드 문서 갱신 (`.claude/rules/api-routes.md`, `CLAUDE.md`)
+
+### 후속 (10차 마일스톤 후보)
+
+27 시리즈에서 핵심 도메인 53+ 라우트는 마이그 완료. 남은 미마이그 라우트 (16개) 는 다음 마일스톤에서 envelope 화 예정:
+
+- accounts, networth, performance/*, prices/*, reports/*, tax/gift, backtest, ai/ask
+- 각 라우트마다 클라이언트 fetcher 동시 업데이트 필요 (atomic PR)
+- 가이드 문서 (`.claude/rules/api-routes.md`) 의 "적용 범위" 표를 함께 갱신
