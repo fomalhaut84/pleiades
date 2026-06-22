@@ -38,17 +38,19 @@ export default function WhooingSettings() {
       fetch('/api/settings/whooing').then((r) => r.ok ? r.json() : null),
       fetch('/api/settings/whooing/mappings').then((r) => r.ok ? r.json() : null),
       fetch('/api/categories').then((r) => r.ok ? r.json() : null),
-    ]).then(([cfg, maps, cats]) => {
+    ]).then(([cfgRes, mapsRes, cats]) => {
+      const cfg = cfgRes?.data
+      const mapsArr = mapsRes?.data
       if (cfg) {
         setConfig(cfg)
         setWebhookUrl(cfg.webhookUrl ?? '')
         setDefaultRight(cfg.defaultRight ?? '')
         setIsActive(cfg.isActive)
       }
-      if (maps?.mappings) {
-        setMappings(maps.mappings)
+      if (Array.isArray(mapsArr)) {
+        setMappings(mapsArr)
         const local: Record<string, { left: string; right: string }> = {}
-        for (const m of maps.mappings as CategoryMapping[]) {
+        for (const m of mapsArr as CategoryMapping[]) {
           local[m.categoryId] = { left: m.whooingLeft, right: m.whooingRight ?? '' }
         }
         setLocalMappings(local)
@@ -68,8 +70,8 @@ export default function WhooingSettings() {
         body: JSON.stringify({ webhookUrl: webhookUrl.trim() || null, isActive, defaultRight: defaultRight.trim() || null }),
       })
       if (res.ok) {
-        const data = await res.json()
-        setConfig(data)
+        const json = await res.json()
+        if (json?.data) setConfig(json.data)
       }
     } finally {
       setSaving(false)
@@ -88,8 +90,8 @@ export default function WhooingSettings() {
         body: JSON.stringify({ mappings: arr }),
       })
       if (res.ok) {
-        const data = await res.json()
-        setMappings(data.mappings)
+        const json = await res.json()
+        if (Array.isArray(json?.data)) setMappings(json.data)
       }
     } finally {
       setSavingMappings(false)

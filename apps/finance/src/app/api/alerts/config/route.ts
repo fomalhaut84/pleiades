@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,13 +12,10 @@ export async function GET() {
     const configs = await prisma.alertConfig.findMany({
       orderBy: { key: 'asc' },
     })
-    return NextResponse.json({ configs })
+    return ok(configs)
   } catch (error) {
     console.error('GET /api/alerts/config error:', error)
-    return NextResponse.json(
-      { error: '알림 설정을 불러올 수 없습니다.' },
-      { status: 500 }
-    )
+    return fail('알림 설정을 불러올 수 없습니다.', 500)
   }
 }
 
@@ -31,42 +29,27 @@ export async function PUT(request: NextRequest) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json(
-        { error: '잘못된 요청 형식입니다.' },
-        { status: 400 }
-      )
+      return fail('잘못된 요청 형식입니다.', 400)
     }
 
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return NextResponse.json(
-        { error: '잘못된 요청 형식입니다.' },
-        { status: 400 }
-      )
+      return fail('잘못된 요청 형식입니다.', 400)
     }
 
     const { key, value } = body as { key?: unknown; value?: unknown }
 
     if (!key || typeof key !== 'string') {
-      return NextResponse.json(
-        { error: '설정 키를 지정해주세요.' },
-        { status: 400 }
-      )
+      return fail('설정 키를 지정해주세요.', 400)
     }
     if (value === undefined || value === null || String(value).trim() === '') {
-      return NextResponse.json(
-        { error: '값을 입력해주세요.' },
-        { status: 400 }
-      )
+      return fail('값을 입력해주세요.', 400)
     }
 
     const existing = await prisma.alertConfig.findUnique({
       where: { key },
     })
     if (!existing) {
-      return NextResponse.json(
-        { error: `존재하지 않는 설정입니다: ${key}` },
-        { status: 404 }
-      )
+      return fail(`존재하지 않는 설정입니다: ${key}`, 404)
     }
 
     const updated = await prisma.alertConfig.update({
@@ -74,12 +57,9 @@ export async function PUT(request: NextRequest) {
       data: { value: String(value) },
     })
 
-    return NextResponse.json(updated)
+    return ok(updated)
   } catch (error) {
     console.error('PUT /api/alerts/config error:', error)
-    return NextResponse.json(
-      { error: '알림 설정 변경에 실패했습니다.' },
-      { status: 500 }
-    )
+    return fail('알림 설정 변경에 실패했습니다.', 500)
   }
 }

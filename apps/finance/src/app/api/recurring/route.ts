@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { validateRecurringInput } from '@/lib/recurring-utils'
-import { ok } from '@/lib/api-response'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +38,7 @@ export async function GET() {
     return ok(serialized)
   } catch (error) {
     console.error('[api/recurring] GET 실패:', error)
-    return NextResponse.json({ error: '반복 거래 조회에 실패했습니다.' }, { status: 500 })
+    return fail('반복 거래 조회에 실패했습니다.', 500)
   }
 }
 
@@ -51,15 +51,15 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 })
+      return fail('유효한 JSON 형식이 아닙니다.', 400)
     }
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return NextResponse.json({ error: '유효한 JSON 객체가 아닙니다.' }, { status: 400 })
+      return fail('유효한 JSON 객체가 아닙니다.', 400)
     }
 
     const errors = validateRecurringInput(body)
     if (errors.length > 0) {
-      return NextResponse.json({ error: errors[0].message, errors }, { status: 400 })
+      return fail(errors[0].message, 400)
     }
 
     const category = await prisma.category.findUnique({
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       select: { id: true },
     })
     if (!category) {
-      return NextResponse.json({ error: '존재하지 않는 카테고리입니다.' }, { status: 400 })
+      return fail('존재하지 않는 카테고리입니다.', 400)
     }
 
     const nextRunAt = body.nextRunAt
@@ -87,12 +87,12 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json(item, { status: 201 })
+    return ok(item, { status: 201 })
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
-      return NextResponse.json({ error: '존재하지 않는 카테고리입니다.' }, { status: 400 })
+      return fail('존재하지 않는 카테고리입니다.', 400)
     }
     console.error('[api/recurring] POST 실패:', error)
-    return NextResponse.json({ error: '반복 거래 생성에 실패했습니다.' }, { status: 500 })
+    return fail('반복 거래 생성에 실패했습니다.', 500)
   }
 }

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import {
@@ -6,18 +6,19 @@ import {
   calcTaxableFromGross,
   type IncomeProfileInput,
 } from '@/lib/tax/income-profile-utils'
+import { ok, fail, noContent } from '@/lib/api-response'
 
 function handlePrismaError(error: unknown, context: string) {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === 'P2025') {
-      return NextResponse.json({ error: '프로필을 찾을 수 없습니다.' }, { status: 404 })
+      return fail('프로필을 찾을 수 없습니다.', 404)
     }
     if (error.code === 'P2002') {
-      return NextResponse.json({ error: '해당 연도 프로필이 이미 존재합니다.' }, { status: 409 })
+      return fail('해당 연도 프로필이 이미 존재합니다.', 409)
     }
   }
   console.error(`${context} error:`, error)
-  return NextResponse.json({ error: `${context}에 실패했습니다.` }, { status: 500 })
+  return fail(`${context}에 실패했습니다.`, 500)
 }
 
 /** PUT /api/income-profiles/[id] — 수정 */
@@ -30,12 +31,12 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ id: s
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: '잘못된 요청 형식입니다.' }, { status: 400 })
+      return fail('잘못된 요청 형식입니다.', 400)
     }
 
     const errors = validateIncomeProfileInput(body)
     if (errors.length > 0) {
-      return NextResponse.json({ error: errors[0].message, errors }, { status: 400 })
+      return fail(errors[0].message, 400)
     }
 
     const { year, inputType, prepaidTax, note } = body as IncomeProfileInput
@@ -66,7 +67,7 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ id: s
       },
     })
 
-    return NextResponse.json(profile)
+    return ok(profile)
   } catch (error) {
     return handlePrismaError(error, '근로소득 프로필 수정')
   }
@@ -78,7 +79,7 @@ export async function DELETE(_request: NextRequest, props: { params: Promise<{ i
   try {
     const { id } = params
     await prisma.incomeProfile.delete({ where: { id } })
-    return new NextResponse(null, { status: 204 })
+    return noContent()
   } catch (error) {
     return handlePrismaError(error, '근로소득 프로필 삭제')
   }

@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,10 +12,10 @@ export async function GET() {
     const mappings = await prisma.whooingCategoryMap.findMany({
       include: { category: { select: { name: true, icon: true } } },
     })
-    return NextResponse.json({ mappings })
+    return ok(mappings)
   } catch (error) {
     console.error('[api/settings/whooing/mappings] GET 실패:', error)
-    return NextResponse.json({ error: '매핑 조회에 실패했습니다.' }, { status: 500 })
+    return fail('매핑 조회에 실패했습니다.', 500)
   }
 }
 
@@ -25,10 +26,10 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     let body: Record<string, unknown>
-    try { body = await request.json() } catch { return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 }) }
+    try { body = await request.json() } catch { return fail('유효한 JSON 형식이 아닙니다.', 400) }
 
     if (!Array.isArray(body.mappings)) {
-      return NextResponse.json({ error: 'mappings 배열이 필요합니다.' }, { status: 400 })
+      return fail('mappings 배열이 필요합니다.', 400)
     }
 
     const mappings = body.mappings as { categoryId: string; whooingLeft: string; whooingRight?: string }[]
@@ -52,9 +53,9 @@ export async function PUT(request: NextRequest) {
       include: { category: { select: { name: true, icon: true } } },
     })
 
-    return NextResponse.json({ mappings: updated })
+    return ok(updated)
   } catch (error) {
     console.error('[api/settings/whooing/mappings] PUT 실패:', error)
-    return NextResponse.json({ error: '매핑 저장에 실패했습니다.' }, { status: 500 })
+    return fail('매핑 저장에 실패했습니다.', 500)
   }
 }
