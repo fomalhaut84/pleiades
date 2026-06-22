@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { yearSchema } from '@/lib/zod-schemas'
 import { zodErrorsToValidation } from '@/lib/zod-utils'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
     const yearResult = yearSchema.safeParse(searchParams.get('year'))
     if (!yearResult.success) {
       const errs = zodErrorsToValidation(yearResult.error)
-      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+      return fail(errs[0].message, 400)
     }
     const year = yearResult.data ?? new Date().getFullYear()
     const accountId = searchParams.get('accountId')
@@ -75,7 +76,7 @@ export async function GET(request: NextRequest) {
       byMonth[month].count += 1
     }
 
-    return NextResponse.json({
+    return ok({
       year,
       totalNetKRW: Math.round(totalNetKRW),
       totalTaxKRW: Math.round(totalTaxKRW),
@@ -87,9 +88,6 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('GET /api/dividends/summary error:', error)
-    return NextResponse.json(
-      { error: '배당 요약을 불러올 수 없습니다.' },
-      { status: 500 }
-    )
+    return fail('배당 요약을 불러올 수 없습니다.', 500)
   }
 }

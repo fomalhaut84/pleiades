@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { validateTransactionInput } from '@/lib/transaction-utils'
+import { ok, fail, noContent } from '@/lib/api-response'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -17,14 +18,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 })
+      return fail('유효한 JSON 형식이 아닙니다.', 400)
     }
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return NextResponse.json({ error: '유효한 JSON 객체가 아닙니다.' }, { status: 400 })
+      return fail('유효한 JSON 객체가 아닙니다.', 400)
     }
     const errors = validateTransactionInput(body)
     if (errors.length > 0) {
-      return NextResponse.json({ error: errors[0].message, errors }, { status: 400 })
+      return fail(errors[0].message, 400)
     }
 
     const amount = body.amount as number
@@ -38,18 +39,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       select: { id: true, type: true },
     })
     if (!category) {
-      return NextResponse.json({ error: '존재하지 않는 카테고리입니다.' }, { status: 400 })
+      return fail('존재하지 않는 카테고리입니다.', 400)
     }
     if (txType && category.type !== 'transfer') {
-      return NextResponse.json({ error: '출금/입금은 이체 카테고리에서만 사용할 수 있습니다.' }, { status: 400 })
+      return fail('출금/입금은 이체 카테고리에서만 사용할 수 있습니다.', 400)
     }
     if (!txType && category.type === 'transfer') {
-      return NextResponse.json({ error: '이체 카테고리는 출금/입금 유형에서만 사용할 수 있습니다.' }, { status: 400 })
+      return fail('이체 카테고리는 출금/입금 유형에서만 사용할 수 있습니다.', 400)
     }
 
     const existing = await prisma.transaction.findUnique({ where: { id } })
     if (!existing) {
-      return NextResponse.json({ error: '존재하지 않는 내역입니다.' }, { status: 404 })
+      return fail('존재하지 않는 내역입니다.', 404)
     }
 
     const transactedAt = body.transactedAt
@@ -95,7 +96,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return result
     })
 
-    return NextResponse.json({
+    return ok({
       id: updated.id,
       amount: updated.amount,
       description: updated.description,
@@ -111,11 +112,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     })
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2025') return NextResponse.json({ error: '존재하지 않는 내역입니다.' }, { status: 404 })
-      if (error.code === 'P2003') return NextResponse.json({ error: '존재하지 않는 카테고리 또는 자산입니다.' }, { status: 400 })
+      if (error.code === 'P2025') return fail('존재하지 않는 내역입니다.', 404)
+      if (error.code === 'P2003') return fail('존재하지 않는 카테고리 또는 자산입니다.', 400)
     }
     console.error('[api/transactions/[id]] PUT 실패:', error)
-    return NextResponse.json({ error: '내역 수정에 실패했습니다.' }, { status: 500 })
+    return fail('내역 수정에 실패했습니다.', 500)
   }
 }
 
@@ -143,15 +144,15 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       await tx.transaction.delete({ where: { id } })
     })
 
-    return new NextResponse(null, { status: 204 })
+    return noContent()
   } catch (error) {
     if (error instanceof Error && error.message === 'NOT_FOUND') {
-      return NextResponse.json({ error: '존재하지 않는 내역입니다.' }, { status: 404 })
+      return fail('존재하지 않는 내역입니다.', 404)
     }
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return NextResponse.json({ error: '존재하지 않는 내역입니다.' }, { status: 404 })
+      return fail('존재하지 않는 내역입니다.', 404)
     }
     console.error('[api/transactions/[id]] DELETE 실패:', error)
-    return NextResponse.json({ error: '내역 삭제에 실패했습니다.' }, { status: 500 })
+    return fail('내역 삭제에 실패했습니다.', 500)
   }
 }

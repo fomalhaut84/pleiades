@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { yearMonthSchema } from '@/lib/zod-schemas'
 import { zodErrorsToValidation } from '@/lib/zod-utils'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,11 +30,11 @@ export async function GET(request: NextRequest) {
     })
     if (!ymResult.success) {
       const errs = zodErrorsToValidation(ymResult.error)
-      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+      return fail(errs[0].message, 400)
     }
     const { year, month } = ymResult.data
     if (year === undefined || month === undefined) {
-      return NextResponse.json({ error: 'year, month 파라미터가 필요합니다.' }, { status: 400 })
+      return fail('year, month 파라미터가 필요합니다.', 400)
     }
 
     // 카테고리 → 그룹 매핑
@@ -173,7 +174,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({
+    return ok({
       monthCompare,
       prevMonthSummary: {
         totalExpense: prevExpenseTotal,
@@ -187,7 +188,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('[api/transactions/analysis] GET 실패:', error)
-    return NextResponse.json({ error: '분석 데이터 조회에 실패했습니다.' }, { status: 500 })
+    return fail('분석 데이터 조회에 실패했습니다.', 500)
   }
 }
 

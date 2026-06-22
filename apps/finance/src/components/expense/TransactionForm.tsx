@@ -106,8 +106,8 @@ export default function TransactionForm({
           { signal: controller.signal }
         )
         if (res.ok) {
-          const data = await res.json()
-          setSuggestions(data.suggestions ?? [])
+          const json = await res.json()
+          setSuggestions(json?.data?.suggestions ?? [])
         } else {
           setSuggestions([])
         }

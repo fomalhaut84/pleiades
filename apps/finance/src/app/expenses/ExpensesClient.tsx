@@ -148,7 +148,8 @@ export default function ExpensesClient({ initialData }: ExpensesClientProps) {
         try {
           const analysisRes = await fetch(`/api/transactions/analysis?year=${y}&month=${m}`, { signal: controller.signal })
           if (analysisRes.ok) {
-            setAnalysisData(await analysisRes.json())
+            const aJson = await analysisRes.json()
+            setAnalysisData(aJson?.data ?? null)
           } else {
             setAnalysisData(null)
           }
