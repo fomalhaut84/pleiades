@@ -317,7 +317,7 @@
 - [x] **27-B**: 단순 GET 라우트 마이그 (10 라우트 + 13 fetcher, atomic)
 - [ ] **27-C**: POST/PUT/DELETE + 일부 GET 마이그 (5 sub-PR 분할)
   - [x] **27-C-1**: Watchlist + Recurring + Settings + IncomeProfile (7 라우트 16 메소드)
-  - [ ] **27-C-2**: Category + Budget + Asset
+  - [x] **27-C-2**: Category + Budget + Asset (9 라우트 + 2 fetcher)
   - [ ] **27-C-3**: Dividend + Deposit + Transaction
   - [ ] **27-C-4**: RSU + StockOption
   - [ ] **27-C-5**: Trade
