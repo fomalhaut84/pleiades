@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { takeAllSnapshots } from '@/lib/performance/snapshot'
 import { BENCHMARK_DISPLAY_NAMES } from '@/lib/performance/constants'
 import { dateRangeSchema } from '@/lib/zod-schemas'
 import { zodErrorsToValidation } from '@/lib/zod-utils'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
     const accountId = searchParams.get('accountId')
 
     if (!accountId) {
-      return NextResponse.json({ error: 'accountId는 필수입니다.' }, { status: 400 })
+      return fail('accountId는 필수입니다.', 400)
     }
 
     const dateResult = dateRangeSchema.safeParse({
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
     })
     if (!dateResult.success) {
       const errs = zodErrorsToValidation(dateResult.error)
-      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+      return fail(errs[0].message, 400)
     }
     const { from, to } = dateResult.data
 
@@ -91,14 +92,14 @@ export async function GET(request: NextRequest) {
       normalizedValue: baseValue > 0 ? (s.totalValueKRW / baseValue) * 100 : 100,
     }))
 
-    return NextResponse.json({
+    return ok({
       snapshots: normalizedSnapshots,
       benchmark,
       benchmarkName,
     })
   } catch (error) {
     console.error('GET /api/performance/snapshots error:', error)
-    return NextResponse.json({ error: '스냅샷 데이터를 불러올 수 없습니다.' }, { status: 500 })
+    return fail('스냅샷 데이터를 불러올 수 없습니다.', 500)
   }
 }
 
@@ -109,9 +110,9 @@ export async function GET(request: NextRequest) {
 export async function POST() {
   try {
     const results = await takeAllSnapshots()
-    return NextResponse.json({ results }, { status: 201 })
+    return ok(results, { status: 201 })
   } catch (error) {
     console.error('POST /api/performance/snapshots error:', error)
-    return NextResponse.json({ error: '스냅샷 생성에 실패했습니다.' }, { status: 500 })
+    return fail('스냅샷 생성에 실패했습니다.', 500)
   }
 }

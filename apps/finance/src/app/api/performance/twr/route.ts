@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { calculateTWR } from '@/lib/performance/twr'
 import { VALID_PERIODS } from '@/lib/performance/constants'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,20 +16,17 @@ export async function GET(request: NextRequest) {
     const period = searchParams.get('period') ?? '3M'
 
     if (!accountId) {
-      return NextResponse.json({ error: 'accountId는 필수입니다.' }, { status: 400 })
+      return fail('accountId는 필수입니다.', 400)
     }
 
     if (!VALID_PERIODS.includes(period)) {
-      return NextResponse.json(
-        { error: `유효한 기간: ${VALID_PERIODS.join(', ')}` },
-        { status: 400 }
-      )
+      return fail(`유효한 기간: ${VALID_PERIODS.join(', ')}`, 400)
     }
 
     const result = await calculateTWR(accountId, period)
-    return NextResponse.json(result)
+    return ok(result)
   } catch (error) {
     console.error('GET /api/performance/twr error:', error)
-    return NextResponse.json({ error: 'TWR 계산에 실패했습니다.' }, { status: 500 })
+    return fail('TWR 계산에 실패했습니다.', 500)
   }
 }
