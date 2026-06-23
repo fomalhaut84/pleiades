@@ -45,8 +45,8 @@ export default function ReportsClient() {
         body: JSON.stringify({ year: genYear, quarter: genQuarter }),
       })
       if (!res.ok) {
-        const data = await res.json()
-        alert(data.error || '리포트 생성 실패')
+        const data = await res.json().catch(() => null)
+        alert(data?.error ?? '리포트 생성 실패')
         return
       }
       fetchReports()

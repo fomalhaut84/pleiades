@@ -77,8 +77,9 @@ export default function NetWorthClient() {
         if (!r.ok) throw new Error('API error')
         return r.json()
       })
-      .then((d) => {
-        if (d.breakdown) setData(d)
+      .then((json) => {
+        const d = json?.data
+        if (d?.breakdown) setData(d)
       })
       .catch(console.error)
       .finally(() => setLoading(false))

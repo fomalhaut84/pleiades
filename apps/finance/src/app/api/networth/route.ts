@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import {
   calcCurrentValueKRW,
   DEFAULT_FX_RATE_USD_KRW,
 } from '@/lib/format'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -76,7 +76,7 @@ export async function GET() {
       take: 12,
     })
 
-    return NextResponse.json({
+    return ok({
       netWorthKRW,
       stockValueKRW,
       assetValueKRW,
@@ -104,6 +104,6 @@ export async function GET() {
     })
   } catch (error) {
     console.error('GET /api/networth error:', error)
-    return NextResponse.json({ error: '순자산을 계산할 수 없습니다.' }, { status: 500 })
+    return fail('순자산을 계산할 수 없습니다.', 500)
   }
 }
