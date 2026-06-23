@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { ok } from '@/lib/api-response'
+import { ok, fail } from '@/lib/api-response'
 
 export async function GET() {
   try {
@@ -17,9 +16,6 @@ export async function GET() {
     return ok(accounts)
   } catch (error) {
     console.error('GET /api/accounts error:', error)
-    return NextResponse.json(
-      { error: '계좌 목록을 불러올 수 없습니다.' },
-      { status: 500 }
-    )
+    return fail('계좌 목록을 불러올 수 없습니다.', 500)
   }
 }
