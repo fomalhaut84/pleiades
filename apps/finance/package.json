@@ -20,7 +20,7 @@
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@prisma/client": "^6.19.2",
     "@react-pdf/renderer": "^4.3.2",
-    "dompurify": "^3.3.3",
+    "dompurify": "^3.4.11",
     "dotenv": "^17.3.1",
     "grammy": "^1.41.1",
     "marked": "^17.0.4",
@@ -44,15 +44,22 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitest/coverage-v8": "^4.1.8",
-    "esbuild": "^0.27.4",
+    "esbuild": "^0.28.1",
     "eslint": "^8",
     "eslint-config-next": "^15.5.16",
-    "postcss": "^8",
+    "postcss": "^8.5.10",
     "prisma": "^6.19.2",
     "tailwindcss": "^3.4.1",
     "tsx": "^4.21.0",
     "typescript": "^5",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.8"
+  },
+  "overrides": {
+    "js-yaml": "^4.2.0",
+    "postcss": "^8.5.10",
+    "next": {
+      "postcss": "^8.5.10"
+    }
   }
 }
