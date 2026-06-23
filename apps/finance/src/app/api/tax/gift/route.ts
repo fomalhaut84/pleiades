@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { calcGiftTaxSummary, GIFT_SOURCES } from '@/lib/tax/gift-tax'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,9 +62,9 @@ export async function GET() {
       }
     })
 
-    return NextResponse.json({ summaries })
+    return ok({ summaries })
   } catch (error) {
     console.error('GET /api/tax/gift error:', error)
-    return NextResponse.json({ error: '증여세 현황을 불러올 수 없습니다.' }, { status: 500 })
+    return fail('증여세 현황을 불러올 수 없습니다.', 500)
   }
 }

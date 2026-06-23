@@ -43,12 +43,12 @@ describe('isSafeBusinessError', () => {
 })
 
 describe('businessErrorResponse', () => {
-  it('화이트리스트 매칭 시 400 + 메시지 응답', async () => {
+  it('화이트리스트 매칭 시 400 + envelope 응답', async () => {
     const res = businessErrorResponse(new Error('보유 수량 부족: 5주'))
     expect(res).not.toBeNull()
     expect(res?.status).toBe(400)
     const body = await res?.json()
-    expect(body).toEqual({ error: '보유 수량 부족: 5주' })
+    expect(body).toEqual({ success: false, error: '보유 수량 부족: 5주' })
   })
 
   it('화이트리스트 외부는 null 반환', () => {

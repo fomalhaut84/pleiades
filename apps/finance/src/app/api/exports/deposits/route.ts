@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { toCSV, csvResponse } from '@/lib/csv'
 import { formatDate } from '@/lib/format'
 import { yearSchema } from '@/lib/zod-schemas'
 import { zodErrorsToValidation } from '@/lib/zod-utils'
+import { fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
     const yearResult = yearSchema.safeParse(searchParams.get('year'))
     if (!yearResult.success) {
       const errs = zodErrorsToValidation(yearResult.error)
-      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+      return fail(errs[0].message, 400)
     }
     const year = yearResult.data
 
@@ -57,9 +58,6 @@ export async function GET(request: NextRequest) {
     return csvResponse(csv, `deposits${suffix}_${yearSuffix}.csv`)
   } catch (error) {
     console.error('GET /api/exports/deposits error:', error)
-    return new Response(JSON.stringify({ error: 'CSV 생성에 실패했습니다.' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return fail('CSV 생성에 실패했습니다.', 500)
   }
 }

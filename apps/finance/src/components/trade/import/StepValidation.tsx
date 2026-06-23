@@ -84,11 +84,16 @@ export default function StepValidation({
 
       const data = await res.json()
       if (!res.ok) {
-        setSubmitError(data.error ?? '임포트에 실패했습니다.')
+        setSubmitError(data?.error ?? '임포트에 실패했습니다.')
         return
       }
 
-      onNext(data.result as ImportResult)
+      const result = data?.data as ImportResult | undefined
+      if (!result) {
+        setSubmitError('임포트 결과를 받지 못했습니다.')
+        return
+      }
+      onNext(result)
     } catch {
       setSubmitError('네트워크 오류가 발생했습니다.')
     } finally {

@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { recalcHolding, calcTotalKRW } from '@/lib/trade-utils'
+import { ok, fail } from '@/lib/api-response'
 
 const RSU_TICKER = '035720.KS'
 const RSU_DISPLAY_NAME = '카카오'
@@ -16,10 +17,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json(
-        { error: '유효한 JSON 요청을 보내주세요.' },
-        { status: 400 }
-      )
+      return fail('유효한 JSON 요청을 보내주세요.', 400)
     }
 
     const { vestPrice, autoSell } = body as {
@@ -29,16 +27,10 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
 
     // 입력 검증
     if (typeof vestPrice !== 'number' || !Number.isFinite(vestPrice) || vestPrice <= 0) {
-      return NextResponse.json(
-        { error: '베스팅일 종가는 0보다 큰 숫자여야 합니다.' },
-        { status: 400 }
-      )
+      return fail('베스팅일 종가는 0보다 큰 숫자여야 합니다.', 400)
     }
     if (typeof autoSell !== 'boolean') {
-      return NextResponse.json(
-        { error: 'autoSell은 boolean이어야 합니다.' },
-        { status: 400 }
-      )
+      return fail('autoSell은 boolean이어야 합니다.', 400)
     }
 
     const result = await prisma.$transaction(async (tx) => {
@@ -147,26 +139,17 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       return { schedule: updated, holding }
     }, { isolationLevel: 'Serializable' })
 
-    return NextResponse.json(result)
+    return ok(result)
   } catch (error) {
     if (error instanceof Error) {
       if (error.message === 'NOT_FOUND') {
-        return NextResponse.json(
-          { error: 'RSU 스케줄을 찾을 수 없습니다.' },
-          { status: 404 }
-        )
+        return fail('RSU 스케줄을 찾을 수 없습니다.', 404)
       }
       if (error.message === 'ALREADY_VESTED') {
-        return NextResponse.json(
-          { error: '이미 베스팅 처리된 스케줄입니다.' },
-          { status: 400 }
-        )
+        return fail('이미 베스팅 처리된 스케줄입니다.', 400)
       }
       if (error.message === 'INVALID_SELL_SHARES') {
-        return NextResponse.json(
-          { error: '매도 수량이 베스팅 수량을 초과합니다.' },
-          { status: 400 }
-        )
+        return fail('매도 수량이 베스팅 수량을 초과합니다.', 400)
       }
     }
     // Prisma Serializable 충돌 (P2034)
@@ -176,15 +159,9 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       'code' in error &&
       (error as { code: string }).code === 'P2034'
     ) {
-      return NextResponse.json(
-        { error: '동시 요청이 충돌했습니다. 잠시 후 다시 시도해주세요.' },
-        { status: 409 }
-      )
+      return fail('동시 요청이 충돌했습니다. 잠시 후 다시 시도해주세요.', 409)
     }
     console.error('POST /api/rsu/[id]/vest error:', error)
-    return NextResponse.json(
-      { error: '베스팅 처리에 실패했습니다.' },
-      { status: 500 }
-    )
+    return fail('베스팅 처리에 실패했습니다.', 500)
   }
 }

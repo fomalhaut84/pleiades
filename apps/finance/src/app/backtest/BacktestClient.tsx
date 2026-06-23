@@ -85,8 +85,10 @@ export default function BacktestClient() {
         body: JSON.stringify({ ticker: ticker.trim().toUpperCase(), strategyKey, days }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || '백테스트 실패')
-      setResult(data)
+      if (!res.ok) throw new Error(data?.error || '백테스트 실패')
+      const payload = data?.data
+      if (!payload) throw new Error('백테스트 결과를 받지 못했습니다.')
+      setResult(payload)
     } catch (err) {
       setError(err instanceof Error ? err.message : '알 수 없는 오류')
     } finally {

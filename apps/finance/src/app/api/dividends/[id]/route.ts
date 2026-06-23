@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { calcAmountKRW } from '@/lib/dividend-utils'
 import { validateFxRateForUSD } from '@/lib/trade-utils'
+import { ok, fail, noContent } from '@/lib/api-response'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -12,33 +13,33 @@ export async function PUT(request: NextRequest, props: RouteParams) {
   try {
     const existing = await prisma.dividend.findUnique({ where: { id: params.id } })
     if (!existing) {
-      return NextResponse.json({ error: '배당 기록을 찾을 수 없습니다.' }, { status: 404 })
+      return fail('배당 기록을 찾을 수 없습니다.', 404)
     }
 
     const body = await request.json()
     const { exDate, payDate, amountGross, amountNet, taxAmount, fxRate, reinvested } = body
 
     if (amountGross !== undefined && (typeof amountGross !== 'number' || !Number.isFinite(amountGross) || amountGross <= 0)) {
-      return NextResponse.json({ error: '세전 금액은 0보다 커야 합니다.' }, { status: 400 })
+      return fail('세전 금액은 0보다 커야 합니다.', 400)
     }
     if (amountNet !== undefined && (typeof amountNet !== 'number' || !Number.isFinite(amountNet) || amountNet < 0)) {
-      return NextResponse.json({ error: '세후 금액은 0 이상이어야 합니다.' }, { status: 400 })
+      return fail('세후 금액은 0 이상이어야 합니다.', 400)
     }
     if (payDate !== undefined && (typeof payDate !== 'string' || isNaN(Date.parse(payDate)))) {
-      return NextResponse.json({ error: '유효한 지급일을 입력해주세요.' }, { status: 400 })
+      return fail('유효한 지급일을 입력해주세요.', 400)
     }
     if (exDate !== undefined && exDate !== null && (typeof exDate !== 'string' || isNaN(Date.parse(exDate)))) {
-      return NextResponse.json({ error: '유효한 기준일을 입력해주세요.' }, { status: 400 })
+      return fail('유효한 기준일을 입력해주세요.', 400)
     }
     if (taxAmount !== undefined && taxAmount !== null && (typeof taxAmount !== 'number' || !Number.isFinite(taxAmount) || taxAmount < 0)) {
-      return NextResponse.json({ error: '세금은 0 이상이어야 합니다.' }, { status: 400 })
+      return fail('세금은 0 이상이어야 합니다.', 400)
     }
     if (fxRate !== undefined && fxRate !== null && existing.currency === 'USD') {
       const fxError = validateFxRateForUSD(fxRate, 'USD 배당')
-      if (fxError) return NextResponse.json({ error: fxError }, { status: 400 })
+      if (fxError) return fail(fxError, 400)
     }
     if (reinvested !== undefined && typeof reinvested !== 'boolean') {
-      return NextResponse.json({ error: '재투자 여부는 true/false여야 합니다.' }, { status: 400 })
+      return fail('재투자 여부는 true/false여야 합니다.', 400)
     }
 
     // 최종 적용값 결정
@@ -51,16 +52,16 @@ export async function PUT(request: NextRequest, props: RouteParams) {
 
     // 교차 검증: amountNet <= amountGross, taxAmount <= amountGross
     if (nextNet > nextGross) {
-      return NextResponse.json({ error: '세후 금액이 세전 금액을 초과할 수 없습니다.' }, { status: 400 })
+      return fail('세후 금액이 세전 금액을 초과할 수 없습니다.', 400)
     }
     if (nextTax != null && nextTax > nextGross) {
-      return NextResponse.json({ error: '세금이 세전 금액을 초과할 수 없습니다.' }, { status: 400 })
+      return fail('세금이 세전 금액을 초과할 수 없습니다.', 400)
     }
 
     // USD는 최종 fxRate가 항상 양수 보장 — stored 값이 손상되었을 때 silent 0 차단
     if (existing.currency === 'USD') {
       const fxError = validateFxRateForUSD(nextFxRate, 'USD 배당')
-      if (fxError) return NextResponse.json({ error: fxError }, { status: 400 })
+      if (fxError) return fail(fxError, 400)
     }
 
     // 서버 측 amountKRW 재계산
@@ -80,10 +81,10 @@ export async function PUT(request: NextRequest, props: RouteParams) {
       },
     })
 
-    return NextResponse.json(updated)
+    return ok(updated)
   } catch (error) {
     console.error('PUT /api/dividends/[id] error:', error)
-    return NextResponse.json({ error: '배당 수정에 실패했습니다.' }, { status: 500 })
+    return fail('배당 수정에 실패했습니다.', 500)
   }
 }
 
@@ -92,13 +93,13 @@ export async function DELETE(_request: NextRequest, props: RouteParams) {
   try {
     const existing = await prisma.dividend.findUnique({ where: { id: params.id } })
     if (!existing) {
-      return NextResponse.json({ error: '배당 기록을 찾을 수 없습니다.' }, { status: 404 })
+      return fail('배당 기록을 찾을 수 없습니다.', 404)
     }
 
     await prisma.dividend.delete({ where: { id: params.id } })
-    return new NextResponse(null, { status: 204 })
+    return noContent()
   } catch (error) {
     console.error('DELETE /api/dividends/[id] error:', error)
-    return NextResponse.json({ error: '배당 삭제에 실패했습니다.' }, { status: 500 })
+    return fail('배당 삭제에 실패했습니다.', 500)
   }
 }

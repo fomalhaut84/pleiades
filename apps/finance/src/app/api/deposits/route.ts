@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { validateDepositInput } from '@/lib/deposit-utils'
 import { isGiftSource } from '@/lib/tax/gift-tax'
 import { checkGiftTaxLimit } from '@/bot/notifications/budget-alert'
 import { paginationSchema, yearSchema } from '@/lib/zod-schemas'
 import { zodErrorsToValidation } from '@/lib/zod-utils'
+import { ok, fail, paginated } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,14 +19,14 @@ export async function GET(request: NextRequest) {
     })
     if (!paginationResult.success) {
       const errs = zodErrorsToValidation(paginationResult.error)
-      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+      return fail(errs[0].message, 400)
     }
     const { limit, offset } = paginationResult.data
 
     const yearResult = yearSchema.safeParse(searchParams.get('year'))
     if (!yearResult.success) {
       const errs = zodErrorsToValidation(yearResult.error)
-      return NextResponse.json({ error: errs[0].message, errors: errs }, { status: 400 })
+      return fail(errs[0].message, 400)
     }
     const year = yearResult.data
 
@@ -56,13 +57,10 @@ export async function GET(request: NextRequest) {
       prisma.deposit.count({ where }),
     ])
 
-    return NextResponse.json({ deposits, total, limit, offset })
+    return paginated(deposits, total, limit, offset)
   } catch (error) {
     console.error('GET /api/deposits error:', error)
-    return NextResponse.json(
-      { error: '입금 내역을 불러올 수 없습니다.' },
-      { status: 500 }
-    )
+    return fail('입금 내역을 불러올 수 없습니다.', 500)
   }
 }
 
@@ -72,34 +70,34 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: '잘못된 요청 형식입니다.' }, { status: 400 })
+      return fail('잘못된 요청 형식입니다.', 400)
     }
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return NextResponse.json({ error: '잘못된 요청 형식입니다.' }, { status: 400 })
+      return fail('잘못된 요청 형식입니다.', 400)
     }
     const errors = validateDepositInput(body as Record<string, unknown>)
     if (errors.length > 0) {
-      return NextResponse.json({ error: errors[0].message, errors }, { status: 400 })
+      return fail(errors[0].message, 400)
     }
 
     const { accountId, assetId, amount, source, note, depositedAt } = body as Record<string, unknown>
 
     if (note !== undefined && note !== null && typeof note !== 'string') {
-      return NextResponse.json({ error: '메모는 문자열이어야 합니다.' }, { status: 400 })
+      return fail('메모는 문자열이어야 합니다.', 400)
     }
 
     if (accountId) {
       const account = await prisma.account.findUnique({ where: { id: accountId as string } })
-      if (!account) return NextResponse.json({ error: '계좌를 찾을 수 없습니다.' }, { status: 404 })
+      if (!account) return fail('계좌를 찾을 수 없습니다.', 404)
     }
     if (assetId) {
       const asset = await prisma.asset.findUnique({ where: { id: assetId as string } })
-      if (!asset) return NextResponse.json({ error: '자산을 찾을 수 없습니다.' }, { status: 404 })
+      if (!asset) return fail('자산을 찾을 수 없습니다.', 404)
     }
 
     const roundedAmount = Math.round(amount as number)
     if (roundedAmount <= 0) {
-      return NextResponse.json({ error: '금액은 1원 이상이어야 합니다.' }, { status: 400 })
+      return fail('금액은 1원 이상이어야 합니다.', 400)
     }
 
     const deposit = await prisma.$transaction(async (tx) => {
@@ -130,12 +128,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json(deposit, { status: 201 })
+    return ok(deposit, { status: 201 })
   } catch (error) {
     console.error('POST /api/deposits error:', error)
-    return NextResponse.json(
-      { error: '입금 기록에 실패했습니다.' },
-      { status: 500 }
-    )
+    return fail('입금 기록에 실패했습니다.', 500)
   }
 }

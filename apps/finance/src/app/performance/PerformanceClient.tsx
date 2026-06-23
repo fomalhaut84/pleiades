@@ -52,8 +52,8 @@ export default function PerformanceClient({ accounts, hasSnapshots }: Performanc
     setLoadingChart(true)
     try {
       const res = await fetch(`/api/performance/snapshots?accountId=${selectedAccount}`)
-      const data = await res.json()
-      setSnapshotData(data)
+      const json = await res.json()
+      setSnapshotData(json?.data ?? null)
     } catch (error) {
       console.error('Failed to fetch snapshots:', error)
     } finally {
@@ -66,19 +66,19 @@ export default function PerformanceClient({ accounts, hasSnapshots }: Performanc
     try {
       const results = await Promise.all(
         accounts.map(async (a) => {
-          const res = await fetch(`/api/performance/twr?accountId=${a.id}&period=${period}`)
-          if (!res.ok) {
-            return {
-              accountId: a.id,
-              accountName: a.name,
-              twr: null,
-              benchmarkReturn: null,
-              alpha: null,
-              benchmarkTicker: null,
-              snapshotCount: 0,
-            }
+          const fallback = {
+            accountId: a.id,
+            accountName: a.name,
+            twr: null,
+            benchmarkReturn: null,
+            alpha: null,
+            benchmarkTicker: null,
+            snapshotCount: 0,
           }
-          return res.json()
+          const res = await fetch(`/api/performance/twr?accountId=${a.id}&period=${period}`)
+          if (!res.ok) return fallback
+          const json = await res.json()
+          return json?.data ?? fallback
         })
       )
       setTwrData(results)
@@ -94,8 +94,8 @@ export default function PerformanceClient({ accounts, hasSnapshots }: Performanc
     setLoadingContrib(true)
     try {
       const res = await fetch(`/api/performance/contribution?accountId=${selectedAccount}&period=${period}`)
-      const data = await res.json()
-      setContributionData(data)
+      const json = await res.json()
+      setContributionData(json?.data ?? null)
     } catch (error) {
       console.error('Failed to fetch contribution:', error)
     } finally {

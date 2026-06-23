@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import {
@@ -6,6 +6,7 @@ import {
   calcTaxableFromGross,
   type IncomeProfileInput,
 } from '@/lib/tax/income-profile-utils'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,13 +16,10 @@ export async function GET() {
     const profiles = await prisma.incomeProfile.findMany({
       orderBy: { year: 'desc' },
     })
-    return NextResponse.json(profiles)
+    return ok(profiles)
   } catch (error) {
     console.error('GET /api/income-profiles error:', error)
-    return NextResponse.json(
-      { error: '근로소득 프로필 조회에 실패했습니다.' },
-      { status: 500 },
-    )
+    return fail('근로소득 프로필 조회에 실패했습니다.', 500)
   }
 }
 
@@ -32,12 +30,12 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: '잘못된 요청 형식입니다.' }, { status: 400 })
+      return fail('잘못된 요청 형식입니다.', 400)
     }
 
     const errors = validateIncomeProfileInput(body)
     if (errors.length > 0) {
-      return NextResponse.json({ error: errors[0].message, errors }, { status: 400 })
+      return fail(errors[0].message, 400)
     }
 
     const { year, inputType, prepaidTax, note } = body as IncomeProfileInput
@@ -68,18 +66,12 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json(profile, { status: 201 })
+    return ok(profile, { status: 201 })
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      return NextResponse.json(
-        { error: '해당 연도 프로필이 이미 존재합니다. 수정을 이용해주세요.' },
-        { status: 409 },
-      )
+      return fail('해당 연도 프로필이 이미 존재합니다. 수정을 이용해주세요.', 409)
     }
     console.error('POST /api/income-profiles error:', error)
-    return NextResponse.json(
-      { error: '근로소득 프로필 생성에 실패했습니다.' },
-      { status: 500 },
-    )
+    return fail('근로소득 프로필 생성에 실패했습니다.', 500)
   }
 }

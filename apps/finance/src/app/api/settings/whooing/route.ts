@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,14 +12,14 @@ const SINGLETON_ID = 'whooing-config'
 export async function GET() {
   try {
     const config = await prisma.whooingConfig.findUnique({ where: { id: SINGLETON_ID } })
-    return NextResponse.json({
+    return ok({
       webhookUrl: config?.webhookUrl ?? null,
       isActive: config?.isActive ?? false,
       defaultRight: config?.defaultRight ?? null,
     })
   } catch (error) {
     console.error('[api/settings/whooing] GET 실패:', error)
-    return NextResponse.json({ error: '후잉 설정 조회에 실패했습니다.' }, { status: 500 })
+    return fail('후잉 설정 조회에 실패했습니다.', 500)
   }
 }
 
@@ -28,7 +29,7 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     let body: Record<string, unknown>
-    try { body = await request.json() } catch { return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 }) }
+    try { body = await request.json() } catch { return fail('유효한 JSON 형식이 아닙니다.', 400) }
 
     const existing = await prisma.whooingConfig.findUnique({ where: { id: SINGLETON_ID } })
 
@@ -44,13 +45,13 @@ export async function PUT(request: NextRequest) {
       create: { id: SINGLETON_ID, ...data },
     })
 
-    return NextResponse.json({
+    return ok({
       webhookUrl: config.webhookUrl,
       isActive: config.isActive,
       defaultRight: config.defaultRight,
     })
   } catch (error) {
     console.error('[api/settings/whooing] PUT 실패:', error)
-    return NextResponse.json({ error: '후잉 설정 저장에 실패했습니다.' }, { status: 500 })
+    return fail('후잉 설정 저장에 실패했습니다.', 500)
   }
 }

@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { validateRecurringInput } from '@/lib/recurring-utils'
+import { ok, fail, noContent } from '@/lib/api-response'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -17,15 +18,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 })
+      return fail('유효한 JSON 형식이 아닙니다.', 400)
     }
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return NextResponse.json({ error: '유효한 JSON 객체가 아닙니다.' }, { status: 400 })
+      return fail('유효한 JSON 객체가 아닙니다.', 400)
     }
 
     const errors = validateRecurringInput(body)
     if (errors.length > 0) {
-      return NextResponse.json({ error: errors[0].message, errors }, { status: 400 })
+      return fail(errors[0].message, 400)
     }
 
     const nextRunAt = body.nextRunAt
@@ -46,14 +47,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       },
     })
 
-    return NextResponse.json(item)
+    return ok(item)
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2025') return NextResponse.json({ error: '존재하지 않는 반복 거래입니다.' }, { status: 404 })
-      if (error.code === 'P2003') return NextResponse.json({ error: '존재하지 않는 카테고리입니다.' }, { status: 400 })
+      if (error.code === 'P2025') return fail('존재하지 않는 반복 거래입니다.', 404)
+      if (error.code === 'P2003') return fail('존재하지 않는 카테고리입니다.', 400)
     }
     console.error('[api/recurring/[id]] PUT 실패:', error)
-    return NextResponse.json({ error: '반복 거래 수정에 실패했습니다.' }, { status: 500 })
+    return fail('반복 거래 수정에 실패했습니다.', 500)
   }
 }
 
@@ -68,11 +69,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 })
+      return fail('유효한 JSON 형식이 아닙니다.', 400)
     }
 
     if (typeof body.isActive !== 'boolean') {
-      return NextResponse.json({ error: 'isActive는 boolean이어야 합니다.' }, { status: 400 })
+      return fail('isActive는 boolean이어야 합니다.', 400)
     }
 
     const item = await prisma.recurringTransaction.update({
@@ -80,13 +81,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       data: { isActive: body.isActive },
     })
 
-    return NextResponse.json({ id: item.id, isActive: item.isActive })
+    return ok({ id: item.id, isActive: item.isActive })
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return NextResponse.json({ error: '존재하지 않는 반복 거래입니다.' }, { status: 404 })
+      return fail('존재하지 않는 반복 거래입니다.', 404)
     }
     console.error('[api/recurring/[id]] PATCH 실패:', error)
-    return NextResponse.json({ error: '상태 변경에 실패했습니다.' }, { status: 500 })
+    return fail('상태 변경에 실패했습니다.', 500)
   }
 }
 
@@ -97,12 +98,12 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params
     await prisma.recurringTransaction.delete({ where: { id } })
-    return new NextResponse(null, { status: 204 })
+    return noContent()
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return NextResponse.json({ error: '존재하지 않는 반복 거래입니다.' }, { status: 404 })
+      return fail('존재하지 않는 반복 거래입니다.', 404)
     }
     console.error('[api/recurring/[id]] DELETE 실패:', error)
-    return NextResponse.json({ error: '반복 거래 삭제에 실패했습니다.' }, { status: 500 })
+    return fail('반복 거래 삭제에 실패했습니다.', 500)
   }
 }

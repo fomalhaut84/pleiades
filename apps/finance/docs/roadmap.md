@@ -304,3 +304,36 @@
 - [x] **26-C**: GET 쿼리 파라미터 Zod 검증 (zod-schemas lib + 8 라우트 + 26 단위 테스트)
 - [x] **26-D**: Generic 성공 토스트 확장 (22 컴포넌트: 9 DeleteModal + 13 Form/EditPanel)
 - [x] **26-F**: 베스팅 iCal 내보내기 (RFC 5545 + line folding + CR 정규화 + 145 단위 테스트)
+
+---
+
+# 9차 마일스톤 — 응답 envelope `ApiResponse<T>` 전면 도입
+
+> 25-E (API 응답 형식 일관화) 후속 — DELETE 204 / 비즈니스 에러 헬퍼는 끝났지만 **성공 응답 형식** 은 라우트마다 다름. 53 라우트 + 40+ 클라이언트 fetcher 영향 범위 → 단독 마일스톤. 점진 적용 (sub-phase 단위) 으로 안전하게.
+
+## Phase 27: ApiResponse envelope 전면 도입
+
+- [x] **27-A**: `ApiResponse<T>` 타입 + 헬퍼 (`ok` / `fail` / `paginated` / `noContent`) + 16 단위 테스트
+- [x] **27-B**: 단순 GET 라우트 마이그 (10 라우트 + 13 fetcher, atomic)
+- [x] **27-C**: POST/PUT/DELETE + 일부 GET 마이그 (5 sub-PR 완료)
+  - [x] **27-C-1**: Watchlist + Recurring + Settings + IncomeProfile (7 라우트 16 메소드)
+  - [x] **27-C-2**: Category + Budget + Asset (9 라우트 + 2 fetcher)
+  - [x] **27-C-3**: Dividend + Deposit + Transaction (9 라우트 + 2 fetcher)
+  - [x] **27-C-4**: RSU + StockOption (7 라우트 + 1 fetcher)
+  - [x] **27-C-5**: Trade (3 라우트 + 3 fetcher + api-errors 헬퍼 통일)
+- [x] **27-D**: pagination meta 통일 + 복잡한 GET (8 라우트 + ExpensesClient/ImportWizard unwrap)
+- [x] **27-E**: 가이드 문서 갱신 (`.claude/rules/api-routes.md`, `CLAUDE.md`)
+
+---
+
+# 10차 마일스톤 — envelope 잔여 마이그
+
+> 27 시리즈에서 빠진 16 라우트를 envelope 으로 정리. 외부 consumer (cron/MCP) 가 lib 직접 호출이라 영향 적음. 5 sub-PR 로 분할.
+
+## Phase 28: envelope 잔여 16 라우트
+
+- [x] **28-A**: accounts (2 라우트)
+- [x] **28-B**: networth + reports + tax/gift (4 라우트, PDF 다운로드 raw 유지)
+- [x] **28-C**: performance/* (4 라우트, cron/MCP lib 직접 호출 — 영향 없음)
+- [x] **28-D**: prices/* (4 라우트, bot/cron lib 직접 호출 — 영향 없음, 429 throttle 보존)
+- [x] **28-E**: ai/ask + backtest (2 라우트) + 가이드 문서 "전체 마이그 완료" 표기 갱신

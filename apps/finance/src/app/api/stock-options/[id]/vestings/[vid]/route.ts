@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
+import { ok, fail, noContent } from '@/lib/api-response'
 
 interface RouteParams {
   params: Promise<{ id: string; vid: string }>
@@ -13,12 +14,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const { id, vid } = await params
     let body: Record<string, unknown>
-    try { body = await request.json() } catch { return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 }) }
+    try { body = await request.json() } catch { return fail('유효한 JSON 형식이 아닙니다.', 400) }
 
     // parent 검증
     const existing = await prisma.stockOptionVesting.findUnique({ where: { id: vid } })
     if (!existing || existing.stockOptionId !== id) {
-      return NextResponse.json({ error: '존재하지 않는 행사 스케줄입니다.' }, { status: 404 })
+      return fail('존재하지 않는 행사 스케줄입니다.', 404)
     }
 
     const data: Record<string, unknown> = {}
@@ -27,13 +28,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (body.note !== undefined) data.note = typeof body.note === 'string' ? body.note.trim() || null : null
 
     const updated = await prisma.stockOptionVesting.update({ where: { id: vid }, data })
-    return NextResponse.json(updated)
+    return ok(updated)
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return NextResponse.json({ error: '존재하지 않는 행사 스케줄입니다.' }, { status: 404 })
+      return fail('존재하지 않는 행사 스케줄입니다.', 404)
     }
     console.error('PUT /api/stock-options/[id]/vestings/[vid] error:', error)
-    return NextResponse.json({ error: '행사 스케줄 수정에 실패했습니다.' }, { status: 500 })
+    return fail('행사 스케줄 수정에 실패했습니다.', 500)
   }
 }
 
@@ -51,23 +52,21 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { id, vid } = await params
 
     let body: Record<string, unknown>
-    try { body = await request.json() } catch { return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 }) }
+    try { body = await request.json() } catch { return fail('유효한 JSON 형식이 아닙니다.', 400) }
 
     const newStatus = body.status
     if (typeof newStatus !== 'string') {
-      return NextResponse.json({ error: 'status를 지정해주세요.' }, { status: 400 })
+      return fail('status를 지정해주세요.', 400)
     }
 
     const vesting = await prisma.stockOptionVesting.findUnique({ where: { id: vid } })
     if (!vesting || vesting.stockOptionId !== id) {
-      return NextResponse.json({ error: '베스팅을 찾을 수 없습니다.' }, { status: 404 })
+      return fail('베스팅을 찾을 수 없습니다.', 404)
     }
 
     const allowed = ALLOWED_TRANSITIONS[vesting.status]
     if (!allowed || !allowed.includes(newStatus)) {
-      return NextResponse.json({
-        error: `'${vesting.status}' → '${newStatus}' 전환은 허용되지 않습니다.`,
-      }, { status: 400 })
+      return fail(`'${vesting.status}' → '${newStatus}' 전환은 허용되지 않습니다.`, 400)
     }
 
     // pending → exercisable: 베스팅일 도래 검증 (KST 일 단위)
@@ -75,7 +74,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
       const todayEnd = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + 1))
       if (vesting.vestingDate >= todayEnd) {
-        return NextResponse.json({ error: '베스팅일이 아직 도래하지 않았습니다.' }, { status: 400 })
+        return fail('베스팅일이 아직 도래하지 않았습니다.', 400)
       }
     }
 
@@ -99,7 +98,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         })
         return tx.stockOptionVesting.findUniqueOrThrow({ where: { id: vid } })
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
-      return NextResponse.json(updated)
+      return ok(updated)
     }
 
     // 기타 상태 전환도 조건부 업데이트
@@ -108,19 +107,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       data: { status: newStatus },
     })
     if (result.count === 0) {
-      return NextResponse.json({ error: '이미 처리된 요청입니다.' }, { status: 409 })
+      return fail('이미 처리된 요청입니다.', 409)
     }
     const updated = await prisma.stockOptionVesting.findUniqueOrThrow({ where: { id: vid } })
-    return NextResponse.json(updated)
+    return ok(updated)
   } catch (error) {
     if (error instanceof Error && error.message === 'ALREADY_PROCESSED') {
-      return NextResponse.json({ error: '이미 처리된 요청입니다.' }, { status: 409 })
+      return fail('이미 처리된 요청입니다.', 409)
     }
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
-      return NextResponse.json({ error: '동시 요청이 감지되었습니다. 다시 시도해주세요.' }, { status: 409 })
+      return fail('동시 요청이 감지되었습니다. 다시 시도해주세요.', 409)
     }
     console.error('PATCH /api/stock-options/[id]/vestings/[vid] error:', error)
-    return NextResponse.json({ error: '상태 변경에 실패했습니다.' }, { status: 500 })
+    return fail('상태 변경에 실패했습니다.', 500)
   }
 }
 
@@ -134,16 +133,16 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     // parent 검증
     const existing = await prisma.stockOptionVesting.findUnique({ where: { id: vid } })
     if (!existing || existing.stockOptionId !== id) {
-      return NextResponse.json({ error: '존재하지 않는 행사 스케줄입니다.' }, { status: 404 })
+      return fail('존재하지 않는 행사 스케줄입니다.', 404)
     }
 
     await prisma.stockOptionVesting.delete({ where: { id: vid } })
-    return new NextResponse(null, { status: 204 })
+    return noContent()
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return NextResponse.json({ error: '존재하지 않는 행사 스케줄입니다.' }, { status: 404 })
+      return fail('존재하지 않는 행사 스케줄입니다.', 404)
     }
     console.error('DELETE /api/stock-options/[id]/vestings/[vid] error:', error)
-    return NextResponse.json({ error: '행사 스케줄 삭제에 실패했습니다.' }, { status: 500 })
+    return fail('행사 스케줄 삭제에 실패했습니다.', 500)
   }
 }

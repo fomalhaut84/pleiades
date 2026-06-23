@@ -18,7 +18,7 @@ export default function AlertConfigEditor() {
   useEffect(() => {
     fetch('/api/alerts/config')
       .then((res) => res.ok ? res.json() : null)
-      .then((data) => { if (data?.configs) setConfigs(data.configs) })
+      .then((json) => { if (Array.isArray(json?.data)) setConfigs(json.data) })
       .catch(() => {})
   }, [])
 

@@ -25,8 +25,8 @@ export default function RecurringClient() {
     try {
       const res = await fetch('/api/recurring')
       if (res.ok) {
-        const data = await res.json()
-        setItems(data.items ?? [])
+        const json = await res.json()
+        setItems(Array.isArray(json.data) ? json.data : [])
       }
     } catch (e) {
       console.error('[recurring] 조회 실패:', e)
@@ -40,8 +40,8 @@ export default function RecurringClient() {
   useEffect(() => {
     fetch('/api/categories')
       .then((res) => res.ok ? res.json() : null)
-      .then((data) => {
-        if (data?.categories) setCategories(data.categories)
+      .then((json) => {
+        if (Array.isArray(json?.data)) setCategories(json.data)
       })
       .catch(() => {})
   }, [])

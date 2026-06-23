@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { toVestingEvents, toKSTDateString } from '@/lib/vesting-events'
 import { buildICS, type ICSEvent } from '@/lib/ics'
+import { fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,6 +69,6 @@ export async function GET() {
     })
   } catch (error) {
     console.error('GET /api/exports/vesting.ics error:', error)
-    return NextResponse.json({ error: '캘린더 내보내기에 실패했습니다.' }, { status: 500 })
+    return fail('캘린더 내보내기에 실패했습니다.', 500)
   }
 }

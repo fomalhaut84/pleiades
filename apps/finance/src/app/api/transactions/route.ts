@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { validateTransactionInput } from '@/lib/transaction-utils'
 import { sendToWhooing } from '@/lib/whooing-webhook'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
     const sp = request.nextUrl.searchParams
     const rawType = sp.get('type')
     if (rawType && rawType !== 'expense' && rawType !== 'income') {
-      return NextResponse.json({ error: 'type은 expense 또는 income만 허용됩니다.' }, { status: 400 })
+      return fail('type은 expense 또는 income만 허용됩니다.', 400)
     }
     const type = rawType ?? undefined
     const yearStr = sp.get('year')
@@ -106,13 +107,10 @@ export async function GET(request: NextRequest) {
 
     // listOnly 모드: 페이지 이동 시 집계 스킵
     if (listOnly) {
-      return NextResponse.json({
-        transactions: serialized,
-        total,
-        offset,
-        limit,
-        year,
-      })
+      return ok(
+        { transactions: serialized, year },
+        { meta: { total, limit, offset } },
+      )
     }
 
     // 집계 조회 (필터 변경 시에만)
@@ -183,25 +181,25 @@ export async function GET(request: NextRequest) {
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .sort((a, b) => b.total - a.total)
 
-    return NextResponse.json({
-      transactions: serialized,
-      total,
-      offset,
-      limit,
-      summary: {
-        totalExpense,
-        totalIncome,
-        net: totalIncome - totalExpense,
-        count: filteredCount,
-        currency: 'KRW',
+    return ok(
+      {
+        transactions: serialized,
+        summary: {
+          totalExpense,
+          totalIncome,
+          net: totalIncome - totalExpense,
+          count: filteredCount,
+          currency: 'KRW',
+        },
+        byMonth,
+        byCategory,
+        year,
       },
-      byMonth,
-      byCategory,
-      year,
-    })
+      { meta: { total, limit, offset } },
+    )
   } catch (error) {
     console.error('[api/transactions] GET 실패:', error)
-    return NextResponse.json({ error: '거래 내역 조회에 실패했습니다.' }, { status: 500 })
+    return fail('거래 내역 조회에 실패했습니다.', 500)
   }
 }
 
@@ -216,14 +214,14 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 })
+      return fail('유효한 JSON 형식이 아닙니다.', 400)
     }
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return NextResponse.json({ error: '유효한 JSON 객체가 아닙니다.' }, { status: 400 })
+      return fail('유효한 JSON 객체가 아닙니다.', 400)
     }
     const errors = validateTransactionInput(body)
     if (errors.length > 0) {
-      return NextResponse.json({ error: errors[0].message, errors }, { status: 400 })
+      return fail(errors[0].message, 400)
     }
 
     const amount = body.amount as number
@@ -240,22 +238,22 @@ export async function POST(request: NextRequest) {
       select: { id: true, name: true, icon: true, type: true },
     })
     if (!category) {
-      return NextResponse.json({ error: '존재하지 않는 카테고리입니다.' }, { status: 400 })
+      return fail('존재하지 않는 카테고리입니다.', 400)
     }
 
     // transfer 유형 ↔ transfer 카테고리 일치 검증
     if (txType && category.type !== 'transfer') {
-      return NextResponse.json({ error: '출금/입금은 이체 카테고리에서만 사용할 수 있습니다.' }, { status: 400 })
+      return fail('출금/입금은 이체 카테고리에서만 사용할 수 있습니다.', 400)
     }
     if (!txType && category.type === 'transfer') {
-      return NextResponse.json({ error: '이체 카테고리는 출금/입금 유형에서만 사용할 수 있습니다.' }, { status: 400 })
+      return fail('이체 카테고리는 출금/입금 유형에서만 사용할 수 있습니다.', 400)
     }
 
     // 자산 존재 확인 (transfer 유형)
     if (linkedAssetId) {
       const asset = await prisma.asset.findUnique({ where: { id: linkedAssetId }, select: { id: true } })
       if (!asset) {
-        return NextResponse.json({ error: '존재하지 않는 자산입니다.' }, { status: 400 })
+        return fail('존재하지 않는 자산입니다.', 400)
       }
     }
 
@@ -300,7 +298,7 @@ export async function POST(request: NextRequest) {
       console.error('[whooing] 전송 실패:', err)
     }
 
-    return NextResponse.json({
+    return ok({
       id: transaction.id,
       amount: transaction.amount,
       description: transaction.description,
@@ -316,9 +314,9 @@ export async function POST(request: NextRequest) {
     }, { status: 201 })
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
-      return NextResponse.json({ error: '존재하지 않는 카테고리입니다.' }, { status: 400 })
+      return fail('존재하지 않는 카테고리입니다.', 400)
     }
     console.error('[api/transactions] POST 실패:', error)
-    return NextResponse.json({ error: '내역 생성에 실패했습니다.' }, { status: 500 })
+    return fail('내역 생성에 실패했습니다.', 500)
   }
 }

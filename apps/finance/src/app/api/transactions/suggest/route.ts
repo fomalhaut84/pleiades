@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { matchCategory, suggestByHistory } from '@/lib/category-matcher'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,12 +30,12 @@ export async function GET(request: NextRequest) {
     const sp = request.nextUrl.searchParams
     const q = sp.get('q')?.trim()?.slice(0, MAX_QUERY_LENGTH)
     if (!q || q.length < 2) {
-      return NextResponse.json({ suggestions: [] })
+      return ok({ suggestions: [] })
     }
 
     const rawType = sp.get('type')
     if (rawType && !VALID_TYPES.has(rawType)) {
-      return NextResponse.json({ error: 'type은 expense 또는 income이어야 합니다.' }, { status: 400 })
+      return fail('type은 expense 또는 income이어야 합니다.', 400)
     }
     const types: Array<'expense' | 'income'> =
       rawType ? [rawType as 'expense' | 'income'] : ['expense', 'income']
@@ -69,9 +70,9 @@ export async function GET(request: NextRequest) {
 
     const suggestions = [...keywordSuggestions, ...historySuggestions].slice(0, MAX_SUGGESTIONS)
 
-    return NextResponse.json({ suggestions })
+    return ok({ suggestions })
   } catch (error) {
     console.error('[suggest] error:', error)
-    return NextResponse.json({ error: '추천 조회에 실패했습니다.' }, { status: 500 })
+    return fail('추천 조회에 실패했습니다.', 500)
   }
 }

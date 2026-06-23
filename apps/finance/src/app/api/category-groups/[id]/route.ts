@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
+import { ok, fail, noContent } from '@/lib/api-response'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -16,14 +17,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: '유효한 JSON 형식이 아닙니다.' }, { status: 400 })
+      return fail('유효한 JSON 형식이 아닙니다.', 400)
     }
 
     const data: Record<string, unknown> = {}
     if (typeof body.name === 'string') {
       const name = body.name.trim()
-      if (!name) return NextResponse.json({ error: '그룹 이름을 입력해주세요.' }, { status: 400 })
-      if (name.length > 50) return NextResponse.json({ error: '이름은 50자 이내로 입력해주세요.' }, { status: 400 })
+      if (!name) return fail('그룹 이름을 입력해주세요.', 400)
+      if (name.length > 50) return fail('이름은 50자 이내로 입력해주세요.', 400)
       data.name = name
     }
     if (body.icon !== undefined) {
@@ -38,14 +39,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       data,
     })
 
-    return NextResponse.json(group)
+    return ok(group)
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2025') return NextResponse.json({ error: '존재하지 않는 그룹입니다.' }, { status: 404 })
-      if (error.code === 'P2002') return NextResponse.json({ error: '이미 존재하는 그룹 이름입니다.' }, { status: 409 })
+      if (error.code === 'P2025') return fail('존재하지 않는 그룹입니다.', 404)
+      if (error.code === 'P2002') return fail('이미 존재하는 그룹 이름입니다.', 409)
     }
     console.error('[api/category-groups/[id]] PUT 실패:', error)
-    return NextResponse.json({ error: '그룹 수정에 실패했습니다.' }, { status: 500 })
+    return fail('그룹 수정에 실패했습니다.', 500)
   }
 }
 
@@ -64,16 +65,16 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       const parts: string[] = []
       if (catCount > 0) parts.push(`${catCount}개의 카테고리`)
       if (budgetCount > 0) parts.push(`${budgetCount}개의 예산`)
-      return NextResponse.json({ error: `${parts.join(', ')}이 연결되어 삭제할 수 없습니다.` }, { status: 400 })
+      return fail(`${parts.join(', ')}이 연결되어 삭제할 수 없습니다.`, 400)
     }
 
     await prisma.categoryGroup.delete({ where: { id } })
-    return new NextResponse(null, { status: 204 })
+    return noContent()
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return NextResponse.json({ error: '존재하지 않는 그룹입니다.' }, { status: 404 })
+      return fail('존재하지 않는 그룹입니다.', 404)
     }
     console.error('[api/category-groups/[id]] DELETE 실패:', error)
-    return NextResponse.json({ error: '그룹 삭제에 실패했습니다.' }, { status: 500 })
+    return fail('그룹 삭제에 실패했습니다.', 500)
   }
 }
