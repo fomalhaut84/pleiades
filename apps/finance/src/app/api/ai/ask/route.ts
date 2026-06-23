@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import {
   askAdvisor,
   AdvisorTimeoutError,
   AdvisorError,
 } from '@/lib/ai/claude-advisor'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -21,31 +22,22 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json(
-        { error: '잘못된 요청 형식입니다.' },
-        { status: 400 }
-      )
+      return fail('잘못된 요청 형식입니다.', 400)
     }
 
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return NextResponse.json(
-        { error: '잘못된 요청 형식입니다.' },
-        { status: 400 }
-      )
+      return fail('잘못된 요청 형식입니다.', 400)
     }
 
     const { prompt } = body as { prompt?: unknown }
 
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
-      return NextResponse.json(
-        { error: '질문을 입력해주세요.' },
-        { status: 400 }
-      )
+      return fail('질문을 입력해주세요.', 400)
     }
 
     const result = await askAdvisor(prompt.trim())
 
-    return NextResponse.json({
+    return ok({
       response: result.response,
       model: result.model,
       durationMs: result.durationMs,
@@ -53,23 +45,14 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     if (error instanceof AdvisorTimeoutError) {
-      return NextResponse.json(
-        { error: 'AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.' },
-        { status: 504 }
-      )
+      return fail('AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.', 504)
     }
 
     if (error instanceof AdvisorError && isSafeError(error.message)) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 400 }
-      )
+      return fail(error.message, 400)
     }
 
     console.error('POST /api/ai/ask error:', error)
-    return NextResponse.json(
-      { error: 'AI 응답 처리에 실패했습니다.' },
-      { status: 500 }
-    )
+    return fail('AI 응답 처리에 실패했습니다.', 500)
   }
 }

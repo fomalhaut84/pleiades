@@ -324,10 +324,16 @@
 - [x] **27-D**: pagination meta 통일 + 복잡한 GET (8 라우트 + ExpensesClient/ImportWizard unwrap)
 - [x] **27-E**: 가이드 문서 갱신 (`.claude/rules/api-routes.md`, `CLAUDE.md`)
 
-### 후속 (10차 마일스톤 후보)
+---
 
-27 시리즈에서 핵심 도메인 53+ 라우트는 마이그 완료. 남은 미마이그 라우트 (16개) 는 다음 마일스톤에서 envelope 화 예정:
+# 10차 마일스톤 — envelope 잔여 마이그
 
-- accounts, networth, performance/*, prices/*, reports/*, tax/gift, backtest, ai/ask
-- 각 라우트마다 클라이언트 fetcher 동시 업데이트 필요 (atomic PR)
-- 가이드 문서 (`.claude/rules/api-routes.md`) 의 "적용 범위" 표를 함께 갱신
+> 27 시리즈에서 빠진 16 라우트를 envelope 으로 정리. 외부 consumer (cron/MCP) 가 lib 직접 호출이라 영향 적음. 5 sub-PR 로 분할.
+
+## Phase 28: envelope 잔여 16 라우트
+
+- [x] **28-A**: accounts (2 라우트)
+- [x] **28-B**: networth + reports + tax/gift (4 라우트, PDF 다운로드 raw 유지)
+- [x] **28-C**: performance/* (4 라우트, cron/MCP lib 직접 호출 — 영향 없음)
+- [x] **28-D**: prices/* (4 라우트, bot/cron lib 직접 호출 — 영향 없음, 429 throttle 보존)
+- [x] **28-E**: ai/ask + backtest (2 라우트) + 가이드 문서 "전체 마이그 완료" 표기 갱신

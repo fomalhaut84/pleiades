@@ -115,7 +115,7 @@ PM2 ──► myfinance-bot (standalone)        │
 
 - 한국어 UI, 코드/변수명은 영어.
 - 컴포넌트: 함수형 + hooks. default export.
-- API routes: `src/app/api/` 아래 route.ts. try-catch + 신규/마이그 완료 라우트는 `@/lib/api-response` 의 `ok`/`fail`/`noContent`/`paginated` 헬퍼 사용 (envelope `{ success, data?, error?, meta? }`). 미마이그 라우트 변경 시 클라이언트 fetcher 동시 업데이트 필수. 상세 + 적용 범위는 `.claude/rules/api-routes.md`.
+- API routes: `src/app/api/` 아래 route.ts. try-catch + `@/lib/api-response` 의 `ok`/`fail`/`noContent`/`paginated` 헬퍼 사용 (envelope `{ success, data?, error?, meta? }`). 상세는 `.claude/rules/api-routes.md`.
 - DB 접근: 반드시 `@/lib/prisma` singleton. raw query 금지.
 - Trade 생성 시 Holding 업데이트는 Prisma transaction으로 묶기.
 - 금액 응답에 항상 currency 필드 포함. 날짜는 ISO 8601.

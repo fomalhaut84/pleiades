@@ -13,16 +13,11 @@
 
 ## 응답 envelope (`ApiResponse<T>`)
 
-**신규 라우트** 와 **마이그 완료 라우트** (아래 "적용 범위" 참고) 는 `@/lib/api-response` 의 헬퍼를 사용해 통일된 envelope 으로 반환한다 (Phase 27).
+모든 API 라우트는 `@/lib/api-response` 의 헬퍼를 사용해 통일된 envelope 으로 반환한다 (Phase 27/28 — 전체 마이그 완료).
 
 ### 적용 범위
 
-| 상태 | 도메인 |
-|---|---|
-| ✅ 마이그 완료 (27-A~D) | trades, dividends, deposits, transactions, rsu, stock-options, watchlist, recurring, settings, income-profiles, categories, budgets, assets, exports/* (에러 path), 그 외 27-B 단순 GET |
-| ⏳ 마이그 예정 (28차 마일스톤 후보) | accounts, networth, performance/*, prices/*, reports, tax/gift, backtest, ai/ask |
-
-**중요**: 미마이그 라우트의 응답을 envelope 으로 바꾸려면 **반드시 클라이언트 fetcher 도 함께 업데이트** 한다 (envelope 일방 변경은 화면 깨짐을 유발). 신규 라우트는 처음부터 envelope 사용.
+Phase 27 (27-A~E) + Phase 28 (28-A~E) 으로 **모든 도메인 envelope 적용 완료**. 신규 라우트는 처음부터 envelope 사용한다.
 
 ### 예외 (envelope 미적용)
 

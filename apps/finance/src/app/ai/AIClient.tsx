@@ -83,10 +83,13 @@ export default function AIClient() {
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.error || 'AI 응답 실패')
+        throw new Error(data?.error || 'AI 응답 실패')
       }
 
-      const aiContent = data.response
+      const aiContent = data?.data?.response
+      if (!aiContent) {
+        throw new Error('AI 응답을 받지 못했습니다.')
+      }
       const aiMsg: Message = {
         id: generateId(),
         role: 'assistant',
