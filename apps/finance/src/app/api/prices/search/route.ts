@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { searchKrxByName } from '@/lib/krx-stocks'
 import { searchYahooByName } from '@/lib/price-fetcher'
+import { ok, fail } from '@/lib/api-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,17 +14,14 @@ export async function GET(request: NextRequest) {
     const q = request.nextUrl.searchParams.get('q')?.trim()
 
     if (!q || q.length < 2) {
-      return NextResponse.json(
-        { error: '검색어는 2자 이상 입력해주세요.' },
-        { status: 400 }
-      )
+      return fail('검색어는 2자 이상 입력해주세요.', 400)
     }
 
     const hasKorean = /[가-힣]/.test(q)
 
     if (hasKorean) {
       const results = await searchKrxByName(q)
-      return NextResponse.json({
+      return ok({
         source: 'krx',
         results: results.map((r) => ({
           ticker: r.ticker,
@@ -34,7 +32,7 @@ export async function GET(request: NextRequest) {
     }
 
     const results = await searchYahooByName(q)
-    return NextResponse.json({
+    return ok({
       source: 'yahoo',
       results: results.map((r) => ({
         ticker: r.symbol,
@@ -45,6 +43,6 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('[api] 종목 검색 실패:', error)
-    return NextResponse.json({ error: '종목 검색에 실패했습니다.' }, { status: 500 })
+    return fail('종목 검색에 실패했습니다.', 500)
   }
 }
