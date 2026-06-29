@@ -23,7 +23,7 @@ function buildBriefingPrompt(session: MarketSession): string {
     session === 'US'
       ? '3. 미국주(USD) 종목 중 스윙/모멘텀/단타 전략은 get_technical_analysis로 TA 확인'
       : '3. 한국주(KRW) 종목 중 스윙/모멘텀/단타 전략은 get_technical_analysis로 TA 확인',
-    '4. firecrawl_search로 보유 종목 관련 최신 뉴스 검색',
+    '4. WebSearch로 보유 종목 관련 최신 뉴스 검색',
     '',
     '브리핑 구성:',
     '- 시장 동향 요약 (주요 지수, 이슈)',

@@ -69,7 +69,7 @@ function fireTickerAnalysis(ctx: Context, chatId: number, ticker: string): void 
     `1. get_holding_strategy(${ticker})로 전략/목표가/손절가 확인`,
     `2. get_technical_analysis(${ticker})로 TA 리포트 확인`,
     `3. get_portfolio(전체)에서 ${ticker} 보유 현황 확인`,
-    `4. firecrawl_search로 "${ticker} 최신 뉴스" 검색`,
+    `4. WebSearch로 "${ticker} 최신 뉴스" 검색`,
     '',
     '분석 내용:',
     '- 현재 보유 현황 (수량, 평단, 수익률)',
