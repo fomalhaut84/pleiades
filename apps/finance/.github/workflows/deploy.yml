@@ -94,12 +94,20 @@ jobs:
           fi
           # printf로 \n literal newline 처리 — multi-line YAML block scalar 들여쓰기 깨짐 회피.
           text=$(printf '✅ <b>myFinance Deploy %s</b> 성공\n서버: production\n워크플로우: %s' "$RELEASE_TAG" "$RUN_URL")
-          curl -sS -X POST \
+          # 성공 응답 body (sent message + chat metadata) 는 chat 정보 노출 위험 → /tmp 로 격리.
+          # 실패 (HTTP 4xx/5xx) 시에만 body 출력 + step fail (--fail-with-body).
+          body=$(mktemp)
+          if ! curl -sS --fail-with-body -o "$body" -X POST \
             "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
             --data-urlencode "parse_mode=HTML" \
-            --data-urlencode "text=$text" \
-            -o /dev/null
+            --data-urlencode "text=$text"; then
+            echo "::error::Telegram sendMessage failed"
+            cat "$body" >&2
+            rm -f "$body"
+            exit 1
+          fi
+          rm -f "$body"
 
       - name: Notify Telegram (failure)
         if: failure()
@@ -114,9 +122,16 @@ jobs:
             exit 0
           fi
           text=$(printf '❌ <b>myFinance Deploy %s</b> 실패\n워크플로우 로그: %s' "${RELEASE_TAG:-unknown}" "$RUN_URL")
-          curl -sS -X POST \
+          # 실패 알림 자체가 또 실패해도 가시화. 성공 body 는 chat 정보 노출 위험 → /tmp 격리.
+          body=$(mktemp)
+          if ! curl -sS --fail-with-body -o "$body" -X POST \
             "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
             --data-urlencode "parse_mode=HTML" \
-            --data-urlencode "text=$text" \
-            -o /dev/null
+            --data-urlencode "text=$text"; then
+            echo "::error::Telegram failure notification itself failed"
+            cat "$body" >&2
+            rm -f "$body"
+            exit 1
+          fi
+          rm -f "$body"
