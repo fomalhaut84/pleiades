@@ -1,0 +1,137 @@
+name: Deploy on Release
+
+# 운영 배포 자동화 — GitHub Release publish 시 운영 서버에서 deploy.sh 실행.
+# 매 릴리즈마다 사용자가 ssh + git pull + npm run build + pm2 restart 수동 진행
+# 누락 → 코드/dist 불일치 → 운영 장애 위험. myFitness #137 패턴 그대로 이식.
+# 스펙: docs/specs/366-deploy-automation.md
+# 트리거: release.published (자동), workflow_dispatch (수동 재실행, inputs.tag 필요).
+
+on:
+  release:
+    types: [published]
+  # 진단/수동 재실행 트리거 — GitHub release event 가 어떤 이유로 발동 안 했을 때
+  # Actions UI 의 "Run workflow" 로 수동 실행. tag 입력 (예: v0.8.3) 지정.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to deploy (예: v0.8.3)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# 동일 릴리즈/재시도가 겹치면 동일 worktree(node_modules/dist/pm2)에서 deploy.sh 가
+# 동시 실행되어 빌드 손상/PM2 race 위험. 직렬화로 차단. 진행 중 새 release publish 시
+# 새 deploy는 큐잉되어 이전 완료 후 시작.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: SSH Deploy
+    runs-on: ubuntu-latest
+    # 정식 릴리즈(prerelease/draft 아님) 만 운영 배포.
+    # draft 는 publish 이벤트 자체가 안 뜨지만 명시적 가드.
+    # workflow_dispatch 는 항상 통과 (운영자가 의도적으로 트리거).
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.release.prerelease && !github.event.release.draft) }}
+    steps:
+      # Fingerprint secret 누락/typo 시 ssh-action 이 빈 문자열로 진행 → InsecureIgnoreHostKey
+      # default → MITM 재개. 사전 검증으로 차단.
+      - name: Preflight — require host fingerprint
+        env:
+          DEPLOY_SSH_FINGERPRINT: ${{ secrets.DEPLOY_SSH_FINGERPRINT }}
+        run: |
+          if [[ -z "$DEPLOY_SSH_FINGERPRINT" ]]; then
+            echo "ERROR: DEPLOY_SSH_FINGERPRINT secret is empty. SSH MITM 위험 → 배포 중단." >&2
+            echo "운영자: 스펙 docs/specs/366-deploy-automation.md §3.3 의 ssh-keygen -lf 명령으로 추출 후 GitHub Secrets 등록." >&2
+            exit 1
+          fi
+          echo "Fingerprint secret present (length=${#DEPLOY_SSH_FINGERPRINT})"
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          # release event 면 release.tag_name, workflow_dispatch 면 inputs.tag.
+          # 직접 script에 expand 시 shell injection 위험 → env var + 형식 검증.
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT }}
+          # SSH host fingerprint 검증 — 미설정 시 InsecureIgnoreHostKey() default → MITM 위험.
+          # secret 등록 방법은 스펙 §3.3 참조 (ssh-keyscan + ssh-keygen -lf).
+          fingerprint: ${{ secrets.DEPLOY_SSH_FINGERPRINT }}
+          envs: RELEASE_TAG,DEPLOY_PATH
+          # 30분 timeout (npm ci + build + pm2 restart 충분)
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+            # 태그 형식 검증 (semver: vMAJOR.MINOR.PATCH[-suffix])
+            if ! [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
+              echo "ERROR: Invalid tag format: $RELEASE_TAG" >&2
+              exit 1
+            fi
+            cd "$DEPLOY_PATH"
+            ./deploy/deploy.sh "$RELEASE_TAG"
+
+      # 배포 결과 텔레그램 알림 — myfinance-bot 인프라 재활용. raw curl 로 third-party action 의존 X.
+      # 토큰은 GitHub Actions가 자동 마스킹. 성공/실패 모두 알림 (무알림이 더 위험).
+      - name: Notify Telegram (success)
+        if: success()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+            echo "::warning::TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID secret 미설정 — 알림 skip"
+            exit 0
+          fi
+          # printf로 \n literal newline 처리 — multi-line YAML block scalar 들여쓰기 깨짐 회피.
+          text=$(printf '✅ <b>myFinance Deploy %s</b> 성공\n서버: production\n워크플로우: %s' "$RELEASE_TAG" "$RUN_URL")
+          # 성공 응답 body (sent message + chat metadata) 는 chat 정보 노출 위험 → /tmp 로 격리.
+          # 실패 (HTTP 4xx/5xx) 시에만 body 출력 + step fail (--fail-with-body).
+          body=$(mktemp)
+          if ! curl -sS --fail-with-body -o "$body" -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "parse_mode=HTML" \
+            --data-urlencode "text=$text"; then
+            echo "::error::Telegram sendMessage failed"
+            cat "$body" >&2
+            rm -f "$body"
+            exit 1
+          fi
+          rm -f "$body"
+
+      - name: Notify Telegram (failure)
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+            echo "::warning::TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID secret 미설정 — 알림 skip"
+            exit 0
+          fi
+          text=$(printf '❌ <b>myFinance Deploy %s</b> 실패\n워크플로우 로그: %s' "${RELEASE_TAG:-unknown}" "$RUN_URL")
+          # 실패 알림 자체가 또 실패해도 가시화. 성공 body 는 chat 정보 노출 위험 → /tmp 격리.
+          body=$(mktemp)
+          if ! curl -sS --fail-with-body -o "$body" -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "parse_mode=HTML" \
+            --data-urlencode "text=$text"; then
+            echo "::error::Telegram failure notification itself failed"
+            cat "$body" >&2
+            rm -f "$body"
+            exit 1
+          fi
+          rm -f "$body"

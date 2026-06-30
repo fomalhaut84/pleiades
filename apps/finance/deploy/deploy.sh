@@ -4,10 +4,16 @@
 # 예시: ./deploy/deploy.sh main
 #       ./deploy/deploy.sh v0.1.0
 #       ./deploy/deploy.sh dev
+#
+# 호출 시 cwd 자동 처리:
+# - cwd 가 myFinance 루트면 그대로 (deploy.sh 가 직접 호출됨)
+# - 그 외엔 스크립트 위치 기준 상위 디렉토리 (CI workflow 에서 임의 cwd 호출 호환)
 set -e
 
 TARGET="${1:-main}"
-cd /home/nasty68/myFinance
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+REPO_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+cd "$REPO_ROOT"
 
 echo "=== 1. Fetch latest ==="
 git fetch origin --tags

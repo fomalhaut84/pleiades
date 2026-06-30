@@ -4,7 +4,7 @@ module.exports = {
       name: 'myfinance',
       script: 'node_modules/.bin/next',
       args: 'start -p 4100',
-      cwd: '/home/nasty68/myFinance',
+      cwd: __dirname,
       env: {
         NODE_ENV: 'production',
         PORT: 4100,
@@ -18,7 +18,7 @@ module.exports = {
     {
       name: 'myfinance-bot',
       script: 'dist/bot/standalone.cjs',
-      cwd: '/home/nasty68/myFinance',
+      cwd: __dirname,
       env: {
         NODE_ENV: 'production',
       },
