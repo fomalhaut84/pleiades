@@ -63,6 +63,21 @@ export function toKSTDateString(input: Date | string): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
 }
 
+/**
+ * KST 캘린더 기준 두 날짜 사이 일수 차 (target - today).
+ * - 양수: target 가 미래 (예: 3 = 3일 후)
+ * - 0: 오늘
+ * - 음수: target 가 과거 (예: -1 = 어제)
+ */
+export function diffDaysKST(targetKey: string, nowMs: number): number {
+  const todayKey = toKSTDateString(new Date(nowMs))
+  const [ty, tm, td] = todayKey.split('-').map(Number)
+  const [ey, em, ed] = targetKey.split('-').map(Number)
+  const todayUtc = Date.UTC(ty, tm - 1, td)
+  const targetUtc = Date.UTC(ey, em - 1, ed)
+  return Math.round((targetUtc - todayUtc) / 86400000)
+}
+
 function normalizeRsuStatus(raw: string): VestingEventStatus {
   if (raw === 'vested') return 'vested'
   return 'pending'

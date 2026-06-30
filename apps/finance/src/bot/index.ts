@@ -15,6 +15,7 @@ import { registerBriefingCommands } from './commands/briefing'
 import { registerNetWorthCommands } from './commands/networth'
 import { registerReportCommands } from './commands/report'
 import { registerBacktestCommands } from './commands/backtest'
+import { registerVestConfirmHandler } from './commands/vest-confirm'
 import { authMiddleware } from './middleware/auth'
 
 // IPv6 라우트가 없는 환경(운영 서버 등)에서 node-fetch의 IPv6 우선 시도가
@@ -60,6 +61,7 @@ function createBot(): Bot {
   registerNetWorthCommands(instance)
   registerReportCommands(instance)
   registerBacktestCommands(instance)
+  registerVestConfirmHandler(instance)
 
   // fallback 순서: 소비 입력 → AI 질문 (질문형 키워드 포함 시)
   registerExpenseFallback(instance)

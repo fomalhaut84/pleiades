@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildMonthGrid,
+  diffDaysKST,
   groupEventsByDate,
   toKSTDateString,
   toVestingEvents,
@@ -146,5 +147,31 @@ describe('buildMonthGrid', () => {
     const cells = buildMonthGrid(2026, 5)
     const june1 = cells.find((d) => d.getMonth() === 5 && d.getDate() === 1)
     expect(june1).toBeDefined()
+  })
+})
+
+describe('diffDaysKST', () => {
+  // 2026-06-15 03:00 UTC = 2026-06-15 12:00 KST
+  const nowMs = Date.parse('2026-06-15T03:00:00Z')
+
+  it('오늘 → 0', () => {
+    expect(diffDaysKST('2026-06-15', nowMs)).toBe(0)
+  })
+
+  it('내일 → 1', () => {
+    expect(diffDaysKST('2026-06-16', nowMs)).toBe(1)
+  })
+
+  it('어제 → -1', () => {
+    expect(diffDaysKST('2026-06-14', nowMs)).toBe(-1)
+  })
+
+  it('90일 후', () => {
+    expect(diffDaysKST('2026-09-13', nowMs)).toBe(90)
+  })
+
+  it('월 경계 이동 (5월 → 7월)', () => {
+    expect(diffDaysKST('2026-07-15', nowMs)).toBe(30)
+    expect(diffDaysKST('2026-05-15', nowMs)).toBe(-31)
   })
 })
