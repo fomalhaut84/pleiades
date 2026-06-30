@@ -1,20 +1,11 @@
 import Link from 'next/link'
 import { formatKRW } from '@/lib/format'
-import { toKSTDateString, upcomingEvents, type VestingEvent } from '@/lib/vesting-events'
+import { diffDaysKST, upcomingEvents, type VestingEvent } from '@/lib/vesting-events'
 
 interface Props {
   events: VestingEvent[]
   todayMs: number
   days: number
-}
-
-function diffDaysKST(dateKey: string, todayMs: number): number {
-  const todayKey = toKSTDateString(new Date(todayMs))
-  const [ty, tm, td] = todayKey.split('-').map(Number)
-  const [ey, em, ed] = dateKey.split('-').map(Number)
-  const todayUtc = Date.UTC(ty, tm - 1, td)
-  const evUtc = Date.UTC(ey, em - 1, ed)
-  return Math.round((evUtc - todayUtc) / 86400000)
 }
 
 function formatDateLabel(dateKey: string): string {

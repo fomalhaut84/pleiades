@@ -2,12 +2,14 @@ import { prisma } from '@/lib/prisma'
 import Header from '@/components/layout/Header'
 import VestingCalendar from '@/components/vesting/VestingCalendar'
 import VestingList from '@/components/vesting/VestingList'
+import VestingDistribution from '@/components/vesting/VestingDistribution'
 import Disclaimer from '@/components/ui/Disclaimer'
-import { toVestingEvents, toKSTDateString, upcomingEvents } from '@/lib/vesting-events'
+import { toVestingEvents, toKSTDateString, upcomingEvents, diffDaysKST } from '@/lib/vesting-events'
 
 export const dynamic = 'force-dynamic'
 
 const UPCOMING_DAYS = 90
+const EXPIRING_SOON_DAYS = 90
 
 export default async function VestingPage() {
   const [rsus, options] = await Promise.all([
@@ -28,19 +30,37 @@ export default async function VestingPage() {
   const todayMs = Date.now()
   const todayKey = toKSTDateString(new Date(todayMs))
   const thisMonthPrefix = todayKey.slice(0, 7)
+  const currentYear = todayKey.slice(0, 4)
 
   const thisMonthCount = events.filter((e) => e.date.startsWith(thisMonthPrefix)).length
   const upcomingCount = upcomingEvents(events, UPCOMING_DAYS, todayMs).length
-  const completedCount = events.filter(
-    (e) => e.status === 'vested' || e.status === 'exercised',
+  // YTD: 올해 완료된 베스팅만 (전체 누적 X)
+  const ytdCompletedCount = events.filter(
+    (e) =>
+      (e.status === 'vested' || e.status === 'exercised') &&
+      e.date.startsWith(currentYear),
   ).length
-  const expiringCount = events.filter((e) => e.status === 'expired').length
+
+  // 만료 임박: 옵션 expiryDate D-90 이내 (오늘 포함) + remainingShares > 0 (행사 기회 임박).
+  // 이미 만료된 옵션은 cron 이 vesting.status='expired' 만 처리하고 StockOption.remainingShares 는
+  // 차감하지 않아 매년 누적되는 잘못된 메트릭이 됨 → 본 카드에서는 제외하고 임박만 표기.
+  let expiringSoonCount = 0
+  for (const opt of options) {
+    if (opt.remainingShares <= 0) continue
+    const days = diffDaysKST(toKSTDateString(opt.expiryDate), todayMs)
+    if (days >= 0 && days <= EXPIRING_SOON_DAYS) expiringSoonCount += 1
+  }
 
   const summaryCards: Array<{ label: string; value: string; sub?: string; color?: string }> = [
     { label: '이번 달 이벤트', value: `${thisMonthCount}건` },
     { label: '다가오는 이벤트', value: `${upcomingCount}건`, sub: `${UPCOMING_DAYS}일 이내` },
-    { label: '완료 이벤트', value: `${completedCount}건`, color: 'text-sejin' },
-    { label: '만료', value: `${expiringCount}건`, color: 'text-amber-400' },
+    { label: `${currentYear} 완료`, value: `${ytdCompletedCount}건`, color: 'text-sejin' },
+    {
+      label: '만료 임박',
+      value: `${expiringSoonCount}건`,
+      sub: `${EXPIRING_SOON_DAYS}일 이내`,
+      color: 'text-amber-400',
+    },
   ]
 
   return (
@@ -74,9 +94,12 @@ export default async function VestingPage() {
 
       <section className="grid grid-cols-1 lg:grid-cols-[1.4fr,1fr] gap-4">
         <VestingList events={events} todayMs={todayMs} days={UPCOMING_DAYS} />
-        <Disclaimer>
-          베스팅 정보는 입력 데이터 기반 예측이며, 실제 행사 가능일은 회사 정책에 따라 달라질 수 있습니다.
-        </Disclaimer>
+        <div className="flex flex-col gap-4">
+          <VestingDistribution events={events} todayMs={todayMs} days={UPCOMING_DAYS} />
+          <Disclaimer>
+            베스팅 정보는 입력 데이터 기반 예측이며, 실제 행사 가능일은 회사 정책에 따라 달라질 수 있습니다.
+          </Disclaimer>
+        </div>
       </section>
     </div>
   )
