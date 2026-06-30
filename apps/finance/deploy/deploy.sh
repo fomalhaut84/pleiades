@@ -30,8 +30,12 @@ echo "=== 5. Build ==="
 npm run build
 
 echo "=== 6. PM2 Restart ==="
+# 웹: stateless → graceful reload (zero-downtime)
 pm2 startOrReload ecosystem.config.js --only myfinance
-pm2 startOrReload ecosystem.config.js --only myfinance-bot
+# 봇: 텔레그램 long polling 은 토큰당 1 인스턴스만 허용 → reload 시 두 봇이 겹치면
+# 409 Conflict. fork 단일 인스턴스라 hard restart 가 안전 (옛 인스턴스 stop 후 새로 spawn).
+# docs/specs/356-bot-409-conflict-fix.md 참조.
+pm2 startOrRestart ecosystem.config.js --only myfinance-bot
 
 echo ""
 echo "=== Deploy complete: $TARGET ==="
