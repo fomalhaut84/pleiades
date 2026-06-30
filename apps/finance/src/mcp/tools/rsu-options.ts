@@ -35,6 +35,7 @@ export async function getRsuSchedule(args: { account_name?: string }) {
       const basisDate = s.basisDate?.toISOString().slice(0, 10) ?? '-'
 
       lines.push(`**${s.account.name}** — ${vestDate}`)
+      lines.push(`- ID: \`${s.id}\` (vest_rsu 호출 시 사용)`)
       lines.push(`- 상태: ${status}`)
       lines.push(`- 주수: ${s.shares}주`)
       lines.push(`- 기준가: ${s.basisValue.toLocaleString()}원 (기준일: ${basisDate})`)

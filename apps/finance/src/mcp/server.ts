@@ -19,6 +19,7 @@ import { listBudgets, setBudget, deleteBudget } from './tools/budget'
 import { listRecurringTransactions, createRecurringTransaction, updateRecurringTransaction, deleteRecurringTransaction } from './tools/recurring'
 import { listAlertConfigs, updateAlertConfig } from './tools/alert'
 import { createRsuSchedule, updateRsuSchedule, deleteRsuSchedule } from './tools/rsu-write'
+import { vestRsu } from './tools/rsu-vest'
 import {
   createStockOption,
   updateStockOption,
@@ -541,6 +542,16 @@ server.tool(
   'RSU 스케줄 삭제 (pending만). 사용자의 명시적 동의 후에만 호출.',
   { id: z.string() },
   async (args) => deleteRsuSchedule(args)
+)
+
+server.tool(
+  'vest_rsu',
+  'RSU 베스팅 처리: 베스팅일 종가 자동 조회 → BUY/SELL Trade + Holding 자동 반영 + status=vested. autoSell 미지정 시 schedule.sellShares>0 이면 매도 포함. 사용자의 명시적 동의 후에만 호출.',
+  {
+    id: z.string().describe('RSU 스케줄 ID'),
+    autoSell: z.boolean().optional().describe('매도 자동 실행. 미지정 시 schedule.sellShares>0 기본'),
+  },
+  async (args) => vestRsu(args)
 )
 
 // --- 스톡옵션 쓰기 ---

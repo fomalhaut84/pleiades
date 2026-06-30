@@ -1,12 +1,7 @@
 import { NextRequest } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { recalcHolding, calcTotalKRW } from '@/lib/trade-utils'
 import { ok, fail } from '@/lib/api-response'
-
-const RSU_TICKER = '035720.KS'
-const RSU_DISPLAY_NAME = '카카오'
-const RSU_MARKET = 'KR'
-const RSU_CURRENCY = 'KRW'
+import { businessErrorResponse } from '@/lib/api-errors'
+import { processRsuVest, RsuVestError, rsuVestErrorMessage } from '@/lib/rsu-vest-service'
 
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -25,7 +20,6 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       autoSell: boolean
     }
 
-    // 입력 검증
     if (typeof vestPrice !== 'number' || !Number.isFinite(vestPrice) || vestPrice <= 0) {
       return fail('베스팅일 종가는 0보다 큰 숫자여야 합니다.', 400)
     }
@@ -33,126 +27,20 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       return fail('autoSell은 boolean이어야 합니다.', 400)
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      // 스케줄 조회 + 상태 확인
-      const schedule = await tx.rSUSchedule.findUnique({ where: { id } })
-      if (!schedule) {
-        throw new Error('NOT_FOUND')
-      }
-      if (schedule.status !== 'pending') {
-        throw new Error('ALREADY_VESTED')
-      }
-
-      // sellShares 정합성 검증
-      if (schedule.sellShares != null && (schedule.sellShares < 0 || schedule.sellShares > schedule.shares)) {
-        throw new Error('INVALID_SELL_SHARES')
-      }
-
-      const accountId = schedule.accountId
-      const now = new Date()
-
-      // 1. BUY Trade 생성 (베스팅 = 취득)
-      const buyTotalKRW = calcTotalKRW(vestPrice, schedule.shares, RSU_CURRENCY)
-      await tx.trade.create({
-        data: {
-          accountId,
-          ticker: RSU_TICKER,
-          displayName: RSU_DISPLAY_NAME,
-          market: RSU_MARKET,
-          type: 'BUY',
-          shares: schedule.shares,
-          price: vestPrice,
-          currency: RSU_CURRENCY,
-          totalKRW: buyTotalKRW,
-          note: `RSU 베스팅 (${schedule.note ?? ''})`,
-          tradedAt: schedule.vestingDate,
-        },
-      })
-
-      // 2. autoSell이면 SELL Trade 생성
-      if (autoSell && schedule.sellShares && schedule.sellShares > 0) {
-        const sellTotalKRW = calcTotalKRW(vestPrice, schedule.sellShares, RSU_CURRENCY)
-        await tx.trade.create({
-          data: {
-            accountId,
-            ticker: RSU_TICKER,
-            displayName: RSU_DISPLAY_NAME,
-            market: RSU_MARKET,
-            type: 'SELL',
-            shares: schedule.sellShares,
-            price: vestPrice,
-            currency: RSU_CURRENCY,
-            totalKRW: sellTotalKRW,
-            note: `RSU 베스팅 직후 매도 (${schedule.note ?? ''})`,
-            tradedAt: schedule.vestingDate,
-          },
-        })
-      }
-
-      // 3. Holding 재계산
-      const allTrades = await tx.trade.findMany({
-        where: { accountId, ticker: RSU_TICKER },
-        orderBy: [{ tradedAt: 'asc' }, { createdAt: 'asc' }],
-        select: { type: true, shares: true, price: true, currency: true, fxRate: true },
-      })
-
-      const holdingState = recalcHolding(allTrades)
-
-      let holding = null
-      if (holdingState.shares > 0) {
-        holding = await tx.holding.upsert({
-          where: { accountId_ticker: { accountId, ticker: RSU_TICKER } },
-          update: {
-            shares: holdingState.shares,
-            avgPrice: holdingState.avgPrice,
-            avgPriceFx: holdingState.avgPriceFx,
-            avgFxRate: holdingState.avgFxRate,
-          },
-          create: {
-            accountId,
-            ticker: RSU_TICKER,
-            displayName: RSU_DISPLAY_NAME,
-            market: RSU_MARKET,
-            shares: holdingState.shares,
-            avgPrice: holdingState.avgPrice,
-            currency: RSU_CURRENCY,
-            avgPriceFx: holdingState.avgPriceFx,
-            avgFxRate: holdingState.avgFxRate,
-          },
-        })
-      } else {
-        await tx.holding.deleteMany({
-          where: { accountId, ticker: RSU_TICKER },
-        })
-      }
-
-      // 4. RSUSchedule 상태 업데이트
-      const updated = await tx.rSUSchedule.update({
-        where: { id },
-        data: {
-          status: 'vested',
-          vestPrice,
-          vestedAt: now,
-        },
-      })
-
-      return { schedule: updated, holding }
-    }, { isolationLevel: 'Serializable' })
-
+    const result = await processRsuVest(id, vestPrice, autoSell)
     return ok(result)
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.message === 'NOT_FOUND') {
-        return fail('RSU 스케줄을 찾을 수 없습니다.', 404)
-      }
-      if (error.message === 'ALREADY_VESTED') {
-        return fail('이미 베스팅 처리된 스케줄입니다.', 400)
-      }
-      if (error.message === 'INVALID_SELL_SHARES') {
-        return fail('매도 수량이 베스팅 수량을 초과합니다.', 400)
-      }
+    if (error instanceof RsuVestError) {
+      // NOT_FOUND → 404, 상태/타이밍 충돌 → 409, 입력 검증 → 400
+      const status =
+        error.code === 'NOT_FOUND' ? 404
+        : error.code === 'NOT_YET_VESTED' || error.code === 'PRICE_NOT_SETTLED' ? 409
+        : 400
+      return fail(rsuVestErrorMessage(error), status)
     }
-    // Prisma Serializable 충돌 (P2034)
+    // recalcHolding 의 비즈니스 예외 (예: "보유 수량 부족: ...") 사용자에게 한국어 그대로 노출
+    const businessResponse = businessErrorResponse(error)
+    if (businessResponse) return businessResponse
     if (
       error != null &&
       typeof error === 'object' &&

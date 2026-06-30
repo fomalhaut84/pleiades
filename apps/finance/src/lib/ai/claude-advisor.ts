@@ -88,6 +88,7 @@ const ALLOWED_TOOLS = [
   'mcp__myfinance__create_rsu_schedule',
   'mcp__myfinance__update_rsu_schedule',
   'mcp__myfinance__delete_rsu_schedule',
+  'mcp__myfinance__vest_rsu',
   'mcp__myfinance__create_stock_option',
   'mcp__myfinance__update_stock_option',
   'mcp__myfinance__delete_stock_option',

@@ -6,7 +6,7 @@
 import cron from 'node-cron'
 import { prisma } from '@/lib/prisma'
 import { sendQuarterlyReminder } from './quarterly'
-import { sendRSUReminders } from './rsu'
+import { sendRSUReminders, sendRSUVestConfirmations } from './rsu'
 import { sendMonthlyReminder } from './monthly'
 import { sendDailySummary } from './daily'
 import { sendMonthlyReport } from './monthly-report'
@@ -89,7 +89,7 @@ export function scheduleNotifications(): void {
       { timezone: 'Asia/Seoul' }
     )
 
-    // RSU/스톡옵션 리마인더: 매일 09:00 KST (D-7, D-1 대상만 발송)
+    // RSU/스톡옵션 리마인더: 매일 09:00 KST (D-7 / D-1 정보성)
     cron.schedule(
       '0 9 * * *',
       async () => {
@@ -97,6 +97,20 @@ export function scheduleNotifications(): void {
           await sendRSUReminders(chatIds)
         } catch (error) {
           console.error('[notification] RSU/스톡옵션 리마인더 실패:', error)
+        }
+      },
+      { timezone: 'Asia/Seoul' }
+    )
+
+    // RSU D-day 확정 알림: 매일 15:35 KST (KRX 마감 15:30 + 안전 마진).
+    // 종가가 yahoo historical 에 확정된 후이므로 inline keyboard [확정] 한 번 탭으로 처리 가능.
+    cron.schedule(
+      '35 15 * * *',
+      async () => {
+        try {
+          await sendRSUVestConfirmations(chatIds)
+        } catch (error) {
+          console.error('[notification] D-day RSU 확정 알림 실패:', error)
         }
       },
       { timezone: 'Asia/Seoul' }
