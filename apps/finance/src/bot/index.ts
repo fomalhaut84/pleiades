@@ -1,4 +1,5 @@
 import { Bot } from 'grammy'
+import { Agent } from 'https'
 import { registerCommands } from './commands/start'
 import { registerPortfolioCommands } from './commands/portfolio'
 import { registerPriceCommands } from './commands/price'
@@ -16,6 +17,15 @@ import { registerReportCommands } from './commands/report'
 import { registerBacktestCommands } from './commands/backtest'
 import { authMiddleware } from './middleware/auth'
 
+// IPv6 라우트가 없는 환경(운영 서버 등)에서 node-fetch의 IPv6 우선 시도가
+// ETIMEDOUT으로 누적되는 것을 방지하기 위해 IPv4 강제. keepAlive로 cron 호출 시
+// TCP/TLS 핸드셰이크 비용도 절감. docs/specs/354-bot-ipv6-token-fix.md 참조.
+const telegramAgent = new Agent({ family: 4, keepAlive: true })
+
+// grammy client.timeoutSeconds는 모든 API 호출(getUpdates 포함) 공통 abort timer.
+// long-polling Telegram side hold 기본값(30s) 위에 마진 확보 (60s = polling 30s + RTT 30s).
+const CLIENT_TIMEOUT_SECONDS = 60
+
 let bot: Bot | null = null
 
 function createBot(): Bot {
@@ -24,7 +34,12 @@ function createBot(): Bot {
     throw new Error('TELEGRAM_BOT_TOKEN 환경변수가 설정되지 않았습니다')
   }
 
-  const instance = new Bot(token)
+  const instance = new Bot(token, {
+    client: {
+      baseFetchConfig: { agent: telegramAgent },
+      timeoutSeconds: CLIENT_TIMEOUT_SECONDS,
+    },
+  })
 
   // Chat ID 화이트리스트 인증
   instance.use(authMiddleware)

@@ -8,6 +8,7 @@
 import { Context } from 'grammy'
 import { Bot } from 'grammy'
 import { splitMessage } from './formatter'
+import { isNetworkError, sanitizeError } from './error'
 
 /**
  * HTML 특수문자 이스케이프 (텔레그램 HTML parse_mode용)
@@ -87,28 +88,29 @@ function isParseError(error: unknown): boolean {
 }
 
 /**
- * 안전하게 재시도 가능한 네트워크 에러 판별.
- * ETIMEDOUT/ENOTFOUND만 재시도 (연결 자체 실패 → 요청 미도달 보장).
- * ECONNRESET은 요청 도달 후 응답 실패일 수 있어 중복 메시지 위험 → 재시도 안 함.
+ * 시도 사이 sleep — 2s/8s/30s (총 4회 시도 = 초기 + 3 재시도).
+ * IPv4 강제(src/bot/index.ts) 이후에도 일시 네트워크 흔들림에 대비. myFitness #108 통일.
  */
-function isRetryableNetworkError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false
-  const inner = (error as { error?: { code?: string } }).error
-  return inner?.code === 'ETIMEDOUT' || inner?.code === 'ENOTFOUND'
-}
+const RETRY_DELAYS_MS = [2000, 8000, 30000]
 
 /**
- * 재시도 래퍼: 네트워크 에러 시 지수 백오프로 재시도 (최대 2회)
+ * 재시도 래퍼: 네트워크 에러 시 지수 백오프. ETIMEDOUT/ECONNRESET/ENETUNREACH/grammy timeout/abort 등
+ * 광범위하게 포착 (`isNetworkError` — src/bot/utils/error.ts).
+ *
+ * 주의: send 가 성공 후 응답 도착 전 끊긴 경우 (ECONNRESET 등) 중복 메시지 위험은 있으나,
+ * 운영 시나리오상 사용자 1명 → cron 누락보다 중복 위험이 작다.
  */
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   let lastError: unknown
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+  const maxAttempts = RETRY_DELAYS_MS.length + 1
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       return await fn()
     } catch (error) {
       lastError = error
-      if (!isRetryableNetworkError(error) || attempt === maxRetries) throw error
-      const delay = 1000 * (attempt + 1) // 1초, 2초
+      if (!isNetworkError(error) || attempt === maxAttempts - 1) throw error
+      const delay = RETRY_DELAYS_MS[attempt]
+      console.warn(`[bot] 전송 재시도 ${attempt + 1}/${maxAttempts} (${delay}ms 후): ${sanitizeError(error)}`)
       await new Promise((r) => setTimeout(r, delay))
     }
   }
