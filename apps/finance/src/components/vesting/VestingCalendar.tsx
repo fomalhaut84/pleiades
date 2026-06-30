@@ -80,7 +80,7 @@ export default function VestingCalendar({ events, todayMs }: Props) {
 
       <div className="grid grid-cols-7 px-2 pt-3 pb-2 text-[10px] font-bold text-dim tracking-[1.2px] uppercase">
         {WEEKDAYS.map((d, i) => (
-          <div key={d} className={`px-3 ${i === 0 ? 'text-red-400/80' : ''}`}>
+          <div key={d} className={`px-3 ${i === 0 ? 'text-red-500/80 dark:text-red-400/80' : ''}`}>
             {d}
           </div>
         ))}
@@ -94,11 +94,13 @@ export default function VestingCalendar({ events, todayMs }: Props) {
           const dayEvents = byDate.get(key) ?? []
           const dow = d.getDay()
 
-          const dayColor = dow === 0 ? 'text-red-400' : otherMonth ? 'text-dim' : 'text-sub'
+          const dayColor = dow === 0
+            ? 'text-red-500 dark:text-red-400'
+            : otherMonth ? 'text-dim' : 'text-sub'
           const cellClass = [
             'rounded-lg px-2.5 py-2 min-h-[88px] sm:min-h-[104px] flex flex-col gap-1.5 transition-colors',
             otherMonth ? 'opacity-40' : 'hover:bg-surface',
-            isToday ? 'bg-amber-500/10 ring-1 ring-inset ring-amber-500/40' : '',
+            isToday ? 'bg-amber-500/10 dark:bg-amber-500/15 ring-1 ring-inset ring-amber-500/50 dark:ring-amber-500/40' : '',
           ].filter(Boolean).join(' ')
 
           return (

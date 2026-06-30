@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import Header from '@/components/layout/Header'
+import ThemeToggle from '@/components/theme/ThemeToggle'
 import VestingCalendar from '@/components/vesting/VestingCalendar'
 import VestingList from '@/components/vesting/VestingList'
 import VestingDistribution from '@/components/vesting/VestingDistribution'
@@ -59,20 +60,23 @@ export default async function VestingPage() {
       label: '만료 임박',
       value: `${expiringSoonCount}건`,
       sub: `${EXPIRING_SOON_DAYS}일 이내`,
-      color: 'text-amber-400',
+      color: 'text-amber-600 dark:text-amber-400',
     },
   ]
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-7 max-w-[1080px] flex flex-col gap-6">
       <Header title="베스팅 캘린더">
-        <a
-          href="/api/exports/vesting.ics"
-          download="vesting.ics"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold text-sub border border-border hover:bg-surface hover:text-bright transition-colors"
-        >
-          📅 캘린더 내보내기
-        </a>
+        <div className="flex items-center gap-1.5">
+          <a
+            href="/api/exports/vesting.ics"
+            download="vesting.ics"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold text-sub border border-border hover:bg-surface hover:text-bright transition-colors"
+          >
+            📅 캘린더 내보내기
+          </a>
+          <ThemeToggle />
+        </div>
       </Header>
 
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
