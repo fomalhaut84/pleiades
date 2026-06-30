@@ -7,8 +7,9 @@
 
 import { getBot } from '@/bot/index'
 import { askAdvisor } from '@/lib/ai/claude-advisor'
-import { splitMessage } from '@/bot/utils/formatter'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
+import { sendHtml } from '@/bot/utils/telegram'
+import { sanitizeError } from '@/bot/utils/error'
 
 type MarketSession = 'KR' | 'US'
 
@@ -23,7 +24,7 @@ function buildBriefingPrompt(session: MarketSession): string {
     session === 'US'
       ? '3. 미국주(USD) 종목 중 스윙/모멘텀/단타 전략은 get_technical_analysis로 TA 확인'
       : '3. 한국주(KRW) 종목 중 스윙/모멘텀/단타 전략은 get_technical_analysis로 TA 확인',
-    '4. firecrawl_search로 보유 종목 관련 최신 뉴스 검색',
+    '4. WebSearch로 보유 종목 관련 최신 뉴스 검색',
     '',
     '브리핑 구성:',
     '- 시장 동향 요약 (주요 지수, 이슈)',
@@ -50,33 +51,26 @@ export async function sendBriefing(
       maxBudgetUsd: 1.0,
     })
 
-    const chunks = splitMessage(result.response)
-    const htmlChunks = chunks.map((chunk) => markdownToTelegramHtml(chunk))
+    const html = markdownToTelegramHtml(result.response)
 
     for (const chatId of chatIds) {
       try {
-        for (let i = 0; i < chunks.length; i++) {
-          try {
-            await bot.api.sendMessage(chatId, htmlChunks[i], { parse_mode: 'HTML' })
-          } catch {
-            await bot.api.sendMessage(chatId, chunks[i])
-          }
-        }
+        await sendHtml(bot, chatId, html)
       } catch (error) {
-        console.error(`[briefing] 발송 실패 (chatId: ${chatId}):`, error)
+        console.error(`[briefing] 발송 실패 (chatId: ${chatId}): ${sanitizeError(error)}`)
       }
     }
 
     const label = session === 'KR' ? '한국장' : '미국장'
     console.log(`[briefing] ${label} 모닝 브리핑 발송 완료`)
   } catch (error) {
-    console.error('[briefing] 브리핑 생성 실패:', error)
+    console.error(`[briefing] 브리핑 생성 실패: ${sanitizeError(error)}`)
 
     const label = session === 'KR' ? '🇰🇷 한국장' : '🇺🇸 미국장'
     const fallback = `📊 ${label} 모닝 브리핑 생성에 실패했습니다.\n/ai 에서 직접 질문해주세요.`
     for (const chatId of chatIds) {
       try {
-        await bot.api.sendMessage(chatId, fallback)
+        await sendHtml(bot, chatId, fallback)
       } catch {
         // 무시
       }

@@ -33,9 +33,12 @@ export class AdvisorTimeoutError extends Error {
 }
 
 export class AdvisorError extends Error {
-  constructor(message: string) {
+  /** 디버깅용 상세 (예: claude CLI stderr tail). 사용자 노출 금지. */
+  detail?: string
+  constructor(message: string, detail?: string) {
     super(message)
     this.name = 'AdvisorError'
+    this.detail = detail
   }
 }
 
@@ -92,8 +95,6 @@ const ALLOWED_TOOLS = [
   'mcp__myfinance__update_stock_option_vesting',
   'mcp__myfinance__delete_stock_option_vesting',
   'mcp__myfinance__exercise_vesting',
-  'mcp__firecrawl__firecrawl_search',
-  'mcp__firecrawl__firecrawl_scrape',
   'WebSearch',
   'WebFetch',
 ].join(',')
@@ -185,6 +186,11 @@ export async function askAdvisor(
 
   return new Promise<AdvisorResult>((resolve, reject) => {
     const chunks: Buffer[] = []
+    /** stderr 최대 보유량 — buffer full → child hang 방지 + 로그 폭증 차단.
+     *  rolling buffer 로 항상 **마지막** STDERR_MAX_BYTES 만 유지 (앞 chunk drop).
+     *  claude/npx 가 verbose 출력 뒤에 진짜 에러를 마지막에 찍는 경우를 위해 tail 보존이 핵심. */
+    const STDERR_MAX_BYTES = 64 * 1024
+    let errBuf: Buffer = Buffer.alloc(0)
     let timedOut = false
 
     const child = spawn('sh', ['-c', cmd], {
@@ -199,6 +205,12 @@ export async function askAdvisor(
     }, timeout)
 
     child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
+    child.stderr.on('data', (chunk: Buffer) => {
+      errBuf = Buffer.concat([errBuf, chunk])
+      if (errBuf.length > STDERR_MAX_BYTES) {
+        errBuf = errBuf.subarray(errBuf.length - STDERR_MAX_BYTES)
+      }
+    })
 
     child.on('close', (code) => {
       clearTimeout(timer)
@@ -209,9 +221,13 @@ export async function askAdvisor(
       }
 
       const stdout = Buffer.concat(chunks).toString('utf-8')
+      const stderr = errBuf.toString('utf-8').trim()
 
       if (code !== 0) {
-        reject(new AdvisorError(`Claude CLI 종료 코드: ${code}`))
+        // 디버깅 detail: stderr 끝 1KB 만 별도 프로퍼티로 전달 (message 는 사용자 노출 가능한 정적 문장)
+        const stderrTail = stderr.slice(-1024)
+        if (stderrTail) console.error('[advisor] claude stderr:', stderrTail)
+        reject(new AdvisorError(`Claude CLI 종료 코드: ${code}`, stderrTail || undefined))
         return
       }
 

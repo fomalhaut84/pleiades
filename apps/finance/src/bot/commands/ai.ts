@@ -10,6 +10,7 @@ import { splitMessage, formatKRWFull, formatUSD } from '../utils/formatter'
 import { isAiQuestion } from '../utils/ai-trigger'
 import { isTradeMessage } from '../utils/trade-trigger'
 import { markdownToTelegramHtml } from '../utils/markdown'
+import { sanitizeError } from '../utils/error'
 
 const TYPING_INTERVAL_MS = 5000
 const MIN_AI_TEXT_LENGTH = 3
@@ -68,9 +69,11 @@ function fireAiQuestion(ctx: Context, question: string): void {
       if (error instanceof AdvisorTimeoutError) {
         await ctx.reply('⚠️ AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.')
       } else if (error instanceof AdvisorError) {
+        // AdvisorError.message 는 정적 한국어. detail (stderr) 는 console 로만.
+        if (error.detail) console.error(`[bot] AI advisor detail: ${error.detail}`)
         await ctx.reply(`⚠️ ${error.message}`)
       } else {
-        console.error('[bot] AI 질문 처리 실패:', error)
+        console.error(`[bot] AI 질문 처리 실패: ${sanitizeError(error)}`)
         await ctx.reply('⚠️ AI 질문 처리에 실패했습니다.')
       }
     })

@@ -77,7 +77,7 @@ PM2 ──► myfinance-bot (standalone)        │
         └─ Notification Scheduler (daily/briefing/RSU/…)
                                            │
                   Claude Code CLI (claude -p, --resume 세션 유지)
-                  └─ MCP: myFinance (자체) + firecrawl (웹)
+                  └─ MCP: myFinance (자체)
                   └─ trading-signals (TA 로컬 계산)
                   └─ yahoo-finance2 (시세 + 환율)
 ```

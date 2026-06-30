@@ -11,6 +11,7 @@ import 'dotenv/config'
 import { getBot } from './index'
 import { schedulePriceUpdates, scheduleSnapshots, scheduleKrxSync, scheduleRecurring, scheduleVestingStatusUpdate } from '@/lib/cron'
 import { scheduleNotifications } from './notifications/scheduler'
+import { sanitizeError } from './utils/error'
 
 async function main(): Promise<void> {
   console.log('[bot] standalone 프로세스 시작...')
@@ -34,7 +35,7 @@ async function main(): Promise<void> {
   console.log('[bot] cron + 알림 스케줄러 등록 완료')
 
   bot.catch((err) => {
-    console.error('[bot] 에러:', err)
+    console.error(`[bot] 에러: ${sanitizeError(err)}`)
   })
 
   // graceful shutdown
@@ -52,6 +53,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error('[bot] 시작 실패:', err)
+  console.error(`[bot] 시작 실패: ${sanitizeError(err)}`)
   process.exit(1)
 })
