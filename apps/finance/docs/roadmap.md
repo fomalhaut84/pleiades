@@ -361,4 +361,4 @@
 ## Phase 30: AI 가이드 폴리시 + 웹 UI
 
 - [x] **30-A**: TA 시그널 AI 가이드 폴리시 (on/off + 티커별 6h 쿨다운)
-- [ ] **30-B**: 커스텀 전략 웹 UI (`/strategies` CRUD)
+- [x] **30-B**: 커스텀 전략 웹 UI (`/strategies` CRUD)
