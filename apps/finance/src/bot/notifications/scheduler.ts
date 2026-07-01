@@ -9,6 +9,7 @@ import { sendQuarterlyReminder } from './quarterly'
 import { sendRSUReminders, sendRSUVestConfirmations } from './rsu'
 import { sendClosingReview, sendWeeklyReview, ensureActiveReviewSetting } from './active-review'
 import { ensureCustomStrategyAlertsSetting } from './custom-strategy-alert'
+import { ensureTaAiGuideSetting } from './ta-signal-alert'
 import { sendMonthlyReminder } from './monthly'
 import { sendDailySummary } from './daily'
 import { sendMonthlyReport } from './monthly-report'
@@ -50,6 +51,10 @@ export function scheduleNotifications(): void {
   // custom_strategy_alerts 키 upsert — 설정 UI 에서 on/off 가능하도록
   ensureCustomStrategyAlertsSetting().catch((error) => {
     console.error('[notification] ensureCustomStrategyAlertsSetting 실패:', error)
+  })
+  // ta_ai_guide 키 upsert — TA 시그널 AI 가이드 on/off
+  ensureTaAiGuideSetting().catch((error) => {
+    console.error('[notification] ensureTaAiGuideSetting 실패:', error)
   })
 
   try {
