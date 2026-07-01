@@ -96,6 +96,10 @@ const ALLOWED_TOOLS = [
   'mcp__myfinance__update_stock_option_vesting',
   'mcp__myfinance__delete_stock_option_vesting',
   'mcp__myfinance__exercise_vesting',
+  'mcp__myfinance__create_custom_strategy',
+  'mcp__myfinance__list_custom_strategies',
+  'mcp__myfinance__update_custom_strategy',
+  'mcp__myfinance__delete_custom_strategy',
   'WebSearch',
   'WebFetch',
 ].join(',')
