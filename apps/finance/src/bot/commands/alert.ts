@@ -11,10 +11,18 @@ const KEY_ALIASES: Record<string, string> = {
   '요약시각': 'daily_summary_hour',
   '리포트일': 'monthly_report_day',
   '모니터링주기': 'ta_check_interval_min',
+  '능동리뷰': 'active_review',
 }
 
-/** 값 형식 검증 (숫자만 허용) */
-function isValidValue(value: string): boolean {
+/** on/off 문자열만 받는 키 (다른 키는 숫자) */
+const ON_OFF_KEYS = new Set(['active_review'])
+
+/** 값 형식 검증 — 키별로 허용 값 규칙이 다름 */
+function isValidValue(key: string, value: string): boolean {
+  if (ON_OFF_KEYS.has(key)) {
+    const v = value.toLowerCase()
+    return v === 'on' || v === 'off'
+  }
   return /^-?\d+(\.\d+)?$/.test(value)
 }
 
@@ -78,10 +86,13 @@ async function handler(ctx: Context) {
         return
       }
 
-      if (!isValidValue(value)) {
-        await ctx.reply(`⚠️ 값은 숫자여야 합니다: ${value}`)
+      if (!isValidValue(key, value)) {
+        const hint = ON_OFF_KEYS.has(key) ? 'on / off' : '숫자'
+        await ctx.reply(`⚠️ 값 형식 오류 — ${hint} 만 허용됩니다: ${value}`)
         return
       }
+      // ON_OFF 는 소문자 정규화
+      const normalizedValue = ON_OFF_KEYS.has(key) ? value.toLowerCase() : value
 
       const existing = await prisma.alertConfig.findUnique({ where: { key } })
       if (!existing) {
@@ -91,7 +102,7 @@ async function handler(ctx: Context) {
 
       const updated = await prisma.alertConfig.update({
         where: { key },
-        data: { value },
+        data: { value: normalizedValue },
       })
 
       await replyHtml(ctx,

@@ -324,6 +324,8 @@ async function main() {
     { key: 'daily_summary_hour', value: '8', label: '일일 요약 시각 (KST)' },
     { key: 'monthly_report_day', value: '1', label: '월간 리포트 발송일' },
     { key: 'ta_check_interval_min', value: '10', label: 'TA 모니터링 주기 (분)' },
+    // Phase 29-D: 능동 AI 리뷰 (클로징/주간) 자동 발송 on/off — 'on' | 'off'
+    { key: 'active_review', value: 'on', label: '능동 AI 리뷰 (on/off)' },
   ]
   for (const cfg of alertDefaults) {
     await prisma.alertConfig.upsert({
