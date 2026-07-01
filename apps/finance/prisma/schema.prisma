@@ -399,3 +399,22 @@ model WhooingCategoryMap {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
+
+/// Phase 29-E — 사용자 정의 매매 전략
+/// 사용자가 자연어로 조건 입력 → AI 파싱 → conditions JSON 저장 → cron 이 코드로 평가.
+/// 조건 만족 시 텔레그램 알림. frequency 로 dedup (once/daily/always).
+model CustomStrategy {
+  id              String    @id @default(cuid())
+  name            String    // "SOXL 저점 매수"
+  description     String?   // 자연어 원문 (사용자 표현 보존)
+  ticker          String    // "SOXL"
+  conditions      Json      // Condition[] — { type, operator, value, timeframe? }
+  logic           String    @default("AND") // "AND" | "OR"
+  frequency       String    @default("daily") // "once" | "daily" | "always"
+  isActive        Boolean   @default(true)
+  lastTriggeredAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([ticker, isActive])
+}

@@ -5,6 +5,7 @@ import { syncKrxStocks } from './krx-stocks'
 import { prisma } from './prisma'
 import { checkPriceAlerts } from '@/bot/notifications/price-alert'
 import { checkTASignals } from '@/bot/notifications/ta-signal-alert'
+import { checkCustomStrategies } from '@/bot/notifications/custom-strategy-alert'
 import { isKRMarketOpen, isUSMarketOpen } from './market-hours'
 import { calculateNextRunAt, type Frequency } from './recurring-utils'
 import { sendToWhooing } from './whooing-webhook'
@@ -94,6 +95,10 @@ export function schedulePriceUpdates(): void {
             const chatIds = getAllowedChatIds()
             if (chatIds.length > 0) {
               await checkPriceAlerts(chatIds)
+              // 커스텀 전략 스캔 — 시장 시간 무관 (환율/RSI 등 24h 조건 대비)
+              checkCustomStrategies(chatIds).catch((err) =>
+                console.error('[cron] 커스텀 전략 스캔 실패:', err),
+              )
               // 장중에만 TA 시그널 체크 (주기 DB 설정 기반)
               if (isMarketHours) {
                 const shouldRunTA = await shouldRunTACheck()

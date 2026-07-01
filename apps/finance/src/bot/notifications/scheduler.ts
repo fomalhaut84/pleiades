@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma'
 import { sendQuarterlyReminder } from './quarterly'
 import { sendRSUReminders, sendRSUVestConfirmations } from './rsu'
 import { sendClosingReview, sendWeeklyReview, ensureActiveReviewSetting } from './active-review'
+import { ensureCustomStrategyAlertsSetting } from './custom-strategy-alert'
 import { sendMonthlyReminder } from './monthly'
 import { sendDailySummary } from './daily'
 import { sendMonthlyReport } from './monthly-report'
@@ -45,6 +46,10 @@ export function scheduleNotifications(): void {
   // 키는 404). 실패는 log 만, cron 등록은 계속 진행.
   ensureActiveReviewSetting().catch((error) => {
     console.error('[notification] ensureActiveReviewSetting 실패:', error)
+  })
+  // custom_strategy_alerts 키 upsert — 설정 UI 에서 on/off 가능하도록
+  ensureCustomStrategyAlertsSetting().catch((error) => {
+    console.error('[notification] ensureCustomStrategyAlertsSetting 실패:', error)
   })
 
   try {

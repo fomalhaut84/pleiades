@@ -10,6 +10,12 @@ import { getPrices, getFxRate } from './tools/market'
 import { simulateGrowth } from './tools/simulator'
 import { getTechnicalAnalysis } from './tools/ta'
 import { getHoldingStrategy, getAllStrategies, setHoldingStrategy } from './tools/strategy'
+import {
+  createCustomStrategy,
+  listCustomStrategies,
+  updateCustomStrategy,
+  deleteCustomStrategy,
+} from './tools/custom-strategy'
 import { getNetWorth } from './tools/networth'
 import { getRsuSchedule, getStockOptions } from './tools/rsu-options'
 import { getWatchlist, addWatchlist, updateWatchlist, deleteWatchlist } from './tools/watchlist'
@@ -224,6 +230,49 @@ server.tool(
     memo: z.string().max(500).nullable().optional(),
   },
   async (args) => setHoldingStrategy(args)
+)
+
+// --- 커스텀 전략 (Phase 29-E) ---
+
+server.tool(
+  'create_custom_strategy',
+  '자연어로 커스텀 매매 전략 등록. 예: "SOXL이 40달러 이하 + RSI 30 이하 시 알림". AI가 자동으로 조건(price/rsi/macd_signal/sma_cross/bb_position/change_pct)으로 파싱. cron이 조건 만족 여부 감시 → 텔레그램 알림.',
+  {
+    text: z.string().min(1).max(500).describe('자연어 전략 텍스트'),
+  },
+  async (args) => createCustomStrategy(args)
+)
+
+server.tool(
+  'list_custom_strategies',
+  '등록된 커스텀 전략 조회. ticker 지정 시 해당 종목만.',
+  {
+    ticker: z.string().optional(),
+    activeOnly: z.boolean().optional().describe('기본 true — false 시 비활성 포함'),
+  },
+  async (args) => listCustomStrategies(args)
+)
+
+server.tool(
+  'update_custom_strategy',
+  '커스텀 전략 부분 수정 (활성 여부, 빈도, logic, 이름). 조건 자체를 바꾸려면 삭제 후 재등록.',
+  {
+    id: z.string(),
+    isActive: z.boolean().optional(),
+    frequency: z.enum(['once', 'daily', 'always']).optional(),
+    logic: z.enum(['AND', 'OR']).optional(),
+    name: z.string().min(1).max(100).optional(),
+  },
+  async (args) => updateCustomStrategy(args)
+)
+
+server.tool(
+  'delete_custom_strategy',
+  '커스텀 전략 삭제. id 는 list_custom_strategies 로 확인.',
+  {
+    id: z.string(),
+  },
+  async (args) => deleteCustomStrategy(args)
 )
 
 // --- 순자산 ---

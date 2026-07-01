@@ -9,6 +9,7 @@ import { registerBudgetCommands } from './commands/budget'
 import { registerAiCommands, registerAiFallback } from './commands/ai'
 import { registerAlertCommands } from './commands/alert'
 import { registerStrategyCommands } from './commands/strategy'
+import { registerCustomStrategyCommands } from './commands/custom-strategy'
 import { registerWatchlistCommands } from './commands/watchlist'
 import { registerAnalysisCommands } from './commands/analysis'
 import { registerBriefingCommands } from './commands/briefing'
@@ -55,6 +56,7 @@ function createBot(): Bot {
   registerAiCommands(instance)
   registerAlertCommands(instance)
   registerStrategyCommands(instance)
+  registerCustomStrategyCommands(instance)
   registerWatchlistCommands(instance)
   registerAnalysisCommands(instance)
   registerBriefingCommands(instance)
