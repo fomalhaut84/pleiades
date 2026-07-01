@@ -80,14 +80,24 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 시세 warm-up — 응답 전 await 로 priceCache 채우기 완료 보장.
-    // client 가 POST 성공 후 즉시 GET /api/watchlist 로 refetch 하는 race 방지 —
-    // await 안 하면 refetch 가 priceCache 미채워진 상태 조회 → currentPrice null.
-    // yahoo API 왕복 ~1s 지연 감수 (연 몇 회 사용). 실패는 log 후 응답 유지 (best-effort).
+    // 시세 warm-up — 응답 전 priceCache 채우기 시도 (client refetch race 방지).
+    // AbortSignal 로 5s 후 실제 yahoo fetch 를 abort → hang 시 PM2 process 안에서
+    // 요청 leak 없음 (Promise.race 만으로는 await 만 멈추고 fetch 는 계속됨).
+    const WARM_UP_TIMEOUT_MS = 5000
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), WARM_UP_TIMEOUT_MS)
     try {
-      await fetchQuote(item.ticker)
+      await fetchQuote(item.ticker, { signal: controller.signal })
     } catch (err) {
-      console.error(`[api/watchlist] warm-up 실패 (${item.ticker}):`, err instanceof Error ? err.message : err)
+      const msg = err instanceof Error ? err.message : String(err)
+      // abort 는 정상 timeout — priceCache 는 다음 cron 사이클에서 채워짐
+      if (controller.signal.aborted) {
+        console.log(`[api/watchlist] warm-up timeout (${item.ticker}) — 배경 fetch 취소 후 응답 진행`)
+      } else {
+        console.error(`[api/watchlist] warm-up 실패 (${item.ticker}):`, msg)
+      }
+    } finally {
+      clearTimeout(timer)
     }
 
     return ok(item, { status: 201 })
