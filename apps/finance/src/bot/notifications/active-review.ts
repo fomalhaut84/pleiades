@@ -51,6 +51,10 @@ async function isActiveReviewEnabled(): Promise<boolean> {
 
 function buildClosingPrompt(session: MarketSession): string {
   const sessionLabel = session === 'KR' ? '🇰🇷 한국장' : '🇺🇸 미국장'
+  // KR 클로징 (15:40 KST): 방금 마감한 세션 = 오늘 (KST). 다음 세션 = 내일.
+  // US 클로징 (07:15 KST 화-토): 방금 마감한 세션 = 지난밤 미국장 (KST 어제 밤 개장 ~ 오늘 이른 아침 마감).
+  //   다음 세션은 오늘 밤 개장. AI 가 '오늘 미국장' 검색 시 개장 전 프리마켓 뉴스만 잡힐 위험 → 표현 명시.
+  const closedSession = session === 'KR' ? '오늘 한국장' : '방금 마감한 지난밤 미국장'
   const nextSession = session === 'KR' ? '내일' : '오늘밤'
   const marketCurrency = session === 'KR' ? '한국주(KRW)' : '미국주(USD)'
 
@@ -59,12 +63,12 @@ function buildClosingPrompt(session: MarketSession): string {
     '다음 단계로 진행해:',
     '1. get_all_strategies로 전체 종목 전략 확인',
     '2. get_portfolio(전체)로 현재 보유 상태 (평가금액, 손익)',
-    `3. WebSearch로 오늘 ${sessionLabel} 관련 뉴스/지수 이슈 검색`,
-    `4. ${marketCurrency} 종목 중 오늘 유의미한 움직임 있는 것만 get_technical_analysis로 재확인`,
+    `3. WebSearch로 ${closedSession} 관련 뉴스/지수 이슈 검색`,
+    `4. ${marketCurrency} 종목 중 ${closedSession} 에서 유의미한 움직임 있는 것만 get_technical_analysis로 재확인`,
     '',
     '리뷰 구성 (총 6~8줄, 간결하게):',
-    '- 오늘 시장 요약 (주요 지수, 이슈 1~2개)',
-    '- 보유 종목 오늘 성과 (전략별 요약, top-3 움직임)',
+    `- ${closedSession} 시장 요약 (주요 지수, 이슈 1~2개)`,
+    `- 보유 종목 ${closedSession} 성과 (전략별 요약, top-3 움직임)`,
     `- ${nextSession} 관찰 필요 종목 (다음 세션 대비 포인트)`,
     `- ${nextSession} 예정 이벤트 (실적/FOMC/일정, 있다면)`,
     '',
