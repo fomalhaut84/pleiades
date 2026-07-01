@@ -11,7 +11,15 @@ interface WatchlistFormProps {
   onSaved: () => void
 }
 
-const STRATEGIES = ['swing', 'momentum', 'value', 'scalp'] as const
+const STRATEGIES = ['long_hold', 'swing', 'momentum', 'value', 'scalp'] as const
+
+const STRATEGY_LABELS: Record<string, string> = {
+  long_hold: '장기보유',
+  swing: '스윙',
+  momentum: '모멘텀',
+  value: '가치투자',
+  scalp: '단타',
+}
 
 export default function WatchlistForm({ mode, item, onClose, onSaved }: WatchlistFormProps) {
   const { show } = useToast()
@@ -118,7 +126,7 @@ export default function WatchlistForm({ mode, item, onClose, onSaved }: Watchlis
               <select value={strategy} onChange={(e) => setStrategy(e.target.value)}
                 className={`${inputClasses} appearance-none cursor-pointer`}
                 style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236e6e82' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 14px center' }}>
-                {STRATEGIES.map((s) => <option key={s} value={s}>{s}</option>)}
+                {STRATEGIES.map((s) => <option key={s} value={s}>{STRATEGY_LABELS[s] ?? s}</option>)}
               </select>
             </div>
           </div>

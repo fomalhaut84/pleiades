@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { ok, fail } from '@/lib/api-response'
+import { fetchQuote } from '@/lib/price-fetcher'
 
 export const dynamic = 'force-dynamic'
 
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     const validMarkets = ['US', 'KR']
     if (!validMarkets.includes(market)) return fail('시장은 US 또는 KR만 허용됩니다.', 400)
 
-    const validStrategies = ['swing', 'momentum', 'value', 'scalp']
+    const validStrategies = ['long_hold', 'swing', 'momentum', 'value', 'scalp']
     const strategy = typeof body.strategy === 'string' && validStrategies.includes(body.strategy) ? body.strategy : 'swing'
 
     const targetBuy = typeof body.targetBuy === 'number' && body.targetBuy > 0 ? body.targetBuy : null
@@ -78,6 +79,26 @@ export async function POST(request: NextRequest) {
         entryHigh,
       },
     })
+
+    // 시세 warm-up — 응답 전 priceCache 채우기 시도 (client refetch race 방지).
+    // AbortSignal 로 5s 후 실제 yahoo fetch 를 abort → hang 시 PM2 process 안에서
+    // 요청 leak 없음 (Promise.race 만으로는 await 만 멈추고 fetch 는 계속됨).
+    const WARM_UP_TIMEOUT_MS = 5000
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), WARM_UP_TIMEOUT_MS)
+    try {
+      await fetchQuote(item.ticker, { signal: controller.signal })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      // abort 는 정상 timeout — priceCache 는 다음 cron 사이클에서 채워짐
+      if (controller.signal.aborted) {
+        console.log(`[api/watchlist] warm-up timeout (${item.ticker}) — 배경 fetch 취소 후 응답 진행`)
+      } else {
+        console.error(`[api/watchlist] warm-up 실패 (${item.ticker}):`, msg)
+      }
+    } finally {
+      clearTimeout(timer)
+    }
 
     return ok(item, { status: 201 })
   } catch (error) {

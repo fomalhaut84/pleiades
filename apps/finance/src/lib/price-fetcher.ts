@@ -36,11 +36,17 @@ export interface QuoteResult {
  * yahoo-finance2로 단일 종목 실시간 시세 조회.
  * 보유 종목이면 PriceCache도 갱신한다.
  */
-export async function fetchQuote(ticker: string): Promise<QuoteResult> {
+export async function fetchQuote(ticker: string, options?: { signal?: AbortSignal }): Promise<QuoteResult> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let quote: any
   try {
-    quote = await yahooFinance.quote(ticker)
+    // yahoo-finance2 는 3번째 인자 moduleOptions.fetchOptions.signal 로 AbortSignal 지원.
+    // signal 전달 시 abort 후 fetch 가 중단되어 process 안에서 hang 방지.
+    quote = await yahooFinance.quote(
+      ticker,
+      {},
+      options?.signal ? { fetchOptions: { signal: options.signal } } : {},
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message.toLowerCase() : ''
     if (message.includes('not found') || message.includes('no data') || message.includes('invalid symbol') || message.includes('delisted')) {

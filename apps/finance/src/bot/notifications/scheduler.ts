@@ -7,6 +7,7 @@ import cron from 'node-cron'
 import { prisma } from '@/lib/prisma'
 import { sendQuarterlyReminder } from './quarterly'
 import { sendRSUReminders, sendRSUVestConfirmations } from './rsu'
+import { sendClosingReview, sendWeeklyReview, ensureActiveReviewSetting } from './active-review'
 import { sendMonthlyReminder } from './monthly'
 import { sendDailySummary } from './daily'
 import { sendMonthlyReport } from './monthly-report'
@@ -38,6 +39,13 @@ export function scheduleNotifications(): void {
     console.log('[notification] TELEGRAM_ALLOWED_CHAT_IDS 미설정, 알림 스케줄 건너뜀')
     return
   }
+
+  // active_review AlertConfig 키를 배포 직후 즉시 upsert — 첫 클로징/주간 cron 실행
+  // 전에 사용자가 PUT /api/alerts/config 로 off 설정 가능하도록 (라우트가 존재하지 않는
+  // 키는 404). 실패는 log 만, cron 등록은 계속 진행.
+  ensureActiveReviewSetting().catch((error) => {
+    console.error('[notification] ensureActiveReviewSetting 실패:', error)
+  })
 
   try {
     // 일일 포트폴리오 요약: 매시 정각 체크 → AlertConfig.daily_summary_hour 매칭 시 발송
@@ -194,8 +202,51 @@ export function scheduleNotifications(): void {
       { timezone: 'Asia/Seoul' }
     )
 
+    // 한국장 클로징 리뷰: 15:40 KST 월~금 (KRX 마감 15:30 + 마진 10분)
+    cron.schedule(
+      '40 15 * * 1-5',
+      async () => {
+        try {
+          await sendClosingReview(chatIds, 'KR')
+        } catch (error) {
+          console.error('[notification] 한국장 클로징 리뷰 실패:', error)
+        }
+      },
+      { timezone: 'Asia/Seoul' }
+    )
+
+    // 미국장 클로징 리뷰: 07:15 KST 화~토
+    // 미국장 마감은 DST 여부에 따라 달라짐:
+    //  - EDT (3~11월): 05:00 KST 마감 → 07:15 는 135분 마진
+    //  - EST (11~3월): 06:00 KST 마감 → 07:15 는 75분 마진 (yahoo daily candle 확정 안전)
+    // 화~토인 이유: 월(KST) = 일(EST) → 마감 없음. 화~금 = 미국장 월~목 마감, 토 = 미국장 금 마감.
+    cron.schedule(
+      '15 7 * * 2-6',
+      async () => {
+        try {
+          await sendClosingReview(chatIds, 'US')
+        } catch (error) {
+          console.error('[notification] 미국장 클로징 리뷰 실패:', error)
+        }
+      },
+      { timezone: 'Asia/Seoul' }
+    )
+
+    // 주간 리뷰: 매주 토 09:00 KST — 지난주 회고 + 다음주 캘린더
+    cron.schedule(
+      '0 9 * * 6',
+      async () => {
+        try {
+          await sendWeeklyReview(chatIds)
+        } catch (error) {
+          console.error('[notification] 주간 리뷰 실패:', error)
+        }
+      },
+      { timezone: 'Asia/Seoul' }
+    )
+
     scheduled = true
-    console.log('[notification] 알림 스케줄러 등록 (일일요약 + 브리핑 + 순자산 + 분기점검 + RSU + 월적립 + 월간리포트)')
+    console.log('[notification] 알림 스케줄러 등록 (일일요약 + 브리핑 + 클로징 + 주간 + 순자산 + 분기점검 + RSU + 월적립 + 월간리포트)')
   } catch (error) {
     console.error('[notification] 알림 스케줄러 등록 실패:', error)
   }

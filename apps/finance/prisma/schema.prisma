@@ -372,7 +372,7 @@ model Watchlist {
   ticker      String   @unique
   displayName String
   market      String             // "US", "KR"
-  strategy    String   @default("swing") // swing, momentum, value, scalp
+  strategy    String   @default("swing") // long_hold, swing, momentum, value, scalp
   memo        String?
   targetBuy   Float?             // 목표 매수가
   entryLow    Float?             // 매수 구간 하한

@@ -28,7 +28,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       data.market = body.market.trim()
     }
     if (typeof body.strategy === 'string') {
-      const validStrategies = ['swing', 'momentum', 'value', 'scalp']
+      const validStrategies = ['long_hold', 'swing', 'momentum', 'value', 'scalp']
       if (!validStrategies.includes(body.strategy)) return fail('유효한 전략을 선택해주세요.', 400)
       data.strategy = body.strategy
     }

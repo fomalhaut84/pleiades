@@ -3,15 +3,18 @@ import { prisma } from '@/lib/prisma'
 import { fetchQuote } from '@/lib/price-fetcher'
 import { formatKRWFull, formatUSD, formatPercent } from '../utils/formatter'
 import { replyHtml, escapeHtml, h } from '../utils/telegram'
+import { sanitizeError } from '../utils/error'
 
 const STRATEGY_LABELS: Record<string, string> = {
+  long_hold: '💎 장기보유',
   swing: '🔄 스윙',
   momentum: '🚀 모멘텀',
-  value: '💎 가치투자',
+  value: '📊 가치투자',
   scalp: '⚡ 단타',
 }
 
 const STRATEGY_ALIASES: Record<string, string> = {
+  '장기': 'long_hold', '장기보유': 'long_hold',
   '스윙': 'swing',
   '모멘텀': 'momentum',
   '가치투자': 'value', '가치': 'value',
@@ -135,6 +138,15 @@ async function handleWatch(ctx: Context): Promise<void> {
     create: { ticker: resolvedTicker, displayName, market, strategy, memo },
   })
 
+  // 시세 warm-up — 다음 cron 사이클 기다리지 않고 즉시 priceCache 채우기.
+  // priceCache 이미 있으면 fetchQuote 내부 upsert 로 갱신 (중복 안전).
+  // 실패는 non-blocking (log 만) — 사용자 UX 는 add 성공 응답 유지.
+  if (!priceData) {
+    fetchQuote(resolvedTicker).catch((err) => {
+      console.error(`[watchlist] add 후 warm-up 실패 (${resolvedTicker}): ${sanitizeError(err)}`)
+    })
+  }
+
   const stratLabel = STRATEGY_LABELS[strategy] ?? strategy
   await replyHtml(ctx,
     `✅ 관심종목 추가: ${h.b(escapeHtml(displayName))} (${escapeHtml(resolvedTicker)})\n` +
@@ -191,13 +203,14 @@ async function handleWatchlist(ctx: Context): Promise<void> {
     let price = priceMap.get(w.ticker)
     const stratLabel = STRATEGY_LABELS[w.strategy] ?? w.strategy
 
-    // PriceCache 미스 시 실시간 조회 fallback
+    // PriceCache 미스 시 실시간 조회 fallback (관심종목 방금 추가 등 첫 cron 이전 케이스)
     if (!price) {
       try {
         const quote = await fetchQuote(w.ticker)
         price = { price: quote.price, currency: quote.currency, changePercent: quote.changePercent ?? null } as unknown as typeof price
-      } catch {
-        // 조회 실패 시 무시
+      } catch (err) {
+        // 실패 사유를 로그로 남김 (기존 catch {} 는 '시세 없음' 뜨는 이유 진단 불가)
+        console.error(`[watchlist] 시세 fallback 실패 (${w.ticker}): ${sanitizeError(err)}`)
       }
     }
 

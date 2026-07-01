@@ -47,37 +47,46 @@ interface TickerMeta {
   displayName: string
   market: string
   strategies: Set<string>
+  hasHolding: boolean
 }
 
-/** 전략별 시그널 조건 매칭 — id는 중복 방지 키에 사용 */
-function checkSignals(report: TAReport, strategy: string): Signal[] {
+/**
+ * 전략별 시그널 조건 매칭 — id는 중복 방지 키에 사용.
+ * hasHolding=false (관심종목만) 는 매도 시그널 스킵 — 매도할 대상 없음.
+ */
+function checkSignals(report: TAReport, strategy: string, hasHolding: boolean): Signal[] {
   const signals: Signal[] = []
   const { rsi14, macd, bollingerBands, volume, sma } = report.indicators
 
   switch (strategy) {
     case 'swing':
       if (rsi14.signal === 'OVERSOLD') signals.push({ id: 'RSI_OVERSOLD', message: `📉 RSI 과매도 (${rsi14.value.toFixed(1)}) — 매수 기회` })
-      if (rsi14.signal === 'OVERBOUGHT') signals.push({ id: 'RSI_OVERBOUGHT', message: `📈 RSI 과매수 (${rsi14.value.toFixed(1)}) — 매도 검토` })
+      if (hasHolding && rsi14.signal === 'OVERBOUGHT') signals.push({ id: 'RSI_OVERBOUGHT', message: `📈 RSI 과매수 (${rsi14.value.toFixed(1)}) — 매도 검토` })
       if (macd.crossover === 'GOLDEN') signals.push({ id: 'MACD_GOLDEN', message: '🔄 MACD 골든크로스 — 매수 시그널' })
-      if (macd.crossover === 'DEAD') signals.push({ id: 'MACD_DEAD', message: '🔄 MACD 데드크로스 — 매도 시그널' })
+      if (hasHolding && macd.crossover === 'DEAD') signals.push({ id: 'MACD_DEAD', message: '🔄 MACD 데드크로스 — 매도 시그널' })
       break
 
     case 'momentum':
       if (volume.surge && report.price.change1d > 0) signals.push({ id: 'VOL_SURGE', message: `🚀 거래량 급증 (${volume.ratio.toFixed(1)}배) + 상승` })
       if (sma.goldenCross) signals.push({ id: 'SMA_GOLDEN', message: '🔄 SMA 골든크로스 — 상승 추세 전환' })
-      if (sma.deathCross) signals.push({ id: 'SMA_DEAD', message: '🔄 SMA 데드크로스 — 하락 추세 전환' })
+      if (hasHolding && sma.deathCross) signals.push({ id: 'SMA_DEAD', message: '🔄 SMA 데드크로스 — 하락 추세 전환' })
       break
 
     case 'scalp':
       if (bollingerBands.position === 'BELOW_LOWER') signals.push({ id: 'BB_BELOW', message: '📉 BB 하단 이탈 — 매수 구간' })
-      if (bollingerBands.position === 'ABOVE_UPPER') signals.push({ id: 'BB_ABOVE', message: '📈 BB 상단 이탈 — 매도 구간' })
+      if (hasHolding && bollingerBands.position === 'ABOVE_UPPER') signals.push({ id: 'BB_ABOVE', message: '📈 BB 상단 이탈 — 매도 구간' })
       if (rsi14.value < 25) signals.push({ id: 'RSI_EXTREME_LOW', message: `📉 RSI 극단 과매도 (${rsi14.value.toFixed(1)})` })
-      if (rsi14.value > 75) signals.push({ id: 'RSI_EXTREME_HIGH', message: `📈 RSI 극단 과매수 (${rsi14.value.toFixed(1)})` })
+      if (hasHolding && rsi14.value > 75) signals.push({ id: 'RSI_EXTREME_HIGH', message: `📈 RSI 극단 과매수 (${rsi14.value.toFixed(1)})` })
       break
 
     case 'long_hold':
-      if (report.signalSummary.overall === 'STRONG_SELL') {
+      // 매도 검토 시그널은 보유 중일 때만 (관심종목만 있으면 매도할 대상 없음)
+      if (hasHolding && report.signalSummary.overall === 'STRONG_SELL') {
         signals.push({ id: 'STRONG_SELL', message: `⚠️ 종합 STRONG_SELL — ${report.signalSummary.reasons.slice(0, 2).join(', ')}` })
+      }
+      // 장기보유는 하락 매수 기회 포착이 핵심 — 보유/관심 모두 대상
+      if (report.signalSummary.overall === 'STRONG_BUY') {
+        signals.push({ id: 'STRONG_BUY', message: `💰 종합 STRONG_BUY — ${report.signalSummary.reasons.slice(0, 2).join(', ')} — 추가 매수 검토` })
       }
       break
   }
@@ -116,22 +125,24 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
     include: { holding: { select: { ticker: true, displayName: true, market: true } } },
   })
 
-  // 관심종목 중 액티브 전략 (long_hold 제외 — 관심종목에 장기보유는 해당 없음)
+  // 관심종목 중 액티브 전략 (long_hold 포함 — 장기보유 관심종목도 매수 기회 알림 대상)
   const watchlist = await prisma.watchlist.findMany({
-    where: { strategy: { in: ['swing', 'momentum', 'scalp'] } },
+    where: { strategy: { in: ['swing', 'momentum', 'scalp', 'long_hold'] } },
   })
 
-  // 티커별 전략 수집 (다중 전략 지원)
+  // 티커별 전략 수집 (다중 전략 지원). hasHolding=true 는 보유 중 → 매도 시그널 활성.
   const tickerStrategies = new Map<string, TickerMeta>()
   for (const h of holdings) {
     const existing = tickerStrategies.get(h.holding.ticker)
     if (existing) {
       existing.strategies.add(h.strategy)
+      existing.hasHolding = true
     } else {
       tickerStrategies.set(h.holding.ticker, {
         displayName: h.holding.displayName,
         market: h.holding.market,
         strategies: new Set([h.strategy]),
+        hasHolding: true,
       })
     }
   }
@@ -139,11 +150,13 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
     const existing = tickerStrategies.get(w.ticker)
     if (existing) {
       existing.strategies.add(w.strategy)
+      // hasHolding 은 holding 존재 여부만 반영 (관심종목이 병존해도 true 유지)
     } else {
       tickerStrategies.set(w.ticker, {
         displayName: w.displayName,
         market: w.market,
         strategies: new Set([w.strategy]),
+        hasHolding: false,
       })
     }
   }
@@ -174,10 +187,10 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
     try {
       const report = await generateTAReport(ticker)
 
-      // 모든 전략에 대해 시그널 체크
+      // 모든 전략에 대해 시그널 체크 (관심종목만 있으면 매도 시그널 스킵)
       const allSignals: Signal[] = []
       for (const strategy of Array.from(meta.strategies)) {
-        allSignals.push(...checkSignals(report, strategy))
+        allSignals.push(...checkSignals(report, strategy, meta.hasHolding))
       }
 
       if (allSignals.length === 0) continue
