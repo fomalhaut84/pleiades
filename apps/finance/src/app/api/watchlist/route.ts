@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     const validMarkets = ['US', 'KR']
     if (!validMarkets.includes(market)) return fail('시장은 US 또는 KR만 허용됩니다.', 400)
 
-    const validStrategies = ['swing', 'momentum', 'value', 'scalp']
+    const validStrategies = ['long_hold', 'swing', 'momentum', 'value', 'scalp']
     const strategy = typeof body.strategy === 'string' && validStrategies.includes(body.strategy) ? body.strategy : 'swing'
 
     const targetBuy = typeof body.targetBuy === 'number' && body.targetBuy > 0 ? body.targetBuy : null

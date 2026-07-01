@@ -6,13 +6,15 @@ import { replyHtml, escapeHtml, h } from '../utils/telegram'
 import { sanitizeError } from '../utils/error'
 
 const STRATEGY_LABELS: Record<string, string> = {
+  long_hold: '💎 장기보유',
   swing: '🔄 스윙',
   momentum: '🚀 모멘텀',
-  value: '💎 가치투자',
+  value: '📊 가치투자',
   scalp: '⚡ 단타',
 }
 
 const STRATEGY_ALIASES: Record<string, string> = {
+  '장기': 'long_hold', '장기보유': 'long_hold',
   '스윙': 'swing',
   '모멘텀': 'momentum',
   '가치투자': 'value', '가치': 'value',

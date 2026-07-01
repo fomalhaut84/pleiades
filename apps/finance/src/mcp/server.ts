@@ -269,7 +269,7 @@ server.tool(
   '관심종목 추가. 티커 유효성은 Yahoo Finance로 자동 검증. 사용자 확인 후 호출할 것.',
   {
     ticker: z.string().describe('Yahoo Finance 티커 (예: AVAV, 005930.KS)'),
-    strategy: z.enum(['swing', 'momentum', 'value', 'scalp']).optional().describe('전략 (기본 swing)'),
+    strategy: z.enum(['long_hold', 'swing', 'momentum', 'value', 'scalp']).optional().describe('전략 (기본 swing)'),
     targetBuy: z.number().positive().optional().describe('목표 매수가'),
     entryLow: z.number().positive().optional().describe('매수 구간 하한'),
     entryHigh: z.number().positive().optional().describe('매수 구간 상한'),
@@ -283,7 +283,7 @@ server.tool(
   '관심종목 부분 업데이트. ticker로 식별. 제공된 필드만 변경. 사용자 확인 후 호출할 것.',
   {
     ticker: z.string().describe('대상 티커'),
-    strategy: z.enum(['swing', 'momentum', 'value', 'scalp']).optional(),
+    strategy: z.enum(['long_hold', 'swing', 'momentum', 'value', 'scalp']).optional(),
     targetBuy: z.number().positive().nullable().optional().describe('null 전달 시 초기화'),
     entryLow: z.number().positive().nullable().optional(),
     entryHigh: z.number().positive().nullable().optional(),

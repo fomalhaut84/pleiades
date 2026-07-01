@@ -80,7 +80,7 @@ export async function getWatchlist() {
   }
 }
 
-const VALID_STRATEGIES = ['swing', 'momentum', 'value', 'scalp']
+const VALID_STRATEGIES = ['long_hold', 'swing', 'momentum', 'value', 'scalp']
 
 /**
  * add_watchlist: 관심종목 추가 (신규)
