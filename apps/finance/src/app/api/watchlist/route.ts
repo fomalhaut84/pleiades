@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { ok, fail } from '@/lib/api-response'
+import { fetchQuote } from '@/lib/price-fetcher'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,6 +79,16 @@ export async function POST(request: NextRequest) {
         entryHigh,
       },
     })
+
+    // 시세 warm-up — 응답 전 await 로 priceCache 채우기 완료 보장.
+    // client 가 POST 성공 후 즉시 GET /api/watchlist 로 refetch 하는 race 방지 —
+    // await 안 하면 refetch 가 priceCache 미채워진 상태 조회 → currentPrice null.
+    // yahoo API 왕복 ~1s 지연 감수 (연 몇 회 사용). 실패는 log 후 응답 유지 (best-effort).
+    try {
+      await fetchQuote(item.ticker)
+    } catch (err) {
+      console.error(`[api/watchlist] warm-up 실패 (${item.ticker}):`, err instanceof Error ? err.message : err)
+    }
 
     return ok(item, { status: 201 })
   } catch (error) {
