@@ -17,6 +17,55 @@ import type { TAReport } from '@/lib/ta/types'
 /** 당일 시그널 발송 기록 (키 → date string) */
 const sentToday = new Map<string, string>()
 
+/**
+ * TA AI 가이드 on/off 설정 키.
+ * 봇 시작 시 upsert 되어 기존 배포에서도 `PUT /api/alerts/config` 로 즉시 off 설정 가능.
+ */
+const TA_AI_GUIDE_KEY = 'ta_ai_guide'
+const TA_AI_GUIDE_LABEL = 'TA 시그널 AI 가이드 (on/off)'
+
+/** 티커별 AI 가이드 요청 쿨다운 6h — 동일 종목이 하루 여러 시그널 발동해도 반복 호출 억제 */
+const AI_GUIDE_COOLDOWN_MS = 6 * 60 * 60 * 1000
+const lastAiAskByTicker = new Map<string, number>()
+
+/** 봇 시작 시 row 존재 보장 — [[project_ai_session_resume]] 배포 정책 참고 */
+export async function ensureTaAiGuideSetting(): Promise<void> {
+  try {
+    await prisma.alertConfig.upsert({
+      where: { key: TA_AI_GUIDE_KEY },
+      update: {},
+      create: { key: TA_AI_GUIDE_KEY, value: 'on', label: TA_AI_GUIDE_LABEL },
+    })
+  } catch (error) {
+    console.error('[ta-signal] ta_ai_guide 설정 초기화 실패:', error)
+  }
+}
+
+async function isTaAiGuideEnabled(): Promise<boolean> {
+  const config = await prisma.alertConfig.upsert({
+    where: { key: TA_AI_GUIDE_KEY },
+    update: {},
+    create: { key: TA_AI_GUIDE_KEY, value: 'on', label: TA_AI_GUIDE_LABEL },
+  })
+  return config.value.toLowerCase() !== 'off'
+}
+
+/**
+ * Pure — 쿨다운 필터 적용 후 상위 N종목 선정.
+ * 테스트 편의를 위해 파라미터로 상태 주입.
+ */
+export function selectAiGuideTargets<T extends { ticker: string }>(
+  candidates: T[],
+  lastAskedByTicker: Map<string, number>,
+  now: number,
+  cooldownMs: number,
+  topN: number,
+): T[] {
+  return candidates
+    .filter((c) => now - (lastAskedByTicker.get(c.ticker) ?? 0) >= cooldownMs)
+    .slice(0, topN)
+}
+
 function getTodayKST(): string {
   const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
   return kst.toISOString().slice(0, 10)
@@ -222,16 +271,27 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
     swing: '스윙', momentum: '모멘텀', scalp: '단타', long_hold: '장기',
   }
 
-  // AI 간략 가이드 생성 (시그널 종목에 대해, 최대 3종목)
+  // AI 간략 가이드 생성 — AlertConfig.ta_ai_guide=off 시 스킵, 티커별 6h 쿨다운 적용.
+  // 최대 3종목 (상위 우선). 쿨다운 티커는 후보에서 배제 → 3종목 슬롯 낭비 방지.
   const aiGuides = new Map<string, string>()
-  const guideTargets = results.slice(0, 3)
-  for (const r of guideTargets) {
-    try {
-      const prompt = `${r.displayName}(${r.ticker})에서 다음 TA 시그널이 발생했다: ${r.signals.join(', ')}. stock-trading-method 프레임워크 기준으로 현재 상황 1~2줄 가이드를 작성해줘. 간결하게.`
-      const guide = await askAdvisor(prompt, { timeout: 30_000, maxBudgetUsd: 0.10 })
-      aiGuides.set(r.ticker, guide.response.trim())
-    } catch (error) {
-      console.warn(`[ta-signal] ${r.ticker} AI 가이드 실패:`, error instanceof Error ? error.message : error)
+  const aiGuideEnabled = await isTaAiGuideEnabled()
+  if (aiGuideEnabled) {
+    const now = Date.now()
+    const guideTargets = selectAiGuideTargets(
+      results,
+      lastAiAskByTicker,
+      now,
+      AI_GUIDE_COOLDOWN_MS,
+      3,
+    )
+    for (const r of guideTargets) {
+      try {
+        const prompt = `${r.displayName}(${r.ticker})에서 다음 TA 시그널이 발생했다: ${r.signals.join(', ')}. stock-trading-method 프레임워크 기준으로 현재 상황 1~2줄 가이드를 작성해줘. 간결하게.`
+        const guide = await askAdvisor(prompt, { timeout: 30_000, maxBudgetUsd: 0.10 })
+        aiGuides.set(r.ticker, guide.response.trim())
+      } catch (error) {
+        console.warn(`[ta-signal] ${r.ticker} AI 가이드 실패:`, error instanceof Error ? error.message : error)
+      }
     }
   }
 
@@ -264,12 +324,17 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
     }
   }
 
-  // 발송 성공 시에만 dedupe 기록 (실패 시 다음 주기에 재시도)
+  // 발송 성공 시에만 dedupe + AI 쿨다운 기록 (실패 시 다음 주기 재시도).
+  // AI 가이드가 붙었던 티커만 쿨다운 기록 → skip 된 티커는 다음 주기 재시도.
   if (sendSuccess) {
     for (const r of results) {
       for (const sigId of r.signalIds) {
         sentToday.set(`ta:${r.ticker}:${sigId}`, today)
       }
+    }
+    const now = Date.now()
+    for (const ticker of aiGuides.keys()) {
+      lastAiAskByTicker.set(ticker, now)
     }
   }
 
