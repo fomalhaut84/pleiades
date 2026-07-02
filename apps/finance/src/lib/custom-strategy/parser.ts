@@ -13,7 +13,7 @@ import { validateParsedStrategy, type ParsedStrategy } from './types'
 const PROMPT_HEADER = `
 사용자 입력을 아래 JSON schema 로 정확히 파싱해줘. 오직 JSON 오브젝트만 출력 — 다른 설명/코드블록 없이.
 
-## 지원 조건 타입
+## 지원 조건 타입 (v1)
 - price (숫자, ticker 현재가)
 - rsi (숫자, RSI14 값)
 - macd_signal (문자열, "GOLDEN" 또는 "DEAD")
@@ -21,9 +21,14 @@ const PROMPT_HEADER = `
 - bb_position (문자열, "BELOW_LOWER" 또는 "ABOVE_UPPER")
 - change_pct (숫자, timeframe 필수 — "1d" | "5d" | "20d")
 
+## 지원 조건 타입 (v2 — 시간/보유 필터)
+- time_window (문자열 "HH:MM~HH:MM", KST 24h. 자정 wraparound 허용 — 예 "23:00~02:00")
+- weekday (배열, 요일 코드 ["MON","TUE","WED","THU","FRI","SAT","SUN"] 중 부분집합)
+- holding_status (문자열, "HELD" 또는 "NOT_HELD" — 사용자가 해당 ticker 보유 여부)
+
 ## 연산자
 - 숫자 타입: < <= > >= ==
-- 문자열 타입: is (전용)
+- 문자열/배열 타입: is (전용)
 
 ## logic (AND | OR)
 ## frequency (once | daily | always)
@@ -40,10 +45,28 @@ const PROMPT_HEADER = `
   "frequency": "daily"
 }
 
+## v2 예시
+- "SOXL 40달러 이하 시 알림, 단 미국장 시간대 (KST 22:30~05:00) 에만" →
+  {"conditions": [
+    {"type":"price","operator":"<=","value":40},
+    {"type":"time_window","operator":"is","value":"22:30~05:00"}
+  ], "logic":"AND"}
+- "NVDA MACD 골든크로스 시 알림 (평일만)" →
+  {"conditions": [
+    {"type":"macd_signal","operator":"is","value":"GOLDEN"},
+    {"type":"weekday","operator":"is","value":["MON","TUE","WED","THU","FRI"]}
+  ], "logic":"AND"}
+- "TSLA 볼밴 하단 이탈 시 알림 (보유 중일 때만)" →
+  {"conditions": [
+    {"type":"bb_position","operator":"is","value":"BELOW_LOWER"},
+    {"type":"holding_status","operator":"is","value":"HELD"}
+  ], "logic":"AND"}
+
 ## 규칙
 - 지원 타입 외 조건 요구되면 { "error": "지원 안함: ..." } 로만 응답
-- 뉴스/펀더멘털/시간 조건은 미지원
+- 뉴스/펀더멘털/어닝/크로스-티커 조건은 미지원 (지원 타입 외 로 처리)
 - ticker 알 수 없으면 { "error": "ticker 를 명확히 지정해주세요" }
+- 사용자가 시간대를 "미국장" / "한국장" 등으로 지칭하면 KST 로 환산 (미국장 = 대략 22:30~05:00 KST DST 무관 단순화, 한국장 = 09:00~15:30)
 
 ## 사용자 입력
 `

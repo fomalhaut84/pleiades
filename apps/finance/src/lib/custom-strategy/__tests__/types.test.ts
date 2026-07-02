@@ -63,6 +63,62 @@ describe('validateCondition', () => {
   it('NaN value → 무효', () => {
     expect(validateCondition({ type: 'price', operator: '<', value: NaN })).toBe(false)
   })
+
+  // ── v2 (Phase 31-A) —
+  describe('time_window (v2)', () => {
+    it('유효한 HH:MM~HH:MM', () => {
+      expect(validateCondition({ type: 'time_window', operator: 'is', value: '09:00~15:30' })).toBe(true)
+      expect(validateCondition({ type: 'time_window', operator: 'is', value: '23:00~02:00' })).toBe(true)
+      expect(validateCondition({ type: 'time_window', operator: 'is', value: '00:00~23:59' })).toBe(true)
+    })
+    it('range 밖 시각 → 무효', () => {
+      expect(validateCondition({ type: 'time_window', operator: 'is', value: '24:00~05:00' })).toBe(false)
+      expect(validateCondition({ type: 'time_window', operator: 'is', value: '09:60~10:00' })).toBe(false)
+    })
+    it('잘못된 포맷 → 무효', () => {
+      expect(validateCondition({ type: 'time_window', operator: 'is', value: '9:00~15:00' })).toBe(false)
+      expect(validateCondition({ type: 'time_window', operator: 'is', value: '09:00-15:00' })).toBe(false)
+      expect(validateCondition({ type: 'time_window', operator: 'is', value: '오전 9시' })).toBe(false)
+    })
+    it('operator 가 is 아니면 무효', () => {
+      expect(validateCondition({ type: 'time_window', operator: '<', value: '09:00~15:00' })).toBe(false)
+    })
+  })
+
+  describe('weekday (v2)', () => {
+    it('유효한 요일 배열', () => {
+      expect(validateCondition({ type: 'weekday', operator: 'is', value: ['MON', 'TUE', 'WED', 'THU', 'FRI'] })).toBe(true)
+      expect(validateCondition({ type: 'weekday', operator: 'is', value: ['SAT'] })).toBe(true)
+    })
+    it('빈 배열 → 무효 (의미 없음)', () => {
+      expect(validateCondition({ type: 'weekday', operator: 'is', value: [] })).toBe(false)
+    })
+    it('알 수 없는 요일 코드 → 무효', () => {
+      expect(validateCondition({ type: 'weekday', operator: 'is', value: ['MON', 'MONDAY'] })).toBe(false)
+      expect(validateCondition({ type: 'weekday', operator: 'is', value: ['mon'] })).toBe(false)
+    })
+    it('중복 요일 → 무효 (정규화 요구)', () => {
+      expect(validateCondition({ type: 'weekday', operator: 'is', value: ['MON', 'MON'] })).toBe(false)
+    })
+    it('문자열/숫자 값 → 무효', () => {
+      expect(validateCondition({ type: 'weekday', operator: 'is', value: 'MON' })).toBe(false)
+      expect(validateCondition({ type: 'weekday', operator: 'is', value: 1 })).toBe(false)
+    })
+  })
+
+  describe('holding_status (v2)', () => {
+    it('HELD / NOT_HELD 유효', () => {
+      expect(validateCondition({ type: 'holding_status', operator: 'is', value: 'HELD' })).toBe(true)
+      expect(validateCondition({ type: 'holding_status', operator: 'is', value: 'NOT_HELD' })).toBe(true)
+    })
+    it('기타 값 → 무효', () => {
+      expect(validateCondition({ type: 'holding_status', operator: 'is', value: 'held' })).toBe(false)
+      expect(validateCondition({ type: 'holding_status', operator: 'is', value: 'OWNED' })).toBe(false)
+    })
+    it('operator 가 is 아니면 무효', () => {
+      expect(validateCondition({ type: 'holding_status', operator: '<', value: 'HELD' })).toBe(false)
+    })
+  })
 })
 
 describe('validateParsedStrategy', () => {
@@ -126,5 +182,23 @@ describe('conditionToString', () => {
     expect(
       conditionToString({ type: 'change_pct', operator: '<', value: -5, timeframe: '5d' }),
     ).toBe('change_pct(5d) < -5')
+  })
+
+  it('weekday 는 배열을 [MON,FRI] 형태로 표시', () => {
+    expect(
+      conditionToString({ type: 'weekday', operator: 'is', value: ['MON', 'FRI'] }),
+    ).toBe('weekday is [MON,FRI]')
+  })
+
+  it('time_window 문자열 그대로', () => {
+    expect(
+      conditionToString({ type: 'time_window', operator: 'is', value: '09:00~15:30' }),
+    ).toBe('time_window is 09:00~15:30')
+  })
+
+  it('holding_status', () => {
+    expect(
+      conditionToString({ type: 'holding_status', operator: 'is', value: 'HELD' }),
+    ).toBe('holding_status is HELD')
   })
 })

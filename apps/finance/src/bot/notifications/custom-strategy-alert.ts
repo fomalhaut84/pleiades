@@ -134,6 +134,14 @@ async function runScan(chatIds: number[]): Promise<void> {
   })
   const priceMap = new Map(prices.map((p) => [p.ticker, p]))
 
+  // 보유 티커 조회 — holding_status 조건 평가용 (Phase 31-A v2).
+  // shares > 0 만 홀딩으로 간주. 여러 계좌에서 같은 티커 보유해도 Set 이므로 중복 무관.
+  const holdingRows = await prisma.holding.findMany({
+    where: { shares: { gt: 0 } },
+    select: { ticker: true },
+  })
+  const holdings = new Set(holdingRows.map((h) => h.ticker))
+
   // TA 필요한 ticker 만 리포트 생성 (병렬 + 실패 허용)
   const taByTicker = new Map<string, TAReport | null>()
 
@@ -186,6 +194,7 @@ async function runScan(chatIds: number[]): Promise<void> {
       conds,
       s.logic === 'OR' ? 'OR' : 'AND',
       snapshot,
+      { now, holdings, strategyTicker: s.ticker },
     )
 
     if (!satisfied) continue
