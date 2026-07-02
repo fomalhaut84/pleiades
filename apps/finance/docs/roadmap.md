@@ -373,4 +373,4 @@
 
 - [x] **31-E**: nav-config 자동 파생 리팩터 (`BottomTab.MORE_ITEMS` 하드코딩 제거)
 - [x] **31-B**: AlertConfig 통합 설정 UI (카테고리 그루핑)
-- [ ] **31-A**: 커스텀 전략 v2 조건 확장 (time_window / weekday / holding_status)
+- [x] **31-A**: 커스텀 전략 v2 조건 확장 (time_window / weekday / holding_status)
