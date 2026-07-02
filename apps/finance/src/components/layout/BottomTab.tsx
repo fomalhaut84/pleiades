@@ -15,17 +15,25 @@ const colorMap: Record<string, string> = {
   '다솜': 'text-dasom',
 }
 
+// 순서: nav-config.ts 사이드바 그루핑 순 (포트폴리오 → 가계부 → 분석 → AI & 전략).
+// 유지 보수 시 nav-config.ts 와 함께 갱신 (drift 방지는 #391 후속 리팩터에서).
 const MORE_ITEMS = [
   { href: '/rsu', icon: '🏢', label: 'RSU' },
+  { href: '/stock-options', icon: '📊', label: '스톡옵션' },
+  { href: '/vesting', icon: '📅', label: '베스팅 캘린더' },
   { href: '/dividends', icon: '💰', label: '배당금' },
   { href: '/deposits', icon: '🎁', label: '입금/증여' },
-  { href: '/stock-options', icon: '📊', label: '스톡옵션' },
+  { href: '/watchlist', icon: '👀', label: '관심종목' },
   { href: '/categories', icon: '🏷️', label: '카테고리' },
+  { href: '/budgets', icon: '📋', label: '예산' },
+  { href: '/recurring', icon: '🔄', label: '반복 거래' },
   { href: '/tax', icon: '🧾', label: '세금' },
   { href: '/simulator', icon: '🔮', label: '시뮬레이터' },
   { href: '/performance', icon: '📈', label: '수익률 분석' },
   { href: '/ai', icon: '🤖', label: 'AI 분석' },
+  { href: '/strategies', icon: '🧠', label: '커스텀 전략' },
   { href: '/networth', icon: '💰', label: '순자산' },
+  { href: '/assets', icon: '🏦', label: '자산 관리' },
   { href: '/reports', icon: '📋', label: '리포트' },
   { href: '/backtest', icon: '🧪', label: '백테스팅' },
 ]
