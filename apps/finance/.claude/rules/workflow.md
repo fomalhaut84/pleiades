@@ -114,7 +114,7 @@ npm run lint && npm run typecheck && npm run test && npm run build
 
 `pr-review-toolkit:code-reviewer` 에이전트로 **커밋 전 또는 PR 생성 전** 리뷰. PR 오픈 후에는 GitHub Codex bot 이 자동 리뷰하지만, 그 전에 잡을 수 있는 이슈는 잡아 봇 왕복 (수정 커밋 → 봇 재리뷰) 비용을 줄인다.
 
-**codex-cli MCP 는 사용 X** — 모델 지원 이슈로 사실상 이용 불가. 과거 룰의 잔재이므로 무시.
+**codex-cli MCP 는 사용 X** — GitHub Codex bot 과 동일한 사용자 codex 쿼터를 소진한다. bot 이 PR 오픈 시 자동 리뷰하므로 CLI 로 이중 소비할 이유 없음. 쿼터 초과 상태에서는 어차피 500 에러로 실패. (에러 메시지는 "model not supported" 형태로 나오지만 실제 원인은 대개 쿼터 소진임)
 
 **적용 기준 (필수 vs self-review 만):**
 
