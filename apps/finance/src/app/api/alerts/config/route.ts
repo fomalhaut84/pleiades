@@ -1,18 +1,30 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { ok, fail } from '@/lib/api-response'
+import {
+  categoryOf,
+  inputTypeOf,
+  ALERT_KEY_DESCRIPTION,
+} from '@/lib/alert-config/categories'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * GET /api/alerts/config — 전체 알림 설정 조회
+ * GET /api/alerts/config — 전체 알림 설정 조회.
+ * 응답에 category / inputType / description 을 첨부 (Phase 31-B).
  */
 export async function GET() {
   try {
     const configs = await prisma.alertConfig.findMany({
       orderBy: { key: 'asc' },
     })
-    return ok(configs)
+    const enriched = configs.map((c) => ({
+      ...c,
+      category: categoryOf(c.key),
+      inputType: inputTypeOf(c.key, c.value),
+      description: ALERT_KEY_DESCRIPTION[c.key] ?? null,
+    }))
+    return ok(enriched)
   } catch (error) {
     console.error('GET /api/alerts/config error:', error)
     return fail('알림 설정을 불러올 수 없습니다.', 500)
