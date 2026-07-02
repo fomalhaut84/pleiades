@@ -362,3 +362,15 @@
 
 - [x] **30-A**: TA 시그널 AI 가이드 폴리시 (on/off + 티커별 6h 쿨다운)
 - [x] **30-B**: 커스텀 전략 웹 UI (`/strategies` CRUD)
+
+---
+
+# 13차 마일스톤 — 설정 UX 통합 + 전략 조건 확장
+
+> 알림 설정 카테고리 그루핑 + 모바일 네비 자동 파생 + 커스텀 전략 시간/보유 조건.
+
+## Phase 31: 설정 UI + 조건 확장
+
+- [x] **31-E**: nav-config 자동 파생 리팩터 (`BottomTab.MORE_ITEMS` 하드코딩 제거)
+- [ ] **31-B**: AlertConfig 통합 설정 UI (카테고리 그루핑)
+- [ ] **31-A**: 커스텀 전략 v2 조건 확장 (time_window / weekday / holding_status)
