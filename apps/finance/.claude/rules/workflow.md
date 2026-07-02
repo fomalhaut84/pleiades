@@ -112,51 +112,94 @@ npm run lint && npm run typecheck && npm run test && npm run build
 
 ### 8. 코드 리뷰
 
-`pr-review-toolkit:code-reviewer` 에이전트로 **커밋 전 또는 PR 생성 전** 리뷰. PR 오픈 후에는 GitHub Codex bot 이 자동 리뷰하지만, 그 전에 잡을 수 있는 이슈는 잡아 봇 왕복 (수정 커밋 → 봇 재리뷰) 비용을 줄인다.
+두 단계 리뷰. 목적: P1/P2 이슈를 걸러내되 재리뷰 사이클과 토큰 소비를 최소화.
 
-**codex-cli MCP 는 사용 X** — MCP 서버 연결 자체는 정상이지만 GitHub Codex bot 과 동일한 사용자 codex 쿼터를 소진한다. bot 이 PR 오픈 시 자동 리뷰하므로 CLI 로 이중 소비할 이유 없음. 쿼터 초과 상태에서는 어차피 400 에러로 실패 — 이때 에러 메시지가 "model not supported when using Codex with a ChatGPT account" 형태로 오해 소지 있게 나오지만 실제 원인은 대개 쿼터 소진.
+#### 8-1. 로컬 사전 리뷰 (PR 오픈 전)
 
-**적용 기준 (필수 vs self-review 만):**
+**pr-review-toolkit code-reviewer 에이전트 1회.** 아래 예외를 제외하면 자체 검증 없이 PR 을 여는 것은 금지.
 
-- **에이전트 리뷰 필수** — 다음 중 하나 이상:
-  - 신규 파일 3개 이상 or 기존 파일 200 LOC 이상 변경
-  - 신규 API 라우트 or DB 스키마/마이그레이션
-  - 신규 컴포넌트 (특히 폼/모달/interactive UI)
-  - 보안 sensitive 경로 (auth, secret, 외부 프로세스 호출)
-  - AI/LLM 호출 로직 신규/변경
-- **self-review 로 충분** — 위에 해당 안 하고 다음 중 하나:
-  - 문서만 (`docs/*`, `*.md`)
-  - 순수 시각 조정 (색상, spacing, 리터럴 문구)
-  - 단순 fix / 리팩터 (< 50 LOC 단일 파일)
+**self-review 로 충분** (에이전트 skip 허용) — 다음 중 하나이면서 P2 리스크가 없어야:
+- 문서만 (`docs/*`, `*.md`)
+- 순수 시각 조정 (색상, spacing, 리터럴 문구)
+- 단순 fix / 리팩터 (< 50 LOC 단일 파일)
 
-**에이전트 호출 프롬프트 (템플릿, 300자 이내 결론 요청):**
+**에이전트 필수** — 다음 중 하나라도 해당:
+- 신규 파일 3개 이상 or 기존 파일 200 LOC 이상 변경
+- 신규 API 라우트 or DB 스키마/마이그레이션
+- 신규 컴포넌트 (특히 폼/모달/interactive UI)
+- 보안 sensitive 경로 (auth, secret, 외부 프로세스 호출)
+- AI/LLM 호출 로직 신규/변경
+
+**프롬프트 템플릿:**
 ```
-brief: 브랜치 <current> vs <base> diff 리뷰.
-- git diff <base>...HEAD 로 변경사항 확인
-- 심각도 분류:
-  - P0 (info): 스타일/네이밍
-  - P1 (major): 로직/엣지케이스/성능
-  - P2 (critical): 보안/데이터 손실/크래시
-- 각 이슈: file:line + 짧은 설명 + 수정 제안
-- 최종 요약: P0/P1/P2 각 건수, 300자 이내
+Task(subagent_type="pr-review-toolkit:code-reviewer", prompt="""
+Review branch <current> vs <base> in <repo path>.
+
+## Context
+<1~3문장으로 이번 변경이 하는 일>
+
+## Focus files
+<주요 파일 목록>
+
+## Severity
+- P0 (info): 스타일·네이밍
+- P1 (major): 로직·엣지케이스·성능
+- P2 (critical): 보안·데이터손실·크래시
+
+## Output
+각 이슈: severity + file:line + 설명 + fix.
+최종 counts: P0/P1/P2. 300자 이내 결론.
+""")
 ```
 
-**심각도 대응:**
-- P0 (info): 선택 반영
-- P1 (major): **반드시 수정**
-- P2 (critical): **반드시 수정**
+**심각도 대응 (사전 리뷰):**
+- **P2**: 반드시 수정
+- **P1**: 반드시 수정
+- **P0**: 저비용/명확한 것만 반영. 큰 리팩터를 요구하는 P0 는 후속 이슈로 분리
 
-**반복 루프:**
-```
-리뷰 → P1/P2 있음? → Yes → 수정 → 커밋 → (경미하면 self-review 로 확인) → 재리뷰
-                    → No  → ✅ 통과
-```
-2회 이상 반복 시 스코프/설계 재점검 신호. 매 결과 사용자에게 요약 보고. 통과 시 `✅ 코드 리뷰 통과 (P1/P2: 0건)`.
+P1/P2 반영 후 검증 3종 (`lint / typecheck / build`) 재통과 → PR 오픈. 반영 시 **재발 방지 회귀 테스트도 함께 추가** (같은 P2 반복 발생 억제).
 
-**PR 오픈 후 (GitHub Codex bot):**
-- 봇 리뷰가 자동으로 붙는다 — 지적 있으면 즉시 대응 (P2 필수, P1 필수, P0 선택)
-- 봇 지적이 매 PR 나온다면 커밋 전 에이전트 프롬프트/self-review 을 다시 sharpen 하라는 신호
-- 지적된 이슈 반영 시 관련 회귀 테스트도 함께 추가 (같은 P2 재발 방지)
+#### 8-2. GitHub Codex bot 리뷰 (PR 오픈 후)
+
+GitHub 이 PR 오픈 시 자동으로 Codex bot 리뷰 트리거. **매 커밋마다 재실행되지 않음** — 사용자가 `@codex review` 코멘트를 남길 때만 재리뷰.
+
+**심각도 대응 (Codex bot):**
+- **P2**: 반드시 수정
+- **P1**: 반드시 수정
+- **P0**: 원칙적으로 무시 (후속 이슈로만 트래킹). 사전 리뷰에서 P0 를 이미 정리했고, Codex 재리뷰는 사용자 codex 쿼터를 새로 소비함
+
+**재리뷰 절제 (토큰 소비 억제):**
+- P1/P2 를 실제로 반영한 커밋에 한해 `@codex review` 요청
+- P0 만 반영했거나 문서/스펙만 바꾼 경우엔 재리뷰 요청 금지
+- 반영 시 회귀 테스트 함께 추가 (같은 지적 반복 방지)
+
+#### 8-3. 반복 루프
+
+```
+사전 리뷰 → P1/P2 = 0 → PR 오픈
+  ↓
+Codex bot 리뷰 → P1/P2 있음? → Yes → 수정 → 커밋 → @codex review
+                              → No  → ✅ 통과 (P0 는 후속 이슈)
+```
+
+2회 이상 반복 시 스코프/설계 재점검 신호. 최종 통과 시 `✅ 코드 리뷰 통과 (P1/P2: 0건)`. 매 리뷰 결과는 사용자에게 요약 보고.
+
+#### 8-4. codex-cli MCP (선택 대안)
+
+사전 리뷰의 대안으로 `mcp__codex-cli__codex` MCP 도구 사용 가능 (`codex exec` bash 호출 아님). MCP 연결은 정상이지만 GitHub Codex bot 과 동일한 사용자 codex 쿼터를 공유하므로, **원칙적으로 사용하지 않는다** — bot 이 PR 오픈 시 이미 리뷰하므로 CLI 로 이중 소비할 이유 없음.
+
+만약 쓴다면:
+```
+mcp__codex-cli__codex 호출:
+- prompt: <8-1 프롬프트 그대로>
+- reasoningEffort: "high"
+- fullAuto: true
+- workingDirectory: <repo path>
+- resetSession: true
+- model 파라미터는 생략 (기본 model 미지원 오류 시 지정 필요 — 예: "gpt-4o")
+```
+
+품질은 유사하지만 model/quota 이슈 잦음. 실패 시 pr-review-toolkit 으로 폴백. 에러 메시지가 "model not supported when using Codex with a ChatGPT account" 형태로 나오면 대개 쿼터 초과이므로 사용자에게 확인.
 
 ### 9. PR 생성
 ```bash
