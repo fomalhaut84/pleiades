@@ -374,3 +374,15 @@
 - [x] **31-E**: nav-config 자동 파생 리팩터 (`BottomTab.MORE_ITEMS` 하드코딩 제거)
 - [x] **31-B**: AlertConfig 통합 설정 UI (카테고리 그루핑)
 - [x] **31-A**: 커스텀 전략 v2 조건 확장 (time_window / weekday / holding_status)
+
+---
+
+# 14차 마일스톤 — MCP 인프라 격상 + 관측 개선
+
+> MCP 서버를 stdio 서브프로세스 → 상시 상주 HTTP 서버 (PM2) 로 승격하여 로그 트래킹/cold-start/커넥션 재사용 개선.
+
+## Phase 32: MCP HTTP + PM2 + 로깅
+
+- [x] **32-A**: HTTP transport PoC (multi-session stateful 패턴 확정)
+- [ ] **32-B**: MCP server HTTP transport 정식 도입 + PM2 승격
+- [ ] **32-C**: 구조화 로깅 (pino + 파일 rotation)
