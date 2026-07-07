@@ -83,8 +83,9 @@ jobs:
             # 즉시 참조 → 서비스 다운 위험. Target transport (HTTP vs stdio) 별 분기:
             #   - HTTP target (v0.12.0+): checkout 전 backup → checkout 후 restore →
             #     deploy.sh 자체 backup/restore/swap 흐름 정상 동작
-            #   - stdio target (rollback): target 의 stdio config 를 유지해야 함 (restore X).
-            #     old deploy.sh 는 myfinance-mcp 정리 로직 없으므로 workflow 가 여기서 대신 처리.
+            #   - stdio target (rollback): target 의 stdio config 를 유지 (restore X).
+            #     old deploy.sh 는 myfinance-mcp 앱을 모르므로 workflow 가 대신 정리하되,
+            #     정리 시점은 deploy.sh 성공 이후 (Codex P1 #4642785947 — 실패 시 fallback 유지).
             MCP_CFG=src/lib/ai/mcp-config.json
             MCP_CFG_BOOTSTRAP=""
             if [ -f "$MCP_CFG" ]; then
@@ -96,21 +97,35 @@ jobs:
             git checkout -f "$RELEASE_TAG"
 
             # Target transport 감지 (checkout 후의 tracked mcp-config 기준)
-            if grep -q '"url"' "$MCP_CFG" 2>/dev/null; then
+            IS_STDIO_TARGET=0
+            if ! grep -q '"url"' "$MCP_CFG" 2>/dev/null; then
+              IS_STDIO_TARGET=1
+            fi
+
+            if [ "$IS_STDIO_TARGET" = "0" ]; then
               # HTTP target — restore backup 으로 배포 중 서비스 continuity 유지
               if [ -n "$MCP_CFG_BOOTSTRAP" ] && [ -f "$MCP_CFG_BOOTSTRAP" ]; then
                 cp "$MCP_CFG_BOOTSTRAP" "$MCP_CFG"
               fi
-            else
-              # stdio target (rollback) — target 의 stdio config 를 유지 (restore 안 함).
-              # Old deploy.sh 는 myfinance-mcp 앱을 모르므로 여기서 정리.
+            fi
+            # stdio target (rollback): target 의 stdio config 를 유지 (restore 안 함).
+            # myfinance-mcp 정리는 deploy.sh 성공 이후로 지연 — Codex P1 (#4642785947):
+            # old deploy.sh 는 backup/trap 복원 로직이 없어서 npm ci / build 실패 시
+            # 실행 중 web/bot 은 target 의 stdio mcp-config 를 참조하지만 dist/node_modules
+            # 는 partially updated → HTTP MCP 도 이미 delete 된 상태라 AI 폴백 X.
+            # 지연 전략: 실패 시 in-memory myfinance-mcp (old HTTP code) 가 living
+            # fallback 으로 남고, 웹/봇 도 in-memory 로는 여전히 old HTTP config 로 동작.
+
+            ./deploy/deploy.sh "$RELEASE_TAG"
+
+            # stdio rollback 성공 확정 후에만 myfinance-mcp 정리.
+            # 실패 시 이 블록 미도달 → myfinance-mcp 유지 → 운영자 수동 확인.
+            if [ "$IS_STDIO_TARGET" = "1" ]; then
               if command -v pm2 >/dev/null 2>&1 && pm2 describe myfinance-mcp >/dev/null 2>&1; then
                 pm2 delete myfinance-mcp || true
                 pm2 save --force || true
               fi
             fi
-
-            ./deploy/deploy.sh "$RELEASE_TAG"
 
             # deploy.sh 성공 시 최종 swap 이 이미 수행됨. bootstrap backup 은 정리.
             [ -n "$MCP_CFG_BOOTSTRAP" ] && rm -f "$MCP_CFG_BOOTSTRAP" || true
