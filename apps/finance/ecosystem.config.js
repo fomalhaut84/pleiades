@@ -48,6 +48,9 @@ module.exports = {
         NODE_ENV: 'production',
         MCP_TRANSPORT: 'http',
         MCP_PORT: '4200',
+        // Phase 32-C: 구조화 로그를 프로젝트 루트 logs/mcp-YYYY-MM-DD.log 로도 tee.
+        // stdout 은 PM2 log 로 자동 흡수 (~/.pm2/logs/myfinance-mcp-out.log).
+        MCP_LOG_TEE_FILE: '1',
       },
       instances: 1,
       autorestart: true,
