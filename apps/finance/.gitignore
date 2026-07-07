@@ -38,7 +38,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# backups & logs & reports
+# backups & logs & reports (Phase 32-C: MCP structured tee 파일 포함)
 /backups/
 /logs/
 /reports/

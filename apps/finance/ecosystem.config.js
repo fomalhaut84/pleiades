@@ -36,5 +36,31 @@ module.exports = {
       node_args: '--max-old-space-size=512',
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
+    {
+      // Phase 32-B — MCP 서버를 별도 PM2 앱으로 승격.
+      // stdio subprocess (매 세션 spawn/kill) → 상시 상주 HTTP 서버.
+      // 목적: 로그 트래킹 개선 (pm2 logs 로 사후 추적), cold-start 제거, Prisma 커넥션 재사용.
+      // Multi-session 패턴은 server.ts startHttp() 참고.
+      name: 'myfinance-mcp',
+      script: 'dist/mcp/server.cjs',
+      cwd: __dirname,
+      env: {
+        NODE_ENV: 'production',
+        MCP_TRANSPORT: 'http',
+        MCP_PORT: '4200',
+        // Phase 32-C: 구조화 로그를 프로젝트 루트 logs/mcp-YYYY-MM-DD.log 로도 tee.
+        // stdout 은 PM2 log 로 자동 흡수 (~/.pm2/logs/myfinance-mcp-out.log).
+        MCP_LOG_TEE_FILE: '1',
+      },
+      instances: 1,
+      autorestart: true,
+      // SIGTERM → httpServer.close() graceful shutdown (server.ts 참고, 15s 강제 종료)
+      kill_timeout: 15000,
+      min_uptime: 30000,
+      exp_backoff_restart_delay: 100,
+      max_memory_restart: '512M',
+      node_args: '--max-old-space-size=512',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+    },
   ],
 }
