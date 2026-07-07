@@ -158,12 +158,53 @@ export function newTraceId(): string {
   return randomUUID().slice(0, 8)
 }
 
-/** Sensitive 필드 제외한 args summary (긴 문자열 truncate) */
+// Sensitive 키워드 — `_` / `-` 무시 대소문자 무관 매치 (예: userPassword, api_key, jwtToken).
+// `'auth'` 는 author* / authoredAt 같은 도메인 필드까지 잡을 수 있어 명시 패턴만 열거.
+const SENSITIVE_KEY_PATTERNS = [
+  'password', 'token', 'secret', 'apikey', 'jwt', 'credential',
+  'authorization', 'authheader', 'authtoken', 'accesstoken', 'refreshtoken', 'bearer',
+]
+
+/**
+ * args 오브젝트를 deep-copy 하며 sensitive 필드를 [REDACTED] 로 치환.
+ * pino redact 는 최상위 로그 프로퍼티에만 작동 (preview 문자열 내부는 못 봄) → serialize
+ * 전에 여기서 처리해야 안전.
+ *
+ * 특수 타입 (Date/Buffer/Error) 은 prototype 손실 방지를 위해 요약 문자열로 반환.
+ * Plain object 로 재조립하면 정보 소실.
+ */
+function redactSensitive(v: unknown, depth = 0): unknown {
+  if (depth > 8 || v === null || v === undefined) return v
+  if (typeof v !== 'object') return v
+  // 특수 타입 가드 (Object.entries 로 재조립하면 prototype 손실)
+  if (v instanceof Date) return v.toISOString()
+  if (Buffer.isBuffer(v)) return `[Buffer len=${v.length}]`
+  if (v instanceof Error) return { name: v.name, message: v.message }
+  if (v instanceof Map || v instanceof Set) return `[${v.constructor.name} size=${(v as { size: number }).size}]`
+  if (Array.isArray(v)) return v.map((item) => redactSensitive(item, depth + 1))
+  const out: Record<string, unknown> = {}
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    // `_` / `-` 무시 대소문자 무관 매치 (예: API_KEY, api-key, APIKEY 모두 apikey 로 정규화)
+    const normalized = k.toLowerCase().replace(/[_-]/g, '')
+    if (SENSITIVE_KEY_PATTERNS.some((p) => normalized.includes(p))) {
+      out[k] = '[REDACTED]'
+    } else {
+      out[k] = redactSensitive(val, depth + 1)
+    }
+  }
+  return out
+}
+
+/**
+ * Sensitive 필드 제외한 args summary (긴 문자열 truncate).
+ * serialize 전 redact 로 preview 에도 secret 노출 방지.
+ */
 export function summarizeArgs(args: unknown, maxLen = 200): unknown {
   if (args === null || args === undefined) return args
+  const cleaned = redactSensitive(args)
   try {
-    const s = JSON.stringify(args)
-    if (s.length <= maxLen) return args
+    const s = JSON.stringify(cleaned)
+    if (s.length <= maxLen) return cleaned
     return { _truncated: true, preview: s.slice(0, maxLen) }
   } catch {
     return { _unserializable: true, type: typeof args }

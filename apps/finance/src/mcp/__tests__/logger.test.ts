@@ -47,6 +47,109 @@ describe('summarizeArgs', () => {
     expect(result._unserializable).toBe(true)
     expect(result.type).toBe('object')
   })
+
+  describe('sensitive 필드 redact (Codex P2)', () => {
+    it('password 필드는 짧은 값도 REDACTED', () => {
+      const result = summarizeArgs({ user: 'sejin', password: 'secret123' })
+      expect(result).toEqual({ user: 'sejin', password: '[REDACTED]' })
+    })
+
+    it('token / secret / apiKey / jwt / credential / authorization 모두 redact', () => {
+      const result = summarizeArgs({
+        token: 'abc',
+        secret: 'x',
+        apiKey: 'y',
+        jwtToken: 'z',
+        credential: 'w',
+        authorization: 'Bearer xxx',
+        accessToken: 'a',
+        refreshToken: 'r',
+        safe: 'ok',
+      }, 500) as Record<string, string>
+      expect(result.token).toBe('[REDACTED]')
+      expect(result.secret).toBe('[REDACTED]')
+      expect(result.apiKey).toBe('[REDACTED]')
+      expect(result.jwtToken).toBe('[REDACTED]')
+      expect(result.credential).toBe('[REDACTED]')
+      expect(result.authorization).toBe('[REDACTED]')
+      expect(result.accessToken).toBe('[REDACTED]')
+      expect(result.refreshToken).toBe('[REDACTED]')
+      expect(result.safe).toBe('ok')
+    })
+
+    it('author* / authored* 는 domain 필드로 유지 (false-positive 방지)', () => {
+      const result = summarizeArgs({
+        authorId: 'sejin',
+        authorName: '세진',
+        authoredAt: '2026-07-07',
+      }) as Record<string, string>
+      expect(result.authorId).toBe('sejin')
+      expect(result.authorName).toBe('세진')
+      expect(result.authoredAt).toBe('2026-07-07')
+    })
+
+    it('대소문자 무관 부분 매치 (userPassword, API_KEY 등)', () => {
+      const result = summarizeArgs({
+        userPassword: 'x',
+        API_KEY: 'y',
+        JwtSecret: 'z',
+      }) as Record<string, string>
+      expect(result.userPassword).toBe('[REDACTED]')
+      expect(result.API_KEY).toBe('[REDACTED]')
+      expect(result.JwtSecret).toBe('[REDACTED]')
+    })
+
+    it('중첩 오브젝트 안의 sensitive 필드도 redact', () => {
+      const result = summarizeArgs({
+        body: { password: 'x', name: 'ok' },
+        headers: { authorization: 'Bearer xxx' },
+      }) as { body: Record<string, string>; headers: Record<string, string> }
+      expect(result.body.password).toBe('[REDACTED]')
+      expect(result.body.name).toBe('ok')
+      expect(result.headers.authorization).toBe('[REDACTED]')
+    })
+
+    it('특수 타입 (Date/Buffer/Error/Map/Set) 은 요약 문자열로 유지 (prototype 손실 방지)', () => {
+      const now = new Date('2026-07-07T00:00:00Z')
+      expect(summarizeArgs({ createdAt: now })).toEqual({ createdAt: '2026-07-07T00:00:00.000Z' })
+      expect(summarizeArgs({ buf: Buffer.from('hello') })).toEqual({ buf: '[Buffer len=5]' })
+      const err = new Error('boom')
+      const result = summarizeArgs({ err }) as { err: { name: string; message: string } }
+      expect(result.err.name).toBe('Error')
+      expect(result.err.message).toBe('boom')
+      expect(summarizeArgs({ m: new Map([['a', 1]]) })).toEqual({ m: '[Map size=1]' })
+      expect(summarizeArgs({ s: new Set([1, 2]) })).toEqual({ s: '[Set size=2]' })
+    })
+
+    it('배열 안의 오브젝트도 redact', () => {
+      const result = summarizeArgs({
+        credentials: [{ password: 'x' }, { password: 'y' }],
+      }) as { credentials: Array<Record<string, string>> }
+      // credentials 자체가 'credential' 매치 → 전체 REDACTED
+      expect(result.credentials).toBe('[REDACTED]')
+    })
+
+    it('긴 args 로 truncate 되어도 preview 에 secret 노출 X', () => {
+      const longArgs = { password: 'MY_SUPER_SECRET_PASSWORD_12345', data: 'x'.repeat(500) }
+      const result = summarizeArgs(longArgs) as { _truncated: boolean; preview: string }
+      expect(result._truncated).toBe(true)
+      expect(result.preview).not.toContain('MY_SUPER_SECRET_PASSWORD')
+      expect(result.preview).toContain('[REDACTED]')
+    })
+
+    it('recursion depth 제한 (무한 중첩 방어)', () => {
+      // depth 8 이상은 원본 그대로 반환. 실무상 안전한 깊이.
+      const obj: Record<string, unknown> = {}
+      let cur = obj
+      for (let i = 0; i < 15; i++) {
+        cur.next = {}
+        cur = cur.next as Record<string, unknown>
+      }
+      // 안 터지고 결과 반환하기만 하면 OK
+      const result = summarizeArgs(obj)
+      expect(result).toBeDefined()
+    })
+  })
 })
 
 describe('toolError result 감지 로직 (integration snapshot)', () => {
