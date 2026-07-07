@@ -385,4 +385,4 @@
 
 - [x] **32-A**: HTTP transport PoC (multi-session stateful 패턴 확정)
 - [x] **32-B**: MCP server HTTP transport 정식 도입 + PM2 승격
-- [ ] **32-C**: 구조화 로깅 (pino + 파일 rotation)
+- [x] **32-C**: 구조화 로깅 (pino + 파일 rotation + SDK bypass 감지)
