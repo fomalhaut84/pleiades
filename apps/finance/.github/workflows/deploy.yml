@@ -76,6 +76,13 @@ jobs:
               exit 1
             fi
             cd "$DEPLOY_PATH"
+            # Bootstrap: 서버에 이미 배포된 deploy.sh 는 이전 태그 버전 — 새 릴리스가
+            # 배포 흐름 자체를 변경했다면 (예: v0.12.0 MCP HTTP 승격, workflow.yml 은
+            # 태그 SHA 에서 로드되지만 deploy.sh 는 서버 working tree 에서 실행됨) →
+            # 우리가 여기서 먼저 target 태그로 checkout 해서 NEW deploy.sh 가 실행되게 함.
+            # 새 deploy.sh 는 자체적으로도 checkout 하므로 idempotent.
+            git fetch origin --tags --force
+            git checkout -f "$RELEASE_TAG"
             ./deploy/deploy.sh "$RELEASE_TAG"
 
       # 배포 결과 텔레그램 알림 — myfinance-bot 인프라 재활용. raw curl 로 third-party action 의존 X.
