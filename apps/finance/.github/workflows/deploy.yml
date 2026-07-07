@@ -102,33 +102,54 @@ jobs:
               IS_STDIO_TARGET=1
             fi
 
-            if [ "$IS_STDIO_TARGET" = "0" ]; then
-              # HTTP target — restore backup 으로 배포 중 서비스 continuity 유지
-              if [ -n "$MCP_CFG_BOOTSTRAP" ] && [ -f "$MCP_CFG_BOOTSTRAP" ]; then
-                cp "$MCP_CFG_BOOTSTRAP" "$MCP_CFG"
-              fi
+            # 어느 target 이든 checkout 이 mcp-config 를 target 내용으로 바꾼 상태.
+            # 배포 중 continuity 를 위해 이전 (bootstrap) config 로 즉시 restore.
+            #   - HTTP target: 이전 HTTP config 유지 → deploy.sh 자체 swap 이 최종 반영
+            #   - stdio target (rollback): 이전 HTTP config 유지 → myfinance-mcp 가 살아있는
+            #     동안 web/bot 은 HTTP 로 fallback (claude-advisor.ts 는 매 호출마다
+            #     mcp-config.json 재로드 → 실패 시 old deploy.sh 는 backup/trap 없음).
+            #     stdio target 내용은 별도 파일에 보존 후 deploy.sh 성공 시 최종 swap.
+            # Codex P1 (#4642785947 후속): rollback 실패 시 partially-updated node_modules
+            # 에서 stdio spawn 실패 가능 → HTTP config 유지가 living fallback.
+            MCP_CFG_TARGET_STDIO=""
+            if [ "$IS_STDIO_TARGET" = "1" ]; then
+              MCP_CFG_TARGET_STDIO=$(mktemp -t mcp-config.target-stdio.XXXXXX.json)
+              cp "$MCP_CFG" "$MCP_CFG_TARGET_STDIO"
             fi
-            # stdio target (rollback): target 의 stdio config 를 유지 (restore 안 함).
-            # myfinance-mcp 정리는 deploy.sh 성공 이후로 지연 — Codex P1 (#4642785947):
-            # old deploy.sh 는 backup/trap 복원 로직이 없어서 npm ci / build 실패 시
-            # 실행 중 web/bot 은 target 의 stdio mcp-config 를 참조하지만 dist/node_modules
-            # 는 partially updated → HTTP MCP 도 이미 delete 된 상태라 AI 폴백 X.
-            # 지연 전략: 실패 시 in-memory myfinance-mcp (old HTTP code) 가 living
-            # fallback 으로 남고, 웹/봇 도 in-memory 로는 여전히 old HTTP config 로 동작.
+            if [ -n "$MCP_CFG_BOOTSTRAP" ] && [ -f "$MCP_CFG_BOOTSTRAP" ]; then
+              cp "$MCP_CFG_BOOTSTRAP" "$MCP_CFG"
+            fi
+
+            # 배포 중/후 이 스크립트가 실패로 abort 되어도 tmp 파일이 남지 않도록 정리.
+            # bootstrap 은 이미 in-place restore 되어 있어 별도 config 복원 조치는 불필요.
+            trap 'rm -f "${MCP_CFG_TARGET_STDIO:-}" "${MCP_CFG_BOOTSTRAP:-}" 2>/dev/null || true' EXIT
 
             ./deploy/deploy.sh "$RELEASE_TAG"
 
-            # stdio rollback 성공 확정 후에만 myfinance-mcp 정리.
-            # 실패 시 이 블록 미도달 → myfinance-mcp 유지 → 운영자 수동 확인.
+            # stdio rollback 성공 확정 후 target 의 stdio config 로 swap + myfinance-mcp 정리.
+            # deploy.sh 실패 시 이 블록 미도달 → mcp-config 는 HTTP 유지 + myfinance-mcp 유지 → 운영자 확인.
+            # swap 자체가 실패해도 stdio 미완료 상태 (HTTP + myfinance-mcp) 로 안전하게 남도록
+            # 명시적 if-check + set -e abort 회피 (미래 코드 추가 시 부작용 차단).
             if [ "$IS_STDIO_TARGET" = "1" ]; then
-              if command -v pm2 >/dev/null 2>&1 && pm2 describe myfinance-mcp >/dev/null 2>&1; then
-                pm2 delete myfinance-mcp || true
-                pm2 save --force || true
+              SWAP_OK=0
+              if [ -n "$MCP_CFG_TARGET_STDIO" ] && [ -f "$MCP_CFG_TARGET_STDIO" ]; then
+                if cp "$MCP_CFG_TARGET_STDIO" "$MCP_CFG"; then
+                  SWAP_OK=1
+                else
+                  echo "WARN: stdio config swap 실패 — HTTP config 유지, myfinance-mcp 도 유지."
+                fi
+              else
+                echo "WARN: MCP_CFG_TARGET_STDIO 파일 부재 — HTTP config 유지, myfinance-mcp 도 유지."
+              fi
+              if [ "$SWAP_OK" = "1" ]; then
+                if command -v pm2 >/dev/null 2>&1 && pm2 describe myfinance-mcp >/dev/null 2>&1; then
+                  pm2 delete myfinance-mcp || true
+                  pm2 save --force || true
+                fi
               fi
             fi
 
-            # deploy.sh 성공 시 최종 swap 이 이미 수행됨. bootstrap backup 은 정리.
-            [ -n "$MCP_CFG_BOOTSTRAP" ] && rm -f "$MCP_CFG_BOOTSTRAP" || true
+            # trap 이 tmp 파일 정리 담당 — 여기서 별도 rm 은 불필요.
 
       # 배포 결과 텔레그램 알림 — myfinance-bot 인프라 재활용. raw curl 로 third-party action 의존 X.
       # 토큰은 GitHub Actions가 자동 마스킹. 성공/실패 모두 알림 (무알림이 더 위험).
