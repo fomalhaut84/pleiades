@@ -92,13 +92,14 @@ if [ "$IS_HTTP_MCP" = "1" ]; then
     fi
 else
     # stdio 경로 (rollback): target 의 stdio config 가 우리가 원하는 최종 상태.
-    # backup 을 지움. Trap 은 유지 — build 실패 시 dist 롤백 필요 (아직 dist backup 생성 전이지만
-    # 이후 line 107 에서 backup 후에 build 함).
-    # Trap 해제는 build/pm2 정리 성공 후 stdio 경로 끝에서 진행.
-    if [ -n "$MCP_CONFIG_BACKUP" ]; then
-        rm -f "$MCP_CONFIG_BACKUP"
-        MCP_CONFIG_BACKUP=""
-    fi
+    # backup 정리는 stdio 경로 성공 후 (line ~313 부근) 로 지연 — npm ci / migrate /
+    # next build 실패 시 trap 이 old (HTTP 또는 이전 stdio) config 로 복원할 수 있도록.
+    # (backup 을 여기서 지우면 build 실패 시 web/bot 이 target stdio config 를 참조하지만
+    #  worktree/node_modules 는 partially updated 상태 → tool call 크래시.)
+    # 이 시점 checkout 직후는 checkout -f 가 이미 target 의 stdio config 를 반영한 상태.
+    # 실행 중 web/bot 은 target stdio 를 시도 (dist/mcp/server.cjs 는 old 유지 → 서브프로세스
+    # spawn 은 stdio mode 지원). 만약 실패해도 trap 이 backup 으로 복원.
+    :
 fi
 
 echo "=== 3. Install dependencies ==="
@@ -308,6 +309,12 @@ else
     if [ -n "$DIST_MCP_BACKUP" ]; then
         rm -f "$DIST_MCP_BACKUP"
         DIST_MCP_BACKUP=""
+    fi
+    # rollback 성공 확정 → mcp-config backup 도 이 시점에 정리 (line 98~101 이동).
+    # 이 전에 지우면 build 실패 시 trap 이 old config 로 복원 불가 (Codex P2).
+    if [ -n "$MCP_CONFIG_BACKUP" ]; then
+        rm -f "$MCP_CONFIG_BACKUP"
+        MCP_CONFIG_BACKUP=""
     fi
     # stdio 경로 정리 완료 → trap 해제 (여기까지 왔으면 build/pm2 정리 성공).
     trap - EXIT
