@@ -136,7 +136,7 @@ if [ "$IS_HTTP_MCP" = "1" ]; then
     # 실제로 부팅 + health 응답하는지 확인. 크래시 (환경변수 누락 / 스키마 오류 등) 를
     # 사전에 잡아 old healthy 인스턴스가 유지된 채로 abort → 서비스 무중단.
     #
-    # 프로덕션 포트 4200 은 old 인스턴스가 잡고 있을 수 있으므로 임시 포트 4299 사용.
+    # 프로덕션 포트 4210 은 old 인스턴스가 잡고 있을 수 있으므로 임시 포트 4299 사용.
     PREFLIGHT_PORT=4299
 
     # 이전 배포가 interrupt 되어 4299 에 좀비 프로세스가 남아있을 수 있음.
@@ -218,16 +218,16 @@ if [ "$IS_HTTP_MCP" = "1" ]; then
     npm run build:mcp:activate
 
     echo "=== 7. PM2 — MCP 재시작 + health 재확인 ==="
-    # pre-flight 통과 후에만 실제 서비스 포트 (4200) 인스턴스 교체.
+    # pre-flight 통과 후에만 실제 서비스 포트 (4210) 인스턴스 교체.
     # startOrRestart (hard restart) 사용 이유:
-    # 고정 포트 (127.0.0.1:4200) 를 잡는 fork 단일 프로세스라 old 가 살아있는 상태에서
+    # 고정 포트 (127.0.0.1:4210) 를 잡는 fork 단일 프로세스라 old 가 살아있는 상태에서
     # 새 인스턴스가 뜨면 EADDRINUSE. reload 는 replacement 를 먼저 스폰해서 이 상황을 유발.
     # hard restart = stop old → spawn new 순서라 안전. 봇 (myfinance-bot) 도 동일 패턴 (#356 참조).
     pm2 startOrRestart ecosystem.config.js --only myfinance-mcp
 
     MCP_HEALTHY=0
     for i in {1..20}; do
-        if curl -sS -f -o /dev/null http://127.0.0.1:4200/health; then
+        if curl -sS -f -o /dev/null http://127.0.0.1:4210/health; then
             MCP_HEALTHY=1
             echo "MCP server healthy (after ${i}s)"
             break
@@ -252,7 +252,7 @@ if [ "$IS_HTTP_MCP" = "1" ]; then
                     echo "WARN: pm2 restart 자체 실패 (PM2_HOME/권한 등 확인 필요)"
                 fi
                 for i in {1..10}; do
-                    if curl -sS -f -o /dev/null http://127.0.0.1:4200/health; then
+                    if curl -sS -f -o /dev/null http://127.0.0.1:4210/health; then
                         MCP_ROLLBACK_HEALTHY=1
                         echo "old MCP 복구 성공 (after ${i}s) — 웹/봇 old 상태 유지"
                         break
@@ -262,7 +262,7 @@ if [ "$IS_HTTP_MCP" = "1" ]; then
             fi
         fi
         if [ "$MCP_ROLLBACK_HEALTHY" != "1" ]; then
-            echo "ERROR: rollback health 실패 — old dist 도 4200 응답 없음."
+            echo "ERROR: rollback health 실패 — old dist 도 4210 응답 없음."
             # crash-loop 방지: 첫 HTTP 배포에서 old dist 가 stdio-only 라 HTTP mode 에서
             # 반복 크래시할 수 있음. pm2 stop 으로 loop 차단 (운영자 수동 개입 유도).
             echo "myfinance-mcp 를 stop 처리하여 crash-loop 회피. 운영자 수동 확인 필요."
