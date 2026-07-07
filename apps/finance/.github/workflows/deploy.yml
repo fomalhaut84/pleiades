@@ -76,14 +76,31 @@ jobs:
               exit 1
             fi
             cd "$DEPLOY_PATH"
-            # Bootstrap: 서버에 이미 배포된 deploy.sh 는 이전 태그 버전 — 새 릴리스가
-            # 배포 흐름 자체를 변경했다면 (예: v0.12.0 MCP HTTP 승격, workflow.yml 은
-            # 태그 SHA 에서 로드되지만 deploy.sh 는 서버 working tree 에서 실행됨) →
-            # 우리가 여기서 먼저 target 태그로 checkout 해서 NEW deploy.sh 가 실행되게 함.
-            # 새 deploy.sh 는 자체적으로도 checkout 하므로 idempotent.
+
+            # Bootstrap: 서버 working tree 의 deploy.sh 는 이전 태그 버전. 배포 흐름 자체가
+            # 바뀌었다면 (v0.12.0 MCP HTTP 승격 등) checkout 후 NEW deploy.sh 를 실행해야 함.
+            # 순서 주의: git checkout 은 mcp-config.json 을 target 내용으로 바꿈. Running
+            # web/bot 은 그 순간부터 tracked file 을 참조하므로, checkout 전 backup 을 만들고
+            # checkout 후 즉시 복원해서 deploy.sh 진입 시점에 old (stdio) config 를 유지 →
+            # deploy.sh 는 자체 backup/restore/swap 흐름을 정상적으로 수행.
+            MCP_CFG=src/lib/ai/mcp-config.json
+            MCP_CFG_BOOTSTRAP=""
+            if [ -f "$MCP_CFG" ]; then
+              MCP_CFG_BOOTSTRAP=$(mktemp -t mcp-config.bootstrap.XXXXXX.json)
+              cp "$MCP_CFG" "$MCP_CFG_BOOTSTRAP"
+            fi
+
             git fetch origin --tags --force
             git checkout -f "$RELEASE_TAG"
+
+            if [ -n "$MCP_CFG_BOOTSTRAP" ] && [ -f "$MCP_CFG_BOOTSTRAP" ]; then
+              cp "$MCP_CFG_BOOTSTRAP" "$MCP_CFG"
+            fi
+
             ./deploy/deploy.sh "$RELEASE_TAG"
+
+            # deploy.sh 성공 시 최종 swap 이 이미 수행됨. bootstrap backup 은 정리.
+            [ -n "$MCP_CFG_BOOTSTRAP" ] && rm -f "$MCP_CFG_BOOTSTRAP" || true
 
       # 배포 결과 텔레그램 알림 — myfinance-bot 인프라 재활용. raw curl 로 third-party action 의존 X.
       # 토큰은 GitHub Actions가 자동 마스킹. 성공/실패 모두 알림 (무알림이 더 위험).
