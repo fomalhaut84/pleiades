@@ -79,10 +79,12 @@ jobs:
 
             # Bootstrap: 서버 working tree 의 deploy.sh 는 이전 태그 버전. 배포 흐름 자체가
             # 바뀌었다면 (v0.12.0 MCP HTTP 승격 등) checkout 후 NEW deploy.sh 를 실행해야 함.
-            # 순서 주의: git checkout 은 mcp-config.json 을 target 내용으로 바꿈. Running
-            # web/bot 은 그 순간부터 tracked file 을 참조하므로, checkout 전 backup 을 만들고
-            # checkout 후 즉시 복원해서 deploy.sh 진입 시점에 old (stdio) config 를 유지 →
-            # deploy.sh 는 자체 backup/restore/swap 흐름을 정상적으로 수행.
+            # git checkout 이 mcp-config.json 을 target 내용으로 바꿈 → running web/bot 이
+            # 즉시 참조 → 서비스 다운 위험. Target transport (HTTP vs stdio) 별 분기:
+            #   - HTTP target (v0.12.0+): checkout 전 backup → checkout 후 restore →
+            #     deploy.sh 자체 backup/restore/swap 흐름 정상 동작
+            #   - stdio target (rollback): target 의 stdio config 를 유지해야 함 (restore X).
+            #     old deploy.sh 는 myfinance-mcp 정리 로직 없으므로 workflow 가 여기서 대신 처리.
             MCP_CFG=src/lib/ai/mcp-config.json
             MCP_CFG_BOOTSTRAP=""
             if [ -f "$MCP_CFG" ]; then
@@ -93,8 +95,19 @@ jobs:
             git fetch origin --tags --force
             git checkout -f "$RELEASE_TAG"
 
-            if [ -n "$MCP_CFG_BOOTSTRAP" ] && [ -f "$MCP_CFG_BOOTSTRAP" ]; then
-              cp "$MCP_CFG_BOOTSTRAP" "$MCP_CFG"
+            # Target transport 감지 (checkout 후의 tracked mcp-config 기준)
+            if grep -q '"url"' "$MCP_CFG" 2>/dev/null; then
+              # HTTP target — restore backup 으로 배포 중 서비스 continuity 유지
+              if [ -n "$MCP_CFG_BOOTSTRAP" ] && [ -f "$MCP_CFG_BOOTSTRAP" ]; then
+                cp "$MCP_CFG_BOOTSTRAP" "$MCP_CFG"
+              fi
+            else
+              # stdio target (rollback) — target 의 stdio config 를 유지 (restore 안 함).
+              # Old deploy.sh 는 myfinance-mcp 앱을 모르므로 여기서 정리.
+              if command -v pm2 >/dev/null 2>&1 && pm2 describe myfinance-mcp >/dev/null 2>&1; then
+                pm2 delete myfinance-mcp || true
+                pm2 save --force || true
+              fi
             fi
 
             ./deploy/deploy.sh "$RELEASE_TAG"
