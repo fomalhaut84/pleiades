@@ -2,7 +2,7 @@
   "mcpServers": {
     "myfinance": {
       "type": "http",
-      "url": "http://127.0.0.1:4200/mcp"
+      "url": "http://127.0.0.1:4210/mcp"
     }
   }
 }

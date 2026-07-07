@@ -904,7 +904,7 @@ server.tool(
 // --- 서버 시작 ---
 
 const TRANSPORT_MODE = process.env.MCP_TRANSPORT ?? 'stdio'
-const HTTP_PORT = parseInt(process.env.MCP_PORT ?? '4200', 10)
+const HTTP_PORT = parseInt(process.env.MCP_PORT ?? '4210', 10)
 const HTTP_HOST = '127.0.0.1'
 
 async function startStdio(): Promise<void> {
