@@ -41,6 +41,13 @@ let currentFileStream: pino.DestinationStream | null = null
 let currentFileDate = ''
 
 /**
+ * Phase 33-C (#418, #409 흡수): fatal 만 별도로 tee 되는 파일.
+ * `logs/mcp-crash-YYYY-MM-DD.log` — pm2 상태 진단 시 crash 만 빠르게 스캔.
+ * 일반 로그와 rotation·retention 동일 (KST 자정, 14일).
+ */
+let currentCrashStream: pino.DestinationStream | null = null
+
+/**
  * 오래된 로그 파일 정리 — 14일 (기본) 초과 시 삭제.
  * 매 rotation 시점과 부팅 시점에 실행. 실패는 조용히 넘김 (best effort).
  */
@@ -81,6 +88,23 @@ function openFileStream(): pino.DestinationStream | null {
 }
 
 /**
+ * Phase 33-C (#418): crash 전용 tee 파일 스트림 open.
+ * `logs/mcp-crash-<KST-date>.log`. LOG_ENABLE_FILE 이 켜져 있을 때만 활성.
+ */
+function openCrashFileStream(): pino.DestinationStream | null {
+  if (!LOG_ENABLE_FILE) return null
+  try {
+    fs.mkdirSync(LOG_DIR, { recursive: true })
+    const dateStr = currentFileDate || kstDateString()
+    const filePath = path.join(LOG_DIR, `mcp-crash-${dateStr}.log`)
+    return pino.destination({ dest: filePath, sync: true, mkdir: true })
+  } catch (error) {
+    console.error('[mcp/logger] crash tee 초기화 실패:', LOG_DIR, error)
+    return null
+  }
+}
+
+/**
  * 자정 감지 후 파일 스트림 교체. 5분 주기 setInterval (로그 시점마다 검사 X).
  * 순서: flushSync (in-flight write 안전) → 새 stream open → old stream end.
  */
@@ -88,17 +112,23 @@ function scheduleFileRotation(): void {
   if (!LOG_ENABLE_FILE) return
   const check = setInterval(() => {
     const today = kstDateString()
-    if (today !== currentFileDate && currentFileStream) {
-      const oldStream = currentFileStream
+    if (today !== currentFileDate && (currentFileStream || currentCrashStream)) {
       // 새 스트림을 먼저 만든 뒤 old 를 flush + end → 그 사이 write 는 old 로 감.
-      // wrapper 에서 currentFileStream 을 참조하므로 새 write 는 자동으로 new 로 전환.
+      // wrapper 에서 currentFileStream / currentCrashStream 을 참조하므로 새 write 는
+      // 자동으로 new 로 전환. currentFileDate 는 openFileStream 안에서 갱신.
+      const oldMain = currentFileStream
+      const oldCrash = currentCrashStream
       currentFileStream = openFileStream()
-      try {
-        ;(oldStream as unknown as { flushSync?: () => void }).flushSync?.()
-      } catch { /* best effort */ }
-      try {
-        ;(oldStream as unknown as { end?: () => void }).end?.()
-      } catch { /* best effort */ }
+      currentCrashStream = openCrashFileStream()
+      for (const s of [oldMain, oldCrash]) {
+        if (!s) continue
+        try {
+          ;(s as unknown as { flushSync?: () => void }).flushSync?.()
+        } catch { /* best effort */ }
+        try {
+          ;(s as unknown as { end?: () => void }).end?.()
+        } catch { /* best effort */ }
+      }
     }
   }, 5 * 60 * 1000)
   check.unref()
@@ -125,6 +155,26 @@ function buildStreams(): pino.StreamEntry[] {
         },
       } as pino.DestinationStream,
     })
+
+    // Phase 33-C (#418, #409 A): fatal 만 별도로 crash 파일에 tee.
+    // pino.multistream 은 entry level 이상만 그 stream 에 씀 → level 'fatal' 이면
+    // fatal 이상만 crash 파일. uncaughtException/unhandledRejection 도 logger.fatal
+    // 로 기록 (installCrashHandlers 참조) → 자동 포함.
+    currentCrashStream = openCrashFileStream()
+    if (currentCrashStream) {
+      streams.push({
+        level: 'fatal',
+        stream: {
+          write(chunk: string) {
+            try {
+              currentCrashStream?.write(chunk)
+            } catch {
+              // ignore — 다음 write 에서 새 stream 사용
+            }
+          },
+        } as pino.DestinationStream,
+      })
+    }
   }
 
   return streams
@@ -216,9 +266,11 @@ export function summarizeArgs(args: unknown, maxLen = 200): unknown {
  * currentFileStream (sonic-boom) 의 flushSync 를 직접 호출.
  */
 function flushAll(): void {
-  try {
-    ;(currentFileStream as unknown as { flushSync?: () => void })?.flushSync?.()
-  } catch { /* best effort */ }
+  for (const s of [currentFileStream, currentCrashStream]) {
+    try {
+      ;(s as unknown as { flushSync?: () => void })?.flushSync?.()
+    } catch { /* best effort */ }
+  }
 }
 
 /**
