@@ -56,6 +56,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: '설정',
     items: [
+      { href: '/alerts/history', icon: '🔔', label: '알림 이력' },
       { href: '/settings', icon: '⚙️', label: '설정', hiddenOnMobile: true },
     ],
   },
