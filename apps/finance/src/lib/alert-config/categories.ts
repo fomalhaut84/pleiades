@@ -66,6 +66,7 @@ export const ALERT_KEY_CATEGORY: Record<string, AlertCategoryKey> = {
   price_drop_pct: 'price',
   price_surge_pct: 'price',
   fx_change_krw: 'price',
+  watchlist_market_hours_only: 'price',
   budget_warn_pct: 'expense',
   daily_summary_hour: 'schedule',
   monthly_report_day: 'schedule',
@@ -89,6 +90,7 @@ export const ALERT_KEY_INPUT_TYPE: Record<string, AlertInputType> = {
   ta_ai_guide: 'toggle',
   active_review: 'toggle',
   custom_strategy_alerts: 'toggle',
+  watchlist_market_hours_only: 'toggle',
 }
 
 /** 키별 사용자 향 설명 (label 은 DB label, 이건 부가 설명) */
@@ -103,11 +105,22 @@ export const ALERT_KEY_DESCRIPTION: Record<string, string> = {
   ta_ai_guide: 'TA 시그널 알림에 AI 짧은 조언 첨부 (티커별 6h 쿨다운)',
   active_review: 'KR 15:40 / US 07:15 클로징 리뷰 + 주간 리뷰 자동 발송',
   custom_strategy_alerts: '/strategies 에 등록한 조건 발동 시 텔레그램 알림',
+  watchlist_market_hours_only: '관심종목 목표매수가/매수구간 알림을 각 시장 거래시간에만 발송 (기본 off = 24h)',
 }
 
 /** 카테고리 조회 — 알려지지 않은 키는 general */
 export function categoryOf(key: string): AlertCategoryKey {
   return ALERT_KEY_CATEGORY[key] ?? 'general'
+}
+
+/**
+ * 토글 (on/off) 키 여부.
+ * `ALERT_KEY_INPUT_TYPE` 를 단일 진실로 삼아 텔레그램 봇 커맨드 / MCP 도구 / 웹 UI
+ * 세 곳이 일관되게 on/off 검증 하도록. 신규 토글 키 추가 시 `ALERT_KEY_INPUT_TYPE`
+ * 에 `'toggle'` 로만 매핑하면 세 경로 모두 자동 반영.
+ */
+export function isToggleKey(key: string): boolean {
+  return ALERT_KEY_INPUT_TYPE[key] === 'toggle'
 }
 
 /**
