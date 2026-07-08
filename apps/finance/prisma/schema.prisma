@@ -327,6 +327,25 @@ model AlertConfig {
   updatedAt DateTime @updatedAt
 }
 
+// Phase 33-A (#416): 알림 발동 이력. 33-B 이력 페이지 + 사후 진단 데이터 소스.
+// 1 행 = 1 이벤트. 한 번의 텔레그램 배치 발송에 여러 알림이 포함되면 여러 행 저장.
+model AlertHistory {
+  id             String   @id @default(cuid())
+  firedAt        DateTime @default(now())
+  kind           String   // surge / drop / fx / target_hit / stop_loss / watch_buy / watch_zone / ta_signal / custom_strategy
+  ticker         String?  // 환율 등 티커 없는 알림은 null
+  price          Float?
+  changePercent  Float?
+  message        String   // per-event HTML 본문
+  deliveryStatus String   // 'sent' | 'partial' | 'failed'
+  recipientCount Int      @default(0)
+  errorMessage   String?
+
+  @@index([firedAt])
+  @@index([kind, firedAt])
+  @@index([ticker, firedAt])
+}
+
 model Asset {
   id           String    @id @default(cuid())
   name         String                         // "신한 적금", "전세 보증금"

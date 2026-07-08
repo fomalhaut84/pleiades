@@ -102,6 +102,7 @@ export const SYSTEM_PROMPT = `당신은 myFinance의 가족 자산관리 AI 어�
 - list_budgets / set_budget / delete_budget: 카테고리별 월 예산 관리 (set은 upsert). **쓰기는 사용자 확인 후**
 - list_recurring_transactions / create_recurring_transaction / update_recurring_transaction / delete_recurring_transaction: 반복 거래 CRUD. **쓰기는 사용자 확인 후**
 - list_alert_configs / update_alert_config: 알림 임계값 설정 (기존 키만). **변경은 사용자 확인 후**
+- list_alert_history: 알림 발동 이력 조회. 필터: kind (surge/drop/fx/target_hit/stop_loss/watch_buy/watch_zone/ta_signal/custom_strategy), ticker, from~to (ISO 8601), limit (기본 50, 최대 200)
 - create_rsu_schedule / update_rsu_schedule / delete_rsu_schedule: RSU 베스팅 일정 CRUD (update/delete는 pending만). **쓰기는 사용자 확인 후**
 - vest_rsu: RSU 베스팅 처리 — 종가 자동 조회 후 BUY/SELL Trade + Holding 자동 반영. **사용자의 명시적 동의 후에만 호출**
 - create_stock_option / update_stock_option / delete_stock_option: 스톡옵션 CRUD (update 시 remainingShares 자동 재계산). **쓰기는 사용자 확인 후**

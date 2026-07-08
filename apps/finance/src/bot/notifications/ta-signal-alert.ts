@@ -12,6 +12,11 @@ import { getBot } from '@/bot/index'
 import { sendHtml, escapeHtml } from '@/bot/utils/telegram'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 import { isMarketOpenFor } from '@/lib/market-hours'
+import {
+  computeDeliveryStatus,
+  recordAlertHistory,
+  type AlertEventInput,
+} from './alert-history'
 import type { TAReport } from '@/lib/ta/types'
 
 /** 당일 시그널 발송 기록 (키 → date string) */
@@ -213,12 +218,16 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
   if (tickerStrategies.size === 0) return
 
   // PriceCache.market을 결정적 소스로 사용 (Holding/Watchlist 간 market 불일치 방지)
-  // price-alert.ts와 동일한 패턴 (#261)
+  // price-alert.ts와 동일한 패턴 (#261). Phase 33-A: price/changePercent 도 함께 조회하여
+  // AlertHistory 에 시세 스냅샷 캡처 (사후 진단 유용).
   const priceCaches = await prisma.priceCache.findMany({
     where: { ticker: { in: Array.from(tickerStrategies.keys()) } },
-    select: { ticker: true, market: true },
+    select: { ticker: true, market: true, price: true, changePercent: true },
   })
   const marketByTicker = new Map(priceCaches.map((p) => [p.ticker, p.market]))
+  const snapshotByTicker = new Map(
+    priceCaches.map((p) => [p.ticker, { price: p.price, changePercent: p.changePercent }]),
+  )
 
   const results: SignalResult[] = []
 
@@ -314,19 +323,21 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
   const bot = getBot()
   const message = lines.join('\n')
 
-  let sendSuccess = false
+  let sendSuccess = 0
+  let lastError: string | undefined
   for (const chatId of chatIds) {
     try {
       await sendHtml(bot, chatId, message)
-      sendSuccess = true
+      sendSuccess++
     } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error)
       console.error(`[ta-signal] 알림 발송 실패 (chatId: ${chatId}):`, error)
     }
   }
 
   // 발송 성공 시에만 dedupe + AI 쿨다운 기록 (실패 시 다음 주기 재시도).
   // AI 가이드가 붙었던 티커만 쿨다운 기록 → skip 된 티커는 다음 주기 재시도.
-  if (sendSuccess) {
+  if (sendSuccess > 0) {
     for (const r of results) {
       for (const sigId of r.signalIds) {
         sentToday.set(`ta:${r.ticker}:${sigId}`, today)
@@ -338,5 +349,20 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
     }
   }
 
-  console.log(`[ta-signal] TA 시그널 알림: ${results.length}종목`)
+  // Phase 33-A (#416): 티커 단위 이력 저장 — 각 종목의 시그널을 한 이벤트로 통합.
+  // 시세 스냅샷 (price / changePercent) 을 함께 캡처하여 사후 진단시 참고.
+  const historyEvents: AlertEventInput[] = results.map((r) => {
+    const snap = snapshotByTicker.get(r.ticker)
+    return {
+      kind: 'ta_signal',
+      ticker: r.ticker,
+      price: snap?.price ?? null,
+      changePercent: snap?.changePercent ?? null,
+      message: `${r.displayName} (${r.ticker}) — ${r.strategy}: ${r.signals.join(', ')}`,
+    }
+  })
+  const status = computeDeliveryStatus(sendSuccess, chatIds.length)
+  await recordAlertHistory(historyEvents, status, chatIds.length, status === 'sent' ? undefined : lastError)
+
+  console.log(`[ta-signal] TA 시그널 알림: ${results.length}종목 → ${sendSuccess}/${chatIds.length} chats`)
 }

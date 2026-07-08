@@ -85,6 +85,7 @@ const ALLOWED_TOOLS = [
   'mcp__myfinance__delete_recurring_transaction',
   'mcp__myfinance__list_alert_configs',
   'mcp__myfinance__update_alert_config',
+  'mcp__myfinance__list_alert_history',
   'mcp__myfinance__create_rsu_schedule',
   'mcp__myfinance__update_rsu_schedule',
   'mcp__myfinance__delete_rsu_schedule',

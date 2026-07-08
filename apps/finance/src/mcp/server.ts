@@ -36,6 +36,7 @@ import { listAssets, createAsset, updateAsset, deleteAsset, createAssetDeposit }
 import { listBudgets, setBudget, deleteBudget } from './tools/budget'
 import { listRecurringTransactions, createRecurringTransaction, updateRecurringTransaction, deleteRecurringTransaction } from './tools/recurring'
 import { listAlertConfigs, updateAlertConfig } from './tools/alert'
+import { listAlertHistory } from './tools/alert-history'
 import { createRsuSchedule, updateRsuSchedule, deleteRsuSchedule } from './tools/rsu-write'
 import { vestRsu } from './tools/rsu-vest'
 import {
@@ -759,6 +760,22 @@ server.tool(
     value: z.string().describe('숫자 문자열'),
   },
   async (args) => updateAlertConfig(args)
+)
+
+server.tool(
+  'list_alert_history',
+  '알림 발동 이력 조회. Phase 33-A (#416). 필터: kind, ticker, from~to (ISO 8601), limit (기본 50, 최대 200).',
+  {
+    kind: z
+      .enum(['surge', 'drop', 'fx', 'target_hit', 'stop_loss', 'watch_buy', 'watch_zone', 'ta_signal', 'custom_strategy'])
+      .optional()
+      .describe('알림 종류 필터'),
+    ticker: z.string().optional().describe('티커 필터 (예: AAPL, 005930.KS)'),
+    from: z.string().optional().describe('시작 시각 (ISO 8601)'),
+    to: z.string().optional().describe('종료 시각 (ISO 8601)'),
+    limit: z.number().int().positive().optional().describe('최대 반환 개수 (기본 50, 최대 200)'),
+  },
+  async (args) => listAlertHistory(args)
 )
 
 // --- RSU 스케줄 쓰기 ---
