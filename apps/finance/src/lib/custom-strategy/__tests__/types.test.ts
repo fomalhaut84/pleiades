@@ -201,4 +201,50 @@ describe('conditionToString', () => {
       conditionToString({ type: 'holding_status', operator: 'is', value: 'HELD' }),
     ).toBe('holding_status is HELD')
   })
+
+  it('earnings_within_days 정수 (v3)', () => {
+    expect(
+      conditionToString({ type: 'earnings_within_days', operator: '<=', value: 3 }),
+    ).toBe('earnings_within_days <= 3')
+  })
+})
+
+describe('earnings_within_days (v3, Phase 34-A / #419)', () => {
+  it('숫자 연산자 5개 모두 허용, 정수 값', () => {
+    for (const op of ['<', '<=', '>', '>=', '==']) {
+      expect(
+        validateCondition({ type: 'earnings_within_days', operator: op, value: 3 }),
+      ).toBe(true)
+    }
+  })
+
+  it('음수 값 거부 (미래 카운트다운 의미상)', () => {
+    expect(
+      validateCondition({ type: 'earnings_within_days', operator: '>=', value: -1 }),
+    ).toBe(false)
+  })
+
+  it('소수 값 거부 (일 단위 정수만)', () => {
+    expect(
+      validateCondition({ type: 'earnings_within_days', operator: '<=', value: 1.5 }),
+    ).toBe(false)
+  })
+
+  it('is 연산자 거부 (numeric 타입)', () => {
+    expect(
+      validateCondition({ type: 'earnings_within_days', operator: 'is', value: 3 }),
+    ).toBe(false)
+  })
+
+  it('value 문자열 거부', () => {
+    expect(
+      validateCondition({ type: 'earnings_within_days', operator: '<=', value: '3' }),
+    ).toBe(false)
+  })
+
+  it('0 (오늘 어닝) 허용', () => {
+    expect(
+      validateCondition({ type: 'earnings_within_days', operator: '==', value: 0 }),
+    ).toBe(true)
+  })
 })

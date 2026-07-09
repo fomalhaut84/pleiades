@@ -3,6 +3,7 @@ import {
   evaluateCondition,
   evaluateStrategy,
   requiresTA,
+  daysUntilEarnings,
   type MarketSnapshot,
   type EvaluationContext,
 } from '../evaluator'
@@ -250,6 +251,90 @@ describe('evaluateCondition — v2 holding_status', () => {
   })
 })
 
+describe('daysUntilEarnings (v3 pure, #419) — KST 캘린더 일수', () => {
+  // KST 자정 기준. 2026-01-05 00:00 KST = 2026-01-04 15:00 UTC.
+  const now = new Date('2026-01-04T15:00:00Z')  // KST 2026-01-05 00:00
+
+  it('null / undefined → null', () => {
+    expect(daysUntilEarnings(null, now)).toBeNull()
+    expect(daysUntilEarnings(undefined, now)).toBeNull()
+  })
+
+  it('과거 어닝 (KST 어제) → null', () => {
+    // KST 2026-01-04 12:00 = UTC 2026-01-04 03:00 (now 보다 12h 이전)
+    expect(daysUntilEarnings(new Date('2026-01-04T03:00:00Z'), now)).toBeNull()
+  })
+
+  it('같은 KST 날짜 어닝 → 0', () => {
+    // KST 2026-01-05 15:00 = UTC 2026-01-05 06:00
+    expect(daysUntilEarnings(new Date('2026-01-05T06:00:00Z'), now)).toBe(0)
+  })
+
+  it('내일 (KST 2026-01-06 아무 시각) → 1', () => {
+    // KST 2026-01-06 00:30 = UTC 2026-01-05 15:30
+    expect(daysUntilEarnings(new Date('2026-01-05T15:30:00Z'), now)).toBe(1)
+    // KST 2026-01-06 23:59 = UTC 2026-01-06 14:59
+    expect(daysUntilEarnings(new Date('2026-01-06T14:59:00Z'), now)).toBe(1)
+  })
+
+  it('KST 3일 뒤 어닝 → 3', () => {
+    // KST 2026-01-08 09:00 = UTC 2026-01-08 00:00
+    expect(daysUntilEarnings(new Date('2026-01-08T00:00:00Z'), now)).toBe(3)
+  })
+
+  it('now 가 KST 23:59, 어닝이 다음 KST 00:00 → D-1 (자정 경계)', () => {
+    // now KST 2026-01-05 23:59 = UTC 2026-01-05 14:59
+    const late = new Date('2026-01-05T14:59:00Z')
+    // 어닝 KST 2026-01-06 00:00 = UTC 2026-01-05 15:00
+    expect(daysUntilEarnings(new Date('2026-01-05T15:00:00Z'), late)).toBe(1)
+  })
+})
+
+describe('evaluateCondition — v3 earnings_within_days (#419)', () => {
+  // now = KST 2026-01-05 00:00 = UTC 2026-01-04 15:00
+  const now = new Date('2026-01-04T15:00:00Z')
+  const ctx = makeContext({ now })
+  // KST 날짜 → UTC 00:00 shift (KST 는 UTC-9h). 편의 헬퍼.
+  const kstDate = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d - 1, 15, 0, 0))
+
+  it('데이터 없음 → false (안전측)', () => {
+    const cond: Condition = { type: 'earnings_within_days', operator: '<=', value: 3 }
+    expect(evaluateCondition(cond, makeSnapshot({ earnings: null }), ctx)).toBe(false)
+    // earnings undefined 도 같은 처리
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(false)
+  })
+
+  it('과거 어닝 → false', () => {
+    const cond: Condition = { type: 'earnings_within_days', operator: '<=', value: 3 }
+    const snap = makeSnapshot({ earnings: { nextEarningsDate: kstDate(2026, 1, 3) } })
+    expect(evaluateCondition(cond, snap, ctx)).toBe(false)
+  })
+
+  it('KST 3일 뒤 어닝 (D-3), <=3 → true', () => {
+    const cond: Condition = { type: 'earnings_within_days', operator: '<=', value: 3 }
+    const snap = makeSnapshot({ earnings: { nextEarningsDate: kstDate(2026, 1, 8) } })
+    expect(evaluateCondition(cond, snap, ctx)).toBe(true)
+  })
+
+  it('KST 7일 뒤 어닝, <=3 → false', () => {
+    const cond: Condition = { type: 'earnings_within_days', operator: '<=', value: 3 }
+    const snap = makeSnapshot({ earnings: { nextEarningsDate: kstDate(2026, 1, 12) } })
+    expect(evaluateCondition(cond, snap, ctx)).toBe(false)
+  })
+
+  it('KST 7일 뒤 어닝, >=5 → true', () => {
+    const cond: Condition = { type: 'earnings_within_days', operator: '>=', value: 5 }
+    const snap = makeSnapshot({ earnings: { nextEarningsDate: kstDate(2026, 1, 12) } })
+    expect(evaluateCondition(cond, snap, ctx)).toBe(true)
+  })
+
+  it('value 문자열 → false (validate 통과했더라도 evaluator 방어)', () => {
+    const cond = { type: 'earnings_within_days', operator: '<=', value: '3' } as unknown as Condition
+    const snap = makeSnapshot({ earnings: { nextEarningsDate: kstDate(2026, 1, 8) } })
+    expect(evaluateCondition(cond, snap, ctx)).toBe(false)
+  })
+})
+
 describe('evaluateStrategy', () => {
   const c1: Condition = { type: 'price', operator: '<=', value: 200 }
   const c2: Condition = { type: 'price', operator: '>=', value: 50 }
@@ -306,5 +391,9 @@ describe('requiresTA', () => {
     expect(requiresTA([{ type: 'time_window', operator: 'is', value: '09:00~15:30' }])).toBe(false)
     expect(requiresTA([{ type: 'weekday', operator: 'is', value: ['MON'] }])).toBe(false)
     expect(requiresTA([{ type: 'holding_status', operator: 'is', value: 'HELD' }])).toBe(false)
+  })
+
+  it('v3 earnings_within_days → TA 불필요 (EarningsCache 만 참조)', () => {
+    expect(requiresTA([{ type: 'earnings_within_days', operator: '<=', value: 3 }])).toBe(false)
   })
 })

@@ -15,6 +15,7 @@ import { getBot } from '@/bot/index'
 import { sendHtml, escapeHtml } from '@/bot/utils/telegram'
 import { generateTAReport } from '@/lib/ta/engine'
 import type { TAReport } from '@/lib/ta/types'
+import { getEarningsMany } from '@/lib/earnings/cache'
 import {
   computeDeliveryStatus,
   recordAlertHistory,
@@ -147,6 +148,10 @@ async function runScan(chatIds: number[]): Promise<void> {
   })
   const holdings = new Set(holdingRows.map((h) => h.ticker))
 
+  // Phase 34-A (#419): 어닝 캐시 (전략 전체 티커 대상 미리 조회).
+  // 캐시 없으면 evaluator 가 자동으로 false 처리 → 안전.
+  const earningsMap = await getEarningsMany(tickers)
+
   // TA 필요한 ticker 만 리포트 생성 (병렬 + 실패 허용)
   const taByTicker = new Map<string, TAReport | null>()
 
@@ -189,11 +194,13 @@ async function runScan(chatIds: number[]): Promise<void> {
     if (!shouldFire(s.frequency, s.lastTriggeredAt, now)) continue
 
     const priceRow = priceMap.get(s.ticker)
+    const earningsRow = earningsMap.get(s.ticker)
     const snapshot: MarketSnapshot = {
       price: priceRow
         ? { price: priceRow.price, changePercent: priceRow.changePercent }
         : null,
       ta: taByTicker.get(s.ticker) ?? null,
+      earnings: earningsRow ? { nextEarningsDate: earningsRow.nextEarningsDate } : null,
     }
 
     const { satisfied, perCondition } = evaluateStrategy(

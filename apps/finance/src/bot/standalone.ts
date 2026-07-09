@@ -9,7 +9,7 @@
 
 import 'dotenv/config'
 import { getBot } from './index'
-import { schedulePriceUpdates, scheduleSnapshots, scheduleKrxSync, scheduleRecurring, scheduleVestingStatusUpdate } from '@/lib/cron'
+import { schedulePriceUpdates, scheduleSnapshots, scheduleKrxSync, scheduleRecurring, scheduleVestingStatusUpdate, scheduleEarningsScan } from '@/lib/cron'
 import { scheduleNotifications } from './notifications/scheduler'
 import { sanitizeError } from './utils/error'
 
@@ -31,6 +31,7 @@ async function main(): Promise<void> {
   scheduleKrxSync()
   scheduleRecurring()
   scheduleVestingStatusUpdate()
+  scheduleEarningsScan()
   scheduleNotifications()
   console.log('[bot] cron + 알림 스케줄러 등록 완료')
 

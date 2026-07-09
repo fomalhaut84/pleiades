@@ -437,3 +437,12 @@ model CustomStrategy {
 
   @@index([ticker, isActive])
 }
+
+// Phase 34-A (#419): 어닝 캘린더 캐시. cron 이 일 1회 yahoo-finance2 로 갱신하고
+// evaluator 의 `earnings_within_days` 조건이 참조.
+model EarningsCache {
+  ticker           String    @id
+  nextEarningsDate DateTime?
+  lastFetchedAt    DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}

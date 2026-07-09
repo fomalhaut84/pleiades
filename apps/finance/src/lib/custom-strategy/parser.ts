@@ -26,6 +26,9 @@ const PROMPT_HEADER = `
 - weekday (배열, 요일 코드 ["MON","TUE","WED","THU","FRI","SAT","SUN"] 중 부분집합)
 - holding_status (문자열, "HELD" 또는 "NOT_HELD" — 사용자가 해당 ticker 보유 여부)
 
+## 지원 조건 타입 (v3 — 어닝 캘린더)
+- earnings_within_days (숫자 정수, 0 이상, 다음 어닝까지 남은 일수 — Yahoo Finance 캘린더)
+
 ## 연산자
 - 숫자 타입: < <= > >= ==
 - 문자열/배열 타입: is (전용)
@@ -62,9 +65,20 @@ const PROMPT_HEADER = `
     {"type":"holding_status","operator":"is","value":"HELD"}
   ], "logic":"AND"}
 
+## v3 예시 (어닝 캘린더)
+- "AAPL 어닝 3일 이내면 알림 (매수 회피용)" →
+  {"conditions": [
+    {"type":"earnings_within_days","operator":"<=","value":3}
+  ], "logic":"AND"}
+- "NVDA RSI 30 이하 + 어닝 7일 이상 남았을 때만 진입" →
+  {"conditions": [
+    {"type":"rsi","operator":"<=","value":30},
+    {"type":"earnings_within_days","operator":">=","value":7}
+  ], "logic":"AND"}
+
 ## 규칙
 - 지원 타입 외 조건 요구되면 { "error": "지원 안함: ..." } 로만 응답
-- 뉴스/펀더멘털/어닝/크로스-티커 조건은 미지원 (지원 타입 외 로 처리)
+- 뉴스/펀더멘털/크로스-티커 조건은 미지원 (지원 타입 외 로 처리). 어닝은 v3 로 지원 시작.
 - ticker 알 수 없으면 { "error": "ticker 를 명확히 지정해주세요" }
 - 사용자가 시간대를 "미국장" / "한국장" 등으로 지칭하면 KST 로 환산 (미국장 = 대략 22:30~05:00 KST DST 무관 단순화, 한국장 = 09:00~15:30)
 

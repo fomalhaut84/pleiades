@@ -17,6 +17,8 @@ export type ConditionType =
   | 'time_window'     // KST 시각 범위 필터 (HH:MM~HH:MM)
   | 'weekday'         // KST 요일 필터 (MON/TUE/…)
   | 'holding_status'  // 사용자 보유 여부
+  // v3 additions (Phase 34) —
+  | 'earnings_within_days'  // 다음 어닝까지 남은 일수 (data 없거나 과거만 있으면 false)
 
 export type Operator = '<' | '<=' | '>' | '>=' | '==' | 'is'
 
@@ -60,7 +62,7 @@ const VALID_WEEKDAYS_SET = new Set<WeekdayCode>(VALID_WEEKDAYS)
 /** HH:MM~HH:MM 포맷 (00~23:00~59). 자정 wraparound 는 evaluator 가 판정. */
 export const TIME_WINDOW_RE = /^([01]\d|2[0-3]):([0-5]\d)~([01]\d|2[0-3]):([0-5]\d)$/
 
-const NUMERIC_TYPES = new Set<ConditionType>(['price', 'rsi', 'change_pct'])
+const NUMERIC_TYPES = new Set<ConditionType>(['price', 'rsi', 'change_pct', 'earnings_within_days'])
 const SINGLE_STRING_TYPES = new Set<ConditionType>(['macd_signal', 'sma_cross', 'bb_position', 'holding_status'])
 const NUMERIC_OPS = new Set<Operator>(['<', '<=', '>', '>=', '=='])
 const IS_OP: Operator = 'is'
@@ -71,6 +73,7 @@ const VALID_TIMEFRAMES = new Set<Timeframe>(['1d', '5d', '20d'])
 const VALID_TYPES = new Set<ConditionType>([
   'price', 'rsi', 'macd_signal', 'sma_cross', 'bb_position', 'change_pct',
   'time_window', 'weekday', 'holding_status',
+  'earnings_within_days',
 ])
 
 /** Condition 유효성 검증 — evaluator 진입 전 방어 */
@@ -87,6 +90,10 @@ export function validateCondition(c: unknown): c is Condition {
     if (type === 'change_pct') {
       // timeframe 필수 — evaluator 폴백을 방지해 조건 의도가 명확해지도록
       if (!VALID_TIMEFRAMES.has(cond.timeframe as Timeframe)) return false
+    }
+    if (type === 'earnings_within_days') {
+      // 어닝 일수는 정수 + 음수는 무의미 (미래 카운트다운). 소수/음수 거부.
+      if (!Number.isInteger(cond.value) || cond.value < 0) return false
     }
     return true
   }
