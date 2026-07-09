@@ -386,3 +386,20 @@
 - [x] **32-A**: HTTP transport PoC (multi-session stateful 패턴 확정)
 - [x] **32-B**: MCP server HTTP transport 정식 도입 + PM2 승격
 - [x] **32-C**: 구조화 로깅 (pino + 파일 rotation + SDK bypass 감지)
+
+---
+
+# 15차 마일스톤 — 관측 & 이력 & 전략 확장
+
+> 알림 발동 이력 웹 조회, MCP 로그 대시보드, 커스텀 전략 v3 (어닝 · 크로스-티커).
+
+## Phase 33: 관측 & 이력 & 정책
+- [x] **33-D**: 관심종목 알림 시간대 토글 (24h ↔ 장중 only)
+- [x] **33-A**: AlertHistory 모델 + 발동 hook (9개 kind 자동 저장)
+- [x] **33-B**: 알림 이력 페이지 `/alerts/history` (필터·차트·리스트)
+- [x] **33-C**: MCP 로그 대시보드 `/admin/mcp-logs` + crash 파일 분리 + 스키마 문서화 (#409 흡수)
+
+## Phase 34: 커스텀 전략 v3
+- [x] **34-A**: 어닝 캘린더 조건 (`earnings_within_days`, yahoo-finance2 무료)
+- [x] **34-B**: 크로스-티커 조건 (`cross_ticker` SPY/VIX 등 벤치마크 게이트)
+- [ ] **34-C**: 뉴스 조건 (외부 API 승인 후 별도 마일스톤으로 이월, #421)
