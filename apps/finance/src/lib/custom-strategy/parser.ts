@@ -26,8 +26,13 @@ const PROMPT_HEADER = `
 - weekday (배열, 요일 코드 ["MON","TUE","WED","THU","FRI","SAT","SUN"] 중 부분집합)
 - holding_status (문자열, "HELD" 또는 "NOT_HELD" — 사용자가 해당 ticker 보유 여부)
 
-## 지원 조건 타입 (v3 — 어닝 캘린더)
+## 지원 조건 타입 (v3 — 어닝 캘린더 / 크로스-티커)
 - earnings_within_days (숫자 정수, 0 이상, 다음 어닝까지 남은 일수 — Yahoo Finance 캘린더)
+- cross_ticker — 다른 티커의 price / change_percent 비교. 필수 필드:
+  - crossTicker: 참조 티커 (대문자 정규화). 자기 자신 참조 금지
+  - metric: "price" 또는 "change_percent"
+  - operator: 숫자 연산자 (< / <= / > / >= / ==)
+  - value: 숫자
 
 ## 연산자
 - 숫자 타입: < <= > >= ==
@@ -76,9 +81,18 @@ const PROMPT_HEADER = `
     {"type":"earnings_within_days","operator":">=","value":7}
   ], "logic":"AND"}
 
+## v3 예시 (크로스-티커)
+- "SPY -2% 이하 하락한 날에는 SOXL 진입 회피 → SOXL 매수 조건에 SPY 안 떨어진 조건 추가"
+  ticker: "SOXL", conditions: [
+    {"type":"cross_ticker","operator":">","value":-2,"crossTicker":"SPY","metric":"change_percent"}
+  ], "logic":"AND"
+- "VIX 25 초과 시 QQQ 콜 스캘핑" — ticker: "QQQ", conditions: [
+    {"type":"cross_ticker","operator":">","value":25,"crossTicker":"VIX","metric":"price"}
+  ]
+
 ## 규칙
 - 지원 타입 외 조건 요구되면 { "error": "지원 안함: ..." } 로만 응답
-- 뉴스/펀더멘털/크로스-티커 조건은 미지원 (지원 타입 외 로 처리). 어닝은 v3 로 지원 시작.
+- 뉴스/펀더멘털 조건은 미지원 (지원 타입 외 로 처리). 어닝 / 크로스-티커는 v3 로 지원 시작.
 - ticker 알 수 없으면 { "error": "ticker 를 명확히 지정해주세요" }
 - 사용자가 시간대를 "미국장" / "한국장" 등으로 지칭하면 KST 로 환산 (미국장 = 대략 22:30~05:00 KST DST 무관 단순화, 한국장 = 09:00~15:30)
 

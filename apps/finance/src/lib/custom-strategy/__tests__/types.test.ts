@@ -248,3 +248,54 @@ describe('earnings_within_days (v3, Phase 34-A / #419)', () => {
     ).toBe(true)
   })
 })
+
+describe('cross_ticker (v3, Phase 34-B / #420)', () => {
+  it('필수 필드 (crossTicker + metric + operator + value) 모두 있으면 통과', () => {
+    expect(validateCondition({
+      type: 'cross_ticker', operator: '<=', value: -2,
+      crossTicker: 'SPY', metric: 'change_percent',
+    })).toBe(true)
+    expect(validateCondition({
+      type: 'cross_ticker', operator: '>', value: 25,
+      crossTicker: 'VIX', metric: 'price',
+    })).toBe(true)
+  })
+
+  it('crossTicker 누락 → false', () => {
+    expect(validateCondition({
+      type: 'cross_ticker', operator: '<=', value: 0, metric: 'price',
+    })).toBe(false)
+  })
+
+  it('crossTicker 빈 문자열 → false', () => {
+    expect(validateCondition({
+      type: 'cross_ticker', operator: '<=', value: 0, crossTicker: '   ', metric: 'price',
+    })).toBe(false)
+  })
+
+  it('metric 화이트리스트 외 → false', () => {
+    expect(validateCondition({
+      type: 'cross_ticker', operator: '<=', value: 0,
+      crossTicker: 'SPY', metric: 'rsi',
+    })).toBe(false)
+    expect(validateCondition({
+      type: 'cross_ticker', operator: '<=', value: 0, crossTicker: 'SPY',
+    })).toBe(false)
+  })
+
+  it('is 연산자 거부 (numeric 타입)', () => {
+    expect(validateCondition({
+      type: 'cross_ticker', operator: 'is', value: 0,
+      crossTicker: 'SPY', metric: 'price',
+    })).toBe(false)
+  })
+})
+
+describe('conditionToString — cross_ticker', () => {
+  it('SPY.change_percent <= -2 형태', () => {
+    expect(conditionToString({
+      type: 'cross_ticker', operator: '<=', value: -2,
+      crossTicker: 'SPY', metric: 'change_percent',
+    })).toBe('SPY.change_percent <= -2')
+  })
+})

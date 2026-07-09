@@ -24,6 +24,7 @@ import {
 import {
   evaluateStrategy,
   requiresTA,
+  collectCrossTickers,
   type MarketSnapshot,
 } from '@/lib/custom-strategy/evaluator'
 import {
@@ -133,12 +134,20 @@ async function runScan(chatIds: number[]): Promise<void> {
   })
   if (strategies.length === 0) return
 
-  // ticker 단위로 PriceCache 미리 조회
-  const tickers = Array.from(new Set(strategies.map((s) => s.ticker)))
+  // Phase 34-B (#420): 전략들이 참조하는 크로스 티커도 함께 조회 (같은 쿼리에 병합).
+  const strategyTickers = Array.from(new Set(strategies.map((s) => s.ticker)))
+  const crossSet = collectCrossTickers(strategies)
+  const tickers = strategyTickers
+  const allPriceTickers = Array.from(new Set([...strategyTickers, ...crossSet]))
   const prices = await prisma.priceCache.findMany({
-    where: { ticker: { in: tickers } },
+    where: { ticker: { in: allPriceTickers } },
   })
   const priceMap = new Map(prices.map((p) => [p.ticker, p]))
+  const crossTickersMap = new Map<string, { price: number; changePercent: number | null }>()
+  for (const t of crossSet) {
+    const p = priceMap.get(t)
+    if (p) crossTickersMap.set(t, { price: p.price, changePercent: p.changePercent })
+  }
 
   // 보유 티커 조회 — holding_status 조건 평가용 (Phase 31-A v2).
   // shares > 0 만 홀딩으로 간주. 여러 계좌에서 같은 티커 보유해도 Set 이므로 중복 무관.
@@ -207,7 +216,7 @@ async function runScan(chatIds: number[]): Promise<void> {
       conds,
       s.logic === 'OR' ? 'OR' : 'AND',
       snapshot,
-      { now, holdings, strategyTicker: s.ticker },
+      { now, holdings, strategyTicker: s.ticker, crossTickers: crossTickersMap },
     )
 
     if (!satisfied) continue

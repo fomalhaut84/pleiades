@@ -43,6 +43,12 @@ export interface EvaluationContext {
   holdings: Set<string>
   /** 평가 대상 티커 — holding_status 판정용 (Strategy.ticker 주입) */
   strategyTicker: string
+  /**
+   * Phase 34-B (#420): 크로스-티커 조건 참조용 스냅샷 맵.
+   * key = 대문자 정규화된 티커. 호출자가 전략들의 모든 crossTicker 를 미리 조회해 주입.
+   * 미주입 or 특정 티커 없음 → cross_ticker 조건 false (안전측).
+   */
+  crossTickers?: Map<string, { price: number; changePercent: number | null }>
 }
 
 /** 지원 조건 타입 중 TA 필요 여부 판단 — 평가 전에 TAReport fetch 여부 결정 */
@@ -195,9 +201,48 @@ export function evaluateCondition(
       if (days == null) return false
       return compareNumeric(days, cond.operator, cond.value)
     }
+    // ── v3 (Phase 34-B #420) —
+    case 'cross_ticker': {
+      if (typeof cond.value !== 'number') return false
+      if (typeof cond.crossTicker !== 'string' || !cond.crossTicker.trim()) return false
+      if (cond.metric !== 'price' && cond.metric !== 'change_percent') return false
+      const target = cond.crossTicker.trim().toUpperCase()
+      // 자기 자신 참조 방지 — 사용자가 실수로 등록해도 무의미한 tautology 회피.
+      if (target === context.strategyTicker) return false
+      const cross = context.crossTickers?.get(target)
+      if (!cross) return false
+      const actual = cond.metric === 'price' ? cross.price : cross.changePercent
+      if (actual == null || !Number.isFinite(actual)) return false
+      return compareNumeric(actual, cond.operator, cond.value)
+    }
     default:
       return false
   }
+}
+
+/**
+ * Pure — 전략 집합에서 참조되는 모든 크로스 티커를 대문자 정규화하여 수집.
+ * 자기 자신 참조 (strategyTicker == crossTicker) 는 evaluator 가 false 처리하지만
+ * 수집 단계에서도 제외해 PriceCache 조회 최적화.
+ */
+export function collectCrossTickers(
+  strategies: Array<{ ticker: string; conditions: unknown }>,
+): Set<string> {
+  const out = new Set<string>()
+  for (const s of strategies) {
+    const self = s.ticker.trim().toUpperCase()
+    const raw = Array.isArray(s.conditions) ? (s.conditions as unknown[]) : []
+    for (const c of raw) {
+      if (!c || typeof c !== 'object') continue
+      const cond = c as { type?: string; crossTicker?: string }
+      if (cond.type !== 'cross_ticker') continue
+      if (typeof cond.crossTicker !== 'string') continue
+      const t = cond.crossTicker.trim().toUpperCase()
+      if (!t || t === self) continue
+      out.add(t)
+    }
+  }
+  return out
 }
 
 export interface EvaluationResult {

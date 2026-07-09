@@ -4,6 +4,7 @@ import {
   evaluateStrategy,
   requiresTA,
   daysUntilEarnings,
+  collectCrossTickers,
   type MarketSnapshot,
   type EvaluationContext,
 } from '../evaluator'
@@ -335,6 +336,141 @@ describe('evaluateCondition — v3 earnings_within_days (#419)', () => {
   })
 })
 
+describe('evaluateCondition — v3 cross_ticker (Phase 34-B / #420)', () => {
+  const ctx = makeContext({ strategyTicker: 'SOXL' })
+
+  it('crossTickers 미주입 → false', () => {
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '<=', value: -2,
+      crossTicker: 'SPY', metric: 'change_percent',
+    }
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(false)
+  })
+
+  it('참조 티커 데이터 없음 → false', () => {
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '<=', value: -2,
+      crossTicker: 'SPY', metric: 'change_percent',
+    }
+    const c = makeContext({ strategyTicker: 'SOXL', crossTickers: new Map() })
+    expect(evaluateCondition(cond, makeSnapshot(), c)).toBe(false)
+  })
+
+  it('SPY change_percent -3 이 -2 이하 → true', () => {
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '<=', value: -2,
+      crossTicker: 'SPY', metric: 'change_percent',
+    }
+    const c = makeContext({
+      strategyTicker: 'SOXL',
+      crossTickers: new Map([['SPY', { price: 400, changePercent: -3 }]]),
+    })
+    expect(evaluateCondition(cond, makeSnapshot(), c)).toBe(true)
+  })
+
+  it('VIX price > 25 (가격 지표) 통과', () => {
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '>', value: 25,
+      crossTicker: 'VIX', metric: 'price',
+    }
+    const c = makeContext({
+      strategyTicker: 'QQQ',
+      crossTickers: new Map([['VIX', { price: 30, changePercent: 10 }]]),
+    })
+    expect(evaluateCondition(cond, makeSnapshot(), c)).toBe(true)
+  })
+
+  it('changePercent 이 null 이면 false', () => {
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '<=', value: -2,
+      crossTicker: 'SPY', metric: 'change_percent',
+    }
+    const c = makeContext({
+      strategyTicker: 'SOXL',
+      crossTickers: new Map([['SPY', { price: 400, changePercent: null }]]),
+    })
+    expect(evaluateCondition(cond, makeSnapshot(), c)).toBe(false)
+  })
+
+  it('자기 자신 참조 → false (tautology 방지)', () => {
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '<=', value: 200,
+      crossTicker: 'SOXL', metric: 'price',
+    }
+    const c = makeContext({
+      strategyTicker: 'SOXL',
+      crossTickers: new Map([['SOXL', { price: 100, changePercent: 0 }]]),
+    })
+    expect(evaluateCondition(cond, makeSnapshot(), c)).toBe(false)
+  })
+
+  it('소문자 crossTicker 도 대문자로 정규화하여 조회', () => {
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '>', value: 25,
+      crossTicker: 'vix', metric: 'price',
+    }
+    const c = makeContext({
+      strategyTicker: 'QQQ',
+      crossTickers: new Map([['VIX', { price: 30, changePercent: 10 }]]),
+    })
+    expect(evaluateCondition(cond, makeSnapshot(), c)).toBe(true)
+  })
+
+  it('crossTicker/metric 누락 → false (evaluator 방어)', () => {
+    const c = makeContext({
+      strategyTicker: 'SOXL',
+      crossTickers: new Map([['SPY', { price: 400, changePercent: -3 }]]),
+    })
+    expect(evaluateCondition(
+      { type: 'cross_ticker', operator: '<=', value: 0 } as unknown as Condition,
+      makeSnapshot(), c,
+    )).toBe(false)
+  })
+})
+
+describe('collectCrossTickers (pure, Phase 34-B / #420)', () => {
+  it('여러 전략의 cross_ticker 참조 통합 + 대문자 정규화 + 중복 제거', () => {
+    const strategies = [
+      { ticker: 'SOXL', conditions: [
+        { type: 'cross_ticker', crossTicker: 'spy', metric: 'change_percent' },
+        { type: 'price', value: 50 },
+      ] },
+      { ticker: 'QQQ', conditions: [
+        { type: 'cross_ticker', crossTicker: 'VIX', metric: 'price' },
+        { type: 'cross_ticker', crossTicker: 'SPY', metric: 'change_percent' }, // 중복 (다른 전략)
+      ] },
+    ]
+    expect(collectCrossTickers(strategies)).toEqual(new Set(['SPY', 'VIX']))
+  })
+
+  it('자기 자신 참조는 제외', () => {
+    const strategies = [
+      { ticker: 'SPY', conditions: [
+        { type: 'cross_ticker', crossTicker: 'SPY', metric: 'price' },
+        { type: 'cross_ticker', crossTicker: 'VIX', metric: 'price' },
+      ] },
+    ]
+    expect(collectCrossTickers(strategies)).toEqual(new Set(['VIX']))
+  })
+
+  it('conditions 배열이 아니거나 손상된 조건은 무시', () => {
+    const strategies = [
+      { ticker: 'SOXL', conditions: 'not-an-array' },
+      { ticker: 'QQQ', conditions: [
+        { type: 'cross_ticker' }, // crossTicker 누락
+        { type: 'cross_ticker', crossTicker: '' },
+        null,
+        { type: 'cross_ticker', crossTicker: 'SPY', metric: 'price' },
+      ] },
+    ]
+    expect(collectCrossTickers(strategies)).toEqual(new Set(['SPY']))
+  })
+
+  it('빈 입력 → 빈 Set', () => {
+    expect(collectCrossTickers([])).toEqual(new Set())
+  })
+})
+
 describe('evaluateStrategy', () => {
   const c1: Condition = { type: 'price', operator: '<=', value: 200 }
   const c2: Condition = { type: 'price', operator: '>=', value: 50 }
@@ -395,5 +531,12 @@ describe('requiresTA', () => {
 
   it('v3 earnings_within_days → TA 불필요 (EarningsCache 만 참조)', () => {
     expect(requiresTA([{ type: 'earnings_within_days', operator: '<=', value: 3 }])).toBe(false)
+  })
+
+  it('v3 cross_ticker → TA 불필요 (PriceCache 만 참조)', () => {
+    expect(requiresTA([{
+      type: 'cross_ticker', operator: '<=', value: -2,
+      crossTicker: 'SPY', metric: 'change_percent',
+    }])).toBe(false)
   })
 })
