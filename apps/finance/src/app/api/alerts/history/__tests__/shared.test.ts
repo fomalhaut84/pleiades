@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { KNOWN_KINDS, parseISOOrNull, kstDateKey, buildKstDayBuckets, parseKindsParam } from '../shared'
+import {
+  KNOWN_KINDS, parseISOOrNull, kstDateKey, buildKstDayBuckets, parseKindsParam,
+  resolveTimeWindow,
+} from '../shared'
 
 describe('KNOWN_KINDS', () => {
   it('9종 kind 를 모두 포함 (33-A AlertHistory 매핑과 동기화)', () => {
@@ -140,5 +143,40 @@ describe('buildKstDayBuckets (self-review P1 회귀 방지 #417)', () => {
     const d = new Date('2026-07-08T05:00:00Z')
     const buckets = buildKstDayBuckets(new Map([['2026-07-08', 2]]), d, d)
     expect(buckets).toEqual([{ date: '2026-07-08', count: 2 }])
+  })
+})
+
+describe('resolveTimeWindow (Codex #428 P2 회귀 방지)', () => {
+  const now = new Date('2026-07-09T00:00:00Z')
+  const DAY = 24 * 60 * 60 * 1000
+
+  it('both null → now anchored, from = now - N일', () => {
+    const r = resolveTimeWindow(null, null, 7, now)
+    expect(r.effectiveTo).toBe(now)
+    expect(r.effectiveFrom.getTime()).toBe(now.getTime() - 7 * DAY)
+  })
+
+  it('to 만 지정 (과거) → from = to - N일 (inverted range 방지)', () => {
+    const to = new Date('2026-06-01T00:00:00Z')
+    const r = resolveTimeWindow(null, to, 7, now)
+    expect(r.effectiveTo).toBe(to)
+    expect(r.effectiveFrom.getTime()).toBe(to.getTime() - 7 * DAY)
+    // 실제 위험 조건: from <= to (기존 버그 재현 방지)
+    expect(r.effectiveFrom.getTime()).toBeLessThanOrEqual(r.effectiveTo.getTime())
+  })
+
+  it('from 만 지정 → to = now', () => {
+    const from = new Date('2026-06-01T00:00:00Z')
+    const r = resolveTimeWindow(from, null, 7, now)
+    expect(r.effectiveFrom).toBe(from)
+    expect(r.effectiveTo).toBe(now)
+  })
+
+  it('both 지정 → 그대로', () => {
+    const from = new Date('2026-05-01T00:00:00Z')
+    const to = new Date('2026-06-01T00:00:00Z')
+    const r = resolveTimeWindow(from, to, 7, now)
+    expect(r.effectiveFrom).toBe(from)
+    expect(r.effectiveTo).toBe(to)
   })
 })

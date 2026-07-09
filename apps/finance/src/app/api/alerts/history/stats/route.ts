@@ -8,7 +8,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { ok, fail } from '@/lib/api-response'
 import type { Prisma } from '@prisma/client'
-import { parseISOOrNull, parseKindsParam, buildKstDayBuckets, kstDateKey } from '../shared'
+import { parseISOOrNull, parseKindsParam, buildKstDayBuckets, kstDateKey, resolveTimeWindow } from '../shared'
 
 const DEFAULT_LOOKBACK_DAYS = 7
 
@@ -30,9 +30,8 @@ export async function GET(req: NextRequest) {
     if (fromStr && !from) return fail('from 이 ISO 8601 형식이 아닙니다.', 400)
     if (toStr && !to) return fail('to 가 ISO 8601 형식이 아닙니다.', 400)
 
-    const now = new Date()
-    const effectiveFrom = from ?? new Date(now.getTime() - DEFAULT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
-    const effectiveTo = to ?? now
+    // 기본 기간: `to` anchored (Codex #428 P2 fix). resolveTimeWindow 규칙 통일.
+    const { effectiveFrom, effectiveTo } = resolveTimeWindow(from, to, DEFAULT_LOOKBACK_DAYS)
 
     const where: Prisma.AlertHistoryWhereInput = {
       firedAt: { gte: effectiveFrom, lte: effectiveTo },

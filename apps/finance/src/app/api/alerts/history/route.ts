@@ -8,7 +8,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { paginated, fail } from '@/lib/api-response'
 import type { Prisma } from '@prisma/client'
-import { parseISOOrNull, parseKindsParam } from './shared'
+import { parseISOOrNull, parseKindsParam, resolveTimeWindow } from './shared'
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 200
@@ -41,10 +41,8 @@ export async function GET(req: NextRequest) {
     let offset = offsetStr ? parseInt(offsetStr, 10) : 0
     if (!Number.isFinite(offset) || offset < 0) offset = 0
 
-    // 기본 기간: 최근 N일 (from/to 미지정 시)
-    const now = new Date()
-    const effectiveFrom = from ?? new Date(now.getTime() - DEFAULT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
-    const effectiveTo = to ?? now
+    // 기본 기간: `to` anchored (Codex #428 P2 fix). from/to 조합별 규칙은 resolveTimeWindow 참고.
+    const { effectiveFrom, effectiveTo } = resolveTimeWindow(from, to, DEFAULT_LOOKBACK_DAYS)
 
     const where: Prisma.AlertHistoryWhereInput = {
       firedAt: { gte: effectiveFrom, lte: effectiveTo },

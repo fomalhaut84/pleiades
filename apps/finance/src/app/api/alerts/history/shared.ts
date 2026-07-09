@@ -16,6 +16,28 @@ export function parseISOOrNull(s: string | undefined | null): Date | null {
 }
 
 /**
+ * 조회 기간 계산 (Codex #428 P2 회귀 방지 — 이전에는 `from` 미지정 시 항상 서버 now 기준
+ * -N일 로 anchored → 사용자가 `to` 만 과거로 지정하면 inverted range → 0 rows).
+ *
+ * 규칙:
+ *   - both provided → 그대로 사용
+ *   - `to` 만 → `from = to - lookbackDays`
+ *   - `from` 만 → `to = now`
+ *   - both omitted → `to = now`, `from = now - lookbackDays`
+ */
+export function resolveTimeWindow(
+  from: Date | null,
+  to: Date | null,
+  lookbackDays: number,
+  now: Date = new Date(),
+): { effectiveFrom: Date; effectiveTo: Date } {
+  const DAY = 24 * 60 * 60 * 1000
+  const effectiveTo = to ?? now
+  const effectiveFrom = from ?? new Date(effectiveTo.getTime() - lookbackDays * DAY)
+  return { effectiveFrom, effectiveTo }
+}
+
+/**
  * `kind` 쿼리 파라미터 정규화 — repeated (`?kind=a&kind=b`) 와 CSV (`?kind=a,b`) 모두 허용.
  * Codex P2 (#417 PR #424): 다중 kind 를 서버에서 지원해야 페이지네이션/집계가
  * 정합. 이전 구현은 클라 다중 선택 시 서버 필터를 skip 하고 페이지 후 클라 필터 →
