@@ -427,7 +427,7 @@ function fireMultiExpenseParse(ctx: Context, text: string): void {
     ctx.replyWithChatAction('typing').catch(() => {})
   }, 5000)
 
-  askAdvisor(buildMultiParsePrompt() + text, { timeout: 60_000 })
+  askAdvisor(buildMultiParsePrompt() + text, { timeout: 60_000, intent: 'parse' })  // 구조 JSON 파싱 → haiku (35-A)
     .then(async (result) => {
       await handleMultiExpenseParsed(ctx, result.response)
     })

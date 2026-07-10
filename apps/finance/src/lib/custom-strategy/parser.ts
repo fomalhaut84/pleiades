@@ -121,6 +121,8 @@ export async function parseStrategyText(text: string): Promise<ParsedStrategy> {
 
   const prompt = `${PROMPT_HEADER}\n${text.trim()}`
 
+  // 명시 model='sonnet' — 자연어 → 구조화 JSON 파싱 안정성 우선 (35-A intent='parse'
+  // 매핑은 haiku 지만 전략 파서는 스키마 위반 회귀 방지 위해 sonnet 유지 예외).
   const result = await askAdvisor(prompt, {
     model: 'sonnet',
     timeout: 60_000,
@@ -153,5 +155,90 @@ export async function parseStrategyText(text: string): Promise<ParsedStrategy> {
   }
 
   // ticker 대문자 정규화 (parser 프롬프트에도 있지만 방어)
+  return { ...parsed, ticker: parsed.ticker.toUpperCase().trim() }
+}
+
+/**
+ * Phase 35-B (#434) — 자연어 전략 편집.
+ * 기존 전략 컨텍스트 + 자연어 지시 → 갱신된 ParsedStrategy 반환. 상대 편집
+ * ("SPY 조건 빼줘", "어닝 5일로 완화") 지원. 지원 조건 밖 지시는 error throw.
+ */
+export async function editStrategyByNL(
+  current: ParsedStrategy,
+  instruction: string,
+): Promise<ParsedStrategy> {
+  if (!instruction || !instruction.trim()) {
+    throw new Error('편집 지시를 입력해주세요.')
+  }
+  if (instruction.length > 500) {
+    throw new Error('편집 지시가 너무 깁니다 (500자 이하).')
+  }
+
+  const contextBlock = JSON.stringify(
+    {
+      name: current.name,
+      ticker: current.ticker,
+      conditions: current.conditions,
+      logic: current.logic,
+      frequency: current.frequency,
+    },
+    null,
+    2,
+  )
+
+  const editHeader = `
+사용자가 아래 기존 전략을 자연어 지시대로 수정한 결과를 JSON 으로 응답해줘.
+반환 스키마는 등록과 동일 (name / ticker / conditions / logic / frequency).
+오직 JSON 오브젝트만 출력 — 다른 설명/코드블록 없이.
+
+## 상대 편집 규칙
+- "SPY 조건 빼줘" / "어닝 조건 제거" → 해당 type 의 condition 삭제
+- "어닝 5일로 완화" / "RSI 25 로 강화" → 해당 condition value 조정
+- "OR 로 바꿔" → logic 변경
+- "매일 한 번만" / "always 로" → frequency 변경
+- "이름을 X 로" → name 변경
+- 지시가 애매하면 { "error": "지시 애매: ..." } 로 응답
+- 기존 전략에 없는 조건 타입을 새로 요구 → 등록 규칙 그대로 (지원 타입 밖이면 error)
+
+${PROMPT_HEADER}
+
+## 기존 전략 (JSON)
+${contextBlock}
+
+## 편집 지시
+`
+
+  const prompt = `${editHeader}${instruction.trim()}`
+
+  // 편집도 등록과 동일하게 sonnet 로 (스키마 안정성 우선).
+  const result = await askAdvisor(prompt, {
+    model: 'sonnet',
+    timeout: 60_000,
+    maxBudgetUsd: 0.2,
+  })
+
+  const raw = result.response.trim()
+  const firstBrace = raw.indexOf('{')
+  const lastBrace = raw.lastIndexOf('}')
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
+    throw new Error(`AI 편집 응답에 JSON 오브젝트가 없습니다. 표현을 바꿔서 재시도해주세요.\n원문: ${raw.slice(0, 200)}`)
+  }
+  const cleaned = raw.slice(firstBrace, lastBrace + 1).trim()
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(cleaned)
+  } catch {
+    throw new Error(`AI 편집 응답이 JSON 이 아닙니다. 재시도 하거나 표현을 바꿔주세요.\n원문: ${cleaned.slice(0, 200)}`)
+  }
+
+  if (isParseError(parsed)) {
+    throw new Error(`편집 실패: ${parsed.error}`)
+  }
+
+  if (!validateParsedStrategy(parsed)) {
+    throw new Error(`AI 편집 결과가 유효한 전략 스키마가 아닙니다. 지시를 더 명확히 해주세요.`)
+  }
+
   return { ...parsed, ticker: parsed.ticker.toUpperCase().trim() }
 }

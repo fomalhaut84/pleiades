@@ -402,4 +402,19 @@
 ## Phase 34: 커스텀 전략 v3
 - [x] **34-A**: 어닝 캘린더 조건 (`earnings_within_days`, yahoo-finance2 무료)
 - [x] **34-B**: 크로스-티커 조건 (`cross_ticker` SPY/VIX 등 벤치마크 게이트)
-- [ ] **34-C**: 뉴스 조건 (외부 API 승인 후 별도 마일스톤으로 이월, #421)
+- [ ] **34-C**: 뉴스 조건 (16차 Phase 36 으로 재구성, 다시 17차로 이월)
+
+---
+
+# 16차 마일스톤 — AI 정책 강화 & 뉴스 조건
+
+> `/ai` sonnet 승격 + 자연어 전략 편집 (Phase 35). 뉴스 조건 (Phase 36) 은 17차 이월.
+
+## Phase 35: AI 정책 강화
+- [x] **35-A**: `/ai` 자유대화 sonnet 승격 + `AdvisorIntent` API
+- [x] **35-B**: 자연어 전략 편집 (미리보기 + diff + PUT conditions 확장)
+
+## Phase 36: 뉴스 조건 (17차 이월)
+- [ ] **36-A**: 뉴스 API 도입 결정 — 조사 완료 (`docs/specs/435-news-api-decision.md`), 17차에서 결정
+- [ ] **36-B**: NewsCache + fetcher + cron
+- [ ] **36-C**: `news_keyword` 조건
