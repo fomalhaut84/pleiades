@@ -35,7 +35,8 @@ export async function POST(request: NextRequest) {
       return fail('질문을 입력해주세요.', 400)
     }
 
-    const result = await askAdvisor(prompt.trim())
+    // 웹 `/ai` — 자유 질문 → sonnet (Phase 35-A / #433)
+    const result = await askAdvisor(prompt.trim(), { intent: 'conversation' })
 
     return ok({
       response: result.response,

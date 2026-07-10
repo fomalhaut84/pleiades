@@ -296,7 +296,7 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
     for (const r of guideTargets) {
       try {
         const prompt = `${r.displayName}(${r.ticker})에서 다음 TA 시그널이 발생했다: ${r.signals.join(', ')}. stock-trading-method 프레임워크 기준으로 현재 상황 1~2줄 가이드를 작성해줘. 간결하게.`
-        const guide = await askAdvisor(prompt, { timeout: 30_000, maxBudgetUsd: 0.10 })
+        const guide = await askAdvisor(prompt, { timeout: 30_000, maxBudgetUsd: 0.10, intent: 'guide' })  // 1~2줄 가이드 → haiku (35-A)
         aiGuides.set(r.ticker, guide.response.trim())
       } catch (error) {
         console.warn(`[ta-signal] ${r.ticker} AI 가이드 실패:`, error instanceof Error ? error.message : error)

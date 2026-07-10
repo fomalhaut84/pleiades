@@ -52,7 +52,11 @@ function fireAiQuestion(ctx: Context, question: string): void {
   }, TYPING_INTERVAL_MS)
 
   cleanExpiredSessions()
-  askAdvisor(question, { sessionId: chatSessions.get(chatId)?.sessionId, persist: true })
+  askAdvisor(question, {
+    sessionId: chatSessions.get(chatId)?.sessionId,
+    persist: true,
+    intent: 'conversation',  // 자유 질문 → sonnet (35-A / #433)
+  })
     .then(async (result) => {
       if (result.sessionId) chatSessions.set(chatId, { sessionId: result.sessionId, lastUsed: Date.now() })
       const chunks = splitMessage(result.response)
@@ -138,7 +142,7 @@ function fireTradeParseQuestion(ctx: Context, text: string): void {
       .catch(() => { /* 무시 */ })
   }, TYPING_INTERVAL_MS)
 
-  askAdvisor(TRADE_PARSE_PROMPT + text)
+  askAdvisor(TRADE_PARSE_PROMPT + text, { intent: 'parse' })  // 구조 JSON 파싱 → haiku (35-A)
     .then(async (result) => {
       await handleParsedTrade(ctx, result.response)
     })

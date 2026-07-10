@@ -121,6 +121,8 @@ export async function parseStrategyText(text: string): Promise<ParsedStrategy> {
 
   const prompt = `${PROMPT_HEADER}\n${text.trim()}`
 
+  // 명시 model='sonnet' — 자연어 → 구조화 JSON 파싱 안정성 우선 (35-A intent='parse'
+  // 매핑은 haiku 지만 전략 파서는 스키마 위반 회귀 방지 위해 sonnet 유지 예외).
   const result = await askAdvisor(prompt, {
     model: 'sonnet',
     timeout: 60_000,

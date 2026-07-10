@@ -4,9 +4,32 @@ import { SYSTEM_PROMPT } from './system-prompt'
 
 export type AdvisorModel = 'haiku' | 'sonnet'
 
+/**
+ * 호출 의도 — 모델 자동 선택 근거 (Phase 35-A / #433).
+ *   - `conversation`: `/ai` 자유 질문. 도구 체이닝·트레이드오프 서술 필요 → sonnet
+ *   - `parse`: 사용자 자연어 → 구조 JSON (거래·가계부·전략). 짧고 결정적 → haiku
+ *   - `guide`: 짧은 TA 조언 등 1~2줄 가이드 → haiku
+ *
+ * 명시 `model` 이 있으면 그 값이 우선. intent 는 폴백 선택.
+ */
+export type AdvisorIntent = 'conversation' | 'parse' | 'guide'
+
+/**
+ * Pure — intent → model 매핑. 명시 model 이 있으면 그대로, 없으면 intent 로 결정.
+ * intent 도 없으면 haiku (하위호환 — 기존 호출부 default).
+ */
+export function pickModel(model: AdvisorModel | undefined, intent: AdvisorIntent | undefined): AdvisorModel {
+  if (model) return model
+  if (intent === 'conversation') return 'sonnet'
+  // 'parse' / 'guide' / undefined 는 모두 haiku
+  return 'haiku'
+}
+
 export interface AdvisorOptions {
-  /** 모델 선택 (기본: haiku) */
+  /** 모델 선택 (명시 시 intent 무시하고 이 값 사용) */
   model?: AdvisorModel
+  /** 호출 의도 — 모델 자동 선택 근거. 명시 model 이 없을 때 폴백 매핑. */
+  intent?: AdvisorIntent
   /** 타임아웃 ms (기본: 180_000) */
   timeout?: number
   /** API 비용 상한 USD (기본: 0.50) */
@@ -131,12 +154,13 @@ export async function askAdvisor(
   options: AdvisorOptions = {}
 ): Promise<AdvisorResult> {
   const {
-    model = 'haiku',
     timeout = 180_000,
     maxBudgetUsd = 0.50,
     sessionId,
     persist = false,
   } = options
+  // Phase 35-A (#433): intent → model 폴백 매핑. 명시 model 우선.
+  const model = pickModel(options.model, options.intent)
 
   // 프롬프트 길이 제한
   const MAX_PROMPT_LENGTH = 10_000
