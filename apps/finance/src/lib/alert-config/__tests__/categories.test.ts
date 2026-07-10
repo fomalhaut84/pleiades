@@ -5,6 +5,7 @@ import {
   categoryOf,
   inputTypeOf,
   groupByCategory,
+  isToggleKey,
 } from '../categories'
 
 describe('categoryOf', () => {
@@ -83,7 +84,7 @@ describe('groupByCategory', () => {
 })
 
 describe('ALERT_KEY_CATEGORY 완전성', () => {
-  it('실제 사용 중인 10개 키가 모두 매핑됨', () => {
+  it('실제 사용 중인 키들이 모두 매핑됨', () => {
     const knownKeys = [
       'price_drop_pct',
       'price_surge_pct',
@@ -95,10 +96,46 @@ describe('ALERT_KEY_CATEGORY 완전성', () => {
       'ta_ai_guide',
       'active_review',
       'custom_strategy_alerts',
+      'watchlist_market_hours_only',
     ]
     for (const key of knownKeys) {
       expect(ALERT_KEY_CATEGORY[key]).toBeDefined()
     }
+  })
+})
+
+describe('isToggleKey (bot 커맨드 / MCP 툴 단일 진실)', () => {
+  it('토글 매핑된 키는 true (활성/비활성 알림 정책)', () => {
+    // Codex #422 P2: 이 목록이 곧 텔레그램 봇 커맨드 / MCP updateAlertConfig 에서
+    // on/off 허용 여부를 결정. 새 토글 추가 시 반드시 여기 포함되어야 회귀 방지.
+    expect(isToggleKey('active_review')).toBe(true)
+    expect(isToggleKey('ta_ai_guide')).toBe(true)
+    expect(isToggleKey('custom_strategy_alerts')).toBe(true)
+    expect(isToggleKey('watchlist_market_hours_only')).toBe(true)
+  })
+
+  it('숫자/문자 키는 false', () => {
+    expect(isToggleKey('price_drop_pct')).toBe(false)
+    expect(isToggleKey('daily_summary_hour')).toBe(false)
+    expect(isToggleKey('fx_change_krw')).toBe(false)
+  })
+
+  it('알려지지 않은 키는 false', () => {
+    expect(isToggleKey('unknown_key_xyz')).toBe(false)
+    expect(isToggleKey('')).toBe(false)
+  })
+})
+
+describe('watchlist_market_hours_only (Phase 33-D / #415)', () => {
+  it('price 카테고리로 분류', () => {
+    expect(categoryOf('watchlist_market_hours_only')).toBe('price')
+  })
+
+  it('toggle 입력 타입 (off 기본값과 무관하게 매핑 override 적용)', () => {
+    // value 가 아직 upsert 되지 않아 빈 문자열이더라도 override 로 toggle 반환.
+    expect(inputTypeOf('watchlist_market_hours_only', '')).toBe('toggle')
+    expect(inputTypeOf('watchlist_market_hours_only', 'off')).toBe('toggle')
+    expect(inputTypeOf('watchlist_market_hours_only', 'on')).toBe('toggle')
   })
 })
 

@@ -138,6 +138,42 @@ export function scheduleSnapshots(): void {
 }
 
 /**
+ * Phase 34-A (#419) — 어닝 캘린더 갱신 스케줄러.
+ * 매일 06:00 KST — 스냅샷과 겹치지 않는 5분 앞 슬롯. 미국장 마감 후 신선.
+ * 부팅 후 첫 실행은 다음 06:00 을 기다림 (부팅 즉시 실행하면 rate limit 부담).
+ */
+export function scheduleEarningsScan(): void {
+  const guard = createCronGuard('어닝 스캔', 5 * 60 * 1000)
+
+  async function runOnce(): Promise<void> {
+    await guard(async () => {
+      const { runEarningsScan } = await import('./earnings/cron')
+      const result = await runEarningsScan()
+      console.log(`[cron] 어닝 스캔 완료: attempted=${result.attempted} ok=${result.ok} failed=${result.failed}`)
+    })
+  }
+
+  cron.schedule('0 6 * * *', () => { void runOnce() }, { timezone: 'Asia/Seoul' })
+
+  // 부팅 즉시 초기 시드 — cache 가 비어 있으면 다음 06:00 KST 까지 대기하는 대신 채움.
+  // 신규 배포 후 최대 24h dead window (모든 earnings_within_days 조건 false) 회피
+  // (self-review P1, #419). scheduleKrxSync 와 동일 패턴 (cron.ts scheduleKrxSync 참고).
+  void (async () => {
+    try {
+      const count = await prisma.earningsCache.count()
+      if (count === 0) {
+        console.log('[cron] EarningsCache empty → 초기 시드 실행')
+        await runOnce()
+      }
+    } catch (error) {
+      console.error('[cron] 어닝 초기 시드 실패:', error)
+    }
+  })()
+
+  console.log('[cron] 어닝 스캔 스케줄러 등록 (매일 06:00 KST)')
+}
+
+/**
  * KRX 종목 리스트 동기화 스케줄러.
  * 매주 월요일 07:00 KST 실행.
  */

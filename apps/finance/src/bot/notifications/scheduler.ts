@@ -10,6 +10,7 @@ import { sendRSUReminders, sendRSUVestConfirmations } from './rsu'
 import { sendClosingReview, sendWeeklyReview, ensureActiveReviewSetting } from './active-review'
 import { ensureCustomStrategyAlertsSetting } from './custom-strategy-alert'
 import { ensureTaAiGuideSetting } from './ta-signal-alert'
+import { ensureWatchlistMarketHoursOnlySetting } from './price-alert'
 import { sendMonthlyReminder } from './monthly'
 import { sendDailySummary } from './daily'
 import { sendMonthlyReport } from './monthly-report'
@@ -55,6 +56,11 @@ export function scheduleNotifications(): void {
   // ta_ai_guide 키 upsert — TA 시그널 AI 가이드 on/off
   ensureTaAiGuideSetting().catch((error) => {
     console.error('[notification] ensureTaAiGuideSetting 실패:', error)
+  })
+  // watchlist_market_hours_only 키 upsert (Phase 33-D / #415) —
+  // 관심종목 매수 알림을 각 시장 거래시간에만 발송할지 사용자 토글.
+  ensureWatchlistMarketHoursOnlySetting().catch((error) => {
+    console.error('[notification] ensureWatchlistMarketHoursOnlySetting 실패:', error)
   })
 
   try {

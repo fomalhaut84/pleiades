@@ -11,6 +11,46 @@ import { getBot } from '@/bot/index'
 import { formatPercent } from '@/bot/utils/formatter'
 import { sendHtml, escapeHtml } from '@/bot/utils/telegram'
 import { isMarketOpenFor } from '@/lib/market-hours'
+import {
+  computeDeliveryStatus,
+  recordAlertHistory,
+  type AlertEventInput,
+} from './alert-history'
+
+const WATCHLIST_MHO_KEY = 'watchlist_market_hours_only'
+const WATCHLIST_MHO_LABEL = '관심종목 매수 알림 — 장중에만'
+
+/**
+ * 관심종목 목표매수가/매수구간 알림의 시간대 제한 설정 초기화 (Phase 33-D / #415).
+ * `off` (기본) = 24h 발송, `on` = 각 시장 거래시간에만 발송.
+ * 봇 시작 시 upsert 로 row 존재 보장 → 설정 페이지에 자동 노출.
+ */
+export async function ensureWatchlistMarketHoursOnlySetting(): Promise<void> {
+  try {
+    await prisma.alertConfig.upsert({
+      where: { key: WATCHLIST_MHO_KEY },
+      update: {},
+      create: { key: WATCHLIST_MHO_KEY, value: 'off', label: WATCHLIST_MHO_LABEL },
+    })
+  } catch (error) {
+    console.error('[notification] watchlist_market_hours_only 설정 초기화 실패:', error)
+  }
+}
+
+/**
+ * Pure — 관심종목 매수 알림 발동을 시간대 제한 규칙으로 건너뛸지 판단.
+ * marketHoursOnly=false 이면 항상 발동 (24h). true 이면 해당 시장 장중에만 발동.
+ * `marketOpen` 은 실제 판정 함수 주입 (테스트 용이).
+ */
+export function shouldSkipWatchlistAlert(
+  marketHoursOnly: boolean,
+  market: string,
+  ticker: string,
+  marketOpen: (market: string, ticker: string) => boolean = isMarketOpenFor,
+): boolean {
+  if (!marketHoursOnly) return false
+  return !marketOpen(market, ticker)
+}
 
 /** 당일 알림 발송 기록 (ticker → date string) */
 const sentToday = new Map<string, string>()
@@ -44,7 +84,7 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
   // AlertConfig에서 임계값 조회
   const configs = await prisma.alertConfig.findMany({
     where: {
-      key: { in: ['price_drop_pct', 'price_surge_pct', 'fx_change_krw'] },
+      key: { in: ['price_drop_pct', 'price_surge_pct', 'fx_change_krw', WATCHLIST_MHO_KEY] },
     },
   })
   const configMap = new Map(configs.map((c) => [c.key, c.value]))
@@ -57,6 +97,7 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
   const dropThreshold = parseOrDefault('price_drop_pct', -5)
   const surgeThreshold = parseOrDefault('price_surge_pct', 5)
   const fxThreshold = parseOrDefault('fx_change_krw', 50)
+  const watchlistMarketHoursOnly = (configMap.get(WATCHLIST_MHO_KEY) ?? 'off').toLowerCase() === 'on'
 
   // 보유 종목만 조회 (전체 PriceCache가 아니라)
   const holdings = await prisma.holding.findMany({
@@ -81,7 +122,7 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
   })
 
   const priceMap = new Map(prices.map((p) => [p.ticker, p]))
-  const alerts: string[] = []
+  const events: AlertEventInput[] = []
 
   for (const p of prices) {
     // 환율은 별도 처리
@@ -92,9 +133,13 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
         sentToday.set(key, today)
 
         const direction = p.change > 0 ? '📈 상승' : '📉 하락'
-        alerts.push(
-          `💱 환율 ${direction}: ${p.price.toLocaleString('ko-KR')}원 (${p.change > 0 ? '+' : ''}${p.change.toFixed(0)}원)`
-        )
+        events.push({
+          kind: 'fx',
+          ticker: p.ticker,
+          price: p.price,
+          changePercent: p.changePercent,
+          message: `💱 환율 ${direction}: ${p.price.toLocaleString('ko-KR')}원 (${p.change > 0 ? '+' : ''}${p.change.toFixed(0)}원)`,
+        })
       }
       continue
     }
@@ -112,15 +157,23 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
     if (p.changePercent <= dropThreshold) {
       sentToday.set(key, today)
       const name = nameMap.get(p.ticker) ?? p.ticker
-      alerts.push(
-        `🔴 ${name} (${p.ticker}) 급락: ${formatPercent(p.changePercent)}`
-      )
+      events.push({
+        kind: 'drop',
+        ticker: p.ticker,
+        price: p.price,
+        changePercent: p.changePercent,
+        message: `🔴 ${name} (${p.ticker}) 급락: ${formatPercent(p.changePercent)}`,
+      })
     } else if (p.changePercent >= surgeThreshold) {
       sentToday.set(key, today)
       const name = nameMap.get(p.ticker) ?? p.ticker
-      alerts.push(
-        `🟢 ${name} (${p.ticker}) 급등: ${formatPercent(p.changePercent)}`
-      )
+      events.push({
+        kind: 'surge',
+        ticker: p.ticker,
+        price: p.price,
+        changePercent: p.changePercent,
+        message: `🟢 ${name} (${p.ticker}) 급등: ${formatPercent(p.changePercent)}`,
+      })
     }
   }
 
@@ -149,9 +202,12 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
       const key = `target:${s.holding.ticker}`
       if (sentToday.get(key) !== today) {
         sentToday.set(key, today)
-        alerts.push(
-          `🎯 ${name} (${ticker}) 목표가 도달: ${currentPrice.toLocaleString('ko-KR')} (목표 ${s.targetPrice.toLocaleString('ko-KR')})`
-        )
+        events.push({
+          kind: 'target_hit',
+          ticker: s.holding.ticker,
+          price: currentPrice,
+          message: `🎯 ${name} (${ticker}) 목표가 도달: ${currentPrice.toLocaleString('ko-KR')} (목표 ${s.targetPrice.toLocaleString('ko-KR')})`,
+        })
       }
     }
 
@@ -159,9 +215,12 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
       const key = `stoploss:${s.holding.ticker}`
       if (sentToday.get(key) !== today) {
         sentToday.set(key, today)
-        alerts.push(
-          `🛑 ${name} (${ticker}) 손절가 도달: ${currentPrice.toLocaleString('ko-KR')} (손절 ${s.stopLoss.toLocaleString('ko-KR')})`
-        )
+        events.push({
+          kind: 'stop_loss',
+          ticker: s.holding.ticker,
+          price: currentPrice,
+          message: `🛑 ${name} (${ticker}) 손절가 도달: ${currentPrice.toLocaleString('ko-KR')} (손절 ${s.stopLoss.toLocaleString('ko-KR')})`,
+        })
       }
     }
   }
@@ -180,6 +239,10 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
     const price = priceMap.get(w.ticker)
     if (!price) continue
 
+    // 관심종목 알림 시간대 토글 (Phase 33-D / #415)
+    // — on 이면 매수구간/목표매수가 알림을 각 시장 거래시간에만 발송 (기본 off = 24h).
+    if (shouldSkipWatchlistAlert(watchlistMarketHoursOnly, price.market, w.ticker)) continue
+
     const name = escapeHtml(w.displayName)
     const ticker = escapeHtml(w.ticker)
 
@@ -187,9 +250,12 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
       const key = `wbuy:${w.ticker}`
       if (sentToday.get(key) !== today) {
         sentToday.set(key, today)
-        alerts.push(
-          `💰 ${name} (${ticker}) 목표 매수가 도달: ${price.price.toLocaleString('ko-KR')} (목표 ${w.targetBuy.toLocaleString('ko-KR')})`
-        )
+        events.push({
+          kind: 'watch_buy',
+          ticker: w.ticker,
+          price: price.price,
+          message: `💰 ${name} (${ticker}) 목표 매수가 도달: ${price.price.toLocaleString('ko-KR')} (목표 ${w.targetBuy.toLocaleString('ko-KR')})`,
+        })
       }
     }
 
@@ -197,25 +263,36 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
       const key = `wzone:${w.ticker}`
       if (sentToday.get(key) !== today) {
         sentToday.set(key, today)
-        alerts.push(
-          `🔔 ${name} (${ticker}) 매수구간 진입: ${price.price.toLocaleString('ko-KR')} (구간 ${w.entryLow.toLocaleString('ko-KR')}~${w.entryHigh.toLocaleString('ko-KR')})`
-        )
+        events.push({
+          kind: 'watch_zone',
+          ticker: w.ticker,
+          price: price.price,
+          message: `🔔 ${name} (${ticker}) 매수구간 진입: ${price.price.toLocaleString('ko-KR')} (구간 ${w.entryLow.toLocaleString('ko-KR')}~${w.entryHigh.toLocaleString('ko-KR')})`,
+        })
       }
     }
   }
 
-  if (alerts.length === 0) return
+  if (events.length === 0) return
 
   const bot = getBot()
-  const message = `⚡ <b>변동 알림</b>\n\n${alerts.join('\n')}`
+  const combined = `⚡ <b>변동 알림</b>\n\n${events.map((e) => e.message).join('\n')}`
 
+  let sendSuccess = 0
+  let lastError: string | undefined
   for (const chatId of chatIds) {
     try {
-      await sendHtml(bot, chatId, message)
+      await sendHtml(bot, chatId, combined)
+      sendSuccess++
     } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error)
       console.error(`[notification] 변동 알림 발송 실패 (chatId: ${chatId}):`, error)
     }
   }
 
-  console.log(`[notification] 변동 알림 발송: ${alerts.length}건`)
+  // Phase 33-A (#416): 각 이벤트 이력 저장 (배송 상태 요약)
+  const status = computeDeliveryStatus(sendSuccess, chatIds.length)
+  await recordAlertHistory(events, status, chatIds.length, status === 'sent' ? undefined : lastError)
+
+  console.log(`[notification] 변동 알림 발송: ${events.length}건 → ${sendSuccess}/${chatIds.length} chats`)
 }

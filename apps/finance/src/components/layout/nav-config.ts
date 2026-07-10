@@ -56,6 +56,8 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: '설정',
     items: [
+      { href: '/alerts/history', icon: '🔔', label: '알림 이력' },
+      { href: '/admin/mcp-logs', icon: '🪵', label: 'MCP 로그', hiddenOnMobile: true },
       { href: '/settings', icon: '⚙️', label: '설정', hiddenOnMobile: true },
     ],
   },

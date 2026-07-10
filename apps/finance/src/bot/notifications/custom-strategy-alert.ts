@@ -15,9 +15,16 @@ import { getBot } from '@/bot/index'
 import { sendHtml, escapeHtml } from '@/bot/utils/telegram'
 import { generateTAReport } from '@/lib/ta/engine'
 import type { TAReport } from '@/lib/ta/types'
+import { getEarningsMany } from '@/lib/earnings/cache'
+import {
+  computeDeliveryStatus,
+  recordAlertHistory,
+  type AlertEventInput,
+} from './alert-history'
 import {
   evaluateStrategy,
   requiresTA,
+  collectCrossTickers,
   type MarketSnapshot,
 } from '@/lib/custom-strategy/evaluator'
 import {
@@ -127,12 +134,20 @@ async function runScan(chatIds: number[]): Promise<void> {
   })
   if (strategies.length === 0) return
 
-  // ticker 단위로 PriceCache 미리 조회
-  const tickers = Array.from(new Set(strategies.map((s) => s.ticker)))
+  // Phase 34-B (#420): 전략들이 참조하는 크로스 티커도 함께 조회 (같은 쿼리에 병합).
+  const strategyTickers = Array.from(new Set(strategies.map((s) => s.ticker)))
+  const crossSet = collectCrossTickers(strategies)
+  const tickers = strategyTickers
+  const allPriceTickers = Array.from(new Set([...strategyTickers, ...crossSet]))
   const prices = await prisma.priceCache.findMany({
-    where: { ticker: { in: tickers } },
+    where: { ticker: { in: allPriceTickers } },
   })
   const priceMap = new Map(prices.map((p) => [p.ticker, p]))
+  const crossTickersMap = new Map<string, { price: number; changePercent: number | null }>()
+  for (const t of crossSet) {
+    const p = priceMap.get(t)
+    if (p) crossTickersMap.set(t, { price: p.price, changePercent: p.changePercent })
+  }
 
   // 보유 티커 조회 — holding_status 조건 평가용 (Phase 31-A v2).
   // shares > 0 만 홀딩으로 간주. 여러 계좌에서 같은 티커 보유해도 Set 이므로 중복 무관.
@@ -141,6 +156,10 @@ async function runScan(chatIds: number[]): Promise<void> {
     select: { ticker: true },
   })
   const holdings = new Set(holdingRows.map((h) => h.ticker))
+
+  // Phase 34-A (#419): 어닝 캐시 (전략 전체 티커 대상 미리 조회).
+  // 캐시 없으면 evaluator 가 자동으로 false 처리 → 안전.
+  const earningsMap = await getEarningsMany(tickers)
 
   // TA 필요한 ticker 만 리포트 생성 (병렬 + 실패 허용)
   const taByTicker = new Map<string, TAReport | null>()
@@ -168,6 +187,7 @@ async function runScan(chatIds: number[]): Promise<void> {
 
   const now = new Date()
   const alerts: string[] = []
+  const historyEvents: AlertEventInput[] = []
   const firedIds: string[] = []
   const disableIds: string[] = [] // frequency=once + 발동 → 자동 비활성화
 
@@ -183,18 +203,20 @@ async function runScan(chatIds: number[]): Promise<void> {
     if (!shouldFire(s.frequency, s.lastTriggeredAt, now)) continue
 
     const priceRow = priceMap.get(s.ticker)
+    const earningsRow = earningsMap.get(s.ticker)
     const snapshot: MarketSnapshot = {
       price: priceRow
         ? { price: priceRow.price, changePercent: priceRow.changePercent }
         : null,
       ta: taByTicker.get(s.ticker) ?? null,
+      earnings: earningsRow ? { nextEarningsDate: earningsRow.nextEarningsDate } : null,
     }
 
     const { satisfied, perCondition } = evaluateStrategy(
       conds,
       s.logic === 'OR' ? 'OR' : 'AND',
       snapshot,
-      { now, holdings, strategyTicker: s.ticker },
+      { now, holdings, strategyTicker: s.ticker, crossTickers: crossTickersMap },
     )
 
     if (!satisfied) continue
@@ -210,11 +232,19 @@ async function runScan(chatIds: number[]): Promise<void> {
       ? `${priceRow.price.toLocaleString('ko-KR')} ${priceRow.currency}`
       : '(가격 미확인)'
 
-    alerts.push(
+    const alertBlock =
       `🎯 <b>${escapeHtml(s.name)}</b> (${escapeHtml(s.ticker)})\n` +
-        `현재가: ${escapeHtml(priceLabel)}\n` +
-        `${escapeHtml('조건 (' + s.logic + ') 만족:')}\n${escapeHtml(condLines)}`,
-    )
+      `현재가: ${escapeHtml(priceLabel)}\n` +
+      `${escapeHtml('조건 (' + s.logic + ') 만족:')}\n${escapeHtml(condLines)}`
+    alerts.push(alertBlock)
+
+    // 이력용 — HTML 태그 없이 이력 페이지에서 보기 편한 요약.
+    historyEvents.push({
+      kind: 'custom_strategy',
+      ticker: s.ticker,
+      price: priceRow?.price ?? null,
+      message: `${s.name} (${s.ticker}) — ${s.logic} 조건 만족`,
+    })
   }
 
   if (alerts.length === 0) return
@@ -222,14 +252,20 @@ async function runScan(chatIds: number[]): Promise<void> {
   // 최소 1개 chatId 에 발송 성공한 뒤에만 DB 상태 갱신 — 실패 시 다음 tick 에서 재시도.
   const message = `🧠 <b>커스텀 전략 발동</b> (${todayKST()})\n\n${alerts.join('\n\n')}`
   let sentCount = 0
+  let lastError: string | undefined
   for (const chatId of chatIds) {
     try {
       await sendHtml(bot, chatId, message)
       sentCount++
     } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error)
       console.error(`[custom-strategy] 알림 발송 실패 (chatId: ${chatId}):`, error)
     }
   }
+
+  // Phase 33-A (#416): 발동 이력 저장 (발송 성공 여부와 무관 — 실패도 partial/failed 로 기록).
+  const status = computeDeliveryStatus(sentCount, chatIds.length)
+  await recordAlertHistory(historyEvents, status, chatIds.length, status === 'sent' ? undefined : lastError)
 
   if (sentCount === 0) {
     console.warn('[custom-strategy] 전체 chatId 발송 실패 — DB 상태 갱신 보류 (다음 tick 재시도)')

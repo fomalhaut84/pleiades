@@ -15,6 +15,7 @@
 import type { Condition, WeekdayCode } from './types'
 import { TIME_WINDOW_RE } from './types'
 import type { TAReport } from '@/lib/ta/types'
+import { kstDayDiff } from '@/lib/kst-date'
 
 export interface PriceSnapshot {
   price: number
@@ -24,6 +25,11 @@ export interface PriceSnapshot {
 export interface MarketSnapshot {
   price: PriceSnapshot | null
   ta: TAReport | null
+  /**
+   * Phase 34-A (#419): 어닝 캘린더 스냅샷. `earnings_within_days` 조건 평가용.
+   * cron 이 upsert 한 EarningsCache 를 호출자가 주입.
+   */
+  earnings?: { nextEarningsDate: Date | null } | null
 }
 
 /**
@@ -37,6 +43,12 @@ export interface EvaluationContext {
   holdings: Set<string>
   /** 평가 대상 티커 — holding_status 판정용 (Strategy.ticker 주입) */
   strategyTicker: string
+  /**
+   * Phase 34-B (#420): 크로스-티커 조건 참조용 스냅샷 맵.
+   * key = 대문자 정규화된 티커. 호출자가 전략들의 모든 crossTicker 를 미리 조회해 주입.
+   * 미주입 or 특정 티커 없음 → cross_ticker 조건 false (안전측).
+   */
+  crossTickers?: Map<string, { price: number; changePercent: number | null }>
 }
 
 /** 지원 조건 타입 중 TA 필요 여부 판단 — 평가 전에 TAReport fetch 여부 결정 */
@@ -74,6 +86,24 @@ function kstWeekday(now: Date): WeekdayCode {
   const dow = kst.getUTCDay() // 0=Sun, 1=Mon, ...
   const codes: WeekdayCode[] = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
   return codes[dow]
+}
+
+/**
+ * Pure — 다음 어닝까지 남은 KST 캘린더 일수.
+ * 양쪽을 KST 자정으로 정규화한 뒤 계산 → 사용자 인식 ("D-3") 과 정합.
+ *
+ * 예시 (KST):
+ *   - now 07-08 15:00, earnings 07-08 20:00 → 0  (오늘)
+ *   - now 07-08 15:00, earnings 07-09 00:30 → 1  (내일)
+ *   - now 07-08 00:01, earnings 07-11 23:59 → 3  (D-3)
+ *   - now 07-08 23:59, earnings 07-09 00:00 → 1  (자정 넘어감 → D-1)
+ * 이미 지난 어닝 (KST 어제 이전) → `null` → evaluator false.
+ */
+export function daysUntilEarnings(nextEarningsDate: Date | null | undefined, now: Date): number | null {
+  if (!nextEarningsDate) return null
+  const diffDays = kstDayDiff(nextEarningsDate, now)
+  if (diffDays < 0) return null
+  return diffDays
 }
 
 /** "HH:MM~HH:MM" 파싱 → 분 단위 [start, end]. wraparound (end < start) 도 허용. */
@@ -163,9 +193,56 @@ export function evaluateCondition(
       if (cond.value === 'NOT_HELD') return !isHeld
       return false
     }
+    // ── v3 (Phase 34-A #419) —
+    case 'earnings_within_days': {
+      if (typeof cond.value !== 'number') return false
+      const days = daysUntilEarnings(snapshot.earnings?.nextEarningsDate ?? null, context.now)
+      // 데이터 없음 or 과거 어닝만 있음 → false (안전측 — pre-earnings 회피 조건 사용 흐름 상)
+      if (days == null) return false
+      return compareNumeric(days, cond.operator, cond.value)
+    }
+    // ── v3 (Phase 34-B #420) —
+    case 'cross_ticker': {
+      if (typeof cond.value !== 'number') return false
+      if (typeof cond.crossTicker !== 'string' || !cond.crossTicker.trim()) return false
+      if (cond.metric !== 'price' && cond.metric !== 'change_percent') return false
+      const target = cond.crossTicker.trim().toUpperCase()
+      // 자기 자신 참조 방지 — 사용자가 실수로 등록해도 무의미한 tautology 회피.
+      if (target === context.strategyTicker) return false
+      const cross = context.crossTickers?.get(target)
+      if (!cross) return false
+      const actual = cond.metric === 'price' ? cross.price : cross.changePercent
+      if (actual == null || !Number.isFinite(actual)) return false
+      return compareNumeric(actual, cond.operator, cond.value)
+    }
     default:
       return false
   }
+}
+
+/**
+ * Pure — 전략 집합에서 참조되는 모든 크로스 티커를 대문자 정규화하여 수집.
+ * 자기 자신 참조 (strategyTicker == crossTicker) 는 evaluator 가 false 처리하지만
+ * 수집 단계에서도 제외해 PriceCache 조회 최적화.
+ */
+export function collectCrossTickers(
+  strategies: Array<{ ticker: string; conditions: unknown }>,
+): Set<string> {
+  const out = new Set<string>()
+  for (const s of strategies) {
+    const self = s.ticker.trim().toUpperCase()
+    const raw = Array.isArray(s.conditions) ? (s.conditions as unknown[]) : []
+    for (const c of raw) {
+      if (!c || typeof c !== 'object') continue
+      const cond = c as { type?: string; crossTicker?: string }
+      if (cond.type !== 'cross_ticker') continue
+      if (typeof cond.crossTicker !== 'string') continue
+      const t = cond.crossTicker.trim().toUpperCase()
+      if (!t || t === self) continue
+      out.add(t)
+    }
+  }
+  return out
 }
 
 export interface EvaluationResult {
