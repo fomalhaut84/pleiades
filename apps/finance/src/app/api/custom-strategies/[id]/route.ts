@@ -1,6 +1,10 @@
 import { NextRequest } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { ok, fail, noContent } from '@/lib/api-response'
+import { validateCondition } from '@/lib/custom-strategy/types'
+import { conditionsEqual } from '@/lib/custom-strategy/diff'
+import type { Condition } from '@/lib/custom-strategy/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,8 +18,10 @@ const VALID_LOGIC = new Set(['AND', 'OR'])
 /**
  * PUT /api/custom-strategies/[id] — 부분 수정.
  *
- * 편집 가능 필드: name / isActive / frequency / logic.
- * 조건 자체 (conditions, ticker) 편집은 v1 지원 X — 삭제 후 재등록.
+ * 편집 가능 필드: name / isActive / frequency / logic / conditions.
+ * conditions 편집은 Phase 35-B (#434) 부터 지원 — 자연어 편집 (POST .../nl-edit)
+ * 미리보기 결과를 사용자가 승인한 뒤 이 필드로 저장.
+ * ticker 편집은 여전히 지원 X (다른 종목으로 바꾸려면 삭제 후 재등록).
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
@@ -32,12 +38,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const existing = await prisma.customStrategy.findUnique({ where: { id } })
     if (!existing) return fail('전략을 찾을 수 없습니다.', 404)
 
-    const data: {
-      name?: string
-      isActive?: boolean
-      frequency?: string
-      logic?: string
-    } = {}
+    const data: Prisma.CustomStrategyUpdateInput = {}
 
     if (body.name !== undefined) {
       const name = typeof body.name === 'string' ? body.name.trim() : ''
@@ -63,6 +64,30 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         return fail('logic 은 AND / OR 중 하나여야 합니다.', 400)
       }
       data.logic = body.logic
+    }
+
+    if (body.conditions !== undefined) {
+      if (!Array.isArray(body.conditions) || body.conditions.length === 0) {
+        return fail('conditions 는 최소 1개 이상의 조건 배열이어야 합니다.', 400)
+      }
+      if (!body.conditions.every(validateCondition)) {
+        return fail('conditions 에 유효하지 않은 항목이 있습니다.', 400)
+      }
+      // Codex #440 재리뷰 P2: 실제로 변경됐을 때만 conditions/lastTriggeredAt 갱신.
+      // 순서 무관 비교 (`conditionsEqual`): `JSON.stringify` 는 필드 순서에 민감해서
+      // `{type, operator, value}` vs `{value, operator, type}` 를 다르다고 오판 →
+      // 무변경인데 lastTriggeredAt 리셋 → `once` 재무장 / `daily` 중복 발동.
+      const existingConds = (Array.isArray(existing.conditions)
+        ? (existing.conditions as unknown[])
+        : []
+      ).filter(validateCondition) as Condition[]
+      const newConds = body.conditions as unknown as Condition[]
+      if (!conditionsEqual(existingConds, newConds)) {
+        data.conditions = body.conditions as unknown as Prisma.InputJsonValue
+        // 조건이 실제 바뀔 때만 발동 이력 리셋 → fresh signal 로 평가.
+        data.lastTriggeredAt = null
+      }
+      // 같으면 아무것도 안 함 → PUT 이 name/logic 등 다른 필드만 수정.
     }
 
     if (Object.keys(data).length === 0) {
