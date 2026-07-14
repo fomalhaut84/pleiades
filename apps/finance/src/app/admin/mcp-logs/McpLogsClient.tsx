@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { KNOWN_MSGS, MSG_LABELS, LEVEL_ORDER, recentLogDates } from '@/lib/mcp-logs/constants'
+import LiveTailPanel from './LiveTailPanel'
 
 interface LogRow {
   level: string
@@ -259,6 +260,16 @@ export default function McpLogsClient() {
           })}
         </div>
       </section>
+
+      {/* Live tail (Phase 37-C, #446) */}
+      <LiveTailPanel
+        date={date}
+        crash={crash}
+        level={level}
+        msg={msg}
+        tool={toolFilter}
+        traceId={traceFilter}
+      />
 
       {/* Stats */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
