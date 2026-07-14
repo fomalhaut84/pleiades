@@ -26,8 +26,18 @@ export type AlertContextKind =
   | 'ta_signal'
   | 'custom_strategy'
 
+/**
+ * Phase 37-B (#445) — 모든 context shape 공용 옵셔널 필드.
+ * `retriedFrom`: 재발송으로 생성된 새 row 는 원본 AlertHistory.id 를 저장.
+ * 원본 row 는 이 필드가 없어 재발송 이력과 원본이 구분됨.
+ */
+interface CommonContextFields {
+  /** 재발송된 경우 원본 AlertHistory.id — UI 가 "재발송" 배지를 표시 */
+  retriedFrom?: string
+}
+
 /** 시세 계열 (surge/drop/target_hit/stop_loss/watch_buy/watch_zone) 공통 스냅샷 */
-export interface PriceAlertContext {
+export interface PriceAlertContext extends CommonContextFields {
   type: 'surge' | 'drop' | 'target_hit' | 'stop_loss' | 'watch_buy' | 'watch_zone'
   price: number
   changePercent: number | null
@@ -38,7 +48,7 @@ export interface PriceAlertContext {
 }
 
 /** 환율 알림 컨텍스트 */
-export interface FxAlertContext {
+export interface FxAlertContext extends CommonContextFields {
   type: 'fx'
   rate: number
   /** 전일 대비 KRW 변동 */
@@ -47,7 +57,7 @@ export interface FxAlertContext {
 }
 
 /** TA 시그널 컨텍스트 — TAReport 에서 핵심 지표만 발췌 */
-export interface TaSignalContext {
+export interface TaSignalContext extends CommonContextFields {
   type: 'ta_signal'
   price: number | null
   changePercent: number | null
@@ -64,7 +74,7 @@ export interface TaSignalContext {
 }
 
 /** 커스텀 전략 컨텍스트 — evaluator 결과 재활용 */
-export interface CustomStrategyContext {
+export interface CustomStrategyContext extends CommonContextFields {
   type: 'custom_strategy'
   strategyId: string
   strategyName: string

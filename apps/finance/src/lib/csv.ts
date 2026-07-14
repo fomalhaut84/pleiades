@@ -26,10 +26,18 @@ export function toCSV(headers: string[], rows: string[][]): string {
 
 /**
  * CSV Response를 생성한다.
+ *
+ * `extraHeaders` 는 truncation 신호 (`X-Truncated`, `X-Total-Count`) 같은 부가
+ * 메타를 실을 때 사용. Content-Type / Content-Disposition 은 항상 덮어쓴다.
  */
-export function csvResponse(csv: string, filename: string): Response {
+export function csvResponse(
+  csv: string,
+  filename: string,
+  extraHeaders?: Record<string, string>,
+): Response {
   return new Response(csv, {
     headers: {
+      ...(extraHeaders ?? {}),
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': `attachment; filename="${filename}"`,
     },
