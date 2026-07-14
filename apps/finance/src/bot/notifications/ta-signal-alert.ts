@@ -17,6 +17,7 @@ import {
   recordAlertHistory,
   type AlertEventInput,
 } from './alert-history'
+import { buildTaContext } from '@/lib/alert-history/context'
 import type { TAReport } from '@/lib/ta/types'
 
 /** 당일 시그널 발송 기록 (키 → date string) */
@@ -90,6 +91,8 @@ interface SignalResult {
   strategy: string
   signals: string[]
   signalIds: string[]
+  /** Phase 37-A (#444): 발동 당시 TA 리포트 — AlertHistory.contextJson 저장에 재활용 */
+  report: TAReport
 }
 
 interface Signal {
@@ -267,6 +270,7 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
           strategy: stratLabel,
           signals: newSignals.map((s) => s.message),
           signalIds: newSignals.map((s) => s.id),
+          report,
         })
       }
     } catch (error) {
@@ -351,6 +355,7 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
 
   // Phase 33-A (#416): 티커 단위 이력 저장 — 각 종목의 시그널을 한 이벤트로 통합.
   // 시세 스냅샷 (price / changePercent) 을 함께 캡처하여 사후 진단시 참고.
+  // Phase 37-A (#444): TA 지표 스냅샷도 contextJson 에 저장.
   const historyEvents: AlertEventInput[] = results.map((r) => {
     const snap = snapshotByTicker.get(r.ticker)
     return {
@@ -359,6 +364,12 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
       price: snap?.price ?? null,
       changePercent: snap?.changePercent ?? null,
       message: `${r.displayName} (${r.ticker}) — ${r.strategy}: ${r.signals.join(', ')}`,
+      context: buildTaContext({
+        report: r.report,
+        price: snap?.price ?? null,
+        changePercent: snap?.changePercent ?? null,
+        signals: r.signalIds,
+      }),
     }
   })
   const status = computeDeliveryStatus(sendSuccess, chatIds.length)

@@ -96,10 +96,77 @@ export async function listAlertHistory(args: ListAlertHistoryArgs = {}) {
       const tickerPart = r.ticker ? ` [${r.ticker}]` : ''
       lines.push(`- ${time} · ${kindLabel}${tickerPart} · ${statusLabel}`)
       lines.push(`  ${r.message}`)
+      // Phase 37-A (#444): 컨텍스트 요약 — AI 가 사후 진단할 때 참조.
+      const ctx = summarizeContext(r.contextJson)
+      if (ctx) lines.push(`  ↳ ${ctx}`)
     }
 
     return toolResult(lines.join('\n'))
   } catch (error) {
     return toolError(error)
   }
+}
+
+/**
+ * contextJson 을 한 줄 요약으로 변환 (AI/텔레그램 표시용).
+ * 알 수 없는 shape 이면 null → 라인 스킵.
+ */
+function summarizeContext(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object') return null
+  const ctx = raw as Record<string, unknown>
+  const type = ctx.type
+
+  if (type === 'fx') {
+    const rate = num(ctx.rate)
+    const changeKrw = num(ctx.changeKrw)
+    if (rate == null) return null
+    return `환율 ${rate.toLocaleString('ko-KR')}원${changeKrw != null ? ` (${changeKrw > 0 ? '+' : ''}${changeKrw.toFixed(0)}원)` : ''}`
+  }
+
+  if (
+    type === 'surge' || type === 'drop' ||
+    type === 'target_hit' || type === 'stop_loss' ||
+    type === 'watch_buy' || type === 'watch_zone'
+  ) {
+    const price = num(ctx.price)
+    const changePct = num(ctx.changePercent)
+    const threshold = num(ctx.threshold)
+    const marketOpen = ctx.marketOpen
+    const parts: string[] = []
+    if (price != null) parts.push(`시세 ${price.toLocaleString('ko-KR')}`)
+    if (changePct != null) parts.push(`${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%`)
+    if (threshold != null) parts.push(`기준 ${threshold.toLocaleString('ko-KR')}`)
+    if (typeof marketOpen === 'boolean') parts.push(marketOpen ? '장중' : '장외')
+    return parts.length > 0 ? parts.join(' · ') : null
+  }
+
+  if (type === 'ta_signal') {
+    const rsi = num(ctx.rsi)
+    const macd = str(ctx.macdCrossover)
+    const bb = str(ctx.bbPosition)
+    const signals = Array.isArray(ctx.signals) ? (ctx.signals as unknown[]).map(String) : []
+    const parts: string[] = []
+    if (rsi != null) parts.push(`RSI ${rsi.toFixed(1)}`)
+    if (macd) parts.push(`MACD ${macd}`)
+    if (bb) parts.push(`BB ${bb}`)
+    if (signals.length > 0) parts.push(signals.join(','))
+    return parts.length > 0 ? parts.join(' · ') : null
+  }
+
+  if (type === 'custom_strategy') {
+    const name = str(ctx.strategyName)
+    const logic = str(ctx.logic)
+    const per = Array.isArray(ctx.perCondition) ? (ctx.perCondition as unknown[]) : []
+    const matched = per.filter((p) => p && typeof p === 'object' && (p as { result?: unknown }).result === true).length
+    return `전략 "${name ?? '?'}" ${logic ?? ''} — ${matched}/${per.length} 조건 매칭`
+  }
+
+  return null
+}
+
+function num(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
+function str(v: unknown): string | null {
+  return typeof v === 'string' && v ? v : null
 }

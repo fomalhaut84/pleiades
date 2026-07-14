@@ -329,6 +329,8 @@ model AlertConfig {
 
 // Phase 33-A (#416): 알림 발동 이력. 33-B 이력 페이지 + 사후 진단 데이터 소스.
 // 1 행 = 1 이벤트. 한 번의 텔레그램 배치 발송에 여러 알림이 포함되면 여러 행 저장.
+// Phase 37-A (#444): contextJson — kind 별 최소 스냅샷 (시세/TA/전략) 을 함께 저장해
+// 사후 진단 시 당시 판단 근거를 재조회할 수 있도록. 하위호환 위해 nullable — 기존 row 는 null.
 model AlertHistory {
   id             String   @id @default(cuid())
   firedAt        DateTime @default(now())
@@ -340,6 +342,7 @@ model AlertHistory {
   deliveryStatus String   // 'sent' | 'partial' | 'failed'
   recipientCount Int      @default(0)
   errorMessage   String?
+  contextJson    Json?    // Phase 37-A: kind 별 스냅샷 (src/lib/alert-history/context.ts 스키마)
 
   @@index([firedAt])
   @@index([kind, firedAt])

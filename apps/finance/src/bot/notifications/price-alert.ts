@@ -16,6 +16,7 @@ import {
   recordAlertHistory,
   type AlertEventInput,
 } from './alert-history'
+import { buildPriceContext, buildFxContext } from '@/lib/alert-history/context'
 
 const WATCHLIST_MHO_KEY = 'watchlist_market_hours_only'
 const WATCHLIST_MHO_LABEL = '관심종목 매수 알림 — 장중에만'
@@ -139,6 +140,11 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
           price: p.price,
           changePercent: p.changePercent,
           message: `💱 환율 ${direction}: ${p.price.toLocaleString('ko-KR')}원 (${p.change > 0 ? '+' : ''}${p.change.toFixed(0)}원)`,
+          context: buildFxContext({
+            rate: p.price,
+            changeKrw: p.change,
+            changePercent: p.changePercent,
+          }),
         })
       }
       continue
@@ -163,6 +169,14 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
         price: p.price,
         changePercent: p.changePercent,
         message: `🔴 ${name} (${p.ticker}) 급락: ${formatPercent(p.changePercent)}`,
+        context: buildPriceContext({
+          type: 'drop',
+          price: p.price,
+          changePercent: p.changePercent,
+          threshold: dropThreshold,
+          // 도착 조건상 marketOpen 은 true (isMarketOpenFor 통과했음)
+          marketOpen: true,
+        }),
       })
     } else if (p.changePercent >= surgeThreshold) {
       sentToday.set(key, today)
@@ -173,6 +187,13 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
         price: p.price,
         changePercent: p.changePercent,
         message: `🟢 ${name} (${p.ticker}) 급등: ${formatPercent(p.changePercent)}`,
+        context: buildPriceContext({
+          type: 'surge',
+          price: p.price,
+          changePercent: p.changePercent,
+          threshold: surgeThreshold,
+          marketOpen: true,
+        }),
       })
     }
   }
@@ -206,7 +227,16 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
           kind: 'target_hit',
           ticker: s.holding.ticker,
           price: currentPrice,
+          changePercent: price.changePercent,
           message: `🎯 ${name} (${ticker}) 목표가 도달: ${currentPrice.toLocaleString('ko-KR')} (목표 ${s.targetPrice.toLocaleString('ko-KR')})`,
+          context: buildPriceContext({
+            type: 'target_hit',
+            price: currentPrice,
+            changePercent: price.changePercent,
+            threshold: s.targetPrice,
+            // 24h 알림 — 시장 개장 여부는 티커별 판정
+            marketOpen: isMarketOpenFor(price.market, s.holding.ticker),
+          }),
         })
       }
     }
@@ -219,7 +249,15 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
           kind: 'stop_loss',
           ticker: s.holding.ticker,
           price: currentPrice,
+          changePercent: price.changePercent,
           message: `🛑 ${name} (${ticker}) 손절가 도달: ${currentPrice.toLocaleString('ko-KR')} (손절 ${s.stopLoss.toLocaleString('ko-KR')})`,
+          context: buildPriceContext({
+            type: 'stop_loss',
+            price: currentPrice,
+            changePercent: price.changePercent,
+            threshold: s.stopLoss,
+            marketOpen: isMarketOpenFor(price.market, s.holding.ticker),
+          }),
         })
       }
     }
@@ -254,7 +292,15 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
           kind: 'watch_buy',
           ticker: w.ticker,
           price: price.price,
+          changePercent: price.changePercent,
           message: `💰 ${name} (${ticker}) 목표 매수가 도달: ${price.price.toLocaleString('ko-KR')} (목표 ${w.targetBuy.toLocaleString('ko-KR')})`,
+          context: buildPriceContext({
+            type: 'watch_buy',
+            price: price.price,
+            changePercent: price.changePercent,
+            threshold: w.targetBuy,
+            marketOpen: isMarketOpenFor(price.market, w.ticker),
+          }),
         })
       }
     }
@@ -267,7 +313,16 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
           kind: 'watch_zone',
           ticker: w.ticker,
           price: price.price,
+          changePercent: price.changePercent,
           message: `🔔 ${name} (${ticker}) 매수구간 진입: ${price.price.toLocaleString('ko-KR')} (구간 ${w.entryLow.toLocaleString('ko-KR')}~${w.entryHigh.toLocaleString('ko-KR')})`,
+          context: buildPriceContext({
+            type: 'watch_zone',
+            price: price.price,
+            changePercent: price.changePercent,
+            // 구간은 상한을 임계값으로 저장 (하한은 message 에 이미 포함)
+            threshold: w.entryHigh,
+            marketOpen: isMarketOpenFor(price.market, w.ticker),
+          }),
         })
       }
     }

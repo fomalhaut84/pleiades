@@ -21,6 +21,7 @@ import {
   recordAlertHistory,
   type AlertEventInput,
 } from './alert-history'
+import { buildCustomStrategyContext } from '@/lib/alert-history/context'
 import {
   evaluateStrategy,
   requiresTA,
@@ -239,11 +240,30 @@ async function runScan(chatIds: number[]): Promise<void> {
     alerts.push(alertBlock)
 
     // 이력용 — HTML 태그 없이 이력 페이지에서 보기 편한 요약.
+    // Phase 37-A (#444): evaluator 결과와 스냅샷을 contextJson 으로 저장 →
+    // 상세 모달에서 어느 조건이 만족/미달이었는지 재현 가능.
+    const taReport = taByTicker.get(s.ticker) ?? null
     historyEvents.push({
       kind: 'custom_strategy',
       ticker: s.ticker,
       price: priceRow?.price ?? null,
+      changePercent: priceRow?.changePercent ?? null,
       message: `${s.name} (${s.ticker}) — ${s.logic} 조건 만족`,
+      context: buildCustomStrategyContext({
+        strategyId: s.id,
+        strategyName: s.name,
+        strategyTicker: s.ticker,
+        logic: s.logic === 'OR' ? 'OR' : 'AND',
+        conditions: conds,
+        perCondition,
+        snapshot: {
+          price: priceRow?.price ?? null,
+          changePercent: priceRow?.changePercent ?? null,
+          rsi: taReport?.indicators.rsi14.value ?? null,
+          macdCrossover: taReport?.indicators.macd.crossover ?? null,
+          bbPosition: taReport?.indicators.bollingerBands.position ?? null,
+        },
+      }),
     })
   }
 

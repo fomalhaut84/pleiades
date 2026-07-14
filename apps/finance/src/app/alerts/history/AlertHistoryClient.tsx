@@ -8,6 +8,9 @@ import {
 } from 'recharts'
 import { KIND_META, kindMetaOf, STATUS_META, type AlertKind } from './kinds'
 import { formatFiredAt, stripHtml, periodFromISO } from './client-utils'
+import AlertHistoryDetailModal, {
+  type AlertHistoryDetailRow,
+} from '@/components/alerts/AlertHistoryDetailModal'
 
 interface HistoryRow {
   id: string
@@ -20,6 +23,8 @@ interface HistoryRow {
   deliveryStatus: string
   recipientCount: number
   errorMessage: string | null
+  /** Phase 37-A (#444): kind 별 스냅샷 (nullable — 이전 row 는 null) */
+  context: unknown
 }
 
 interface Stats {
@@ -48,6 +53,8 @@ export default function AlertHistoryClient() {
   const [offset, setOffset] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Phase 37-A (#444): 상세 모달 상태 — id 대신 row 를 통째로 저장해 fetch 재요청 회피.
+  const [selectedRow, setSelectedRow] = useState<AlertHistoryDetailRow | null>(null)
 
   // Codex P2 (#417 PR #424): 다중 kind 를 서버 쿼리로 전달 (`?kind=a&kind=b`) →
   // API 가 `in` 절로 필터 + 페이지네이션·집계가 정합. 클라 사이드 후처리 제거.
@@ -301,28 +308,35 @@ export default function AlertHistoryClient() {
               return (
                 <li
                   key={r.id}
-                  className="px-5 py-3 border-b border-border last:border-b-0 hover:bg-surface-dim transition-colors"
+                  className="border-b border-border last:border-b-0"
                 >
-                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                    <span className="text-sub tabular-nums">{formatFiredAt(r.firedAt)}</span>
-                    <span className={`px-2 py-0.5 rounded border font-semibold ${meta?.colorClass ?? 'bg-surface text-sub border-border'}`}>
-                      {meta?.icon} {meta?.label ?? r.kind}
-                    </span>
-                    {r.ticker && (
-                      <span className="px-2 py-0.5 rounded bg-surface-dim border border-border text-bright font-mono">
-                        {r.ticker}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRow(r)}
+                    className="w-full text-left px-5 py-3 hover:bg-surface-dim transition-colors focus:outline-none focus:bg-surface-dim"
+                    aria-label={`${meta?.label ?? r.kind} 상세 보기`}
+                  >
+                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className="text-sub tabular-nums">{formatFiredAt(r.firedAt)}</span>
+                      <span className={`px-2 py-0.5 rounded border font-semibold ${meta?.colorClass ?? 'bg-surface text-sub border-border'}`}>
+                        {meta?.icon} {meta?.label ?? r.kind}
                       </span>
+                      {r.ticker && (
+                        <span className="px-2 py-0.5 rounded bg-surface-dim border border-border text-bright font-mono">
+                          {r.ticker}
+                        </span>
+                      )}
+                      <span className={`ml-auto px-2 py-0.5 rounded border font-semibold ${status.colorClass}`}>
+                        {status.label} · {r.recipientCount}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 text-[13px] text-bright whitespace-pre-line">
+                      {stripHtml(r.message)}
+                    </div>
+                    {r.errorMessage && (
+                      <div className="mt-1 text-[11px] text-red-400 font-mono">↳ {r.errorMessage}</div>
                     )}
-                    <span className={`ml-auto px-2 py-0.5 rounded border font-semibold ${status.colorClass}`}>
-                      {status.label} · {r.recipientCount}
-                    </span>
-                  </div>
-                  <div className="mt-1.5 text-[13px] text-bright whitespace-pre-line">
-                    {stripHtml(r.message)}
-                  </div>
-                  {r.errorMessage && (
-                    <div className="mt-1 text-[11px] text-red-400 font-mono">↳ {r.errorMessage}</div>
-                  )}
+                  </button>
                 </li>
               )
             })}
@@ -350,6 +364,13 @@ export default function AlertHistoryClient() {
           </div>
         )}
       </section>
+
+      {selectedRow && (
+        <AlertHistoryDetailModal
+          row={selectedRow}
+          onClose={() => setSelectedRow(null)}
+        />
+      )}
     </div>
   )
 }
