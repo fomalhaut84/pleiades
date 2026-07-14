@@ -10,7 +10,7 @@
 import { askAdvisor } from '@/lib/ai/claude-advisor'
 import { validateParsedStrategy, type ParsedStrategy } from './types'
 
-const PROMPT_HEADER = `
+export const PROMPT_HEADER = `
 사용자 입력을 아래 JSON schema 로 정확히 파싱해줘. 오직 JSON 오브젝트만 출력 — 다른 설명/코드블록 없이.
 
 ## 지원 조건 타입 (v1)
@@ -28,11 +28,14 @@ const PROMPT_HEADER = `
 
 ## 지원 조건 타입 (v3 — 어닝 캘린더 / 크로스-티커)
 - earnings_within_days (숫자 정수, 0 이상, 다음 어닝까지 남은 일수 — Yahoo Finance 캘린더)
-- cross_ticker — 다른 티커의 price / change_percent 비교. 필수 필드:
+- cross_ticker — 다른 티커의 지표 비교. 필수 필드:
   - crossTicker: 참조 티커 (대문자 정규화). 자기 자신 참조 금지
-  - metric: "price" 또는 "change_percent"
-  - operator: 숫자 연산자 (< / <= / > / >= / ==)
-  - value: 숫자
+  - metric: 아래 6종
+    - "price" / "change_percent" — 숫자 비교. operator 는 < / <= / > / >= / ==. value 는 숫자
+    - "rsi" — 0~100 숫자. operator 는 < / <= / > / >= / ==. value 는 0~100
+    - "macd_signal" — value 는 정수 (1=GOLDEN, 0=NONE, -1=DEAD). operator 는 "==" 만
+    - "sma_cross" — value 는 정수 (1=GOLDEN, -1=DEAD). operator 는 "==" 만
+    - "bb_position" — value 는 정수 (1=ABOVE_UPPER, 0=WITHIN, -1=BELOW_LOWER). operator 는 "==" 만
 
 ## 연산자
 - 숫자 타입: < <= > >= ==
@@ -88,6 +91,19 @@ const PROMPT_HEADER = `
   ], "logic":"AND"
 - "VIX 25 초과 시 QQQ 콜 스캘핑" — ticker: "QQQ", conditions: [
     {"type":"cross_ticker","operator":">","value":25,"crossTicker":"VIX","metric":"price"}
+  ]
+- "SPY RSI 70 이상 과매수면 QQQ 회피 알림" — ticker: "QQQ", conditions: [
+    {"type":"cross_ticker","operator":">=","value":70,"crossTicker":"SPY","metric":"rsi"}
+  ]
+  * 조건 = 알림 발동 조건. 사용자가 "X 상황이면 알림" 이라고 하면 X 를 그대로 조건으로 씀 (부정하지 않음).
+- "SPY MACD 골든크로스 발생 시 SOXL 진입" — ticker: "SOXL", conditions: [
+    {"type":"cross_ticker","operator":"==","value":1,"crossTicker":"SPY","metric":"macd_signal"}
+  ]
+- "VIX SMA 골든크로스 (=변동성 상승 국면) 시 방어형 TLT 매수" — ticker: "TLT", conditions: [
+    {"type":"cross_ticker","operator":"==","value":1,"crossTicker":"VIX","metric":"sma_cross"}
+  ]
+- "SPY 볼밴 상단 이탈 시 QQQ 진입 회피" — ticker: "QQQ", conditions: [
+    {"type":"cross_ticker","operator":"==","value":1,"crossTicker":"SPY","metric":"bb_position"}
   ]
 
 ## 규칙

@@ -179,6 +179,71 @@ describe('computeStrategyDiff (Phase 35-B / #434)', () => {
     expect(conditionsEqual(a, b)).toBe(false)
   })
 
+  // ── Phase 38-A (#448): cross_ticker TA metric 확장 canonical key 정합
+  it('conditionsEqual — cross_ticker.rsi 같은 값 순서·필드 무관 → true', () => {
+    const a: Condition[] = [{
+      type: 'cross_ticker', operator: '>=', value: 70,
+      crossTicker: 'SPY', metric: 'rsi',
+    }]
+    const b: Condition[] = [{
+      value: 70, operator: '>=', type: 'cross_ticker',
+      metric: 'rsi', crossTicker: 'spy',
+    } as Condition]
+    expect(conditionsEqual(a, b)).toBe(true)
+  })
+
+  it('conditionsEqual — cross_ticker.macd_signal GOLDEN vs DEAD 다름', () => {
+    const a: Condition[] = [{
+      type: 'cross_ticker', operator: '==', value: 1,
+      crossTicker: 'SPY', metric: 'macd_signal',
+    }]
+    const b: Condition[] = [{
+      type: 'cross_ticker', operator: '==', value: -1,
+      crossTicker: 'SPY', metric: 'macd_signal',
+    }]
+    expect(conditionsEqual(a, b)).toBe(false)
+  })
+
+  it('conditionsEqual — cross_ticker.sma_cross vs bb_position 다름 (같은 value 1)', () => {
+    const a: Condition[] = [{
+      type: 'cross_ticker', operator: '==', value: 1,
+      crossTicker: 'SPY', metric: 'sma_cross',
+    }]
+    const b: Condition[] = [{
+      type: 'cross_ticker', operator: '==', value: 1,
+      crossTicker: 'SPY', metric: 'bb_position',
+    }]
+    expect(conditionsEqual(a, b)).toBe(false)
+  })
+
+  it('computeStrategyDiff — cross_ticker rsi 조건 추가 감지', () => {
+    const after: ParsedStrategy = {
+      ...base,
+      conditions: [
+        ...base.conditions,
+        { type: 'cross_ticker', operator: '>=', value: 70, crossTicker: 'SPY', metric: 'rsi' },
+      ],
+    }
+    const d = computeStrategyDiff(base, after)
+    expect(d.conditionsAdded).toHaveLength(1)
+    expect(d.conditionsAdded[0]).toMatchObject({
+      type: 'cross_ticker', metric: 'rsi', value: 70,
+    })
+    expect(d.conditionsRemoved).toEqual([])
+  })
+
+  it('컨텐츠 동일 순서만 다른 여러 cross_ticker TA 조건 → hasDiff false', () => {
+    const conds: Condition[] = [
+      { type: 'cross_ticker', operator: '==', value: 1, crossTicker: 'SPY', metric: 'macd_signal' },
+      { type: 'cross_ticker', operator: '==', value: -1, crossTicker: 'SPY', metric: 'bb_position' },
+      { type: 'cross_ticker', operator: '>=', value: 70, crossTicker: 'SPY', metric: 'rsi' },
+    ]
+    const before: ParsedStrategy = { ...base, conditions: conds }
+    // 순서만 뒤바꿈
+    const after: ParsedStrategy = { ...base, conditions: [conds[2], conds[0], conds[1]] }
+    expect(hasDiff(computeStrategyDiff(before, after))).toBe(false)
+  })
+
   it('복합 변경 (logic + 조건 추가 + 조건 제거)', () => {
     const after: ParsedStrategy = {
       name: base.name,
