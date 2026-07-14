@@ -44,6 +44,19 @@ describe('PROMPT_HEADER — cross_ticker 신규 metric 문서화 (Phase 38-A #44
     expect(PROMPT_HEADER).toMatch(/"metric":"bb_position"/)
   })
 
+  // Phase 38-B (#449) — 다중 cross_ticker AND combo 예시 등장.
+  // "VIX 20 초과 + SPY 볼밴 하단 이탈 시" 처럼 벤치마크 두 개를 AND 로 묶는 케이스는
+  // 실무에서 자주 등장하지만 예시가 없으면 AI 가 두 조건으로 분리 실패할 수 있음.
+  it('AND combo 예시 (VIX price + SPY bb_position) 노출', () => {
+    expect(PROMPT_HEADER).toContain('"crossTicker":"VIX"')
+    // combo 예시 안에 두 cross_ticker 가 나란히 있어야 함
+    const comboBlock = PROMPT_HEADER.match(/AND combo[\s\S]{0,400}/)
+    expect(comboBlock).not.toBeNull()
+    expect(comboBlock![0]).toContain('"crossTicker":"VIX"')
+    expect(comboBlock![0]).toContain('"crossTicker":"SPY"')
+    expect(comboBlock![0]).toContain('"logic":"AND"')
+  })
+
   // Codex #457 P2 회귀 방지 — RSI 예시가 사용자 자연어와 방향 일치해야 함.
   // 조건 = 알림 발동 조건. "SPY RSI 70 이상 과매수면 회피 알림" → operator=`>=`, value=70.
   // 이전에는 `<` 로 잘못 적혀 저장 시 반대 상황 (RSI 70 미만) 에서 알림 발동됐음.

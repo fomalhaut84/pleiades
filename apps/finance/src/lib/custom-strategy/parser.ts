@@ -105,6 +105,10 @@ export const PROMPT_HEADER = `
 - "SPY 볼밴 상단 이탈 시 QQQ 진입 회피" — ticker: "QQQ", conditions: [
     {"type":"cross_ticker","operator":"==","value":1,"crossTicker":"SPY","metric":"bb_position"}
   ]
+- "VIX 20 초과 + SPY 볼밴 하단 이탈 시 SOXL 진입 회피" (AND combo) — ticker: "SOXL", conditions: [
+    {"type":"cross_ticker","operator":">","value":20,"crossTicker":"VIX","metric":"price"},
+    {"type":"cross_ticker","operator":"==","value":-1,"crossTicker":"SPY","metric":"bb_position"}
+  ], "logic":"AND"
 
 ## 규칙
 - 지원 타입 외 조건 요구되면 { "error": "지원 안함: ..." } 로만 응답

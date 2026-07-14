@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { useToast } from '@/components/ui/Toast'
+import { conditionToString, type Condition } from '@/lib/custom-strategy/types'
 import type { ParsedStrategyPreview } from './types'
 
 const MAX_ACTIVE = 50
@@ -11,11 +12,15 @@ const EXAMPLES = [
   'NVDA MACD 골든크로스 시 알림',
   'TSLA 볼밴 하단 이탈 시 매수 알림',
   'AAPL 5일간 -10% 이상 하락 시 알림',
+  // Phase 38-B (#449) — cross_ticker TA metric 예시. 자연어 파싱 flow 노출.
+  'SPY RSI 70 이상 과매수 시 QQQ 매수 회피 알림',
+  'VIX 20 초과 + SPY 볼밴 하단 이탈 시 SOXL 진입 회피 알림',
 ]
 
+// Phase 38-B (#449) — 카테고리컬 cross_ticker 라벨 (GOLDEN/DEAD/ABOVE_UPPER 등) 을
+// 정수 대신 사람 친화 표시. `conditionToString` 이 이미 그 규칙을 담고 있음.
 function conditionLine(c: ParsedStrategyPreview['conditions'][number]): string {
-  const timeframe = c.timeframe ? `(${c.timeframe})` : ''
-  return `${c.type}${timeframe} ${c.operator} ${c.value}`
+  return conditionToString(c as unknown as Condition)
 }
 
 interface StrategyRegisterFormProps {
