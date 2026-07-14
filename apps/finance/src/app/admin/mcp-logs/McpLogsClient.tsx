@@ -187,6 +187,14 @@ export default function McpLogsClient() {
           >
             💀 크래시
           </button>
+          {/* Phase 37-D (#447) — 원본 파일 다운로드. 현재 date/crash 조합 대상. */}
+          <a
+            href={`/api/admin/mcp-logs/download?date=${encodeURIComponent(date)}&kind=${crash ? 'crash' : 'main'}`}
+            className="px-3 py-1.5 text-[12px] font-semibold rounded-md border border-border bg-surface text-sub hover:text-bright"
+            title="현재 일자/파일 종류의 원본 로그를 다운로드"
+          >
+            ⬇ 다운로드
+          </a>
 
           <div className="ml-auto flex items-center gap-2">
             <input

@@ -1,12 +1,31 @@
 # MCP 로그 스키마
 
-**출처**: pino JSON lines. Phase 32-C 에서 도입 (`src/mcp/logger.ts`), Phase 33-C (#418) 로 문서화. #409 흡수.
+**출처**: pino JSON lines. Phase 32-C 에서 도입 (`src/mcp/logger.ts`), Phase 33-C (#418) 로 문서화. #409 흡수. Phase 37-D (#447) — retention 명문화 + 다운로드 endpoint 추가.
 
 ## 파일 위치
 
 - `logs/mcp-YYYY-MM-DD.log` — 전체 로그 (info 이상)
 - `logs/mcp-crash-YYYY-MM-DD.log` — **fatal 만** 별도 tee (33-C 신규). pm2 crash 진단 시 이 파일만 스캔.
 - 날짜는 KST 기준. 매일 자정에 rotation. 14일 retention 자동 정리.
+
+## Rotation · Retention 정책
+
+- **Rotation**: 매일 KST 00:00 (자정) 에 새 파일. `scheduleFileRotation` 이 5분 주기 setInterval 로 KST 날짜 변화를 감지 → 새 stream open + old flush+end (`src/mcp/logger.ts:111-135`). 실제 rotation timing 은 00:00~00:05 사이.
+- **Retention**: 기본 14일. `mtime` 기준으로 cutoff 초과된 `mcp-*.log` / `mcp-crash-*.log` 를 삭제.
+- **Prune 트리거**: (a) 매 rotation 직후 (`openFileStream` 안에서 `pruneOldLogs` 호출), (b) 프로세스 부팅 시 (첫 stream open). 별도 cron 없음 — best effort.
+- **환경변수** (`src/mcp/logger.ts:11-38`):
+  - `MCP_LOG_TEE_FILE=1` — 파일 로거 활성 (기본 off). `ecosystem.config.js` 에 설정됨
+  - `MCP_LOG_RETENTION_DAYS` — retention 일수 (기본 `14`, 0 이하면 정리 비활성)
+  - `MCP_LOG_DIR` — 로그 디렉토리 (기본 `logs/`)
+
+## 관리 UI · API
+
+- **대시보드**: `/admin/mcp-logs` — 스냅샷 조회 + 실시간 tail (37-C) + 원본 다운로드 (37-D).
+- **API**:
+  - `GET /api/admin/mcp-logs?date=YYYY-MM-DD&crash=1&level=&msg=&tool=&traceId=&limit=&offset=` — 페이지네이션 리스트
+  - `GET /api/admin/mcp-logs/stats?...` — 통계 요약
+  - `GET /api/admin/mcp-logs/stream?level=&msg=&tool=&traceId=` — 실시간 SSE (오늘 KST 일반 로그만)
+  - `GET /api/admin/mcp-logs/download?date=YYYY-MM-DD&kind=main|crash` — **원본 파일 다운로드** (37-D 신규). date 는 정규식+캘린더 검증, kind 는 화이트리스트. 경로 traversal 방어.
 
 ## 공통 필드 (모든 라인)
 
