@@ -2,6 +2,7 @@
 
 import { formatKRW, formatDate } from '@/lib/format'
 import { formatFrequency } from '@/lib/recurring-utils'
+import IconButton from '@/components/ui/IconButton'
 
 export interface RecurringRow {
   id: string
@@ -52,7 +53,7 @@ export default function RecurringTable({ items, onEdit, onDelete, onToggle }: Re
                 <th className="px-4 py-2.5 text-right text-dim font-semibold tracking-wide uppercase">금액</th>
                 <th className="px-4 py-2.5 text-left text-dim font-semibold tracking-wide uppercase">주기</th>
                 <th className="px-4 py-2.5 text-left text-dim font-semibold tracking-wide uppercase">다음 실행</th>
-                <th className="px-4 py-2.5 text-center text-dim font-semibold tracking-wide uppercase w-[70px]">액션</th>
+                <th className="px-4 py-2.5 text-center text-dim font-semibold tracking-wide uppercase w-[100px]">액션</th>
               </tr>
             </thead>
             <tbody>
@@ -88,24 +89,16 @@ export default function RecurringTable({ items, onEdit, onDelete, onToggle }: Re
                     {formatDate(item.nextRunAt)}
                   </td>
                   <td className="px-4 py-3 text-center whitespace-nowrap">
-                    <button
-                      onClick={() => onEdit(item)}
-                      className="inline-flex items-center justify-center w-[26px] h-[26px] rounded-md text-dim hover:text-text hover:bg-surface transition-all"
-                      title="수정"
-                    >
+                    <IconButton onClick={() => onEdit(item)} title="수정">
                       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                         <path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z" />
                       </svg>
-                    </button>
-                    <button
-                      onClick={() => onDelete(item)}
-                      className="inline-flex items-center justify-center w-[26px] h-[26px] rounded-md text-dim hover:text-red-400 hover:bg-red-500/10 transition-all"
-                      title="삭제"
-                    >
+                    </IconButton>
+                    <IconButton variant="danger" onClick={() => onDelete(item)} title="삭제">
                       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                         <path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4" />
                       </svg>
-                    </button>
+                    </IconButton>
                   </td>
                 </tr>
               ))}

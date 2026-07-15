@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import CategoryEditPanel from './CategoryEditPanel'
 import CategoryDeleteModal from './CategoryDeleteModal'
+import IconButton from '@/components/ui/IconButton'
 
 export interface CategoryRow {
   id: string
@@ -81,28 +82,18 @@ function CategoryRowDesktop({
       </td>
       <td className="pr-4 px-3 py-3 border-b border-border">
         <div className="flex items-center gap-1">
-          <button
-            onClick={onMoveUp}
-            disabled={isFirst || isReordering}
-            className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all disabled:opacity-20 disabled:cursor-not-allowed"
-            title="위로"
-          >
+          <IconButton onClick={onMoveUp} disabled={isFirst || isReordering} title="위로">
             <ArrowUpIcon />
-          </button>
-          <button
-            onClick={onMoveDown}
-            disabled={isLast || isReordering}
-            className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all disabled:opacity-20 disabled:cursor-not-allowed"
-            title="아래로"
-          >
+          </IconButton>
+          <IconButton onClick={onMoveDown} disabled={isLast || isReordering} title="아래로">
             <ArrowDownIcon />
-          </button>
-          <button onClick={() => onEdit(c)} className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all" title="수정">
+          </IconButton>
+          <IconButton onClick={() => onEdit(c)} title="수정">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" /></svg>
-          </button>
-          <button onClick={() => onDelete(c)} className="p-1.5 rounded-md text-dim hover:text-red-400 hover:bg-red-500/10 transition-all" title="삭제">
+          </IconButton>
+          <IconButton variant="danger" onClick={() => onDelete(c)} title="삭제">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 011.334-1.334h2.666a1.333 1.333 0 011.334 1.334V4m2 0v9.333a1.333 1.333 0 01-1.334 1.334H4.667a1.333 1.333 0 01-1.334-1.334V4h9.334z" /></svg>
-          </button>
+          </IconButton>
         </div>
       </td>
     </tr>
@@ -248,7 +239,7 @@ export default function CategoryTable({ categories, activeTab, onTabChange }: Ca
                         key={i}
                         className={`px-3 py-2.5 text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-card ${
                           i === 0 || i === 4 ? 'text-center' : 'text-left'
-                        } ${i === 0 ? 'pl-4 w-16' : ''} ${i === 5 ? 'pr-4 w-28' : ''}`}
+                        } ${i === 0 ? 'pl-4 w-16' : ''} ${i === 5 ? 'pr-4 w-56' : ''}`}
                       >
                         {col}
                       </th>
@@ -326,36 +317,30 @@ export default function CategoryTable({ categories, activeTab, onTabChange }: Ca
                         )}
                       </div>
                       <div className="flex items-center gap-1">
-                        <button
+                        <IconButton
                           onClick={() => handleReorder(c.id, 'up')}
                           disabled={isFirst || reordering}
-                          className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+                          title="위로"
                         >
                           <ArrowUpIcon size={12} />
-                        </button>
-                        <button
+                        </IconButton>
+                        <IconButton
                           onClick={() => handleReorder(c.id, 'down')}
                           disabled={isLast || reordering}
-                          className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+                          title="아래로"
                         >
                           <ArrowDownIcon size={12} />
-                        </button>
-                        <button
-                          onClick={() => setEditItem(c)}
-                          className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all"
-                        >
+                        </IconButton>
+                        <IconButton onClick={() => setEditItem(c)} title="수정">
                           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                             <path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" />
                           </svg>
-                        </button>
-                        <button
-                          onClick={() => setDeleteItem(c)}
-                          className="p-1.5 rounded-md text-dim hover:text-red-400 hover:bg-red-500/10 transition-all"
-                        >
+                        </IconButton>
+                        <IconButton variant="danger" onClick={() => setDeleteItem(c)} title="삭제">
                           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                             <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 011.334-1.334h2.666a1.333 1.333 0 011.334 1.334V4m2 0v9.333a1.333 1.333 0 01-1.334 1.334H4.667a1.333 1.333 0 01-1.334-1.334V4h9.334z" />
                           </svg>
-                        </button>
+                        </IconButton>
                       </div>
                     </div>
                     {c.keywords.length > 0 && (

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { formatKRW } from '@/lib/format'
 import { getBudgetColor } from '@/lib/budget-utils'
+import IconButton from '@/components/ui/IconButton'
 
 interface CategoryBudget {
   id: string
@@ -156,8 +157,8 @@ export default function BudgetManager({
 
           if (isEditing) {
             return (
-              <div key={b.id} className="flex items-center gap-3 px-5 py-3.5 border-b border-border bg-surface-dim">
-                <span className="text-[13px] text-bright font-medium w-[120px] shrink-0">
+              <div key={b.id} className="flex flex-wrap items-center gap-2 sm:gap-3 px-5 py-3.5 border-b border-border bg-surface-dim">
+                <span className="text-[13px] text-bright font-medium w-full sm:w-[120px] sm:shrink-0">
                   {b.categoryIcon ? `${b.categoryIcon} ` : ''}{b.categoryName}
                 </span>
                 <input
@@ -165,7 +166,7 @@ export default function BudgetManager({
                   inputMode="numeric"
                   value={editAmount}
                   onChange={(e) => setEditAmount(e.target.value.replace(/[^0-9,]/g, ''))}
-                  className="w-28 bg-surface border border-border-hover rounded-md px-2.5 py-1 text-[13px] text-bright tabular-nums text-right focus:outline-none"
+                  className="flex-1 min-w-0 sm:flex-none sm:w-28 bg-surface border border-border-hover rounded-md px-2.5 py-1 text-[13px] text-bright tabular-nums text-right focus:outline-none"
                   autoFocus
                 />
                 <span className="text-[12px] text-dim">원</span>
@@ -186,12 +187,16 @@ export default function BudgetManager({
             )
           }
 
+          const remainingColor = b.remaining >= 0
+            ? (b.pct >= 70 ? 'text-yellow-400' : 'text-emerald-400')
+            : 'text-red-400'
+
           return (
-            <div key={b.id} className="grid grid-cols-[140px_1fr_100px_100px_40px] items-center gap-3 px-5 py-3.5 border-b border-border last:border-0 hover:bg-surface-dim transition-colors">
-              <span className="text-[13px] text-bright font-medium whitespace-nowrap">
+            <div key={b.id} className="grid grid-cols-[minmax(80px,1fr)_1.5fr_auto] sm:grid-cols-[140px_1fr_100px_100px_auto] items-center gap-2 sm:gap-3 px-5 py-3.5 border-b border-border last:border-0 hover:bg-surface-dim transition-colors">
+              <span className="text-[13px] text-bright font-medium truncate">
                 {b.categoryIcon ? `${b.categoryIcon} ` : ''}{b.categoryName}
               </span>
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1 min-w-0">
                 <div className="h-1.5 bg-surface-dim rounded-full overflow-hidden">
                   <div className={`h-full rounded-full ${colorMap[color]}`} style={{ width: `${Math.min(b.pct, 100)}%` }} />
                 </div>
@@ -201,32 +206,29 @@ export default function BudgetManager({
                     {b.pct}%{b.pct >= 100 ? ' 초과' : ''}
                   </span>
                 </div>
+                {/* Mobile 전용 요약 — 사용 / 잔액 (sm 이상은 별도 컬럼으로 노출) */}
+                <div className="flex justify-between text-[11px] tabular-nums sm:hidden">
+                  <span className="text-red-400">사용 {formatKRW(b.spent)}</span>
+                  <span className={remainingColor}>잔액 {formatKRW(b.remaining)}</span>
+                </div>
               </div>
-              <span className="text-[12px] font-semibold text-red-400 text-right tabular-nums whitespace-nowrap">
+              <span className="hidden sm:inline text-[12px] font-semibold text-red-400 text-right tabular-nums whitespace-nowrap">
                 {formatKRW(b.spent)}
               </span>
-              <span className={`text-[12px] font-semibold text-right tabular-nums whitespace-nowrap ${b.remaining >= 0 ? (b.pct >= 70 ? 'text-yellow-400' : 'text-emerald-400') : 'text-red-400'}`}>
+              <span className={`hidden sm:inline text-[12px] font-semibold text-right tabular-nums whitespace-nowrap ${remainingColor}`}>
                 {formatKRW(b.remaining)}
               </span>
               <div className="flex gap-0.5 justify-center">
-                <button
-                  onClick={() => handleEdit(b)}
-                  className="inline-flex items-center justify-center w-[26px] h-[26px] rounded-md text-dim hover:text-text hover:bg-surface transition-all"
-                  title="수정"
-                >
+                <IconButton onClick={() => handleEdit(b)} title="수정">
                   <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z" />
                   </svg>
-                </button>
-                <button
-                  onClick={() => handleDelete(b.id)}
-                  className="inline-flex items-center justify-center w-[26px] h-[26px] rounded-md text-dim hover:text-red-400 hover:bg-red-500/10 transition-all"
-                  title="삭제"
-                >
+                </IconButton>
+                <IconButton variant="danger" onClick={() => handleDelete(b.id)} title="삭제">
                   <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4" />
                   </svg>
-                </button>
+                </IconButton>
               </div>
             </div>
           )
@@ -250,11 +252,11 @@ export default function BudgetManager({
 
         {/* 추가 영역 */}
         {showAdd && (
-          <div className="flex items-center gap-3 px-5 py-3.5 border-b border-border bg-surface-dim">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 px-5 py-3.5 border-b border-border bg-surface-dim">
             <select
               value={addCategoryId}
               onChange={(e) => setAddCategoryId(e.target.value)}
-              className="w-[140px] bg-surface-dim border border-border rounded-md px-2.5 py-1.5 text-[13px] text-bright focus:outline-none"
+              className="w-full sm:w-[140px] bg-surface-dim border border-border rounded-md px-2.5 py-1.5 text-[13px] text-bright focus:outline-none"
             >
               <option value="">카테고리 선택</option>
               {unsetCategories.map((c) => (
@@ -267,7 +269,7 @@ export default function BudgetManager({
               value={addAmount}
               onChange={(e) => setAddAmount(e.target.value.replace(/[^0-9,]/g, ''))}
               placeholder="금액"
-              className="w-28 bg-surface border border-border-hover rounded-md px-2.5 py-1.5 text-[13px] text-bright tabular-nums text-right focus:outline-none"
+              className="flex-1 min-w-0 sm:flex-none sm:w-28 bg-surface border border-border-hover rounded-md px-2.5 py-1.5 text-[13px] text-bright tabular-nums text-right focus:outline-none"
             />
             <span className="text-[12px] text-dim">원</span>
             <button

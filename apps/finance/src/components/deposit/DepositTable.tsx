@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { formatKRW, formatDate } from '@/lib/format'
+import IconButton from '@/components/ui/IconButton'
 import DepositEditPanel from './DepositEditPanel'
 import DepositDeleteModal from './DepositDeleteModal'
 
@@ -116,24 +117,16 @@ export default function DepositTable({ deposits, total, limit, offset }: Deposit
                   </td>
                   <td className="pr-4 px-3 py-3 border-b border-border">
                     <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setEditItem(d)}
-                        className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all"
-                        title="수정"
-                      >
+                      <IconButton onClick={() => setEditItem(d)} title="수정">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                           <path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" />
                         </svg>
-                      </button>
-                      <button
-                        onClick={() => setDeleteItem(d)}
-                        className="p-1.5 rounded-md text-dim hover:text-red-400 hover:bg-red-500/10 transition-all"
-                        title="삭제"
-                      >
+                      </IconButton>
+                      <IconButton variant="danger" onClick={() => setDeleteItem(d)} title="삭제">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                           <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 011.334-1.334h2.666a1.333 1.333 0 011.334 1.334V4m2 0v9.333a1.333 1.333 0 01-1.334 1.334H4.667a1.333 1.333 0 01-1.334-1.334V4h9.334z" />
                         </svg>
-                      </button>
+                      </IconButton>
                     </div>
                   </td>
                 </tr>
@@ -153,22 +146,16 @@ export default function DepositTable({ deposits, total, limit, offset }: Deposit
                   <span className="text-[11px] text-dim px-1.5 py-0.5 rounded bg-surface-dim">{d.source}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setEditItem(d)}
-                    className="p-1.5 rounded-md text-dim hover:text-muted hover:bg-surface transition-all"
-                  >
+                  <IconButton onClick={() => setEditItem(d)} title="수정">
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                       <path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" />
                     </svg>
-                  </button>
-                  <button
-                    onClick={() => setDeleteItem(d)}
-                    className="p-1.5 rounded-md text-dim hover:text-red-400 hover:bg-red-500/10 transition-all"
-                  >
+                  </IconButton>
+                  <IconButton variant="danger" onClick={() => setDeleteItem(d)} title="삭제">
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                       <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 011.334-1.334h2.666a1.333 1.333 0 011.334 1.334V4m2 0v9.333a1.333 1.333 0 01-1.334 1.334H4.667a1.333 1.333 0 01-1.334-1.334V4h9.334z" />
                     </svg>
-                  </button>
+                  </IconButton>
                 </div>
               </div>
               <div className="flex items-center justify-between text-[12px]">

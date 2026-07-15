@@ -6,6 +6,7 @@ import { formatKRW, formatDate } from '@/lib/format'
 import RSUForm from './RSUForm'
 import RSUDeleteModal from './RSUDeleteModal'
 import Disclaimer from '@/components/ui/Disclaimer'
+import IconButton from '@/components/ui/IconButton'
 
 interface RSUSchedule {
   id: string
@@ -184,20 +185,12 @@ export default function RSUDashboard({ schedules: initialSchedules, accounts = [
                       >
                         베스팅
                       </button>
-                      <button
-                        onClick={() => setEditingItem(schedule)}
-                        className="p-1.5 rounded-md text-dim hover:text-text hover:bg-surface transition-all"
-                        title="수정"
-                      >
+                      <IconButton onClick={() => setEditingItem(schedule)} title="수정">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z" /></svg>
-                      </button>
-                      <button
-                        onClick={() => setDeletingItem(schedule)}
-                        className="p-1.5 rounded-md text-dim hover:text-red-400 hover:bg-red-500/10 transition-all"
-                        title="삭제"
-                      >
+                      </IconButton>
+                      <IconButton variant="danger" onClick={() => setDeletingItem(schedule)} title="삭제">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4" /></svg>
-                      </button>
+                      </IconButton>
                     </>
                   )}
                 </>
