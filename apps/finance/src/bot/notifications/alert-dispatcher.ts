@@ -8,7 +8,7 @@
  */
 
 import type { Bot } from 'grammy'
-import { sendHtml } from '@/bot/utils/telegram'
+import { sendHtml, escapeHtml } from '@/bot/utils/telegram'
 import { computeDeliveryStatus, recordAlertHistory, type AlertKind } from './alert-history'
 import { getBot } from '../index'
 import type { AlertHistoryContext } from '@/lib/alert-history/context'
@@ -49,6 +49,25 @@ export function createRetryRateLimiter(cooldownMs: number = RETRY_COOLDOWN_MS): 
 export const globalRetryLimiter = createRetryRateLimiter()
 
 /**
+ * HTML entity → literal char (재발송 preprocessing 전용, Codex #463 P2).
+ * `escapeHtml` 의 역함수 (5개 entity: `&amp;` `&lt;` `&gt;` `&quot;` `&#39;`).
+ * `&amp;` 를 먼저 처리하면 `&amp;lt;` 같은 nested 는 `&lt;` → `<` 두 스텝이 되지만,
+ * 저장 시엔 nested 가 발생하지 않으므로 순서 무관. 정규식 하나로 처리:
+ */
+export function decodeHtmlEntities(s: string): string {
+  return s.replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => {
+    switch (e) {
+      case 'amp': return '&'
+      case 'lt': return '<'
+      case 'gt': return '>'
+      case 'quot': return '"'
+      case '#39': return "'"
+      default: return _
+    }
+  })
+}
+
+/**
  * 원본 AlertHistory row 를 재발송 대상 subset 으로 좁힌 인터페이스.
  * Prisma AlertHistory 모델과 호환 (Date → firedAt 필드는 미사용이라 생략).
  */
@@ -73,16 +92,36 @@ export interface RedispatchResult {
  * 순수 재발송 — 지정 chatIds 로 sendHtml 호출 후 성공 카운트/에러 반환.
  * DB 기록은 caller (route handler) 가 수행 — pure/impure 분리로 테스트 용이.
  */
+/**
+ * Codex #463 P2 (2차): 저장 시점에 escapeHtml 을 이미 적용하는 kind 화이트리스트.
+ * price-alert.ts 에서 `${escapeHtml(name)}` 로 build 후 그대로 store 되는 kind 들.
+ * 나머지 (custom_strategy · drop · surge · fx · ta_signal 등) 는 raw 로 store.
+ */
+const PRE_ESCAPED_KINDS = new Set<string>(['target_hit', 'stop_loss', 'watch_buy', 'watch_zone'])
+
 export async function redispatchAlert(
-  row: Pick<RedispatchTargetRow, 'message'>,
+  row: Pick<RedispatchTargetRow, 'message' | 'kind'>,
   chatIds: number[],
   bot: Bot = getBot(),
 ): Promise<RedispatchResult> {
+  // Codex #462 · #463 P2 (2차): 저장 상태가 kind 별로 mixed —
+  //   - PRE_ESCAPED_KINDS: `A &amp; B` (이미 escape 된 상태로 store)
+  //   - 그 외: `SOXL < 40` (raw)
+  //
+  // sendHtml (parse_mode=HTML) 로 raw 를 그대로 넘기면 parser 오류. 하지만 모든
+  // kind 를 decode→escape round-trip 하면 raw 케이스에서 사용자가 literal `&amp;`
+  // 를 이름으로 넣었을 때 decoder 가 `&` 로 오해석 → 원본과 다른 문자 렌더.
+  //
+  // **Fix (kind gating):** pre-escaped kind 만 decode 후 재escape (원본 복원).
+  // raw kind 는 그대로 escape (안전 처리 + 사용자 literal entity 존중).
+  const isPreEscaped = PRE_ESCAPED_KINDS.has(row.kind)
+  const normalized = isPreEscaped ? decodeHtmlEntities(row.message) : row.message
+  const safeMessage = escapeHtml(normalized)
   let successCount = 0
   let lastError: string | undefined
   for (const chatId of chatIds) {
     try {
-      await sendHtml(bot, chatId, row.message)
+      await sendHtml(bot, chatId, safeMessage)
       successCount++
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error)

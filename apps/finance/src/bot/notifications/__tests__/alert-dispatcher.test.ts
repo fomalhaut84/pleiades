@@ -25,6 +25,10 @@ vi.mock('../../index', () => ({
 }))
 vi.mock('@/bot/utils/telegram', () => ({
   sendHtml: vi.fn(),
+  // Codex #462 P2: redispatchAlert 이 escapeHtml 을 호출하므로 mock 도 노출 필요.
+  // 실제 로직 (`&` → `&amp;` 등) 을 그대로 replay 해 회귀 테스트가 정확한 escape
+  // 결과를 assert 할 수 있게 함.
+  escapeHtml: (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
 }))
 
 import {
@@ -153,9 +157,14 @@ describe('redispatchAlert', () => {
   })
 
   const fakeBot = {} as Bot
-  const row = { message: '<b>hi</b>' }
+  // Codex #462 P2: 저장된 message 는 plain-text 요약. sendHtml 에 그대로 넘기면
+  // HTML metacharacter (`<`, `>`, `&`) 가 있는 이름 (예: `SOXL < 40`) 이 Telegram
+  // HTML parser 에서 거부되거나 예상 못한 마크업 렌더. redispatchAlert 는 escape 후 전송.
+  // Codex #463 P2 (2차): kind 기반 gating — raw kind (custom_strategy 등) 는 그대로
+  // escape, pre-escaped kind (target_hit 등) 는 decode 후 재escape 로 round-trip.
+  const row = { message: '<b>hi</b>', kind: 'custom_strategy' }
 
-  it('모든 chat 성공 → status=sent, successCount=totalChats', async () => {
+  it('모든 chat 성공 → status=sent, successCount=totalChats. escape 후 전송', async () => {
     vi.mocked(sendHtml).mockResolvedValue(undefined as never)
     const res = await redispatchAlert(row, [1, 2, 3], fakeBot)
     expect(res.status).toBe('sent')
@@ -163,7 +172,53 @@ describe('redispatchAlert', () => {
     expect(res.totalChats).toBe(3)
     expect(res.lastError).toBeUndefined()
     expect(sendHtml).toHaveBeenCalledTimes(3)
-    expect(sendHtml).toHaveBeenNthCalledWith(1, fakeBot, 1, '<b>hi</b>')
+    // Raw `<b>hi</b>` 가 아니라 escape 된 `&lt;b&gt;hi&lt;/b&gt;` 로 전송돼야 (Codex #462 P2)
+    expect(sendHtml).toHaveBeenNthCalledWith(1, fakeBot, 1, '&lt;b&gt;hi&lt;/b&gt;')
+  })
+
+  // Codex #462 P2 회귀 방지 — 사용자 입력 (custom strategy name 등) 에 HTML
+  // metacharacter 가 들어와도 Telegram HTML parser 를 부수지 않고 plaintext 로 안전 전달.
+  it('raw kind + HTML metacharacter → 전부 escape 후 sendHtml 호출', async () => {
+    vi.mocked(sendHtml).mockResolvedValue(undefined as never)
+    const dangerous = { message: 'SOXL < 40 & QQQ > 500 (사용자 & 이름)', kind: 'custom_strategy' }
+    await redispatchAlert(dangerous, [42], fakeBot)
+    expect(sendHtml).toHaveBeenCalledWith(
+      fakeBot,
+      42,
+      'SOXL &lt; 40 &amp; QQQ &gt; 500 (사용자 &amp; 이름)',
+    )
+  })
+
+  // Codex #463 P2 (1차) 회귀 방지 — pre-escaped kind (target_hit 등) 는 decode→escape
+  // round-trip 으로 double-encode 방지.
+  it('pre-escaped kind (target_hit) — decode 후 재escape 로 round-trip 보존', async () => {
+    vi.mocked(sendHtml).mockResolvedValue(undefined as never)
+    const preEscaped = {
+      message: '🎯 A &amp; B (AAPL) 목표가 도달: 100 (목표 &lt;100&gt;)',
+      kind: 'target_hit',
+    }
+    await redispatchAlert(preEscaped, [42], fakeBot)
+    expect(sendHtml).toHaveBeenCalledWith(
+      fakeBot,
+      42,
+      '🎯 A &amp; B (AAPL) 목표가 도달: 100 (목표 &lt;100&gt;)',
+    )
+  })
+
+  // Codex #463 P2 (2차) 회귀 방지 — raw kind 에서 사용자가 literal `&amp;` 를 이름에
+  // 넣었으면 decode 하지 않고 그대로 escape 해야 원본 문자 (`&amp;` 리터럴) 보존.
+  it('raw kind + literal HTML entity (custom_strategy 이름) → decode 하지 않음', async () => {
+    vi.mocked(sendHtml).mockResolvedValue(undefined as never)
+    // 사용자가 정말 `&amp;` 라는 리터럴 문자열을 전략 이름으로 사용한 경우
+    const literalEntity = { message: 'A &amp; B 전략 (AAPL) — AND 조건 만족', kind: 'custom_strategy' }
+    await redispatchAlert(literalEntity, [42], fakeBot)
+    // decode 하지 않고 그대로 escape → `&amp;` 가 `&amp;amp;` 로 정확 escape,
+    // Telegram 은 `&amp;` 리터럴 표시 (사용자 원본 존중).
+    expect(sendHtml).toHaveBeenCalledWith(
+      fakeBot,
+      42,
+      'A &amp;amp; B 전략 (AAPL) — AND 조건 만족',
+    )
   })
 
   it('모든 chat 실패 → status=failed, lastError 세팅', async () => {
