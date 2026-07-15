@@ -38,7 +38,48 @@ export function formatKstDateTime(iso: string | Date): string {
   return `${y}-${m}-${day} ${hh}:${mm}:${ss}`
 }
 
-/** HTML 태그 제거 (message 는 HTML). CSV 는 plain text 로. */
+/**
+ * Codex #462 P2: 저장 시점에 escapeHtml 을 이미 적용하는 kind 화이트리스트
+ * (alert-dispatcher.ts 의 PRE_ESCAPED_KINDS 와 동일). price-alert.ts 에서
+ * `${escapeHtml(name)}` 로 build 후 store 되는 4종. 나머지는 raw.
+ */
+const PRE_ESCAPED_KINDS = new Set<string>(['target_hit', 'stop_loss', 'watch_buy', 'watch_zone'])
+
+/** escapeHtml 의 역함수 — 5 entity (`&amp;` `&lt;` `&gt;` `&quot;` `&#39;`) 만 decode. */
+function decodeHtmlEntities(s: string): string {
+  return s.replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => {
+    switch (e) {
+      case 'amp': return '&'
+      case 'lt': return '<'
+      case 'gt': return '>'
+      case 'quot': return '"'
+      case '#39': return "'"
+      default: return _
+    }
+  })
+}
+
+/**
+ * CSV 셀용 메시지 정규화 (Codex #462 P2).
+ *
+ * 저장 상태가 kind 별로 mixed:
+ *   - PRE_ESCAPED_KINDS: `A &amp; B` 로 저장 → CSV 는 사람 읽기용이라 `A & B` 로 decode
+ *   - 그 외 (raw): 사용자 입력 그대로 → decode 하면 literal `&amp;` 를 `&` 로 오해석하거나
+ *     `SOXL < 40 > RSI` 같은 이름을 `/<[^>]+>/g` 로 잘라 audit 데이터 손상
+ *
+ * **Fix (kind gating):** pre-escaped 만 decode. raw 는 그대로 유지 → 원본 문자 보존.
+ *
+ * `<...>` 태그 strip 은 stored message 에 실제 HTML 태그가 들어가는 경로가 없으므로
+ * 삭제 (이전 regex `/<[^>]+>/g` 는 raw 이름에 대한 false positive 만 유발했음).
+ */
+export function messageForCsv(message: string, kind: string): string {
+  return PRE_ESCAPED_KINDS.has(kind) ? decodeHtmlEntities(message) : message
+}
+
+/**
+ * @deprecated Codex #462 P2: 오탐 유발 (raw 이름 `<...>` 잘림). `messageForCsv(msg, kind)` 사용.
+ * 하위 호환용 wrapper — 새 코드는 messageForCsv 로 이관.
+ */
 export function stripHtmlForCsv(html: string): string {
   return html.replace(/<[^>]+>/g, '')
 }
@@ -99,7 +140,7 @@ export function toCsvRow(row: HistoryCsvSourceRow): string[] {
     row.ticker ?? '',
     row.price != null ? String(row.price) : '',
     row.changePercent != null ? String(row.changePercent) : '',
-    stripHtmlForCsv(row.message),
+    messageForCsv(row.message, row.kind),
     row.deliveryStatus,
     String(row.recipientCount),
     row.errorMessage ?? '',

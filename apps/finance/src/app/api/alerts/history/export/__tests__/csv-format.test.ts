@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatKstDateTime,
   stripHtmlForCsv,
+  messageForCsv,
   summarizeContext,
   toCsvRow,
   buildExportFilename,
@@ -48,7 +49,28 @@ describe('formatKstDateTime', () => {
   })
 })
 
-describe('stripHtmlForCsv', () => {
+describe('messageForCsv (Codex #462 P2)', () => {
+  it('pre-escaped kind (target_hit): entity decode', () => {
+    expect(messageForCsv('A &amp; B', 'target_hit')).toBe('A & B')
+    expect(messageForCsv('&lt;100&gt;', 'stop_loss')).toBe('<100>')
+    expect(messageForCsv('&quot;x&quot;', 'watch_buy')).toBe('"x"')
+    expect(messageForCsv('&#39;y&#39;', 'watch_zone')).toBe("'y'")
+  })
+
+  it('raw kind (custom_strategy): message 그대로', () => {
+    expect(messageForCsv('SOXL < 40 > RSI', 'custom_strategy')).toBe('SOXL < 40 > RSI')
+    // 사용자가 literal `&amp;` 를 이름에 넣어도 decode 하지 않음
+    expect(messageForCsv('A &amp; B', 'custom_strategy')).toBe('A &amp; B')
+  })
+
+  it('raw kind (drop/surge/fx/ta_signal): 그대로', () => {
+    for (const kind of ['drop', 'surge', 'fx', 'ta_signal']) {
+      expect(messageForCsv('SOXL < 40', kind)).toBe('SOXL < 40')
+    }
+  })
+})
+
+describe('stripHtmlForCsv (@deprecated Codex #462 P2)', () => {
   it('간단한 태그 제거', () => {
     expect(stripHtmlForCsv('<b>AAPL</b> 급락')).toBe('AAPL 급락')
   })
@@ -150,7 +172,8 @@ describe('toCsvRow', () => {
       ticker: 'AAPL',
       price: 150.5,
       changePercent: -6.2,
-      message: '<b>AAPL</b> 급락',
+      // raw stored message (drop 은 raw kind — HTML 태그 없음).
+      message: '🔴 AAPL (AAPL) 급락: -6.2%',
       deliveryStatus: 'sent',
       recipientCount: 2,
       errorMessage: null,
@@ -162,11 +185,48 @@ describe('toCsvRow', () => {
     expect(row[2]).toBe('AAPL')                  // ticker
     expect(row[3]).toBe('150.5')                 // price
     expect(row[4]).toBe('-6.2')                  // changePercent
-    expect(row[5]).toBe('AAPL 급락')             // message (HTML stripped)
+    expect(row[5]).toBe('🔴 AAPL (AAPL) 급락: -6.2%')  // message (raw preserved)
     expect(row[6]).toBe('sent')                  // deliveryStatus
     expect(row[7]).toBe('2')                     // recipientCount
     expect(row[8]).toBe('')                      // errorMessage (null → '')
     expect(row[9]).toContain('type=drop')        // context summary
+  })
+
+  // Codex #462 P2 회귀 방지 — raw kind (custom_strategy) 의 이름에 `<` `>` 가
+  // 포함되면 이전 stripHtmlForCsv 는 `< 40 >` 을 태그로 오해석해 삭제 → audit CSV
+  // 손상. 이제 messageForCsv 는 raw kind 를 그대로 보존.
+  it('raw kind (custom_strategy) 의 `<...>` 텍스트는 preserve', () => {
+    const row = toCsvRow({
+      firedAt: new Date('2026-07-08T00:00:00Z'),
+      kind: 'custom_strategy',
+      ticker: 'SOXL',
+      price: 40,
+      changePercent: 0,
+      message: 'SOXL < 40 > RSI 30 이하 (SOXL) — AND 조건 만족',
+      deliveryStatus: 'sent',
+      recipientCount: 1,
+      errorMessage: null,
+      contextJson: null,
+    })
+    expect(row[5]).toBe('SOXL < 40 > RSI 30 이하 (SOXL) — AND 조건 만족')
+  })
+
+  // Codex #462 P2 회귀 방지 — pre-escaped kind (target_hit 등) 은 저장 시
+  // `${escapeHtml(name)}` 로 build 됨. CSV 는 사람 읽기용이라 entity decode.
+  it('pre-escaped kind (target_hit) 의 `&amp;` 는 CSV 에서 `&` 로 decode', () => {
+    const row = toCsvRow({
+      firedAt: new Date('2026-07-08T00:00:00Z'),
+      kind: 'target_hit',
+      ticker: 'AAPL',
+      price: 200,
+      changePercent: 1.0,
+      message: '🎯 A &amp; B (AAPL) 목표가 도달: 200 (목표 &lt;200&gt;)',
+      deliveryStatus: 'sent',
+      recipientCount: 1,
+      errorMessage: null,
+      contextJson: null,
+    })
+    expect(row[5]).toBe('🎯 A & B (AAPL) 목표가 도달: 200 (목표 <200>)')
   })
 
   it('null 필드는 빈 문자열로', () => {
