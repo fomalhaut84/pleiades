@@ -247,7 +247,36 @@ export default function McpLogsClient() {
           })}
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        {/* Msg 필터 — Phase 39-C (#452 audit M4): 15+ chips 가 mobile 에서 4~5줄로
+            filter section 이 세로로 매우 길어짐. mobile 은 `<details>` 로 접힘 (활성
+            선택은 summary 라벨에 반영), 데스크톱은 그대로 항상 표시. */}
+        <details className="sm:hidden">
+          <summary className="text-[11px] text-sub cursor-pointer select-none py-1">
+            Msg: <span className="text-bright">{msg ? (MSG_LABELS[msg] ?? msg) : '전체'}</span>
+            <span className="text-dim ml-1">▾</span>
+          </summary>
+          <div className="flex flex-wrap gap-2 pt-2">
+            {['', ...KNOWN_MSGS].map((m) => {
+              const active = msg === m
+              return (
+                <button
+                  key={m || 'all'}
+                  onClick={() => { setMsg(m); setOffset(0) }}
+                  className={`px-2.5 py-1 text-[11px] font-semibold rounded-md border transition-colors ${
+                    active
+                      ? 'bg-sodam/25 text-sodam border-sodam/40'
+                      : 'bg-surface border-border text-sub hover:text-bright'
+                  }`}
+                  title={m}
+                >
+                  {m ? (MSG_LABELS[m] ?? m) : '전체'}
+                </button>
+              )
+            })}
+          </div>
+        </details>
+
+        <div className="hidden sm:flex flex-wrap gap-2">
           <span className="text-[11px] text-dim self-center mr-1">Msg:</span>
           {['', ...KNOWN_MSGS].map((m) => {
             const active = msg === m
