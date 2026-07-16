@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useToast } from '@/components/ui/Toast'
+import IconButton from '@/components/ui/IconButton'
 import type { RecurringRow } from './RecurringTable'
 
 interface CategoryOption {
@@ -111,9 +112,9 @@ export default function RecurringForm({ mode, item, prefill, categories, onClose
       <div className="fixed top-0 right-0 h-full w-full max-w-[420px] bg-bg-raised border-l border-border z-50 overflow-y-auto animate-slide-in">
         <div className="px-6 py-5 border-b border-border flex items-center justify-between">
           <h2 className="text-[15px] font-bold text-bright">{isEdit ? '반복 거래 수정' : '반복 거래 추가'}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-md text-sub hover:text-bright hover:bg-surface transition-all">
+          <IconButton variant="ghost" onClick={onClose} aria-label="닫기">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 4l8 8M12 4l-8 8" /></svg>
-          </button>
+          </IconButton>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 flex flex-col gap-5">
@@ -157,7 +158,7 @@ export default function RecurringForm({ mode, item, prefill, categories, onClose
             {frequency === 'monthly' && (
               <>
                 <select value={dayOfMonth} onChange={(e) => setDayOfMonth(Number(e.target.value))}
-                  className={`${inputClasses} w-[120px] appearance-none cursor-pointer`}
+                  className={`${inputClasses} w-full sm:w-[120px] appearance-none cursor-pointer`}
                   style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236e6e82' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 14px center' }}>
                   {Array.from({ length: 31 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}일</option>)}
                 </select>
@@ -183,12 +184,12 @@ export default function RecurringForm({ mode, item, prefill, categories, onClose
               <>
                 <div className="flex gap-2">
                   <select value={monthOfYear} onChange={(e) => setMonthOfYear(Number(e.target.value))}
-                    className={`${inputClasses} w-[100px] appearance-none cursor-pointer`}
+                    className={`${inputClasses} flex-1 min-w-0 sm:flex-none sm:w-[100px] appearance-none cursor-pointer`}
                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236e6e82' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 14px center' }}>
                     {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}월</option>)}
                   </select>
                   <select value={dayOfMonth} onChange={(e) => setDayOfMonth(Number(e.target.value))}
-                    className={`${inputClasses} w-[80px] appearance-none cursor-pointer`}
+                    className={`${inputClasses} flex-1 min-w-0 sm:flex-none sm:w-[80px] appearance-none cursor-pointer`}
                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236e6e82' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 14px center' }}>
                     {Array.from({ length: 31 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}일</option>)}
                   </select>

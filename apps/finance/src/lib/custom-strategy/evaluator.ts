@@ -3,18 +3,20 @@
  *
  * v1 (Phase 29-E): price/rsi/macd_signal/sma_cross/bb_position/change_pct
  * v2 (Phase 31-A): time_window/weekday/holding_status
+ * v3 (Phase 34-A/B): earnings_within_days + cross_ticker (price/change_percent)
+ * v3.1 (Phase 38-A #448): cross_ticker metric 을 TA 지표 (rsi/macd_signal/sma_cross/bb_position) 로 확장
  *
  * 입력:
  *   - Condition[]: 사용자 정의 조건 (parser 로 자연어 파싱된 결과)
  *   - MarketSnapshot: priceCache + (필요 시) TAReport
- *   - EvaluationContext: 시각 + 보유 티커 (v2 조건 대비)
+ *   - EvaluationContext: 시각 + 보유 티커 (v2 조건 대비) + 크로스-티커 스냅샷 (v3)
  *
  * 출력: 각 조건 만족 여부 boolean[] → logic (AND/OR) 결합 → 최종 만족 여부
  */
 
 import type { Condition, WeekdayCode } from './types'
 import { TIME_WINDOW_RE } from './types'
-import type { TAReport } from '@/lib/ta/types'
+import type { TAReport, BBPosition } from '@/lib/ta/types'
 import { kstDayDiff } from '@/lib/kst-date'
 
 export interface PriceSnapshot {
@@ -33,6 +35,30 @@ export interface MarketSnapshot {
 }
 
 /**
+ * Phase 38-A (#448) — 크로스-티커 스냅샷 shape.
+ * 기존 price/changePercent 는 항상 채워짐 (PriceCache 에 있을 때).
+ * TA 필드는 해당 티커의 TA 리포트가 필요/성공 시에만 채워짐 (미채움 = undefined → 조건 false).
+ *
+ * - `macdCrossover`: TA 의 optional `crossover` 를 `NONE` 으로 정규화해 "이벤트 없음" 도 표현.
+ * - `bbPosition`  : TA 의 5-값 (NEAR_UPPER, MIDDLE, NEAR_LOWER 포함) 을 3-값
+ *   (ABOVE_UPPER / WITHIN / BELOW_LOWER) 로 축약 — 사용자 조건 어휘 (극단/중간) 와 정합.
+ * - `smaGoldenCross` / `smaDeathCross`: TA 엔진의 5거래일 창 안에서는 whipsaw
+ *   케이스로 두 flag 가 동시에 true 가 될 수 있음 (`src/lib/ta/engine.ts:134-138`).
+ *   단일 enum 으로 축약하면 GOLDEN 우선 판정 → `sma_cross == -1` 조건이 실제 death
+ *   가 있어도 방출 못함 (Codex #457 P2). self-ticker evaluator 처럼 두 flag 를
+ *   독립 저장 → 조건별로 정확한 flag 검사.
+ */
+export interface CrossTickerSnapshot {
+  price: number
+  changePercent: number | null
+  rsi?: number
+  macdCrossover?: 'GOLDEN' | 'DEAD' | 'NONE'
+  bbPosition?: 'ABOVE_UPPER' | 'WITHIN' | 'BELOW_LOWER'
+  smaGoldenCross?: boolean
+  smaDeathCross?: boolean
+}
+
+/**
  * v2 조건 평가에 필요한 런타임 컨텍스트.
  * 호출자 (custom-strategy-alert.ts) 가 준비해서 주입.
  */
@@ -44,11 +70,12 @@ export interface EvaluationContext {
   /** 평가 대상 티커 — holding_status 판정용 (Strategy.ticker 주입) */
   strategyTicker: string
   /**
-   * Phase 34-B (#420): 크로스-티커 조건 참조용 스냅샷 맵.
+   * Phase 34-B (#420) / Phase 38-A (#448): 크로스-티커 조건 참조용 스냅샷 맵.
    * key = 대문자 정규화된 티커. 호출자가 전략들의 모든 crossTicker 를 미리 조회해 주입.
    * 미주입 or 특정 티커 없음 → cross_ticker 조건 false (안전측).
+   * TA metric 조건은 스냅샷에 해당 TA 필드가 채워져 있어야 참 판정 가능.
    */
-  crossTickers?: Map<string, { price: number; changePercent: number | null }>
+  crossTickers?: Map<string, CrossTickerSnapshot>
 }
 
 /** 지원 조건 타입 중 TA 필요 여부 판단 — 평가 전에 TAReport fetch 여부 결정 */
@@ -201,19 +228,56 @@ export function evaluateCondition(
       if (days == null) return false
       return compareNumeric(days, cond.operator, cond.value)
     }
-    // ── v3 (Phase 34-B #420) —
+    // ── v3 (Phase 34-B #420) / Phase 38-A (#448) —
     case 'cross_ticker': {
       if (typeof cond.value !== 'number') return false
       if (typeof cond.crossTicker !== 'string' || !cond.crossTicker.trim()) return false
-      if (cond.metric !== 'price' && cond.metric !== 'change_percent') return false
-      const target = cond.crossTicker.trim().toUpperCase()
+      const metric = cond.metric
       // 자기 자신 참조 방지 — 사용자가 실수로 등록해도 무의미한 tautology 회피.
+      const target = cond.crossTicker.trim().toUpperCase()
       if (target === context.strategyTicker) return false
       const cross = context.crossTickers?.get(target)
       if (!cross) return false
-      const actual = cond.metric === 'price' ? cross.price : cross.changePercent
-      if (actual == null || !Number.isFinite(actual)) return false
-      return compareNumeric(actual, cond.operator, cond.value)
+
+      switch (metric) {
+        case 'price':
+        case 'change_percent': {
+          const actual = metric === 'price' ? cross.price : cross.changePercent
+          if (actual == null || !Number.isFinite(actual)) return false
+          return compareNumeric(actual, cond.operator, cond.value)
+        }
+        case 'rsi': {
+          // TA 필드가 채워지지 않았으면 (TA fetch 스킵/실패) 안전측 false.
+          if (cross.rsi == null || !Number.isFinite(cross.rsi)) return false
+          return compareNumeric(cross.rsi, cond.operator, cond.value)
+        }
+        case 'macd_signal': {
+          if (cond.operator !== '==') return false
+          if (cross.macdCrossover === undefined) return false
+          if (cond.value === 1) return cross.macdCrossover === 'GOLDEN'
+          if (cond.value === -1) return cross.macdCrossover === 'DEAD'
+          if (cond.value === 0) return cross.macdCrossover === 'NONE'
+          return false
+        }
+        case 'sma_cross': {
+          if (cond.operator !== '==') return false
+          // Codex #457 P2: whipsaw 상황에서 golden/death 두 flag 가 동시에 true 일 수
+          // 있음. 조건별로 정확한 flag 를 검사 (self-ticker case 167-172 와 동일 규칙).
+          if (cond.value === 1) return cross.smaGoldenCross === true
+          if (cond.value === -1) return cross.smaDeathCross === true
+          return false
+        }
+        case 'bb_position': {
+          if (cond.operator !== '==') return false
+          if (cross.bbPosition === undefined) return false
+          if (cond.value === 1) return cross.bbPosition === 'ABOVE_UPPER'
+          if (cond.value === -1) return cross.bbPosition === 'BELOW_LOWER'
+          if (cond.value === 0) return cross.bbPosition === 'WITHIN'
+          return false
+        }
+        default:
+          return false
+      }
     }
     default:
       return false
@@ -243,6 +307,71 @@ export function collectCrossTickers(
     }
   }
   return out
+}
+
+/**
+ * Phase 38-A (#448) — TA 리포트가 필요한 크로스 티커 metric 여부.
+ */
+const CROSS_TICKER_TA_METRICS = new Set<string>(['rsi', 'macd_signal', 'sma_cross', 'bb_position'])
+
+/**
+ * Phase 38-A (#448) — Pure — 조건 배열에서 크로스-티커 TA 리포트가 필요한 티커 집합.
+ * `requiresTA(conditions)` 는 자기 티커의 TA 필요 여부만 판단.
+ * 이 함수는 별도 — 자기 티커 조건과 크로스 티커 조건의 TA 필요성을 분리해
+ * 호출자가 fetch 티커 집합을 dedupe (union) 하도록 지원.
+ *
+ * 반환값의 티커는 `trim().toUpperCase()` 정규화. 자기 자신 참조 티커는 excluded X
+ * (evaluator 가 false 처리하지만 collectCrossTickers 와 동일하게 필터하지 않음 —
+ * 호출자가 self-loop 여부를 이미 알고 있어 이중 필터 불필요, semantic 는 collectCrossTickers 참고).
+ */
+export function requiresTAForCrossTickers(conditions: Condition[]): Set<string> {
+  const out = new Set<string>()
+  for (const c of conditions) {
+    if (c.type !== 'cross_ticker') continue
+    if (typeof c.crossTicker !== 'string') continue
+    if (typeof c.metric !== 'string') continue
+    if (!CROSS_TICKER_TA_METRICS.has(c.metric)) continue
+    const t = c.crossTicker.trim().toUpperCase()
+    if (!t) continue
+    out.add(t)
+  }
+  return out
+}
+
+/**
+ * Phase 38-A (#448) — TA report 의 5-값 BB position 을 크로스-티커용 3-값으로 축약.
+ * NEAR_UPPER / MIDDLE / NEAR_LOWER 는 모두 `WITHIN` — 사용자 조건 어휘 (극단/중간) 와 정합.
+ */
+export function mapCrossTickerBBPosition(pos: BBPosition): 'ABOVE_UPPER' | 'WITHIN' | 'BELOW_LOWER' {
+  if (pos === 'ABOVE_UPPER') return 'ABOVE_UPPER'
+  if (pos === 'BELOW_LOWER') return 'BELOW_LOWER'
+  return 'WITHIN'
+}
+
+/**
+ * Phase 38-A (#448) — 크로스-티커 스냅샷 빌더 (pure).
+ * PriceCache 최소 정보 + (있으면) TAReport 를 병합해 evaluator 가 소비하는 shape 로 축소.
+ * TA 리포트가 null 이면 TA 필드는 undefined 로 남겨 evaluator 가 false 처리.
+ */
+export function buildCrossTickerSnapshot(
+  price: { price: number; changePercent: number | null },
+  ta: TAReport | null,
+): CrossTickerSnapshot {
+  if (!ta) {
+    return { price: price.price, changePercent: price.changePercent }
+  }
+  const { rsi14, macd, bollingerBands, sma } = ta.indicators
+  // Codex #457 P2: golden/death 두 flag 를 독립 저장 (whipsaw 시 동시 true 케이스
+  // 방어). 이전에는 GOLDEN 우선 축약 → DEAD 조건 방출 실패.
+  return {
+    price: price.price,
+    changePercent: price.changePercent,
+    rsi: Number.isFinite(rsi14.value) ? rsi14.value : undefined,
+    macdCrossover: macd.crossover ?? 'NONE',
+    bbPosition: mapCrossTickerBBPosition(bollingerBands.position),
+    smaGoldenCross: sma.goldenCross === true,
+    smaDeathCross: sma.deathCross === true,
+  }
 }
 
 export interface EvaluationResult {

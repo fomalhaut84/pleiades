@@ -27,6 +27,9 @@ export interface StrategyDiff {
  *     타입에 timeframe 이 붙어 와도 evaluator 는 무시 → canonical 에서도 배제
  *     (#440 재재재재리뷰 P2). conditionToString 이 timeframe 을 어느 타입에나 렌더
  *     하는 것이 문제 원인.
+ *   - Phase 38-A (#448) — cross_ticker.metric 확장 (rsi/macd_signal/sma_cross/bb_position).
+ *     canonical key 는 raw 숫자값을 사용하므로 metric 별 카테고리컬 라벨링 (`GOLDEN`/`DEAD` 등)
+ *     이 conditionToString 에서만 렌더되고 diff 판정에는 영향 없음 (evaluator 도 raw 숫자로 비교).
  */
 function condKey(c: Condition): string {
   if (c.type === 'weekday' && Array.isArray(c.value)) {

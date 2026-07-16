@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useToast } from '@/components/ui/Toast'
+import IconButton from '@/components/ui/IconButton'
 
 interface AccountOption { id: string; name: string }
 
@@ -104,9 +105,9 @@ export default function StockOptionForm({ mode, item, accounts, onClose, onSaved
       <div className="fixed top-0 right-0 h-full w-full max-w-[420px] bg-bg-raised border-l border-border z-50 overflow-y-auto animate-slide-in">
         <div className="px-6 py-5 border-b border-border flex items-center justify-between">
           <h2 className="text-[15px] font-bold text-bright">{isEdit ? '스톡옵션 수정' : '스톡옵션 추가'}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-md text-sub hover:text-bright hover:bg-surface transition-all">
+          <IconButton variant="ghost" onClick={onClose} aria-label="닫기">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 4l8 8M12 4l-8 8" /></svg>
-          </button>
+          </IconButton>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 flex flex-col gap-5">

@@ -274,9 +274,11 @@ describe('cross_ticker (v3, Phase 34-B / #420)', () => {
   })
 
   it('metric 화이트리스트 외 → false', () => {
+    // Phase 38-A (#448) 이후 rsi/macd_signal/sma_cross/bb_position 도 유효.
+    // 여전히 무효인 임의 문자열 metric 으로 확인.
     expect(validateCondition({
       type: 'cross_ticker', operator: '<=', value: 0,
-      crossTicker: 'SPY', metric: 'rsi',
+      crossTicker: 'SPY', metric: 'volume',
     })).toBe(false)
     expect(validateCondition({
       type: 'cross_ticker', operator: '<=', value: 0, crossTicker: 'SPY',
@@ -297,5 +299,183 @@ describe('conditionToString — cross_ticker', () => {
       type: 'cross_ticker', operator: '<=', value: -2,
       crossTicker: 'SPY', metric: 'change_percent',
     })).toBe('SPY.change_percent <= -2')
+  })
+})
+
+describe('cross_ticker TA metric (Phase 38-A / #448)', () => {
+  describe('validateCondition — rsi', () => {
+    it('SPY.rsi >= 70 유효 (숫자 op + 0~100)', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '>=', value: 70,
+        crossTicker: 'SPY', metric: 'rsi',
+      })).toBe(true)
+    })
+
+    it('rsi 값 -1 → false (0 미만)', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '<=', value: -1,
+        crossTicker: 'SPY', metric: 'rsi',
+      })).toBe(false)
+    })
+
+    it('rsi 값 101 → false (100 초과)', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '>=', value: 101,
+        crossTicker: 'SPY', metric: 'rsi',
+      })).toBe(false)
+    })
+
+    it('rsi 임의 numeric op 모두 허용 (< / <= / > / >= / ==)', () => {
+      for (const op of ['<', '<=', '>', '>=', '==']) {
+        expect(validateCondition({
+          type: 'cross_ticker', operator: op, value: 50,
+          crossTicker: 'SPY', metric: 'rsi',
+        })).toBe(true)
+      }
+    })
+  })
+
+  describe('validateCondition — macd_signal (== 만, threshold ∈ {-1,0,1})', () => {
+    it('== 1 (GOLDEN) 유효', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '==', value: 1,
+        crossTicker: 'SPY', metric: 'macd_signal',
+      })).toBe(true)
+    })
+    it('== 0 (NONE) 유효', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '==', value: 0,
+        crossTicker: 'SPY', metric: 'macd_signal',
+      })).toBe(true)
+    })
+    it('== -1 (DEAD) 유효', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '==', value: -1,
+        crossTicker: 'SPY', metric: 'macd_signal',
+      })).toBe(true)
+    })
+    it('== 2 → 무효 (허용 집합 밖)', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '==', value: 2,
+        crossTicker: 'SPY', metric: 'macd_signal',
+      })).toBe(false)
+    })
+    it('>= 1 → 무효 (== 만 허용)', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '>=', value: 1,
+        crossTicker: 'SPY', metric: 'macd_signal',
+      })).toBe(false)
+    })
+    it('== 0.5 → 무효 (정수만)', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '==', value: 0.5,
+        crossTicker: 'SPY', metric: 'macd_signal',
+      })).toBe(false)
+    })
+  })
+
+  describe('validateCondition — sma_cross (== 만, threshold ∈ {-1,1})', () => {
+    it('== 1 (GOLDEN) 유효', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '==', value: 1,
+        crossTicker: 'SPY', metric: 'sma_cross',
+      })).toBe(true)
+    })
+    it('== -1 (DEAD) 유효', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '==', value: -1,
+        crossTicker: 'SPY', metric: 'sma_cross',
+      })).toBe(true)
+    })
+    it('== 0 → 무효 (sma_cross 는 NONE 없음)', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '==', value: 0,
+        crossTicker: 'SPY', metric: 'sma_cross',
+      })).toBe(false)
+    })
+    it('< -1 → 무효 (== 아님)', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '<', value: -1,
+        crossTicker: 'SPY', metric: 'sma_cross',
+      })).toBe(false)
+    })
+  })
+
+  describe('validateCondition — bb_position (== 만, threshold ∈ {-1,0,1})', () => {
+    it('== 1 (ABOVE_UPPER) 유효', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '==', value: 1,
+        crossTicker: 'SPY', metric: 'bb_position',
+      })).toBe(true)
+    })
+    it('== 0 (WITHIN) 유효', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '==', value: 0,
+        crossTicker: 'SPY', metric: 'bb_position',
+      })).toBe(true)
+    })
+    it('== -1 (BELOW_LOWER) 유효', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '==', value: -1,
+        crossTicker: 'SPY', metric: 'bb_position',
+      })).toBe(true)
+    })
+    it('== 3 → 무효', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '==', value: 3,
+        crossTicker: 'SPY', metric: 'bb_position',
+      })).toBe(false)
+    })
+    it('> 0 → 무효 (== 만)', () => {
+      expect(validateCondition({
+        type: 'cross_ticker', operator: '>', value: 0,
+        crossTicker: 'SPY', metric: 'bb_position',
+      })).toBe(false)
+    })
+  })
+
+  describe('conditionToString — 카테고리컬 metric 은 라벨로 렌더', () => {
+    it('macd_signal 1 → GOLDEN', () => {
+      expect(conditionToString({
+        type: 'cross_ticker', operator: '==', value: 1,
+        crossTicker: 'SPY', metric: 'macd_signal',
+      })).toBe('SPY.macd_signal == GOLDEN')
+    })
+    it('macd_signal -1 → DEAD', () => {
+      expect(conditionToString({
+        type: 'cross_ticker', operator: '==', value: -1,
+        crossTicker: 'SPY', metric: 'macd_signal',
+      })).toBe('SPY.macd_signal == DEAD')
+    })
+    it('macd_signal 0 → NONE', () => {
+      expect(conditionToString({
+        type: 'cross_ticker', operator: '==', value: 0,
+        crossTicker: 'SPY', metric: 'macd_signal',
+      })).toBe('SPY.macd_signal == NONE')
+    })
+    it('sma_cross 1 → GOLDEN', () => {
+      expect(conditionToString({
+        type: 'cross_ticker', operator: '==', value: 1,
+        crossTicker: 'SPY', metric: 'sma_cross',
+      })).toBe('SPY.sma_cross == GOLDEN')
+    })
+    it('bb_position -1 → BELOW_LOWER', () => {
+      expect(conditionToString({
+        type: 'cross_ticker', operator: '==', value: -1,
+        crossTicker: 'SPY', metric: 'bb_position',
+      })).toBe('SPY.bb_position == BELOW_LOWER')
+    })
+    it('bb_position 0 → WITHIN', () => {
+      expect(conditionToString({
+        type: 'cross_ticker', operator: '==', value: 0,
+        crossTicker: 'SPY', metric: 'bb_position',
+      })).toBe('SPY.bb_position == WITHIN')
+    })
+    it('rsi 는 라벨링 없음 — 원본 숫자', () => {
+      expect(conditionToString({
+        type: 'cross_ticker', operator: '>=', value: 70,
+        crossTicker: 'SPY', metric: 'rsi',
+      })).toBe('SPY.rsi >= 70')
+    })
   })
 })

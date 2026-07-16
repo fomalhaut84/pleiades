@@ -75,6 +75,9 @@ export async function GET(req: NextRequest) {
         deliveryStatus: r.deliveryStatus,
         recipientCount: r.recipientCount,
         errorMessage: r.errorMessage,
+        // Phase 37-A (#444): kind 별 스냅샷 (nullable — 37-A 이전 row 는 null).
+        // UI 상세 모달이 이 필드로 렌더러 분기.
+        context: r.contextJson ?? null,
       })),
       total,
       limit,

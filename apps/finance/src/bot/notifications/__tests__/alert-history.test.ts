@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { computeDeliveryStatus, recordAlertHistory } from '../alert-history'
+import { Prisma } from '@prisma/client'
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
@@ -90,6 +91,74 @@ describe('recordAlertHistory', () => {
       kind: 'ta_signal', ticker: null, price: null, changePercent: null,
       deliveryStatus: 'partial', recipientCount: 3, errorMessage: '네트워크 오류',
     })
+  })
+
+  // Phase 37-A (#444) 회귀 방지 — context 필드가 그대로 contextJson 컬럼에 저장되어야.
+  it('valid context 는 contextJson 으로 보존', async () => {
+    const { prisma } = await import('@/lib/prisma')
+    vi.mocked(prisma.alertHistory.createMany).mockResolvedValueOnce({ count: 1 } as never)
+
+    await recordAlertHistory(
+      [{
+        kind: 'drop',
+        ticker: 'AAPL',
+        price: 150,
+        changePercent: -6.2,
+        message: 'x',
+        context: {
+          type: 'drop', price: 150, changePercent: -6.2, threshold: -5, marketOpen: true,
+        },
+      }],
+      'sent',
+      1,
+    )
+    const call = vi.mocked(prisma.alertHistory.createMany).mock.calls[0][0]!
+    const data = call.data as Array<Record<string, unknown>>
+    expect(data[0].contextJson).toMatchObject({
+      type: 'drop', price: 150, threshold: -5, marketOpen: true,
+    })
+  })
+
+  // Phase 37-A (#444) — context 미지정/손상 시 Prisma.JsonNull 로 정규화 (undefined 로 두면 Prisma 오류).
+  it('context 미지정 시 JsonNull, 알 수 없는 shape 도 JsonNull 로 저장', async () => {
+    const { prisma } = await import('@/lib/prisma')
+    vi.mocked(prisma.alertHistory.createMany).mockResolvedValueOnce({ count: 2 } as never)
+
+    await recordAlertHistory(
+      [
+        { kind: 'surge', message: 'x' }, // context 미지정
+        { kind: 'surge', message: 'y', context: { type: 'unknown_kind' } as never },
+      ],
+      'sent',
+      1,
+    )
+    const call = vi.mocked(prisma.alertHistory.createMany).mock.calls[0][0]!
+    const data = call.data as Array<Record<string, unknown>>
+    expect(data[0].contextJson).toBe(Prisma.JsonNull)
+    expect(data[1].contextJson).toBe(Prisma.JsonNull)
+  })
+
+  // Phase 37-A (#444) — kind 별 다양한 context shape 모두 통과 (스모크)
+  it('모든 kind 컨텍스트가 정상적으로 저장됨', async () => {
+    const { prisma } = await import('@/lib/prisma')
+    vi.mocked(prisma.alertHistory.createMany).mockResolvedValueOnce({ count: 4 } as never)
+
+    await recordAlertHistory(
+      [
+        { kind: 'fx', message: 'x', context: { type: 'fx', rate: 1330, changeKrw: 55, changePercent: 4.3 } },
+        { kind: 'target_hit', message: 'x', context: { type: 'target_hit', price: 200, changePercent: 5, threshold: 195, marketOpen: false } },
+        { kind: 'ta_signal', message: 'x', context: { type: 'ta_signal', price: 150, changePercent: 1, rsi: 32, macdCrossover: 'GOLDEN', bbPosition: 'BELOW_LOWER', smaGoldenCross: true, smaDeathCross: false, volumeSurge: false, signals: ['RSI_OVERSOLD'], overall: 'BUY' } },
+        { kind: 'custom_strategy', message: 'x', context: { type: 'custom_strategy', strategyId: 's1', strategyName: 'test', strategyTicker: 'AAPL', logic: 'AND', conditions: [], perCondition: [] } },
+      ],
+      'sent',
+      1,
+    )
+    const call = vi.mocked(prisma.alertHistory.createMany).mock.calls[0][0]!
+    const data = call.data as Array<Record<string, unknown>>
+    for (const d of data) {
+      expect(d.contextJson).not.toBe(Prisma.JsonNull)
+      expect(typeof d.contextJson).toBe('object')
+    }
   })
 
   it('Prisma 실패는 삼키고 예외 전파 X (알림 흐름 유지)', async () => {

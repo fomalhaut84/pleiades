@@ -21,10 +21,14 @@ import {
   recordAlertHistory,
   type AlertEventInput,
 } from './alert-history'
+import { buildCustomStrategyContext } from '@/lib/alert-history/context'
 import {
   evaluateStrategy,
   requiresTA,
+  requiresTAForCrossTickers,
   collectCrossTickers,
+  buildCrossTickerSnapshot,
+  type CrossTickerSnapshot,
   type MarketSnapshot,
 } from '@/lib/custom-strategy/evaluator'
 import {
@@ -134,20 +138,15 @@ async function runScan(chatIds: number[]): Promise<void> {
   })
   if (strategies.length === 0) return
 
-  // Phase 34-B (#420): 전략들이 참조하는 크로스 티커도 함께 조회 (같은 쿼리에 병합).
+  // Phase 34-B (#420) / Phase 38-A (#448):
+  // 전략들이 참조하는 크로스 티커까지 통합 조회 + TA 필요 시 TA 리포트도 함께.
   const strategyTickers = Array.from(new Set(strategies.map((s) => s.ticker)))
   const crossSet = collectCrossTickers(strategies)
-  const tickers = strategyTickers
   const allPriceTickers = Array.from(new Set([...strategyTickers, ...crossSet]))
   const prices = await prisma.priceCache.findMany({
     where: { ticker: { in: allPriceTickers } },
   })
   const priceMap = new Map(prices.map((p) => [p.ticker, p]))
-  const crossTickersMap = new Map<string, { price: number; changePercent: number | null }>()
-  for (const t of crossSet) {
-    const p = priceMap.get(t)
-    if (p) crossTickersMap.set(t, { price: p.price, changePercent: p.changePercent })
-  }
 
   // 보유 티커 조회 — holding_status 조건 평가용 (Phase 31-A v2).
   // shares > 0 만 홀딩으로 간주. 여러 계좌에서 같은 티커 보유해도 Set 이므로 중복 무관.
@@ -159,20 +158,23 @@ async function runScan(chatIds: number[]): Promise<void> {
 
   // Phase 34-A (#419): 어닝 캐시 (전략 전체 티커 대상 미리 조회).
   // 캐시 없으면 evaluator 가 자동으로 false 처리 → 안전.
-  const earningsMap = await getEarningsMany(tickers)
+  const earningsMap = await getEarningsMany(strategyTickers)
 
-  // TA 필요한 ticker 만 리포트 생성 (병렬 + 실패 허용)
-  const taByTicker = new Map<string, TAReport | null>()
-
-  // 어느 티커에 TA 가 필요한지 그루핑
+  // Phase 38-A (#448): TA 필요 티커를 자기 + 크로스 티커 모두 합집합으로 수집 → 중복 fetch 방지.
+  // 크로스 티커가 다른 전략의 자기 티커와 동일할 수 있어 Set dedupe 필수.
   const tickersNeedingTA = new Set<string>()
   for (const s of strategies) {
     const raw = Array.isArray(s.conditions) ? (s.conditions as unknown[]) : []
-    const conds = raw.filter(validateCondition)
+    const conds = raw.filter(validateCondition) as Condition[]
     if (conds.length === 0) continue
     if (requiresTA(conds)) tickersNeedingTA.add(s.ticker)
+    for (const t of requiresTAForCrossTickers(conds)) {
+      tickersNeedingTA.add(t)
+    }
   }
 
+  // TA 리포트 병렬 fetch (실패는 null 로 기록해 조건 evaluator 가 false 처리하도록).
+  const taByTicker = new Map<string, TAReport | null>()
   await Promise.all(
     Array.from(tickersNeedingTA).map(async (ticker) => {
       try {
@@ -184,6 +186,15 @@ async function runScan(chatIds: number[]): Promise<void> {
       }
     }),
   )
+
+  // 크로스 티커 스냅샷 구성 — price + (있으면) TA 병합. TA 없는 티커도 price 조건은 여전히 평가 가능.
+  const crossTickersMap = new Map<string, CrossTickerSnapshot>()
+  for (const t of crossSet) {
+    const p = priceMap.get(t)
+    if (!p) continue
+    const ta = taByTicker.get(t) ?? null
+    crossTickersMap.set(t, buildCrossTickerSnapshot({ price: p.price, changePercent: p.changePercent }, ta))
+  }
 
   const now = new Date()
   const alerts: string[] = []
@@ -239,11 +250,34 @@ async function runScan(chatIds: number[]): Promise<void> {
     alerts.push(alertBlock)
 
     // 이력용 — HTML 태그 없이 이력 페이지에서 보기 편한 요약.
+    // Phase 37-A (#444): evaluator 결과와 스냅샷을 contextJson 으로 저장 →
+    // 상세 모달에서 어느 조건이 만족/미달이었는지 재현 가능.
+    const taReport = taByTicker.get(s.ticker) ?? null
     historyEvents.push({
       kind: 'custom_strategy',
       ticker: s.ticker,
       price: priceRow?.price ?? null,
+      changePercent: priceRow?.changePercent ?? null,
       message: `${s.name} (${s.ticker}) — ${s.logic} 조건 만족`,
+      context: buildCustomStrategyContext({
+        strategyId: s.id,
+        strategyName: s.name,
+        strategyTicker: s.ticker,
+        logic: s.logic === 'OR' ? 'OR' : 'AND',
+        conditions: conds,
+        perCondition,
+        snapshot: {
+          price: priceRow?.price ?? null,
+          changePercent: priceRow?.changePercent ?? null,
+          // Codex #462 P2: `??` 는 NaN 을 null 로 fallback 하지 않음 (NaN 은 non-null).
+          // TA 엔진이 짧은 데이터로 NaN 반환하면 그대로 JSON 저장 → Prisma createMany 가
+          // 전체 batch 를 reject → 발송된 alert 가 이력 저장 실패. buildTaContext 와
+          // 동일한 `Number.isFinite` 정규화로 방어.
+          rsi: Number.isFinite(taReport?.indicators.rsi14.value) ? taReport!.indicators.rsi14.value : null,
+          macdCrossover: taReport?.indicators.macd.crossover ?? null,
+          bbPosition: taReport?.indicators.bollingerBands.position ?? null,
+        },
+      }),
     })
   }
 

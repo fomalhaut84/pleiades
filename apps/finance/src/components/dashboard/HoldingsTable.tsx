@@ -27,6 +27,10 @@ interface HoldingsTableProps {
   hasPriceData: boolean
 }
 
+function marketBadgeClass(market: string): string {
+  return market === 'US' ? 'text-sodam bg-sodam/10' : 'text-amber-400 bg-amber-400/10'
+}
+
 export default function HoldingsTable({ holdings, priceMap, currentFxRate, hasPriceData }: HoldingsTableProps) {
   const sorted = [...holdings].sort((a, b) => {
     const priceA = priceMap.get(a.ticker)
@@ -42,7 +46,70 @@ export default function HoldingsTable({ holdings, priceMap, currentFxRate, hasPr
         <div className="text-[13px] font-bold text-bright">보유종목</div>
         <div className="text-[12px] text-sub">{holdings.length}개</div>
       </div>
-      <div className="overflow-x-auto">
+
+      {/* Mobile 카드 뷰 (<lg) — 종목명·시장·평가금액·손익률 한눈에 */}
+      <div className="lg:hidden divide-y divide-border">
+        {sorted.map((h) => {
+          const price = priceMap.get(h.ticker)
+          const costKRW = calcCostKRW(h)
+          const currentValue = price
+            ? calcCurrentValueKRW(h, price.price, currentFxRate)
+            : costKRW
+          const pl = price
+            ? calcProfitLoss(h, price.price, currentFxRate)
+            : null
+
+          return (
+            <div key={h.id} className="px-4 py-3">
+              <div className="flex items-start justify-between gap-2 mb-1.5">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                    <span className="text-[13px] font-bold text-bright truncate">{h.displayName}</span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${marketBadgeClass(h.market)}`}>
+                      {h.market}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-dim tabular-nums">
+                    {h.shares}주 · 평단 {h.currency === 'USD' ? formatUSD(h.avgPriceFx ?? h.avgPrice) : formatKRW(h.avgPrice)}
+                  </div>
+                  {/* Phase 39-B self-review P1: USD 종목은 평가금(KRW) 만으론 현재가(USD) 를
+                      역산 불가 → 평단 vs 현재가 비교 불가능. USD 원가 통화로 현재가 노출. */}
+                  {price && (
+                    <div className="text-[11px] text-sub tabular-nums">
+                      현재가 {h.currency === 'USD' ? formatUSD(price.price) : formatKRW(price.price)}
+                    </div>
+                  )}
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-[13px] font-semibold text-muted tabular-nums whitespace-nowrap">
+                    {formatKRW(currentValue)}
+                  </div>
+                  {hasPriceData && pl && (
+                    <div className={`text-[12px] font-bold tabular-nums ${pl.returnPct >= 0 ? 'text-sejin' : 'text-red-500'}`}>
+                      {formatPercent(pl.returnPct)}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {hasPriceData && pl && h.currency === 'USD' && (
+                <div className="text-[10px] text-dim leading-snug tabular-nums">
+                  주가{' '}
+                  <span className={pl.pricePL >= 0 ? 'text-sejin/65' : 'text-red-500/65'}>
+                    {formatSignedKRW(pl.pricePL)}
+                  </span>
+                  {' · 환율 '}
+                  <span className={pl.fxPL >= 0 ? 'text-sejin/65' : 'text-red-500/65'}>
+                    {formatSignedKRW(pl.fxPL)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Desktop 테이블 (lg:) */}
+      <div className="hidden lg:block overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
             <tr>
@@ -90,13 +157,7 @@ export default function HoldingsTable({ holdings, priceMap, currentFxRate, hasPr
                     <span className="font-bold text-bright">{h.displayName}</span>
                   </td>
                   <td className="px-3 py-3 text-[13px] border-b border-border">
-                    <span
-                      className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
-                        h.market === 'US'
-                          ? 'text-sodam bg-sodam/10'
-                          : 'text-amber-400 bg-amber-400/10'
-                      }`}
-                    >
+                    <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${marketBadgeClass(h.market)}`}>
                       {h.market}
                     </span>
                   </td>

@@ -3,8 +3,11 @@ import {
   evaluateCondition,
   evaluateStrategy,
   requiresTA,
+  requiresTAForCrossTickers,
   daysUntilEarnings,
   collectCrossTickers,
+  buildCrossTickerSnapshot,
+  mapCrossTickerBBPosition,
   type MarketSnapshot,
   type EvaluationContext,
 } from '../evaluator'
@@ -538,5 +541,371 @@ describe('requiresTA', () => {
       type: 'cross_ticker', operator: '<=', value: -2,
       crossTicker: 'SPY', metric: 'change_percent',
     }])).toBe(false)
+  })
+
+  // Phase 38-A (#448): 자기 티커 requiresTA 는 크로스 TA 조건에 반응하지 않음.
+  // 크로스 티커 TA 는 별도 requiresTAForCrossTickers 로 관리.
+  it('v3.1 cross_ticker.rsi → 자기 티커 TA 필요 아님 (requiresTA=false)', () => {
+    expect(requiresTA([{
+      type: 'cross_ticker', operator: '>=', value: 70,
+      crossTicker: 'SPY', metric: 'rsi',
+    }])).toBe(false)
+  })
+})
+
+// ─── Phase 38-A (#448) —
+describe('requiresTAForCrossTickers (Phase 38-A / #448)', () => {
+  it('price/change_percent 만 있는 cross_ticker → 빈 Set', () => {
+    expect(requiresTAForCrossTickers([
+      { type: 'cross_ticker', operator: '<=', value: -2, crossTicker: 'SPY', metric: 'change_percent' },
+      { type: 'cross_ticker', operator: '>', value: 25, crossTicker: 'VIX', metric: 'price' },
+    ])).toEqual(new Set())
+  })
+
+  it('rsi/macd_signal/sma_cross/bb_position 각각 TA 필요 티커 반환', () => {
+    const conds: Condition[] = [
+      { type: 'cross_ticker', operator: '>=', value: 70, crossTicker: 'spy', metric: 'rsi' },
+      { type: 'cross_ticker', operator: '==', value: 1, crossTicker: 'QQQ', metric: 'macd_signal' },
+      { type: 'cross_ticker', operator: '==', value: -1, crossTicker: 'iwm', metric: 'sma_cross' },
+      { type: 'cross_ticker', operator: '==', value: -1, crossTicker: 'DIA', metric: 'bb_position' },
+    ]
+    // 대문자 정규화 확인
+    expect(requiresTAForCrossTickers(conds)).toEqual(new Set(['SPY', 'QQQ', 'IWM', 'DIA']))
+  })
+
+  it('여러 cross_ticker 가 같은 티커 참조 시 dedupe', () => {
+    const conds: Condition[] = [
+      { type: 'cross_ticker', operator: '>=', value: 70, crossTicker: 'SPY', metric: 'rsi' },
+      { type: 'cross_ticker', operator: '==', value: 1, crossTicker: 'SPY', metric: 'macd_signal' },
+    ]
+    expect(requiresTAForCrossTickers(conds)).toEqual(new Set(['SPY']))
+  })
+
+  it('비-cross_ticker 조건 무시', () => {
+    const conds: Condition[] = [
+      { type: 'price', operator: '<=', value: 100 },
+      { type: 'rsi', operator: '<=', value: 30 }, // 자기 티커 TA
+    ]
+    expect(requiresTAForCrossTickers(conds)).toEqual(new Set())
+  })
+
+  it('crossTicker 누락/공백은 무시', () => {
+    // as unknown 를 통한 손상된 payload 방어 확인
+    const conds = [
+      { type: 'cross_ticker', operator: '>=', value: 70, metric: 'rsi' },
+      { type: 'cross_ticker', operator: '>=', value: 70, crossTicker: '   ', metric: 'rsi' },
+      { type: 'cross_ticker', operator: '>=', value: 70, crossTicker: 'SPY', metric: 'rsi' },
+    ] as unknown as Condition[]
+    expect(requiresTAForCrossTickers(conds)).toEqual(new Set(['SPY']))
+  })
+})
+
+describe('mapCrossTickerBBPosition (Phase 38-A / #448)', () => {
+  it('ABOVE_UPPER → ABOVE_UPPER', () => {
+    expect(mapCrossTickerBBPosition('ABOVE_UPPER')).toBe('ABOVE_UPPER')
+  })
+  it('BELOW_LOWER → BELOW_LOWER', () => {
+    expect(mapCrossTickerBBPosition('BELOW_LOWER')).toBe('BELOW_LOWER')
+  })
+  it('NEAR_UPPER / MIDDLE / NEAR_LOWER 모두 WITHIN 으로 축약', () => {
+    expect(mapCrossTickerBBPosition('NEAR_UPPER')).toBe('WITHIN')
+    expect(mapCrossTickerBBPosition('MIDDLE')).toBe('WITHIN')
+    expect(mapCrossTickerBBPosition('NEAR_LOWER')).toBe('WITHIN')
+  })
+})
+
+describe('buildCrossTickerSnapshot (Phase 38-A / #448)', () => {
+  const price = { price: 400, changePercent: -1.5 }
+
+  it('TA 없음 → price 필드만 채움 (TA 필드 undefined)', () => {
+    const snap = buildCrossTickerSnapshot(price, null)
+    expect(snap).toEqual({ price: 400, changePercent: -1.5 })
+    expect(snap.rsi).toBeUndefined()
+    expect(snap.macdCrossover).toBeUndefined()
+    expect(snap.bbPosition).toBeUndefined()
+    expect(snap.smaGoldenCross).toBeUndefined()
+    expect(snap.smaDeathCross).toBeUndefined()
+  })
+
+  it('TA 있음 → RSI / MACD 없음(NONE) / BB 축약 / SMA 둘 다 false', () => {
+    const ta = makeTAReport() // 기본 = 중립 지표 (crossover 없음, position=MIDDLE)
+    const snap = buildCrossTickerSnapshot(price, ta)
+    expect(snap.rsi).toBe(50)
+    expect(snap.macdCrossover).toBe('NONE') // crossover undefined → NONE
+    expect(snap.bbPosition).toBe('WITHIN')  // MIDDLE → WITHIN
+    expect(snap.smaGoldenCross).toBe(false)
+    expect(snap.smaDeathCross).toBe(false)
+  })
+
+  it('TA GOLDEN 크로스오버 + BB ABOVE_UPPER 반영', () => {
+    const base = makeTAReport()
+    const ta = makeTAReport({
+      indicators: {
+        ...base.indicators,
+        macd: { ...base.indicators.macd, crossover: 'GOLDEN' },
+        bollingerBands: { ...base.indicators.bollingerBands, position: 'ABOVE_UPPER' },
+        sma: { ...base.indicators.sma, goldenCross: true },
+      },
+    })
+    const snap = buildCrossTickerSnapshot(price, ta)
+    expect(snap.macdCrossover).toBe('GOLDEN')
+    expect(snap.bbPosition).toBe('ABOVE_UPPER')
+    expect(snap.smaGoldenCross).toBe(true)
+    expect(snap.smaDeathCross).toBe(false)
+  })
+
+  it('TA DEAD 크로스오버 + BB BELOW_LOWER 반영', () => {
+    const base = makeTAReport()
+    const ta = makeTAReport({
+      indicators: {
+        ...base.indicators,
+        macd: { ...base.indicators.macd, crossover: 'DEAD' },
+        bollingerBands: { ...base.indicators.bollingerBands, position: 'BELOW_LOWER' },
+        sma: { ...base.indicators.sma, deathCross: true },
+      },
+    })
+    const snap = buildCrossTickerSnapshot(price, ta)
+    expect(snap.macdCrossover).toBe('DEAD')
+    expect(snap.bbPosition).toBe('BELOW_LOWER')
+    expect(snap.smaGoldenCross).toBe(false)
+    expect(snap.smaDeathCross).toBe(true)
+  })
+
+  // Codex #457 P2 회귀 방지 — whipsaw 시 두 flag 동시 true 는 각각 보존되어야
+  // `sma_cross == -1` 조건이 death 를 감지할 수 있음.
+  it('TA whipsaw (goldenCross + deathCross 동시 true) → 두 flag 모두 true 로 보존', () => {
+    const base = makeTAReport()
+    const ta = makeTAReport({
+      indicators: {
+        ...base.indicators,
+        sma: { ...base.indicators.sma, goldenCross: true, deathCross: true },
+      },
+    })
+    const snap = buildCrossTickerSnapshot(price, ta)
+    expect(snap.smaGoldenCross).toBe(true)
+    expect(snap.smaDeathCross).toBe(true)
+  })
+
+  it('rsi 값 NaN → rsi undefined (defense in depth)', () => {
+    const base = makeTAReport()
+    const ta = makeTAReport({
+      indicators: { ...base.indicators, rsi14: { value: NaN, signal: 'NEUTRAL' } },
+    })
+    const snap = buildCrossTickerSnapshot(price, ta)
+    expect(snap.rsi).toBeUndefined()
+  })
+})
+
+describe('evaluateCondition — v3.1 cross_ticker TA metric (Phase 38-A / #448)', () => {
+  const strategyTicker = 'QQQ'
+
+  // rsi
+  it('rsi >= 70 & 크로스 티커 RSI 75 → true', () => {
+    const ctx = makeContext({
+      strategyTicker,
+      crossTickers: new Map([['SPY', { price: 400, changePercent: 0, rsi: 75 }]]),
+    })
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '>=', value: 70,
+      crossTicker: 'SPY', metric: 'rsi',
+    }
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(true)
+  })
+
+  it('rsi >= 70 & 크로스 티커 RSI 50 → false', () => {
+    const ctx = makeContext({
+      strategyTicker,
+      crossTickers: new Map([['SPY', { price: 400, changePercent: 0, rsi: 50 }]]),
+    })
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '>=', value: 70,
+      crossTicker: 'SPY', metric: 'rsi',
+    }
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(false)
+  })
+
+  it('rsi 필드 undefined (TA 미주입/fetch 실패) → false', () => {
+    const ctx = makeContext({
+      strategyTicker,
+      crossTickers: new Map([['SPY', { price: 400, changePercent: 0 }]]),
+    })
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '>=', value: 70,
+      crossTicker: 'SPY', metric: 'rsi',
+    }
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(false)
+  })
+
+  // macd_signal
+  it('macd_signal == 1 (GOLDEN) & 크로스 티커 GOLDEN → true', () => {
+    const ctx = makeContext({
+      strategyTicker,
+      crossTickers: new Map([['SPY', { price: 400, changePercent: 0, macdCrossover: 'GOLDEN' }]]),
+    })
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '==', value: 1,
+      crossTicker: 'SPY', metric: 'macd_signal',
+    }
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(true)
+  })
+
+  it('macd_signal == -1 (DEAD) & 크로스 티커 GOLDEN → false', () => {
+    const ctx = makeContext({
+      strategyTicker,
+      crossTickers: new Map([['SPY', { price: 400, changePercent: 0, macdCrossover: 'GOLDEN' }]]),
+    })
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '==', value: -1,
+      crossTicker: 'SPY', metric: 'macd_signal',
+    }
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(false)
+  })
+
+  it('macd_signal == 0 (NONE) & 크로스 티커 NONE → true', () => {
+    const ctx = makeContext({
+      strategyTicker,
+      crossTickers: new Map([['SPY', { price: 400, changePercent: 0, macdCrossover: 'NONE' }]]),
+    })
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '==', value: 0,
+      crossTicker: 'SPY', metric: 'macd_signal',
+    }
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(true)
+  })
+
+  it('macd_signal 필드 undefined → false (TA 미주입)', () => {
+    const ctx = makeContext({
+      strategyTicker,
+      crossTickers: new Map([['SPY', { price: 400, changePercent: 0 }]]),
+    })
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '==', value: 1,
+      crossTicker: 'SPY', metric: 'macd_signal',
+    }
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(false)
+  })
+
+  // sma_cross — Codex #457 P2: golden/death 는 독립 flag 로 저장, whipsaw 방어.
+  it('sma_cross == 1 (GOLDEN) 매치', () => {
+    const ctx = makeContext({
+      strategyTicker,
+      crossTickers: new Map([['SPY', {
+        price: 400, changePercent: 0, smaGoldenCross: true, smaDeathCross: false,
+      }]]),
+    })
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '==', value: 1,
+      crossTicker: 'SPY', metric: 'sma_cross',
+    }
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(true)
+  })
+
+  it('sma_cross == -1 (DEAD) & 둘 다 false → false', () => {
+    const ctx = makeContext({
+      strategyTicker,
+      crossTickers: new Map([['SPY', {
+        price: 400, changePercent: 0, smaGoldenCross: false, smaDeathCross: false,
+      }]]),
+    })
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '==', value: -1,
+      crossTicker: 'SPY', metric: 'sma_cross',
+    }
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(false)
+  })
+
+  it('sma_cross flag 미주입 (undefined) → false', () => {
+    const ctx = makeContext({
+      strategyTicker,
+      crossTickers: new Map([['SPY', { price: 400, changePercent: 0 }]]),
+    })
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '==', value: 1,
+      crossTicker: 'SPY', metric: 'sma_cross',
+    }
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(false)
+  })
+
+  // Codex #457 P2 회귀 방지 — whipsaw (goldenCross + deathCross 동시 true) 에서
+  // 이전 축약 enum (`smaCross`) 은 GOLDEN 우선 → DEAD 조건 방출 실패했음.
+  // 이제 두 flag 를 독립 검사 → death 조건도 정확히 매치.
+  it('sma_cross whipsaw: 두 flag 모두 true 이면 == 1, == -1 모두 매치', () => {
+    const ctx = makeContext({
+      strategyTicker,
+      crossTickers: new Map([['SPY', {
+        price: 400, changePercent: 0, smaGoldenCross: true, smaDeathCross: true,
+      }]]),
+    })
+    const golden: Condition = {
+      type: 'cross_ticker', operator: '==', value: 1,
+      crossTicker: 'SPY', metric: 'sma_cross',
+    }
+    const dead: Condition = {
+      type: 'cross_ticker', operator: '==', value: -1,
+      crossTicker: 'SPY', metric: 'sma_cross',
+    }
+    expect(evaluateCondition(golden, makeSnapshot(), ctx)).toBe(true)
+    expect(evaluateCondition(dead, makeSnapshot(), ctx)).toBe(true)  // 이전 버그: false 였음
+  })
+
+  // bb_position
+  it('bb_position == 1 (ABOVE_UPPER) 매치', () => {
+    const ctx = makeContext({
+      strategyTicker,
+      crossTickers: new Map([['SPY', { price: 400, changePercent: 0, bbPosition: 'ABOVE_UPPER' }]]),
+    })
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '==', value: 1,
+      crossTicker: 'SPY', metric: 'bb_position',
+    }
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(true)
+  })
+
+  it('bb_position == 0 (WITHIN) 매치', () => {
+    const ctx = makeContext({
+      strategyTicker,
+      crossTickers: new Map([['SPY', { price: 400, changePercent: 0, bbPosition: 'WITHIN' }]]),
+    })
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '==', value: 0,
+      crossTicker: 'SPY', metric: 'bb_position',
+    }
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(true)
+  })
+
+  it('bb_position == -1 (BELOW_LOWER) 매치', () => {
+    const ctx = makeContext({
+      strategyTicker,
+      crossTickers: new Map([['SPY', { price: 400, changePercent: 0, bbPosition: 'BELOW_LOWER' }]]),
+    })
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '==', value: -1,
+      crossTicker: 'SPY', metric: 'bb_position',
+    }
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(true)
+  })
+
+  it('bb_position undefined → false', () => {
+    const ctx = makeContext({
+      strategyTicker,
+      crossTickers: new Map([['SPY', { price: 400, changePercent: 0 }]]),
+    })
+    const cond: Condition = {
+      type: 'cross_ticker', operator: '==', value: 1,
+      crossTicker: 'SPY', metric: 'bb_position',
+    }
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(false)
+  })
+
+  it('macd_signal != == (>=) → false (evaluator 방어)', () => {
+    const ctx = makeContext({
+      strategyTicker,
+      crossTickers: new Map([['SPY', { price: 400, changePercent: 0, macdCrossover: 'GOLDEN' }]]),
+    })
+    const cond = {
+      type: 'cross_ticker', operator: '>=', value: 1,
+      crossTicker: 'SPY', metric: 'macd_signal',
+    } as unknown as Condition
+    expect(evaluateCondition(cond, makeSnapshot(), ctx)).toBe(false)
   })
 })

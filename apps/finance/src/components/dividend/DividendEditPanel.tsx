@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { formatUSD } from '@/lib/format'
 import { calcDividendTax, calcAmountKRW } from '@/lib/dividend-utils'
 import { useToast } from '@/components/ui/Toast'
+import IconButton from '@/components/ui/IconButton'
 import type { DividendRow } from './DividendTable'
 
 interface DividendEditPanelProps {
@@ -126,11 +127,11 @@ export default function DividendEditPanel({ dividend, onClose }: DividendEditPan
       <div className="fixed top-0 right-0 h-full w-full max-w-[420px] bg-bg-raised border-l border-border z-50 overflow-y-auto animate-slide-in">
         <div className="px-6 py-5 border-b border-border flex items-center justify-between">
           <h2 className="text-[15px] font-bold text-bright">배당 수정</h2>
-          <button onClick={onClose} className="p-1.5 rounded-md text-sub hover:text-bright hover:bg-surface transition-all">
+          <IconButton variant="ghost" onClick={onClose} aria-label="닫기">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M4 4l8 8M12 4l-8 8" />
             </svg>
-          </button>
+          </IconButton>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 flex flex-col gap-5">

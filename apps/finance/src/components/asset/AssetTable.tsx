@@ -1,6 +1,7 @@
 'use client'
 
 import { formatKRW, formatDate } from '@/lib/format'
+import IconButton from '@/components/ui/IconButton'
 
 export interface AssetRow {
   id: string
@@ -106,24 +107,16 @@ export default function AssetTable({ assets, activeTab, onTabChange, onEdit, onD
                       {a.maturityDate ? formatDate(a.maturityDate) : '-'}
                     </td>
                     <td className="px-4 py-3 text-center whitespace-nowrap">
-                      <button
-                        onClick={() => onEdit(a)}
-                        className="inline-flex items-center justify-center w-7 h-7 rounded-md text-dim hover:text-text hover:bg-surface transition-all"
-                        title="수정"
-                      >
+                      <IconButton onClick={() => onEdit(a)} title="수정">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                           <path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z" />
                         </svg>
-                      </button>
-                      <button
-                        onClick={() => onDelete(a)}
-                        className="inline-flex items-center justify-center w-7 h-7 rounded-md text-dim hover:text-red-400 hover:bg-red-500/10 transition-all"
-                        title="삭제"
-                      >
+                      </IconButton>
+                      <IconButton variant="danger" onClick={() => onDelete(a)} title="삭제">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                           <path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4" />
                         </svg>
-                      </button>
+                      </IconButton>
                     </td>
                   </tr>
                 ))}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { formatKRW } from '@/lib/format'
+import IconButton from '@/components/ui/IconButton'
 
 interface IncomeProfile {
   id: string
@@ -57,15 +58,13 @@ export default function IncomeProfileManager() {
                   {p.inputType === 'gross' ? '세전총급여' : '과세표준'}
                 </span>
               </div>
-              <div className="flex gap-1.5">
-                <button onClick={() => { setEditingItem(p); setShowForm(true) }}
-                  className="p-1.5 rounded-md text-dim hover:text-text hover:bg-surface transition-all" title="수정">
+              <div className="flex gap-1">
+                <IconButton onClick={() => { setEditingItem(p); setShowForm(true) }} title="수정">
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z" /></svg>
-                </button>
-                <button onClick={() => handleDelete(p.id)}
-                  className="p-1.5 rounded-md text-dim hover:text-red-400 hover:bg-red-500/10 transition-all" title="삭제">
+                </IconButton>
+                <IconButton variant="danger" onClick={() => handleDelete(p.id)} title="삭제">
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4" /></svg>
-                </button>
+                </IconButton>
               </div>
             </div>
             <div className="flex gap-6 text-[12px]">
@@ -159,9 +158,9 @@ function IncomeProfileForm({ item, onClose, onSaved }: { item: IncomeProfile | n
       <div className="fixed top-0 right-0 h-full w-full max-w-[420px] bg-bg-raised border-l border-border z-50 overflow-y-auto animate-slide-in">
         <div className="px-6 py-5 border-b border-border flex items-center justify-between">
           <h2 className="text-[15px] font-bold text-bright">{item ? '프로필 수정' : '프로필 추가'}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-md text-sub hover:text-bright hover:bg-surface transition-all">
+          <IconButton variant="ghost" onClick={onClose} aria-label="닫기">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 4l8 8M12 4l-8 8" /></svg>
-          </button>
+          </IconButton>
         </div>
         <form onSubmit={handleSubmit} className="px-6 py-5 flex flex-col gap-5">
           <div>

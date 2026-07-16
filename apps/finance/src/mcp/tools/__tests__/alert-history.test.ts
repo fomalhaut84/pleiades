@@ -113,4 +113,58 @@ describe('listAlertHistory', () => {
     expect(text).toContain('🔴 AAPL 급락')
     expect(text).toContain('2026-07-08')
   })
+
+  // Phase 37-A (#444) — contextJson 요약 라인 노출 (AI 사후 진단용).
+  it('contextJson 이 있으면 요약 라인 포함, 없으면 스킵', async () => {
+    const { prisma } = await import('@/lib/prisma')
+    vi.mocked(prisma.alertHistory.findMany).mockResolvedValueOnce([
+      {
+        id: '1',
+        firedAt: new Date('2026-07-08T02:30:00Z'),
+        kind: 'ta_signal',
+        ticker: 'AAPL',
+        price: 150,
+        changePercent: 1.2,
+        message: 'RSI 과매도',
+        deliveryStatus: 'sent',
+        recipientCount: 1,
+        errorMessage: null,
+        contextJson: {
+          type: 'ta_signal',
+          rsi: 25.3,
+          macdCrossover: 'GOLDEN',
+          bbPosition: 'BELOW_LOWER',
+          signals: ['RSI_OVERSOLD'],
+        },
+      },
+      {
+        id: '2',
+        firedAt: new Date('2026-07-08T02:31:00Z'),
+        kind: 'surge',
+        ticker: 'AAPL',
+        price: 150,
+        changePercent: 5.2,
+        message: '🟢 AAPL 급등',
+        deliveryStatus: 'sent',
+        recipientCount: 1,
+        errorMessage: null,
+        contextJson: null, // v1 row 시뮬레이션
+      },
+    ] as never)
+
+    const result = await listAlertHistory({})
+    const text = result.content[0].text
+    // TA 요약 라인 (RSI 25.3, MACD GOLDEN, BB BELOW_LOWER, RSI_OVERSOLD)
+    expect(text).toContain('RSI 25.3')
+    expect(text).toContain('MACD GOLDEN')
+    expect(text).toContain('BB BELOW_LOWER')
+    // contextJson null 인 두번째 행은 요약 라인 없음 — id 2 라인 뒤에 ↳ 가 없어야
+    const lines = text.split('\n')
+    const surgeIdx = lines.findIndex((l) => l.includes('🟢 AAPL 급등'))
+    expect(surgeIdx).toBeGreaterThan(-1)
+    // 요약 라인은 다음 라인에 '↳' 로 시작. surge (v1) 는 요약 없음
+    if (lines[surgeIdx + 1]) {
+      expect(lines[surgeIdx + 1]).not.toMatch(/^\s*↳/)
+    }
+  })
 })

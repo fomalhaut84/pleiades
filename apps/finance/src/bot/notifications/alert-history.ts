@@ -7,6 +7,9 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { isValidContext, type AlertHistoryContext } from '@/lib/alert-history/context'
+// Prisma 는 런타임 값 (`Prisma.JsonNull`) 을 사용하므로 `import type` 금지.
+import { Prisma } from '@prisma/client'
 
 export type AlertKind =
   | 'surge'
@@ -27,6 +30,12 @@ export interface AlertEventInput {
   price?: number | null
   changePercent?: number | null
   message: string
+  /**
+   * Phase 37-A (#444) — kind 별 최소 스냅샷.
+   * hook 이 이미 확보한 데이터만 채운다 (추가 fetch 금지).
+   * shape 검증 실패 시 저장 단계에서 null 로 저장 (조회 UI 는 "컨텍스트 없음" 표시).
+   */
+  context?: AlertHistoryContext | null
 }
 
 /**
@@ -65,6 +74,11 @@ export async function recordAlertHistory(
         deliveryStatus,
         recipientCount,
         errorMessage: errorMessage ?? null,
+        // Phase 37-A (#444): 손상된 context 는 조용히 null 로 저장 —
+        // 이력 자체는 남겨야 하므로 (알림 흐름 유지 원칙과 동일).
+        contextJson: e.context && isValidContext(e.context)
+          ? (e.context as unknown as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
       })),
     })
   } catch (error) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { periodFromISO, formatFiredAt, stripHtml } from '../client-utils'
+import { periodFromISO, formatFiredAt, stripHtml, messageForDisplay } from '../client-utils'
 
 describe('periodFromISO', () => {
   it('N일 전 시각을 ISO 8601 로 반환 (now 주입)', () => {
@@ -40,5 +40,29 @@ describe('stripHtml', () => {
 
   it('평문은 변경 없음', () => {
     expect(stripHtml('안녕하세요')).toBe('안녕하세요')
+  })
+})
+
+// Codex #462 P2 회귀 방지 — kind gating 으로 raw kind 의 `<...>` 이름 보존.
+describe('messageForDisplay', () => {
+  it('pre-escaped kind (target_hit 등) → stripHtml 적용', () => {
+    expect(messageForDisplay('🎯 <b>A &amp; B</b>', 'target_hit')).toBe('🎯 A & B')
+    expect(messageForDisplay('&lt;100&gt;', 'stop_loss')).toBe('<100>')
+    expect(messageForDisplay('<b>x</b>', 'watch_buy')).toBe('x')
+    expect(messageForDisplay('<b>y</b>', 'watch_zone')).toBe('y')
+  })
+
+  it('raw kind (custom_strategy) → 사용자 이름의 `< 40 >` 텍스트 preserve', () => {
+    expect(messageForDisplay('SOXL < 40 > RSI 30 이하', 'custom_strategy'))
+      .toBe('SOXL < 40 > RSI 30 이하')
+    // literal `&amp;` 도 decode 하지 않음
+    expect(messageForDisplay('A &amp; B 전략', 'custom_strategy'))
+      .toBe('A &amp; B 전략')
+  })
+
+  it('raw kind (drop/surge/fx/ta_signal) → 그대로', () => {
+    for (const kind of ['drop', 'surge', 'fx', 'ta_signal']) {
+      expect(messageForDisplay('SOXL < 40', kind)).toBe('SOXL < 40')
+    }
   })
 })
