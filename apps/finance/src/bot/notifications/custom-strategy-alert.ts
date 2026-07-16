@@ -269,7 +269,11 @@ async function runScan(chatIds: number[]): Promise<void> {
         snapshot: {
           price: priceRow?.price ?? null,
           changePercent: priceRow?.changePercent ?? null,
-          rsi: taReport?.indicators.rsi14.value ?? null,
+          // Codex #462 P2: `??` 는 NaN 을 null 로 fallback 하지 않음 (NaN 은 non-null).
+          // TA 엔진이 짧은 데이터로 NaN 반환하면 그대로 JSON 저장 → Prisma createMany 가
+          // 전체 batch 를 reject → 발송된 alert 가 이력 저장 실패. buildTaContext 와
+          // 동일한 `Number.isFinite` 정규화로 방어.
+          rsi: Number.isFinite(taReport?.indicators.rsi14.value) ? taReport!.indicators.rsi14.value : null,
           macdCrossover: taReport?.indicators.macd.crossover ?? null,
           bbPosition: taReport?.indicators.bollingerBands.position ?? null,
         },

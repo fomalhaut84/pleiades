@@ -32,6 +32,16 @@ function encodeEvent(entry: LogEntry): string {
   return `data: ${JSON.stringify(entry)}\n\n`
 }
 
+/**
+ * Codex #462 P2: `YYYY-MM-DD` 문자열 date 를 days 만큼 이동 (KST 벽시계 기준).
+ * grace window 감지에서 어제 파일명 (`mcp-YYYY-MM-DD.log`) 을 유도.
+ */
+function kstDayOffset(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const shifted = new Date(Date.UTC(y, m - 1, d) + days * 24 * 60 * 60 * 1000)
+  return shifted.toISOString().slice(0, 10)
+}
+
 export async function GET(req: NextRequest) {
   const url = req.nextUrl
   const level = url.searchParams.get('level')?.trim() || undefined
@@ -47,7 +57,18 @@ export async function GET(req: NextRequest) {
   }
 
   const filter: Filter = { level, msg, tool, traceId }
-  const initialDate = todayKst()
+
+  // Codex #462 P2: pino 로거의 5분 주기 rotation check 로 인해 00:00~00:05 KST
+  // grace window 에서는 여전히 어제 파일이 write 대상이다. `todayKst()` 로 무조건
+  // 시딩하면 그 창의 write 를 놓친다 (오늘 파일 미존재 + rotation branch 미 트리거).
+  // 실제 active file 을 존재 여부로 선택 — 오늘 없고 어제 있으면 어제로 시작,
+  // 이후 poll 이 오늘 파일 등장을 감지해 rotation 처리.
+  const today = todayKst()
+  const yesterday = kstDayOffset(today, -1)
+  const initialDate =
+    fs.existsSync(logFilePath(today, false)) ? today :
+    fs.existsSync(logFilePath(yesterday, false)) ? yesterday :
+    today
 
   const encoder = new TextEncoder()
 
