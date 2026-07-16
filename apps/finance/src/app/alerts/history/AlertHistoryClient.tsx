@@ -7,7 +7,7 @@ import {
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
 import { KIND_META, kindMetaOf, STATUS_META, type AlertKind } from './kinds'
-import { formatFiredAt, stripHtml, periodFromISO } from './client-utils'
+import { formatFiredAt, messageForDisplay, periodFromISO } from './client-utils'
 import AlertHistoryDetailModal, {
   type AlertHistoryDetailRow,
 } from '@/components/alerts/AlertHistoryDetailModal'
@@ -443,7 +443,7 @@ export default function AlertHistoryClient() {
                         </span>
                       </div>
                       <div className="mt-1.5 text-[13px] text-bright whitespace-pre-line">
-                        {stripHtml(r.message)}
+                        {messageForDisplay(r.message, r.kind)}
                       </div>
                       {r.errorMessage && (
                         <div className="mt-1 text-[11px] text-red-400 font-mono">↳ {r.errorMessage}</div>

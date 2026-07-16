@@ -9,7 +9,7 @@
 
 import { useEffect } from 'react'
 import { STATUS_META, kindMetaOf } from '@/app/alerts/history/kinds'
-import { formatFiredAt, stripHtml } from '@/app/alerts/history/client-utils'
+import { formatFiredAt, messageForDisplay } from '@/app/alerts/history/client-utils'
 import { conditionToString, type Condition } from '@/lib/custom-strategy/types'
 
 // 상세 모달이 필요로 하는 최소 필드셋. AlertHistoryClient 의 HistoryRow 와 호환.
@@ -96,7 +96,7 @@ export default function AlertHistoryDetailModal({ row, onClose }: Props) {
         <div className="rounded-lg bg-surface-dim border border-border p-3">
           <div className="text-[11px] text-sub mb-1">알림 메시지</div>
           <div className="text-[13px] text-bright whitespace-pre-line">
-            {stripHtml(row.message)}
+            {messageForDisplay(row.message, row.kind)}
           </div>
           {row.errorMessage && (
             <div className="mt-2 pt-2 border-t border-border text-[11px] text-red-400 font-mono">
