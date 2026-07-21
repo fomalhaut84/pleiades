@@ -80,7 +80,7 @@ function fireTickerAnalysis(ctx: Context, chatId: number, ticker: string): void 
     '- 종합 판단 + 주의사항',
   ].join('\n')
 
-  askAdvisor(prompt, { model: 'sonnet', timeout: 300_000, maxBudgetUsd: 1.0 })
+  askAdvisor(prompt, { model: 'sonnet', timeout: 300_000, maxBudgetUsd: 1.0, caller: 'bot:brief_command' })
     .then(async (result) => {
       const html = markdownToTelegramHtml(result.response)
       if (html.length <= 4096) {

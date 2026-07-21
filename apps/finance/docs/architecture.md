@@ -131,7 +131,8 @@ NEXTAUTH_URL="https://myfinance.example.com"
 
 # === 2차 마일스톤 (Phase 7~11) ===
 TELEGRAM_BOT_TOKEN="..."                   # BotFather에서 발급
-TELEGRAM_ALLOWED_CHAT_IDS="123456,789012"  # 가족 Chat ID (화이트리스트)
+TELEGRAM_ALLOWED_CHAT_IDS="123456,789012"  # 가족 Chat ID (화이트리스트, 봇 명령 사용 가능)
+TELEGRAM_ADMIN_CHAT_IDS="123456"           # Phase 40-A (#468): 관리자 alert 전용 (AI 어드바이저 실패 감지 등). ALLOWED 와 분리 — alert 본문에 stderr detail 포함되어 non-admin 노출 금지
 PROJECT_ROOT="/path/to/myFinance"          # Claude Code CLI cwd
 
 # Claude Code CLI는 Max 플랜으로 로그인된 상태 사용 (API 키 불필요)

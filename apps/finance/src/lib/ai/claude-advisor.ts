@@ -1,6 +1,7 @@
 import { spawn } from 'child_process'
 import path from 'path'
 import { SYSTEM_PROMPT } from './system-prompt'
+import { getGlobalAdvisorMonitor } from './advisor-monitor'
 
 export type AdvisorModel = 'haiku' | 'sonnet'
 
@@ -38,6 +39,11 @@ export interface AdvisorOptions {
   sessionId?: string
   /** 세션을 디스크에 저장 (기본: false). 텔레그램 AI만 true */
   persist?: boolean
+  /**
+   * Phase 40-A (#468) — 호출 위치 라벨. 실패 시 관리자 alert 에 caller 표시로
+   * 어느 flow 가 실패했는지 즉시 파악 가능 (briefing / ta-signal / active-review / etc).
+   */
+  caller?: string
 }
 
 export interface AdvisorResult {
@@ -214,7 +220,7 @@ export async function askAdvisor(
 
   const cmd = cmdParts.join(' ')
 
-  return new Promise<AdvisorResult>((resolve, reject) => {
+  const subprocessPromise = new Promise<AdvisorResult>((resolve, reject) => {
     const chunks: Buffer[] = []
     /** stderr 최대 보유량 — buffer full → child hang 방지 + 로그 폭증 차단.
      *  rolling buffer 로 항상 **마지막** STDERR_MAX_BYTES 만 유지 (앞 chunk drop).
@@ -286,4 +292,27 @@ export async function askAdvisor(
       reject(new AdvisorError(`Claude CLI 실행 오류: ${error.message}`))
     })
   })
+
+  // Phase 40-A (#468) — 실패/성공을 monitor 에 기록 → 연속 3회 실패 시 관리자
+  // 텔레그램 alert 자동 발송. resolve/reject 결과에 side-effect 만 추가하고 원본
+  // promise 를 그대로 리턴 (호출자 관점 동작 무변경).
+  // `void ...` 로 명시적 fire-and-forget — hook 실패는 caller 로 전파되지 않고
+  // console.error 로만 남김 (모니터 실패가 원본 응답을 오염 안 시킴).
+  void subprocessPromise.then(
+    () => {
+      getGlobalAdvisorMonitor().recordSuccess().catch((e) => {
+        console.error('[advisor] monitor.recordSuccess 실패:', e)
+      })
+    },
+    (err: unknown) => {
+      // 실패 계열만 monitor 에 기록 (Error 인스턴스). unknown 은 무시.
+      if (err instanceof Error) {
+        getGlobalAdvisorMonitor().recordFailure(err, options.caller).catch((e) => {
+          console.error('[advisor] monitor.recordFailure 실패:', e)
+        })
+      }
+    },
+  )
+
+  return subprocessPromise
 }

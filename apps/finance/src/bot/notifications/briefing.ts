@@ -49,6 +49,7 @@ export async function sendBriefing(
       model: 'sonnet',
       timeout: 300_000,
       maxBudgetUsd: 1.0,
+      caller: 'cron:briefing',
     })
 
     const html = markdownToTelegramHtml(result.response)

@@ -109,6 +109,7 @@ async function sendReview(
       model: 'sonnet',
       timeout: 300_000,
       maxBudgetUsd: 1.0,
+      caller: 'cron:active_review',
     })
 
     const html = markdownToTelegramHtml(result.response)

@@ -36,7 +36,7 @@ export async function sendMonthlyReport(chatIds: number[]): Promise<void> {
     `6. 주요 관찰 사항 및 다음 달 체크포인트`
 
   try {
-    const result = await askAdvisor(prompt, { model: 'sonnet', timeout: 300_000 })
+    const result = await askAdvisor(prompt, { model: 'sonnet', timeout: 300_000, caller: 'cron:monthly_report' })
 
     const html = markdownToTelegramHtml(result.response)
 

@@ -147,6 +147,7 @@ export async function parseStrategyText(text: string): Promise<ParsedStrategy> {
     model: 'sonnet',
     timeout: 60_000,
     maxBudgetUsd: 0.2,
+    caller: 'strategy:parse',
   })
 
   // 응답에서 JSON 추출 — AI 가 코드블록/서론과 함께 감쌀 수 있음.
@@ -235,6 +236,7 @@ ${contextBlock}
     model: 'sonnet',
     timeout: 60_000,
     maxBudgetUsd: 0.2,
+    caller: 'strategy:edit',
   })
 
   const raw = result.response.trim()
