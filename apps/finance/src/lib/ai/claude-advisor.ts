@@ -98,17 +98,42 @@ export class AdvisorError extends Error {
  * pure — 판정 규칙만 담아 test 용이. subprocess 성공/spawn 실패는 caller 에서
  * 직접 code 지정 (예: `AdvisorError('...', undefined, 'server_down')`).
  */
+/**
+ * Codex #479 P2 재수정: bare `'401'` / `'403'` / `'429'` substring 매칭은
+ * false positive 유발 (port 4030 · 라인 401 · request id 포함 등). Claude 가
+ * 실제 뱉는 형태만 명시적으로 매칭 (regex):
+ *   - `api_error_status=401` (extractAdvisorErrorText 조립 형식)
+ *   - `HTTP 401` / `HTTP/1.1 401` (curl-style)
+ *   - `status: 401` (JSON stringify or log format)
+ *   - `401 Unauthorized` / `403 Forbidden` (HTTP standard reason)
+ */
+// Codex #479 P2 (3차): `HTTP/1.1 401` 처럼 protocol version 이 사이에 있는
+// curl-style 도 매칭 지원 — `http` (optional `/N.N` version) + 공백/slash + status.
+const AUTH_STATUS_PATTERNS: RegExp[] = [
+  /api_error_status[=:]\s*(?:401|403)\b/i,
+  /\bhttp(?:\/[\d.]+)?[\s/]+(?:401|403)\b/i,
+  /\bstatus[:\s]+(?:401|403)\b/i,
+  /\b(?:401|403)\s+(?:unauthorized|forbidden)\b/i,
+]
+const QUOTA_STATUS_PATTERNS: RegExp[] = [
+  /api_error_status[=:]\s*429\b/i,
+  /\bhttp(?:\/[\d.]+)?[\s/]+429\b/i,
+  /\bstatus[:\s]+429\b/i,
+  /\b429\s+(?:too\s+many\s+requests|rate\s+limit)\b/i,
+]
+
 export function classifyAdvisorError(stderr: string | undefined): AdvisorErrorCode {
   if (!stderr) return 'unknown'
   const s = stderr.toLowerCase()
-  // 인증 만료 계열 — claude CLI 가 auth 실패 시 뱉는 문구들
+  // 인증 만료 계열 — claude CLI 가 auth 실패 시 뱉는 문구들.
   if (
     s.includes('not logged in') ||
     s.includes('unauthorized') ||
     s.includes('credentials') ||
     s.includes('please login') ||
     s.includes('session expired') ||
-    s.includes('authentication')
+    s.includes('authentication') ||
+    AUTH_STATUS_PATTERNS.some((re) => re.test(stderr))
   ) return 'auth_expired'
   // 쿼터 초과 — MAX 플랜 usage limit
   if (
@@ -116,7 +141,7 @@ export function classifyAdvisorError(stderr: string | undefined): AdvisorErrorCo
     s.includes('rate limit') ||
     s.includes('usage limit') ||
     s.includes('too many requests') ||
-    s.includes('429')
+    QUOTA_STATUS_PATTERNS.some((re) => re.test(stderr))
   ) return 'quota_exceeded'
   // MCP 서버 접근 실패
   if (
@@ -220,6 +245,28 @@ interface ClaudeJsonOutput {
   duration_ms: number
   total_cost_usd: number
   session_id: string
+  // Codex #479 P2: Claude ResultMessage 는 최종 API 실패 시 `result` 는 비고
+  // `api_error_status` 에 HTTP status (예: 429 rate limit) 를 담을 수 있음.
+  // classify 시 이 필드도 참조해야 auth/quota 분류 가능.
+  api_error_status?: number | string
+  errors?: unknown
+}
+
+/**
+ * Codex #479 P2: Claude JSON output 에서 classify 대상 문자열을 조립.
+ * result 뿐 아니라 `api_error_status` (예: `429`) 와 `errors` 필드까지 포함해
+ * `result` 가 비어있어도 auth/quota 분류가 가능하도록. pure — 테스트 용이.
+ */
+export function extractAdvisorErrorText(json: Partial<ClaudeJsonOutput>): string {
+  const parts: string[] = []
+  if (typeof json.result === 'string' && json.result) parts.push(json.result)
+  if (json.api_error_status != null) parts.push(`api_error_status=${json.api_error_status}`)
+  if (json.errors != null) {
+    try {
+      parts.push(typeof json.errors === 'string' ? json.errors : JSON.stringify(json.errors))
+    } catch { /* ignore stringify failure */ }
+  }
+  return parts.join('\n')
 }
 
 /**
@@ -340,12 +387,31 @@ export async function askAdvisor(
       const stderr = errBuf.toString('utf-8').trim()
 
       if (code !== 0) {
-        // 디버깅 detail: stderr 끝 1KB 만 별도 프로퍼티로 전달 (message 는 사용자 노출 가능한 정적 문장)
+        // Codex #478 P2: `--output-format json` 은 에러도 stdout JSON 으로 반환 후
+        // exit code 를 non-zero 로 종료. stdout 파싱 없이 stderr 만 보면 대부분
+        // 비어있어 unknown 처리 → fallback UX 오분류. stdout JSON 우선 시도.
         const stderrTail = stderr.slice(-1024)
         if (stderrTail) console.error('[advisor] claude stderr:', stderrTail)
-        // Phase 40-B (#469): stderr pattern matching 으로 code 결정 → fallback UX 분기
-        const errorCode = classifyAdvisorError(stderrTail)
-        reject(new AdvisorError(`Claude CLI 종료 코드: ${code}`, stderrTail || undefined, errorCode))
+        // stdout JSON 에서 error 문구 추출 시도. 실패해도 stderr fallback.
+        // Codex #479 P2: `result` 뿐 아니라 `api_error_status` (예: 429) · `errors`
+        // 필드까지 결합 — Claude 는 rate limit/최종 실패 시 result 비고 status 만 채움.
+        let jsonErrorText = ''
+        try {
+          const parsed = JSON.parse(stdout) as Partial<ClaudeJsonOutput>
+          if (parsed && typeof parsed === 'object') {
+            jsonErrorText = extractAdvisorErrorText(parsed)
+          }
+        } catch {
+          // stdout 이 JSON 아니거나 partial — stderr 만 사용
+        }
+        // classifyAdvisorError 는 stdout error 텍스트 + stderr 을 함께 검사 →
+        // JSON result 에 담긴 auth/quota 문구도 정확히 분류.
+        const combined = [jsonErrorText, stderrTail].filter(Boolean).join('\n')
+        const errorCode = classifyAdvisorError(combined || undefined)
+        // detail 은 사용자 진단 정보 우선순위: stdout JSON 문구 > stderr tail.
+        // 관리자 alert 에도 이게 더 actionable (Claude 자체의 에러 원문).
+        const detail = jsonErrorText.slice(0, 1024) || stderrTail || undefined
+        reject(new AdvisorError(`Claude CLI 종료 코드: ${code}`, detail, errorCode))
         return
       }
 
@@ -353,7 +419,16 @@ export async function askAdvisor(
         const output: ClaudeJsonOutput = JSON.parse(stdout)
 
         if (output.is_error) {
-          reject(new AdvisorError(`AI 응답 오류: ${output.result}`, undefined, 'unknown'))
+          // Codex #478 P2: exit code 0 인데 is_error=true 인 케이스도 classify.
+          // Codex #479 P2: `result` 가 비어있어도 `api_error_status` / `errors`
+          // 활용해 auth/quota 정확 분류.
+          const errorText = extractAdvisorErrorText(output)
+          const errorCode = classifyAdvisorError(errorText || undefined)
+          reject(new AdvisorError(
+            `AI 응답 오류: ${output.result || `api_error_status=${output.api_error_status ?? 'unknown'}`}`,
+            errorText.slice(0, 1024) || undefined,
+            errorCode,
+          ))
           return
         }
 
