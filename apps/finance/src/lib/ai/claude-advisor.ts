@@ -54,7 +54,26 @@ export interface AdvisorResult {
   sessionId: string
 }
 
+/**
+ * Phase 40-B (#469) — AdvisorError 원인 분류.
+ * 사용자 UX 를 위해 fallback 메시지를 code 별로 분기.
+ * - `auth_expired`: Claude CLI 인증 만료 (stderr `not logged in` · `unauthorized` · `credentials` 등)
+ * - `quota_exceeded`: MAX 플랜 쿼터 초과 (`quota` · `rate limit` · `usage limit`)
+ * - `server_down`: MCP 서버 접근 실패 or spawn 실패 (`ECONNREFUSED` · `MCP` + `connect`)
+ * - `timeout`: 별도 `AdvisorTimeoutError` 로 이미 분리되어 있으나 monitor 관점에서 code 통일
+ * - `parse_error`: subprocess 는 성공했지만 응답 JSON 파싱 실패
+ * - `unknown`: 위 어느 패턴에도 매칭 안 됨
+ */
+export type AdvisorErrorCode =
+  | 'auth_expired'
+  | 'quota_exceeded'
+  | 'server_down'
+  | 'timeout'
+  | 'parse_error'
+  | 'unknown'
+
 export class AdvisorTimeoutError extends Error {
+  code: AdvisorErrorCode = 'timeout'
   constructor(timeoutMs: number) {
     super(`AI 응답 시간이 초과되었습니다. (${timeoutMs / 1000}초)`)
     this.name = 'AdvisorTimeoutError'
@@ -64,10 +83,71 @@ export class AdvisorTimeoutError extends Error {
 export class AdvisorError extends Error {
   /** 디버깅용 상세 (예: claude CLI stderr tail). 사용자 노출 금지. */
   detail?: string
-  constructor(message: string, detail?: string) {
+  /** Phase 40-B (#469) — 원인 분류. 미지정 시 unknown. */
+  code: AdvisorErrorCode
+  constructor(message: string, detail?: string, code: AdvisorErrorCode = 'unknown') {
     super(message)
     this.name = 'AdvisorError'
     this.detail = detail
+    this.code = code
+  }
+}
+
+/**
+ * Phase 40-B (#469) — stderr tail 을 pattern matching 해 error code 결정.
+ * pure — 판정 규칙만 담아 test 용이. subprocess 성공/spawn 실패는 caller 에서
+ * 직접 code 지정 (예: `AdvisorError('...', undefined, 'server_down')`).
+ */
+export function classifyAdvisorError(stderr: string | undefined): AdvisorErrorCode {
+  if (!stderr) return 'unknown'
+  const s = stderr.toLowerCase()
+  // 인증 만료 계열 — claude CLI 가 auth 실패 시 뱉는 문구들
+  if (
+    s.includes('not logged in') ||
+    s.includes('unauthorized') ||
+    s.includes('credentials') ||
+    s.includes('please login') ||
+    s.includes('session expired') ||
+    s.includes('authentication')
+  ) return 'auth_expired'
+  // 쿼터 초과 — MAX 플랜 usage limit
+  if (
+    s.includes('quota') ||
+    s.includes('rate limit') ||
+    s.includes('usage limit') ||
+    s.includes('too many requests') ||
+    s.includes('429')
+  ) return 'quota_exceeded'
+  // MCP 서버 접근 실패
+  if (
+    s.includes('econnrefused') ||
+    s.includes('connection refused') ||
+    (s.includes('mcp') && (s.includes('connect') || s.includes('timeout'))) ||
+    s.includes('server not responding')
+  ) return 'server_down'
+  return 'unknown'
+}
+
+/**
+ * Phase 40-B (#469) — code → 사용자에게 표시할 한국어 fallback 메시지.
+ * pure — caller (봇/웹) 는 이 결과를 그대로 사용자에게 노출 (stderr detail 유출 없음).
+ */
+export function describeAdvisorError(err: AdvisorError | AdvisorTimeoutError | Error): string {
+  const code: AdvisorErrorCode =
+    err instanceof AdvisorError || err instanceof AdvisorTimeoutError ? err.code : 'unknown'
+  switch (code) {
+    case 'auth_expired':
+      return '🤖 AI 어드바이저 인증 갱신 필요 — 관리자에게 문의해주세요.'
+    case 'quota_exceeded':
+      return '🤖 AI 어드바이저 사용량 초과 — 관리자에게 문의해주세요. 잠시 후 다시 시도해보세요.'
+    case 'server_down':
+      return '🤖 AI 어드바이저 서버 접근 실패 — 관리자에게 문의해주세요.'
+    case 'timeout':
+      return '⏱ AI 응답 시간 초과 — 잠시 후 다시 시도해주세요.'
+    case 'parse_error':
+      return '🤖 AI 응답을 처리할 수 없습니다 — 잠시 후 다시 시도해주세요.'
+    default:
+      return '🤖 AI 어드바이저 일시 중단 — 관리자에게 문의해주세요.'
   }
 }
 
@@ -263,7 +343,9 @@ export async function askAdvisor(
         // 디버깅 detail: stderr 끝 1KB 만 별도 프로퍼티로 전달 (message 는 사용자 노출 가능한 정적 문장)
         const stderrTail = stderr.slice(-1024)
         if (stderrTail) console.error('[advisor] claude stderr:', stderrTail)
-        reject(new AdvisorError(`Claude CLI 종료 코드: ${code}`, stderrTail || undefined))
+        // Phase 40-B (#469): stderr pattern matching 으로 code 결정 → fallback UX 분기
+        const errorCode = classifyAdvisorError(stderrTail)
+        reject(new AdvisorError(`Claude CLI 종료 코드: ${code}`, stderrTail || undefined, errorCode))
         return
       }
 
@@ -271,7 +353,7 @@ export async function askAdvisor(
         const output: ClaudeJsonOutput = JSON.parse(stdout)
 
         if (output.is_error) {
-          reject(new AdvisorError(`AI 응답 오류: ${output.result}`))
+          reject(new AdvisorError(`AI 응답 오류: ${output.result}`, undefined, 'unknown'))
           return
         }
 
@@ -283,13 +365,14 @@ export async function askAdvisor(
           sessionId: output.session_id ?? '',
         })
       } catch {
-        reject(new AdvisorError('AI 응답을 파싱할 수 없습니다.'))
+        reject(new AdvisorError('AI 응답을 파싱할 수 없습니다.', undefined, 'parse_error'))
       }
     })
 
     child.on('error', (error) => {
       clearTimeout(timer)
-      reject(new AdvisorError(`Claude CLI 실행 오류: ${error.message}`))
+      // Phase 40-B: spawn 실패 (ENOENT / EACCES 등) 는 서버 계열 → server_down
+      reject(new AdvisorError(`Claude CLI 실행 오류: ${error.message}`, undefined, 'server_down'))
     })
   })
 

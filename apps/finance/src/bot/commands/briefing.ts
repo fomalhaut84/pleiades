@@ -1,6 +1,6 @@
 import { Bot, Context } from 'grammy'
 import { sendBriefing } from '@/bot/notifications/briefing'
-import { askAdvisor, AdvisorError } from '@/lib/ai/claude-advisor'
+import { askAdvisor, AdvisorError, describeAdvisorError } from '@/lib/ai/claude-advisor'
 import { splitMessage } from '@/bot/utils/formatter'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 
@@ -98,7 +98,9 @@ function fireTickerAnalysis(ctx: Context, chatId: number, ticker: string): void 
     })
     .catch(async (error) => {
       if (error instanceof AdvisorError) {
-        await ctx.reply(`⚠️ ${error.message}`)
+        // Phase 40-B (#469): code 별 fallback 메시지 (auth_expired 등 원인 힌트).
+        if (error.detail) console.error(`[bot] briefing advisor detail (${error.code}): ${error.detail}`)
+        await ctx.reply(describeAdvisorError(error))
       } else {
         console.error(`[bot] ${ticker} 심층 분석 실패:`, error)
         await ctx.reply(`⚠️ ${ticker} 분석에 실패했습니다. 잠시 후 다시 시도해주세요.`)

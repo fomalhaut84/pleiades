@@ -3,6 +3,7 @@ import {
   askAdvisor,
   AdvisorTimeoutError,
   AdvisorError,
+  describeAdvisorError,
 } from '@/lib/ai/claude-advisor'
 import { prisma } from '@/lib/prisma'
 import { createTrade } from '@/lib/trade-service'
@@ -74,9 +75,10 @@ function fireAiQuestion(ctx: Context, question: string): void {
       if (error instanceof AdvisorTimeoutError) {
         await ctx.reply('⚠️ AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.')
       } else if (error instanceof AdvisorError) {
-        // AdvisorError.message 는 정적 한국어. detail (stderr) 는 console 로만.
-        if (error.detail) console.error(`[bot] AI advisor detail: ${error.detail}`)
-        await ctx.reply(`⚠️ ${error.message}`)
+        // Phase 40-B (#469): code 별 fallback 메시지로 사용자 UX 개선.
+        // detail (stderr) 은 console 로만 (사용자 노출 금지).
+        if (error.detail) console.error(`[bot] AI advisor detail (${error.code}): ${error.detail}`)
+        await ctx.reply(describeAdvisorError(error))
       } else {
         console.error(`[bot] AI 질문 처리 실패: ${sanitizeError(error)}`)
         await ctx.reply('⚠️ AI 질문 처리에 실패했습니다.')

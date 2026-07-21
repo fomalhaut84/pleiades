@@ -8,7 +8,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { getBot } from '@/bot/index'
-import { askAdvisor } from '@/lib/ai/claude-advisor'
+import { askAdvisor, describeAdvisorError } from '@/lib/ai/claude-advisor'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 import { sendHtml } from '@/bot/utils/telegram'
 import { sanitizeError } from '@/bot/utils/error'
@@ -126,7 +126,11 @@ async function sendReview(
   } catch (error) {
     console.error(`[active-review] ${label} 생성 실패: ${sanitizeError(error)}`)
 
-    const fallback = `📊 ${label} 리뷰 생성에 실패했습니다.\n${fallbackHint}`
+    // Phase 40-B (#469): AdvisorError code 별 fallback 메시지 (auth_expired 등 원인 힌트).
+    // Advisor 관련이 아닌 다른 예외는 hint 유지.
+    const advisorMsg =
+      error instanceof Error && ('code' in error) ? describeAdvisorError(error) : ''
+    const fallback = `📊 ${label} 리뷰 생성에 실패했습니다.\n${advisorMsg || fallbackHint}`
     for (const chatId of chatIds) {
       try {
         await sendHtml(bot, chatId, fallback)
