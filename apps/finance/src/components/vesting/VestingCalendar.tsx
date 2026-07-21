@@ -142,3 +142,4 @@ export default function VestingCalendar({ events, todayMs }: Props) {
     </div>
   )
 }
+

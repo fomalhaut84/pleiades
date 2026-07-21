@@ -228,6 +228,8 @@ BudgetManager row 는 5개의 direct grid children (카테고리명 · progress 
 
 **Fix 방향**: 상세 페이지에서만 열리므로 유지 가능. 심각하면 mobile 은 리스트 뷰로 전환.
 
+**해결 (Phase 41-A, #470, 2026-07-21):** `/vesting` 페이지에서 `<VestingCalendar>` 를 `hidden lg:block` 로 감싸 mobile 에서 아예 감춤. 기존 `<VestingList>` 가 이미 다가오는 UPCOMING_DAYS 일 리스트를 링크·계좌·행사가 포함한 상세 카드로 렌더하므로 mobile 은 그것 하나로 완결. 캘린더 그리드 `grid-cols-7` 375px 셀 겹침 회피 + 중복 리스트 방지 (Codex #477 P2 지적 반영).
+
 ---
 
 ### L2. AI chat 페이지 message max-width
