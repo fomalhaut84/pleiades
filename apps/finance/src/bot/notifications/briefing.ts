@@ -6,7 +6,7 @@
  */
 
 import { getBot } from '@/bot/index'
-import { askAdvisor } from '@/lib/ai/claude-advisor'
+import { askAdvisor, describeAdvisorError } from '@/lib/ai/claude-advisor'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 import { sendHtml } from '@/bot/utils/telegram'
 import { sanitizeError } from '@/bot/utils/error'
@@ -67,8 +67,15 @@ export async function sendBriefing(
   } catch (error) {
     console.error(`[briefing] 브리핑 생성 실패: ${sanitizeError(error)}`)
 
+    // Phase 40-B (#469, Codex #478 P2): AdvisorError code 별 fallback (auth/quota/
+    // server 원인 힌트). describeAdvisorError 는 AdvisorError/AdvisorTimeoutError/
+    // Error 모두 받아 code 없는 일반 Error 는 unknown 으로 처리. 이 경우 기존
+    // hint (`/ai 에서 직접 질문해주세요`) 를 붙여 사용자 액션 제시.
     const label = session === 'KR' ? '🇰🇷 한국장' : '🇺🇸 미국장'
-    const fallback = `📊 ${label} 모닝 브리핑 생성에 실패했습니다.\n/ai 에서 직접 질문해주세요.`
+    const advisorMsg = error instanceof Error ? describeAdvisorError(error) : ''
+    const fallback =
+      `📊 ${label} 모닝 브리핑 생성에 실패했습니다.\n` +
+      `${advisorMsg}\n/ai 에서 직접 질문해주세요.`
     for (const chatId of chatIds) {
       try {
         await sendHtml(bot, chatId, fallback)
