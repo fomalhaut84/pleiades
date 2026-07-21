@@ -177,7 +177,7 @@ export default function AIClient() {
                   </div>
                 )}
                 <div
-                  className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed
+                  className={`min-w-0 max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed
                     ${msg.role === 'user'
                       ? 'bg-sejin/15 text-bright rounded-br-md'
                       : 'bg-card border border-border text-text rounded-bl-md'

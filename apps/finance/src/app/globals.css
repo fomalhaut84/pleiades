@@ -102,6 +102,10 @@ body {
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 12px;
+  /* Phase 41-B (#471): 긴 URL·변수명 등 인라인 코드가 message 컨테이너 폭을 넘어
+     좌우 스크롤 유발하지 않도록 강제 wrap. mobile 임팩트 큼 (max-w-[85%] 좁음). */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .ai-markdown pre {
   background: var(--surface-dim);
@@ -112,11 +116,22 @@ body {
   margin: 8px 0;
   font-size: 12px;
   line-height: 1.6;
+  /* Phase 41-B (#471): `overflow-x: auto` 만으로는 부모 폭을 넘어서 pre 자체가
+     확장됨 → message 컨테이너 오버플로우. max-width 를 부모 100% 로 잠금. */
+  max-width: 100%;
 }
 .ai-markdown pre code {
   background: transparent;
   padding: 0;
   color: var(--text);
+  /* pre 안 code 는 wrap 대신 스크롤 (코드 가독성 유지) — 부모 pre 의 overflow-x. */
+  overflow-wrap: normal;
+  word-break: normal;
+}
+/* Phase 41-B (#471): 긴 URL / 인라인 링크가 mobile 폭을 넘어 확장하는 것 방지. */
+.ai-markdown a {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .ai-markdown hr {
   border: none;
@@ -143,6 +158,17 @@ body {
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
+}
+/* Phase 41-B (#471): 마크다운 테이블은 mobile 에서만 좌우 스크롤 컨테이너로 (display:block
+   전환은 desktop layout 을 깨뜨릴 수 있어 media query 로 격리).
+   Codex #476 P2: 기본 rule 의 `overflow: hidden` shorthand 가 뒤늦게 override 하지
+   않도록 base rule **뒤에** 배치. `overflow-x: auto` 가 hidden 을 최종 덮음. */
+@media (max-width: 640px) {
+  .ai-markdown table {
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
+  }
 }
 .ai-markdown th {
   background: var(--surface);

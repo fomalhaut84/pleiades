@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 웹 `/ai` — 자유 질문 → sonnet (Phase 35-A / #433)
-    const result = await askAdvisor(prompt.trim(), { intent: 'conversation' })
+    const result = await askAdvisor(prompt.trim(), { intent: 'conversation', caller: 'web:ai_chat' })
 
     return ok({
       response: result.response,

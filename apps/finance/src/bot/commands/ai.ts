@@ -3,6 +3,7 @@ import {
   askAdvisor,
   AdvisorTimeoutError,
   AdvisorError,
+  describeAdvisorError,
 } from '@/lib/ai/claude-advisor'
 import { prisma } from '@/lib/prisma'
 import { createTrade } from '@/lib/trade-service'
@@ -56,6 +57,7 @@ function fireAiQuestion(ctx: Context, question: string): void {
     sessionId: chatSessions.get(chatId)?.sessionId,
     persist: true,
     intent: 'conversation',  // 자유 질문 → sonnet (35-A / #433)
+    caller: 'bot:ai_chat',
   })
     .then(async (result) => {
       if (result.sessionId) chatSessions.set(chatId, { sessionId: result.sessionId, lastUsed: Date.now() })
@@ -73,9 +75,10 @@ function fireAiQuestion(ctx: Context, question: string): void {
       if (error instanceof AdvisorTimeoutError) {
         await ctx.reply('⚠️ AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.')
       } else if (error instanceof AdvisorError) {
-        // AdvisorError.message 는 정적 한국어. detail (stderr) 는 console 로만.
-        if (error.detail) console.error(`[bot] AI advisor detail: ${error.detail}`)
-        await ctx.reply(`⚠️ ${error.message}`)
+        // Phase 40-B (#469): code 별 fallback 메시지로 사용자 UX 개선.
+        // detail (stderr) 은 console 로만 (사용자 노출 금지).
+        if (error.detail) console.error(`[bot] AI advisor detail (${error.code}): ${error.detail}`)
+        await ctx.reply(describeAdvisorError(error))
       } else {
         console.error(`[bot] AI 질문 처리 실패: ${sanitizeError(error)}`)
         await ctx.reply('⚠️ AI 질문 처리에 실패했습니다.')
@@ -142,7 +145,7 @@ function fireTradeParseQuestion(ctx: Context, text: string): void {
       .catch(() => { /* 무시 */ })
   }, TYPING_INTERVAL_MS)
 
-  askAdvisor(TRADE_PARSE_PROMPT + text, { intent: 'parse' })  // 구조 JSON 파싱 → haiku (35-A)
+  askAdvisor(TRADE_PARSE_PROMPT + text, { intent: 'parse', caller: 'bot:trade_parse' })  // 구조 JSON 파싱 → haiku (35-A)
     .then(async (result) => {
       await handleParsedTrade(ctx, result.response)
     })

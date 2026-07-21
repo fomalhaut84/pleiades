@@ -94,7 +94,12 @@ export default async function VestingPage() {
         ))}
       </section>
 
-      <VestingCalendar events={events} todayMs={todayMs} />
+      {/* Phase 41-A (#470): 캘린더는 데스크톱 (`lg+`) 전용. mobile 은 아래
+          VestingList (다가오는 UPCOMING_DAYS 일 리스트) 만 표시 → 캘린더 그리드
+          `grid-cols-7` 375px 셀 겹침 회피 + 중복 리스트 방지 (Codex #477 P2). */}
+      <div className="hidden lg:block">
+        <VestingCalendar events={events} todayMs={todayMs} />
+      </div>
 
       <section className="grid grid-cols-1 lg:grid-cols-[1.4fr,1fr] gap-4">
         <VestingList events={events} todayMs={todayMs} days={UPCOMING_DAYS} />

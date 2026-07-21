@@ -60,6 +60,7 @@ export async function generateQuarterlyReview(
     model: 'sonnet',
     timeout: 300_000,
     maxBudgetUsd: 1.0,
+    caller: 'report:ai_review',
   })
 
   const title = `${year}년 ${quarter}분기 리포트`

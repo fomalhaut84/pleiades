@@ -58,17 +58,20 @@ export default function FamilyTotalCard({ accounts, hasPriceData }: FamilyTotalC
         </div>
       </div>
 
+      {/* Phase 41-C (#472): 3-col grid 유지 (세로 스택은 시각 임팩트 큼).
+          375px viewport 에서 셀당 ~110px 로 tight → mobile 만 폰트/padding 축소 →
+          세진 1억+ (`123,456,789원` 8자리) 도 여유 확보. sm+ 는 기존 값 유지. */}
       <div className="grid grid-cols-3 gap-px bg-border rounded-lg overflow-hidden">
         {accounts.map((account) => (
-          <div key={account.name} className="bg-bg p-3 text-center">
-            <div className="text-[12px] text-sub tracking-wide">
+          <div key={account.name} className="bg-bg p-2 sm:p-3 text-center">
+            <div className="text-[11px] sm:text-[12px] text-sub tracking-wide">
               {account.name}
             </div>
-            <div className={`text-[16px] font-extrabold mt-1 ${COLOR_MAP[account.name] ?? 'text-bright'}`}>
+            <div className={`text-[13px] sm:text-[16px] font-extrabold mt-1 tabular-nums ${COLOR_MAP[account.name] ?? 'text-bright'}`}>
               {formatKRW(account.currentValueKRW)}
             </div>
             {hasPriceData && (
-              <div className={`text-[12px] font-bold mt-0.5 ${account.returnPct >= 0 ? 'text-sejin' : 'text-red-500'}`}>
+              <div className={`text-[11px] sm:text-[12px] font-bold mt-0.5 tabular-nums ${account.returnPct >= 0 ? 'text-sejin' : 'text-red-500'}`}>
                 {formatPercent(account.returnPct)}
               </div>
             )}
