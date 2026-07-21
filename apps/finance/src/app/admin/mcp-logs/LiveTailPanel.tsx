@@ -14,7 +14,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { recentLogDates } from '@/lib/mcp-logs/constants'
+import { recentLogDates, formatKstTime } from '@/lib/mcp-logs/constants'
 
 interface LiveTailPanelProps {
   date: string
@@ -212,7 +212,7 @@ export default function LiveTailPanel({
                     <div className="flex flex-wrap items-center gap-2 text-[11px]">
                       {/* lineNo 는 poll batch 마다 1 부터 재시작해 스냅샷의 파일 라인
                           번호 (L{n}) 와 오해 유발 (Codex #454 P1). live tail 은 표시 안함. */}
-                      <span className="text-sub tabular-nums">{r.time?.slice(11, 19)}</span>
+                      <span className="text-sub tabular-nums" title="KST">{formatKstTime(r.time)}</span>
                       <span className={`px-2 py-0.5 rounded border font-semibold ${levelCls}`}>{r.level}</span>
                       {r.msg && (
                         <span className="px-2 py-0.5 rounded bg-surface-dim border border-border text-bright font-mono">

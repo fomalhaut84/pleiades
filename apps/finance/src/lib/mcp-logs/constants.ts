@@ -66,3 +66,16 @@ export function recentLogDates(days: number, now: number = Date.now()): string[]
   }
   return out
 }
+
+/**
+ * pino ISO 8601 UTC time 문자열을 KST `HH:mm:ss` 로 변환 (mcp-logs 표시용).
+ * 이전에는 `iso.slice(11, 19)` 로 UTC 시각을 그대로 노출 → 사용자 혼동.
+ * pure — 잘못된 입력은 빈 문자열.
+ */
+export function formatKstTime(iso: string | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
+  return kst.toISOString().slice(11, 19)
+}

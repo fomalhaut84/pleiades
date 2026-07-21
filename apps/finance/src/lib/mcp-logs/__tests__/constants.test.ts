@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { KNOWN_MSGS, MSG_LABELS, LEVEL_ORDER, recentLogDates } from '../constants'
+import { KNOWN_MSGS, MSG_LABELS, LEVEL_ORDER, recentLogDates, formatKstTime } from '../constants'
 
 describe('KNOWN_MSGS', () => {
   it('실제 서버에서 emit 되는 모든 msg 를 포함 (Codex #425 P2 회귀 방지)', () => {
@@ -61,5 +61,30 @@ describe('recentLogDates', () => {
 
   it('N=0 → 빈 배열', () => {
     expect(recentLogDates(0)).toEqual([])
+  })
+})
+
+// pino UTC ISO → KST HH:mm:ss 표시 (mcp-logs UI 용).
+describe('formatKstTime', () => {
+  it('UTC ISO → KST 시각 (+9h)', () => {
+    // 2026-07-21 00:15:30 UTC → 2026-07-21 09:15:30 KST
+    expect(formatKstTime('2026-07-21T00:15:30.123Z')).toBe('09:15:30')
+  })
+
+  it('KST 자정 넘김 (UTC 15:00 → KST 다음날 00:00)', () => {
+    expect(formatKstTime('2026-07-20T15:00:00.000Z')).toBe('00:00:00')
+  })
+
+  it('KST 저녁 (UTC 12:00 → KST 21:00)', () => {
+    expect(formatKstTime('2026-07-21T12:34:56.000Z')).toBe('21:34:56')
+  })
+
+  it('undefined / 빈 문자열 → 빈 문자열', () => {
+    expect(formatKstTime(undefined)).toBe('')
+    expect(formatKstTime('')).toBe('')
+  })
+
+  it('잘못된 ISO → 빈 문자열 (crash 방지)', () => {
+    expect(formatKstTime('not-a-date')).toBe('')
   })
 })

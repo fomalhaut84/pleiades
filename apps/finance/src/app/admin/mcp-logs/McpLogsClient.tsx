@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { KNOWN_MSGS, MSG_LABELS, LEVEL_ORDER, recentLogDates } from '@/lib/mcp-logs/constants'
+import { KNOWN_MSGS, MSG_LABELS, LEVEL_ORDER, recentLogDates, formatKstTime } from '@/lib/mcp-logs/constants'
 import LiveTailPanel from './LiveTailPanel'
 
 interface LogRow {
@@ -382,7 +382,7 @@ export default function McpLogsClient() {
                 <li key={`${r.lineNo ?? idx}`} className="px-5 py-3 hover:bg-surface-dim transition-colors">
                   <div className="flex flex-wrap items-center gap-2 text-[11px]">
                     <span className="text-dim font-mono">L{r.lineNo}</span>
-                    <span className="text-sub tabular-nums">{r.time?.slice(11, 19)}</span>
+                    <span className="text-sub tabular-nums" title="KST">{formatKstTime(r.time)}</span>
                     <span className={`px-2 py-0.5 rounded border font-semibold ${levelCls}`}>{r.level}</span>
                     {r.msg && (
                       <span className="px-2 py-0.5 rounded bg-surface-dim border border-border text-bright font-mono">
