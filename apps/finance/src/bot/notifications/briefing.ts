@@ -50,6 +50,11 @@ export async function sendBriefing(
       timeout: 300_000,
       maxBudgetUsd: 1.0,
       caller: 'cron:briefing',
+      // #483: 브리핑은 MCP 도구 (get_all_strategies / get_portfolio 등) 사용이
+      // 필수. tools/list 는 성공했으나 tool 을 한 번도 호출하지 않고 "도구 접근
+      // 불가" 안내 텍스트만 리턴하는 케이스를 no_tool_used AdvisorError 로
+      // 재분류 → catch 블록 fallback + monitor alert 동작.
+      expectsTools: true,
     })
 
     const html = markdownToTelegramHtml(result.response)

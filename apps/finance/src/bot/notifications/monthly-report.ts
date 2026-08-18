@@ -36,7 +36,13 @@ export async function sendMonthlyReport(chatIds: number[]): Promise<void> {
     `6. 주요 관찰 사항 및 다음 달 체크포인트`
 
   try {
-    const result = await askAdvisor(prompt, { model: 'sonnet', timeout: 300_000, caller: 'cron:monthly_report' })
+    const result = await askAdvisor(prompt, {
+      model: 'sonnet',
+      timeout: 300_000,
+      caller: 'cron:monthly_report',
+      // #483: 월간 리포트도 포트폴리오/거래/배당/소비/증여세 MCP 도구 사용 필수.
+      expectsTools: true,
+    })
 
     const html = markdownToTelegramHtml(result.response)
 

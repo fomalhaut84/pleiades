@@ -110,6 +110,8 @@ async function sendReview(
       timeout: 300_000,
       maxBudgetUsd: 1.0,
       caller: 'cron:active_review',
+      // #483: 능동 리뷰는 보유 종목·TA·전략 MCP 도구 사용 필수.
+      expectsTools: true,
     })
 
     const html = markdownToTelegramHtml(result.response)
