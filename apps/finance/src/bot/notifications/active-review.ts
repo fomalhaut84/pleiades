@@ -112,6 +112,10 @@ async function sendReview(
       caller: 'cron:active_review',
       // #483: 능동 리뷰는 보유 종목·TA·전략 MCP 도구 사용 필수.
       expectsTools: true,
+      // #486: 5회 재시도 (총 6회, 90초 backoff, 최대 ~13분).
+      retryOnNoToolUsed: 5,
+      // Codex #487 P2: 15분 상한 강제.
+      overallTimeoutMs: 900_000,
     })
 
     const html = markdownToTelegramHtml(result.response)

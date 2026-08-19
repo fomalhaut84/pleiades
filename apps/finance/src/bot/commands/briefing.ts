@@ -31,13 +31,15 @@ async function handleBriefing(ctx: Context): Promise<void> {
 
   // 종목 심층 분석: 한국/미국 키워드가 아닌 인자 → 종목으로 판단
   if (args && !SESSION_KEYWORDS.has(args)) {
-    await ctx.reply(`🔍 ${args.toUpperCase()} 심층 분석 중... (1~2분 소요)`)
+    // Codex #487 P2: retryOnNoToolUsed 로 최대 ~13분 걸릴 수 있음 (통상 1~2분).
+    await ctx.reply(`🔍 ${args.toUpperCase()} 심층 분석 중... (통상 1~2분, 최대 10분 이상 걸릴 수 있어요)`)
     fireTickerAnalysis(ctx, chatId, args.toUpperCase())
     return
   }
 
-  // 전체 모닝 브리핑
-  await ctx.reply('📊 브리핑 생성 중... (1~2분 소요)')
+  // 전체 모닝 브리핑 — #486 재시도 도입으로 최대 ~13분 (통상 1~2분, 도구 미호출
+  // flaky 시 재시도로 지연). 사용자가 프리즈로 오해하지 않도록 상한 안내.
+  await ctx.reply('📊 브리핑 생성 중... (통상 1~2분, 최대 10분 이상 걸릴 수 있어요)')
 
   let session: 'KR' | 'US'
   if (args === '한국' || args === 'kr' || args === 'KR') {
@@ -80,7 +82,17 @@ function fireTickerAnalysis(ctx: Context, chatId: number, ticker: string): void 
     '- 종합 판단 + 주의사항',
   ].join('\n')
 
-  askAdvisor(prompt, { model: 'sonnet', timeout: 300_000, maxBudgetUsd: 1.0, caller: 'bot:brief_command', expectsTools: true })
+  askAdvisor(prompt, {
+    model: 'sonnet',
+    timeout: 300_000,
+    maxBudgetUsd: 1.0,
+    caller: 'bot:brief_command',
+    expectsTools: true,
+    // #486: 5회 재시도 (총 6회, 90초 backoff, 최대 ~13분).
+    retryOnNoToolUsed: 5,
+    // Codex #487 P2: 15분 상한 강제.
+    overallTimeoutMs: 900_000,
+  })
     .then(async (result) => {
       const html = markdownToTelegramHtml(result.response)
       if (html.length <= 4096) {
