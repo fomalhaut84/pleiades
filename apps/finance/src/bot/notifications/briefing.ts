@@ -55,6 +55,13 @@ export async function sendBriefing(
       // 불가" 안내 텍스트만 리턴하는 케이스를 no_tool_used AdvisorError 로
       // 재분류 → catch 블록 fallback + monitor alert 동작.
       expectsTools: true,
+      // #486: no_tool_used 는 재시도로 대부분 해결되는 flaky 현상. 5회 재시도
+      // (총 6회 시도, 90초 backoff, 최대 ~13분) → 15분 예산 안. 사용자 관점
+      // fallback 최소화.
+      retryOnNoToolUsed: 5,
+      // Codex #487 P2: 각 subprocess timeout 300s × 6 + backoff 90s × 5 는
+      // 최악 37.5분. overallTimeoutMs 로 전체 15분 상한 강제.
+      overallTimeoutMs: 900_000,
     })
 
     const html = markdownToTelegramHtml(result.response)
