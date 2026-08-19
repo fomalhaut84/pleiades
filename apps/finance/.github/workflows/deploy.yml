@@ -153,8 +153,18 @@ jobs:
 
       # 배포 결과 텔레그램 알림 — myfinance-bot 인프라 재활용. raw curl 로 third-party action 의존 X.
       # 토큰은 GitHub Actions가 자동 마스킹. 성공/실패 모두 알림 (무알림이 더 위험).
+      #
+      # #489: 이전 구현 (head -c 800 bytes-based truncate + --data-urlencode) 은 한글/
+      # 이모지의 UTF-8 바이트 경계 중간에서 잘려 invalid sequence → Telegram 400
+      # "text must be encoded in UTF-8" → workflow status = failure → 배포 성공 케이스
+      # 도 사용자에게 "실패" 알림 오탐. 개선:
+      #   - codepoint 기반 truncate (python3, multibyte-safe)
+      #   - jq 로 JSON body 조립 (UTF-8 escape 자동, --data-urlencode 대체)
+      #   - success step 에 continue-on-error: true — 알림 실패가 배포 결과에 영향 X
+      #     (실서비스는 이미 배포 성공. 오탐 방지 defensive layer)
       - name: Notify Telegram (success)
         if: success()
+        continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -176,31 +186,42 @@ jobs:
             notes_raw=$(gh release view "$RELEASE_TAG" --repo "$GH_REPO" --json body -q .body 2>/dev/null || true)
           fi
 
-          # 마크다운 노이즈 제거 → HTML 이스케이프. sed 순서: **bold** / ## 헤더 / 백틱 제거 / \/ \` 언이스케이프 후 HTML 이스케이프.
-          # ERE (-E) 로 헤더 매칭 (\+ 는 GNU/BSD sed 호환성 이슈). head -c 800 로 트림, 길이 비교로 잘림 감지.
+          # 마크다운 노이즈 제거 (bold/헤더/백틱). #489: HTML escape 은 jq 가 payload
+          # 조립 시 처리하므로 제거 (여기서 이중 escape 하면 <b> 태그도 &lt;b&gt; 됨).
+          # 태그는 jq --arg 로 안전하게 attach.
           processed=$(printf '%s' "$notes_raw" \
-            | sed -E -e 's/\\([`/])/\1/g' -e 's/\*\*//g' -e 's/^#+ //' -e 's/`//g' \
-            | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
-          notes=$(printf '%s' "$processed" | head -c 800)
-          if [[ ${#notes} -lt ${#processed} ]]; then
-            notes="${notes}…"
-          fi
+            | sed -E -e 's/\\([`/])/\1/g' -e 's/\*\*//g' -e 's/^#+ //' -e 's/`//g')
 
-          # printf 로 \n literal newline 처리 — multi-line YAML block scalar 들여쓰기 깨짐 회피.
-          if [[ -n "$notes" ]]; then
-            text=$(printf '✅ <b>myFinance Deploy %s</b> 성공\n서버: production\n\n<b>변경 내역</b>\n%s\n\n워크플로우: %s' "$RELEASE_TAG" "$notes" "$RUN_URL")
+          # #489: bytes-based truncate → codepoint 기반. 한글/이모지 중간을 자르면
+          # invalid UTF-8 sequence 로 Telegram 400. python3 은 ubuntu-latest 기본.
+          # one-liner 로 YAML indent / shell 인용 걱정 회피.
+          notes=$(printf '%s' "$processed" | python3 -c 'import sys; s=sys.stdin.read(); sys.stdout.write(s[:800] + ("…" if len(s) > 800 else ""))')
+
+          # HTML escape — Telegram parse_mode=HTML 이 요구. 태그 (<b>...</b>) 를
+          # 직접 삽입하는 부분은 escape 대상 아니라 아래 template 조립 후에는 하지 않음.
+          notes_escaped=$(printf '%s' "$notes" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+
+          # printf 로 literal newline 처리. escaped notes 는 HTML entity 만 남고 태그는 우리 template 만.
+          if [[ -n "$notes_escaped" ]]; then
+            text=$(printf '✅ <b>myFinance Deploy %s</b> 성공\n서버: production\n\n<b>변경 내역</b>\n%s\n\n워크플로우: %s' "$RELEASE_TAG" "$notes_escaped" "$RUN_URL")
           else
             text=$(printf '✅ <b>myFinance Deploy %s</b> 성공\n서버: production\n워크플로우: %s' "$RELEASE_TAG" "$RUN_URL")
           fi
+
+          # #489: --data-urlencode 대신 jq 로 JSON body — UTF-8 escape / 특수문자
+          # / 개행 모두 안전 처리. jq 는 ubuntu-latest 기본 설치.
+          payload=$(jq -cn \
+            --arg chat_id "$TELEGRAM_CHAT_ID" \
+            --arg text "$text" \
+            '{chat_id: $chat_id, parse_mode: "HTML", text: $text}')
 
           # 성공 응답 body (sent message + chat metadata) 는 chat 정보 노출 위험 → /tmp 로 격리.
           # 실패 (HTTP 4xx/5xx) 시에만 body 출력 + step fail (--fail-with-body).
           body=$(mktemp)
           if ! curl -sS --fail-with-body -o "$body" -X POST \
-            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
-            --data-urlencode "parse_mode=HTML" \
-            --data-urlencode "text=$text"; then
+            -H "Content-Type: application/json" \
+            --data "$payload" \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"; then
             echo "::error::Telegram sendMessage failed"
             cat "$body" >&2
             rm -f "$body"
@@ -210,6 +231,8 @@ jobs:
 
       - name: Notify Telegram (failure)
         if: failure()
+        # #489: 실패 알림은 배포가 이미 실패한 상태라 continue-on-error 없음 —
+        # 알림도 실패하면 workflow status 유지 (사용자가 GitHub UI 로 반드시 확인).
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -221,13 +244,17 @@ jobs:
             exit 0
           fi
           text=$(printf '❌ <b>myFinance Deploy %s</b> 실패\n워크플로우 로그: %s' "${RELEASE_TAG:-unknown}" "$RUN_URL")
+          # #489: success step 과 동일 jq JSON body 방식 (UTF-8 안전 + 일관성).
+          payload=$(jq -cn \
+            --arg chat_id "$TELEGRAM_CHAT_ID" \
+            --arg text "$text" \
+            '{chat_id: $chat_id, parse_mode: "HTML", text: $text}')
           # 실패 알림 자체가 또 실패해도 가시화. 성공 body 는 chat 정보 노출 위험 → /tmp 격리.
           body=$(mktemp)
           if ! curl -sS --fail-with-body -o "$body" -X POST \
-            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
-            --data-urlencode "parse_mode=HTML" \
-            --data-urlencode "text=$text"; then
+            -H "Content-Type: application/json" \
+            --data "$payload" \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"; then
             echo "::error::Telegram failure notification itself failed"
             cat "$body" >&2
             rm -f "$body"
