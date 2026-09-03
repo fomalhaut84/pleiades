@@ -1,0 +1,859 @@
+<title>myFinance × myFitness 통합 검토</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@500;700;800&family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+:root{
+  --ground:#f6f7f9;
+  --surface:#ffffff;
+  --surface-2:#eceff3;
+  --ink:#15191f;
+  --ink-2:#4d5763;
+  --ink-3:#7a8590;
+  --rule:#d9dfe6;
+  --rule-soft:#e6ebf0;
+  --fin:#0b8f61;
+  --fit:#22578f;
+  --cal:#7a4b9c;
+  --accent:#a8590c;
+  --risk:#a83420;
+  --shadow:0 1px 2px rgba(20,28,38,.05), 0 8px 24px -16px rgba(20,28,38,.28);
+
+  --f-display:"Gothic A1","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-mono:"IBM Plex Mono","SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#101317;
+    --surface:#171c22;
+    --surface-2:#1f252d;
+    --ink:#e9edf2;
+    --ink-2:#a8b2bd;
+    --ink-3:#79848f;
+    --rule:#2b333c;
+    --rule-soft:#232a32;
+    --fin:#34d399;
+    --fit:#6ba6de;
+    --cal:#bb92e0;
+    --accent:#e0913c;
+    --risk:#e8836d;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -18px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#101317;
+  --surface:#171c22;
+  --surface-2:#1f252d;
+  --ink:#e9edf2;
+  --ink-2:#a8b2bd;
+  --ink-3:#79848f;
+  --rule:#2b333c;
+  --rule-soft:#232a32;
+  --fin:#34d399;
+  --fit:#6ba6de;
+  --cal:#bb92e0;
+  --accent:#e0913c;
+  --risk:#e8836d;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -18px rgba(0,0,0,.8);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--ground);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:15.5px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 96px}
+
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0}
+h1{font-weight:800;font-size:clamp(30px,4.6vw,46px);line-height:1.14;letter-spacing:-.022em}
+h2{font-weight:800;font-size:clamp(21px,2.6vw,26px);letter-spacing:-.014em;line-height:1.3}
+h3{font-weight:700;font-size:17px;letter-spacing:-.008em;line-height:1.4}
+p{margin:0}
+a{color:var(--accent);text-underline-offset:3px;text-decoration-thickness:1px}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+
+/* ---- masthead ---- */
+.masthead{padding:64px 0 0}
+.kicker{
+  font-family:var(--f-mono);font-size:11.5px;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);
+  display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap;
+}
+.kicker .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);flex:none}
+.dek{font-size:18px;line-height:1.66;color:var(--ink-2);margin-top:20px;max-width:62ch}
+.dek strong{color:var(--ink);font-weight:600}
+.meta{
+  margin-top:32px;padding-top:16px;border-top:1px solid var(--rule);
+  display:flex;flex-wrap:wrap;gap:8px 32px;
+  font-family:var(--f-mono);font-size:12px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;
+}
+.meta b{color:var(--ink-2);font-weight:500}
+
+/* ---- section frame ---- */
+section{margin-top:72px}
+.eyebrow{
+  font-family:var(--f-mono);font-size:11px;font-weight:500;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--ink-3);margin-bottom:10px;
+}
+.sec-head{border-top:2px solid var(--ink);padding-top:14px;margin-bottom:28px}
+.sec-head .eyebrow{margin-bottom:6px}
+.sec-head p{color:var(--ink-2);margin-top:10px;max-width:66ch;font-size:15px}
+
+/* ---- revision block ---- */
+.rev{
+  margin-top:44px;background:var(--surface);border:1px solid var(--rule);
+  border-left:3px solid var(--accent);border-radius:0 8px 8px 0;
+  padding:24px 26px;box-shadow:var(--shadow);
+}
+.rev .eyebrow{margin-bottom:8px}
+.rev h2{font-size:20px;margin-bottom:12px}
+.rev p{color:var(--ink-2);font-size:14.5px;max-width:66ch}
+.rev p + p{margin-top:11px}
+.quote{
+  margin-top:16px;padding:14px 0 14px 18px;border-left:2px solid var(--rule);
+  font-size:14px;color:var(--ink-2);font-style:normal;
+}
+.quote cite{display:block;margin-top:8px;font-family:var(--f-mono);font-size:11px;font-style:normal;color:var(--ink-3);letter-spacing:.06em}
+
+/* ---- answers ---- */
+.answers{display:flex;flex-direction:column;gap:0;margin-top:6px}
+.ans{
+  display:grid;grid-template-columns:46px 1fr auto;gap:0 18px;align-items:baseline;
+  padding:15px 0;border-bottom:1px solid var(--rule-soft);
+}
+.ans:first-child{border-top:1px solid var(--rule-soft)}
+.ans-id{font-family:var(--f-mono);font-size:12px;font-weight:500;color:var(--accent)}
+.ans-q{font-size:14.5px;color:var(--ink-2)}
+.ans-q b{color:var(--ink);font-weight:600;display:block;font-family:var(--f-display);font-size:15.5px;margin-bottom:2px}
+.ans-v{
+  font-family:var(--f-mono);font-size:12.5px;font-weight:500;color:var(--ink);
+  white-space:nowrap;text-align:right;
+}
+
+/* ---- tables ---- */
+.tscroll{overflow-x:auto;margin:0 -4px;padding:0 4px}
+table{border-collapse:collapse;width:100%;min-width:520px;font-size:14px}
+th,td{text-align:left;padding:11px 14px 11px 0;vertical-align:top;border-bottom:1px solid var(--rule-soft)}
+thead th{
+  font-family:var(--f-mono);font-size:10.5px;font-weight:500;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-3);border-bottom:1px solid var(--rule);
+  padding-bottom:8px;white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:none}
+td.num,th.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.rowlabel{font-weight:600;color:var(--ink);white-space:nowrap}
+.fin{color:var(--fin);font-weight:500}
+.fit{color:var(--fit);font-weight:500}
+.gap{color:var(--accent);font-weight:500}
+.none{color:var(--ink-3)}
+code{
+  font-family:var(--f-mono);font-size:.88em;background:var(--surface-2);
+  padding:1.5px 5px;border-radius:3px;color:var(--ink);white-space:nowrap;
+}
+
+/* ---- findings ---- */
+.findings{display:flex;flex-direction:column;gap:0}
+.finding{
+  display:grid;grid-template-columns:auto 1fr;gap:0 22px;
+  padding:24px 0;border-bottom:1px solid var(--rule-soft);
+}
+.finding:first-child{border-top:1px solid var(--rule-soft)}
+.fmark{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;color:var(--accent);
+  padding-top:5px;white-space:nowrap;font-weight:500;
+}
+.fmark.new::after{
+  content:"NEW";display:block;margin-top:5px;font-size:9px;letter-spacing:.12em;
+  color:var(--fin);
+}
+.finding h3{margin-bottom:8px}
+.finding p{color:var(--ink-2);max-width:64ch;font-size:14.5px}
+.finding p + p{margin-top:10px}
+.pullout{
+  margin-top:14px;padding:14px 16px;background:var(--surface);
+  border-left:3px solid var(--accent);border-radius:0 5px 5px 0;
+  font-size:14px;color:var(--ink);box-shadow:var(--shadow);
+}
+.pullout b{font-weight:600}
+
+/* ---- figure ---- */
+.fig{margin-top:18px}
+.figbox{overflow-x:auto;background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:8px 10px}
+.fig svg{display:block;min-width:600px;width:100%;height:auto}
+.fig svg text{font-family:var(--f-mono);font-size:10.5px;fill:var(--ink-2)}
+.fig svg text.hdr{font-family:var(--f-display);font-size:12.5px;font-weight:700;fill:var(--ink);letter-spacing:.01em}
+.fig svg text.big{font-size:11.5px;font-weight:500;fill:var(--ink)}
+.fig svg text.tiny{font-size:9.5px;fill:var(--ink-3)}
+.figcap{margin-top:9px;font-size:12.5px;color:var(--ink-3);font-family:var(--f-mono);line-height:1.6}
+
+/* ---- option ladder ---- */
+.ladder{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.opt{
+  background:var(--surface);border:1px solid var(--rule);border-radius:7px;
+  padding:18px 20px;display:grid;grid-template-columns:56px 1fr;gap:0 18px;align-items:start;
+}
+.opt.pick{border-color:var(--accent);box-shadow:var(--shadow)}
+.opt-id{
+  font-family:var(--f-mono);font-size:13px;font-weight:500;color:var(--ink-3);
+  padding-top:2px;letter-spacing:.02em;
+}
+.opt.pick .opt-id{color:var(--accent)}
+.opt-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.opt-body{font-size:14.5px;color:var(--ink-2)}
+.opt-body p + p{margin-top:9px}
+.opt dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:12px 0 0;font-size:13.5px}
+.opt dt{
+  font-family:var(--f-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3);padding-top:4px;white-space:nowrap;
+}
+.opt dd{margin:0;color:var(--ink-2)}
+.chip{
+  font-family:var(--f-mono);font-size:10.5px;font-weight:500;letter-spacing:.06em;
+  padding:3px 9px;border-radius:99px;white-space:nowrap;border:1px solid;
+}
+.chip.r1{color:var(--fin);border-color:color-mix(in srgb,var(--fin) 40%,transparent);background:color-mix(in srgb,var(--fin) 9%,transparent)}
+.chip.r2{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent);background:color-mix(in srgb,var(--accent) 9%,transparent)}
+.chip.r3{color:var(--risk);border-color:color-mix(in srgb,var(--risk) 40%,transparent);background:color-mix(in srgb,var(--risk) 9%,transparent)}
+.chip.now{color:var(--ink-3);border-color:var(--rule);background:var(--surface-2)}
+.chip.req{color:var(--cal);border-color:color-mix(in srgb,var(--cal) 40%,transparent);background:color-mix(in srgb,var(--cal) 9%,transparent)}
+
+/* ---- risks ---- */
+.risks{display:grid;grid-template-columns:repeat(auto-fit,minmax(268px,1fr));gap:1px;background:var(--rule-soft);border:1px solid var(--rule-soft);border-radius:7px;overflow:hidden}
+.risk{background:var(--surface);padding:18px 20px}
+.risk h3{font-size:14.5px;margin-bottom:7px;display:flex;align-items:center;gap:8px}
+.risk h3::before{content:"";width:3px;height:14px;background:var(--risk);border-radius:2px;flex:none}
+.risk p{font-size:13.5px;color:var(--ink-2);line-height:1.62}
+
+/* ---- roadmap ---- */
+.stages{margin-top:8px;border-left:2px solid var(--rule);padding-left:0}
+.stage{position:relative;padding:0 0 30px 30px}
+.stage:last-child{padding-bottom:0}
+.stage::before{
+  content:attr(data-n);position:absolute;left:-13px;top:1px;
+  width:24px;height:24px;border-radius:50%;background:var(--ground);
+  border:2px solid var(--rule);color:var(--ink-3);
+  font-family:var(--f-mono);font-size:11px;font-weight:500;
+  display:flex;align-items:center;justify-content:center;
+}
+.stage.live::before{border-color:var(--accent);color:var(--accent)}
+.stage-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.stage .when{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px}
+.stage p{font-size:14.5px;color:var(--ink-2);max-width:64ch}
+.stage p + p{margin-top:9px}
+.stopline{
+  margin-top:11px;font-size:13px;color:var(--ink-2);
+  padding:9px 13px;background:var(--surface-2);border-radius:5px;
+  display:flex;gap:9px;align-items:baseline;
+}
+.stopline b{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--fin);white-space:nowrap;font-weight:500}
+.delta{
+  margin-top:11px;font-size:13px;color:var(--ink-2);
+  padding:9px 13px;border:1px dashed var(--rule);border-radius:5px;
+  display:flex;gap:9px;align-items:baseline;
+}
+.delta b{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);white-space:nowrap;font-weight:500}
+
+/* ---- questions ---- */
+.qs{display:flex;flex-direction:column;gap:0;margin-top:4px}
+.q{padding:20px 0;border-bottom:1px solid var(--rule-soft);display:grid;grid-template-columns:auto 1fr;gap:0 20px}
+.q:first-child{border-top:1px solid var(--rule-soft)}
+.qm{font-family:var(--f-mono);font-size:11px;color:var(--accent);padding-top:4px;font-weight:500}
+.q h3{margin-bottom:6px;font-size:16px}
+.q p{font-size:14px;color:var(--ink-2);max-width:62ch}
+
+/* ---- sources ---- */
+.sources{margin-top:72px;padding-top:20px;border-top:1px solid var(--rule);font-size:13px;color:var(--ink-3)}
+.sources h3{font-size:12px;font-family:var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);font-weight:500;margin-bottom:12px}
+.sources ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px}
+.sources li{line-height:1.6}
+
+@media (max-width:640px){
+  .wrap{padding:0 18px 72px}
+  .masthead{padding-top:44px}
+  .finding,.q{grid-template-columns:1fr;gap:8px}
+  .fmark,.qm{padding-top:0}
+  .fmark.new::after{display:inline;margin-left:8px}
+  .opt{grid-template-columns:1fr;gap:10px}
+  .opt-id{padding-top:0}
+  .ans{grid-template-columns:36px 1fr;gap:0 12px}
+  .ans-v{text-align:left;grid-column:2;margin-top:4px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <div class="kicker"><span class="dot"></span>통합 방향 노트<span class="dot"></span>개정 002<span class="dot"></span>단계 0 실행</div>
+  <h1>myFinance × myFitness<br>통합 검토</h1>
+  <p class="dek">두 프로젝트는 이미 <strong>같은 아키텍처의 두 갈래</strong>다. 처음 질문은 "어디까지 합치고 어디서 멈출까?"였다. 목표가 <strong>개인 비서 플랫폼</strong>으로 확정되면서 답이 바뀌었다 — 멈추는 지점을 찾는 문제가 아니라, <strong>도메인을 계속 붙일 수 있는 자리를 만드는 문제</strong>다. 가는 길은 그대로 되돌리기 비용 순이다.</p>
+  <div class="meta">
+    <span><b>초판</b> 2026-09-03 (001)</span>
+    <span><b>개정</b> 2026-09-03 (002)</span>
+    <span><b>myFinance</b> v0.16.4 · dev clean</span>
+    <span><b>myFitness</b> v2.27.2 · dev clean</span>
+  </div>
+</header>
+
+<!-- ============ 개정 ============ -->
+<div class="rev">
+  <div class="eyebrow">001 → 002</div>
+  <h2>무엇이 바뀌었나</h2>
+  <p>001 은 이렇게 끝났다 — <em>"B1(공유 패키지)에서 멈추는 게 현실적으로 가장 좋은 종착지일 수 있다. B2(모노레포)는 '저장소가 둘이라 아프다'가 실제로 관측될 때만."</em></p>
+  <p>그 결론은 <b>저장소가 영원히 둘</b>이라는 전제 위에 서 있었다. Q1 의 답이 그 전제를 깬다.</p>
+  <div class="quote">
+    "지금 재무/건강 관리에서 더 확장될 여지가 있어. 개인 비서 형식으로 확장하고자해. 핵심은 각 기능별로 파편화 된 기능을 한곳에 모아두고자 하는거야. 그러면 다른 방향으로 확장도 추가 프로젝트 없이 확장 가능할테고, 그거에 따라서 알림 시스템도 기존 텔레그램에서 디스코드나 슬랙으로 바꾸고자해."
+    <cite>사용자 · 2026-09-03</cite>
+  </div>
+  <p>도메인을 계속 늘리는 것이 목표라면 <b>B2 는 증거를 기다릴 선택지가 아니라 요구사항 그 자체</b>다. B0 에서 도메인 #3 을 붙이면 저장소 하나 + PM2 3개 + 봇 하나 + <code>logger.ts</code>·<code>session-utils.ts</code> 사본이 또 생긴다. 지금 관측된 드리프트가 3배가 된다.</p>
+  <p>다만 <b>가는 길은 그대로 되돌리기 비용 순이다.</b> 달라지는 건 종착지를 알고 가므로 각 단계를 <em>모노레포 호환 형태로</em> 해야 한다는 점뿐이다.</p>
+</div>
+
+<!-- ============ 확정된 답 ============ -->
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">확정</div>
+    <h2>답이 나온 질문</h2>
+    <p>Q1·Q4 는 001 의 미결 질문이고, Q5·Q6 은 그 답에서 새로 생겼다.</p>
+  </div>
+
+  <div class="answers">
+    <div class="ans">
+      <div class="ans-id">Q1</div>
+      <div class="ans-q"><b>"키운다"의 목표가 제품인가, 개발 효율인가</b>둘 다 아니다 — 플랫폼이다. 도메인을 계속 늘린다</div>
+      <div class="ans-v">개인 비서 플랫폼</div>
+    </div>
+    <div class="ans">
+      <div class="ans-id">Q4</div>
+      <div class="ans-q"><b>myFitness 에 테스트를 붙일 의향이 있나</b>공유 패키지(B1)의 전제 조건이 풀렸다</div>
+      <div class="ans-v">붙인다</div>
+    </div>
+    <div class="ans">
+      <div class="ans-id">Q5</div>
+      <div class="ans-q"><b>도메인 #3 은 무엇인가</b>N=2 로 만든 추상화는 셋째에서 깨진다. 계약을 설계하려면 세 번째가 필요하다</div>
+      <div class="ans-v">일정·캘린더</div>
+    </div>
+    <div class="ans">
+      <div class="ans-id">Q6</div>
+      <div class="ans-q"><b>알림 채널을 어디로 옮기나</b>도메인별 채널이 곧 통합 인박스가 된다</div>
+      <div class="ans-v">Discord</div>
+    </div>
+  </div>
+
+  <div class="pullout" style="margin-top:22px"><b>왜 캘린더인가.</b> 001 의 예시 질문 — <em>"이번 달 야근이 늘었는데 수면·러닝 부하와 외식비가 같이 어떻게 움직였나"</em> — 이 실제로 답 가능해지는 유일한 도메인이다. 야근은 캘린더에 있다. 게다가 재무·건강 <b>양쪽 모두와 교차</b>하고, 스키마가 이벤트 시계열이라 기존 둘(거래 시계열 / 활동 시계열)과 형태가 같다. 도메인 계약이 <b>시계열 + 집계 + 알림</b>으로 수렴하는지 검증하기에 가장 좋은 셋째다.</div>
+</section>
+
+<!-- ============ 현재 좌표 ============ -->
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">현재 좌표</div>
+    <h2>두 프로젝트는 얼마나 닮았나</h2>
+    <p>실측값이다. 스택은 사실상 동일하고, 갈라진 곳은 버전·테스트·성숙도뿐이다.</p>
+  </div>
+
+  <div class="tscroll">
+    <table>
+      <thead>
+        <tr><th></th><th>myFinance</th><th>myFitness</th><th>판정</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="rowlabel">도메인</td><td>가족 자산·가계부·세금</td><td>Garmin 기반 피트니스</td><td class="none">무관</td></tr>
+        <tr><td class="rowlabel">프레임워크</td><td class="num">Next 15.5.16 / React 19.2.7</td><td class="num">Next 16.2.6 / React 19.2.5</td><td class="gap">1 major 차</td></tr>
+        <tr><td class="rowlabel">DB</td><td class="num">PostgreSQL + Prisma 6.19.2</td><td class="num">PostgreSQL + Prisma 6.19.3</td><td class="fin">동일</td></tr>
+        <tr><td class="rowlabel">UI</td><td>Tailwind + Recharts</td><td>Tailwind + Recharts</td><td class="fin">동일</td></tr>
+        <tr><td class="rowlabel">봇</td><td>grammY standalone + node-cron</td><td>grammY standalone + node-cron</td><td class="fin">동일</td></tr>
+        <tr><td class="rowlabel">봇 디렉터리 구조</td><td class="num">middleware·utils·commands·notifications</td><td class="num">middleware·utils·commands·notifications</td><td class="fin">완전 동일</td></tr>
+        <tr><td class="rowlabel">MCP 서버</td><td class="num">HTTP · 127.0.0.1:4210</td><td class="num">HTTP · 127.0.0.1:4301</td><td class="fin">동일 패턴</td></tr>
+        <tr><td class="rowlabel">AI 어드바이저</td><td><code>claude -p</code> + MCP</td><td><code>claude -p</code> + MCP</td><td class="fin">동일</td></tr>
+        <tr><td class="rowlabel">배포</td><td class="num">PM2 + Nginx · :4100</td><td class="num">PM2 + Nginx · :4200</td><td class="fin">같은 서버</td></tr>
+        <tr><td class="rowlabel">테스트</td><td>vitest (<code>test:run</code>)</td><td class="none">test 스크립트 없음</td><td class="gap">비대칭 · Q4 로 해소 예정</td></tr>
+        <tr><td class="rowlabel">버전 체계</td><td class="num">v0.16.4 (18차 마일스톤)</td><td class="num">v2.27.2 (M14+)</td><td class="gap">불일치</td></tr>
+        <tr><td class="rowlabel">하네스</td><td class="num">agent 4 · skill 7 · rule 5</td><td class="num">agent 5 · skill 9 · rule 3</td><td class="gap">쌍둥이, 다른 이름</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ 핵심 발견 ============ -->
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">핵심 발견</div>
+    <h2>조사에서 나온 여섯 가지</h2>
+    <p>1~3 은 001 의 발견이고, 4~6 은 Q6(알림 채널) 결정 뒤 새로 측정한 것이다.</p>
+  </div>
+
+  <div class="findings">
+    <div class="finding">
+      <div class="fmark">발견 1</div>
+      <div>
+        <h3>"통합"은 하나가 아니라 두 개의 축이다</h3>
+        <p><b>축 A — 하네스·세션 통합</b>: Claude Code 를 어떻게 쓰느냐의 문제. 스킬·에이전트·규칙·메모리·세션. 코드는 한 줄도 안 건드린다.</p>
+        <p><b>축 B — 코드·제품 통합</b>: 저장소와 런타임의 문제. 공유 패키지, 모노레포, 단일 앱.</p>
+        <p>두 축은 <b>따로 결정할 수 있다.</b> 축 A 는 축 B 없이도 이득이 나고, 축 B 는 축 A 가 먼저 있으면 훨씬 싸진다. 순서가 정해지는 지점이다.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="fmark">발견 2</div>
+      <div>
+        <h3>하네스는 이미 쌍둥이인데, 이름만 다르게 두 번 만들어졌다</h3>
+        <p>같은 역할의 스킬이 양쪽에 다른 이름으로 존재한다. 더 중요한 건 <b>각자에게만 있는 스킬</b>이다 — 합집합을 취하면 양쪽 다 즉시 좋아진다.</p>
+        <div class="tscroll" style="margin-top:14px">
+          <table>
+            <thead><tr><th>역할</th><th>myFinance</th><th>myFitness</th></tr></thead>
+            <tbody>
+              <tr><td class="rowlabel">세션 재개</td><td><code>session-resume</code></td><td><code>session-primer</code></td></tr>
+              <tr><td class="rowlabel">세션 인계</td><td><code>session-boundary</code></td><td><code>session-handoff</code></td></tr>
+              <tr><td class="rowlabel">오케스트레이터</td><td><code>milestone-workflow</code></td><td><code>myfitness-orchestrator</code></td></tr>
+              <tr><td class="rowlabel">릴리즈</td><td><code>release-publisher</code></td><td><code>release-flow</code></td></tr>
+              <tr><td class="rowlabel">Codex 대응</td><td><code>codex-response-patterns</code></td><td><code>codex-review-loop</code></td></tr>
+              <tr><td class="rowlabel">검증 4종</td><td><code>project-verify</code></td><td class="none">없음</td></tr>
+              <tr><td class="rowlabel">스펙 작성</td><td><code>project-spec-writer</code></td><td class="none">없음</td></tr>
+              <tr><td class="rowlabel">운영 진단</td><td class="none">없음</td><td><code>ops-diagnose</code></td></tr>
+              <tr><td class="rowlabel">Prisma 드리프트</td><td class="none">없음</td><td><code>prisma-drift-fix</code></td></tr>
+              <tr><td class="rowlabel">orphan 커밋 확인</td><td class="none">memory 로만 존재</td><td><code>orphan-check</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pullout">코드 쪽 중복도 같은 모양이다. <code>mcp/session-utils.ts</code> 는 양쪽 다 44줄인데 22줄이 다르다 — 같은 파일이 복사된 뒤 각자 흘러간 것. <code>claude-advisor.ts</code>, <code>mcp/logger.ts</code>, <code>bot/utils/{error,formatter,telegram}.ts</code> 도 같은 상태다.</div>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="fmark">발견 3</div>
+      <div>
+        <h3>AI 어드바이저 통합은 코드 통합 없이 지금도 된다</h3>
+        <p>두 MCP 서버는 이미 같은 서버에서 로컬 HTTP 로 상주 중이다 (<code>:4210</code>, <code>:4301</code>). <code>mcp-config.json</code> 한 파일에 두 항목을 함께 넣으면, <b>하나의 Claude 세션이 재무와 건강 데이터를 동시에 본다.</b></p>
+        <div class="pullout"><b>이게 "키운다"의 실체다.</b> 저장소를 합쳐야 얻는 게 아니다. "이번 달 야근이 늘었는데 수면·러닝 부하와 외식비가 같이 어떻게 움직였나" 같은 질문은 두 MCP 를 한 세션에 물리는 순간 답이 가능해진다. 되돌리기는 JSON 두 줄 삭제.</div>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="fmark new">발견 4</div>
+      <div>
+        <h3>알림 채널 교체는 절반만 싸다</h3>
+        <p>아웃바운드(알림 발신)와 인바운드(봇 명령)의 비용이 완전히 다르다. 이걸 구분하지 않으면 <b>비싼 쪽을 두 번 하고 버리게 된다.</b></p>
+
+        <div class="fig">
+          <div class="figbox">
+            <svg viewBox="0 0 620 392" role="img" aria-label="아웃바운드는 초크포인트 한 곳을 지나 어댑터로 교체 가능하고, 인바운드는 30개 파일에 210건이 흩어져 재작성이 필요하다">
+              <defs>
+                <marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M0,0 L8,4 L0,8 z" fill="var(--ink-3)"></path>
+                </marker>
+                <marker id="arg" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M0,0 L8,4 L0,8 z" fill="var(--fin)"></path>
+                </marker>
+              </defs>
+
+              <!-- ROW 1 : outbound -->
+              <text class="hdr" x="4" y="16">아웃바운드 · 알림 발신</text>
+              <text class="tiny" x="176" y="16">알림 모듈 21개 → 저장소당 초크포인트 1곳 → 어댑터 교체</text>
+
+              <rect x="4" y="34" width="126" height="22" rx="4" fill="var(--surface-2)" stroke="var(--rule)"></rect>
+              <text x="14" y="48">daily.ts</text>
+              <rect x="4" y="62" width="126" height="22" rx="4" fill="var(--surface-2)" stroke="var(--rule)"></rect>
+              <text x="14" y="76">briefing.ts</text>
+              <rect x="4" y="90" width="126" height="22" rx="4" fill="var(--surface-2)" stroke="var(--rule)"></rect>
+              <text x="14" y="104">budget-alert.ts</text>
+              <rect x="4" y="118" width="126" height="22" rx="4" fill="var(--surface-2)" stroke="var(--rule)"></rect>
+              <text class="tiny" x="14" y="132">… 알림 모듈 21개</text>
+
+              <path d="M130,45 L196,101" stroke="var(--fin)" stroke-opacity=".5" fill="none" marker-end="url(#arg)"></path>
+              <path d="M130,73 L196,101" stroke="var(--fin)" stroke-opacity=".5" fill="none" marker-end="url(#arg)"></path>
+              <path d="M130,101 L196,101" stroke="var(--fin)" stroke-opacity=".5" fill="none" marker-end="url(#arg)"></path>
+              <path d="M130,129 L196,101" stroke="var(--fin)" stroke-opacity=".5" fill="none" marker-end="url(#arg)"></path>
+
+              <rect x="204" y="78" width="136" height="46" rx="5" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"></rect>
+              <text class="big" x="214" y="96">sendHtml</text>
+              <text class="tiny" x="284" y="96" fill="var(--fin)">fin</text>
+              <text class="big" x="214" y="113">sendToAll</text>
+              <text class="tiny" x="284" y="113" fill="var(--fit)">fit</text>
+              <text class="tiny" x="204" y="140">저장소당 원시 전송 1파일</text>
+
+              <path d="M340,101 L378,101" stroke="var(--ink-3)" fill="none" marker-end="url(#ar)"></path>
+
+              <rect x="386" y="82" width="104" height="38" rx="5" fill="var(--surface)" stroke="var(--fin)" stroke-width="2"></rect>
+              <text class="big" x="398" y="99">Notifier</text>
+              <text class="tiny" x="398" y="113">인터페이스</text>
+
+              <path d="M490,95 L534,66" stroke="var(--ink-3)" fill="none" marker-end="url(#ar)"></path>
+              <path d="M490,107 L534,136" stroke="var(--ink-3)" fill="none" marker-end="url(#ar)"></path>
+
+              <rect x="540" y="52" width="76" height="28" rx="4" fill="var(--surface-2)" stroke="var(--rule)"></rect>
+              <text x="551" y="70">Telegram</text>
+              <rect x="540" y="122" width="76" height="28" rx="4" fill="var(--surface)" stroke="var(--fin)" stroke-width="2"></rect>
+              <text class="big" x="553" y="140">Discord</text>
+
+              <line x1="4" y1="176" x2="616" y2="176" stroke="var(--rule)"></line>
+
+              <!-- ROW 2 : inbound -->
+              <text class="hdr" x="4" y="206">인바운드 · 봇 명령</text>
+              <text class="tiny" x="140" y="206">파일 30개 → 초크포인트 없음 → 재작성</text>
+
+              <rect x="4" y="224" width="126" height="22" rx="4" fill="var(--surface-2)" stroke="var(--rule)"></rect>
+              <text x="14" y="238">commands/ai.ts</text>
+              <text class="tiny" x="136" y="238">27건</text>
+
+              <rect x="4" y="252" width="126" height="22" rx="4" fill="var(--surface-2)" stroke="var(--rule)"></rect>
+              <text x="14" y="266">trade.ts</text>
+              <text class="tiny" x="136" y="266">15건</text>
+
+              <rect x="4" y="280" width="126" height="22" rx="4" fill="var(--surface-2)" stroke="var(--rule)"></rect>
+              <text x="14" y="294">expense.ts</text>
+              <text class="tiny" x="136" y="294">15건</text>
+
+              <rect x="4" y="308" width="126" height="22" rx="4" fill="var(--surface-2)" stroke="var(--rule)"></rect>
+              <text x="14" y="322">food.ts</text>
+              <text class="tiny" x="136" y="322">12건</text>
+
+              <rect x="4" y="336" width="126" height="22" rx="4" fill="var(--surface-2)" stroke="var(--rule)"></rect>
+              <text class="tiny" x="14" y="350">… 명령 파일 30개</text>
+
+              <path d="M176,235 L534,286" stroke="var(--risk)" stroke-opacity=".45" fill="none"></path>
+              <path d="M176,263 L534,290" stroke="var(--risk)" stroke-opacity=".45" fill="none"></path>
+              <path d="M176,291 L534,294" stroke="var(--risk)" stroke-opacity=".45" fill="none"></path>
+              <path d="M176,319 L534,298" stroke="var(--risk)" stroke-opacity=".45" fill="none"></path>
+              <path d="M176,347 L534,302" stroke="var(--risk)" stroke-opacity=".45" fill="none"></path>
+
+              <rect x="244" y="230" width="268" height="40" rx="4" fill="var(--surface)" opacity=".93"></rect>
+              <text class="big" x="254" y="249" fill="var(--risk)">210건 직접 호출</text>
+              <text class="tiny" x="254" y="264">grammY Context 관통 · 초크포인트 없음</text>
+
+              <rect x="540" y="276" width="76" height="28" rx="4" fill="var(--surface-2)" stroke="var(--rule)"></rect>
+              <text x="551" y="294">Telegram</text>
+            </svg>
+          </div>
+          <div class="figcap">아웃바운드 fin 3,378 + fit 1,212줄 · 인바운드 fin 3,968 + fit 1,843줄<br>전송 호출 fin 149 / fit 61 — 전부 인바운드 쪽에 몰려 있다</div>
+        </div>
+
+        <p style="margin-top:16px">아웃바운드는 이미 한 지점을 지난다 — myFinance 는 <code>bot/utils/telegram.ts</code>, myFitness 는 <code>bot/notifications/send.ts</code>. 알림 모듈 16개/5개 중 원시 전송을 직접 하는 건 각각 <b>1개뿐</b>이다. (같은 역할이 다른 파일에 있는 것 — 스킬 이름이 갈린 것과 정확히 같은 쌍둥이 패턴이고, 001 이 측정한 드리프트 142줄이 그 값이다.)</p>
+        <div class="pullout"><b>그래서 인바운드를 저장소별로 각각 Discord 로 옮기면 안 된다.</b> 비싼 작업을 두 번 하고, 통합할 때 버린다. 아웃바운드만 먼저 옮기고 인바운드는 단일 봇까지 텔레그램으로 둔다.</div>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="fmark new">발견 5</div>
+      <div>
+        <h3>텔레그램이 <code>src/bot</code> 밖으로 새어 있다</h3>
+        <p>채널을 바꾸면 봇 디렉터리만 고쳐서는 끝나지 않는다. 함께 손대야 하는 곳:</p>
+        <div class="tscroll" style="margin-top:14px">
+          <table>
+            <thead><tr><th>저장소</th><th>파일</th></tr></thead>
+            <tbody>
+              <tr><td class="rowlabel">양쪽 공통</td><td><code>src/mcp/logger.ts</code></td></tr>
+              <tr><td class="rowlabel fin">myFinance</td><td><code>src/lib/cron.ts</code> · <code>src/lib/ai/advisor-monitor.ts</code> · <code>src/app/api/alerts/history/[id]/retry/route.ts</code></td></tr>
+              <tr><td class="rowlabel fit">myFitness</td><td><code>src/lib/garmin/sync.ts</code> · <code>src/lib/monitoring/admin-alerts.ts</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="margin-top:12px">텔레그램을 참조하는 파일은 myFinance 43 / 424, myFitness 27 / 218 이다. 대부분은 봇 안이지만, 위 여섯 곳이 밖으로 나와 있다.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="fmark new">발견 6</div>
+      <div>
+        <h3>첫 공유 패키지는 Next 16 정렬을 기다릴 필요가 없다</h3>
+        <p><b>001 의 선결조건 하나가 걷힌다.</b> 001 은 "Next 15 → 16 정렬"을 B1 전체의 선결 조건으로 뒀지만, 알림 계층에는 해당하지 않는다.</p>
+        <div class="tscroll" style="margin-top:14px">
+          <table>
+            <thead><tr><th>추출 후보</th><th class="num">myFinance</th><th class="num">myFitness</th><th>외부 의존</th></tr></thead>
+            <tbody>
+              <tr><td><code>bot/utils/error.ts</code></td><td class="num">101줄</td><td class="num">85줄</td><td class="fin">import 0건 (양쪽 다)</td></tr>
+              <tr><td><code>bot/utils/telegram.ts</code></td><td class="num">118줄</td><td class="num">60줄</td><td>grammY + 형제 파일</td></tr>
+              <tr><td><code>bot/notifications/send.ts</code></td><td class="none">없음</td><td class="num">124줄</td><td>grammY + <code>../utils/error</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pullout"><code>src/bot</code> 이 <code>next</code> 를 import 하는 건수는 <b>양쪽 다 0</b>이다. 봇은 이미 별도 PM2 프로세스(<code>myfinance-bot</code>, <code>myfitness-bot</code>)로 돈다. <b>오늘 뺄 수 있다.</b></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 축 A ============ -->
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">축 A · 하네스와 세션</div>
+    <h2>Claude Code 쪽을 먼저 합친다</h2>
+    <p>"각 세션의 연속성 유지"가 여기 해당한다. 도메인이 늘수록 가치가 오르는 축이다 — 다만 메모리 인덱스 한도는 그만큼 더 빡빡해진다.</p>
+  </div>
+
+  <div class="ladder">
+    <div class="opt">
+      <div class="opt-id">A0</div>
+      <div>
+        <div class="opt-head"><h3>현상 유지</h3><span class="chip now">현재</span></div>
+        <div class="opt-body"><p>프로젝트별로 <code>claude</code> 를 따로 띄우고, 하네스도 따로 관리한다. 세션 연속성은 각 프로젝트 안에서만 유지된다.</p></div>
+        <dl>
+          <dt>대가</dt><dd>스킬 개선이 한쪽에만 반영된다. 이미 <code>ops-diagnose</code>·<code>project-verify</code> 가 서로 없는 상태로 몇 달째다.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="opt pick">
+      <div class="opt-id">A1</div>
+      <div>
+        <div class="opt-head"><h3>공유 하네스 플러그인</h3><span class="chip r1">되돌리기: 즉시</span><span class="chip req">단계 2</span></div>
+        <div class="opt-body">
+          <p>공통 스킬·에이전트를 별도 저장소 하나에 플러그인으로 묶고, 두 프로젝트에서 로컬 마켓플레이스로 설치한다. 프로젝트별 고유 규칙(세금 로직, Garmin 필드 casing)은 각자 <code>.claude/</code> 에 남긴다.</p>
+          <p>플러그인 스킬은 <code>harness:session-resume</code> 처럼 네임스페이스가 붙어 프로젝트 로컬 스킬과 충돌하지 않는다. <b>도메인이 셋으로 늘면 이 층이 세 번 복사되는 것을 막는다.</b></p>
+        </div>
+        <dl>
+          <dt>얻는 것</dt><dd>스킬 합집합. 한쪽에서 개선하면 양쪽 반영. 이름 통일.</dd>
+          <dt>되돌리기</dt><dd><code>/plugin uninstall</code>. 원본 <code>.claude/</code> 를 지우지 않고 시작하면 손실 0.</dd>
+          <dt>먼저 할 일</dt><dd>스킬 대조표 기준으로 역할별 정본 선택 (더 성숙한 쪽 채택)</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="opt pick">
+      <div class="opt-id">A2</div>
+      <div>
+        <div class="opt-head"><h3>메모리 공유 + 통합 어드바이저</h3><span class="chip r1">되돌리기: 즉시</span><span class="chip req">단계 0 · 2</span></div>
+        <div class="opt-body">
+          <p>두 프로젝트의 <code>autoMemoryDirectory</code> 를 같은 경로로 지정해 한 벌의 auto memory 를 쓴다. 동시에 <code>mcp-config.json</code> 에 두 MCP 를 함께 등록해 어드바이저가 양쪽 데이터를 본다 (발견 3).</p>
+          <p><b>주의:</b> <code>MEMORY.md</code> 인덱스는 세션 시작 시 <b>200줄 / 25KB</b>까지만 로드된다. 현재 myFinance 126줄 + myFitness 16줄 = 142줄, 여유 58줄. <b>도메인이 셋이 되면 이 여유로는 부족하다.</b> 압축 선행이 필수다.</p>
+        </div>
+        <dl>
+          <dt>얻는 것</dt><dd>세션 연속성. 도메인 교차 질문이 가능한 AI 어드바이저.</dd>
+          <dt>되돌리기</dt><dd>설정 키 삭제 + 메모리 파일 분리. 파일은 평범한 markdown 이라 손으로 나눌 수 있다.</dd>
+          <dt>리스크</dt><dd>메모리 오염 — 재무 컨텍스트가 피트니스 세션에 섞여 들어옴. 인덱스 규율이 곧 비용.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-id">A3</div>
+      <div>
+        <div class="opt-head"><h3>단일 워크스페이스 세션</h3><span class="chip r2">되돌리기: 낮음</span></div>
+        <div class="opt-body">
+          <p><code>~/workspace</code> 상위에서 <code>claude</code> 를 띄우고 두 저장소를 <code>--add-dir</code> 로 붙인다. 공식 권고는 반대 방향이다 — 작업이 한 패키지에 국한되면 그 디렉터리에서 시작하라고 한다.</p>
+        </div>
+        <dl>
+          <dt>쓸 때</dt><dd>공유 패키지 추출처럼 <b>실제로 두 저장소를 동시에 건드리는 작업</b>일 때만. 단계 1·3 이 여기 해당한다.</dd>
+          <dt>되돌리기</dt><dd>플래그를 빼면 끝. 단 <code>--add-dir</code> 는 <code>--resume</code> 때 복원되지 않아 매번 다시 넘겨야 한다.</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 축 B ============ -->
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">축 B · 코드와 제품</div>
+    <h2>저장소를 어디까지 합칠까</h2>
+    <p>001 에서는 B1 이 종착지 후보였다. 002 에서는 <b>B2 가 목표에 내장된 요구사항</b>이 되고, B1 은 경유지가 된다.</p>
+  </div>
+
+  <div class="ladder">
+    <div class="opt">
+      <div class="opt-id">B0</div>
+      <div>
+        <div class="opt-head"><h3>저장소 분리 유지</h3><span class="chip now">현재</span></div>
+        <div class="opt-body"><p>독립 저장소, 독립 릴리즈, 독립 배포.</p></div>
+        <dl>
+          <dt>대가</dt><dd>공용 모듈이 계속 갈라진다 — <code>#180</code> MCP HTTP 승격이 myFinance → myFitness 로 손으로 옮겨진 전례가 있다. <b>도메인 #3 을 붙이면 이 비용이 3배가 된다.</b></dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="opt pick">
+      <div class="opt-id">B1</div>
+      <div>
+        <div class="opt-head"><h3>공유 패키지 추출</h3><span class="chip r2">되돌리기: 중간</span><span class="chip req">단계 1 · 3</span></div>
+        <div class="opt-body">
+          <p>저장소는 둘로 두고 진짜 중복만 별도 패키지로 뺀다. <b>002 는 이걸 둘로 쪼갠다</b> — 알림 계층(단계 1)은 Next 무관이라 지금 뺄 수 있고, MCP 뼈대·어드바이저 래퍼(단계 3)는 Next 정렬 뒤다.</p>
+          <p>배포는 npm 레지스트리 없이 git 의존성이나 로컬 <code>file:</code> 링크로 충분하다. 1인 프로젝트다.</p>
+        </div>
+        <dl>
+          <dt>얻는 것</dt><dd>버그 픽스 1회로 양쪽 반영. 드리프트 정지. 추출 패턴 검증.</dd>
+          <dt>되돌리기</dt><dd>패키지를 각 저장소로 다시 인라인. 며칠치 작업이지 재앙은 아니다.</dd>
+          <dt>001 대비</dt><dd>종착지가 아니라 <b>경유지</b>다. 단계 3 부터는 모노레포 호환 레이아웃으로 뺀다.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="opt pick">
+      <div class="opt-id">B2</div>
+      <div>
+        <div class="opt-head"><h3>모노레포</h3><span class="chip r3">되돌리기: 높음</span><span class="chip req">요구사항</span></div>
+        <div class="opt-body">
+          <p>npm workspaces 로 <code>apps/{finance,fitness,calendar}</code> + <code>packages/{notify,mcp-core,advisor}</code>. 루트 CLAUDE.md 에 공통 규칙, 앱별 CLAUDE.md 에 도메인 규칙 — 공식 권고 레이아웃 그대로다.</p>
+          <p><b>여기서의 진짜 산출물은 폴더 구조가 아니라 도메인 모듈 계약이다.</b> 새 도메인이 무엇을 구현하면 플랫폼에 꽂히는가 — DB 스키마 / MCP 도구 / 알림 라우트 / 스케줄 잡 / UI 라우트. 계약 없는 모노레포는 두 앱을 한 폴더에 넣은 것일 뿐이다.</p>
+        </div>
+        <dl>
+          <dt>얻는 것</dt><dd>단일 검증 파이프라인, 단일 배포, 원자적 크로스-앱 변경. <b>추가 프로젝트 없이 도메인 확장.</b></dd>
+          <dt>대가</dt><dd>릴리즈 격리 상실. 버전 체계가 <code>v0.16.4</code> vs <code>v2.27.2</code> 로 달라 태그 정책 재설계 필요.</dd>
+          <dt>진입 조건</dt><dd class="gap">001: "크로스 저장소 변경 월 2회 이상" → 002: <b>도메인 #3(캘린더)을 실제로 붙일 때</b></dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-id">B3</div>
+      <div>
+        <div class="opt-head"><h3>단일 앱 (생활 대시보드)</h3><span class="chip r3">되돌리기: 사실상 불가</span><span class="chip req">쪼갬</span></div>
+        <div class="opt-body">
+          <p>001 은 B3 를 통째로 "나중"에 뒀다. 002 는 쪼갠다 — <b>"한 곳에서 다 본다"는 단계 1 에 거의 공짜로 딸려온다.</b> Discord 서버 하나에 도메인별 채널을 두면 되기 때문이다. 채널 라우팅은 앱이 아니라 어댑터 안에 산다.</p>
+        </div>
+        <div class="tscroll" style="margin-top:14px">
+          <table>
+            <thead><tr><th>B3 의 부분</th><th>판정</th><th>시점</th></tr></thead>
+            <tbody>
+              <tr><td class="rowlabel">"한 곳에서 다 본다"</td><td class="fin">Discord 채널로 거의 공짜</td><td class="fin">단계 1 에 딸려온다</td></tr>
+              <tr><td class="rowlabel">단일 봇 (인바운드)</td><td class="gap">명령 30파일 재작성</td><td>단계 4 이후</td></tr>
+              <tr><td class="rowlabel">단일 DB</td><td class="gap">마이그레이션</td><td>단계 4 이후 · Q7 선행</td></tr>
+              <tr><td class="rowlabel">단일 웹 UI</td><td class="none">이득 가장 적음</td><td class="none">미정</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <dl>
+          <dt>001 대비</dt><dd>001 은 "B3 가 주는 건 UI 통합과 프로세스 절감이지 새로운 능력이 아니다"라고 봤다. 개인 비서 프레이밍에서는 <b>절반만 맞다</b> — 단일 인박스는 비서의 본체다. 다만 그 이득은 단계 1 에서 나오므로 비싼 나머지는 여전히 나중이다.</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 리스크 ============ -->
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">리스크</div>
+    <h2>실행하면 여기서 아프다</h2>
+  </div>
+
+  <div class="risks">
+    <div class="risk">
+      <h3>버전 스큐</h3>
+      <p>Next 15.5 vs 16.2. 단계 3 이상의 선결 조건이다 (단계 1 은 무관 — 발견 6). myFinance dependabot PR #58 은 14 → 16 점프라 베이스가 틀렸다. 폐기하고 15 → 16 으로 새로 잡아야 한다.</p>
+    </div>
+    <div class="risk">
+      <h3>테스트 비대칭</h3>
+      <p>myFitness 엔 test 스크립트가 없다. Q4 로 방향은 정해졌지만, 범위를 <b>추출 대상 코드로만</b> 한정해야 한다. myFitness 전체에 테스트를 붙이는 프로젝트가 아니다.</p>
+    </div>
+    <div class="risk">
+      <h3>도메인 계약의 조기 일반화</h3>
+      <p>가장 큰 새 리스크다. 재무·건강 둘만 보고 만든 추상화는 셋째에서 깨진다. 캘린더를 붙이기 <b>전에</b> 계약을 확정하면 두 번 만든다. 단계 1 은 계약이 아니라 어댑터 하나만 만드는 이유다.</p>
+    </div>
+    <div class="risk">
+      <h3>릴리즈 커플링</h3>
+      <p>지금은 한쪽 hotfix 가 다른 쪽을 안 건드린다. 단계 4 는 이 격리를 없앤다. 실서비스 둘을 동시에 흔들 수 있다는 뜻이다 (Q2 미결).</p>
+    </div>
+    <div class="risk">
+      <h3>메모리 인덱스 한도</h3>
+      <p><code>MEMORY.md</code> 는 200줄 / 25KB 까지만 로드되고 초과분은 조용히 사라진다. 현재 합산 142줄, 여유 58줄. 도메인 셋이면 부족하다.</p>
+    </div>
+    <div class="risk">
+      <h3>운영 단일 장애점</h3>
+      <p>알림을 Discord 하나로 모으면 Discord 장애 시 전 도메인 알림이 함께 멈춘다. 지금은 텔레그램 봇 둘이 독립적으로 살아 있다. 어댑터 구조가 폴백 여지를 남긴다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 개정 경로 ============ -->
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">개정 경로</div>
+    <h2>각 단계에서 멈춰도 손해가 없도록</h2>
+    <p>종착지가 정해졌어도 순서는 그대로 되돌리기 비용 순이다. 달라진 건 각 단계를 <b>모노레포 호환 형태로</b> 한다는 점, 그리고 알림 작업이 앞으로 당겨졌다는 점이다.</p>
+  </div>
+
+  <div class="stages">
+    <div class="stage live" data-n="0">
+      <div class="when">지금 · 반나절</div>
+      <div class="stage-head"><h3>통합 어드바이저부터 켠다</h3><span class="chip r1">되돌리기: JSON 2줄</span></div>
+      <p>두 <code>mcp-config.json</code> 에 서로의 MCP 항목을 추가하고, 텔레그램에서 <code>/reset</code> 으로 세션을 초기화한다 (기존 <code>--resume</code> 세션은 옛 도구 목록을 붙잡고 있다).</p>
+      <div class="delta"><b>001 대비</b> 내용은 같고 <b>목적이 바뀐다</b> — "재미있나" 에서 <b>"비서 프레이밍이 성립하나"</b> 로. 두 도메인을 한 세션이 볼 때 쓸 만한 답이 나오지 않으면, 도메인을 늘리는 것 자체가 무의미하다.</div>
+      <div class="stopline"><b>여기서 멈춰도</b> 잃는 것 없음. 원상복구 즉시.</div>
+    </div>
+
+    <div class="stage" data-n="1">
+      <div class="when">단계 0 이 유효하면 · 3~5일</div>
+      <div class="stage-head"><h3>알림 어댑터 + Discord 아웃바운드</h3><span class="chip r2">되돌리기: 채널은 env 1줄</span></div>
+      <p><code>@pleiades/notify</code> 로 <code>Notifier</code> 인터페이스와 Telegram·Discord 어댑터를 만든다. 재시도 백오프·HTML 파싱 실패 시 plain 폴백·4096자 분할은 myFitness <code>send.ts</code> 에 이미 있다 — 추출 시 양쪽 구현을 비교해 정본을 고른다. 채널 라우팅(<code>#finance</code> <code>#fitness</code> <code>#calendar</code>)은 어댑터 안에 둔다.</p>
+      <p><b>선결:</b> 이 코드에 테스트. myFitness 의 첫 vitest 도입 지점이고, 범위는 추출 대상으로만 한정한다.</p>
+      <div class="delta"><b>001 대비</b> <b>승격</b>. 001 에서는 단계 3(B1) 안에 묻혀 있었다. 넷이 한꺼번에 성립해서 앞으로 당긴다 — 어차피 원하는 작업(Q6), 이미 초크포인트(발견 4), Next 무관(발견 6), 추출 패턴의 파일럿.</div>
+      <div class="stopline"><b>여기서 멈춰도</b> 어댑터 경계가 남는다. 통합 인박스도 이미 얻었다.</div>
+    </div>
+
+    <div class="stage" data-n="2">
+      <div class="when">병행 가능 · 2~3일</div>
+      <div class="stage-head"><h3>하네스 플러그인 + 메모리 (A1 · A2)</h3><span class="chip r1">되돌리기: 즉시</span></div>
+      <p>역할별로 더 성숙한 쪽을 정본으로 골라 공유 플러그인을 만들고, myFinance <code>MEMORY.md</code> 를 압축한 뒤 <code>autoMemoryDirectory</code> 를 같은 경로로 지정한다.</p>
+      <div class="stopline"><b>여기까지가</b> "세션 연속성 유지"의 실질적 완성. 제품 코드는 단계 1 의 알림 계층 말고는 그대로다.</div>
+    </div>
+
+    <div class="stage" data-n="3">
+      <div class="when">별도 판단 · 1~2주</div>
+      <div class="stage-head"><h3>Next 16 정렬 + 나머지 공유 패키지</h3><span class="chip r2">되돌리기: 중간</span></div>
+      <p>myFinance 를 15 → 16 으로 올린다 (PR #58 은 폐기하고 새로). 그다음 MCP 뼈대(<code>logger</code>, <code>session-utils</code>, HTTP transport)와 어드바이저 래퍼를 뺀다.</p>
+      <div class="delta"><b>001 대비</b> 내용은 같지만 <b>레이아웃이 다르다</b>. 단계 4 에서 그대로 <code>packages/*</code> 가 되도록 뺀다. 001 에서는 여기가 종착지 후보였으나 002 에서는 경유지다.</div>
+      <div class="stopline"><b>여기서 멈춰도</b> 드리프트는 정지한다. 도메인 확장만 못 한다.</div>
+    </div>
+
+    <div class="stage" data-n="4">
+      <div class="when">도메인 #3 을 붙일 때</div>
+      <div class="stage-head"><h3>모노레포 + 도메인 계약 (B2)</h3><span class="chip r3">되돌리기: 높음</span></div>
+      <p><code>apps/{finance,fitness,calendar}</code> + <code>packages/*</code>. 캘린더를 실제로 붙이면서 도메인 모듈 계약을 확정한다 — 새 도메인이 무엇을 구현하면 꽂히는가.</p>
+      <div class="delta"><b>001 대비</b> <b>진입 조건이 바뀌었다.</b> "크로스 저장소 변경이 월 2회 이상"이라는 관측 기반 조건에서, <b>"도메인 #3 을 실제로 붙일 때"</b> 라는 목표 기반 조건으로. 증거를 기다리는 선택이 아니라 목표에 내장된 단계다.</div>
+      <div class="stopline"><b>여기서 검증된다</b> 계약이 실제로 성립하면 도메인 #4 부터는 싸진다. 성립하지 않으면 단계 3 에서 멈추는 것이 옳았다는 뜻이다.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 남은 질문 ============ -->
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">남은 미결</div>
+    <h2>아직 답이 없는 질문</h2>
+    <p>전부 단계 3 이후 안건이다. 지금 답하지 않아도 단계 0~2 는 막히지 않는다.</p>
+  </div>
+
+  <div class="qs">
+    <div class="q">
+      <div class="qm">Q7</div>
+      <div>
+        <h3>도메인별 DB 인가, 단일 DB schema 분리인가</h3>
+        <p>도메인 계약의 데이터 경계를 정하는 질문이다. 단계 4 선행. 지금 두 앱은 각자 PostgreSQL 을 쓴다 — 캘린더를 붙일 때 셋째를 또 세울지, schema 로 나눌지가 갈린다.</p>
+      </div>
+    </div>
+    <div class="q">
+      <div class="qm">Q2</div>
+      <div>
+        <h3>두 서비스의 독립 배포를 포기할 수 있나</h3>
+        <p>단계 4 진입 시 릴리즈 정책. 한쪽 hotfix 가 다른 쪽 실서비스를 흔들 수 있다는 걸 받아들일 수 있는가. 001 에서도 "B1 이후"였고 위치는 그대로다.</p>
+      </div>
+    </div>
+    <div class="q">
+      <div class="qm">Q3</div>
+      <div>
+        <h3>봇 인바운드를 하나로 합칠 것인가</h3>
+        <p>B3 의 잔여분. 명령 30파일 재작성이 걸린 질문이라 단계 4 이후다. 아웃바운드는 이 답과 무관하게 단계 1 에서 이미 통합된다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="sources">
+  <h3>근거</h3>
+  <ul>
+    <li>정본 문서 — <code>docs/specs/002-platform-direction.md</code> (이 페이지는 사본), <code>docs/specs/001-integration-master.md</code></li>
+    <li>로컬 실측 — 두 저장소의 <code>package.json</code>, <code>ecosystem.config.js</code>, <code>.claude/</code> 트리, <code>src/</code> LOC, 봇 구조·전송 호출 분포·import 그래프, auto memory 디렉터리 (2026-09-03). 측정 명령은 <code>docs/research/measured-facts.md</code></li>
+    <li><a href="https://code.claude.com/docs/en/memory">Claude Code — How Claude remembers your project</a> (CLAUDE.md 로드 순서, <code>autoMemoryDirectory</code>, MEMORY.md 200줄/25KB 한도)</li>
+    <li><a href="https://code.claude.com/docs/en/sessions">Claude Code — Manage sessions</a> (<code>--resume</code> 크로스 프로젝트 조회, 세션 피커 <code>Ctrl+A</code>)</li>
+    <li><a href="https://code.claude.com/docs/en/large-codebases">Claude Code — Monorepos and large codebases</a> (계층 CLAUDE.md, <code>claudeMdExcludes</code>, <code>additionalDirectories</code> vs <code>--add-dir</code>)</li>
+    <li><a href="https://code.claude.com/docs/en/plugins">Claude Code — Create plugins</a> (플러그인 패키징, 로컬 마켓플레이스, 스킬 네임스페이스)</li>
+  </ul>
+</div>
+
+</div>
