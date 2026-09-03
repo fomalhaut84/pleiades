@@ -30,7 +30,7 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
 
 | 파일 | 내용 | 언제 읽나 |
 |---|---|---|
-| `docs/handoff/2026-09-03-from-myfinance.md` | 직전 세션 인계 노트 | **새 세션 시작 시 먼저** |
+| `docs/handoff/` 의 최신 파일 | 직전 세션 인계 노트 (현재: `2026-09-03-direction-002.md`) | **새 세션 시작 시 먼저** |
 | `docs/specs/002-platform-direction.md` | **정본 방향** — 개인 비서 플랫폼, 개정 경로 0~4, 확정된 답 | **방향 판단 시 먼저** |
 | `docs/specs/001-integration-master.md` | 축 A/B 분해·옵션·리스크 분석 (권고 경로는 002 가 대체) | 분석 근거가 필요할 때 |
 | `docs/research/measured-facts.md` | 두 저장소 실측 데이터 (2026-09-03) | 숫자가 필요할 때. **재측정 전에 여기부터** |
@@ -52,7 +52,8 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
 - 새 옵션·단계를 제안할 때는 **되돌리기 비용을 항상 함께 적는다.** 이 저장소 문서의 일관된 형식이다.
 - 실측값은 추정하지 않는다. `docs/research/measured-facts.md` 에 없으면 직접 측정하고 그 파일에 측정 명령과 함께 추가한다.
 - 문서는 한국어. 코드·변수명·경로는 영어.
-- 커밋 (git init 후): conventional commits — `<type>(<scope>): <desc>`
+- 커밋: conventional commits — `<type>(<scope>): <desc>`. `main` 브랜치, 원격 없음
+- 아티팩트 소스는 `docs/artifacts/integration-artifact.html`. 발행 전 `action:"read"` 로 현재 버전 확인 필수
 
 ## 상속하는 컨벤션
 
