@@ -47,7 +47,13 @@ MCP 클라이언트 설정 실측:
 { "mcpServers": { "myfitness": { "type": "http", "url": "http://127.0.0.1:4301/mcp" } } }
 ```
 
-→ 둘 다 로컬 HTTP 상주. **한 파일에 두 항목을 넣으면 교차 도메인 어드바이저가 된다.**
+→ 둘 다 로컬 HTTP 상주.
+
+> **정정 (2026-09-03 재측정).** 위 두 파일이 대칭이라는 기록은 절반이 틀렸다.
+> **myFitness 의 `src/lib/ai/mcp-config.json` 은 죽은 파일이다** — 실제로는
+> `claude-advisor.ts:108 ensureMcpConfig()` 가 매 호출마다 `.runtime/mcp-config.json` 을
+> 생성해 `--mcp-config` 로 넘긴다. 저장소의 JSON 을 고쳐도 아무 일도 일어나지 않는다.
+> 상세는 아래 "단계 0 의 실제 범위" 절.
 
 ## 코드 규모
 
@@ -213,3 +219,62 @@ grep -nE "^import" ~/workspace/$d/src/bot/utils/error.ts
 추출 후보 3파일에는 없다.)
 
 → **`@pleiades/notify` 추출은 Next 16 정렬을 기다리지 않아도 된다.**
+
+---
+
+# 추가 측정 — 2026-09-03 (단계 0 의 실제 범위)
+
+001 의 발견 3 은 단계 0 을 "`mcp-config.json` 에 두 항목 추가, 되돌리기는 JSON 두 줄"로 기록했다.
+어드바이저 호출부를 실측하니 **양쪽 다 그보다 넓다.**
+
+## MCP 설정이 실제로 만들어지는 곳
+
+```bash
+grep -rn "mcp-config" ~/workspace/$d/src --include='*.ts'
+sed -n '108,140p' ~/workspace/myFitness/src/lib/ai/claude-advisor.ts
+sed -n '752,760p' ~/workspace/myFinance/src/lib/ai/claude-advisor.ts
+```
+
+| | myFinance | myFitness |
+|---|---|---|
+| 설정 출처 | **저장소 JSON 파일** (`src/lib/ai/mcp-config.json`) | **코드가 런타임 생성** (`ensureMcpConfig()` → `.runtime/mcp-config.json`) |
+| 경로 결정 | `process.env.MCP_CONFIG_PATH ?? projectRoot + 'src/lib/ai/mcp-config.json'` | `path.resolve(process.cwd(), ".runtime/mcp-config.json")` |
+| 저장소 JSON 수정으로 반영되나 | **예** | **아니오 — 죽은 파일** |
+| 서버 항목 정의 위치 | JSON | `claude-advisor.ts:130` 의 `config` 객체 리터럴 |
+
+myFitness 는 `MCP_TRANSPORT`(http/stdio)에 따라 서버 항목을 분기 생성한다.
+교차 도메인을 넣으려면 **JSON 이 아니라 TypeScript 를 고쳐야 한다.**
+
+## `--strict-mcp-config` + `--allowedTools` 화이트리스트
+
+설정에 서버를 추가해도 **도구가 허용 목록에 없으면 쓸 수 없다.** 양쪽 다 명시 화이트리스트다.
+
+| | myFinance | myFitness |
+|---|---|---|
+| 화이트리스트 위치 | `claude-advisor.ts` 의 `ALLOWED_TOOLS` 상수 (486줄~) | `claude-advisor.ts:275` 인라인 문자열 |
+| 등재된 도구 수 | `mcp__myfinance__*` 다수 | `mcp__myfitness__*` 20개 |
+| 관련 플래그 | `--strict-mcp-config`, `--tools "WebSearch,WebFetch"`, `--permission-mode dontAsk` | `--strict-mcp-config`, `--tools ""` |
+
+`--tools` 는 built-in 도구 availability allowlist, `--allowedTools` 는 permission bypass 목록이다.
+**교차 도메인 도구를 추가하려면 상대 저장소의 도구 이름을 이 목록에 전부 등재해야 한다.**
+
+## 시스템 프롬프트도 도메인 고정
+
+```bash
+grep -n "mcp__myfitness__\*\|mcp__myfinance__\*" ~/workspace/$d/src/lib/ai/*.ts
+```
+
+myFitness `claude-advisor.ts:162` — *"먼저 필요한 mcp__myfitness__\* 도구를 병렬로 호출해…"*.
+프롬프트가 자기 도메인 도구만 지시한다. 상대 도구를 등록만 하고 프롬프트를 그대로 두면
+모델이 호출하지 않을 가능성이 높다.
+
+## 결론 — 단계 0 의 실제 범위
+
+| | 001 의 기록 | 실측 |
+|---|---|---|
+| 변경 대상 | JSON 2파일 | **TS 2파일 + JSON 1파일** (myFitness JSON 은 무의미) |
+| 변경 내용 | 항목 2줄 | 서버 항목 + allowedTools 등재 + 시스템 프롬프트 |
+| 반영 방법 | 텔레그램 `/reset` | **빌드 + `pm2 restart`** (코드 변경이므로) + `/reset` |
+| 되돌리기 | JSON 2줄 삭제 | `git revert` + 재빌드 + restart |
+
+여전히 가역적이지만 **"설정 토글"이 아니라 "실서비스 두 곳의 코드 변경"이다.**

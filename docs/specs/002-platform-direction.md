@@ -102,20 +102,45 @@ myFitness 는 `src/bot/notifications/send.ts`. 알림 모듈 16개/5개 중 원�
 
 | 단계 | 내용 | 001 대비 | 되돌리기 |
 |---|---|---|---|
-| **0** · 통합 어드바이저 | 두 `mcp-config.json` 병합 → `/reset` | 유지 (목적만 변경) | JSON 2줄 |
+| **0** · 통합 어드바이저 | 설정 + allowedTools + 프롬프트 → 빌드·restart | 유지 (목적 변경 · **범위 실측 정정**) | `git revert` + restart |
 | **1** · 알림 어댑터 + Discord 아웃바운드 | `@pleiades/notify` 추출, Discord 어댑터 | **승격** (001 의 단계 3 일부) | 재인라인 며칠 / 채널은 env 1줄 |
 | **2** · 하네스 플러그인 + 메모리 | A1 · A2 | 유지 | 설정 삭제 |
 | **3** · Next 16 정렬 + 나머지 패키지 | MCP 뼈대, advisor 래퍼 | 유지, 모노레포 호환 레이아웃으로 | 중간 |
 | **4** · 모노레포 (B2) | `apps/*` + `packages/*` + 도메인 계약 | **진입 조건 변경** | 높음 |
 
-### 단계 0 · 통합 어드바이저 — *지금, 반나절*
+### 단계 0 · 통합 어드바이저 — *지금, 반나절 → 하루*
 
-내용은 001 과 같다. **목적이 바뀐다**: "재미있나" → **"비서 프레이밍이 성립하나"**.
+**목적이 바뀐다**: "재미있나" → **"비서 프레이밍이 성립하나"**.
 캘린더가 도메인 #3 으로 확정됐으므로, 여기서 검증할 것은
 "두 도메인을 한 세션이 볼 때 실제로 쓸 만한 답이 나오는가"다.
 쓸 만하지 않으면 도메인을 늘리는 것 자체가 무의미하다.
 
-> **멈춰도:** 잃는 것 없음.
+> **발견 7 — 001 의 "JSON 두 줄"은 틀렸다.**
+> 어드바이저 호출부를 실측하니 단계 0 은 설정 토글이 아니라 **실서비스 두 곳의 코드 변경**이다.
+> 근거는 `../research/measured-facts.md` 의 "단계 0 의 실제 범위" 절.
+
+| | 001 의 기록 | 실측 |
+|---|---|---|
+| myFinance 설정 출처 | 저장소 JSON | 저장소 JSON ✓ (`MCP_CONFIG_PATH` 로 override 가능) |
+| myFitness 설정 출처 | 저장소 JSON | **코드가 런타임 생성** — `ensureMcpConfig()` → `.runtime/mcp-config.json`.<br>저장소의 `src/lib/ai/mcp-config.json` 은 **죽은 파일** |
+| 도구 허용 | (기록 없음) | 양쪽 다 `--strict-mcp-config` + **명시 `--allowedTools` 화이트리스트**.<br>서버만 등록하면 도구를 못 쓴다 |
+| 시스템 프롬프트 | (기록 없음) | 자기 도메인 도구만 지시 (`"mcp__myfitness__* 도구를 호출해…"`).<br>그대로 두면 모델이 상대 도구를 안 부른다 |
+| 반영 | 텔레그램 `/reset` | **빌드 + `pm2 restart`** + `/reset` |
+
+**실제 작업 목록:**
+
+1. myFinance — `src/lib/ai/mcp-config.json` 에 `myfitness` 항목 추가
+2. myFinance — `claude-advisor.ts` 의 `ALLOWED_TOOLS` 에 `mcp__myfitness__*` 등재
+3. myFitness — `claude-advisor.ts` 의 `ensureMcpConfig()` 에 `myfinance` 항목 추가 (JSON 아님)
+4. myFitness — `claude-advisor.ts:275` 인라인 `--allowedTools` 문자열에 `mcp__myfinance__*` 등재
+5. 양쪽 — 시스템 프롬프트에 교차 도메인 도구 사용 지시 한 줄
+6. 빌드 → `pm2 restart` (bot + web) → 텔레그램 `/reset`
+
+> **멈춰도:** `git revert` + 재빌드 + restart. 여전히 완전 가역이지만
+> **"설정 토글"이 아니라 "코드 변경"이다.** 되돌리기 비용은 즉시가 아니라 *수십 분*.
+
+**부수 효과 하나.** myFitness 의 죽은 `src/lib/ai/mcp-config.json` 이 드러났다.
+지우거나 주석을 다는 것이 맞지만 단계 0 과 별개 건이다.
 
 ### 단계 1 · 알림 어댑터 + Discord 아웃바운드 — *승격*
 

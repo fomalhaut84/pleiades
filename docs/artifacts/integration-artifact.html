@@ -385,8 +385,8 @@ code{
 <section>
   <div class="sec-head">
     <div class="eyebrow">핵심 발견</div>
-    <h2>조사에서 나온 여섯 가지</h2>
-    <p>1~3 은 001 의 발견이고, 4~6 은 Q6(알림 채널) 결정 뒤 새로 측정한 것이다.</p>
+    <h2>조사에서 나온 일곱 가지</h2>
+    <p>1~3 은 001 의 발견이고, 4~7 은 Q6(알림 채널) 결정 뒤 새로 측정한 것이다. <b>발견 7 은 001 의 기록을 정정한다.</b></p>
   </div>
 
   <div class="findings">
@@ -431,7 +431,8 @@ code{
       <div>
         <h3>AI 어드바이저 통합은 코드 통합 없이 지금도 된다</h3>
         <p>두 MCP 서버는 이미 같은 서버에서 로컬 HTTP 로 상주 중이다 (<code>:4210</code>, <code>:4301</code>). <code>mcp-config.json</code> 한 파일에 두 항목을 함께 넣으면, <b>하나의 Claude 세션이 재무와 건강 데이터를 동시에 본다.</b></p>
-        <div class="pullout"><b>이게 "키운다"의 실체다.</b> 저장소를 합쳐야 얻는 게 아니다. "이번 달 야근이 늘었는데 수면·러닝 부하와 외식비가 같이 어떻게 움직였나" 같은 질문은 두 MCP 를 한 세션에 물리는 순간 답이 가능해진다. 되돌리기는 JSON 두 줄 삭제.</div>
+        <div class="pullout"><b>이게 "키운다"의 실체다.</b> 저장소를 합쳐야 얻는 게 아니다. "이번 달 야근이 늘었는데 수면·러닝 부하와 외식비가 같이 어떻게 움직였나" 같은 질문은 두 MCP 를 한 세션에 물리는 순간 답이 가능해진다.</div>
+        <p style="margin-top:12px"><b>단 001 이 여기 덧붙인 "되돌리기는 JSON 두 줄"은 틀렸다</b> — 발견 7 참조.</p>
       </div>
     </div>
 
@@ -574,6 +575,27 @@ code{
           </table>
         </div>
         <div class="pullout"><code>src/bot</code> 이 <code>next</code> 를 import 하는 건수는 <b>양쪽 다 0</b>이다. 봇은 이미 별도 PM2 프로세스(<code>myfinance-bot</code>, <code>myfitness-bot</code>)로 돈다. <b>오늘 뺄 수 있다.</b></div>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="fmark new">발견 7</div>
+      <div>
+        <h3>단계 0 은 "JSON 두 줄"이 아니다 — 001 정정</h3>
+        <p>001 은 단계 0 을 <em>"<code>mcp-config.json</code> 에 두 항목 추가, 되돌리기는 JSON 두 줄"</em> 로 기록했다. 어드바이저 호출부를 실측하니 <b>양쪽 다 그보다 넓다.</b></p>
+        <div class="tscroll" style="margin-top:14px">
+          <table>
+            <thead><tr><th></th><th>001 의 기록</th><th>실측</th></tr></thead>
+            <tbody>
+              <tr><td class="rowlabel">myFinance 설정</td><td>저장소 JSON</td><td class="fin">맞음 (<code>MCP_CONFIG_PATH</code> override 가능)</td></tr>
+              <tr><td class="rowlabel">myFitness 설정</td><td>저장소 JSON</td><td class="gap">코드가 런타임 생성 — <code>ensureMcpConfig()</code> → <code>.runtime/mcp-config.json</code>. 저장소 JSON 은 <b>죽은 파일</b></td></tr>
+              <tr><td class="rowlabel">도구 허용</td><td class="none">기록 없음</td><td class="gap">양쪽 <code>--strict-mcp-config</code> + 명시 <code>--allowedTools</code> 화이트리스트</td></tr>
+              <tr><td class="rowlabel">시스템 프롬프트</td><td class="none">기록 없음</td><td class="gap">자기 도메인 도구만 지시</td></tr>
+              <tr><td class="rowlabel">반영</td><td>텔레그램 <code>/reset</code></td><td class="gap">빌드 + <code>pm2 restart</code> + <code>/reset</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pullout"><b>여전히 완전 가역이지만 "설정 토글"이 아니라 "실서비스 두 곳의 코드 변경"이다.</b> 되돌리기는 <code>git revert</code> + 재빌드 + restart — 즉시가 아니라 수십 분. 이 프로젝트에서 되돌리기 비용을 항상 함께 적는 이유가 이것이다: 추정한 비용과 실측한 비용이 달랐다.</div>
       </div>
     </div>
   </div>
@@ -770,11 +792,11 @@ code{
 
   <div class="stages">
     <div class="stage live" data-n="0">
-      <div class="when">지금 · 반나절</div>
-      <div class="stage-head"><h3>통합 어드바이저부터 켠다</h3><span class="chip r1">되돌리기: JSON 2줄</span></div>
-      <p>두 <code>mcp-config.json</code> 에 서로의 MCP 항목을 추가하고, 텔레그램에서 <code>/reset</code> 으로 세션을 초기화한다 (기존 <code>--resume</code> 세션은 옛 도구 목록을 붙잡고 있다).</p>
-      <div class="delta"><b>001 대비</b> 내용은 같고 <b>목적이 바뀐다</b> — "재미있나" 에서 <b>"비서 프레이밍이 성립하나"</b> 로. 두 도메인을 한 세션이 볼 때 쓸 만한 답이 나오지 않으면, 도메인을 늘리는 것 자체가 무의미하다.</div>
-      <div class="stopline"><b>여기서 멈춰도</b> 잃는 것 없음. 원상복구 즉시.</div>
+      <div class="when">지금 · 하루</div>
+      <div class="stage-head"><h3>통합 어드바이저부터 켠다</h3><span class="chip r2">되돌리기: revert + restart</span></div>
+      <p>서로의 MCP 서버를 등록하고, <code>--allowedTools</code> 화이트리스트에 상대 도메인 도구를 등재하고, 시스템 프롬프트에 교차 도메인 사용 지시를 넣는다. 그다음 빌드 → <code>pm2 restart</code> → 텔레그램 <code>/reset</code> (기존 <code>--resume</code> 세션은 옛 도구 목록을 붙잡고 있다).</p>
+      <div class="delta"><b>001 대비</b> <b>목적이 바뀌고</b> — "재미있나" 에서 <b>"비서 프레이밍이 성립하나"</b> 로 — <b>범위가 정정됐다</b>. 001 은 JSON 2줄로 봤으나 실측은 TS 2파일 + JSON 1파일 + 재배포다 (발견 7). 두 도메인을 한 세션이 볼 때 쓸 만한 답이 나오지 않으면, 도메인을 늘리는 것 자체가 무의미하다.</div>
+      <div class="stopline"><b>여기서 멈춰도</b> 잃는 것 없음. <code>git revert</code> + 재빌드 + restart.</div>
     </div>
 
     <div class="stage" data-n="1">
