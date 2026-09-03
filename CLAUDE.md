@@ -55,6 +55,18 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
 - 커밋: conventional commits — `<type>(<scope>): <desc>`. `main` 브랜치, 원격 없음
 - 아티팩트 소스는 `docs/artifacts/integration-artifact.html`. 발행 전 `action:"read"` 로 현재 버전 확인 필수
 
+## 하네스: pleiades 통합
+
+**목표:** 두 실서비스 저장소를 읽어 실측하고, 방향 문서를 쓰고, 그 비용 추정을 코드로 반증한 뒤, 승인 후에만 집행한다.
+
+**트리거:** 통합 방향 판단·단계 실행·재검토 요청 시 `pleiades-orchestrator` 스킬을 사용하라.
+세션 시작은 `pleiades-resume`, 종료는 `pleiades-handoff`. 단순 질문은 직접 응답 가능.
+
+**변경 이력:**
+| 날짜 | 변경 내용 | 대상 | 사유 |
+|------|----------|------|------|
+| 2026-09-03 | 초기 구성 — 에이전트 4 + 스킬 6(오케스트레이터 포함) | 전체 | - |
+
 ## 상속하는 컨벤션
 
 두 대상 저장소가 공유하는 규칙이다. 통합 코드를 쓰게 되면 그대로 따른다.
