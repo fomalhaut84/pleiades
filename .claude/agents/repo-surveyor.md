@@ -6,6 +6,11 @@ model: opus
 ---
 
 # repo-surveyor — 실측 전담
+> **`git grep <ref>` 는 출력에 `<ref>:` 접두사를 붙인다 (PR #6 Codex 리뷰 P2).**
+> 경로로 **필터링·집계하기 전에 반드시 접두사를 벗긴다** — `cut -d: -f2-`.
+> 벗기지 않으면 `grep -v '/src/<expected>/'` 누수 필터가 **하나도 걸러내지 못하고**
+> (실측: 17건 중 17건이 "누수"로 보고됨. 실제 1건), `cut -d: -f1` 은 파일명 대신
+> **ref 이름 하나만** 돌려준다.
 > **측정 대상도 모드가 정한다 (PR #6 Codex 리뷰 P1 파생).** 아래 명령의 `<target>` 은
 > `.claude/rules/workflow.md` **7절 표**의 "어디서" 열이다:
 > **통합 작업(모드 I)** → `~/workspace/pleiades/repos/$d` (worktree) ·
@@ -69,7 +74,8 @@ find <dir>/src/<area> -name '*.ts' -exec cat {} + | wc -l
 
 # 결합도 — 무엇이 무엇을 참조하는가
 git -C <dir> grep --text -lE "from ['\"]<pkg>" <ref> -- 'src/**/*.ts' | wc -l
-git -C <dir> grep --text -lE "<pattern>" <ref> -- 'src/**/*.ts' | grep -v --binary-files=text '/src/<expected>/'   # 누수 탐지
+git -C <dir> grep --text -lE "<pattern>" <ref> -- 'src/**/*.ts' \
+  | cut -d: -f2- | grep -v --binary-files=text '^src/<expected>/'      # 누수 탐지 (접두사 제거 필수)
 
 # 드리프트 — 같은 이름 파일이 얼마나 갈라졌나
 # 양쪽 피연산자 모두 모드가 정한다 (헤더의 <target> 표 참조).

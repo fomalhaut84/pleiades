@@ -4,6 +4,11 @@ description: myFinance·myFitness 두 저장소를 실측하고 docs/research/me
 ---
 
 # repo-measure — 실측과 기록
+> **`git grep <ref>` 는 출력에 `<ref>:` 접두사를 붙인다 (PR #6 Codex 리뷰 P2).**
+> 경로로 **필터링·집계하기 전에 반드시 접두사를 벗긴다** — `cut -d: -f2-`.
+> 벗기지 않으면 `grep -v '/src/<expected>/'` 누수 필터가 **하나도 걸러내지 못하고**
+> (실측: 17건 중 17건이 "누수"로 보고됨. 실제 1건), `cut -d: -f1` 은 파일명 대신
+> **ref 이름 하나만** 돌려준다.
 > **측정 대상도 모드가 정한다 (PR #6 Codex 리뷰 P1 파생).** 아래 명령의 `<target>` 은
 > `.claude/rules/workflow.md` **7절 표**의 "어디서" 열이다:
 > **통합 작업(모드 I)** → `~/workspace/pleiades/repos/$d` (worktree) ·
@@ -95,9 +100,11 @@ find <dir>/src/<area> -name '*.ts' -exec cat {} + | wc -l
 # 참조 파일 수 (분모와 함께)
 git -C <dir> grep --text -lE "from ['\"]<pkg>" <ref> -- 'src/**/*.ts' | wc -l
 # 예상 경계 밖 누수
-git -C <dir> grep --text -lE "<pattern>" <ref> -- 'src/**/*.ts' | grep -v --binary-files=text '/src/<expected>/'
+git -C <dir> grep --text -lE "<pattern>" <ref> -- 'src/**/*.ts' \
+  | cut -d: -f2- | grep -v --binary-files=text '^src/<expected>/'      # ← 접두사 제거 필수
 # 호출 지점이 한 곳인가 흩어져 있나
-git -C <dir> grep --text -n "<call>" <ref> -- 'src/**/*.ts' | cut -d: -f1 | sort | uniq -c | sort -rn
+git -C <dir> grep --text -n "<call>" <ref> -- 'src/**/*.ts' \
+  | cut -d: -f2 | sort | uniq -c | sort -rn                            # ← f1 은 ref 이름이다
 ```
 
 호출이 한 파일에 모이면 **초크포인트**(교체 가능), 흩어져 있으면 **재작성**이다. 비용이 자릿수로 다르다.
