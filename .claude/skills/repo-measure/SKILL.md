@@ -90,9 +90,10 @@ done
 ### 규모
 ```bash
 # ⚠ 파일시스템 측정 — ref 지정 불가. 그 ref 체크아웃 확인 후 실행, 아니면 \"미확인\"
-find <dir>/src -type f \( -name '*.ts' -o -name '*.tsx' \) | wc -l
+git -C <dir> ls-tree -r --name-only <ref> -- src | grep -E '\.tsx?$' | wc -l
 # ⚠ 파일시스템 측정 — ref 지정 불가. 그 ref 체크아웃 확인 후 실행, 아니면 \"미확인\"
-find <dir>/src/<area> -name '*.ts' -exec cat {} + | wc -l
+git -C <dir> ls-tree -r --name-only <ref> -- src/<area> | grep '\.ts$' \
+  | while read f; do git -C <dir> show "<ref>:$f"; done | wc -l
 ```
 
 ### 결합도 — 무엇이 무엇에 묶여 있나
@@ -111,11 +112,8 @@ git -C <dir> grep --text -n "<call>" <ref> -- 'src/**/*.ts' \
 
 ### 드리프트 — 같은 이름 파일이 얼마나 갈라졌나
 ```bash
-# 양쪽 피연산자 모두 모드가 정한다 (헤더의 <target> 표 참조).
-# 모드 I: repos/*  ·  모드 S·H: 원본. 섞으면 서로 다른 시점을 비교하게 된다.
-diff <target:myFinance>/src/<path> <target:myFitness>/src/<path> | wc -l
-
-# 체크아웃 상태에 의존하지 않으려면 ref 를 직접 비교한다:
+# 양쪽 피연산자 모두 모드가 정한다 (헤더의 <dir>/<ref> 표 참조).
+# 체크아웃 상태에 의존하지 않도록 ref 에서 직접 꺼낸다 — 파일시스템 diff 는 쓰지 않는다.
 git -C <dir:fin> show <ref:fin>:src/<path> > /tmp/fin.ts
 git -C <dir:fit> show <ref:fit>:src/<path> > /tmp/fit.ts
 diff /tmp/fin.ts /tmp/fit.ts | wc -l
@@ -123,7 +121,7 @@ diff /tmp/fin.ts /tmp/fit.ts | wc -l
 
 ### 추출 가능성 — 후보가 정말 무의존인가
 ```bash
-grep -nE --binary-files=text "^import" <file>              # 전부 읽는다. 형제 파일까지 따라간다
+git -C <dir> grep --text -nE "^import" <ref> -- '<후보 파일 경로>'   # 전부 읽는다. 형제 파일까지 따라간다
 git -C <dir> grep --text -n "from ['\"]next" <ref> -- 'src/<하위경로>/' | wc -l
 git -C <dir> grep --text -n "from ['\"]@/lib" <ref> -- 'src/<하위경로>/' | wc -l
 ```
