@@ -27,14 +27,20 @@ pleiades 는 myFinance × myFitness 를 **개인 비서 플랫폼**으로 통합
 작업 시작 전 실행 모드를 판별한다.
 
 ```bash
-ls _workspace/ 2>/dev/null
-ls docs/specs/ docs/handoff/
-git -C ~/workspace/pleiades log --oneline -5
+echo "== 통합 작업 (worktree · integration/pleiades 여야 함)"
 for d in myFinance myFitness; do
-  echo -n "$d: "; git -C ~/workspace/$d branch --show-current
+  echo -n "  repos/$d: "; git -C repos/$d branch --show-current
+  git -C repos/$d status -s | head -3
+done
+echo "== 서비스 유지용 원본 (fin=dev · fit=main · 쓰기 금지)"
+for d in myFinance myFitness; do
+  echo -n "  ~/workspace/$d: "; git -C ~/workspace/$d branch --show-current
   git -C ~/workspace/$d status -s | head -3
 done
 ```
+
+> **체크아웃이 4개다 (PR #6 Codex 리뷰 P1).** 통합 작업 worktree 2개 + 서비스 유지용 원본 2개.
+> 원본에는 앞선 1a 단계 변경이 들어 있지 않다 — `docs/specs/004-repo-layout.md`.
 
 | 상황 | 모드 |
 |---|---|

@@ -49,12 +49,12 @@ pleiades 의 제1규율은 **"실측값은 추정하지 않는다"** 이다. 당
 
 ```bash
 # 규모
-find ~/workspace/$d/src -type f \( -name '*.ts' -o -name '*.tsx' \) | wc -l
-find ~/workspace/$d/src/<area> -name '*.ts' -exec cat {} + | wc -l
+find ~/workspace/pleiades/repos/$d/src -type f \( -name '*.ts' -o -name '*.tsx' \) | wc -l
+find ~/workspace/pleiades/repos/$d/src/<area> -name '*.ts' -exec cat {} + | wc -l
 
 # 결합도 — 무엇이 무엇을 참조하는가
-grep -rlE --binary-files=text "from ['\"]<pkg>" ~/workspace/$d/src --include='*.ts' | wc -l
-grep -rlE --binary-files=text "<pattern>" ~/workspace/$d/src --include='*.ts' | grep -v --binary-files=text '/src/<expected>/'   # 누수 탐지
+grep -rlE --binary-files=text "from ['\"]<pkg>" ~/workspace/pleiades/repos/$d/src --include='*.ts' | wc -l
+grep -rlE --binary-files=text "<pattern>" ~/workspace/pleiades/repos/$d/src --include='*.ts' | grep -v --binary-files=text '/src/<expected>/'   # 누수 탐지
 
 # 드리프트 — 같은 이름 파일이 얼마나 갈라졌나
 diff ~/workspace/pleiades/repos/myFinance/src/<path> ~/workspace/pleiades/repos/myFitness/src/<path> | wc -l

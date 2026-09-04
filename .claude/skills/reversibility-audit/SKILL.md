@@ -43,9 +43,9 @@ description: 방향 문서에 적힌 비용·되돌리기 추정을 실제 코�
 ### 1. 설정이 정말 설정인가
 
 ```bash
-grep -rn --binary-files=text "<파일명>" ~/workspace/$d/src --include='*.ts'
-grep -rn --binary-files=text "writeFileSync\|mkdirSync\|\.runtime/\|process.cwd()" ~/workspace/$d/src/<dir>/*.ts
-grep -rn --binary-files=text "process.env.[A-Z_]* ??\|process.env.[A-Z_]* ||" ~/workspace/$d/src/<dir>/*.ts
+grep -rn --binary-files=text "<파일명>" ~/workspace/pleiades/repos/$d/src --include='*.ts'
+grep -rn --binary-files=text "writeFileSync\|mkdirSync\|\.runtime/\|process.cwd()" ~/workspace/pleiades/repos/$d/src/<dir>/*.ts
+grep -rn --binary-files=text "process.env.[A-Z_]* ??\|process.env.[A-Z_]* ||" ~/workspace/pleiades/repos/$d/src/<dir>/*.ts
 ```
 
 - 그 파일을 실제로 읽는 코드가 있는가
@@ -56,7 +56,7 @@ grep -rn --binary-files=text "process.env.[A-Z_]* ??\|process.env.[A-Z_]* ||" ~/
 ### 2. 등록만으로 동작하는가
 
 ```bash
-grep -rn --binary-files=text "allowedTools\|allowed-tools\|--tools\|allowlist\|permission" ~/workspace/$d/src --include='*.ts'
+grep -rn --binary-files=text "allowedTools\|allowed-tools\|--tools\|allowlist\|permission" ~/workspace/pleiades/repos/$d/src --include='*.ts'
 ```
 
 - 화이트리스트가 코드에 하드코딩돼 있으면 **설정 변경만으로는 작동하지 않는다**
@@ -76,8 +76,8 @@ grep -rn --binary-files=text "allowedTools\|allowed-tools\|--tools\|allowlist\|p
 
 ```bash
 grep -nE --binary-files=text "^import" <후보 파일>                          # 전부 읽는다
-grep -rn --binary-files=text "from ['\"]next" ~/workspace/$d/src/<dir>/ | wc -l
-grep -rn --binary-files=text "from ['\"]@/lib" ~/workspace/$d/src/<dir>/ | wc -l
+grep -rn --binary-files=text "from ['\"]next" ~/workspace/pleiades/repos/$d/src/<dir>/ | wc -l
+grep -rn --binary-files=text "from ['\"]@/lib" ~/workspace/pleiades/repos/$d/src/<dir>/ | wc -l
 ```
 
 형제 파일 import 까지 따라간다. 별도 프로세스로 이미 돌면 프레임워크 버전 정렬과 무관하다.
