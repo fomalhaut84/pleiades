@@ -63,8 +63,16 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 작업 전 해당 저장소의 `CLAUDE.md` 와 `.claude/rules/` 를 읽는다. **아래 요약보다 그쪽이 정본이다.**
 
 공통:
-- 브랜치 `main`(실서비스) → `dev` → `feat/<issue>-<n>` / `fix/<issue>-<n>`.
-  **`dev` 에서 분기, `dev` 로 PR. `main` 직접 변경 금지**
+- **pleiades 통합 작업의 base 는 `dev` 가 아니라 `integration/pleiades` 다.**
+  작업은 `~/workspace/pleiades/repos/<repo>` **worktree** 에서 하고,
+  `integration/pleiades-<단계>` 를 따서 **`integration/pleiades` 로 PR** 한다.
+  `integration/pleiades` → `dev` PR 은 **1a 전체가 끝난 뒤 한 번**이다.
+  근거는 `docs/specs/004-repo-layout.md` · `.claude/rules/workflow.md` 7절 base 표.
+  **미완성 단계를 `dev` 로 보내면 서비스 브랜치가 오염되고 003 §5-2 의 단계별
+  되돌리기 등급이 무너진다** (PR #6 Codex 리뷰 P1).
+- 원본 `~/workspace/myFinance`(`dev`) · `~/workspace/myFitness`(`main`) 은
+  **서비스 유지용이다. 쓰기 금지.**
+- `main` 직접 변경 금지
 - **PR 머지는 사용자가 직접 한다.** 로컬 merge / 직접 push 금지
 - 커밋 `<type>(<scope>): <desc> (#<issue>)`
 - DB 접근은 `@/lib/prisma` singleton, raw query 금지
@@ -99,7 +107,7 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 
 - [ ] 승인 게이트 5항목 제시 + 명시 승인 수령
 - [ ] 착수 직전 재감사 통과 (정정 0)
-- [ ] 대상 브랜치가 `dev` 이고 clean 임을 확인
+- [ ] **`repos/` 아래 worktree** 에서 작업하며 base 가 `integration/pleiades` 이고 clean 임을 확인
 - [ ] 저장소 A 변경 → 검증 통과 → 커밋
 - [ ] 저장소 B 변경 → 검증 통과 → 커밋
 - [ ] 빌드·재시작·세션 초기화 명령 사용자에게 전달
@@ -110,7 +118,7 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 
 | 상황 | 대응 |
 |---|---|
-| 브랜치가 `dev` 아님 / dirty | 사용자에게 보고. 임의로 stash·checkout 하지 않는다 |
+| base 가 `integration/pleiades` 아님 / dirty / 원본 경로에서 작업 중 | 사용자에게 보고. 임의로 stash·checkout 하지 않는다 |
 | 검증 실패 | 되돌리고 원인 보고. 실패한 채 다음 저장소로 넘어가지 않는다 |
 | 한쪽만 성공 | 성공분 롤백 여부를 사용자에게 묻는다 |
 | 계획에 없던 파일 수정 필요 | **즉시 중단.** 범위 변경은 승인 사항 |

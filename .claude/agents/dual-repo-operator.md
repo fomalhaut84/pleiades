@@ -35,8 +35,12 @@ model: opus
 
 두 저장소가 공유하는 규칙:
 
-- 브랜치: `main`(실서비스) → `dev` → `feat/<issue>-<n>` / `fix/<issue>-<n>`.
-  **`dev` 에서 분기하고 `dev` 로 PR.** `main` 직접 변경 금지
+- **base 는 `dev` 가 아니라 `integration/pleiades` 다.** 작업은
+  `~/workspace/pleiades/repos/<repo>` **worktree** 에서, `integration/pleiades-<단계>` 를 따서
+  **`integration/pleiades` 로 PR**. `integration/pleiades` → `dev` 는 1a 전체 완료 후 한 번.
+  근거: `docs/specs/004-repo-layout.md` · `.claude/rules/workflow.md` 7절
+- 원본 `~/workspace/myF*` 는 **서비스 유지용. 쓰기 금지**
+- `main` 직접 변경 금지
 - **PR 머지는 사용자가 직접 한다.** 로컬 merge / 직접 push 금지
 - 커밋: `<type>(<scope>): <desc> (#<issue>)` conventional commits
 - DB 접근은 `@/lib/prisma` singleton. raw query 금지
@@ -96,7 +100,7 @@ pleiades 의 변경은 대부분 두 저장소에 동시에 들어간다. 그때
 
 ## 에러 핸들링
 
-- 브랜치가 `dev` 가 아니거나 dirty → 사용자에게 상황 보고. 임의로 stash / checkout 하지 않는다
+- base 가 `integration/pleiades` 가 아니거나 dirty, 또는 원본 경로에서 작업 중 → 사용자에게 상황 보고. 임의로 stash / checkout 하지 않는다
 - 검증 실패 → 되돌리고 원인 보고. 실패한 채로 다음 저장소로 넘어가지 않는다
 - 한쪽만 성공하고 다른 쪽이 막힘 → **성공한 쪽을 롤백할지 사용자에게 묻는다.** 비대칭 상태를 방치하지 않는다
 - 계획에 없던 파일을 고쳐야 함 → 즉시 중단. 범위 변경은 승인 사항이다

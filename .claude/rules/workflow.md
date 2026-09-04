@@ -108,8 +108,11 @@ pleiades 에는 UI 가 없다. 그 자리에 **가역성 게이트**가 온다.
 ### 5. GitHub 이슈 생성
 
 ```bash
-gh issue create --title "<제목>" --body "$(cat docs/specs/...)" --label "<라벨>"
+gh issue create -R fomalhaut84/pleiades --title "<제목>" --body "$(cat docs/specs/...)" --label "<라벨>"
 ```
+
+**이슈는 대상 저장소가 아니라 항상 pleiades 에 만든다.** `-R` 로 명시한다 —
+대상 저장소 worktree 안에서 실행하면 `gh` 가 그쪽 저장소를 잡는다.
 
 라벨: `1a` · `선결` · `측정` · `결정`
 **이슈 없이 작업 브랜치를 만들지 않는다.** 이슈와 PR 은 1:1 로 매칭된다.
@@ -148,14 +151,25 @@ git checkout integration/pleiades && git checkout -b integration/pleiades-<단�
 
 ### 8. 검증
 
-```bash
-npm run lint && npm run typecheck && npm run test && npm run build
-```
+**검증 명령은 저장소마다 다르다.** 아래 표대로 실행한다 — **명령을 추측하지 말고 이 표를 쓴다.**
+
+| 대상 | lint | 타입 | 테스트 | 빌드 |
+|---|---|---|---|---|
+| **pleiades** | 1a-0 이후 정의 | — | — | — |
+| **`repos/myFinance`** | `npm run lint` | **`npx tsc --noEmit`** | **`npm run test:run`** | `npm run build` |
+| **`repos/myFitness`** | `npm run lint` | `npm run typecheck` | `npm run test` | `npm run build` |
 
 전부 통과해야 다음 단계. 실패 시 수정 후 재실행. **건너뛰기 금지.**
 
-> **현재 pleiades 에는 npm 프로젝트가 없다.** 이 절은 1a-0(`package.json` 신설) 이후 적용된다.
-> 그때까지 문서 변경은 9절의 self-review 경로를 따른다.
+> **정정 (PR #6 Codex 리뷰 P1).** 이전 서술은 `npm run lint && npm run typecheck &&
+> npm run test && npm run build` 를 모든 대상에 적용했다. 그러나 **myFinance 에는
+> `typecheck` 스크립트가 없고**(`npx tsc --noEmit` 을 직접 쓴다) **`test` 는 watch 모드**라
+> CI 에서 멈춘다(`test:run` 이 1회 실행형). myFitness 의 `test` 는 테스트 프레임워크가 아니라
+> verify 스크립트다(1a-2 가 vitest 를 도입할 때까지). 그대로 따르면 **missing-script 로
+> 실패하고 "건너뛰기 금지" 때문에 대상 저장소 PR 이 막힌다.**
+
+> **pleiades 자체에는 아직 npm 프로젝트가 없다.** pleiades 행은 1a-0(`package.json` 신설)
+> 이후 채운다. 그때까지 pleiades 문서 변경은 9절의 self-review 경로를 따른다.
 ### 9. 코드 리뷰 + PR
 
 리뷰는 **PR 오픈을 사이에 두고 두 단계**로 나뉜다. 목적: **수정 필수 등급**을 걸러내되
@@ -243,7 +257,11 @@ PR 본문 필수 항목 — **리뷰 결과는 이 시점에 확정할 수 없�
 9-6 에서 갱신한다. 지금은 `봇: 리뷰 대기` 로 둔다.
 
 - 변경 사항 요약
-- `Closes #<issue>`
+- `Closes fomalhaut84/pleiades#<issue>` — **저장소를 반드시 한정한다**
+
+  > **정정 (PR #6 Codex 리뷰 P2).** 이슈는 항상 **pleiades** 에 만드는데(5절), 대상 저장소
+  > 작업의 PR 은 **그 저장소**에서 열린다. 한정하지 않은 `Closes #<n>` 은 **그 저장소의
+  > 같은 번호 이슈**를 가리켜, 무관한 이슈를 닫고 진짜 추적 이슈는 열어둔 채로 만든다.
 - **되돌리기 비용** — 등급 + 되돌리는 행위 (pleiades 고유)
 - 체크리스트: 린트/타입체크/테스트/빌드 (해당 시)
 - `## 코드 리뷰 결과` 섹션 초안 (9-6 에서 확정)
@@ -330,8 +348,8 @@ PR 링크를 사용자에게 알린다. **머지는 사용자가 직접 한다.*
 사용자가 "머지 완료"를 알려주면:
 
 ```bash
-gh issue comment <issue> --body "완료: PR #<pr>, 머지일 $(date +%Y-%m-%d)"
-gh issue close <issue>
+gh issue comment -R fomalhaut84/pleiades <issue> --body "완료: PR #<pr>, 머지일 $(date +%Y-%m-%d)"
+gh issue close -R fomalhaut84/pleiades <issue>
 git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 표 참조
 ```
 
@@ -350,9 +368,10 @@ git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 �
    > 줄이는 것은 **반복 횟수**이지 **수정 필수 등급**이 아니다.
    > **같은 결함이 myFinance·myFitness 양쪽에 있다** (#8).
 3. PR 2개 생성: **main 대상 + dev 대상** (**양쪽 머지 원칙**)
-   - **main PR 에만** `Closes #<issue>` 를 넣는다
-   - **dev 백포트 PR 은 이슈-PR 1:1 규칙의 예외다.** 본문에 `Backport of #<main-PR> (#<issue>)`
-     만 적고 이슈를 닫지 않는다. 별도 이슈를 만들지 않는다
+   - **main PR 에만** `Closes fomalhaut84/pleiades#<issue>` 를 넣는다 (**저장소 한정**)
+   - **dev 백포트 PR 은 이슈-PR 1:1 규칙의 예외다.** 본문에
+     `Backport of #<main-PR> (fomalhaut84/pleiades#<issue>)` 만 적고 이슈를 닫지 않는다.
+     별도 이슈를 만들지 않는다
 
    > **정정 (PR #6 Codex 리뷰 P2).** hotfix 는 이슈 1개에 PR 2개라 1:1 규칙과 충돌했다.
    > 이슈를 재사용하면 1:1 위반, 새 이슈를 만들면 작업-이슈 대응이 깨진다.
