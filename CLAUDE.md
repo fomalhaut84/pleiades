@@ -79,7 +79,13 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
 - 새 옵션·단계를 제안할 때는 **되돌리기 비용을 항상 함께 적는다.** 이 저장소 문서의 일관된 형식이다.
 - 실측값은 추정하지 않는다. `docs/research/measured-facts.md` 에 없으면 직접 측정하고 그 파일에 측정 명령과 함께 추가한다.
 - 문서는 한국어. 코드·변수명·경로는 영어.
-- 커밋: conventional commits — `<type>(<scope>): <desc>`. `main` 브랜치, 원격 없음
+- **브랜치 전략은 gitflow.** `main`(정본) → `dev`(개발) → `<type>/<issue>-<n>`(작업).
+  **작업 브랜치는 `dev` 에서 분기하고 `dev` 로 PR.** `main` 직접 push 금지. `main` 은 `dev` 에서만 받는다
+- **모든 작업은 GitHub 이슈와 PR 이 1:1 로 매칭된다.** 이슈 없이 작업 브랜치를 만들지 않는다.
+  PR 본문에 `Closes #<issue>` 를 넣어 자동으로 닫히게 한다
+- 커밋: conventional commits — `<type>(<scope>): <desc> (#<issue>)`.
+  원격 `origin` = `git@github.com:fomalhaut84/pleiades.git` (**PUBLIC**)
+- **PR 머지는 사용자가 직접 한다.** 로컬 merge / `main` 직접 push 금지 — 두 대상 저장소와 같은 규칙
 - 아티팩트 소스는 `docs/artifacts/integration-artifact.html`. 발행 전 `action:"read"` 로 현재 버전 확인 필수
 
 ## 하네스: pleiades 통합
