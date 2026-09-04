@@ -22,8 +22,12 @@ Q7(DB 경계) · Q2(독립 배포) · Q3(봇 인바운드 통합).
 
 | 저장소 | 경로 | 버전 | 브랜치 |
 |---|---|---|---|
-| myFinance | `~/workspace/myFinance` | v0.16.4 | dev |
-| myFitness | `~/workspace/myFitness` | v2.27.2 | dev |
+| myFinance | `~/workspace/myFinance` | v0.16.4 | **`integration/pleiades`** (dev 분기) |
+| myFitness | `~/workspace/myFitness` | v2.27.2 | **`integration/pleiades`** (dev 분기) |
+
+**이 프로젝트의 모든 작업은 두 저장소의 `integration/pleiades` 브랜치에서만 한다** (2026-09-04 생성, 로컬 전용).
+단계 작업은 그 위에 `integration/pleiades-<단계>` 를 따서 PR 로 합친다 — 003 §5-2 의 단계별 되돌리기 등급을 보존하기 위해서다.
+`dev` 로의 PR 은 1a 전체가 끝난 뒤. `main` 직접 변경 금지. 롤백은 `_workspace/04_operator_rollback.md`.
 
 ```bash
 # 두 저장소를 함께 보는 세션 (CLAUDE.md·rules 까지 로드)
@@ -59,6 +63,7 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
 ## 작업 규칙
 
 - **기존 두 저장소에 쓰기 전 반드시 사용자 확인.** 둘 다 실서비스 중이다 (PM2 + Nginx, finance:4100 / fitness:4200).
+- **두 저장소 작업 브랜치는 `integration/pleiades`.** 다른 브랜치에서 작업하지 않는다 (위 표 참조).
 - 새 옵션·단계를 제안할 때는 **되돌리기 비용을 항상 함께 적는다.** 이 저장소 문서의 일관된 형식이다.
 - 실측값은 추정하지 않는다. `docs/research/measured-facts.md` 에 없으면 직접 측정하고 그 파일에 측정 명령과 함께 추가한다.
 - 문서는 한국어. 코드·변수명·경로는 영어.
