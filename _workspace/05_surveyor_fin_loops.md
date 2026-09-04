@@ -266,11 +266,16 @@ grep -rn --binary-files=text -E "chatIds\s*:\s*number\[\]" src --include='*.ts' 
 | 대상 | 건수 |
 |---|---|
 | `chatIds: number[]` 파라미터를 받는 함수 시그니처 | **18** (알림 진입점 16 + 내부 위임 2: `doCheckTASignals`, `runScan`) |
-| `chatIds` 를 실인자로 넘기는 호출 (테스트 제외) | **19** — `scheduler.ts` 14 + `lib/cron.ts` 3 + `retry/route.ts` 1 + 내부 위임 2 … 중 `sendBriefing`/`sendClosingReview` 4건 포함 |
+| `chatIds` 를 실인자로 넘기는 호출 (테스트 제외) | **19** — `scheduler.ts` **13** + `lib/cron.ts` 3 + `retry/route.ts` 1 + 내부 위임 2 … 중 `sendBriefing`/`sendClosingReview` 4건 포함 |
 | `getAllowedChatIds()` **호출** 지점 | 5 (`retry/route.ts:63`, `cron.ts:95`, `budget-alert.ts:28`·`:95`, `scheduler.ts:40`) |
 
-`scheduler.ts` 는 `:40` 에서 한 번 만든 `chatIds` 를 **14개 cron 콜백에 클로저로 캡처**해 넘긴다
-(`:81,95,108,121,135,148,161,186,200,213,226,243,256`).
+`scheduler.ts` 는 `:40` 에서 한 번 만든 `chatIds` 를 **13개 cron 콜백에 클로저로 캡처**해 넘긴다
+(`:81,95,108,121,135,148,161,186,200,213,226,243,256` — **13개**. `:40` 은 생성, `:41` 은 가드다).
+
+> **정정 (PR #9 Codex 리뷰 P2).** 이 소계를 **14** 로 적어 `14+3+1+2 = 20` 이 되면서
+> 총계 **19** 와 어긋났고, 바로 아래 행번호 목록(13개)과도 맞지 않았다.
+> 재측정 결과 **scheduler 13 + cron 3 + retry 1 + 내부 위임 2 = 19** 로 총계는 옳다.
+> 틀린 것은 소계뿐이다. `measured-facts.md` · `003` 의 전파분도 함께 정정했다.
 
 → **`getAllowedChatIds` 4개 정의를 지우는 것은 청구서의 일부일 뿐이다.**
 수신자 해석이 파사드로 내려가면 **18개 시그니처에서 파라미터가 빠지고 19개 호출부가 따라 바뀐다.**
@@ -383,7 +388,7 @@ grep -rn --binary-files=text "getAllowedChatIds" src --include='*.ts'
 
 | # | 정의 | 호출 | 반환값 용도 | `targetCount()` 로 대체 |
 |---|---|---|---|---|
-| 1 | `bot/notifications/scheduler.ts:21` | `:40` | ① `:41` `length===0` 가드 ② **14개 cron 콜백에 `chatIds` 를 클로저로 전달** (`:81`~`:256`) | **✕ — 가드만 대체됨.** 전달분은 18개 시그니처 개편이 따라온다. 그리고 `:108 sendQuarterlyReport(chatIds)` 는 §7-4 로 **목록 자체가 계속 필요** |
+| 1 | `bot/notifications/scheduler.ts:21` | `:40` | ① `:41` `length===0` 가드 ② **13개 cron 콜백에 `chatIds` 를 클로저로 전달** (`:81`~`:256`) | **✕ — 가드만 대체됨.** 전달분은 18개 시그니처 개편이 따라온다. 그리고 `:108 sendQuarterlyReport(chatIds)` 는 §7-4 로 **목록 자체가 계속 필요** |
 | 2 | `bot/notifications/budget-alert.ts:14` | `:28`, `:95` | ① `:29`·`:96` `length===0` 가드 ② `:81`·`:122` 루프 대상 | **○ 완전 대체** — 파일 안에서 생성·소비가 닫혀 있다 |
 | 3 | `lib/cron.ts:13` | `:95` | ① `:96` `length>0` 가드 ② `checkPriceAlerts(chatIds)`·`checkCustomStrategies(chatIds)`·`checkTASignals(chatIds)` **3개 함수에 전달** | **△** — 3개 시그니처를 함께 바꾸면 대체 가능. 그 3개는 각자 내부에 또 `length===0` 가드를 갖는다(#7·#9·#10) → **가드 중복 4중** |
 | 4 | `app/api/alerts/history/[id]/retry/route.ts:29` | `:63` | ① `:64` `length===0` → **HTTP 500 `fail('발송 대상 chat 이 설정되지 않았습니다.')`** ② `redispatchAlert(row, chatIds)` 전달 → 반환 `totalChats` 가 **API 응답 필드** | **△** — 가드는 `targetCount()` 로, 목록 전달은 `redispatchAlert` 시그니처 개편으로. **API 응답 계약(`totalChats`)이 걸려 있어** 값 의미가 바뀌면 안 됨 |

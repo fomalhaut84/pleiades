@@ -374,7 +374,7 @@ myFinance 4개는 로직 동일. `retry/route.ts` 만 `!Number.isNaN`, 나머지
 
 > **정정·보완 (2026-09-04 전수 측정 · 이슈 #4).** 위 표는 `getAllowedChatIds` **정의 4곳**만 센다.
 > 그 4곳이 만든 값은 **함수 인자로 계속 전파된다** — `chatIds: number[]` 파라미터가
-> **18 시그니처**, 실인자 호출이 **19곳**이고, `scheduler.ts:40` 값 하나를 **14개 cron 콜백이
+> **18 시그니처**, 실인자 호출이 **19곳**이고, `scheduler.ts:40` 값 하나를 **13개 cron 콜백이
 > 클로저로 캡처**한다. 그리고 `quarterly-report.ts:52`(`sendDocument`)가 **목록 자체**를 요구하므로
 > **`scheduler.ts:21` 정의는 실질적으로 지울 수 없다.**
 > **완전 제거 가능한 것은 `budget-alert.ts:14` 1곳뿐이다.** 상세는 이 문서 하단
@@ -1364,7 +1364,7 @@ grep -rn --binary-files=text "getAllowedChatIds" src --include='*.ts'           
 | 실인자 호출 (테스트 제외) | **19** |
 | `getAllowedChatIds()` 호출 지점 | 5 (`budget-alert.ts` 가 2회) |
 
-`scheduler.ts:40` 이 만든 값 하나를 **14개 cron 콜백이 클로저로 캡처**
+`scheduler.ts:40` 이 만든 값 하나를 **13개 cron 콜백이 클로저로 캡처**
 (`:81,95,108,121,135,148,161,186,200,213,226,243,256`).
 
 **완전 제거 가능한 `getAllowedChatIds` 는 `budget-alert.ts:14` 1곳뿐** (파일 안에서 생성·소비가 닫힘).
