@@ -49,14 +49,21 @@ worktree 에서 작업하고 `integration/pleiades-<단계>` 를 따서 PR 로 �
 # 1. dev → main PR 생성 (Claude)
 gh pr create --base main --head dev --title "Release v1.0.0" --body "..."
 
-# 2. 사용자가 머지
+# 2. 봇 리뷰 게이트 — 9-3·9-4 를 그대로 거친다. 봇 P0/P1 = 0 이 될 때까지 머지하지 않는다.
+#    수정이 필요하면 dev 에 반영 → @codex review → 9-6 으로 PR body 갱신
 
-# 3. 머지 확인 후 태그 (Claude)
+# 3. 사용자가 머지
+
+# 4. 머지 확인 후 태그 (Claude)
 git checkout main && git pull
 git tag v1.0.0
 git push origin --tags
 gh release create v1.0.0 --title "v1.0.0" --notes "릴리즈 노트"
 ```
+
+> **릴리즈도 봇 게이트를 거친다 (PR #6 Codex 리뷰 P1).** 봇은 `gh pr create` **뒤에**
+> 비동기로 돌기 시작하므로, PR 생성 다음 줄에 머지를 두면 **필수 지적이 남은 채로
+> `dev` 를 `main` 에 머지**할 수 있다. 릴리즈는 곧장 실서비스로 간다.
 
 > **정정 (PR #6 Codex 리뷰 P1).** 계승한 원본 두 저장소의 절차는
 > `git merge dev` → `git push origin main --tags` 로 **로컬에서 main 을 직접 갱신·push** 했다.
@@ -113,10 +120,25 @@ gh issue create --title "<제목>" --body "$(cat docs/specs/...)" --label "<라�
 
 ### 7. 개발
 
+**작업 대상에 따라 base 가 다르다.** 아래 `<base>` 는 이 표를 가리킨다.
+
+| 작업 대상 | 브랜치 | `<base>` | PR 종착 |
+|---|---|---|---|
+| **pleiades** (`docs/**`·`packages/**`·`.claude/**`) | `<type>/<issue>-<n>` | **`dev`** | `dev` |
+| **대상 저장소** (`repos/myFinance`·`repos/myFitness`) | `integration/pleiades-<단계>` | **`integration/pleiades`** | `integration/pleiades` |
+
 ```bash
-git checkout dev && git pull
-git checkout -b feat/<issue>-<n>
+# pleiades
+git checkout dev && git pull && git checkout -b feat/<issue>-<n>
+
+# 대상 저장소 (repos/ 아래 worktree 에서)
+git checkout integration/pleiades && git checkout -b integration/pleiades-<단계>
 ```
+
+> **대상 저장소 작업은 `dev` 로 직행하지 않는다 (PR #6 Codex 리뷰 P1).**
+> `integration/pleiades` → `dev` PR 은 **1a 전체가 끝난 뒤 한 번**이다 (`004-repo-layout.md`).
+> 그 전에 단계 브랜치를 `dev` 로 보내면 **미완성 단계가 서비스 브랜치로 들어가고**
+> 003 §5-2 의 단계별 되돌리기 등급이 무너진다.
 
 커밋: `<type>(<scope>): <desc> (#<issue>)` — 하나의 논리적 변경 = 하나의 커밋.
 
@@ -166,7 +188,9 @@ npm run lint && npm run typecheck && npm run test && npm run build
 > 그리고 규모 행은 **실행 코드에만** 적용된다 — 문서 3파일이 규모 행과 self-review 행에
 > 동시에 걸려 **어느 행을 고르느냐로 게이트가 달라지는** 모호함이 있었다.
 
-self-review 시에도 검증(8절) 필수이고, PR body 에 `self-review only (변경 성격: <카테고리>)` 를 명시한다.
+self-review 시에도 검증(8절) 필수이고, PR body 초안에 `self-review (변경 성격: <카테고리>)` 를 명시한다.
+9-6 에서 **`self-review + Codex M회`** 로 확정한다 — **`only` 는 쓰지 않는다.** self-review 경로도
+봇 리뷰(9-3)를 그대로 거치기 때문이다.
 
 #### 9-1. 로컬 사전 리뷰 (PR 오픈 전)
 
@@ -174,7 +198,7 @@ self-review 시에도 검증(8절) 필수이고, PR body 에 `self-review only (
 
 ```
 Task(subagent_type="pr-review-toolkit:code-reviewer", prompt="""
-Review branch <current> vs dev in <repo path>.
+Review branch <current> vs <base> in <repo path>.   # <base> 는 7절 표 참조
 
 ## Context
 <1~3문장으로 이번 변경이 하는 일>
@@ -212,7 +236,7 @@ critical/major 반영 후 검증 재통과 → PR 오픈.
 9-1 의 `critical`/`major` 를 0 으로 만들고 검증(8절)을 재통과한 뒤 연다.
 
 ```bash
-gh pr create --base dev --head <branch>
+gh pr create --base <base> --head <branch>   # <base> 는 7절 표 참조
 ```
 
 PR 본문 필수 항목 — **리뷰 결과는 이 시점에 확정할 수 없다.** 봇 리뷰(9-3)가 끝난 뒤
@@ -308,7 +332,7 @@ PR 링크를 사용자에게 알린다. **머지는 사용자가 직접 한다.*
 ```bash
 gh issue comment <issue> --body "완료: PR #<pr>, 머지일 $(date +%Y-%m-%d)"
 gh issue close <issue>
-git checkout dev && git pull && git branch -d <branch>
+git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 표 참조
 ```
 
 그리고 `CLAUDE.md` 의 상태 절을 갱신하고, 다음 작업이 있으면 사용자에게 제안한다.
