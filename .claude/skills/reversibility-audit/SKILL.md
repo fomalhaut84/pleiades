@@ -4,6 +4,12 @@ description: 방향 문서에 적힌 비용·되돌리기 추정을 실제 코�
 ---
 
 # reversibility-audit — 비용 추정 반증
+> **감사 대상은 모드가 정한다 (PR #6 Codex 리뷰 P1).** 아래 명령의 `<audit-target>` 은
+> `.claude/rules/workflow.md` **7절 표**의 "어디서" 열이다:
+> **모드 I** → `~/workspace/pleiades/repos/$d` (worktree, `integration/pleiades`) ·
+> **모드 S·H** → `~/workspace/$d` (원본, 그 저장소의 `dev`/`main`).
+> **경로를 고정하면 단독 변경·핫픽스가 "바꾸려는 코드가 없는 브랜치"를 감사하고 통과한다** —
+> 반대로 통합 작업이 원본을 감사하면 앞선 단계가 빠진 트리를 본다. 둘 다 잘못된 승인이다.
 > **`grep` 에는 반드시 `--binary-files=text` (PR #6 Codex 리뷰 P2).** 없으면 `.next/cache`
 > 같은 파일이 binary 로 판정돼 **조용히 0건 오탐**이 난다. 실제로 실측·감사 에이전트가
 > 독립적으로 같은 오탐을 냈다 (`004-repo-layout.md`). 아래 명령에도 전부 붙어 있다.
@@ -43,9 +49,9 @@ description: 방향 문서에 적힌 비용·되돌리기 추정을 실제 코�
 ### 1. 설정이 정말 설정인가
 
 ```bash
-grep -rn --binary-files=text "<파일명>" ~/workspace/pleiades/repos/$d/src --include='*.ts'
-grep -rn --binary-files=text "writeFileSync\|mkdirSync\|\.runtime/\|process.cwd()" ~/workspace/pleiades/repos/$d/src/<dir>/*.ts
-grep -rn --binary-files=text "process.env.[A-Z_]* ??\|process.env.[A-Z_]* ||" ~/workspace/pleiades/repos/$d/src/<dir>/*.ts
+grep -rn --binary-files=text "<파일명>" <audit-target>/src --include='*.ts'
+grep -rn --binary-files=text "writeFileSync\|mkdirSync\|\.runtime/\|process.cwd()" <audit-target>/src/<dir>/*.ts
+grep -rn --binary-files=text "process.env.[A-Z_]* ??\|process.env.[A-Z_]* ||" <audit-target>/src/<dir>/*.ts
 ```
 
 - 그 파일을 실제로 읽는 코드가 있는가
@@ -56,7 +62,7 @@ grep -rn --binary-files=text "process.env.[A-Z_]* ??\|process.env.[A-Z_]* ||" ~/
 ### 2. 등록만으로 동작하는가
 
 ```bash
-grep -rn --binary-files=text "allowedTools\|allowed-tools\|--tools\|allowlist\|permission" ~/workspace/pleiades/repos/$d/src --include='*.ts'
+grep -rn --binary-files=text "allowedTools\|allowed-tools\|--tools\|allowlist\|permission" <audit-target>/src --include='*.ts'
 ```
 
 - 화이트리스트가 코드에 하드코딩돼 있으면 **설정 변경만으로는 작동하지 않는다**
@@ -76,8 +82,8 @@ grep -rn --binary-files=text "allowedTools\|allowed-tools\|--tools\|allowlist\|p
 
 ```bash
 grep -nE --binary-files=text "^import" <후보 파일>                          # 전부 읽는다
-grep -rn --binary-files=text "from ['\"]next" ~/workspace/pleiades/repos/$d/src/<dir>/ | wc -l
-grep -rn --binary-files=text "from ['\"]@/lib" ~/workspace/pleiades/repos/$d/src/<dir>/ | wc -l
+grep -rn --binary-files=text "from ['\"]next" <audit-target>/src/<dir>/ | wc -l
+grep -rn --binary-files=text "from ['\"]@/lib" <audit-target>/src/<dir>/ | wc -l
 ```
 
 형제 파일 import 까지 따라간다. 별도 프로세스로 이미 돌면 프레임워크 버전 정렬과 무관하다.

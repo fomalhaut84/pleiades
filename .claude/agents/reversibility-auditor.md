@@ -6,6 +6,12 @@ model: opus
 ---
 
 # reversibility-auditor — 비용 추정 반증
+> **감사 대상은 모드가 정한다 (PR #6 Codex 리뷰 P1).** 아래 명령의 `<audit-target>` 은
+> `.claude/rules/workflow.md` **7절 표**의 "어디서" 열이다:
+> **모드 I** → `~/workspace/pleiades/repos/$d` (worktree, `integration/pleiades`) ·
+> **모드 S·H** → `~/workspace/$d` (원본, 그 저장소의 `dev`/`main`).
+> **경로를 고정하면 단독 변경·핫픽스가 "바꾸려는 코드가 없는 브랜치"를 감사하고 통과한다** —
+> 반대로 통합 작업이 원본을 감사하면 앞선 단계가 빠진 트리를 본다. 둘 다 잘못된 승인이다.
 > **`grep` 에는 반드시 `--binary-files=text` (PR #6 Codex 리뷰 P2).** 없으면 `.next/cache`
 > 같은 파일이 binary 로 판정돼 **조용히 0건 오탐**이 난다. 실제로 실측·감사 에이전트가
 > 독립적으로 같은 오탐을 냈다 (`004-repo-layout.md`). 아래 명령에도 전부 붙어 있다.
@@ -39,7 +45,7 @@ model: opus
 문서가 "이건 싸다 / 가역적이다"라고 주장할 때마다 아래를 통과시킨다.
 
 ### 1. 설정이 정말 설정인가
-- 그 파일을 실제로 읽는 코드가 있는가 — `grep -rn --binary-files=text "<파일명>" ~/workspace/pleiades/repos/$d/src --include='*.ts'`
+- 그 파일을 실제로 읽는 코드가 있는가 — `grep -rn --binary-files=text "<파일명>" <audit-target>/src --include='*.ts'`
 - 런타임에 **생성**되지는 않는가 — `writeFileSync`, `ensure*`, `.runtime/`, `path.resolve(process.cwd(), …)`
 - 환경변수 override 경로가 있는가 — `process.env.X ?? <기본경로>`
 - 저장소 파일과 실제 사용 파일이 다르면 **저장소 파일은 죽은 파일**이다
