@@ -39,8 +39,9 @@ model: opus
   `~/workspace/pleiades/repos/<repo>` **worktree** 에서, `integration/pleiades-<단계>` 를 따서
   **`integration/pleiades` 로 PR**. `integration/pleiades` → `dev` 는 1a 전체 완료 후 한 번.
   근거: `docs/specs/004-repo-layout.md` · `.claude/rules/workflow.md` 7절
-- 원본 `~/workspace/myF*` 에는 **통합 작업을 쓰지 않는다** — 서비스 핫픽스·단일 저장소 작업 전용
-  (그 경우의 절차는 `.claude/rules/workflow.md` 긴급 수정 절. 승인 게이트는 그대로)
+- 원본 `~/workspace/myF*` 에는 **통합 작업을 쓰지 않는다** — **단독 작업**(그 저장소의 `dev` 경유)과
+  **서비스 핫픽스**(`main` 경유) 전용이다. **둘은 다른 경로다** — `.claude/rules/workflow.md` 7절
+  base 표. 승인 게이트는 양쪽 다 그대로
 - `main` 직접 변경 금지
 - **PR 머지는 사용자가 직접 한다.** 로컬 merge / 직접 push 금지
 - 커밋: `<type>(<scope>): <desc> (#<issue>)` conventional commits

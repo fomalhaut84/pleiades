@@ -76,8 +76,8 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
   **미완성 단계를 `dev` 로 보내면 서비스 브랜치가 오염되고 003 §5-2 의 단계별
   되돌리기 등급이 무너진다** (PR #6 Codex 리뷰 P1).
 - 원본 `~/workspace/myFinance`(`dev`) · `~/workspace/myFitness`(`main`) 에는
-  **통합 작업을 쓰지 않는다** — 서비스 핫픽스·단일 저장소 작업 전용이다
-  (그 절차는 `.claude/rules/workflow.md` 긴급 수정 절. **승인 게이트는 그대로 적용된다**).
+  **통합 작업을 쓰지 않는다** — **단독 작업**(그 저장소의 `dev` 경유)과 **서비스 핫픽스**(`main` 경유) 전용이다.
+  **둘은 다른 경로다** — `.claude/rules/workflow.md` 7절 base 표. 승인 게이트는 양쪽 다 그대로.
 - `main` 직접 변경 금지
 - **PR 머지는 사용자가 직접 한다.** 로컬 merge / 직접 push 금지
 - 커밋 `<type>(<scope>): <desc> (#<issue>)`

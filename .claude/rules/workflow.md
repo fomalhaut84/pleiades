@@ -137,10 +137,17 @@ gh issue create -R fomalhaut84/pleiades --title "<제목>" --body "$(cat docs/sp
 
 **작업 대상에 따라 base 가 다르다.** 아래 `<base>` 는 이 표를 가리킨다.
 
-| 작업 대상 | 브랜치 | `<base>` | PR 종착 |
-|---|---|---|---|
-| **pleiades** (`docs/**`·`packages/**`·`.claude/**`) | `<type>/<issue>-<n>` | **`dev`** | `dev` |
-| **대상 저장소** (`repos/myFinance`·`repos/myFitness`) | `integration/pleiades-<단계>` | **`integration/pleiades`** | `integration/pleiades` |
+| 작업 대상 | 어디서 | 브랜치 | `<base>` | PR 종착 |
+|---|---|---|---|---|
+| **pleiades** (`docs/**`·`packages/**`·`.claude/**`) | pleiades | `<type>/<issue>-<n>` | **`dev`** | `dev` |
+| **통합 작업** (대상 저장소) | **`repos/*` worktree** | `integration/pleiades-<단계>` | **`integration/pleiades`** | `integration/pleiades` |
+| **단독 작업** (대상 저장소 하나만, 통합과 무관) | **원본 `~/workspace/myF*`** | `<type>/<issue>-<n>` | **그 저장소의 `dev`** | 그 저장소 `dev` |
+| **서비스 핫픽스** (실서비스 버그) | **원본 `~/workspace/myF*`** | `hotfix/<issue>-<n>` | **그 저장소의 `main`** | `main` + `dev` |
+
+**단독 작업과 서비스 핫픽스는 다른 경로다 (PR #6 Codex 리뷰 P1).** 둘 다 원본에서 하지만
+**단독 작업은 `dev` 를 거친다** — 긴급하지 않은 변경을 핫픽스 경로로 보내면 `main` 에서 분기해
+`main` 으로 PR 하게 되어 **평시 기능이 즉시 배포된다.** 단독 작업은 그 저장소 자신의
+`.claude/rules/workflow.md`(계승 전 원본)를 따르고, 이슈는 **그 저장소**에 만든다.
 
 ```bash
 # pleiades
@@ -309,12 +316,19 @@ PR 오픈 시 자동 트리거. **매 커밋마다 재실행되지 않는다** �
 ```
 사전 리뷰 (9-1, 필수인 경우) → critical/major = 0 → PR 오픈 (9-2)
   ↓
-Codex bot 리뷰 → P0/P1 있음? → Yes → 수정 → 커밋 → @codex review
+Codex bot 리뷰 → P0/P1 있음? → Yes → 수정 → ★ 8절 검증 재실행 + 9-5 회귀 테스트 실행
+                             │                → 통과해야 커밋 → @codex review
                              → No  → ✅ 통과 (P2 이하는 후속 이슈)
 ```
 
+> **★ 봇 수정 후에는 반드시 재검증한다 (PR #6 Codex 리뷰 P1).** 8절 검증은 **그 수정 이전**의
+> 결과다. 봇 지적을 고치느라 실행 코드를 바꿔놓고 재검증 없이 커밋하면, **빌드가 깨졌거나
+> 테스트가 실패하는 채로 "봇 통과 = 완료"를 선언**할 수 있다. 9-5 가 요구하는 회귀 테스트도
+> **추가로 끝나는 게 아니라 실제로 돌려야** 게이트 역할을 한다.
+> 문서만 바꾼 수정은 8절이 "해당 없음"이므로 이 재검증도 해당 없다.
+
 2회 이상 반복 시 스코프·설계 재점검 신호.
-최종 통과 시 `✅ 코드 리뷰 통과 (사전 critical/major: 0건 · 봇 P0/P1: 0건)`.
+최종 통과 시 `✅ 코드 리뷰 통과 (사전 critical/major: 0건 · 봇 P0/P1: 0건 · 마지막 수정 후 검증 재통과)`.
 **매 리뷰 결과는 사용자에게 요약 보고.**
 
 #### 9-5. 회귀 방지 테스트 (수정 필수 등급 반영 시)
