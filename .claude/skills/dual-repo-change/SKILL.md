@@ -66,7 +66,6 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 > **myFitness worktree 에는 `.claude/` 가 없다 (PR #6 교차 감사 M8).** fit 의 하네스는 gitignored 라
 > worktree 에 따라오지 않는다(004 §3′, 의도적 제외). 필요하면 **원본 `~/workspace/myFitness/.claude/`** 를
 > 읽는다 — 쓰지는 않는다. myFinance 는 tracked 라 worktree 에 있다.
- **아래 요약보다 그쪽이 정본이다.**
 
 공통:
 - **pleiades 통합 작업의 base 는 `dev` 가 아니라 `integration/pleiades` 다.**
@@ -76,8 +75,9 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
   근거는 `docs/specs/004-repo-layout.md` · `.claude/rules/workflow.md` 7절 base 표.
   **미완성 단계를 `dev` 로 보내면 서비스 브랜치가 오염되고 003 §5-2 의 단계별
   되돌리기 등급이 무너진다** (PR #6 Codex 리뷰 P1).
-- 원본 `~/workspace/myFinance`(`dev`) · `~/workspace/myFitness`(`main`) 은
-  **서비스 유지용이다. 쓰기 금지.**
+- 원본 `~/workspace/myFinance`(`dev`) · `~/workspace/myFitness`(`main`) 에는
+  **통합 작업을 쓰지 않는다** — 서비스 핫픽스·단일 저장소 작업 전용이다
+  (그 절차는 `.claude/rules/workflow.md` 긴급 수정 절. **승인 게이트는 그대로 적용된다**).
 - `main` 직접 변경 금지
 - **PR 머지는 사용자가 직접 한다.** 로컬 merge / 직접 push 금지
 - 커밋 `<type>(<scope>): <desc> (#<issue>)`

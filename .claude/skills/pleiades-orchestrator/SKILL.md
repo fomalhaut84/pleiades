@@ -32,7 +32,7 @@ for d in myFinance myFitness; do
   echo -n "  repos/$d: "; git -C ~/workspace/pleiades/repos/$d branch --show-current
   git -C ~/workspace/pleiades/repos/$d status -s | head -3
 done
-echo "== 서비스 유지용 원본 (fin=dev · fit=main · 쓰기 금지)"
+echo "== 서비스 유지용 원본 (fin=dev · fit=main · 통합 작업 금지 · 핫픽스는 여기서)"
 for d in myFinance myFitness; do
   echo -n "  ~/workspace/$d: "; git -C ~/workspace/$d branch --show-current
   git -C ~/workspace/$d status -s | head -3

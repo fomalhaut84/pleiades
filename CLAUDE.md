@@ -36,8 +36,13 @@ Q7(DB 경계) · Q2(독립 배포) · Q3(봇 인바운드 통합).
 | 서비스 유지 | `~/workspace/myFinance` (v0.16.4) | `dev` | 원본. 핫픽스·단일 저장소 작업용 |
 | 서비스 유지 | `~/workspace/myFitness` (v2.27.2) | `main` | 원본. 핫픽스·단일 저장소 작업용 |
 
-**이 프로젝트의 작업은 `repos/` 아래에서만 한다.** 원본 두 경로는 이 프로젝트가 끝날 때까지
-**서비스 유지용으로 남긴다** — 필요하면 읽기 전용으로 참고한다.
+**이 프로젝트의 통합 작업은 `repos/` 아래에서만 한다.** 원본 두 경로는 이 프로젝트가 끝날 때까지
+**서비스 유지용으로 남긴다** — 통합 작업의 참고용으로는 읽기 전용이다.
+
+> **원본이 금지된 것은 통합 작업뿐이다.** **서비스 핫픽스(myFinance·myFitness 실서비스 버그)와
+> 단일 저장소 작업은 원본에서 한다** — worktree 는 `integration/pleiades` 를 잡고 있어
+> 그 저장소의 `main` 에서 분기할 수 없고 통합 미완성분이 섞일 위험도 있다.
+> 절차는 `.claude/rules/workflow.md` 긴급 수정 절. **실서비스 변경이므로 사용자 승인 게이트는 그대로다.**
 단계 작업은 `integration/pleiades-<단계>` 를 따서 PR 로 합친다 (003 §5-2 의 단계별 되돌리기 등급 보존).
 `dev` 로의 PR 은 1a 전체가 끝난 뒤. `main` 직접 변경 금지. 롤백은 `_workspace/04_operator_rollback.md`.
 
@@ -91,7 +96,7 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
 ## 작업 규칙
 
 - **기존 두 저장소에 쓰기 전 반드시 사용자 확인.** 둘 다 실서비스 중이다 (PM2 + Nginx, finance:4100 / fitness:4200).
-- **작업은 `repos/` 아래 worktree 에서, 브랜치는 `integration/pleiades`.** 원본 `~/workspace/myF*` 는 서비스 유지용이므로 쓰기 금지 (위 표 참조).
+- **통합 작업은 `repos/` 아래 worktree 에서, 브랜치는 `integration/pleiades`.** 원본 `~/workspace/myF*` 에는 **통합 작업을 쓰지 않는다** — 서비스 핫픽스·단일 저장소 작업 전용이다 (위 표 참조).
 - **절대경로 측정에는 반드시 `grep --binary-files=text`.** 없으면 `.next/cache` 같은 파일이 binary 로 판정돼 조용히 0건 오탐이 난다 (004).
 - 새 옵션·단계를 제안할 때는 **되돌리기 비용을 항상 함께 적는다.** 이 저장소 문서의 일관된 형식이다.
 - 실측값은 추정하지 않는다. `docs/research/measured-facts.md` 에 없으면 직접 측정하고 그 파일에 측정 명령과 함께 추가한다.

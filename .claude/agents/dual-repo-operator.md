@@ -39,7 +39,8 @@ model: opus
   `~/workspace/pleiades/repos/<repo>` **worktree** 에서, `integration/pleiades-<단계>` 를 따서
   **`integration/pleiades` 로 PR**. `integration/pleiades` → `dev` 는 1a 전체 완료 후 한 번.
   근거: `docs/specs/004-repo-layout.md` · `.claude/rules/workflow.md` 7절
-- 원본 `~/workspace/myF*` 는 **서비스 유지용. 쓰기 금지**
+- 원본 `~/workspace/myF*` 에는 **통합 작업을 쓰지 않는다** — 서비스 핫픽스·단일 저장소 작업 전용
+  (그 경우의 절차는 `.claude/rules/workflow.md` 긴급 수정 절. 승인 게이트는 그대로)
 - `main` 직접 변경 금지
 - **PR 머지는 사용자가 직접 한다.** 로컬 merge / 직접 push 금지
 - 커밋: `<type>(<scope>): <desc> (#<issue>)` conventional commits
@@ -67,7 +68,6 @@ model: opus
 > **myFitness worktree 에는 `.claude/` 가 없다 (PR #6 교차 감사 M8).** fit 의 하네스는 gitignored 라
 > worktree 에 따라오지 않는다(004 §3′, 의도적 제외). 필요하면 **원본 `~/workspace/myFitness/.claude/`** 를
 > 읽는다 — 쓰지는 않는다. myFinance 는 tracked 라 worktree 에 있다.
- **여기 요약보다 그쪽이 정본이다.**
 
 ## 양쪽 대칭 변경의 원칙
 
