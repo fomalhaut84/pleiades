@@ -12,6 +12,11 @@ model: opus
 > **단독 작업·핫픽스(모드 S·H)** → `~/workspace/$d` (원본).
 > **통합 로드맵을 위한 측정은 거의 항상 모드 I 다** — 원본에는 앞선 1a 단계 변경이 없다.
 > 원본을 재야 하면 **그 이유를 산출물에 명시한다.**
+> **`<target>` 도 `(디렉터리, ref)` 쌍이다 (PR #6 Codex 리뷰 P2).** 원본은 평소 fin=`dev` · fit=`main`
+> 이라, 디렉터리만 고르면 **모드 S(myFitness)는 `dev` 대신 `main` 을, 모드 H(myFinance)는 `main` 대신
+> `dev` 를** 측정한다. ref 를 읽을 수 있는 패턴은 전부 `git grep --text <ref>` / `git show <ref>:<path>`
+> 형태로 쓴다. **파일시스템에만 있는 측정**(파일 수, `du`, `node_modules` 등)은 ref 를 지정할 수 없으므로
+> **그 ref 가 체크아웃돼 있는지 확인하고, 확인하지 못하면 "미확인"으로 기록한다.** 임의 checkout 금지.
 > **`grep` 에는 반드시 `--binary-files=text` (PR #6 Codex 리뷰 P2).** 없으면 `.next/cache`
 > 같은 파일이 binary 로 판정돼 **조용히 0건 오탐**이 난다. 실제로 실측·감사 에이전트가
 > 독립적으로 같은 오탐을 냈다 (`004-repo-layout.md`). 아래 명령에도 전부 붙어 있다.
@@ -57,12 +62,14 @@ pleiades 의 제1규율은 **"실측값은 추정하지 않는다"** 이다. 당
 
 ```bash
 # 규모
-find <target>/src -type f \( -name '*.ts' -o -name '*.tsx' \) | wc -l
-find <target>/src/<area> -name '*.ts' -exec cat {} + | wc -l
+# ⚠ 파일시스템 측정 — ref 지정 불가. 그 ref 체크아웃 확인 후 실행, 아니면 \"미확인\"
+find <dir>/src -type f \( -name '*.ts' -o -name '*.tsx' \) | wc -l
+# ⚠ 파일시스템 측정 — ref 지정 불가. 그 ref 체크아웃 확인 후 실행, 아니면 \"미확인\"
+find <dir>/src/<area> -name '*.ts' -exec cat {} + | wc -l
 
 # 결합도 — 무엇이 무엇을 참조하는가
-grep -rlE --binary-files=text "from ['\"]<pkg>" <target>/src --include='*.ts' | wc -l
-grep -rlE --binary-files=text "<pattern>" <target>/src --include='*.ts' | grep -v --binary-files=text '/src/<expected>/'   # 누수 탐지
+git -C <dir> grep --text -lE "from ['\"]<pkg>" <ref> -- 'src/**/*.ts' | wc -l
+git -C <dir> grep --text -lE "<pattern>" <ref> -- 'src/**/*.ts' | grep -v --binary-files=text '/src/<expected>/'   # 누수 탐지
 
 # 드리프트 — 같은 이름 파일이 얼마나 갈라졌나
 # 양쪽 피연산자 모두 모드가 정한다 (헤더의 <target> 표 참조).

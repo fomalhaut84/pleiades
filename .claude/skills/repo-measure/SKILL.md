@@ -10,6 +10,11 @@ description: myFinance·myFitness 두 저장소를 실측하고 docs/research/me
 > **단독 작업·핫픽스(모드 S·H)** → `~/workspace/$d` (원본).
 > **통합 로드맵을 위한 측정은 거의 항상 모드 I 다** — 원본에는 앞선 1a 단계 변경이 없다.
 > 원본을 재야 하면 **그 이유를 산출물에 명시한다.**
+> **`<target>` 도 `(디렉터리, ref)` 쌍이다 (PR #6 Codex 리뷰 P2).** 원본은 평소 fin=`dev` · fit=`main`
+> 이라, 디렉터리만 고르면 **모드 S(myFitness)는 `dev` 대신 `main` 을, 모드 H(myFinance)는 `main` 대신
+> `dev` 를** 측정한다. ref 를 읽을 수 있는 패턴은 전부 `git grep --text <ref>` / `git show <ref>:<path>`
+> 형태로 쓴다. **파일시스템에만 있는 측정**(파일 수, `du`, `node_modules` 등)은 ref 를 지정할 수 없으므로
+> **그 ref 가 체크아웃돼 있는지 확인하고, 확인하지 못하면 "미확인"으로 기록한다.** 임의 checkout 금지.
 > **`grep` 에는 반드시 `--binary-files=text` (PR #6 Codex 리뷰 P2).** 없으면 `.next/cache`
 > 같은 파일이 binary 로 판정돼 **조용히 0건 오탐**이 난다. 실제로 실측·감사 에이전트가
 > 독립적으로 같은 오탐을 냈다 (`004-repo-layout.md`). 아래 명령에도 전부 붙어 있다.
@@ -79,18 +84,20 @@ done
 
 ### 규모
 ```bash
-find <target>/src -type f \( -name '*.ts' -o -name '*.tsx' \) | wc -l
-find <target>/src/<area> -name '*.ts' -exec cat {} + | wc -l
+# ⚠ 파일시스템 측정 — ref 지정 불가. 그 ref 체크아웃 확인 후 실행, 아니면 \"미확인\"
+find <dir>/src -type f \( -name '*.ts' -o -name '*.tsx' \) | wc -l
+# ⚠ 파일시스템 측정 — ref 지정 불가. 그 ref 체크아웃 확인 후 실행, 아니면 \"미확인\"
+find <dir>/src/<area> -name '*.ts' -exec cat {} + | wc -l
 ```
 
 ### 결합도 — 무엇이 무엇에 묶여 있나
 ```bash
 # 참조 파일 수 (분모와 함께)
-grep -rlE --binary-files=text "from ['\"]<pkg>" <target>/src --include='*.ts' | wc -l
+git -C <dir> grep --text -lE "from ['\"]<pkg>" <ref> -- 'src/**/*.ts' | wc -l
 # 예상 경계 밖 누수
-grep -rlE --binary-files=text "<pattern>" <target>/src --include='*.ts' | grep -v --binary-files=text '/src/<expected>/'
+git -C <dir> grep --text -lE "<pattern>" <ref> -- 'src/**/*.ts' | grep -v --binary-files=text '/src/<expected>/'
 # 호출 지점이 한 곳인가 흩어져 있나
-grep -rn --binary-files=text "<call>" <target>/src --include='*.ts' | cut -d: -f1 | sort | uniq -c | sort -rn
+git -C <dir> grep --text -n "<call>" <ref> -- 'src/**/*.ts' | cut -d: -f1 | sort | uniq -c | sort -rn
 ```
 
 호출이 한 파일에 모이면 **초크포인트**(교체 가능), 흩어져 있으면 **재작성**이다. 비용이 자릿수로 다르다.
@@ -110,14 +117,14 @@ diff /tmp/fin.ts /tmp/fit.ts | wc -l
 ### 추출 가능성 — 후보가 정말 무의존인가
 ```bash
 grep -nE --binary-files=text "^import" <file>              # 전부 읽는다. 형제 파일까지 따라간다
-grep -rn --binary-files=text "from ['\"]next" <target>/src/<dir>/ | wc -l
-grep -rn --binary-files=text "from ['\"]@/lib" <target>/src/<dir>/ | wc -l
+git -C <dir> grep --text -n "from ['\"]next" <ref> -- 'src/<하위경로>/' | wc -l
+git -C <dir> grep --text -n "from ['\"]@/lib" <ref> -- 'src/<하위경로>/' | wc -l
 ```
 
 ### 설정 출처 — 그 파일이 진짜 읽히나
 ```bash
-grep -rn --binary-files=text "<파일명>" <target>/src --include='*.ts'
-grep -rn --binary-files=text "writeFileSync\|\.runtime/\|process.cwd()" <target>/src/<dir>/*.ts
+git -C <dir> grep --text -n "<파일명>" <ref> -- 'src/**/*.ts'
+git -C <dir> grep --text -n "writeFileSync\|\.runtime/\|process.cwd()" <ref> -- 'src/<하위경로>/'*.ts
 ```
 
 런타임 생성본이 있으면 **저장소 파일은 죽은 파일**이다. 이 확인은 `reversibility-audit` 과 겹치며, 겹치는 것이 맞다.

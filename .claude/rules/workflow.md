@@ -87,8 +87,10 @@ gh release create v1.0.0 --title "v1.0.0" --notes "릴리즈 노트"
 
 - `docs/research/measured-facts.md` 를 **먼저 읽는다.** 있는 값은 재측정하지 않는다
 - 없으면 `repo-surveyor` 로 측정하고 **측정 명령과 함께** 그 파일에 추가한다
-- **`grep` 에는 반드시 `--binary-files=text`** — 없으면 `.next/cache` 같은 파일이 binary 로
-  판정돼 조용히 0건 오탐이 난다. 실제로 두 에이전트가 독립적으로 같은 오탐을 냈다 (004)
+**`grep` 에는 반드시 binary-safe 옵션** — 도구마다 이름이 다르다:
+  **GNU `grep` → `--binary-files=text`** · **`git grep` → `--text`(`-a`)**.
+  `git grep --binary-files=text` 는 **존재하지 않는 옵션이라 `unknown option` 으로 실패한다**
+  (실측: git 2.50.1). 없으면 `.next/cache` 같은 파일이 binary 로 판정돼 조용히 0건 오탐이 난다
 
 ### 3. 기획 문서화
 `docs/specs/<NNN>-<주제>.md` 에 작성. 포함: 목적, 옵션 사다리, **되돌리기 비용**, 미결 질문 표, 제외 사항.

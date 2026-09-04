@@ -30,7 +30,7 @@ model: opus
 > **따라서 아래 명령은 체크아웃 상태에 의존하지 않는 `git grep <ref>` 형태로 쓴다:**
 >
 > ```bash
-> git -C <dir> grep --binary-files=text -n "<패턴>" <ref> -- '<경로>'
+> git -C <dir> grep --text -n "<패턴>" <ref> -- '<경로>'
 > ```
 >
 > | 모드 | `<dir>` | `<ref>` |
@@ -65,7 +65,7 @@ model: opus
 문서가 "이건 싸다 / 가역적이다"라고 주장할 때마다 아래를 통과시킨다.
 
 ### 1. 설정이 정말 설정인가
-- 그 파일을 실제로 읽는 코드가 있는가 — `grep -rn --binary-files=text "<파일명>" <audit-target>/src --include='*.ts'`
+- 그 파일을 실제로 읽는 코드가 있는가 — `git -C <dir> grep --text -n "<파일명>" <ref> -- 'src/**/*.ts'`
 - 런타임에 **생성**되지는 않는가 — `writeFileSync`, `ensure*`, `.runtime/`, `path.resolve(process.cwd(), …)`
 - 환경변수 override 경로가 있는가 — `process.env.X ?? <기본경로>`
 - 저장소 파일과 실제 사용 파일이 다르면 **저장소 파일은 죽은 파일**이다
