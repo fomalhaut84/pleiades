@@ -116,7 +116,18 @@ gh issue create -R fomalhaut84/pleiades --title "<제목>" --body "$(cat docs/sp
 
 라벨: `1a` · `선결` · `측정` · `결정`
 **이슈 없이 작업 브랜치를 만들지 않는다.** 이슈와 PR 은 1:1 로 매칭된다.
-**예외는 2개** — hotfix 의 dev 백포트 PR (긴급 수정 절) · 릴리즈 PR `dev` → `main` (릴리즈 전략 절).
+**예외는 3개:**
+
+| 예외 | 이슈 | 처리 |
+|---|---|---|
+| **양쪽 저장소 대칭 변경** | pleiades 이슈 **1개** | 대상 저장소 **PR 2개**(fin·fit)가 그 이슈 하나를 공유한다. **둘 다 머지돼야 이슈를 닫는다** |
+| hotfix 의 dev 백포트 PR | main PR 과 공유 | 긴급 수정 절 |
+| 릴리즈 PR `dev` → `main` | 없음 | 릴리즈 전략 절 |
+
+> **대칭 변경 예외 (PR #6 Codex 리뷰 P2).** `dual-repo-change` 는 저장소마다 브랜치를 만들고
+> 검증하므로 **PR 이 2개**다 (003 §2-2 도 패키지 수정에 PR 2개가 필요하다고 적었다).
+> 이슈를 2개로 쪼개면 "하나의 논리적 변경"이 갈라지고, 1개면 1:1 을 위반한다.
+> **이슈 1개 · PR 2개**로 두되 **완료 판정을 양쪽 머지에 건다.**
 
 ### 6. 구현 계획
 변경 파일 목록, 구현 순서, 패키지 추가 여부 정리. **사용자 승인 후** 코딩 시작.
@@ -266,8 +277,7 @@ PR 본문 필수 항목 — **리뷰 결과는 이 시점에 확정할 수 없�
 - 체크리스트: 린트/타입체크/테스트/빌드 (해당 시)
 - `## 코드 리뷰 결과` 섹션 초안 (9-6 에서 확정)
 
-**이슈-PR 1:1 의 예외 2개:** hotfix 의 dev 백포트 PR · 릴리즈 PR(`dev` → `main`).
-둘 다 별도 이슈를 만들지 않는다 — 릴리즈 전략 절과 긴급 수정 절 참조.
+**이슈-PR 1:1 의 예외 3개** (5절 표 참조): 양쪽 저장소 대칭 변경(PR 2개) · hotfix dev 백포트 · 릴리즈 PR.
 
 #### 9-3. GitHub Codex bot 리뷰 (PR 오픈 후)
 
@@ -348,7 +358,12 @@ PR 링크를 사용자에게 알린다. **머지는 사용자가 직접 한다.*
 사용자가 "머지 완료"를 알려주면:
 
 ```bash
-gh issue comment -R fomalhaut84/pleiades <issue> --body "완료: PR #<pr>, 머지일 $(date +%Y-%m-%d)"
+# 대상 저장소 작업이면 PR 을 <owner>/<repo>#<pr> 또는 전체 URL 로 적는다.
+# 한정하지 않으면 pleiades 의 같은 번호 PR 을 가리킨다.
+gh issue comment -R fomalhaut84/pleiades <issue> \
+  --body "완료: <owner>/<repo>#<pr>, 머지일 $(date +%Y-%m-%d)"
+
+# 대칭 변경이면 PR 2개가 모두 머지된 뒤에 닫는다 (5절 예외 표).
 gh issue close -R fomalhaut84/pleiades <issue>
 git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 표 참조
 ```
@@ -368,7 +383,11 @@ git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 �
    > 줄이는 것은 **반복 횟수**이지 **수정 필수 등급**이 아니다.
    > **같은 결함이 myFinance·myFitness 양쪽에 있다** (#8).
 3. PR 2개 생성: **main 대상 + dev 대상** (**양쪽 머지 원칙**)
-   - **main PR 에만** `Closes fomalhaut84/pleiades#<issue>` 를 넣는다 (**저장소 한정**)
+   - **양쪽 PR 모두 `Closes` 를 넣지 않는다.** 본문에 `Refs fomalhaut84/pleiades#<issue>` 만 적는다
+
+     > **정정 (PR #6 Codex 리뷰 P2).** main PR 에 `Closes` 를 넣으면 **머지 즉시 이슈가 닫힌다.**
+     > dev 백포트가 아직 막혀 있거나 포기됐어도 닫히므로, 5번의 "양쪽 머지 후 종료"와 모순된다.
+     > **닫기는 5번에서 수동으로** 한다.
    - **dev 백포트 PR 은 이슈-PR 1:1 규칙의 예외다.** 본문에
      `Backport of #<main-PR> (fomalhaut84/pleiades#<issue>)` 만 적고 이슈를 닫지 않는다.
      별도 이슈를 만들지 않는다

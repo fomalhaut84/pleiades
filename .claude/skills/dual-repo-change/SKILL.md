@@ -84,9 +84,13 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 
 | | myFinance | myFitness |
 |---|---|---|
-| 검증 | `npm run lint` / `npx tsc --noEmit` / `npm run test:run` / `npm run build` | `npm run lint` / typecheck / `npm run build` (3-check) |
-| 테스트 | vitest 있음 | **없음** — 도입 시 범위를 대상 코드로만 한정 |
+| 검증 | `npm run lint` / **`npx tsc --noEmit`** / **`npm run test:run`** / `npm run build` | `npm run lint` / `npm run typecheck` / **`npm run test`** / `npm run build` |
+| 테스트 | vitest 있음 (`test` 는 watch — **`test:run` 을 쓴다**) | vitest **없음**. 단 `npm run test` = **verify 스크립트 2개**이므로 **반드시 돌린다** (1a-2 가 vitest 도입) |
 | 같은 역할 다른 위치 | 아웃바운드 전송: `bot/utils/telegram.ts` | 아웃바운드 전송: `bot/notifications/send.ts` |
+
+> **검증 명령은 `.claude/rules/workflow.md` 8절 표가 정본이다** (PR #6 Codex 리뷰 P1).
+> myFitness 의 `npm run test` 는 vitest 가 아니라 **verify 스크립트 2개**다 — 테스트 프레임워크가
+> 없다는 것과 **실행할 것이 없다는 것은 다르다.** 1a-2 가 vitest 를 도입하기 전에도 반드시 돌린다.
 
 **같은 역할 코드가 다른 파일에 있다는 것을 전제로 찾는다.** 경로가 대칭일 거라 가정하지 않는다.
 정본을 고를 때는 더 성숙한 구현을 택하고, 어느 쪽을 왜 골랐는지 커밋 메시지에 남긴다.
@@ -108,8 +112,8 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 - [ ] 승인 게이트 5항목 제시 + 명시 승인 수령
 - [ ] 착수 직전 재감사 통과 (정정 0)
 - [ ] **`repos/` 아래 worktree** 에서 작업하며 base 가 `integration/pleiades` 이고 clean 임을 확인
-- [ ] 저장소 A 변경 → 검증 통과 → 커밋
-- [ ] 저장소 B 변경 → 검증 통과 → 커밋
+- [ ] 저장소 A 변경 → **위 표의 검증 4종 전부** 통과 → 커밋
+- [ ] 저장소 B 변경 → **위 표의 검증 4종 전부** 통과 → 커밋
 - [ ] 빌드·재시작·세션 초기화 명령 사용자에게 전달
 - [ ] 롤백 절차 문서화
 - [ ] pleiades 문서에 결과 반영
