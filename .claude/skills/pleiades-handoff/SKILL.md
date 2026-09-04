@@ -15,8 +15,8 @@ pleiades 는 세션 사이 간격이 길고, 그 사이 두 대상 저장소는 
 ```bash
 echo "== 통합 작업 (worktree · integration/pleiades 여야 함)"
 for d in myFinance myFitness; do
-  echo -n "  repos/$d: "; git -C repos/$d branch --show-current
-  git -C repos/$d status -s | head -3
+  echo -n "  repos/$d: "; git -C ~/workspace/pleiades/repos/$d branch --show-current
+  git -C ~/workspace/pleiades/repos/$d status -s | head -3
 done
 echo "== 서비스 유지용 원본 (fin=dev · fit=main · 쓰기 금지)"
 for d in myFinance myFitness; do
@@ -78,7 +78,11 @@ done
 | 메모리 색인 | `MEMORY.md` 는 색인일 뿐. 정본은 `docs/`. 중복 기록하지 않는다 |
 | 커밋 | conventional commits. 세션 산출물을 논리 단위로 나눠 커밋 |
 
-### 5. 커밋
+#> **커밋·PR 은 `.claude/rules/workflow.md` 를 따른다.** 이슈 → `chore/<issue>-<n>`(base `dev`)
+> → 9-1 사전 리뷰 → 9-2 PR 생성 → 9-3 봇 리뷰 → 9-6 PR body 확정 → **머지는 사용자가 직접.**
+> `dev`·`main` 직접 커밋 금지 (PR #6 교차 감사 M4·M5).
+
+## 5. 커밋
 
 ```
 docs(handoff): <주제> 세션 인계 노트

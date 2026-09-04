@@ -21,7 +21,7 @@ description: pleiades 통합 프로젝트의 새 세션 시작 시 인계 상태
 ```
 Read: docs/handoff/ 의 가장 최근 파일
 Read: docs/specs/002-platform-direction.md   ← 정본 방향
-Bash: ls docs/handoff/ && git -C repos/myFinance log --oneline -3 && git -C repos/myFitness log --oneline -3
+Bash: ls docs/handoff/ && git -C ~/workspace/pleiades/repos/myFinance log --oneline -3 && git -C ~/workspace/pleiades/repos/myFitness log --oneline -3
 ```
 
 `001-integration-master.md` 는 **분석 근거로만 유효하다.** 권고 경로와 단계 0 범위는 002 가 대체했다.
@@ -38,7 +38,7 @@ Bash: ls docs/handoff/ && git -C repos/myFinance log --oneline -3 && git -C repo
 ```bash
 echo "== 통합 작업 (worktree · integration/pleiades 여야 함)"
 for d in myFinance myFitness; do
-  echo "-- repos/$d"; git -C repos/$d branch --show-current; git -C repos/$d status -s | head -5
+  echo "-- repos/$d"; git -C ~/workspace/pleiades/repos/$d branch --show-current; git -C ~/workspace/pleiades/repos/$d status -s | head -5
 done
 echo "== 서비스 유지용 원본 (fin=dev · fit=main · 쓰기 금지)"
 for d in myFinance myFitness; do

@@ -29,8 +29,8 @@ pleiades 는 myFinance × myFitness 를 **개인 비서 플랫폼**으로 통합
 ```bash
 echo "== 통합 작업 (worktree · integration/pleiades 여야 함)"
 for d in myFinance myFitness; do
-  echo -n "  repos/$d: "; git -C repos/$d branch --show-current
-  git -C repos/$d status -s | head -3
+  echo -n "  repos/$d: "; git -C ~/workspace/pleiades/repos/$d branch --show-current
+  git -C ~/workspace/pleiades/repos/$d status -s | head -3
 done
 echo "== 서비스 유지용 원본 (fin=dev · fit=main · 쓰기 금지)"
 for d in myFinance myFitness; do
@@ -46,7 +46,7 @@ done
 |---|---|
 | `_workspace/` 없음 | **초기 실행** — Phase 1 부터 |
 | `_workspace/` 있음 + 부분 수정 요청 | **부분 재실행** — 해당 에이전트만 재호출 |
-| `_workspace/` 있음 + 새 입력 | **새 실행** — `_workspace/` → `_workspace_prev/` 이동 후 Phase 1 |
+| `_workspace/` 있음 + 새 입력 | **새 실행** — `_workspace/` 는 **그대로 두고** 주제 접미사로 새 파일을 만든다 (`{phase}_{agent}_{주제}`) |
 
 **기대값이 체크아웃마다 다르다** (`docs/specs/004-repo-layout.md`):
 
@@ -122,7 +122,13 @@ Phase 2 ↔ 3 은 정정이 0 이 될 때까지 순환한다. 3회를 넘으면 
 | 태스크 (`TaskCreate`) | 의존 관계·진행 추적 |
 | 메시지 (`SendMessage`) | 감사 정정 통지, 측정 요청 같은 실시간 조율 |
 
-최종 산출물만 `docs/` 로. `_workspace/` 는 지우지 않는다 (사후 검증·감사 추적).
+최종 산출물만 `docs/` 로. `_workspace/` 는 **지우지도 옮기지도 않는다** (사후 검증·감사 추적).
+
+> **`_workspace_prev/` 로 옮기지 마라 (PR #6 교차 감사 M10).** `.gitignore` 가 `_workspace_prev/` 를
+> 무시하는데 `_workspace/` 8파일은 전부 tracked 다. 한 번 옮기면 **정본 004 의 근거 계보
+> (`01_surveyor_layout` → `02_writer` → `03_auditor` → `04_operator_rollback`)가 버전 관리 밖으로
+> 나가고**, `004:232`·`CLAUDE.md` 의 "롤백은 `_workspace/04_operator_rollback.md`" 참조가 깨진다.
+> 파일이 많아지면 **주제별 하위 디렉터리**(`_workspace/<주제>/`)로 나눈다.
 
 ## 에러 핸들링
 
@@ -145,7 +151,7 @@ Phase 2 ↔ 3 은 정정이 0 이 될 때까지 순환한다. 3회를 넘으면 
 ### 정상 흐름
 > "단계 1 알림 어댑터 어떻게 할지 방향 잡아줘"
 
-1. Phase 0 — `_workspace/` 없음 → 초기 실행. 두 저장소 `dev` clean 확인
+1. Phase 0 — `_workspace/` 없음 → 초기 실행. 두 worktree `integration/pleiades` clean 확인 (원본은 fin=`dev`/fit=`main`)
 2. Phase 1 — `repo-surveyor` 가 봇 구조·전송 호출 분포·추출 후보 의존 측정
 3. Phase 2 — `decision-writer` 가 어댑터 설계 + 되돌리기 비용 초안
 4. Phase 3 — `reversibility-auditor` 가 "Next 무관" 주장을 import 그래프로 검증 → 확인

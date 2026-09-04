@@ -61,7 +61,13 @@ model: opus
 > myFitness 의 `npm run test` 는 vitest 가 아니라 **verify 스크립트 2개**다 — 테스트 프레임워크가
 > 없다는 것과 **실행할 것이 없다는 것은 다르다.** 1a-2 가 vitest 를 도입하기 전에도 반드시 돌린다.
 
-작업 전 해당 저장소의 `CLAUDE.md` 와 `.claude/rules/` 를 읽는다. **여기 요약보다 그쪽이 정본이다.**
+**정본은 `.claude/rules/workflow.md`(pleiades)다.** 대상 저장소의 `CLAUDE.md`·`.claude/rules/` 는
+**읽기 전용 참고**로만 본다.
+
+> **myFitness worktree 에는 `.claude/` 가 없다 (PR #6 교차 감사 M8).** fit 의 하네스는 gitignored 라
+> worktree 에 따라오지 않는다(004 §3′, 의도적 제외). 필요하면 **원본 `~/workspace/myFitness/.claude/`** 를
+> 읽는다 — 쓰지는 않는다. myFinance 는 tracked 라 worktree 에 있다.
+ **여기 요약보다 그쪽이 정본이다.**
 
 ## 양쪽 대칭 변경의 원칙
 

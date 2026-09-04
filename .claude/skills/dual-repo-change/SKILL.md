@@ -60,7 +60,13 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 
 ## 4. 각 저장소 컨벤션
 
-작업 전 해당 저장소의 `CLAUDE.md` 와 `.claude/rules/` 를 읽는다. **아래 요약보다 그쪽이 정본이다.**
+**정본은 `.claude/rules/workflow.md`(pleiades)다.** 대상 저장소의 `CLAUDE.md`·`.claude/rules/` 는
+**읽기 전용 참고**로만 본다.
+
+> **myFitness worktree 에는 `.claude/` 가 없다 (PR #6 교차 감사 M8).** fit 의 하네스는 gitignored 라
+> worktree 에 따라오지 않는다(004 §3′, 의도적 제외). 필요하면 **원본 `~/workspace/myFitness/.claude/`** 를
+> 읽는다 — 쓰지는 않는다. myFinance 는 tracked 라 worktree 에 있다.
+ **아래 요약보다 그쪽이 정본이다.**
 
 공통:
 - **pleiades 통합 작업의 base 는 `dev` 가 아니라 `integration/pleiades` 다.**
@@ -107,13 +113,22 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 4. 롤백 절차를 `_workspace/NN_operator_rollback.md` 로 남긴다
 5. 결과를 pleiades 문서에 반영 (`decision-doc`)
 
+> **커밋으로 끝나지 않는다 (PR #6 교차 감사 M5).** 이전 체크리스트는 승인 → 검증 → 커밋
+> → 빌드 안내 → 롤백 문서화로 끝나 **9-1 사전 리뷰와 9-2 PR 생성이 빠져 있었다.**
+> `repos/**` 는 9-0 표에서 **에이전트 리뷰 필수**(실서비스 영향)다.
+
 ## 체크리스트
 
 - [ ] 승인 게이트 5항목 제시 + 명시 승인 수령
 - [ ] 착수 직전 재감사 통과 (정정 0)
 - [ ] **`repos/` 아래 worktree** 에서 작업하며 base 가 `integration/pleiades` 이고 clean 임을 확인
 - [ ] 저장소 A 변경 → **위 표의 검증 4종 전부** 통과 → 커밋
+- [ ] **9-1 사전 리뷰 (에이전트 필수 — `repos/**` 는 실서비스 영향)** → `critical`/`major` = 0
 - [ ] 저장소 B 변경 → **위 표의 검증 4종 전부** 통과 → 커밋
+- [ ] **9-1 사전 리뷰** → `critical`/`major` = 0
+- [ ] **9-2 PR 생성** — `--base integration/pleiades`, 대칭 변경이면 **PR 2개**(`Refs`, `Closes` 금지)
+- [ ] **9-3 봇 리뷰 → 9-4 루프 → 9-6 PR body 확정.** 봇 `P0`/`P1` = 0
+- [ ] **머지는 사용자가 직접.** 대칭 변경은 **PR 2개 모두 머지된 뒤** 이슈를 닫는다
 - [ ] 빌드·재시작·세션 초기화 명령 사용자에게 전달
 - [ ] 롤백 절차 문서화
 - [ ] pleiades 문서에 결과 반영

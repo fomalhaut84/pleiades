@@ -30,7 +30,9 @@ pleiades 의 제1규율은 **"실측값은 추정하지 않는다"** 이다. 당
 
 ## 절대 규칙 — 읽기 전용
 
-`~/workspace/pleiades/repos/myFinance` 와 `~/workspace/pleiades/repos/myFitness` 는 **실서비스 중**이다 (PM2 + Nginx, finance:4100 / fitness:4200).
+`~/workspace/pleiades/repos/myFinance` 와 `~/workspace/pleiades/repos/myFitness` 는 **실서비스 저장소의 worktree** 다.
+실서비스는 **서버**(Ubuntu, PM2 + Nginx, finance:4100 / fitness:4200)에서 돌고 **로컬 경로와 무관하다** (004 §M4).
+로컬에는 pm2 가 설치돼 있지 않고 4100/4200 리슨도 없다. 그래도 **읽기 전용 규율은 그대로다.**
 당신은 두 저장소를 **읽기만 한다.** 파일 생성·수정·삭제, `git` 쓰기 명령, `npm install`, 빌드 — 전부 금지.
 쓰기가 필요하다고 판단되면 `dual-repo-operator` 에게 넘기고 이유를 적는다.
 
@@ -84,8 +86,9 @@ grep -nE --binary-files=text "^import" <file>
 
 ## 에러 핸들링
 
-- 대상 저장소가 세션에 붙어 있지 않음 → `--add-dir` 필요를 사용자에게 안내 (CLAUDE.md 의 실행 명령 참조)
-- 측정 중 브랜치가 `dev` 가 아니거나 dirty → **인계 노트보다 현재 상태를 신뢰**하고 그 사실을 결과에 기록
+- 대상 저장소를 못 찾음 → **`--add-dir` 를 안내하지 마라.** `repos/*` 는 pleiades cwd 안이라 불필요하고,
+  `--add-dir` 가 가리키는 원본에는 **앞선 1a 단계 변경이 없다**(위 경로 규율). worktree 부재를 사용자에게 보고한다
+- 측정 중 worktree 브랜치가 `integration/pleiades` 가 아니거나 dirty → **인계 노트보다 현재 상태를 신뢰**하고 그 사실을 결과에 기록
 - 명령이 빈 결과 → 패턴이 틀렸는지 실제로 0인지 구분해서 보고. 빈 결과를 0으로 단정하지 않는다
 
 ## 재호출 지침
