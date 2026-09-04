@@ -372,6 +372,15 @@ awk '/function getAllowedChatIds/,/^}/' ~/workspace/myFinance/<각 파일>
 myFinance 4개는 로직 동일. `retry/route.ts` 만 `!Number.isNaN`, 나머지는 `!isNaN`.
 (양쪽 `bot/middleware/auth.ts` 에도 있으나 인바운드 인가용으로 목적이 다름.)
 
+> **정정·보완 (2026-09-04 전수 측정 · 이슈 #4).** 위 표는 `getAllowedChatIds` **정의 4곳**만 센다.
+> 그 4곳이 만든 값은 **함수 인자로 계속 전파된다** — `chatIds: number[]` 파라미터가
+> **18 시그니처**, 실인자 호출이 **19곳**이고, `scheduler.ts:40` 값 하나를 **13개 cron 콜백이
+> 클로저로 캡처**한다. 그리고 `quarterly-report.ts:52`(`sendDocument`)가 **목록 자체**를 요구하므로
+> **`scheduler.ts:21` 정의는 실질적으로 지울 수 없다.**
+> **완전 제거 가능한 것은 `budget-alert.ts:14` 1곳뿐이다.** 상세는 이 문서 하단
+> *"추가 측정 — 2026-09-04 (myFinance 22곳 루프 본문 전수)"* M2-5 / M4.
+> 행번호는 위 표(`14/15/22/30`)가 아니라 **`13/14/21/29`** 가 맞다 (003 §3 발견 8 정정, 전부 −1).
+
 ## 기능 매트릭스 — 정본을 한쪽으로 고르면 양쪽 다 기능이 빠진다
 
 | 기능 | myFinance `sendHtml` | myFitness `sendToAll` | myFitness `…WithKeyboard` |
@@ -733,6 +742,15 @@ myFitness 도입에 필요한 것: devDep 3개 + `vitest.config.mts` 15줄 + scr
 아웃바운드 초크포인트 테스트 사례. 단, 파일 주석이 남긴 제약 —
 `'../index' (getBot) 는 모듈 로드시 모든 command register 를 chain-import` 하므로 mock 필수.
 → `@pleiades/notify` 는 `src/bot/index.ts` 를 참조하지 말고 transport 를 **주입**받아야 한다.
+
+> **보완 (2026-09-04 집행 · 이슈 #2).** 위 *"myFitness 도입에 필요한 것: devDep 3개 + …"* 는
+> 목록으로는 맞으나 **`npm install` 이 그대로는 실패한다.** fit `package.json` `overrides` 의
+> **`"postcss": "$postcss"`** 한 줄 때문이다 (`npm error Unable to resolve reference $postcss`).
+> vitest 3종 자체는 **peer 충돌 없이 resolve 된다** — `ERESOLVE` 0건, vitest 4.1.11 /
+> coverage-v8 4.1.11 / vite-tsconfig-paths 6.1.1 / **vite 6.4.3 (fin 과 동일)**, lock 716 → 785.
+> 상세·재현·수정안은 이 문서 하단 *"추가 측정 — 2026-09-04 (myFitness vitest resolve · U1 원인 규명)"*.
+> 위 표의 *"scripts: 없음 (대신 `typecheck` 있음 — fin 에는 없음)"* 은 맞다. 단
+> **fin 도 `next build` 가 타입 검사를 하므로** 비대칭은 "검사 유무"가 아니라 **"검사 단계"** 다.
 
 ## 수신자·라우팅
 
@@ -1234,3 +1252,307 @@ git -C ~/workspace/myFitness worktree list
 | `git worktree remove` 가 `--force` 없이 성공하는지 | 복사한 gitignored 파일·`node_modules` 가 남아 있음. **미검증** (004 §4-3) |
 | `autoMemoryDirectory` 가 세션 키까지 옮기는지 | **미확인.** worktree 채택으로 지금은 아무것도 막지 않음. 002 단계 4 에서 재활성 |
 | 이 문서의 기존 grep 기반 "0건" 결론 재검증 | **미수행** — `--binary-files=text` 로 재실행 필요 (004 Q22) |
+
+---
+
+# 추가 측정 — 2026-09-04 (myFinance 22곳 루프 본문 전수 · 1a-4 청구서)
+
+출처 `_workspace/05_surveyor_fin_loops.md` (GitHub 이슈 #4). 003 §9 *"1a 착수 직전 측정 1건"* 의 이행.
+감사(`03_auditor_notify.md`)가 대표 4곳만 부분 수행한 것을 **전수**로 마감했다.
+
+## 측정 시점 저장소 상태
+
+| | 값 |
+|---|---|
+| 측정 대상 | `~/workspace/pleiades/repos/myFinance` (git worktree, 004 배치) |
+| 브랜치 / HEAD / dirty | `integration/pleiades` / `c549fa6` / **0** |
+| `src` 파일 | 424 |
+| (대조) myFitness | `integration/pleiades` / `ac034be` / dirty 0 |
+
+`~/workspace/myFinance`(서비스 유지용 원본, `dev`)는 **열지 않았다.** 전 명령 읽기 전용.
+모든 `grep` 에 `--binary-files=text` (004 표준).
+
+## M0. 모집단 — 루프는 22곳이 맞다. 다른 순회 형태는 0건
+
+```bash
+grep -rn --binary-files=text "for (const chatId of" src --include='*.ts' | wc -l                              # 22
+grep -rn --binary-files=text -E "chatIds?\s*\.(forEach|map|filter|reduce|some|every)" src --include='*.ts'     # 0
+grep -rn --binary-files=text -E "Promise\.(all|allSettled)\(.*[Cc]hat" src --include='*.ts'                    # 0
+grep -rn --binary-files=text -E "for \(let [a-z]+ = 0.*chatIds" src --include='*.ts'                           # 0
+grep -rn --binary-files=text -E "for \((const|let) [A-Za-z_]+ of .*[Cc]hat" src --include='*.ts' | wc -l       # 22 (교차 확인)
+grep -rn --binary-files=text "sendHtml(" src --include='*.ts' | grep -v 'src/bot/utils/telegram.ts' | wc -l    # 20
+```
+
+**22곳 / 15 파일. 전부 `await` 순차 for-of — 병렬 fan-out 0건.** 테스트에는 0건.
+`22 − 20 sendHtml = 2` 가 `quarterly-report.ts:52`(`sendDocument`)와 `rsu.ts:182`(raw `sendMessage`)로 1:1 대응.
+
+## M1. 전수 분류 — **(c) 부수효과 0 · (d) 수신자별 분기 0**
+
+| 분류 | 뜻 | 건수 |
+|---|---|---|
+| (a) 순수 전송 | 본문이 전송 호출 하나뿐 | **16 / 22** |
+| (b) 전송 + 결과 수집 | 반환값·성공 카운터를 모은다 | **5 / 22** |
+| **(c) 전송 + 부수효과** | DB 쓰기·상태 변경이 루프 안에 | **0 / 22** |
+| **(d) 전송 + 분기** | 수신자별로 내용이 달라진다 | **0 / 22** |
+| (e) 포트 밖 | `quarterly-report.ts:52` | **1 / 22** |
+
+(b) 5곳: `advisor-monitor.ts:220`(`anySuccess`) · `alert-dispatcher.ts:122`(`successCount`) ·
+`ta-signal-alert.ts:332`(`sendSuccess`) · `price-alert.ts:338`(`sendSuccess`) ·
+`custom-strategy-alert.ts:290`(`sentCount`).
+
+**(d) = 0 의 근거 (실제로 확인함):**
+```bash
+grep -rn --binary-files=text "chatId" src/bot/notifications/*.ts src/lib/ai/advisor-monitor.ts \
+  | grep -vE "chatIds|for \(const chatId of|function |: number" \
+  | grep -vE "sendHtml\(bot, chatId|sendMessage\(chatId|sendDocument\(chatId"
+```
+→ **19줄, 전부 `console.error` 템플릿 문자열.** 루프 본문의 `chatId` 용도는 (1) 전송 대상 인자,
+(2) 실패 로그 문자열 — 그 외 **0건**. 메시지 본문은 **22곳 전부 루프 진입 전에 확정**된다.
+
+## M1-B. 카운터가 게이트하는 부수효과 — **7 지점 / 5 모듈** (전부 루프 **밖**)
+
+| 소비 지점 | 카운터 | 하는 일 | 등급 |
+|---|---|---|---|
+| `ta-signal-alert.ts:344-354` | `sendSuccess > 0` | `sentToday` dedupe Map + `lastAiAskByTicker` AI 쿨다운 Map | 메모리 상태 |
+| `ta-signal-alert.ts:375-376` | `sendSuccess`, `chatIds.length` | `computeDeliveryStatus` → `recordAlertHistory` | **DB** |
+| `price-alert.ts:349-350` | 〃 | 동일 | **DB** |
+| `custom-strategy-alert.ts:301-302` | `sentCount`, `chatIds.length` | 동일 | **DB** |
+| `custom-strategy-alert.ts:304-320` | `sentCount === 0` → `return` | `prisma.customStrategy.updateMany` **2건 스킵** | **DB (게이트)** |
+| `alert-dispatcher.ts:131-132` | `successCount`, `chatIds.length`, `lastError` | `persistRetryHistory` + **API 응답 body**(`retry/route.ts:76-86`) | **DB + API 계약** |
+| `advisor-monitor.ts:228` | `anySuccess` | 모니터 상태 진행(`:135` `delivered`) | 상태 변경 |
+
+`BroadcastResult` 대조: `sent`/`total`/`sent>0` 으로 충족. **`lastError` 만 `deliveries[]` 파생**이라
+호출부 **4곳**(`alert-dispatcher`·`ta-signal-alert`·`price-alert`·`custom-strategy-alert`)에 한 줄씩 붙는다.
+
+## M1-C. 짝 루프 4쌍 — 22 중 8 (36%)
+
+| 모듈 | 본문 루프 | 폴백 루프 | 바깥 catch |
+|---|---|---|---|
+| `briefing.ts` | :69 | :91 | :79 |
+| `active-review.ts` | :123 | :140 | :132 |
+| `monthly-report.ts` | :53 | :67 | :62 |
+| `quarterly-report.ts` | :37 | :66 | :63 |
+
+폴백 루프는 **AI 생성 실패용 바깥 catch 안**에 있다. 그 바깥 try/catch 4개는 전송 실패용이 아니므로
+**파사드가 흡수하지 않고 남는다.**
+
+## M2-3. `chatIds.length` 21 hits = **가드 10 + 분모 11**
+
+```bash
+grep -rn --binary-files=text -E "chatIds\.length" src --include='*.ts'      # 21 hits
+```
+
+**가드 10곳** — `scheduler.ts:41`(cron 등록 전체 스킵) · `lib/cron.ts:96` ·
+`retry/route.ts:64`(**HTTP 500 분기**) · `advisor-monitor.ts:205` · `budget-alert.ts:29`·`:96` ·
+`custom-strategy-alert.ts:116` · `networth-snapshot.ts:85`(**DB 스냅샷 저장 `:80` 은 가드 밖**) ·
+`ta-signal-alert.ts:173` · `price-alert.ts:80`.
+
+**분모 11곳** — `computeDeliveryStatus(success,total)` 4 ·
+`recordAlertHistory(…, chatIds.length, …)` **3 → DB 컬럼 `AlertHistory.recipientCount`** ·
+`alert-dispatcher.ts:132` `totalChats` **→ API 응답 body 1** · `console.log` 3.
+
+## M2-5 / M4. `chatIds` 전파 — **18 시그니처 · 19 호출부**
+
+```bash
+grep -rn --binary-files=text -E "chatIds\s*:\s*number\[\]" src --include='*.ts' | wc -l    # 18
+grep -rn --binary-files=text "getAllowedChatIds" src --include='*.ts'                      # 정의 4 + 호출 5
+```
+
+| 대상 | 건수 |
+|---|---|
+| `chatIds: number[]` 파라미터 시그니처 | **18** (진입점 16 + 내부 위임 2: `doCheckTASignals`·`runScan`) |
+| 실인자 호출 (테스트 제외) | **19** |
+| `getAllowedChatIds()` 호출 지점 | 5 (`budget-alert.ts` 가 2회) |
+
+`scheduler.ts:40` 이 만든 값 하나를 **13개 cron 콜백이 클로저로 캡처**
+(`:81,95,108,121,135,148,161,186,200,213,226,243,256`).
+
+**완전 제거 가능한 `getAllowedChatIds` 는 `budget-alert.ts:14` 1곳뿐** (파일 안에서 생성·소비가 닫힘).
+`scheduler.ts:21` 은 `:108 sendQuarterlyReport(chatIds)` 가 **목록 자체**를 요구해 **실질적으로 못 지운다.**
+`lib/cron.ts:13`·`retry/route.ts:29` 는 수신 측 시그니처를 함께 바꿔야 하고, 후자는 **API 응답 계약**(`totalChats`)이 걸려 있다.
+
+## M3. per-chat `catch` 22곳 — **재던지기 0 · 사용자 통지 0 (전부 삼킨다)**
+
+| 유형 | 건수 | 위치 |
+|---|---|---|
+| A `console.error(raw error)` | **12** | `budget-alert:84`·`:125`, `quarterly:108`, `networth-snapshot:96`, `monthly:68`, `daily:135`, `quarterly-report:57`, `alert-dispatcher:126`, `ta-signal-alert:336`, `price-alert:342`, `custom-strategy-alert:294`, `advisor-monitor:224` |
+| B `console.error(sanitizeError(error))` | **5** | `rsu:114`·`:188`, `briefing:72`, `active-review:126`, `monthly-report:56` |
+| C `lastError = error.message` + A | **4** | `alert-dispatcher:126`, `ta-signal-alert:336`, `price-alert:342`, `custom-strategy-alert:294` (A 의 부분집합) |
+| D 빈 `catch {}` (`// 무시`) | **5** | `briefing:94`, `active-review:143`, `monthly-report:70`, `quarterly-report:42`·`:71` |
+
+흡수 판정: **무손실 17 / 파생 코드 필요 4 / 범위 밖 1**(`quarterly-report:57`).
+
+**흡수 시 반드시 바뀌는 것 3가지**
+
+1. **로그 문자열 17종** — `[notification]`(세부 9종) · `[alert-retry]` · `[active-review]` ·
+   `[briefing]` · `[custom-strategy]` · `[networth]` · `[report]` · `[ta-signal]` · `[advisor-monitor]`.
+   한 형식으로 통일하면 **운영 로그 grep 패턴이 깨진다.**
+2. **`sanitizeError` 적용 불일치** — 12 raw / 5 sanitized.
+3. **`lastError` 가 raw `error.message` 로 DB → UI → CSV 에 노출된다.**
+
+| 경로 | 위치 |
+|---|---|
+| 쓰기 | `alert-history.ts:76` → `prisma/schema.prisma:344 errorMessage String?` |
+| 읽기 → API | `app/api/alerts/history/route.ts:77` |
+| 읽기 → **화면** | `AlertHistoryClient.tsx:449` · `AlertHistoryDetailModal.tsx:103` |
+| 읽기 → **CSV** | `app/api/alerts/history/export/csv-format.ts:19,146` |
+
+→ **현재 상태가 `CLAUDE.md` 컨벤션 위반**(*"catch 에서 `error.message` 원문 노출 금지"*)이다.
+1a-4 가 만드는 문제가 아니라 **1a-4 가 손대는 그 4줄에 이미 있는 문제**다.
+
+> **방법론 주의 (이번 측정에서 실제 발생).** 대상 경로를 셸 변수에 담아 `"$F"` 로 인용하면
+> glob 이 전개되지 않아 `ugrep` 이 **경고와 함께 0건**을 낸다. 004 의 `--binary-files=text` 와
+> 같은 성격의 함정이다 — **빈 결과를 0 으로 단정하지 않고** 경로를 직접 나열해 재실행했다.
+
+## M5. 테스트 파급 — 결합은 얕다
+
+| 항목 | 값 |
+|---|---|
+| `chatIds`/`sendHtml` 참조 테스트 파일 | **1 / 42** (`bot/notifications/__tests__/alert-dispatcher.test.ts`) |
+| 그 파일의 `it()` 블록 | 25 |
+| 그중 `sendHtml` 직접 assert (`toHaveBeenNthCalledWith(1, fakeBot, 1, '…')` — **인자 순서 고정**) | **9 / 25** |
+| `TELEGRAM_ALLOWED_CHAT_IDS` 를 세팅하는 테스트 | `retry/__tests__/route.test.ts` `it()` 6개 — `redispatchAlert` 를 mock 하므로 **무관** |
+
+## 정정 — 003 §5-1 의 세 서술
+
+> **정정 (2026-09-04 전수 측정).** 003 §5-1 의 myFinance 변경 칸은 세 군데가 과소·불성립이다.
+> ① *"`scheduler.ts:41`·`lib/cron.ts:96` 의 가드 2곳"* → **가드 10곳 + 분모 11곳 = 21지점.**
+> ② *"`getAllowedChatIds` 4곳 제거"* → **완전 제거 가능은 1곳**(`budget-alert.ts`).
+> ③ *"루프 21곳 제거"* 는 개수는 맞으나 **순수 삭제가 아니다** — `lastError` 파생 4곳 추가 +
+> `chatIds: number[]` 18 시그니처 / 19 호출부 개편이 따라온다.
+> 개정 청구서는 003 §5-1 정정 표(합계 약 94 지점 · 최소 60 지점).
+
+> **정정 (2026-09-04 전수 측정).** 003 §5-2 의 *"Q10 이 '아니오'면 1a 는 관측 가능한 동작 변경이 0"*
+> 은 **fin 쪽에서 불성립한다.** `rsu.ts:184` 는 raw `bot.api.sendMessage` 라 **재시도도 HTML 폴백도
+> 없다.** 파사드 흡수 시 `[2000,8000,30000]`ms ×4 재시도 + plain 폴백이 **새로 붙는다.**
+> 003 은 fit `sendToAllWithKeyboard` 의 동일 개선만 적었다.
+
+## 못 잰 값 (이 절 범위)
+
+| 항목 | 왜 못 쟀나 |
+|---|---|
+| 실제 수신자 chat id 개수 | `.env` 값 열람 금지 |
+| `AlertHistory.errorMessage` 의 현재 문자열 분포 | 실서비스 DB 조회 필요 (→ 003 Q14). **`sanitizeError` 적용 시 UI 표시가 얼마나 바뀌는지**는 이 값 없이 모른다 |
+| 파사드 전환 후 로그 volume 변화 | 런타임 데이터 |
+| `npm run lint`/`tsc --noEmit` 이 18 시그니처 변경을 어떻게 걸러내는가 | 읽기 전용 규율상 미실행 |
+
+---
+
+# 추가 측정 — 2026-09-04 (myFitness vitest resolve · U1 원인 규명)
+
+출처 `_workspace/05_operator_u1_vitest.md` (GitHub 이슈 #2). 003 §9 U1 의 이행.
+환경 node v20.18.0 / npm 10.8.2 / darwin 25.6.0. **대상 저장소 파일 변경 0** (md5·`git status` 검증).
+
+## 실행한 명령과 결과
+
+```bash
+cd ~/workspace/pleiades/repos/myFitness
+npm install --dry-run --package-lock-only \
+  'vitest@^4.1.8' '@vitest/coverage-v8@^4.1.8' 'vite-tsconfig-paths@^6.1.1'
+# → npm error Unable to resolve reference $postcss   (EXIT=1)
+
+npm install --dry-run --package-lock-only          # 인자 없이 (대조군)
+# → up to date / 210 packages / EXIT=0
+```
+
+**`ERESOLVE` 가 아니다.** peer dependency 충돌이 아니라 **npm overrides 참조 해석 실패**다.
+현재 트리는 정상이고, 실패는 **패키지를 추가할 때만** 발생한다.
+
+## 원인 분리 (scratchpad 사본 — 대상 저장소 무관)
+
+| 사본 | overrides | 추가 패키지 | 결과 |
+|---|---|---|---|
+| A | 원본 (`$postcss`, `$esbuild`) | 3종 / `vitest` 만 / `coverage-v8` 만 | **실패** (동일 메시지) |
+| A | 원본 | `vite-tsconfig-paths` 만 | 성공 (212 packages) |
+| A | 원본 | `is-odd` (무관 패키지) | 성공 (210 packages) |
+| **D** | **`$postcss` 만 리터럴** (`$esbuild` 유지) | 3종 | **성공** (223) |
+| E | `$esbuild` 만 리터럴 (`$postcss` 유지) | 3종 | **실패** |
+| B | 둘 다 리터럴 | 3종 | **성공** (223) |
+
+**유일한 blocker 는 `"postcss": "$postcss"` 한 줄이다. `$esbuild` 는 무관하다.**
+
+npm 디버그 스택:
+```
+Error: Unable to resolve reference $postcss
+    at get spec        (@npmcli/arborist/lib/edge.js:202:15)
+    at #nodeFromEdge   (build-ideal-tree.js:1036:46)
+    at #loadPeerSet    (build-ideal-tree.js:1294:35)   ← peer set 확장 경로
+silly unfinished npm timer idealTree:node_modules/vitest
+```
+**peer set 확장 경로에서 npm 이 `$name` 참조를 해석하지 못한다.**
+`vitest → vite → postcss` 로 postcss 가 트리에 들어올 때만 드러난다.
+→ **원래부터 깨져 있었고 vitest 가 조건을 처음 만족시켰을 뿐이다.**
+
+## resolve 되는 실제 버전 (사본 B lock 판독)
+
+| 패키지 | 현재 fit | 추가 후 |
+|---|---|---|
+| `vitest` / `@vitest/coverage-v8` | 없음 | **4.1.11** / **4.1.11** |
+| `vite-tsconfig-paths` | 없음 | **6.1.1** |
+| `vite` | 없음 | **6.4.3** — **fin 과 동일** |
+| `postcss` | 8.5.25 | **8.5.25 (무변경)** — 중복 사본 없음 |
+| `esbuild` | 0.28.1 | **0.28.1 (무변경)** |
+| lock 엔트리 | 716 | **785** (+69) |
+
+**`ERESOLVE` 0건 · peer dependency 충돌 0건.**
+
+## 필요한 수정 (미승인 — 적용하지 않음)
+
+```diff
+   "overrides": {
+-    "postcss": "$postcss",
++    "postcss": "^8.5.10",
+```
+**의미 동일** — npm 의 `$postcss` 는 "루트 `package.json` 의 postcss spec 을 쓰라"는 뜻이고
+fit `devDependencies.postcss` 가 정확히 `^8.5.10`. 사본 D 에서 lock 결과 동일함을 실증(양쪽 8.5.25).
+되돌리기 **즉시**(1줄) · 서비스 영향 **없음** · 단 1a-2 승인 범위 밖 → 003 **Q16**.
+`npm install --legacy-peer-deps` 는 이 오류를 피하지 못한다(override 해석 단계가 별개).
+
+## lint / typecheck 비대칭 (정적 판독)
+
+| 항목 | myFinance | myFitness |
+|---|---|---|
+| eslint 설정 | `.eslintrc.json` (eslintrc) | `eslint.config.mjs` (flat) |
+| eslint / eslint-config-next / next | ^8 / ^15.5.16 / ^15.5.16 | ^9.39.4 / ^16.2.6 / ^16.2.6 |
+| `lint` 스크립트 | `next lint` | **`eslint src/ --max-warnings 0`** |
+| `--max-warnings 0` 게이트 | 없음 | **있음** |
+| lint 대상 경로 | `next lint` 기본 | **`src/` 로 한정** |
+| `ignores` 에 `__tests__`/`*.test.ts` | 없음 | **없음** (`src/generated/**` 뿐) |
+| `typecheck` 스크립트 | **없음** (단 `next build` 가 타입 검사 — `ignoreBuildErrors` 없음) | `tsc --noEmit` |
+| `tsconfig.include` | `["next-env.d.ts","**/*.ts","**/*.tsx",".next/types/**/*.ts"]` | 동일 + `.next/dev/types/**/*.ts` |
+| `tsconfig.jsx` | `preserve` | `react-jsx` |
+| 기존 테스트 파일 | 44개+ (`src/**/__tests__/`) | 0개 |
+
+`repos/myFitness/eslint.config.mjs` 전문 (127 bytes):
+```js
+import nextConfig from "eslint-config-next";
+export default [ ...nextConfig, { ignores: ["src/generated/**"] } ];
+```
+
+→ **테스트 파일 경로가 결정 사항이다.** fit `lint` 는 `src/` 밖을 아예 검사하지 않으므로,
+fin 과 대칭(`src/**/__tests__/`)을 지키면 **zero-warning 게이트에 그대로 걸리고**,
+루트에 두면 게이트를 피하는 대신 경로 컨벤션이 갈라진다 → 003 **Q17**.
+
+> **정정 (2026-09-04).** 003 §9 의 *"myFitness 에만 `typecheck` 가 있고 `tsconfig.include` 가
+> `**/*.ts` 다"* 중 **include 부분이 부정확**하다 — fin 도 동일하다. 비대칭의 원인은
+> **`typecheck` 스크립트 유무**뿐이고, fin 도 `next build` 가 타입 검사를 한다.
+> 즉 비대칭은 "검사되냐"가 아니라 **"어느 단계에서 걸리냐"** 다.
+
+## 신규 리스크 — esbuild override 가 vite 를 선언 범위 밖으로 민다
+
+`vite@6.4.3` 선언: `esbuild: "^0.25.0"`, `postcss: "^8.5.3"`
+
+| | vite 가 쓰게 되는 esbuild | 방식 |
+|---|---|---|
+| **myFinance (현재 실동작)** | `vite/node_modules/esbuild@0.25.12` | 중첩 설치. 선언 범위 **안** |
+| **myFitness (추가 시 예상)** | `esbuild@0.28.1` (top-level) | `"esbuild": "$esbuild"` override 가 **중첩을 막는다** |
+
+npm overrides 는 범위 검사를 우회하므로 **resolve 는 통과하지만 런타임 동작은 미확인**이다.
+
+## 못 잰 값 (이 절 범위)
+
+| 항목 | 이유 |
+|---|---|
+| fit 에서 vitest 가 **런타임에 실제로 도는지** | 설치 후 `npx vitest run` 필요. 읽기 전용 범위 밖 → 003 §9 **U3** |
+| fit 테스트 파일이 `eslint src/ --max-warnings 0` 을 **통과하는지** | 테스트 파일 미작성 → 003 §9 **U2 여전히 미확인** |
+| `$postcss` 를 **유지한 채** 회피하는 방법 | 확인하지 못함. `--legacy-peer-deps` 는 아님 |
