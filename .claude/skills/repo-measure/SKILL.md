@@ -4,6 +4,16 @@ description: myFinance·myFitness 두 저장소를 실측하고 docs/research/me
 ---
 
 # repo-measure — 실측과 기록
+> **`grep` 에는 반드시 `--binary-files=text` (PR #6 Codex 리뷰 P2).** 없으면 `.next/cache`
+> 같은 파일이 binary 로 판정돼 **조용히 0건 오탐**이 난다. 실제로 실측·감사 에이전트가
+> 독립적으로 같은 오탐을 냈다 (`004-repo-layout.md`). 아래 명령에도 전부 붙어 있다.
+> **경로 규율 (PR #6 Codex 리뷰 P1).** 통합 작업의 측정·감사 대상은
+> **`~/workspace/pleiades/repos/{myFinance,myFitness}`** (worktree, 브랜치 `integration/pleiades`) 다.
+> `~/workspace/myFinance`(`dev`) · `~/workspace/myFitness`(`main`) 은 **서비스 유지용 원본**이라
+> **앞선 1a 단계 변경이 들어 있지 않다.** 원본을 재면 **이전 단계가 빠진 트리를 측정해
+> 잘못된 범위를 승인**하게 된다. 근거: `docs/specs/004-repo-layout.md`.
+> 원본을 재야 하는 경우(서비스 현재 상태 확인 등)는 **그렇게 재는 이유를 산출물에 명시한다.**
+
 
 pleiades 의 제1규율: **실측값은 추정하지 않는다.** 이 스킬은 그 규율의 실행 절차다.
 
@@ -14,7 +24,7 @@ pleiades 의 제1규율: **실측값은 추정하지 않는다.** 이 스킬은 
 ### 1. 먼저 기존 기록을 읽는다
 
 ```bash
-grep -n "<주제 키워드>" docs/research/measured-facts.md
+grep -n --binary-files=text "<주제 키워드>" docs/research/measured-facts.md
 ```
 
 이미 있으면 **재측정하지 않는다.** 단 아래는 예외다:
@@ -70,31 +80,31 @@ find ~/workspace/$d/src/<area> -name '*.ts' -exec cat {} + | wc -l
 ### 결합도 — 무엇이 무엇에 묶여 있나
 ```bash
 # 참조 파일 수 (분모와 함께)
-grep -rlE "from ['\"]<pkg>" ~/workspace/$d/src --include='*.ts' | wc -l
+grep -rlE --binary-files=text "from ['\"]<pkg>" ~/workspace/$d/src --include='*.ts' | wc -l
 # 예상 경계 밖 누수
-grep -rlE "<pattern>" ~/workspace/$d/src --include='*.ts' | grep -v '/src/<expected>/'
+grep -rlE --binary-files=text "<pattern>" ~/workspace/$d/src --include='*.ts' | grep -v --binary-files=text '/src/<expected>/'
 # 호출 지점이 한 곳인가 흩어져 있나
-grep -rn "<call>" ~/workspace/$d/src --include='*.ts' | cut -d: -f1 | sort | uniq -c | sort -rn
+grep -rn --binary-files=text "<call>" ~/workspace/$d/src --include='*.ts' | cut -d: -f1 | sort | uniq -c | sort -rn
 ```
 
 호출이 한 파일에 모이면 **초크포인트**(교체 가능), 흩어져 있으면 **재작성**이다. 비용이 자릿수로 다르다.
 
 ### 드리프트 — 같은 이름 파일이 얼마나 갈라졌나
 ```bash
-diff ~/workspace/myFinance/src/<path> ~/workspace/myFitness/src/<path> | wc -l
+diff ~/workspace/pleiades/repos/myFinance/src/<path> ~/workspace/pleiades/repos/myFitness/src/<path> | wc -l
 ```
 
 ### 추출 가능성 — 후보가 정말 무의존인가
 ```bash
-grep -nE "^import" <file>              # 전부 읽는다. 형제 파일까지 따라간다
-grep -rn "from ['\"]next" ~/workspace/$d/src/<dir>/ | wc -l
-grep -rn "from ['\"]@/lib" ~/workspace/$d/src/<dir>/ | wc -l
+grep -nE --binary-files=text "^import" <file>              # 전부 읽는다. 형제 파일까지 따라간다
+grep -rn --binary-files=text "from ['\"]next" ~/workspace/$d/src/<dir>/ | wc -l
+grep -rn --binary-files=text "from ['\"]@/lib" ~/workspace/$d/src/<dir>/ | wc -l
 ```
 
 ### 설정 출처 — 그 파일이 진짜 읽히나
 ```bash
-grep -rn "<파일명>" ~/workspace/$d/src --include='*.ts'
-grep -rn "writeFileSync\|\.runtime/\|process.cwd()" ~/workspace/$d/src/<dir>/*.ts
+grep -rn --binary-files=text "<파일명>" ~/workspace/$d/src --include='*.ts'
+grep -rn --binary-files=text "writeFileSync\|\.runtime/\|process.cwd()" ~/workspace/$d/src/<dir>/*.ts
 ```
 
 런타임 생성본이 있으면 **저장소 파일은 죽은 파일**이다. 이 확인은 `reversibility-audit` 과 겹치며, 겹치는 것이 맞다.

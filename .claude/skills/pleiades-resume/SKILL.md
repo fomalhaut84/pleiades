@@ -21,7 +21,7 @@ description: pleiades 통합 프로젝트의 새 세션 시작 시 인계 상태
 ```
 Read: docs/handoff/ 의 가장 최근 파일
 Read: docs/specs/002-platform-direction.md   ← 정본 방향
-Bash: ls docs/handoff/ && git -C ~/workspace/myFinance log --oneline -3 && git -C ~/workspace/myFitness log --oneline -3
+Bash: ls docs/handoff/ && git -C repos/myFinance log --oneline -3 && git -C repos/myFitness log --oneline -3
 ```
 
 `001-integration-master.md` 는 **분석 근거로만 유효하다.** 권고 경로와 단계 0 범위는 002 가 대체했다.
@@ -33,13 +33,24 @@ Bash: ls docs/handoff/ && git -C ~/workspace/myFinance log --oneline -3 && git -
 
 두 저장소는 이 세션 밖에서도 움직인다. 인계 노트의 기록과 실제가 다를 수 있다.
 
+**체크아웃이 4개다** — 통합 작업용 worktree 2개 + 서비스 유지용 원본 2개 (`docs/specs/004-repo-layout.md`).
+
 ```bash
+echo "== 통합 작업 (worktree · integration/pleiades 여야 함)"
 for d in myFinance myFitness; do
-  echo "== $d"; git -C ~/workspace/$d branch --show-current; git -C ~/workspace/$d status -s | head -5
+  echo "-- repos/$d"; git -C repos/$d branch --show-current; git -C repos/$d status -s | head -5
+done
+echo "== 서비스 유지용 원본 (fin=dev · fit=main · 쓰기 금지)"
+for d in myFinance myFitness; do
+  echo "-- ~/workspace/$d"; git -C ~/workspace/$d branch --show-current; git -C ~/workspace/$d status -s | head -3
 done
 ```
 
-브랜치가 `dev` 가 아니거나 dirty 면 **인계 노트보다 현재 상태를 신뢰한다.**
+**worktree 브랜치가 `integration/pleiades` 가 아니거나 dirty 면 인계 노트보다 현재 상태를 신뢰한다.**
+원본이 `dev`/`main` 이 아니면 **누군가 서비스 유지 작업 중일 수 있으므로 사용자에게 확인한다.**
+
+> **측정·감사는 worktree 를 본다 (PR #6 Codex 리뷰 P1).** 원본에는 앞선 1a 단계 변경이
+> 들어 있지 않다 — 원본을 재면 이전 단계가 빠진 트리를 측정하게 된다.
 
 ### Step 3 — 브리핑 (3문단 이내)
 
