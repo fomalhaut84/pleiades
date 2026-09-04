@@ -18,19 +18,30 @@ Q7(DB 경계) · Q2(독립 배포) · Q3(봇 인바운드 통합).
 
 ## 대상 저장소
 
-통합 대상은 이 저장소 밖에 있다. 읽거나 고치려면 세션에 붙여야 한다.
+**통합 작업 소스는 `repos/` 아래 git worktree 로 있다** (2026-09-04 배치, 상세는 `docs/specs/004-repo-layout.md`).
+저장소는 여전히 각각 하나다 — worktree 는 같은 저장소의 두 번째 작업 디렉터리이므로 **분기가 불가능하다.**
 
-| 저장소 | 경로 | 버전 | 브랜치 |
+| 용도 | 경로 | 브랜치 | 성격 |
 |---|---|---|---|
-| myFinance | `~/workspace/myFinance` | v0.16.4 | **`integration/pleiades`** (dev 분기) |
-| myFitness | `~/workspace/myFitness` | v2.27.2 | **`integration/pleiades`** (dev 분기) |
+| **통합 작업** | `repos/myFinance` | **`integration/pleiades`** | worktree. **여기서 작업·커밋** |
+| **통합 작업** | `repos/myFitness` | **`integration/pleiades`** | worktree. **여기서 작업·커밋** |
+| 서비스 유지 | `~/workspace/myFinance` (v0.16.4) | `dev` | 원본. 핫픽스·단일 저장소 작업용 |
+| 서비스 유지 | `~/workspace/myFitness` (v2.27.2) | `main` | 원본. 핫픽스·단일 저장소 작업용 |
 
-**이 프로젝트의 모든 작업은 두 저장소의 `integration/pleiades` 브랜치에서만 한다** (2026-09-04 생성, 로컬 전용).
-단계 작업은 그 위에 `integration/pleiades-<단계>` 를 따서 PR 로 합친다 — 003 §5-2 의 단계별 되돌리기 등급을 보존하기 위해서다.
+**이 프로젝트의 작업은 `repos/` 아래에서만 한다.** 원본 두 경로는 이 프로젝트가 끝날 때까지
+**서비스 유지용으로 남긴다** — 필요하면 읽기 전용으로 참고한다.
+단계 작업은 `integration/pleiades-<단계>` 를 따서 PR 로 합친다 (003 §5-2 의 단계별 되돌리기 등급 보존).
 `dev` 로의 PR 은 1a 전체가 끝난 뒤. `main` 직접 변경 금지. 롤백은 `_workspace/04_operator_rollback.md`.
 
+`repos/` 는 pleiades `.gitignore` 에 등재돼 있다. 그 결과 **Grep 은 루트 검색에서 `repos/` 를 건너뛴다** —
+두 저장소를 검색할 때는 **`path` 를 `repos/` 이하로 지정**해야 한다 (Glob·Read 는 영향 없음).
+
+**하네스는 아직 통합되지 않았다.** 하위 디렉터리의 `.claude/skills`·`agents` 는 **로드되지 않으므로**
+(`--add-dir` 로 붙였을 때만 보인다) `repos/*/.claude/` 는 현재 동작하지 않는다.
+두 저장소 하네스(fin 16 tracked + fit 18 ignored)를 pleiades 로 모으는 것이 **002 단계 2** 이고,
+이 배치의 선결 조건이다. 그때까지 저장소별 하네스가 필요하면 `--add-dir` 로 원본을 붙인다:
+
 ```bash
-# 두 저장소를 함께 보는 세션 (CLAUDE.md·rules 까지 로드)
 CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
   claude --add-dir ~/workspace/myFinance --add-dir ~/workspace/myFitness
 ```
@@ -63,7 +74,8 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
 ## 작업 규칙
 
 - **기존 두 저장소에 쓰기 전 반드시 사용자 확인.** 둘 다 실서비스 중이다 (PM2 + Nginx, finance:4100 / fitness:4200).
-- **두 저장소 작업 브랜치는 `integration/pleiades`.** 다른 브랜치에서 작업하지 않는다 (위 표 참조).
+- **작업은 `repos/` 아래 worktree 에서, 브랜치는 `integration/pleiades`.** 원본 `~/workspace/myF*` 는 서비스 유지용이므로 쓰기 금지 (위 표 참조).
+- **절대경로 측정에는 반드시 `grep --binary-files=text`.** 없으면 `.next/cache` 같은 파일이 binary 로 판정돼 조용히 0건 오탐이 난다 (004).
 - 새 옵션·단계를 제안할 때는 **되돌리기 비용을 항상 함께 적는다.** 이 저장소 문서의 일관된 형식이다.
 - 실측값은 추정하지 않는다. `docs/research/measured-facts.md` 에 없으면 직접 측정하고 그 파일에 측정 명령과 함께 추가한다.
 - 문서는 한국어. 코드·변수명·경로는 영어.

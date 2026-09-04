@@ -787,3 +787,450 @@ alert 본문에 AdvisorError.detail (stderr tail) 이 포함되며 … 가족 ch
 | myFitness `WorkoutAdjustment` 중 telegram id 채워진 row 수 | 위와 동일 |
 | Discord 측 제한값 | 대상 저장소에 Discord 코드 0줄 — 저장소 실측 대상 아님 |
 | 전환 회귀 커버리지 baseline | myFitness 테스트 0개 |
+
+---
+
+# 추가 측정 — 2026-09-04 (저장소 배치 변형 A — pleiades 하위 이동)
+
+사용자 질문 "두 프로젝트를 pleiades 하위에 두는 게 낫지 않나"의 비용 측정.
+**변형 A** = `pleiades/repos/{myFinance,myFitness}` 에 **독립 git 저장소**로 배치.
+원격·배포·릴리즈 격리 유지. (**변형 B** = 진짜 모노레포 = 002 단계 4 = 003 §2, 재측정 안 함.)
+상세는 `_workspace/01_surveyor_layout.md`.
+
+## 측정 시점 저장소 상태
+
+```bash
+for d in myFinance myFitness; do
+  git -C ~/workspace/$d branch --show-current
+  git -C ~/workspace/$d status --porcelain | wc -l
+  git -C ~/workspace/$d log -1 --format='%h %ad %s' --date=short
+  git -C ~/workspace/$d stash list | wc -l
+done
+```
+
+| | myFinance | myFitness |
+|---|---|---|
+| 브랜치 / dirty | `integration/pleiades` / 0 | `integration/pleiades` / 0 |
+| HEAD | `c549fa6` (2026-08-27) | `ac034be` (2026-09-04) |
+| `git stash` | 0건 | 0건 |
+| worktree / submodule | 1 / 없음 | 1 / 없음 |
+
+> **정정 (2026-09-04 재측정).** 위 "Discord 이식 제약" 절은 브랜치 `dev`, myFitness HEAD `2625600`
+> (2026-09-03) 로 기록했다. 현재는 **양쪽 `integration/pleiades`**, myFitness HEAD 는
+> `ac034be` 로 이동했다 (PR #366 머지). 이 절의 값은 새 HEAD 기준.
+
+> **정정 (2026-09-04 재측정).** 위 "테스트 도입 전제" 절은 myFitness `scripts` 에
+> "테스트 없음 (대신 `typecheck`)" 으로 기록했다. 현재 `package.json` 에
+> **`test`, `verify:mcp-date-labels`, `verify:food-edit-pending` 3개가 추가**됐다
+> (`test` = 두 verify 를 tsx 로 실행). **vitest 의존성은 여전히 0개**이므로
+> CLAUDE.md 의 미확인 U1(myFitness vitest resolve)은 그대로 유효하다.
+
+## M1. clone 으로는 따라오지 않는 것
+
+```bash
+git -C ~/workspace/$d status --porcelain --untracked-files=all           # untracked
+git -C ~/workspace/$d ls-files --others --ignored --exclude-standard --directory   # ignored
+git -C ~/workspace/myFinance ls-files .claude | wc -l
+```
+
+untracked(비ignore) 파일: **양쪽 0**. 소스로 보이는 untracked 없음.
+
+**ignored 중 clone 후 수동 복사가 필요한 것** (생성물 제외)
+
+| | myFinance | myFitness |
+|---|---|---|
+| `.env` | 332 B | 221 B |
+| `.claude/settings.local.json` | 17,469 B | (아래 `.claude/` 에 포함) |
+| **`.claude/` 전체** | **tracked (16 files)** | **ignored — 18 files / 104 K** |
+| **`CLAUDE.md`** | **tracked** | **ignored — 8,621 B** |
+| `.garmin-tokens/` | — | 2 files / 8 K (`oauth2_token.json` 2,839 B, `oauth1_token.json` 113 B) |
+| `.vscode/settings.json` | tracked | ignored / 4 K (`{"jira-plugin.workingProject":""}` 1줄) |
+| 재생성 가능 | `node_modules` 38,795f/822M · `.next` 881f/1.1G · `dist` 13M · `coverage` 1.8M | `node_modules` 43,402f/825M · `.next` 1,266f/286M · `dist` 3.2M · `src/generated/prisma` 25f/20M (`npx prisma generate`) |
+
+**`.gitignore` 비대칭이 원인**
+
+| | myFinance | myFitness |
+|---|---|---|
+| claude 관련 ignore 줄 | `.claude/settings.local.json` 1줄 | `.claude/` · `CLAUDE.md` · `.runtime/` 3줄 |
+| `.claude/` tracked 파일 수 | **16** | **0** |
+
+→ **myFinance 는 clone 하면 하네스가 따라오고, myFitness 는 통째로 사라진다.**
+   이 문서 "하네스 구성" 절의 myFitness agents 5 / skills 9 / rules 3 은 **전부 로컬 전용 파일**이다.
+
+**`.env` 키 (값 미열람)**
+
+```bash
+grep -oE '^[A-Za-z_][A-Za-z0-9_]*' ~/workspace/$d/.env | sort -u
+comm -23 <(.env 키) <(.env.example 키)
+```
+
+| | myFinance | myFitness |
+|---|---|---|
+| `.env` 키 수 / `.env.example` 키 수 | 7 / 10 | 4 / 12 |
+| **example 에 없는 `.env` 키** | **`NEXTAUTH_SECRET`, `NEXTAUTH_URL`** | **0개** |
+
+→ myFinance 는 `cp .env.example .env` 로 복구하면 2개가 **조용히 빠진다.** 원본 복사만 안전.
+
+**로컬 전용 브랜치·커밋·태그**
+
+```bash
+git -C ~/workspace/$d for-each-ref --format='%(refname:short)|%(upstream:short)|%(upstream:track)' refs/heads
+git -C ~/workspace/$d log --oneline --branches --not --remotes=origin
+comm -23 <(git tag|sort) <(git ls-remote --tags origin|sed 's|.*refs/tags/||;s|\^{}||'|sort -u)
+```
+
+| 저장소 | upstream 없는 브랜치 | origin 에 없는 커밋 |
+|---|---|---|
+| myFinance | `integration/pleiades` (커밋 0) | 1 — `0e662df` on `feat/45-error-loading` (ahead 1) |
+| myFitness | `integration/pleiades` (커밋 0) | 2 — `54c2f57`, `84086b8` on `fix/261-2` (upstream **gone**) |
+
+로컬 전용 태그: **양쪽 0**. → clone 시 손실은 커밋 3개 + 브랜치 이름 2개. `mv` 면 0.
+
+## M2. 디스크
+
+```bash
+du -sh ~/workspace/$d/{.git,node_modules,.next,dist,coverage} ~/workspace/$d
+cd ~/workspace/$d && git ls-files | while read f; do stat -f%z "$f"; done | awk '{s+=$1}END{print s}'
+df -h ~
+```
+
+| | myFinance | myFitness | 합계 |
+|---|---|---|---|
+| `.git` | 16 MB | 32 MB | 48 MB |
+| tracked 워킹트리 | 733 files / 8.6 MB | 396 files / 2.9 MB | 11.5 MB |
+| `node_modules` | 822 MB | 825 MB | 1.65 GB |
+| `.next` | 1.1 GB | 286 MB | 1.39 GB |
+| `dist` / `coverage` | 13 MB / 1.8 MB | 3.2 MB / — | 18 MB |
+| **디렉터리 총계** | **1.9 GB** | **1.1 GB** | **3.06 GB** |
+
+`df -h ~` → `/dev/disk3s5 926Gi size / 856Gi used / **21Gi avail** / 98% capacity`
+
+| 방식 | 추가 디스크 | 여유 잔량 |
+|---|---|---|
+| `mv` (이동) | **0** | 21 GiB |
+| `git clone` (원본 유지) + `npm ci` + `build` | **+3.06 GB** | 약 18 GiB |
+
+## M3. 절대 경로 의존 — **6곳, 전부 권한 파일**
+
+```bash
+grep -rn -- "/workspace/myFinance\|/workspace/myFitness\|/Users/sagan" ~/workspace/$d \
+  --exclude-dir=node_modules --exclude-dir=.next --exclude-dir=.git --exclude-dir=dist --exclude-dir=coverage
+```
+
+| 파일:줄 | 저장소 | 영향 |
+|---|---|---|
+| `.claude/settings.local.json:22,43,44,102,103,112` | myFinance | 허용 규칙 6/150 (4.0%) 매칭 실패 → **권한 프롬프트 재발.** 앱은 무사 |
+| (myFitness) | — | **소스·설정 전체 0건** |
+
+**경로 무관 확인**
+
+| 대상 | 실측 | 이동 영향 |
+|---|---|---|
+| `ecosystem.config.js` fin `:7,:21,:46` | `cwd: __dirname` | 없음 |
+| `ecosystem.config.js` fit `:7,:23,:73` | `cwd: '/home/nasty68/myFitness'` — **서버 경로** | 없음 |
+| `tsconfig.json` paths | 양쪽 `"@/*": ["./src/*"]` 상대 | 없음 |
+| `next.config.mjs` / `prisma.config.ts` / `vitest.config.mts` | 절대경로 0 | 없음 |
+| 런타임 경로 | 전부 `process.cwd()`/`__dirname` (fin 8곳, fit 9곳) | 없음 |
+| `.mcp.json` | **양쪽 다 없음** (MCP 설정은 `src/lib/ai/` 안) | 해당 없음 |
+| 로컬 cron | `crontab -l` → `no crontab for sagan` (exit 1) | 없음 |
+| launchd | `~/Library/LaunchAgents` 에 workspace 참조 0 | 없음 |
+| node-cron | 전부 앱 내부 (`src/lib/cron.ts` 등) | 없음 |
+
+유일한 env 탈출구: `myFinance/src/lib/ai/claude-advisor.ts:753`
+`process.env.MYFINANCE_ROOT ?? process.cwd()` — `.env` 에 `MYFINANCE_ROOT` 미설정.
+
+**pleiades 쪽 갱신 대상**: `grep -rn "workspace/myF" ~/workspace/pleiades --exclude-dir=.git | wc -l` → **46**
+(+ auto memory 3). 그중 실제 갱신 필요는 **12** (`.claude/` 5 · `CLAUDE.md` 3 · `README.md` 1 · memory 3).
+나머지 34 는 `measured-facts.md` 의 측정 명령 16 + `_workspace/` 과거 초안 20 → **손대지 않는다.**
+
+## M4. 서버 배포는 로컬 경로에 묶여 있지 않다 — **확정**
+
+```bash
+grep -rn "rsync\|scp \|ssh \|sshpass" ~/workspace/$d --exclude-dir=node_modules \
+  --exclude-dir=.next --exclude-dir=.git --exclude-dir=dist --exclude-dir=coverage | grep -v '\.md:'
+```
+
+| | myFinance | myFitness |
+|---|---|---|
+| `rsync` / `scp` hit | **0 / 0** | **0 / 0** |
+| `ssh` hit | 1 — `.github/workflows/deploy.yml:4` **주석** (자동화 이전 수동 절차 설명) | 1 — 동상 |
+
+실제 배포 경로 (양쪽 동일):
+`GitHub Release publish` → `.github/workflows/deploy.yml` (ubuntu runner) →
+`appleboy/ssh-action@v1.2.2` (host/user/key/port/fingerprint = GitHub Secrets) →
+서버에서 `cd "$DEPLOY_PATH"` → `git fetch origin --tags --force` → `git checkout -f "$RELEASE_TAG"` →
+`./deploy/deploy.sh` → `npm ci` → `prisma migrate deploy` → build → `pm2`.
+
+서버 경로: fin `secrets.DEPLOY_PATH`, fit `deploy/deploy.sh:10` `cd /home/nasty68/myFitness`.
+**둘 다 서버 파일시스템 기준.** 로컬에서 배포에 도달하는 접점은 `git push` + Release 생성뿐이고
+그건 cwd 가 저장소 안이기만 하면 되므로 절대 경로 무관.
+
+→ **변형 A 는 실서비스 배포를 깨지 않는다.** 변형 A 안전성의 핵심 근거.
+
+## M5. 중첩 git 저장소 — `.gitignore` 한 줄로 충분
+
+pleiades 현재 `.gitignore`: `.DS_Store` / `node_modules/` / `*.log` / `_workspace_prev/`.
+**`repos/` 항목 없음 → 현재는 무방비.**
+
+스크래치패드 실증 (outer/inner 두 git init 후):
+
+| 상황 | 결과 |
+|---|---|
+| ignore 없이 `git status` | `?? repos/` |
+| ignore 없이 `git add .` | `warning: adding embedded git repository` → 인덱스에 **`160000 <sha> 0 repos/inner`** (gitlink). pleiades clone 시 **빈 디렉터리** |
+| `.gitignore` 에 `repos/` 후 `git add .` | repos/ **미포함** |
+| ignore 상태에서 명시 `git add repos/inner` | `paths are ignored … Use -f` → **차단** |
+| outer 에서 `git grep` | inner 파일 **미검색** |
+
+→ **submodule 불필요.** submodule 은 SHA 핀 고정·`--recurse-submodules` 요구를 만들어
+  "독립 저장소 유지"라는 변형 A 전제를 깬다.
+  방치 시 실패 모드는 gitlink 커밋 1개, 되돌리기는 `git rm --cached repos/<name>`.
+
+## M6. workspaces 흔적 — **양쪽 0**
+
+```bash
+node -e "console.log(JSON.stringify(require('.../package.json').workspaces ?? null))"
+node -e "console.log(require('.../package-lock.json').lockfileVersion)"
+ls ~/workspace/$d | grep -iE 'lock|\.yarn|pnpm|npmrc'
+```
+
+| | myFinance | myFitness |
+|---|---|---|
+| `workspaces` 필드 | **null** | **null** |
+| 매니저 / lockfile / version | npm / `package-lock.json` 393,371 B / **3** | npm / `package-lock.json` 352,306 B / **3** |
+| pnpm·yarn·`.npmrc`·`.yarn/` | 없음 | 없음 |
+| `package.json` name / version | `myfinance` / `0.1.0` | `myfitness` / `0.1.0` |
+| `overrides` 항목 수 | 3 | **13** |
+
+→ 변형 A 에 workspaces 는 불필요. 흔적 0 이므로 `repos/` 하위에 두어도 npm 이 상위를 올려다보지 않는다.
+  (`overrides` 13 vs 3 은 변형 B 병합 충돌 지점 — 이번 범위 밖.)
+
+## 부수 발견 — Claude Code 프로젝트 상태가 경로로 키잉된다
+
+```bash
+ls -1 ~/.claude/projects/ | grep -i "myF\|pleiades"
+du -sh ~/.claude/projects/<key>; ls <key>/*.jsonl | wc -l; ls <key>/memory/*.md | wc -l
+# 키 9개 전수: 세션 jsonl 의 cwd 필드 vs 키 문자열 대조 → MISMATCH 0건
+```
+
+| 키 | 총 크기 | 세션 `.jsonl` | memory 토픽 |
+|---|---|---|---|
+| `-Users-sagan-workspace-myFinance` | **113 MB** | 7 | **38** |
+| `-Users-sagan-workspace-myFitness` | **141 MB** | 6 | **18** |
+| `-Users-sagan-workspace-pleiades` | 6.4 MB | 2 | 4 |
+
+키 전수 검사에서 키 ≠ cwd 경로 파생 사례 **0건** (`/`→`-` 치환만, `_` 는 보존).
+
+→ `~/workspace/pleiades/repos/myFinance` 로 옮기면 키가
+`-Users-sagan-workspace-pleiades-repos-myFinance` 로 바뀐다.
+**memory 토픽 56개 + 세션 히스토리 13개 (254 MB) 가 고아가 된다.**
+`claude-code-mechanisms.md:33` 은 "`<project>` 는 git 저장소 기준 파생"이라 적었으나,
+어느 규칙이든 결과는 **경로 문자열**이고 그 경로가 바뀐다.
+회피안 (a) `~/.claude/projects/` 디렉터리를 새 키로 `mv`, (b) `autoMemoryDirectory` 절대 경로 고정
+— **둘 다 실증 미측정.**
+
+## 못 잰 값
+
+| 항목 | 이유 |
+|---|---|
+| `.env` 값 (chat id·DB URL·토큰·Garmin 자격) | 시크릿. 이름·크기만 측정 |
+| `~/.claude/projects/` 키를 `mv` 하면 세션·메모리가 살아나는지 | 실행 검증 필요, 읽기 전용 범위 밖 |
+| `autoMemoryDirectory` 가 이동 후에도 memory 를 잇는지 | 위와 동일 |
+| pleiades 를 cwd 로 열었을 때 `repos/*/.claude/skills` 자동 탐색 여부 | 런타임 동작. 정적 측정 불가. `claude-code-mechanisms.md:125` 는 "패키지별 `.claude/skills/` 지원"이라 하나 이 배치에서 미실증 |
+| GitHub Secrets `DEPLOY_PATH` 실제 값 (myFinance) | 저장소에 없음 |
+| 서버 파일시스템 상태 | 읽기 전용 규율상 서버 미접속 |
+
+---
+
+# 추가 측정 — 2026-09-04 (배치 집행: `git worktree` · 감사 반증)
+
+위 "저장소 배치 변형 A" 절의 후속. 감사(`_workspace/03_auditor_layout.md`)와 집행 과정에서
+나온 값이다. **위 절의 기존 줄은 고치지 않았다.** 정정은 아래 블록으로 남긴다.
+결정 문서는 `docs/specs/004-repo-layout.md`.
+
+## ⚠ 방법론 — 절대경로 측정은 `--binary-files=text` 를 붙인다
+
+```bash
+grep -rn --binary-files=text -- "/Users/sagan/workspace" <path>
+```
+
+> **정정 (2026-09-04 감사).** 위 **M3** 절의 측정 명령은 `grep -rn` 만 썼다.
+> `grep -r` 은 `.next/cache` 의 팩 파일들을 **binary 로 판정해 건너뛴다.**
+> 그 결과 `01_surveyor_layout.md` M3 과 감사 1차 스캔이 **둘 다 `.next/cache` 를 0건으로
+> 오탐**했다 (독립적으로 2회).
+>
+> **경고 — 이 문서의 다른 grep 기반 "0건" 결론들이 같은 결함을 가질 수 있다.**
+> 특히 M3 의 *"myFitness 소스·설정 전체 0건"*, M4 의 *"`rsync`/`scp` hit 0/0"*.
+> 재검증 전까지 그 0 들은 **"텍스트 파일 범위에서 0건"** 으로 읽는다.
+> 재검증은 004 §6 **Q22**.
+
+## `.next/cache` 는 절대경로로 키잉된다 — **M3 정정**
+
+```bash
+grep -rl --binary-files=text -- "/Users/sagan/workspace" ~/workspace/$d/.next/cache | wc -l
+grep -o --binary-files=text -- "/Users/sagan/workspace[^\"]*" .next/cache/**/index.pack | sort -u | wc -l
+```
+
+| | myFinance | myFitness | 합 |
+|---|---|---|---|
+| 절대경로를 담은 `.next/cache` 파일 | **160** | **9** | 169 |
+| 단일 `index.pack` 안 **distinct** 절대경로 | **1,144** | — | — |
+| 관련 캐시 용량 | — | — | **1.35 GB** |
+
+> **정정 (2026-09-04 감사).** 위 M3 절은 절대경로 의존을 **"6곳, 전부 권한 파일"** 로 적었다.
+> 소스·설정 범위에서는 맞다. **`.next/cache` 는 그 범위 밖이었다.**
+> 디렉터리를 `mv` 하면 앱은 안 깨지지만 **첫 빌드 1회가 콜드**가 되고, 되돌릴 때 **한 번 더**다.
+> `git worktree` 채택으로 이 비용은 **발생하지 않았다** — 원본 `.next`(fin 1.1 GB · fit 286 MB)가
+> 제자리에서 warm 유지된다.
+
+## 이동해도 재설치·재생성은 **불필요** (실증)
+
+| 검사 | 실측 | 판정 |
+|---|---|---|
+| `node_modules` 심링크 중 절대경로 | fin **0 / 45**, fit **0 / 39** | 전부 상대 |
+| lockfile 안 절대경로 | **0건** | 무관 |
+| `.git/hooks` 절대경로 | **0건** | 무관 |
+| Prisma 쿼리 엔진 바이너리 경로 임베드 | **0건** | 무관 |
+| `.prisma/client/index.js:525,539` 의 절대경로 | 존재하나 **inert metadata** | 런타임은 `__dirname` 기준 |
+
+`.prisma/client` 는 **APFS 복제본을 새 경로에서 실제 기동**해 확인했다 —
+**DB 연결 단계에서만** 실패(경로 해석 단계는 통과).
+→ `npm ci` / `prisma generate` / 재빌드는 경로 이동 때문에 필요한 것이 아니다.
+
+## `~/.claude` 경로 키잉 저장소는 **3개** — 부수 발견 정정
+
+| # | 저장소 | 담긴 것 | 디렉터리 rename 으로 해결되나 |
+|---|---|---|---|
+| ① | `~/.claude/projects/<slug>/` | 세션 `.jsonl` · `memory/` | **예** — rename 후 memory 주입 · `--resume` 회수 · 신규 세션 기록 **실증** |
+| ② | `~/.claude.json` 의 `projects["<절대경로>"]` | 신뢰 대화상자 · `codex-cli` MCP 등록 · `lastSessionId` | **아니오** (키가 절대경로) |
+| ③ | `~/.claude/history.jsonl` | 프롬프트 **2,046건** | **아니오** |
+
+**슬러그 규칙 정정**
+
+| | 이 문서의 기존 기록 | 실측 (CLI **v2.1.260**) |
+|---|---|---|
+| 치환 | `/` → `-`, **`_` 보존** | **`/` · `_` · `.` → `-`** |
+| 안정성 | 규칙 | **CLI 버전 의존** |
+
+> **정정 (2026-09-04 감사).** 위 "부수 발견" 절은 `-Users-sagan-workspace-knou_python` 을 근거로
+> **"`_` 는 보존"** 이라 적었다. 그 키는 **과거 CLI 버전이 만든 것**이고, 현재 버전은 `_`·`.` 도
+> 치환한다. 즉 **슬러그를 손으로 계산해 rename 하는 절차는 CLI 업그레이드에 깨진다.**
+> 또한 회피안 (a) 는 **①만 덮는다** — ②③ 은 그 절에 등장하지 않았다.
+> `autoMemoryDirectory`(회피안 b)는 실재하나 **세션 키는 못 옮길 가능성이 높아 (a)의 대안이
+> 아니다** — **미확인**으로 남긴다.
+>
+> **`git worktree` 채택으로 ①②③ 비용이 전부 0 이다** — 원본 경로가 유지되므로 키가 바뀌지 않는다.
+> memory 토픽 56개 · 세션 13개 · **254 MB 는 제자리에 온전하다.**
+
+## `.gitignore` 한 줄의 한계 — **M5 정정**
+
+| 검사 | 실측 | 판정 |
+|---|---|---|
+| ignore 상태에서 `git add repos/inner` | 차단 | M5 대로 |
+| ignore 상태에서 **`git add -f repos/inner`** | **뚫린다 — gitlink 생성** | **M5 반증** |
+| `git clean -fdx` | 중첩 저장소 **보호** | 안전 |
+| **`git clean -ffdx`** | **`repos/` 통째로 삭제** | **M5 미기재 위험** |
+
+> **정정 (2026-09-04 감사).** M5 는 `.gitignore` 한 줄을 **"충분하다"** 고 적었다.
+> 정확히는 **기본값을 바꾸는 장치이지 사고를 막는 장치가 아니다.** `-f` 를 두 번 치면 뚫린다.
+> **worktree 채택으로 판돈은 줄었다** — `repos/` 가 삭제돼도 원본 체크아웃이 남으므로
+> 편도가 아니다(`git worktree add` 재실행 + gitignored 사본 재복사로 복구).
+> **작업 규율: pleiades 루트에서 `git clean -ffdx` 금지.**
+
+## Grep 도구는 차단되지 않는다 — 루트 traversal 제외
+
+| 검색 | 결과 |
+|---|---|
+| 루트 검색 (경로 미지정) | ❌ 미검색 |
+| `path: repos/inner` | ✅ `FOUND:repos/inner/src.txt` |
+| `path: repos/` | ✅ 검색됨 |
+
+실제 Grep 도구로 확인. → **규칙 한 줄**: *"`repos/` 하위 검색 시 `path` 를 명시한다."*
+
+## **중첩 `.claude/` 는 로드되지 않는다** (신규 · 결정적)
+
+| 배치 | `.claude/skills` | `.claude/agents` |
+|---|---|---|
+| 하위 디렉터리(`repos/*/.claude/`) — **gitignore 유무와 무관** | **미발견** | **미발견** |
+| **`--add-dir` 로 붙인 경우** | **발견** | **발견** |
+
+> **정정 (2026-09-04 실측).** 위 "못 잰 값" 표의 *"pleiades 를 cwd 로 열었을 때
+> `repos/*/.claude/skills` 자동 탐색 여부 — 정적 측정 불가"* 는 **측정됐다. 탐색되지 않는다.**
+> `docs/research/claude-code-mechanisms.md:125` 의 *"패키지별 `.claude/skills/` 지원"* 은
+> **이 배치에 적용되지 않는다.**
+> → 귀결: **하네스 통합(002 단계 2)은 이 배치의 선결 조건**이다 (004 §6 Q20).
+
+## `cp -Rc` (APFS clonefile)
+
+```bash
+time cp -Rc <src> <dst>
+```
+
+| 항목 | 실측 |
+|---|---|
+| 1.9 GB 복제 소요 | **8.25초** |
+| 실제 디스크 소비 | **~0** (COW) |
+| 따라온 것 | `.env` · `.git` · `.claude` · `node_modules` · `.next` · 로컬 브랜치 6개 **전부** |
+
+→ M2 의 **"clone = +3.06 GB · 수동 복사 6종"** 은 `git clone` 을 전제한 값이다.
+  `cp -Rc` 는 그 둘을 동시에 없앤다. **그럼에도 clone 계열은 채택되지 않았다** —
+  남는 문제가 용량이 아니라 **저장소 2벌의 분기 가능성**이기 때문 (004 §2-2).
+
+## `git worktree` — 채택안 실측
+
+```bash
+git -C ~/workspace/$d worktree add ~/workspace/pleiades/repos/$d integration/pleiades
+git -C ~/workspace/$d worktree list
+```
+
+**worktree 에 안 따라오는 gitignored 필수 파일**
+
+| | myFinance | myFitness |
+|---|---|---|
+| tracked 파일 (따라옴) | **733** | **396** |
+| 수동 복사 필요 | `.env` (4K) | `.env` (4K) · `.garmin-tokens/` (8K) · `.claude/` (104K) · `CLAUDE.md` (12K) |
+
+**집행 후 상태 (2026-09-04)**
+
+```bash
+git -C ~/workspace/myFinance worktree list
+# /Users/sagan/workspace/myFinance                 c549fa6 [dev]
+# /Users/sagan/workspace/pleiades/repos/myFinance  c549fa6 [integration/pleiades]
+git -C ~/workspace/myFitness worktree list
+# /Users/sagan/workspace/myFitness                 5809c48 [main]
+# /Users/sagan/workspace/pleiades/repos/myFitness  ac034be [integration/pleiades]
+```
+
+| 항목 | 값 |
+|---|---|
+| 원본 체크아웃 브랜치 | fin **`dev`** / fit **`main`** (04 집행 전 상태로 복귀) |
+| worktree clean | **0** (양쪽) |
+| 복사한 gitignored 파일 | fin `.env` / fit `.env`·`.garmin-tokens/`·`CLAUDE.md`. **fit `.claude/` 는 의도적 제외** (하네스 통합 대상) |
+| fin `.claude/` | **tracked 16파일이라 자동으로 따라옴.** 제거는 `git rm` 커밋 = 소스 변경이므로 단계 2 로 미룸 (004 Q21) |
+| `node_modules` | `cp -Rc` COW 복사. 양쪽 `@prisma/client` 로드 확인 |
+| **실제 디스크 소비** | **90 MB** |
+| `du -sh repos/` (참고) | **1.7 GB** — `du` 는 COW 공유 블록을 각 사본에 중복 계상하므로 **실소비가 아니다** (`myFinance` 852 MB / `myFitness` 839 MB) |
+| pleiades `.gitignore` | `repos/` 1줄 추가 |
+
+## 로컬에는 실행 중인 서비스가 없다
+
+| 검사 | 실측 |
+|---|---|
+| 로컬 `pm2` | **미설치** |
+| 4100 / 4200 리슨 | **없음** |
+| 배포 경로 | `appleboy/ssh-action@v1.2.2` → **서버**에서 `git fetch`/`checkout` (fin `deploy.yml:54,78,96,97,127` / fit `deploy.yml:54,78,86,87,89`) |
+
+→ **M4 재확인** — 깨질 로컬 배포 절차가 존재하지 않는다.
+
+> **미결 제기 (2026-09-04, 판정 아님).** `CLAUDE.md` 핵심 전제 3 —
+> *"두 MCP 서버가 이미 **로컬** HTTP 로 상주 중"* — 은 위 측정과 어긋난다
+> (로컬 pm2 없음 · 리슨 없음). 문장이 기술한 대상은 **서버**로 보인다.
+> 전제 3 은 **002 단계 0** 의 근거이므로 착수 전 확인이 필요하다 → 004 §6 **Q23**.
+
+## 못 잰 값 (이 절 범위)
+
+| 항목 | 이유 |
+|---|---|
+| `git worktree remove` 가 `--force` 없이 성공하는지 | 복사한 gitignored 파일·`node_modules` 가 남아 있음. **미검증** (004 §4-3) |
+| `autoMemoryDirectory` 가 세션 키까지 옮기는지 | **미확인.** worktree 채택으로 지금은 아무것도 막지 않음. 002 단계 4 에서 재활성 |
+| 이 문서의 기존 grep 기반 "0건" 결론 재검증 | **미수행** — `--binary-files=text` 로 재실행 필요 (004 Q22) |
