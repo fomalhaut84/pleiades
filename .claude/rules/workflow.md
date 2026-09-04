@@ -109,11 +109,12 @@ pleiades 에는 UI 가 없다. 그 자리에 **가역성 게이트**가 온다.
 ### 5. GitHub 이슈 생성
 
 ```bash
-gh issue create -R fomalhaut84/pleiades --title "<제목>" --body "$(cat docs/specs/...)" --label "<라벨>"
+gh issue create -R <issue-repo> --title "<제목>" --body "..." --label "<라벨>"   # <issue-repo> 는 7절 표
 ```
 
-**이슈는 대상 저장소가 아니라 항상 pleiades 에 만든다.** `-R` 로 명시한다 —
-대상 저장소 worktree 안에서 실행하면 `gh` 가 그쪽 저장소를 잡는다.
+**`-R` 을 반드시 붙인다.** 안 붙이면 `gh` 가 현재 디렉터리의 저장소를 잡아 의도와 달라진다.
+pleiades 작업과 **통합 작업**의 이슈는 pleiades 에, **단독 작업·핫픽스**의 이슈는
+**그 대상 저장소**에 만든다 (7절 표 `<issue-repo>` 열).
 
 라벨: `1a` · `선결` · `측정` · `결정`
 **이슈 없이 작업 브랜치를 만들지 않는다.** 이슈와 PR 은 1:1 로 매칭된다.
@@ -137,12 +138,24 @@ gh issue create -R fomalhaut84/pleiades --title "<제목>" --body "$(cat docs/sp
 
 **작업 대상에 따라 base 가 다르다.** 아래 `<base>` 는 이 표를 가리킨다.
 
-| 작업 대상 | 어디서 | 브랜치 | `<base>` | PR 종착 |
-|---|---|---|---|---|
-| **pleiades** (`docs/**`·`packages/**`·`.claude/**`) | pleiades | `<type>/<issue>-<n>` | **`dev`** | `dev` |
-| **통합 작업** (대상 저장소) | **`repos/*` worktree** | `integration/pleiades-<단계>` | **`integration/pleiades`** | `integration/pleiades` |
-| **단독 작업** (대상 저장소 하나만, 통합과 무관) | **원본 `~/workspace/myF*`** | `<type>/<issue>-<n>` | **그 저장소의 `dev`** | 그 저장소 `dev` |
-| **서비스 핫픽스** (실서비스 버그) | **원본 `~/workspace/myF*`** | `hotfix/<issue>-<n>` | **그 저장소의 `main`** | `main` + `dev` |
+**이 표가 `<base>` · `<issue-repo>` · `dual-repo-change` 모드의 단일 출처다.** 다른 절은 이 표를 가리킨다.
+
+| 작업 대상 | 어디서 | 브랜치 | `<base>` | PR 종착 | **`<issue-repo>`** | `dual-repo-change` |
+|---|---|---|---|---|---|---|
+| **pleiades** (`docs/**`·`packages/**`·`.claude/**`) | pleiades | `<type>/<issue>-<n>` | **`dev`** | `dev` | `fomalhaut84/pleiades` | 해당 없음 |
+| **통합 작업** (대상 저장소) | **`repos/*` worktree** | `integration/pleiades-<단계>` | **`integration/pleiades`** | `integration/pleiades` | `fomalhaut84/pleiades` | **모드 I — 전체 적용** |
+| **단독 작업** (대상 저장소 하나만, 통합과 무관) | **원본 `~/workspace/myF*`** | `<type>/<issue>-<n>` | **그 저장소의 `dev`** | 그 저장소 `dev` | **`fomalhaut84/<그 저장소>`** | **모드 S — 승인 게이트·검증·롤백만** |
+| **서비스 핫픽스** (실서비스 버그) | **원본 `~/workspace/myF*`** | `hotfix/<issue>-<n>` | **그 저장소의 `main`** | `main` + `dev` | **`fomalhaut84/<그 저장소>`** | **모드 H — 승인 게이트·검증·롤백만** |
+
+> **`<issue-repo>` 가 갈린다 (PR #6 Codex 리뷰 P2).** 통합 작업의 이슈는 pleiades 에 만들지만
+> **단독 작업·핫픽스의 이슈는 그 대상 저장소에** 만든다 — 그쪽 로드맵에 속하는 일이다.
+> 5절·9-2·10절의 `-R` 과 `Closes` 는 전부 이 열을 따른다. 한정을 빼먹으면
+> **같은 번호의 무관한 이슈를 닫는다.**
+
+> **`dual-repo-change` 는 모드가 셋이다 (PR #6 Codex 리뷰 P1).** 그 스킬의 체크리스트는
+> `repos/` worktree · `integration/pleiades` base 를 전제로 쓰였다. **모드 S·H 에서는
+> 그 전제가 성립하지 않으므로** 승인 게이트(§1)·착수 직전 재감사(§2)·저장소별 검증(§4)·
+> 롤백 문서화만 적용하고, 브랜치·base·PR 은 **이 표를 따른다.**
 
 **단독 작업과 서비스 핫픽스는 다른 경로다 (PR #6 Codex 리뷰 P1).** 둘 다 원본에서 하지만
 **단독 작업은 `dev` 를 거친다** — 긴급하지 않은 변경을 핫픽스 경로로 보내면 `main` 에서 분기해
@@ -276,10 +289,10 @@ PR 본문 필수 항목 — **리뷰 결과는 이 시점에 확정할 수 없�
 9-6 에서 갱신한다. 지금은 `봇: 리뷰 대기` 로 둔다.
 
 - 변경 사항 요약
-- `Closes fomalhaut84/pleiades#<issue>` — **저장소를 반드시 한정한다**
+- `Closes <issue-repo>#<issue>` — **저장소를 반드시 한정한다** (`<issue-repo>` 는 7절 표)
 
   **예외: 완료가 PR 2개에 걸린 경우(5절 예외 표의 대칭 변경·hotfix)는 `Closes` 대신
-  `Refs fomalhaut84/pleiades#<issue>` 를 쓰고, 이슈는 10절에서 수동으로 닫는다.**
+  `Refs <issue-repo>#<issue>` 를 쓰고, 이슈는 10절에서 수동으로 닫는다.** (`<issue-repo>` 는 7절 표)
 
   > **정정 (PR #6 Codex 리뷰 P2).** `Closes` 는 **PR 이 머지되는 순간** 이슈를 닫는다.
   > 대칭 변경은 대상 저장소 PR 이 2개인데 양쪽에 `Closes` 가 붙으면 **먼저 머지된 하나가
@@ -382,11 +395,11 @@ PR 링크를 사용자에게 알린다. **머지는 사용자가 직접 한다.*
 ```bash
 # 대상 저장소 작업이면 PR 을 <owner>/<repo>#<pr> 또는 전체 URL 로 적는다.
 # 한정하지 않으면 pleiades 의 같은 번호 PR 을 가리킨다.
-gh issue comment -R fomalhaut84/pleiades <issue> \
+gh issue comment -R <issue-repo> <issue> \
   --body "완료: <owner>/<repo>#<pr>, 머지일 $(date +%Y-%m-%d)"
 
 # 대칭 변경이면 PR 2개가 모두 머지된 뒤에 닫는다 (5절 예외 표).
-gh issue close -R fomalhaut84/pleiades <issue>
+gh issue close -R <issue-repo> <issue>
 git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 표 참조
 ```
 
@@ -417,13 +430,13 @@ git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 �
    > 줄이는 것은 **반복 횟수**이지 **수정 필수 등급**이 아니다.
    > **같은 결함이 myFinance·myFitness 양쪽에 있다** (#8).
 3. PR 2개 생성: **main 대상 + dev 대상** (**양쪽 머지 원칙**)
-   - **양쪽 PR 모두 `Closes` 를 넣지 않는다.** 본문에 `Refs fomalhaut84/pleiades#<issue>` 만 적는다
+   - **양쪽 PR 모두 `Closes` 를 넣지 않는다.** 본문에 `Refs <issue-repo>#<issue>` 만 적는다 (핫픽스의 `<issue-repo>` 는 **그 대상 저장소** — 7절 표)
 
      > **정정 (PR #6 Codex 리뷰 P2).** main PR 에 `Closes` 를 넣으면 **머지 즉시 이슈가 닫힌다.**
      > dev 백포트가 아직 막혀 있거나 포기됐어도 닫히므로, 5번의 "양쪽 머지 후 종료"와 모순된다.
      > **닫기는 5번에서 수동으로** 한다.
    - **dev 백포트 PR 은 이슈-PR 1:1 규칙의 예외다.** 본문에
-     `Backport of #<main-PR> (fomalhaut84/pleiades#<issue>)` 만 적고 이슈를 닫지 않는다.
+     `Backport of #<main-PR> (<issue-repo>#<issue>)` 만 적고 이슈를 닫지 않는다.
      별도 이슈를 만들지 않는다
 
    > **정정 (PR #6 Codex 리뷰 P2).** hotfix 는 이슈 1개에 PR 2개라 1:1 규칙과 충돌했다.
@@ -431,7 +444,13 @@ git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 �
    > **백포트 PR 을 명시적 예외로 둔다.**
 
 4. **봇 리뷰가 여기서 돈다** (9-3 은 PR 오픈 후에만 실행된다). 봇 **P0·P1** → **반드시 수정**
-   → 양쪽 PR 에 반영 → `@codex review` 로 재확인 → 9-6 으로 PR body 갱신
+   → **★ 8절 검증 재실행 + 9-5 회귀 테스트 실행 → 통과해야 커밋** → 양쪽 PR 에 반영
+   → `@codex review` 로 재확인 → 9-6 으로 PR body 갱신
+
+   > **★ 핫픽스도 9-4 의 재검증 게이트를 그대로 탄다 (PR #6 Codex 리뷰 P1).** 이 절은
+   > 반복 루프만 생략하지 **검증을 생략하지 않는다.** 봇 수정이 실행 코드를 바꾸면 8절 검증은
+   > 그 이전 결과다. **핫픽스는 곧장 실서비스로 가므로** 빌드가 깨진 채 양쪽 PR 이 통과하면
+   > 피해가 가장 크다.
 
    > **정정 (PR #6 Codex 리뷰 P1).** 2번에 봇 게이트를 두었으나 **봇은 PR 오픈 전에는 돌지 않는다.**
    > 그대로면 hotfix 가 봇 결과 없이 PR 까지 가고, 반복 루프도 생략돼 **블로커를 고칠 지점이
