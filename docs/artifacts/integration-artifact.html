@@ -291,14 +291,14 @@ code{
 <div class="wrap">
 
 <header class="masthead">
-  <div class="kicker"><span class="dot"></span>통합 방향 노트<span class="dot"></span>개정 002<span class="dot"></span>단계 0 실행</div>
+  <div class="kicker"><span class="dot"></span>통합 방향 노트<span class="dot"></span>개정 002 · 설계 003 · 배치 004<span class="dot"></span>1a-0 착수 대기</div>
   <h1>myFinance × myFitness<br>통합 검토</h1>
   <p class="dek">두 프로젝트는 이미 <strong>같은 아키텍처의 두 갈래</strong>다. 처음 질문은 "어디까지 합치고 어디서 멈출까?"였다. 목표가 <strong>개인 비서 플랫폼</strong>으로 확정되면서 답이 바뀌었다 — 멈추는 지점을 찾는 문제가 아니라, <strong>도메인을 계속 붙일 수 있는 자리를 만드는 문제</strong>다. 가는 길은 그대로 되돌리기 비용 순이다.</p>
   <div class="meta">
     <span><b>초판</b> 2026-09-03 (001)</span>
-    <span><b>개정</b> 2026-09-03 (002)</span>
-    <span><b>myFinance</b> v0.16.4 · dev clean</span>
-    <span><b>myFitness</b> v2.27.2 · dev clean</span>
+    <span><b>개정</b> 2026-09-03 (002) · 2026-09-04 (003 · 004)</span>
+    <span><b>통합 작업</b> repos/* · integration/pleiades</span>
+    <span><b>서비스 유지</b> fin v0.16.4 dev · fit v2.27.2 main</span>
   </div>
 </header>
 
@@ -314,6 +314,29 @@ code{
   </div>
   <p>도메인을 계속 늘리는 것이 목표라면 <b>B2 는 증거를 기다릴 선택지가 아니라 요구사항 그 자체</b>다. B0 에서 도메인 #3 을 붙이면 저장소 하나 + PM2 3개 + 봇 하나 + <code>logger.ts</code>·<code>session-utils.ts</code> 사본이 또 생긴다. 지금 관측된 드리프트가 3배가 된다.</p>
   <p>다만 <b>가는 길은 그대로 되돌리기 비용 순이다.</b> 달라지는 건 종착지를 알고 가므로 각 단계를 <em>모노레포 호환 형태로</em> 해야 한다는 점뿐이다.</p>
+</div>
+
+<div class="rev" style="border-left-color:var(--fin)">
+  <div class="eyebrow">002 → 003 · 004 · 2026-09-04</div>
+  <h2>설계와 배치가 확정됐다</h2>
+  <p>002 는 <b>방향</b>이었다. 그 뒤 두 문서가 붙었다 — <b>003</b> 은 단계 1 의 상세 설계(<code>@pleiades/notify</code>), <b>004</b> 는 작업 배치다. 그리고 pleiades 자체가 <b>GitHub 저장소</b>가 됐다.</p>
+
+  <div class="tscroll" style="margin-top:16px">
+    <table>
+      <thead><tr><th>확정</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td class="rowlabel">단계 1 분할</td><td><b>1a</b>(텔레그램 유지, 층위 통일) → <b>1b</b>(Discord 전환). 1a 는 <b>채널 전환 없음</b></td></tr>
+        <tr><td class="rowlabel">인터페이스</td><td><b>L3 · 2층</b> — 포트(<code>Transport</code>) + 코어(재시도·폴백·집계·라우팅)</td></tr>
+        <tr><td class="rowlabel">패키지 배포</td><td>git 의존성. 경로는 처음부터 <code>packages/notify/</code> — 모노레포에서 갖게 될 그 자리</td></tr>
+        <tr><td class="rowlabel">작업 배치</td><td><b>git worktree</b> — <code>pleiades/repos/*</code> 가 <code>integration/pleiades</code> 를 잡고, 원본 두 경로는 <b>서비스 유지용</b>으로 남는다</td></tr>
+        <tr><td class="rowlabel">저장소</td><td><code>github.com/fomalhaut84/pleiades</code> · PUBLIC · gitflow · 이슈-PR 1:1</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pullout" style="margin-top:16px"><b>worktree 는 모노레포로 가는 계단이 아니다.</b> 단계 4 의 비용 본체(배포 재설계·릴리즈 격리 상실·git 이력 병합) 중 건드리는 것이 없고, 나중에 <code>repos/*</code> → <code>apps/*</code> 로 한 번 더 옮긴다. <b>"한 세션에서 전부 본다" 하나로만 정당화된다.</b></div>
+
+  <p style="margin-top:14px"><b>딸린 발견 하나 — 하네스 통합이 선결이 됐다.</b> 중첩 <code>.claude/</code> 는 <b>로드되지 않는다</b>(실측). <code>--add-dir</code> 로 붙였을 때만 보인다. 따라서 두 저장소 하네스를 pleiades 로 모으는 것(002 단계 2)이 <b>1a-1 부터의 선결 조건</b>이다 — 1a-1 이 이미 두 저장소 코드를 흡수하기 때문이다. 면제되는 것은 <b>1a-0 하나뿐</b>이다.</p>
 </div>
 
 <!-- ============ 확정된 답 ============ -->
@@ -433,6 +456,7 @@ code{
         <p>두 MCP 서버는 이미 같은 서버에서 로컬 HTTP 로 상주 중이다 (<code>:4210</code>, <code>:4301</code>). <code>mcp-config.json</code> 한 파일에 두 항목을 함께 넣으면, <b>하나의 Claude 세션이 재무와 건강 데이터를 동시에 본다.</b></p>
         <div class="pullout"><b>이게 "키운다"의 실체다.</b> 저장소를 합쳐야 얻는 게 아니다. "이번 달 야근이 늘었는데 수면·러닝 부하와 외식비가 같이 어떻게 움직였나" 같은 질문은 두 MCP 를 한 세션에 물리는 순간 답이 가능해진다.</div>
         <p style="margin-top:12px"><b>단 001 이 여기 덧붙인 "되돌리기는 JSON 두 줄"은 틀렸다</b> — 발견 7 참조.</p>
+        <div class="pullout" style="border-left-color:var(--risk);margin-top:12px"><b>2026-09-04 정정 — "이미 로컬 HTTP 로 상주 중"이 확인되지 않는다.</b> 현재 측정으로 <b>로컬에 pm2 가 설치돼 있지 않고 4210·4301 리슨도 없다.</b> 서버를 기술한 것으로 보이나 확인된 바 없다. <b>단계 0 착수 전 미결(Q23)</b>이고, 이 발견의 전제가 여기 걸려 있다.</div>
       </div>
     </div>
 
@@ -797,6 +821,7 @@ code{
       <p>서로의 MCP 서버를 등록하고, <code>--allowedTools</code> 화이트리스트에 상대 도메인 도구를 등재하고, 시스템 프롬프트에 교차 도메인 사용 지시를 넣는다. 그다음 빌드 → <code>pm2 restart</code> → 텔레그램 <code>/reset</code> (기존 <code>--resume</code> 세션은 옛 도구 목록을 붙잡고 있다).</p>
       <div class="delta"><b>001 대비</b> <b>목적이 바뀌고</b> — "재미있나" 에서 <b>"비서 프레이밍이 성립하나"</b> 로 — <b>범위가 정정됐다</b>. 001 은 JSON 2줄로 봤으나 실측은 TS 2파일 + JSON 1파일 + 재배포다 (발견 7). 두 도메인을 한 세션이 볼 때 쓸 만한 답이 나오지 않으면, 도메인을 늘리는 것 자체가 무의미하다.</div>
       <div class="stopline"><b>여기서 멈춰도</b> 잃는 것 없음. <code>git revert</code> + 재빌드 + restart.</div>
+      <div class="delta" style="border-color:var(--risk)"><b>2026-09-04</b> <b>아직 착수하지 않았다.</b> 범위만 실측하고 보류했다. 그리고 이 단계의 전제 — 두 MCP 가 로컬에 상주하는가 — 가 <b>확인되지 않았다(Q23)</b>. 착수 전에 그것부터 확인해야 한다.</div>
     </div>
 
     <div class="stage" data-n="1">
@@ -805,6 +830,8 @@ code{
       <p><code>@pleiades/notify</code> 로 <code>Notifier</code> 인터페이스와 Telegram·Discord 어댑터를 만든다. 재시도 백오프·HTML 파싱 실패 시 plain 폴백·4096자 분할은 myFitness <code>send.ts</code> 에 이미 있다 — 추출 시 양쪽 구현을 비교해 정본을 고른다. 채널 라우팅(<code>#finance</code> <code>#fitness</code> <code>#calendar</code>)은 어댑터 안에 둔다.</p>
       <p><b>선결:</b> 이 코드에 테스트. myFitness 의 첫 vitest 도입 지점이고, 범위는 추출 대상으로만 한정한다.</p>
       <div class="delta"><b>001 대비</b> <b>승격</b>. 001 에서는 단계 3(B1) 안에 묻혀 있었다. 넷이 한꺼번에 성립해서 앞으로 당긴다 — 어차피 원하는 작업(Q6), 이미 초크포인트(발견 4), Next 무관(발견 6), 추출 패턴의 파일럿.</div>
+      <div class="delta" style="border-color:var(--fin)"><b>003 개정</b> <b>1a / 1b 로 쪼갰다.</b> <b>1a</b> = 텔레그램 유지한 채 층위 통일(1a-0 스캐폴딩 → 1a-1 패키지 구현 → 1a-2 fit vitest → 1a-3 fit 교체 → 1a-4 fin 호출부). <b>1b</b> = Discord 전환. <b>1a 는 채널을 바꾸지 않는다</b> — 되돌리기 등급을 낮게 유지하면서 L3 층위가 맞는지 먼저 검증한다.</div>
+      <div class="delta" style="border-color:var(--risk)"><b>착수 조건</b> <b>1a-0 만 막는 것이 없다.</b> 1a-1 부터는 <b>하네스 통합</b>이 선결이고, 그 위에 결정 8개(Q10 · Q16~Q19 · Q25~Q27)가 단계별로 걸린다. 정본은 003 §10-1 의존 지도.</div>
       <div class="stopline"><b>여기서 멈춰도</b> 어댑터 경계가 남는다. 통합 인박스도 이미 얻었다.</div>
     </div>
 
@@ -812,6 +839,7 @@ code{
       <div class="when">병행 가능 · 2~3일</div>
       <div class="stage-head"><h3>하네스 플러그인 + 메모리 (A1 · A2)</h3><span class="chip r1">되돌리기: 즉시</span></div>
       <p>역할별로 더 성숙한 쪽을 정본으로 골라 공유 플러그인을 만들고, myFinance <code>MEMORY.md</code> 를 압축한 뒤 <code>autoMemoryDirectory</code> 를 같은 경로로 지정한다.</p>
+      <div class="delta" style="border-color:var(--risk)"><b>004 개정</b> <b>앞으로 당겨졌다.</b> worktree 배치에서 <b>중첩 <code>.claude/</code> 가 로드되지 않으므로</b> 하네스 통합은 선택이 아니라 <b>1a-1 의 선결 조건</b>이다. 순서 변경은 축 A·B 가 독립이라 허용된다.</div>
       <div class="stopline"><b>여기까지가</b> "세션 연속성 유지"의 실질적 완성. 제품 코드는 단계 1 의 알림 계층 말고는 그대로다.</div>
     </div>
 
@@ -869,7 +897,8 @@ code{
 <div class="sources">
   <h3>근거</h3>
   <ul>
-    <li>정본 문서 — <code>docs/specs/002-platform-direction.md</code> (이 페이지는 사본), <code>docs/specs/001-integration-master.md</code></li>
+    <li>정본 문서 — <code>002-platform-direction.md</code>(방향) · <code>003-notify-package.md</code>(단계 1 설계) · <code>004-repo-layout.md</code>(배치). 이 페이지는 그 요약이다</li>
+    <li>미결 추적 — <code>github.com/fomalhaut84/pleiades</code> 이슈. <b>미결의 정본은 문서가 아니라 이슈다</b></li>
     <li>로컬 실측 — 두 저장소의 <code>package.json</code>, <code>ecosystem.config.js</code>, <code>.claude/</code> 트리, <code>src/</code> LOC, 봇 구조·전송 호출 분포·import 그래프, auto memory 디렉터리 (2026-09-03). 측정 명령은 <code>docs/research/measured-facts.md</code></li>
     <li><a href="https://code.claude.com/docs/en/memory">Claude Code — How Claude remembers your project</a> (CLAUDE.md 로드 순서, <code>autoMemoryDirectory</code>, MEMORY.md 200줄/25KB 한도)</li>
     <li><a href="https://code.claude.com/docs/en/sessions">Claude Code — Manage sessions</a> (<code>--resume</code> 크로스 프로젝트 조회, 세션 피커 <code>Ctrl+A</code>)</li>
