@@ -739,12 +739,23 @@ import 경로를 바꾼다(§7-3). 로컬 `utils/error.ts` 를 `export * from '@
 
 
 ### 5-2. 단계 — 1a-0 ~ 1a-4
+> **정정 (2026-09-04) — 1a-0 의 "GitHub 원격 발행"은 이미 끝났다.**
+> `github.com/fomalhaut84/pleiades` 가 **PUBLIC** 으로 발행됐고 `main`·`dev` 가 올라가 있다.
+> 그 위에서 **이슈 #1~#8 과 PR #6·#9 가 운영 중**이고, `.claude/rules/workflow.md` 전체가
+> 그 원격을 추적 기반으로 쓴다 (`gh issue create -R fomalhaut84/pleiades`,
+> `Closes fomalhaut84/pleiades#<issue>`).
+> 따라서 초안이 적은 되돌리기 행위 *"원격 저장소 삭제 또는 방치"* 는 **더 이상 즉시도 아니고
+> 손해 0 도 아니다.** 1a-0 에 남은 것은 `package.json` 신설 · `packages/notify/` 스캐폴딩 ·
+> 빌드 산출물 정의 · `prepare` 스크립트다.
+>
+> **딸린 소멸 1건:** 저장소가 PUBLIC 이므로 1a-0 이 요구하던 **서버 2대 접근 자격
+> (deploy key/토큰)이 불필요해졌다.** public git URL 의존성은 자격 증명 없이 resolve 된다.
 
 각 단계는 **그 지점에서 멈춰도 손해가 없다.** 소요는 추정이다.
 
 | 단계 | 내용 | 여기서 멈추면 남는 것 | 되돌리기 등급 | 되돌리는 행위 | 소요 (추정) |
 |---|---|---|---|---|---|
-| **1a-0** | pleiades **GitHub 원격 발행** + `package.json` 신설 + `packages/notify/` 스캐폴딩 + 빌드 산출물 정의(`exports`·`.d.ts`) + `prepare` 빌드 스크립트 + 서버 2대 접근 자격(deploy key/토큰) | pleiades 가 버전 관리되는 원격을 갖는다. **두 저장소는 아직 아무것도 모른다** | **즉시** | 원격 저장소 삭제 또는 방치. 두 저장소 무변경이므로 되돌릴 것이 **이 저장소 안에만** 있다 | **미측정** (npm 스캐폴딩·발행) |
+| **1a-0** | pleiades **GitHub 원격 발행** + `package.json` 신설 + `packages/notify/` 스캐폴딩 + 빌드 산출물 정의(`exports`·`.d.ts`) + `prepare` 빌드 스크립트 + 서버 2대 접근 자격(deploy key/토큰) | pleiades 가 버전 관리되는 원격을 갖는다. **두 저장소는 아직 아무것도 모른다** | **즉시 — 단 원격 발행분은 완료됨** | **원격 삭제는 더 이상 선택지가 아니다** — 되돌릴 것은 `package.json`·`packages/notify/` 뿐 | **미측정** (npm 스캐폴딩·발행) |
 | **1a-1** | `@pleiades/notify` 구현 — 포트 + 코어 + `TelegramTransport` + 패키지 자체 테스트 | 인터페이스와 구현이 존재한다. **L3 층위가 맞는지 코드로 확인된다** — 파일럿의 절반 | **즉시 — 단 1a-3 착수 전까지만** | 패키지 디렉터리 삭제. **"아직 아무도 안 쓴다"는 1a-3/1a-4 착수 전까지만 참이다** — 그 뒤엔 삭제가 양쪽 `npm ci` 를 깬다 | 반나절 + **미측정**(빌드·발행) |
 | **1a-2** | myFitness vitest 도입 (devDep 3 + `vitest.config.mts` 15줄 + scripts 3줄) | myFitness 에 **회귀 baseline 이 생긴다.** 002 Q4 의 이행이고, 1b 안전성의 전제 | **즉시** | **4파일 revert** (`package.json`·`package-lock.json`·`vitest.config.mts`·테스트) + **`npm ci`**. 코드 무영향 | 1시간 미만 |
 | **1a-3** | myFitness `send.ts`(124줄) → 패키지 교체, 호출 6건 | fit 아웃바운드가 재시도·폴백을 **키보드 전송에서도** 얻는다(§4-1(a) 해소). 한쪽만 이전됐지만 그 자체로 개선 | **중간** | `send.ts`(124줄) 복원 + import 6건 되돌림 + `package.json`/lockfile revert + **`npm ci`** + 재빌드 + `pm2 restart` (서버 1대 × {web, bot}) | 되돌리기 반나절 |
