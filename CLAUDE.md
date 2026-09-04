@@ -82,7 +82,7 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
 - **개발 워크플로우 정본은 `.claude/rules/workflow.md`** — 브랜치·릴리즈·11단계·코드 리뷰 기준.
   두 대상 저장소의 룰을 계승했다 (#5). **여기에 중복해 적지 않는다.** 요약만:
   `main`(정본) → `dev`(개발·기본 브랜치) → `<type>/<issue>-<n>` → dev 로 PR.
-  이슈와 PR 은 **1:1**. 커밋 `<type>(<scope>): <desc> (#<issue>)`. **머지는 사용자가 직접**
+  이슈와 PR 은 **1:1** (예외: hotfix 의 dev 백포트 PR). 커밋 `<type>(<scope>): <desc> (#<issue>)`. **머지는 사용자가 직접**
 - 원격 `origin` = `git@github.com:fomalhaut84/pleiades.git` (**PUBLIC**)
 - 아티팩트 소스는 `docs/artifacts/integration-artifact.html`. 발행 전 `action:"read"` 로 현재 버전 확인 필수
 
