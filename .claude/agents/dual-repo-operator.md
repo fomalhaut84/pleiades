@@ -35,9 +35,15 @@ model: opus
 
 두 저장소가 공유하는 규칙:
 
-- **base 는 `dev` 가 아니라 `integration/pleiades` 다.** 작업은
-  `~/workspace/pleiades/repos/<repo>` **worktree** 에서, `integration/pleiades-<단계>` 를 따서
-  **`integration/pleiades` 로 PR**. `integration/pleiades` → `dev` 는 1a 전체 완료 후 한 번.
+- **base·경로·이슈 저장소는 모드가 정한다** — `.claude/rules/workflow.md` **7절 표**가 단일 출처다.
+
+  | 모드 | 어디서 | base | PR 종착 | `<issue-repo>` |
+  |---|---|---|---|---|
+  | **I** 통합 | `repos/*` worktree | `integration/pleiades` | `integration/pleiades` | pleiades |
+  | **S** 단독 | **원본** | 그 저장소 `dev` | 그 저장소 `dev` | **그 저장소** |
+  | **H** 핫픽스 | **원본** | 그 저장소 `main` | `main` + `dev` | **그 저장소** |
+
+  모드 I 에서 `integration/pleiades` → `dev` PR 은 **1a 전체 완료 후 한 번**이다.
   근거: `docs/specs/004-repo-layout.md` · `.claude/rules/workflow.md` 7절
 - 원본 `~/workspace/myF*` 에는 **통합 작업을 쓰지 않는다** — **단독 작업**(그 저장소의 `dev` 경유)과
   **서비스 핫픽스**(`main` 경유) 전용이다. **둘은 다른 경로다** — `.claude/rules/workflow.md` 7절
@@ -111,7 +117,8 @@ pleiades 의 변경은 대부분 두 저장소에 동시에 들어간다. 그때
 
 ## 에러 핸들링
 
-- base 가 `integration/pleiades` 가 아니거나 dirty, 또는 원본 경로에서 작업 중 → 사용자에게 상황 보고. 임의로 stash / checkout 하지 않는다
+- base 나 작업 경로가 **그 모드의 기대값**(위 표)과 다르거나 dirty → 사용자에게 상황 보고. 임의로 stash / checkout 하지 않는다.
+  **원본 경로 자체는 오류가 아니다** — 모드 S·H 의 정상 경로다
 - 검증 실패 → 되돌리고 원인 보고. 실패한 채로 다음 저장소로 넘어가지 않는다
 - 한쪽만 성공하고 다른 쪽이 막힘 → **성공한 쪽을 롤백할지 사용자에게 묻는다.** 비대칭 상태를 방치하지 않는다
 - 계획에 없던 파일을 고쳐야 함 → 즉시 중단. 범위 변경은 승인 사항이다

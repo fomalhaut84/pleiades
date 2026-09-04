@@ -177,7 +177,8 @@ git checkout integration/pleiades && git checkout -b integration/pleiades-<단�
 
 커밋: `<type>(<scope>): <desc> (#<issue>)` — 하나의 논리적 변경 = 하나의 커밋.
 
-**대상 저장소에 쓰는 작업이면 `dual-repo-change` 스킬을 쓴다.** 승인 게이트 5항목을
+**대상 저장소(worktree든 원본이든)에 쓰는 작업이면 `dual-repo-change` 스킬을 쓴다.**
+**모드는 7절 표가 정한다** — I(통합) / S(단독) / H(핫픽스). 승인 게이트 5항목을
 제시하고 명시 승인을 받는다. 포괄 승인을 이미 받았더라도 **실제 범위가 승인 시점 설명과
 달라지면 다시 확인한다.** 두 저장소는 실서비스 중이다.
 
@@ -221,7 +222,11 @@ git checkout integration/pleiades && git checkout -b integration/pleiades-<단�
 | 변경 성격 | 사전 리뷰 (9-1) | 근거 |
 |---|---|---|
 | 패키지 코드 (`packages/**` 로직) | **에이전트 필수** | 로직 버그·엣지케이스 |
-| 대상 저장소 변경 (`repos/**`) | **에이전트 필수** | **실서비스 영향** |
+| **대상 저장소 변경 — 경로 무관** (`repos/**` **또는 원본 `~/workspace/myF*`**) | **에이전트 필수** | **실서비스 영향** |
+
+> **경로가 아니라 대상이 기준이다 (PR #6 Codex 리뷰 P1 파생).** 이전 행은 `repos/**` 만 걸어
+> **원본에서 하는 모드 S·H 가 에이전트 리뷰 필수에서 빠졌다.** 서비스 핫픽스야말로
+> 실서비스 영향이 가장 큰 경로다.
 | 공개 인터페이스 (포트·시그니처) | **에이전트 필수** | 두 저장소 동시 파급 |
 | **실행 코드** 신규 3파일 이상 or 기존 파일 200 LOC 이상 | **에이전트 필수** | 규모 |
 | 보안 sensitive (auth·secret·외부 프로세스) | **에이전트 필수** | 경계 계층 |
@@ -411,13 +416,16 @@ git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 �
 
 | | 어디서 | base | 절차 |
 |---|---|---|---|
-| **서비스 핫픽스** (myFinance·myFitness 실서비스 버그) | **원본 `~/workspace/myF*`** | 그 저장소의 `main` | 아래 1~5. **통합 작업이 아니므로 `dual-repo-change` 를 타지 않는다** |
+| **서비스 핫픽스** (myFinance·myFitness 실서비스 버그) | **원본 `~/workspace/myF*`** | 그 저장소의 `main` | 아래 1~5. **`dual-repo-change` 모드 H** 로 탄다 (7절 표) |
 | pleiades 핫픽스 | pleiades | pleiades `main` | 아래 1~5 |
 
 > **서비스 핫픽스는 원본에서 한다 (PR #6 Codex 리뷰 P1).** worktree 는
 > `integration/pleiades` 를 잡고 있어 그 저장소의 `main` 에서 분기할 수 없고,
 > 통합 미완성분이 섞일 위험도 있다. 원본은 `dev`/`main` 이라 곧바로 분기할 수 있다.
-> **다만 실서비스 변경이므로 사용자 승인 게이트는 그대로 적용된다.**
+> **`dual-repo-change` 모드 H 로 탄다 (PR #6 Codex 리뷰 P1).** 이전 서술은 *"통합 작업이 아니므로
+> 그 스킬을 타지 않는다"* 였는데, 그러면 **승인 게이트·착수 직전 재감사·저장소별 검증·롤백
+> 문서화가 전부 빠진다** — 실서비스로 곧장 가는 경로에서 가장 필요한 통제들이다.
+> 모드 H 는 그 통제를 유지하면서 브랜치·base 만 7절 표를 따른다.
 
 1. `git checkout main && git checkout -b hotfix/<issue>-<n>`
 2. 수정 → 검증 → **로컬 사전 리뷰 1회** (반복 루프만 생략. **게이트는 그대로**)
