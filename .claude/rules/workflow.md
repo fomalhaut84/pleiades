@@ -379,6 +379,18 @@ git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 �
 
 ## 긴급 수정 (Hotfix)
 
+**두 종류를 구분한다.**
+
+| | 어디서 | base | 절차 |
+|---|---|---|---|
+| **서비스 핫픽스** (myFinance·myFitness 실서비스 버그) | **원본 `~/workspace/myF*`** | 그 저장소의 `main` | 아래 1~5. **통합 작업이 아니므로 `dual-repo-change` 를 타지 않는다** |
+| pleiades 핫픽스 | pleiades | pleiades `main` | 아래 1~5 |
+
+> **서비스 핫픽스는 원본에서 한다 (PR #6 Codex 리뷰 P1).** worktree 는
+> `integration/pleiades` 를 잡고 있어 그 저장소의 `main` 에서 분기할 수 없고,
+> 통합 미완성분이 섞일 위험도 있다. 원본은 `dev`/`main` 이라 곧바로 분기할 수 있다.
+> **다만 실서비스 변경이므로 사용자 승인 게이트는 그대로 적용된다.**
+
 1. `git checkout main && git checkout -b hotfix/<issue>-<n>`
 2. 수정 → 검증 → **로컬 사전 리뷰 1회** (반복 루프만 생략. **게이트는 그대로**)
    - 사전 리뷰 **critical·major** → **반드시 수정**
@@ -420,5 +432,11 @@ git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 �
 1. **되돌리기 비용을 항상 함께 적는다.** 모든 옵션·단계·PR
 2. **실측값은 추정하지 않는다.** `measured-facts.md` 에 없으면 측정하고 그 파일에 추가
 3. **대상 저장소에 쓰기 전 반드시 사용자 확인.** 둘 다 실서비스 중이다
-4. **작업은 `repos/` 아래 worktree 에서.** 원본 `~/workspace/myF*` 는 서비스 유지용, 쓰기 금지
+4. **통합 작업은 `repos/` 아래 worktree 에서.** 원본 `~/workspace/myF*` 에는
+   **통합 작업을 쓰지 않는다** — 서비스 유지(핫픽스·단일 저장소 작업) 전용이다
+
+   > **금지 범위는 통합 작업이다 (PR #6 Codex 리뷰 P1).** 이전 서술은 원본 쓰기를
+   > 전면 금지했는데, `CLAUDE.md` 는 원본을 **핫픽스·단일 저장소 작업용**으로 지정한다.
+   > 그리고 9-0 은 `repos/**` 쓰기를 전부 통합용 `dual-repo-change` 로 보낸다.
+   > 그대로면 **실서비스 긴급 수정을 할 수 있는 경로가 문서에 하나도 남지 않는다.**
 5. **문서는 한국어. 코드·변수명·경로는 영어**

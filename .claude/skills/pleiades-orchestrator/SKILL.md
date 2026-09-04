@@ -48,8 +48,19 @@ done
 | `_workspace/` 있음 + 부분 수정 요청 | **부분 재실행** — 해당 에이전트만 재호출 |
 | `_workspace/` 있음 + 새 입력 | **새 실행** — `_workspace/` → `_workspace_prev/` 이동 후 Phase 1 |
 
-**대상 저장소 브랜치가 `dev` 가 아니거나 dirty 면 인계 노트보다 현재 상태를 신뢰한다.**
-두 저장소는 이 세션 밖에서도 움직인다.
+**기대값이 체크아웃마다 다르다** (`docs/specs/004-repo-layout.md`):
+
+| 체크아웃 | 기대 브랜치 | 다르면 |
+|---|---|---|
+| `repos/myFinance` · `repos/myFitness` | **`integration/pleiades`** | 이상 — 사용자에게 보고 |
+| `~/workspace/myFinance` | `dev` | 서비스 유지 작업 중일 수 있음 — 사용자에게 확인 |
+| `~/workspace/myFitness` | `main` | 위와 같음 |
+
+dirty 하거나 기대와 다르면 **인계 노트보다 현재 상태를 신뢰한다.** 네 체크아웃 모두
+이 세션 밖에서 움직인다.
+
+> **정정 (PR #6 Codex 리뷰 P2).** 이전 술어는 `dev` 가 아닌 모든 브랜치를 이상으로 봤다.
+> worktree 는 정상 상태가 `integration/pleiades` 이므로 **매번 이상으로 판정**됐다.
 
 ## Phase 1 — 실측
 
