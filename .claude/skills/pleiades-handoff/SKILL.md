@@ -13,12 +13,20 @@ pleiades 는 세션 사이 간격이 길고, 그 사이 두 대상 저장소는 
 ### 1. 세션 중 변경분 확인
 
 ```bash
-git -C ~/workspace/pleiades status -s
-git -C ~/workspace/pleiades log --oneline -10
+echo "== 통합 작업 (worktree · integration/pleiades 여야 함)"
 for d in myFinance myFitness; do
-  echo -n "$d: "; git -C ~/workspace/$d status -s | wc -l | tr -d ' '
+  echo -n "  repos/$d: "; git -C ~/workspace/pleiades/repos/$d branch --show-current
+  git -C ~/workspace/pleiades/repos/$d status -s | head -3
+done
+echo "== 서비스 유지용 원본 (fin=dev · fit=main · 통합 작업 금지 · 핫픽스는 여기서)"
+for d in myFinance myFitness; do
+  echo -n "  ~/workspace/$d: "; git -C ~/workspace/$d branch --show-current
+  git -C ~/workspace/$d status -s | head -3
 done
 ```
+
+> **체크아웃이 4개다 (PR #6 Codex 리뷰 P1).** 통합 작업 worktree 2개 + 서비스 유지용 원본 2개.
+> 원본에는 앞선 1a 단계 변경이 들어 있지 않다 — `docs/specs/004-repo-layout.md`.
 
 **대상 저장소 변경 건수를 반드시 확인하고 노트에 적는다.** 0 이면 "읽기만 했다"고 명시한다 —
 다음 세션이 실서비스 상태를 신뢰할 수 있는지가 여기서 갈린다.
@@ -70,7 +78,11 @@ done
 | 메모리 색인 | `MEMORY.md` 는 색인일 뿐. 정본은 `docs/`. 중복 기록하지 않는다 |
 | 커밋 | conventional commits. 세션 산출물을 논리 단위로 나눠 커밋 |
 
-### 5. 커밋
+#> **커밋·PR 은 `.claude/rules/workflow.md` 를 따른다.** 이슈 → `chore/<issue>-<n>`(base `dev`)
+> → 9-1 사전 리뷰 → 9-2 PR 생성 → 9-3 봇 리뷰 → 9-6 PR body 확정 → **머지는 사용자가 직접.**
+> `dev`·`main` 직접 커밋 금지 (PR #6 교차 감사 M4·M5).
+
+## 5. 커밋
 
 ```
 docs(handoff): <주제> 세션 인계 노트

@@ -35,8 +35,20 @@ model: opus
 
 두 저장소가 공유하는 규칙:
 
-- 브랜치: `main`(실서비스) → `dev` → `feat/<issue>-<n>` / `fix/<issue>-<n>`.
-  **`dev` 에서 분기하고 `dev` 로 PR.** `main` 직접 변경 금지
+- **base·경로·이슈 저장소는 모드가 정한다** — `.claude/rules/workflow.md` **7절 표**가 단일 출처다.
+
+  | 모드 | 어디서 | base | PR 종착 | `<issue-repo>` |
+  |---|---|---|---|---|
+  | **I** 통합 | `repos/*` worktree | `integration/pleiades` | `integration/pleiades` | pleiades |
+  | **S** 단독 | **원본** | 그 저장소 `dev` | 그 저장소 `dev` | **그 저장소** |
+  | **H** 핫픽스 | **원본** | 그 저장소 `main` | `main` + `dev` | **그 저장소** |
+
+  모드 I 에서 `integration/pleiades` → `dev` PR 은 **1a 전체 완료 후 한 번**이다.
+  근거: `docs/specs/004-repo-layout.md` · `.claude/rules/workflow.md` 7절
+- 원본 `~/workspace/myF*` 에는 **통합 작업을 쓰지 않는다** — **단독 작업**(그 저장소의 `dev` 경유)과
+  **서비스 핫픽스**(`main` 경유) 전용이다. **둘은 다른 경로다** — `.claude/rules/workflow.md` 7절
+  base 표. 승인 게이트는 양쪽 다 그대로
+- `main` 직접 변경 금지
 - **PR 머지는 사용자가 직접 한다.** 로컬 merge / 직접 push 금지
 - 커밋: `<type>(<scope>): <desc> (#<issue>)` conventional commits
 - DB 접근은 `@/lib/prisma` singleton. raw query 금지
@@ -49,11 +61,20 @@ model: opus
 
 | | myFinance | myFitness |
 |---|---|---|
-| 테스트 | vitest 있음 (`test:run`) | **없음** — 도입 시 범위를 대상 코드로 한정 |
-| 검증 | `lint` / `tsc --noEmit` / `test:run` / `build` | `lint` / `typecheck` / `build` (3-check) |
+| 테스트 | vitest 있음 (`test` 는 watch — **`test:run`**) | vitest **없음**. 단 `npm run test` = **verify 스크립트 2개**이므로 **반드시 돌린다** |
+| 검증 | `lint` / **`npx tsc --noEmit`** / **`test:run`** / `build` | `lint` / `typecheck` / **`test`** / `build` |
 | 상세 규칙 | `.claude/rules/` 5종 | `.claude/rules/` 3종 |
 
-작업 전 해당 저장소의 `CLAUDE.md` 와 `.claude/rules/` 를 읽는다. **여기 요약보다 그쪽이 정본이다.**
+> **검증 명령은 `.claude/rules/workflow.md` 8절 표가 정본이다** (PR #6 Codex 리뷰 P1).
+> myFitness 의 `npm run test` 는 vitest 가 아니라 **verify 스크립트 2개**다 — 테스트 프레임워크가
+> 없다는 것과 **실행할 것이 없다는 것은 다르다.** 1a-2 가 vitest 를 도입하기 전에도 반드시 돌린다.
+
+**정본은 `.claude/rules/workflow.md`(pleiades)다.** 대상 저장소의 `CLAUDE.md`·`.claude/rules/` 는
+**읽기 전용 참고**로만 본다.
+
+> **myFitness worktree 에는 `.claude/` 가 없다 (PR #6 교차 감사 M8).** fit 의 하네스는 gitignored 라
+> worktree 에 따라오지 않는다(004 §3′, 의도적 제외). 필요하면 **원본 `~/workspace/myFitness/.claude/`** 를
+> 읽는다 — 쓰지는 않는다. myFinance 는 tracked 라 worktree 에 있다.
 
 ## 양쪽 대칭 변경의 원칙
 
@@ -96,7 +117,8 @@ pleiades 의 변경은 대부분 두 저장소에 동시에 들어간다. 그때
 
 ## 에러 핸들링
 
-- 브랜치가 `dev` 가 아니거나 dirty → 사용자에게 상황 보고. 임의로 stash / checkout 하지 않는다
+- base 나 작업 경로가 **그 모드의 기대값**(위 표)과 다르거나 dirty → 사용자에게 상황 보고. 임의로 stash / checkout 하지 않는다.
+  **원본 경로 자체는 오류가 아니다** — 모드 S·H 의 정상 경로다
 - 검증 실패 → 되돌리고 원인 보고. 실패한 채로 다음 저장소로 넘어가지 않는다
 - 한쪽만 성공하고 다른 쪽이 막힘 → **성공한 쪽을 롤백할지 사용자에게 묻는다.** 비대칭 상태를 방치하지 않는다
 - 계획에 없던 파일을 고쳐야 함 → 즉시 중단. 범위 변경은 승인 사항이다

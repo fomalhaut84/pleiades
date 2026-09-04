@@ -27,23 +27,40 @@ pleiades 는 myFinance × myFitness 를 **개인 비서 플랫폼**으로 통합
 작업 시작 전 실행 모드를 판별한다.
 
 ```bash
-ls _workspace/ 2>/dev/null
-ls docs/specs/ docs/handoff/
-git -C ~/workspace/pleiades log --oneline -5
+echo "== 통합 작업 (worktree · integration/pleiades 여야 함)"
 for d in myFinance myFitness; do
-  echo -n "$d: "; git -C ~/workspace/$d branch --show-current
+  echo -n "  repos/$d: "; git -C ~/workspace/pleiades/repos/$d branch --show-current
+  git -C ~/workspace/pleiades/repos/$d status -s | head -3
+done
+echo "== 서비스 유지용 원본 (fin=dev · fit=main · 통합 작업 금지 · 핫픽스는 여기서)"
+for d in myFinance myFitness; do
+  echo -n "  ~/workspace/$d: "; git -C ~/workspace/$d branch --show-current
   git -C ~/workspace/$d status -s | head -3
 done
 ```
+
+> **체크아웃이 4개다 (PR #6 Codex 리뷰 P1).** 통합 작업 worktree 2개 + 서비스 유지용 원본 2개.
+> 원본에는 앞선 1a 단계 변경이 들어 있지 않다 — `docs/specs/004-repo-layout.md`.
 
 | 상황 | 모드 |
 |---|---|
 | `_workspace/` 없음 | **초기 실행** — Phase 1 부터 |
 | `_workspace/` 있음 + 부분 수정 요청 | **부분 재실행** — 해당 에이전트만 재호출 |
-| `_workspace/` 있음 + 새 입력 | **새 실행** — `_workspace/` → `_workspace_prev/` 이동 후 Phase 1 |
+| `_workspace/` 있음 + 새 입력 | **새 실행** — `_workspace/` 는 **그대로 두고** 주제 접미사로 새 파일을 만든다 (`{phase}_{agent}_{주제}`) |
 
-**대상 저장소 브랜치가 `dev` 가 아니거나 dirty 면 인계 노트보다 현재 상태를 신뢰한다.**
-두 저장소는 이 세션 밖에서도 움직인다.
+**기대값이 체크아웃마다 다르다** (`docs/specs/004-repo-layout.md`):
+
+| 체크아웃 | 기대 브랜치 | 다르면 |
+|---|---|---|
+| `repos/myFinance` · `repos/myFitness` | **`integration/pleiades`** | 이상 — 사용자에게 보고 |
+| `~/workspace/myFinance` | `dev` | 서비스 유지 작업 중일 수 있음 — 사용자에게 확인 |
+| `~/workspace/myFitness` | `main` | 위와 같음 |
+
+dirty 하거나 기대와 다르면 **인계 노트보다 현재 상태를 신뢰한다.** 네 체크아웃 모두
+이 세션 밖에서 움직인다.
+
+> **정정 (PR #6 Codex 리뷰 P2).** 이전 술어는 `dev` 가 아닌 모든 브랜치를 이상으로 봤다.
+> worktree 는 정상 상태가 `integration/pleiades` 이므로 **매번 이상으로 판정**됐다.
 
 ## Phase 1 — 실측
 
@@ -105,7 +122,13 @@ Phase 2 ↔ 3 은 정정이 0 이 될 때까지 순환한다. 3회를 넘으면 
 | 태스크 (`TaskCreate`) | 의존 관계·진행 추적 |
 | 메시지 (`SendMessage`) | 감사 정정 통지, 측정 요청 같은 실시간 조율 |
 
-최종 산출물만 `docs/` 로. `_workspace/` 는 지우지 않는다 (사후 검증·감사 추적).
+최종 산출물만 `docs/` 로. `_workspace/` 는 **지우지도 옮기지도 않는다** (사후 검증·감사 추적).
+
+> **`_workspace_prev/` 로 옮기지 마라 (PR #6 교차 감사 M10).** `.gitignore` 가 `_workspace_prev/` 를
+> 무시하는데 `_workspace/` 8파일은 전부 tracked 다. 한 번 옮기면 **정본 004 의 근거 계보
+> (`01_surveyor_layout` → `02_writer` → `03_auditor` → `04_operator_rollback`)가 버전 관리 밖으로
+> 나가고**, `004:232`·`CLAUDE.md` 의 "롤백은 `_workspace/04_operator_rollback.md`" 참조가 깨진다.
+> 파일이 많아지면 **주제별 하위 디렉터리**(`_workspace/<주제>/`)로 나눈다.
 
 ## 에러 핸들링
 
@@ -128,7 +151,7 @@ Phase 2 ↔ 3 은 정정이 0 이 될 때까지 순환한다. 3회를 넘으면 
 ### 정상 흐름
 > "단계 1 알림 어댑터 어떻게 할지 방향 잡아줘"
 
-1. Phase 0 — `_workspace/` 없음 → 초기 실행. 두 저장소 `dev` clean 확인
+1. Phase 0 — `_workspace/` 없음 → 초기 실행. 두 worktree `integration/pleiades` clean 확인 (원본은 fin=`dev`/fit=`main`)
 2. Phase 1 — `repo-surveyor` 가 봇 구조·전송 호출 분포·추출 후보 의존 측정
 3. Phase 2 — `decision-writer` 가 어댑터 설계 + 되돌리기 비용 초안
 4. Phase 3 — `reversibility-auditor` 가 "Next 무관" 주장을 import 그래프로 검증 → 확인
