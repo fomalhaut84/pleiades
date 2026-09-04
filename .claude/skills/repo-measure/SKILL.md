@@ -97,7 +97,14 @@ grep -rn --binary-files=text "<call>" <target>/src --include='*.ts' | cut -d: -f
 
 ### 드리프트 — 같은 이름 파일이 얼마나 갈라졌나
 ```bash
-diff ~/workspace/pleiades/repos/myFinance/src/<path> ~/workspace/pleiades/repos/myFitness/src/<path> | wc -l
+# 양쪽 피연산자 모두 모드가 정한다 (헤더의 <target> 표 참조).
+# 모드 I: repos/*  ·  모드 S·H: 원본. 섞으면 서로 다른 시점을 비교하게 된다.
+diff <target:myFinance>/src/<path> <target:myFitness>/src/<path> | wc -l
+
+# 체크아웃 상태에 의존하지 않으려면 ref 를 직접 비교한다:
+git -C <dir:fin> show <ref:fin>:src/<path> > /tmp/fin.ts
+git -C <dir:fit> show <ref:fit>:src/<path> > /tmp/fit.ts
+diff /tmp/fin.ts /tmp/fit.ts | wc -l
 ```
 
 ### 추출 가능성 — 후보가 정말 무의존인가
