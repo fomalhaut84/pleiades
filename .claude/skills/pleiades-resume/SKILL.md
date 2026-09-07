@@ -47,6 +47,16 @@ done
 ```
 
 **worktree 브랜치가 `integration/pleiades` 가 아니거나 dirty 면 인계 노트보다 현재 상태를 신뢰한다.**
+
+```bash
+# 원본 fit 의 하네스 존재 확인 — tracked 화 브랜치 → main 체크아웃 전환이 파일을 지운 전례 (#27)
+test -f ~/workspace/myFitness/CLAUDE.md && test -d ~/workspace/myFitness/.claude/rules || echo "fit 원본 하네스 없음 — 복원 필요"
+# 없으면 브리핑에 그 사실을 넣고, 사용자 승인(원본 쓰기) 후 아래를 실행한다. 복원 전에는 대상 저장소 작업을 시작하지 않는다 (#27 · PR #28 Codex P2)
+#   git -C ~/workspace/myFitness archive integration/pleiades .claude CLAUDE.md | tar -x -C ~/workspace/myFitness
+#   (ignored 파일로 복원되며 index 는 바뀌지 않는다. 확인: diff -rq ~/workspace/myFitness/.claude ~/workspace/pleiades/repos/myFitness/.claude → settings.local.json 만 차이)
+# worktree 가 원격 integration/pleiades 보다 뒤처졌는지
+for d in myFinance myFitness; do git -C ~/workspace/pleiades/repos/$d fetch -q origin; echo "$d behind: $(git -C ~/workspace/pleiades/repos/$d rev-list --count HEAD..origin/integration/pleiades)"; done
+```
 원본이 `dev`/`main` 이 아니면 **누군가 서비스 유지 작업 중일 수 있으므로 사용자에게 확인한다.**
 
 > **측정·감사는 worktree 를 본다 (PR #6 Codex 리뷰 P1).** 원본에는 앞선 1a 단계 변경이
