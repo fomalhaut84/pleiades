@@ -97,9 +97,11 @@ done
 
 ### 규모
 ```bash
-# ref 기반(ls-tree/show) — 체크아웃 무관 (#10 ①)
+# ref 기반(ls-tree/show) — 체크아웃 무관 (#10 ①). 단 ref 가 없으면 ls-tree 가 실패해도 뒤의 wc 가 0 을 낸다
+# → 먼저 ref 실재를 확인하고, 실패면 "미확인"으로 기록한다 (PR #20 Codex P1 2회차)
+git -C <dir> rev-parse --verify --quiet "<ref>^{commit}" >/dev/null || echo "미확인 — <dir> 에 <ref> 없음"
+set -o pipefail   # 파이프 중간의 git 실패를 종료 상태에 반영
 git -C <dir> ls-tree -r --name-only <ref> -- src | grep -E '\.tsx?$' | wc -l
-# ref 기반(ls-tree/show) — 체크아웃 무관 (#10 ①)
 git -C <dir> ls-tree -r --name-only <ref> -- src/<area> | grep '\.ts$' \
   | while read f; do git -C <dir> show "<ref>:$f"; done | wc -l
 ```
@@ -125,11 +127,14 @@ git -C <dir> grep --text -n "<call>" <ref> -- 'src/**/*.ts' \
 # 임시파일 없이 프로세스 치환 — 병렬 측정이 서로 덮어쓰지 않고 pleiades 밖에 쓰지 않는다 (#10 ②)
 # 단, 프로세스 치환 안의 git show 실패는 파이프 상태에 반영되지 않는다 — ref/path 가 없으면 wc 가 0 을 내고
 # "동일"로 오기록된다 (PR #20 Codex P1 · 재현 _workspace/harness/regress_pr20_p1.sh). 두 피연산자를 먼저 확인한다.
-git -C <dir:fin> cat-file -e "<ref:fin>:src/<path>" || echo "미확인 — fin <ref:fin>:src/<path> 없음"
-git -C <dir:fit> cat-file -e "<ref:fit>:src/<path>" || echo "미확인 — fit <ref:fit>:src/<path> 없음"
-# 둘 다 통과했을 때만 실행하고, 하나라도 "미확인"이면 드리프트 값을 기록하지 않는다
-diff <(git -C <dir:fin> show <ref:fin>:src/<path>) \
-     <(git -C <dir:fit> show <ref:fit>:src/<path>) | wc -l
+# 게이트와 diff 를 && 로 묶는다 — 게이트가 독립 명령이면 echo 가 성공하고 diff 가 그대로 실행돼 0 이 남는다 (PR #20 Codex P1 2회차)
+if git -C <dir:fin> cat-file -e "<ref:fin>:src/<path>" \
+   && git -C <dir:fit> cat-file -e "<ref:fit>:src/<path>"; then
+  diff <(git -C <dir:fin> show <ref:fin>:src/<path>) \
+       <(git -C <dir:fit> show <ref:fit>:src/<path>) | wc -l
+else
+  echo "미확인 — ref/path 없음 (fin <ref:fin> · fit <ref:fit> · src/<path>)"   # 드리프트 값을 기록하지 않는다
+fi
 ```
 
 ### 추출 가능성 — 후보가 정말 무의존인가
