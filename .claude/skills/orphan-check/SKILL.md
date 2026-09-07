@@ -46,6 +46,8 @@ gh pr list --head $CURRENT --state merged --limit 1 --json number,mergedAt,headR
 MERGED_HEAD=$(gh pr list --head $CURRENT --state merged --limit 1 --json headRefOid -q '.[0].headRefOid')
 # 조회 실패(인증·네트워크·API)나 빈 값이면 ..$CURRENT 가 빈 범위가 되어 "다 반영됨"으로 오판한다 → 판정 불가로 중단 (pleiades PR #24 Codex P1)
 [[ "$MERGED_HEAD" =~ ^[0-9a-f]{40}$ ]] || { echo "미확인 — 머지된 PR 의 head 를 얻지 못했다. orphan 판정 불가, 브랜치를 지우지 않는다"; return 1 2>/dev/null || exit 1; }
+# OID 가 로컬에 없으면(원격 브랜치 삭제 후 stale 로컬) git log 가 invalid revision 으로 실패한다 → 객체 실재를 확인하고 없으면 판정 불가 (pleiades PR #24 Codex P2)
+git cat-file -e "$MERGED_HEAD^{commit}" 2>/dev/null || { echo "미확인 — $MERGED_HEAD 가 로컬에 없다 (git fetch origin 후 재시도). 판정 불가"; return 1 2>/dev/null || exit 1; }
 
 # 대상 PR 이 이미 머지됐고 로컬 브랜치에 $MERGED_HEAD 이후 커밋이 있으면 → orphan
 git log --oneline "$MERGED_HEAD..$CURRENT"
