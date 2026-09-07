@@ -84,7 +84,7 @@ bin/claude-with fit      # 한 번에 한 저장소 (H-5 · Q30). --resume 도 �
 
 | 파일 | 내용 | 언제 읽나 |
 |---|---|---|
-| `docs/handoff/` 의 최신 파일 | 직전 세션 인계 노트 (현재 `2026-09-04-layout-and-rules.md`. `ls` 로 재확인) | **새 세션 시작 시 먼저** |
+| `docs/handoff/` 의 최신 파일 | 직전 세션 인계 노트 (현재 `2026-09-07-harness-integration.md`. `ls` 로 재확인) | **새 세션 시작 시 먼저** |
 | `docs/specs/002-platform-direction.md` | **정본 방향** — 개인 비서 플랫폼, 개정 경로 0~4, 확정된 답 | **방향 판단 시 먼저** |
 | `docs/specs/003-notify-package.md` | **단계 1 상세 설계** — `@pleiades/notify`. 확정된 답 Q15·Q9·Q8·Q11, 발견 8~15, L3 인터페이스, 1a-0~1a-4 · 1b, 되돌리기 표, 제외 목록 | **단계 1 작업 시.** 002 를 대체하지 않는다 |
 | `docs/specs/004-repo-layout.md` | **배치 정본** — worktree 배치(`repos/*`), 변형 A/B 구분, 감사 정정 3건, 미결 Q23·Q24 (**Q20 답 → 005 · Q21 소멸 · Q22 → 005 Q38**, §8 정정) | **경로·배치 판단 시.** 하네스가 어디를 읽어야 하는지 여기가 정한다 |
