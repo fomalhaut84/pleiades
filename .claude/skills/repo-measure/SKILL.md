@@ -101,9 +101,10 @@ done
 # → 먼저 ref 실재를 확인하고, 실패면 "미확인"으로 기록한다 (PR #20 Codex P1 2회차)
 # 게이트는 독립 명령이 아니라 if/else 로 파이프를 감싼다 — 독립이면 echo 가 성공하고 뒤 파이프가 0 을 낸다 (PR #20 Codex P1 3회차)
 set -o pipefail   # 파이프 중간의 git 실패를 종료 상태에 반영
+# 단 grep 은 무매치가 상태 1, diff 는 차이가 있으면 상태 1 이다 — 정상 결과를 실패로 읽지 않도록 그 두 명령만 || true 로 감싼다 (PR #22 Codex P2)
 if git -C <dir> rev-parse --verify --quiet "<ref>^{commit}" >/dev/null; then
-  git -C <dir> ls-tree -r --name-only <ref> -- src | grep -E '\.tsx?$' | wc -l
-  git -C <dir> ls-tree -r --name-only <ref> -- src/<area> | grep '\.ts$' \
+  git -C <dir> ls-tree -r --name-only <ref> -- src | { grep -E '\.tsx?$' || true; } | wc -l
+  git -C <dir> ls-tree -r --name-only <ref> -- src/<area> | { grep '\.ts$' || true; } \
     | while read f; do git -C <dir> show "<ref>:$f"; done | wc -l
 else
   echo "미확인 — <dir> 에 <ref> 없음"   # 값을 기록하지 않는다
@@ -134,8 +135,8 @@ git -C <dir> grep --text -n "<call>" <ref> -- 'src/**/*.ts' \
 # 게이트와 diff 를 && 로 묶는다 — 게이트가 독립 명령이면 echo 가 성공하고 diff 가 그대로 실행돼 0 이 남는다 (PR #20 Codex P1 2회차)
 if git -C <dir:fin> cat-file -e "<ref:fin>:src/<path>" \
    && git -C <dir:fit> cat-file -e "<ref:fit>:src/<path>"; then
-  diff <(git -C <dir:fin> show <ref:fin>:src/<path>) \
-       <(git -C <dir:fit> show <ref:fit>:src/<path>) | wc -l
+  { diff <(git -C <dir:fin> show <ref:fin>:src/<path>) \
+         <(git -C <dir:fit> show <ref:fit>:src/<path>) || true; } | wc -l   # diff 상태 1 = 차이 있음(정상)
 else
   echo "미확인 — ref/path 없음 (fin <ref:fin> · fit <ref:fit> · src/<path>)"   # 드리프트 값을 기록하지 않는다
 fi
