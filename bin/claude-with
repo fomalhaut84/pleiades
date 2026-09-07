@@ -12,6 +12,7 @@
 #   - 대상은 항상 원본이다. fit .claude/ 는 worktree 에 없고, repos/*/.claude 는 중첩이라 로드되지 않는다.
 #   - 한 번에 한 저장소만: 둘 다 붙이면 rule 은 7벌 공존, agent `release-manager` 는 마지막 디렉터리가 조용히 이긴다.
 #   - --add-dir 는 --resume 시 복원되지 않는다. 재개할 때도 이 래퍼로 연다.
+#   - cwd 가 pleiades 가 아니면 중단한다 — pleiades 하네스 없이 대상 저장소만 붙으면 승인 게이트가 사라진다.
 set -euo pipefail
 
 usage() { sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-1}"; }
@@ -32,7 +33,8 @@ for a in "$@"; do
 done
 
 [[ -d "$target/.claude" ]] || { echo "claude-with: $target/.claude 가 없다" >&2; exit 1; }
-[[ "$(pwd)" == "$HOME/workspace/pleiades" ]] || echo "claude-with: 경고 — cwd 가 pleiades 가 아니다 ($(pwd)). pleiades 하네스가 로드되지 않는다" >&2
+[[ "$(pwd)" == "$HOME/workspace/pleiades" ]] || {
+  echo "claude-with: cwd 가 pleiades 가 아니다 ($(pwd)). pleiades 하네스(dual-repo-change 승인 게이트 등)가 로드되지 않으므로 중단한다 — cd ~/workspace/pleiades 후 다시 실행" >&2; exit 1; }
 
 cat >&2 <<MSG
 claude-with: $target 을 --add-dir 로 붙인다 (CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1).
@@ -40,4 +42,5 @@ claude-with: $target 을 --add-dir 로 붙인다 (CLAUDE_CODE_ADDITIONAL_DIRECTO
   · 이 세션에서 그 저장소에 쓰는 작업은 dual-repo-change 승인 게이트를 거친다.
 MSG
 
-exec env CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude --add-dir "$target" "$@"
+# 넘겨받은 인자를 --add-dir 앞에 둔다 — --add-dir 는 variadic 이라 뒤에 오는 위치 인자(프롬프트)를 디렉터리로 먹는다 (measured-facts Q37)
+exec env CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude "$@" --add-dir "$target"
