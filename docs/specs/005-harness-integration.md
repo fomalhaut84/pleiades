@@ -601,7 +601,7 @@ pleiades 세션에서 보이지 않는 것은 `--add-dir` 로 해결한다.
 
 > **정정 H (감사 2회차 정정 ④ · T6).** 2회차 단계 표에는 **에이전트 사전 리뷰 필수 표기가 한 곳도 없었다.**
 > 1회차에서 그 표기를 달고 있던 것은 H-2 하나였는데, Q31 로 **H-2 가 소멸하면서 표기도 함께 사라졌다.**
-> H-3(fin) 은 실서비스 저장소 `myFinance` 의 `dev` 로 PR 을 열고, H-3(fit)·H-4 는 원본 fit 을 고친다 —
+> ~~H-3(fin) 은 실서비스 저장소 `myFinance` 의 `dev` 로 PR 을 열고, H-3(fit)·H-4 는 원본 fit 을 고친다~~ (**정정 P 로 폐기** — 셋 다 `repos/*` 에서 `integration/pleiades` 로 PR, 모드 I. 리뷰 필수 판정은 그대로다) —
 > `.claude/rules/workflow.md` 9-0 표의 **"대상 저장소 변경 — 경로 무관(`repos/**` 또는 원본 `~/workspace/myF*`) → 에이전트 필수"**
 > 행에 정확히 걸린다. 그 행은 *"이전 행이 `repos/**` 만 걸어 모드 S·H 가 리뷰 필수에서 빠졌다"* 는 결함을
 > **이미 한 번 고친 이력**이 있고, 이 문서가 같은 실수를 반복할 뻔했다.
@@ -660,7 +660,7 @@ pleiades 세션에서 보이지 않는 것은 `--add-dir` 로 해결한다.
 | **H-0** (#10 14줄 + grep 6곳 + R1·R2) | `fomalhaut84/pleiades` | **기존 #10** (`Closes`) | pleiades · `dev` | `dev` | self-review | 불필요 |
 | **H-1 · H-1b · H-5** (pleiades 하네스 집행) | `fomalhaut84/pleiades` | **신설 1개** (`Closes`) — #1 은 005 발행 PR 이 닫는다 | pleiades · `dev` | `dev` | self-review | 불필요 |
 | **H-3 (fin)** #8 fin 25줄 | `fomalhaut84/pleiades` | **기존 #8 공유** (`Refs`, 양쪽 머지 후 수동 종료 — 5절 예외 표 *대칭 변경*) | **`integration/pleiades`** (모드 I · #25) | `integration/pleiades` | **에이전트 사전 리뷰 필수** | **필요** — 실서비스 저장소 |
-| **H-4** fit `.gitignore` 2줄→1줄 + tracked 화 | **`fomalhaut84/myFitness`** | **#368** (`Closes`) | **`integration/pleiades`** (모드 I · #25) | `integration/pleiades` | **에이전트 사전 리뷰 필수** | **필요** — fit 소스 변경 |
+| **H-4** fit `.gitignore` 2줄→1줄 + tracked 화 | **`fomalhaut84/myFitness`** (**예외** — 7절 표대로면 pleiades. #368/#369 는 정책 이전에 만들어져 그대로 둔다) | **#368** (`Closes`) | **`integration/pleiades`** (모드 I · #25) | `integration/pleiades` | **에이전트 사전 리뷰 필수** | **필요** — fit 소스 변경 |
 | **H-3 (fit)** #8 fit 33줄 | `fomalhaut84/pleiades` | **기존 #8 공유** (`Refs`) — **H-4 머지 후 착수** | **`integration/pleiades`** (모드 I · #25) | `integration/pleiades` | **에이전트 사전 리뷰 필수** | **필요** |
 
 **권고 — pleiades 쪽은 두 이슈로 나눈다 (하나로 묶지 않는다).**
