@@ -68,6 +68,9 @@ git log --oneline "$MERGED_HEAD..$CURRENT"
 orphan 감지 시:
 
 ```bash
+# 새 브랜치로 옮기기 전에 원 브랜치 이름을 보존한다 — 아래 diff·cherry-pick 이 이 값을 쓴다 (pleiades PR #22 Codex P1)
+OLD_BRANCH=$CURRENT
+
 # <base> 최신 pull
 git checkout <base> && git pull
 
