@@ -75,7 +75,8 @@ pleiades 의 제1규율은 **"실측값은 추정하지 않는다"** 이다. 당
 # ref 기반(ls-tree/show) — 체크아웃 무관 (#10 ①). 단 ref 가 없으면 ls-tree 가 실패해도 뒤의 wc 가 0 을 낸다
 # → 먼저 ref 실재를 확인하고, 실패면 "미확인"으로 기록한다 (PR #20 Codex P1 2회차)
 # 게이트는 독립 명령이 아니라 if/else 로 파이프를 감싼다 — 독립이면 echo 가 성공하고 뒤 파이프가 0 을 낸다 (PR #20 Codex P1 3회차)
-set -o pipefail   # 파이프 중간의 git 실패를 종료 상태에 반영
+# pipefail 은 쓰지 않는다 — grep 무매치(1)·diff 차이(1)가 실패로 읽히고 git grep 파이프까지 전부 감싸야 한다 (PR #22 Codex P2 2건).
+# 대신 실패할 수 있는 입력(ref · 파일)은 위/아래의 명시적 게이트가 막고, diff 는 PIPESTATUS 로 오류(2)만 골라낸다.
 if git -C <dir> rev-parse --verify --quiet "<ref>^{commit}" >/dev/null; then
   git -C <dir> ls-tree -r --name-only <ref> -- src | grep -E '\.tsx?$' | wc -l
   git -C <dir> ls-tree -r --name-only <ref> -- src/<area> | grep '\.ts$' \
@@ -99,7 +100,9 @@ git -C <dir> grep --text -lE "<pattern>" <ref> -- 'src/**/*.ts' \
 if git -C <dir:fin> cat-file -e "<ref:fin>:src/<path>" \
    && git -C <dir:fit> cat-file -e "<ref:fit>:src/<path>"; then
   diff <(git -C <dir:fin> show <ref:fin>:src/<path>) \
-       <(git -C <dir:fit> show <ref:fit>:src/<path>) | wc -l
+       <(git -C <dir:fit> show <ref:fit>:src/<path>) | wc -l; ds=${PIPESTATUS[0]}
+  # diff 상태 0·1 은 정상(동일·차이), 2 는 오류(입력 못 읽음 등) — 오류면 값을 기록하지 않는다 (PR #22 Codex P2)
+  [[ $ds -le 1 ]] || echo "미확인 — diff 오류(상태 $ds)"
 else
   echo "미확인 — ref/path 없음 (fin <ref:fin> · fit <ref:fit> · src/<path>)"   # 드리프트 값을 기록하지 않는다
 fi

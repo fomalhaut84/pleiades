@@ -12,11 +12,11 @@ cd ~/workspace/pleiades && claude
 
 새 세션은 `pleiades-resume` 스킬로 인계 상태를 복원한다.
 
-두 대상 저장소를 함께 봐야 할 때:
+대상 저장소의 하네스(룰·스킬·에이전트)를 함께 봐야 할 때 — **한 번에 한 저장소만** 붙인다 (둘 다 붙이면 같은 이름의 agent 가 조용히 드롭된다, 005 §4-5):
 
 ```bash
-CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
-  claude --add-dir ~/workspace/myFinance --add-dir ~/workspace/myFitness
+bin/claude-with fin      # myFinance 원본을 --add-dir 로. 환경변수 고정, --resume 도 이 래퍼로
+bin/claude-with fit      # myFitness
 ```
 
 ## 문서

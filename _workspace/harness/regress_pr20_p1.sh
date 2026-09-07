@@ -14,3 +14,4 @@ fi
 echo -n "REF-GATE (없는 ref nope/x, if/else — 3회차): "
 if git -C $FIN rev-parse --verify --quiet "nope/x^{commit}" >/dev/null; then git -C $FIN ls-tree -r --name-only nope/x -- src | grep -E "\.tsx?$" | wc -l; else echo "미확인 — ref 없음 (ls-tree 미실행)"; fi
 echo -n "CONTROL (실재 경로 package.json): "; git -C $FIN cat-file -e "$REF:package.json" && git -C $FIT cat-file -e "$REF:package.json" && diff <(git -C $FIN show $REF:package.json) <(git -C $FIT show $REF:package.json) | wc -l | tr -d ' '
+echo -n "DIFF-ERR (없는 fd → 상태 2): "; diff /nonexistent_a /nonexistent_b 2>/dev/null | wc -l | tr -d " "; ds=${PIPESTATUS[0]}; [[ $ds -le 1 ]] || echo "  미확인 — diff 오류(상태 $ds)"
