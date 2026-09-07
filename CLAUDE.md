@@ -4,12 +4,12 @@
 
 **pleiades** — `myFinance` 와 `myFitness` 두 프로젝트를 어디까지 통합할지 검토하고, 결정된 범위를 실행하는 저장소.
 
-**현재 상태: 방향 확정 · 배치·룰 완료 · 하네스 통합(#1) 방향 확정·집행 진행 중(H-0 PR #20 · H-1b/H-5 PR #22 · H-3(fin)/H-4 승인됨) · 단계 0 미착수 · 단계 1(1a) 착수 대기.**
+**현재 상태: 방향 확정 · 배치·룰 완료 · 하네스 통합(#1) 집행 진행 중(#19·#20·#22·#24 머지됨 · #26 브랜치 정책 열림 · H-3(fin) myFinance#492 · H-4 myFitness#369 열림, base `integration/pleiades`) · 단계 0 미착수 · 단계 1(1a) 착수 대기.**
 2026-09-04 에 **worktree 배치**(004) · **GitHub 발행**(PUBLIC, 기본 `dev`) · **gitflow** · **룰 계승**(`.claude/rules/workflow.md`) 이 끝났고, 측정 2건(#2·#4)으로 **003 이 개정**됐다.
 2026-09-07 에 **Q20 이 답을 받아 하네스 통합의 방향이 확정**됐고, 같은 날 **Q29·Q30·Q32·Q39 도 확정**됐다 —
 **형태 B(복사) · 저장소별 래퍼 스크립트 · fit tracked 화 · W-2(원본 workflow.md 유지)**.
 정본은 `docs/specs/005-harness-integration.md`(초안 4회 개정 · 감사 4회 통과).
-**집행 진행:** H-0 → PR #20(이 변경) · H-1b·H-5 → PR #22 · **H-3(fin)·H-4 는 승인 게이트 대기**(대상 저장소 쓰기) ·
+**집행 진행:** H-0 → PR #20 **머지** · H-1b·H-5 → PR #22 **머지** · **H-3(fin) → myFinance#492 · H-4 → myFitness#369 — 열림, 봇 통과, 머지 대기**(base `integration/pleiades`, #25) ·
 H-1 은 Q41(산출물 이름) · H-3(fit)은 H-4 머지 후. 이슈 분할 초안은 005 §4-14.
 **1a-0 은 막는 질문이 없다. 단 1a-1 부터는 하네스 통합(#1)이 선결이고, #1 은 방향만 확정됐다** — 1a-1 이 이미 두 저장소 코드를 흡수한다.
 
@@ -64,7 +64,7 @@ pleiades 발 변경은 **전부** `integration/<type>-pleiades-<name>` 을 따�
 **하네스: 공통은 pleiades, 저장소별 특수는 그 저장소** (Q20 확정 2026-09-07 · **정본 `docs/specs/005-harness-integration.md`**).
 **방향·집행 결정 모두 확정됐고 집행은 진행 중이다** — 진행 상태는 상단 상태 문단이 정본, 단계 정의는 005 §4-13. 아래는 요약이다.
 확정: **`orphan-check` 는 복사(원본 유지)** · **저장소별 `--add-dir` 래퍼 스크립트** ·
-**fit `.claude/` tracked 화**(모드 S · 이슈는 `fomalhaut84/myFitness`) · **fin·fit `workflow.md` 원본 유지 + #8 부분 갱신**.
+**fit `.claude/` tracked 화**(모드 I · base `integration/pleiades` · 이슈 `fomalhaut84/myFitness#368` → PR #369) · **fin·fit `workflow.md` 원본 유지 + #8 부분 갱신**.
 
 - 34파일(fin 16 tracked + fit 18 ignored) 중 pleiades 가 얻는 것은 **복사 1**(`orphan-check` — **H-1b 완료**, `.claude/skills/orphan-check/`) + **신규 작성 1**(Codex 대응, Q41 대기)뿐이고 **나머지는 저장소에 남는다.** fin·fit `rules/workflow.md` 는 **폐기 불가**(단독 작업 절차 35줄이 pleiades 에 없다) — **fin `git rm` 범위는 0** 이다.
 - **저장소에 남은 하네스는 pleiades 세션에서 자동 로드되지 않는다.** 하위 디렉터리의 `.claude/` 는 보이지 않고(004 §3-2), `permissions.additionalDirectories` 는 **툴 권한만** 영속화한다. **`--add-dir` 가 유일한 경로다.**
