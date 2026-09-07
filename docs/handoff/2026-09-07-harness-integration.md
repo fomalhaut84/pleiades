@@ -23,11 +23,12 @@
 | fomalhaut84/pleiades#20 | `chore/10-1` (#19 위) | H-0 룰 정정(#10 14줄 · grep 6곳 · R1·R2) + 게이트 if/else | #10 `Closes` | 즉시 | ✅ 4회차 👍 (P1 4 → 반영) |
 | fomalhaut84/pleiades#22 | `chore/21-1` (#20 위) | H-1b `orphan-check` 복사(base 12줄 + 판정 로직 정정) · H-5 `bin/claude-with` · README | #21 `Closes` | 즉시 | ✅ 5회차 P0/P1 0 (P1 5 → 반영 · P2 3 반영) |
 | fomalhaut84/pleiades#24 | `chore/23-1` (#22 위) | 이 인계 노트 · CLAUDE.md 문서 지도 | #23 `Closes` | 즉시 | ✅ 1회차 P0/P1 0 (P2 1 → #22 에서 반영) |
-| fomalhaut84/myFinance#492 | `chore/pleiades-8-1` from fin `dev` | #8 fin — `workflow.md` + agents·skills 4파일(척도·릴리즈 봇 게이트) | pleiades#8 `Refs` | 즉시 | ✅ 3회차 P0/P1 0 (P1 4 → 범위 확장 승인 2회 후 반영 · P2 2 반영). 최종 10파일 |
-| fomalhaut84/myFitness#369 | `chore/368-1` from fit `dev` | H-4 — `.gitignore` 2줄→1줄, 하네스 17파일 + `CLAUDE.md` tracked 화 | myFitness#368 `Closes` | 중간 | ✅ 1회차 👍 |
+| fomalhaut84/myFinance#492 | `chore/pleiades-8-1` → base **`integration/pleiades`** (#25 로 변경) | #8 fin — `workflow.md` + agents·skills 4파일(척도·릴리즈 봇 게이트) | pleiades#8 `Refs` | 즉시 | ✅ 3회차 P0/P1 0 (P1 4 → 범위 확장 승인 2회 후 반영 · P2 2 반영). 최종 10파일 |
+| fomalhaut84/myFitness#369 | `chore/368-1` → base **`integration/pleiades`** (#25 로 변경) | H-4 — `.gitignore` 2줄→1줄, 하네스 17파일 + `CLAUDE.md` tracked 화 | myFitness#368 `Closes` | 중간 | ✅ 1회차 👍 |
 
 **머지 순서 제약:** pleiades 는 #19 → #20 → #22 → #24 (스택). fit `#369` 머지 후에야 H-3(fit) 착수 가능.
 **#8 종료:** #492 와 H-3(fit) PR **둘 다** 머지된 뒤 수동 종료 (5절 대칭 변경 예외).
+**base 정책 (세션 말미, #25):** pleiades 발 변경은 전부 `integration/pleiades` 로. #492·#369 base 를 `dev` → `integration/pleiades` 로 바꿨다 — **`dev` 에는 `integration/pleiades` → `dev` PR 때 들어간다.** GitHub 브랜치 rename 이 열린 PR 을 닫아 head 이름은 옛것을 유지했다.
 
 ## 결정된 것
 
@@ -66,7 +67,7 @@
 ## 다음 세션의 첫 액션 후보
 
 1. **열린 PR 5개의 봇 결과 확인 → 9-6 body 확정 → 사용자 머지 → 10절 정리** (이슈 코멘트·close·브랜치 삭제·CLAUDE.md 상태). 되돌리기 즉시. `#8` 은 아직 닫지 않는다
-2. **H-3(fit)** — #369 머지 후. 승인 게이트 5항목 다시 제시(모드 S · 이슈 pleiades#8 공유 · fit `dev` 분기 · 9-0 에이전트 필수). fin PR #492 의 전파 교훈(4→10파일)을 **처음부터** 범위에 넣는다(fit 은 `codex-liaison`·`release-flow`·`codex-review-loop`·`branch-workflow` 가 해당). 되돌리기 즉시
+2. **H-3(fit)** — #369 머지 후. 승인 게이트 5항목 다시 제시(모드 I · 이슈 pleiades#8 공유 · `integration/pleiades` 에서 `integration/chore-pleiades-8-fit` 분기 · 9-0 에이전트 필수). fin PR #492 의 전파 교훈(4→10파일)을 **처음부터** 범위에 넣는다(fit 은 `codex-liaison`·`release-flow`·`codex-review-loop`·`branch-workflow` 가 해당). 되돌리기 즉시
 3. **H-1** — Q41 이름 결정(예: `codex-response`, 겹침 0 확인) 후 fin 87 + fit 113 줄을 입력으로 신규 작성. pleiades 만. 되돌리기 즉시
 4. #14 룰 보완(봇 불가 시) — 문구 1건, 즉시. 이후 #17
 

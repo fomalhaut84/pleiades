@@ -13,8 +13,8 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 
 | 모드 | 언제 | 어디서 | base | 이 스킬에서 적용되는 것 |
 |---|---|---|---|---|
-| **I** 통합 | 통합 단계(1a 등) | `repos/*` worktree | `integration/pleiades` | **전부** |
-| **S** 단독 | 그 저장소만의 평시 변경 | **원본** | 그 저장소 `dev` | 승인 게이트 · 착수 직전 재감사 · 저장소별 검증 · 롤백 문서화 |
+| **I** 통합 | **pleiades 발 변경 전부** (통합 단계 · 룰 정정 · tracked 화 등) | `repos/*` worktree | `integration/pleiades` (브랜치 `integration/<type>-pleiades-<name>`) | **전부** |
+| **S** 단독 | 그 저장소만의 평시 변경 (**pleiades 무관**) | **원본** | 그 저장소 `dev` | 승인 게이트 · 착수 직전 재감사 · 저장소별 검증 · 롤백 문서화 |
 | **H** 핫픽스 | 실서비스 버그 | **원본** | 그 저장소 `main` | 위와 같음 + 긴급 수정 절 |
 
 > **모드 S·H 는 `repos/` 도 `integration/pleiades` 도 쓰지 않는다 (PR #6 Codex 리뷰 P1).**
@@ -91,7 +91,7 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 공통:
 - **pleiades 통합 작업의 base 는 `dev` 가 아니라 `integration/pleiades` 다.**
   작업은 `~/workspace/pleiades/repos/<repo>` **worktree** 에서 하고,
-  `integration/pleiades-<단계>` 를 따서 **`integration/pleiades` 로 PR** 한다.
+  `integration/<type>-pleiades-<name>` 을 따서 **`integration/pleiades` 로 PR** 한다 (이슈 #25 · 7절 표).
   `integration/pleiades` → `dev` PR 은 **1a 전체가 끝난 뒤 한 번**이다.
   근거는 `docs/specs/004-repo-layout.md` · `.claude/rules/workflow.md` 7절 base 표.
   **미완성 단계를 `dev` 로 보내면 서비스 브랜치가 오염되고 003 §5-2 의 단계별

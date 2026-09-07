@@ -335,3 +335,10 @@ git -C ~/workspace/myFitness worktree remove ~/workspace/pleiades/repos/myFitnes
 
 **이 문서가 다시 열려야 하는 시점 하나 추가:** **005 의 미결이 답을 받아 H-0~H-5 가 집행될 때** —
 그때 `repos/*` 의 하네스 상태가 바뀌므로 §4-4 작업 규율을 다시 본다.
+
+### 8-4. 정정 — 대상 저장소 브랜치 정책 (2026-09-07 · 이슈 #25)
+
+§4 *"`integration/pleiades-1a-N` → PR → `integration/pleiades`"* 와 04_operator_rollback 의 브랜치 규율은 **pleiades 발 변경 전부**로
+넓어지고 이름이 바뀐다: 피처 `integration/feature-pleiades-<feature>` · 기타 `integration/{fix|chore|…}-pleiades-<branchname>`.
+`integration/pleiades` 는 2026-09-07 두 저장소 원격에 push 됐다(fin `c549fa6` · fit `ac034be`, 각각 당시 `origin/dev` 와 동일).
+정본은 `.claude/rules/workflow.md` 브랜치 전략 절.

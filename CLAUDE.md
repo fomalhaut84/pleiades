@@ -49,13 +49,13 @@ Q7(DB 경계) · Q2(독립 배포) · Q3(봇 인바운드 통합).
 **서비스 유지용으로 남긴다** — 통합 작업의 참고용으로는 읽기 전용이다.
 
 > **원본이 금지된 것은 통합 작업뿐이다.** 원본에서 하는 작업은 **두 종류이고 경로가 다르다**:
-> **단독 작업**(통합과 무관한 평시 변경 → 그 저장소의 `dev` 경유)과
+> **단독 작업**(pleiades 와 무관한 평시 변경 → 그 저장소의 `dev` 경유)과
 > **서비스 핫픽스**(실서비스 버그 → `main` 경유).
 > **평시 변경을 핫픽스 경로로 보내면 즉시 배포된다** — 섞지 않는다.
 > worktree 를 쓸 수 없는 이유는 그것이 `integration/pleiades` 를 잡고 있어 그 저장소의
 > `dev`/`main` 에서 분기할 수 없고 통합 미완성분이 섞이기 때문이다.
 > 경로는 `.claude/rules/workflow.md` **7절 base 표**. **양쪽 다 사용자 승인 게이트가 적용된다.**
-단계 작업은 `integration/pleiades-<단계>` 를 따서 PR 로 합친다 (003 §5-2 의 단계별 되돌리기 등급 보존).
+pleiades 발 변경은 **전부** `integration/<type>-pleiades-<name>` 을 따서 `integration/pleiades` 로 PR 한다 (사용자 결정 2026-09-07 · #25 · `workflow.md` 브랜치 전략). 단계별 되돌리기 등급(003 §5-2)은 브랜치 단위로 보존된다.
 `dev` 로의 PR 은 1a 전체가 끝난 뒤. `main` 직접 변경 금지. 롤백은 `_workspace/04_operator_rollback.md`.
 
 `repos/` 는 pleiades `.gitignore` 에 등재돼 있다. 그 결과 **Grep 은 루트 검색에서 `repos/` 를 건너뛴다** —
