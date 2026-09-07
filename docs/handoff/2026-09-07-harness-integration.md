@@ -13,19 +13,20 @@
 3. **005 발행** — 초안 4회 개정 · 감사 4회(정정 10→8→7→0) · 정본 `docs/specs/005-harness-integration.md`. 004 §8 정정 append
 4. **Q29·Q30·Q32·Q39 확정** (사용자) — B 복사 · 저장소별 래퍼 · fit tracked 화 · W-2 원본 유지
 5. **집행 착수 5단계** — 아래 PR 표. H-1(Q41) · H-3(fit) 은 미착수
-6. Codex 라운드: #19 1회(P2 3) · #20 4회(P1 4 → 반영) · #22 2회(P1 4 → 반영) · #492 2회(P1 2 → 4파일 확장 승인 후 반영) · #369 대기
+6. Codex 라운드: #19 1회(P2 3) · #20 4회(P1 4) · #22 5회(P1 5 · P2 3) · #24 1회(P1 2 → #22 에서 처리 · P2 1) · #492 3회(P1 4 · P2 2, 범위 4→10파일 확장 승인 2회) · #369 1회(👍). **전부 봇 P0/P1 = 0 으로 종료**
 
 ## 열린 PR (머지는 사용자가 직접 · 스택 순서 #19 → #20 → #22)
 
-| PR | 저장소 · 브랜치 | 내용 | 이슈 | 되돌리기 | 봇 상태 (세션 말미 `gh pr view` 로 재확인) |
+| PR | 저장소 · 브랜치 | 내용 | 이슈 | 되돌리기 | 봇 상태 (세션 말미 확정 · 9-6 body 반영) |
 |---|---|---|---|---|---|
-| fomalhaut84/pleiades#19 | `chore/1-1` | 005 정본 · 004 §8 · CLAUDE.md · 실측 · 롤백 문서 | #1 `Closes` | 즉시 | P2 3건 반영, 재리뷰 미요청(9-3) |
-| fomalhaut84/pleiades#20 | `chore/10-1` (#19 위) | H-0 룰 정정(#10 14줄 · grep 6곳 · R1·R2) + 게이트 if/else | #10 `Closes` | 즉시 | 4회차 재리뷰 대기 |
-| fomalhaut84/pleiades#22 | `chore/21-1` (#20 위) | H-1b `orphan-check` 복사(base 12줄 + 판정 로직 정정) · H-5 `bin/claude-with` · README | #21 `Closes` | 즉시 | 3회차 재리뷰 대기 |
-| fomalhaut84/myFinance#492 | `chore/pleiades-8-1` from fin `dev` | #8 fin — `workflow.md` + agents·skills 4파일(척도·릴리즈 봇 게이트) | pleiades#8 `Refs` | 즉시 | 2회차 재리뷰 대기 |
-| fomalhaut84/myFitness#369 | `chore/368-1` from fit `dev` | H-4 — `.gitignore` 2줄→1줄, 하네스 17파일 + `CLAUDE.md` tracked 화 | myFitness#368 `Closes` | 중간 | 1회차 대기 |
+| fomalhaut84/pleiades#19 | `chore/1-1` | 005 정본 · 004 §8 · CLAUDE.md · 실측 · 롤백 문서 | #1 `Closes` | 즉시 | ✅ P0/P1 0 · P2 3 반영 |
+| fomalhaut84/pleiades#20 | `chore/10-1` (#19 위) | H-0 룰 정정(#10 14줄 · grep 6곳 · R1·R2) + 게이트 if/else | #10 `Closes` | 즉시 | ✅ 4회차 👍 (P1 4 → 반영) |
+| fomalhaut84/pleiades#22 | `chore/21-1` (#20 위) | H-1b `orphan-check` 복사(base 12줄 + 판정 로직 정정) · H-5 `bin/claude-with` · README | #21 `Closes` | 즉시 | ✅ 5회차 P0/P1 0 (P1 5 → 반영 · P2 3 반영) |
+| fomalhaut84/pleiades#24 | `chore/23-1` (#22 위) | 이 인계 노트 · CLAUDE.md 문서 지도 | #23 `Closes` | 즉시 | ✅ 1회차 P0/P1 0 (P2 1 → #22 에서 반영) |
+| fomalhaut84/myFinance#492 | `chore/pleiades-8-1` from fin `dev` | #8 fin — `workflow.md` + agents·skills 4파일(척도·릴리즈 봇 게이트) | pleiades#8 `Refs` | 즉시 | ✅ 3회차 P0/P1 0 (P1 4 → 범위 확장 승인 2회 후 반영 · P2 2 반영). 최종 10파일 |
+| fomalhaut84/myFitness#369 | `chore/368-1` from fit `dev` | H-4 — `.gitignore` 2줄→1줄, 하네스 17파일 + `CLAUDE.md` tracked 화 | myFitness#368 `Closes` | 중간 | ✅ 1회차 👍 |
 
-**머지 순서 제약:** pleiades 는 #19 → #20 → #22 (스택). fit `#369` 머지 후에야 H-3(fit) 착수 가능.
+**머지 순서 제약:** pleiades 는 #19 → #20 → #22 → #24 (스택). fit `#369` 머지 후에야 H-3(fit) 착수 가능.
 **#8 종료:** #492 와 H-3(fit) PR **둘 다** 머지된 뒤 수동 종료 (5절 대칭 변경 예외).
 
 ## 결정된 것
@@ -65,7 +66,7 @@
 ## 다음 세션의 첫 액션 후보
 
 1. **열린 PR 5개의 봇 결과 확인 → 9-6 body 확정 → 사용자 머지 → 10절 정리** (이슈 코멘트·close·브랜치 삭제·CLAUDE.md 상태). 되돌리기 즉시. `#8` 은 아직 닫지 않는다
-2. **H-3(fit)** — #369 머지 후. 승인 게이트 5항목 다시 제시(모드 S · 이슈 pleiades#8 공유 · fit `dev` 분기 · 9-0 에이전트 필수). fin PR #492 의 4파일 전파 교훈을 **처음부터** 범위에 넣는다(fit 은 `codex-liaison`·`release-flow`·`codex-review-loop`·`branch-workflow` 가 해당). 되돌리기 즉시
+2. **H-3(fit)** — #369 머지 후. 승인 게이트 5항목 다시 제시(모드 S · 이슈 pleiades#8 공유 · fit `dev` 분기 · 9-0 에이전트 필수). fin PR #492 의 전파 교훈(4→10파일)을 **처음부터** 범위에 넣는다(fit 은 `codex-liaison`·`release-flow`·`codex-review-loop`·`branch-workflow` 가 해당). 되돌리기 즉시
 3. **H-1** — Q41 이름 결정(예: `codex-response`, 겹침 0 확인) 후 fin 87 + fit 113 줄을 입력으로 신규 작성. pleiades 만. 되돌리기 즉시
 4. #14 룰 보완(봇 불가 시) — 문구 1건, 즉시. 이후 #17
 
@@ -96,4 +97,3 @@
 
 - **아티팩트 재발행** — 005·집행 상태가 반영되지 않았다. `docs/artifacts/integration-artifact.html` 를 고친 뒤
   `Artifact(file_path=..., url="https://claude.ai/code/artifact/88cd616a-efe0-4d84-b298-e6961675ae0d")`. 발행 전 `action:"read"`
-- **PR 5개 9-6 body 확정** — 봇 결과가 이 노트 작성 시점에 일부 대기 중이었다
