@@ -40,7 +40,9 @@ dev ──┬──┬──┬────────merge──────�
 > pleiades 가 촉발한 단독 변경(#8 fin · fit tracked 화)은 원본 `dev` 로 보냈다(모드 S). 이제 **pleiades 발 변경은
 > 전부 `integration/pleiades` 로 모인다.** 단독 작업·핫픽스는 **pleiades 와 무관한** 변경에만 남는다.
 > **`integration/pleiades` 는 `dev` 로 가지 않는다** — 서비스 중인 개별 저장소와 pleiades 작업을 분리하기 위한 장기 메인이다.
-> 그러므로 `integration/pleiades` 에 넣은 변경(#8 룰 정정 · fit tracked 화 등)은 **서비스 `dev`/`main` 에 도달하지 않는다.** 서비스에도 필요하면 **단독 작업 경로로 별도 PR** 을 낸다.
+> 그러므로 `integration/pleiades` 에 넣은 변경(#8 룰 정정 · fit tracked 화 등)은 **서비스 `dev`/`main` 에 도달하지 않는다.**
+> 서비스에도 필요하면 **서비스 미러** — 단독 작업 경로(모드 S · 원본 · 그 저장소 `dev`)로 **별도 PR** 을 내되, 이슈는 그 저장소에 만들고 본문에 원 PR 을 링크한다.
+> 미러는 pleiades 가 촉발했어도 **모드 S 로 분류한다** (PR #26 Codex P2 — 아니면 미러 자체가 규정 위반이 된다). 004 Q43 은 이 경로를 쓴다.
 > 단계 브랜치 `integration/pleiades-<단계>` 표기는 `integration/feature-pleiades-<단계>` 로 읽는다.
 > **GitHub 브랜치 rename 은 그 브랜치의 열린 PR 을 닫는다** — 열린 PR 의 head 는 개명하지 않는다(#492·#369 는 옛 이름 유지).
 
