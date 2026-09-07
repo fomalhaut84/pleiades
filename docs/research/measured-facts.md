@@ -2262,3 +2262,15 @@ diff <(sed -n '218,235p' <fin>) <(sed -n '240,257p' <fit>)   # 10. 머지 완료
 4. **(c) 는 저장소 고유가 아니라 공통(85.7%)** → "저장소별 워크플로우라 저장소별로 둬야 한다"가 뒤집힌다.
    **pleiades 에 단독 작업 절을 신설(+30줄)하고 저장소별 잔여를 5줄로 줄이는 선택지**가 열린다.
 5. **계승 34줄도 상한** — 실질 12줄(5.6%).
+
+## 정정 — 하네스 참조 그래프 실측 H4·H5 (2026-09-07 감사 1·2회차)
+
+> 위 "하네스 참조 그래프 실측" 절의 두 요약 숫자가 감사에서 정정됐다. 원문은 그대로 두고 여기서 바로잡는다.
+> 근거: `_workspace/harness/03_auditor_harness.md` 1회차 정정 ④·⑥, 2회차 ⑤.
+
+| 원문 | 원값 | 정정값 | 근거 |
+|---|---|---|---|
+| H4 *"fin `.claude/` 16파일 `git rm` 파급 — 활성 5건"* | 5 | **6** | `repos/myFinance/CLAUDE.md:145` 누락. 열거: `CLAUDE.md` 5줄(62·118·128·140·145) + `src/app/api/alerts/history/export/route.ts:5`(JSDoc 주석) |
+| H5 *"auto memory 의존 — 11파일"* | 11 | **13** | fin 6→**9** · fit 3→**2** · ple 2 (재열거는 감사 1회차 정정 ④ 표) |
+
+재현: `/usr/bin/grep -rn --binary-files=text -e '\.claude/' -e 'workflow\.md' ~/workspace/pleiades/repos/myFinance/CLAUDE.md`
