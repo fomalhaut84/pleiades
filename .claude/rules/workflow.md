@@ -325,6 +325,10 @@ PR 본문 필수 항목 — **리뷰 결과는 이 시점에 확정할 수 없�
 - 변경 사항 요약
 - `Closes <issue-repo>#<issue>` — **저장소를 반드시 한정한다** (`<issue-repo>` 는 7절 표)
 
+  > **대상 저장소 PR 은 `Closes` 가 자동 실행되지 않는다 (#27).** GitHub 은 **기본 브랜치**로 머지될 때만 키워드를 실행하는데,
+  > pleiades 발 PR 의 base 는 `integration/pleiades` 다. `Closes` 는 추적용으로 적되 **이슈는 10절에서 항상 수동으로 닫는다**
+  > (실측: myFitness#369 머지 후 #368 이 열린 채 남았다).
+
   **예외: 완료가 PR 2개에 걸린 경우(5절 예외 표의 대칭 변경·hotfix)는 `Closes` 대신
   `Refs <issue-repo>#<issue>` 를 쓰고, 이슈는 10절에서 수동으로 닫는다.** (`<issue-repo>` 는 7절 표)
 
@@ -433,11 +437,18 @@ gh issue comment -R <issue-repo> <issue> \
   --body "완료: <owner>/<repo>#<pr>, 머지일 $(date +%Y-%m-%d)"
 
 # 대칭 변경이면 PR 2개가 모두 머지된 뒤에 닫는다 (5절 예외 표).
+# 대상 저장소 PR(base integration/pleiades)은 Closes 가 자동 실행되지 않으므로 여기서 반드시 닫는다 (#27).
 gh issue close -R <issue-repo> <issue>
 git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 표 참조
 ```
 
 그리고 `CLAUDE.md` 의 상태 절을 갱신하고, 다음 작업이 있으면 사용자에게 제안한다.
+
+**대상 저장소 PR 이 머지되면 두 가지를 더 한다 (#27):**
+- `repos/<repo>` worktree 의 `integration/pleiades` 를 `git pull --ff-only` 로 당긴다 (worktree 는 자동으로 움직이지 않는다)
+- **원본 체크아웃이 tracked 화 브랜치에서 `dev`/`main` 으로 돌아가면 그 파일들이 워킹트리에서 지워진다.** 되돌린 직후
+  `git -C ~/workspace/<repo> archive integration/pleiades <paths> | tar -x -C ~/workspace/<repo>` 로 ignored 파일로 복원한다
+  (실측: fit `.claude/` 17파일 + `CLAUDE.md` 가 사라졌다)
 
 ## 긴급 수정 (Hotfix)
 

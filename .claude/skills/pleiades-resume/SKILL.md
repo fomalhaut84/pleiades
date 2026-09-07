@@ -47,6 +47,13 @@ done
 ```
 
 **worktree 브랜치가 `integration/pleiades` 가 아니거나 dirty 면 인계 노트보다 현재 상태를 신뢰한다.**
+
+```bash
+# 원본 fit 의 하네스 존재 확인 — tracked 화 브랜치 → main 체크아웃 전환이 파일을 지운 전례 (#27)
+test -f ~/workspace/myFitness/CLAUDE.md && test -d ~/workspace/myFitness/.claude/rules || echo "fit 원본 하네스 없음 → git -C ~/workspace/myFitness archive integration/pleiades .claude CLAUDE.md | tar -x -C ~/workspace/myFitness"
+# worktree 가 원격 integration/pleiades 보다 뒤처졌는지
+for d in myFinance myFitness; do git -C ~/workspace/pleiades/repos/$d fetch -q origin; echo "$d behind: $(git -C ~/workspace/pleiades/repos/$d rev-list --count HEAD..origin/integration/pleiades)"; done
+```
 원본이 `dev`/`main` 이 아니면 **누군가 서비스 유지 작업 중일 수 있으므로 사용자에게 확인한다.**
 
 > **측정·감사는 worktree 를 본다 (PR #6 Codex 리뷰 P1).** 원본에는 앞선 1a 단계 변경이

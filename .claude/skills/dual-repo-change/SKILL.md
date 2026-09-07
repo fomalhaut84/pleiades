@@ -161,6 +161,8 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 - [ ] **9-2 PR 생성** — `--base integration/pleiades`.
       **대칭 변경이면 PR 2개**(`Refs <issue-repo>#<issue>`, **`Closes` 금지**)
 - [ ] 대칭 변경은 **PR 2개 모두 머지된 뒤** 이슈를 닫는다
+- [ ] **이슈는 수동으로 닫는다** — base 가 `integration/pleiades` 라 `Closes` 가 자동 실행되지 않는다 (#27)
+- [ ] 머지 후 `repos/<repo>` worktree 를 `git pull --ff-only`. 원본 체크아웃을 `dev`/`main` 으로 되돌렸다면 **tracked 화된 파일이 지워지지 않았는지 확인**하고 `git archive … | tar -x` 로 복원 (#27)
 
 ### 모드 S — 단독 (저장소 **1개** · PR 은 그 저장소 `dev` 로)
 
