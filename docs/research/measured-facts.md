@@ -2098,3 +2098,43 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude -p "$Q" --add-dir /Users/s
 > **`--add-dir` 플래그 경로에만** 붙어 있다. 따라서 004 Q20 의 *"회피는 `--add-dir` 를 계속 넘기는 것뿐"* 은
 > 앞 절 H4 의 유보에도 불구하고 **결과적으로 맞다.** 저장소별 특수 하네스를 저장소에 남기면
 > **세션마다 `--add-dir` + 환경변수**를 넘겨야 하고 `--resume` 시 복원되지 않는다 (`CLAUDE.md` 안내 그대로).
+
+## `--add-dir` 로딩 범위와 환경변수 (Q37 · 2026-09-07 런타임 실측)
+
+앞 절과 같은 방식(haiku · plan 모드 · 프롬프트를 플래그 앞에). 변별 질문: `ple_rules` = *"pleiades 고유"* 리터럴(pleiades `workflow.md` 에만 4회 존재)을 포함한 룰을 봤는가.
+
+```bash
+Q='Answer with only a JSON object {"skills":[...],"agents":[...],"fit_rules":bool,"ple_rules":bool} ...'
+cd ~/workspace/pleiades;  claude -p "$Q" --add-dir ~/workspace/myFitness < /dev/null                                     # a
+cd ~/workspace/pleiades;  CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude -p "$Q" --add-dir ~/workspace/myFitness < /dev/null   # a2
+cd ~/workspace/myFitness; claude -p "$Q" --add-dir ~/workspace/pleiades < /dev/null                                      # b
+cd ~/workspace/myFitness; CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude -p "$Q" --add-dir ~/workspace/pleiades < /dev/null    # b2
+grep -c "pleiades 고유" ~/workspace/pleiades/.claude/rules/workflow.md   # → 4
+```
+
+| # | cwd | `--add-dir` | env | add-dir 쪽 skills | add-dir 쪽 agents | add-dir 쪽 rules |
+|---|---|---|---|---|---|---|
+| a | pleiades | fit | 끔 | 6 (전부) | 4 (전부) | (변별 불가 — fit skill 설명에 리터럴 포함) |
+| a2 | pleiades | fit | 켬 | 6 | 4 | (동) |
+| **b** | fit | pleiades | **끔** | 3 (전부) | 2 (전부) | **아니오** (`ple_rules: false`) |
+| **b2** | fit | pleiades | **켬** | 3 | 2 | **예** (`ple_rules: true`) |
+
+> **판정.** ① `--add-dir` 는 **환경변수 없이 skills·agents 를 로드**한다. ② **rules·CLAUDE.md 는 `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1` 이 있어야** 로드된다 (b vs b2). ③ 방향은 **대칭** — 대상 저장소 cwd 세션도 `--add-dir` 로 pleiades 하네스를 본다.
+> 이름 충돌 시 우선순위는 이 실측 범위 밖(감사 3회차 항목).
+
+부수 관측 (b·b2): cwd 가 fit 일 때 `Permission allow rule (.claude/settings.local.json): Bash(grep -n "SplitChart..." ...) has a wildcard before the rest of the command` 경고가 매번 출력된다 — fit `settings.local.json` 의 허용 규칙 1건이 CLI 검사에 걸린다.
+
+## fit 하네스 민감 문자열 스캔 (Q33 · 2026-09-07)
+
+```bash
+/usr/bin/grep -rniE --binary-files=text \
+  -e 'token|secret|password|passwd|api[_-]?key|bearer|BEGIN (RSA|OPENSSH)|AKIA[0-9A-Z]{12}|ghp_[A-Za-z0-9]{20}|sk-[A-Za-z0-9]{20}|[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|@gmail|@[a-z0-9-]+\.(com|net|kr)|ssh [a-z]+@|https?://[^ )]*:[^ )]*@' \
+  ~/workspace/myFitness/.claude ~/workspace/myFitness/CLAUDE.md
+```
+
+| 매치 | 판정 |
+|---|---|
+| `.claude/settings.local.json:88` — curl User-Agent 문자열 (`Mozilla/5.0 (X11; ...)`) 안의 `.` 패턴 | 무해 |
+| `.claude/skills/ops-diagnose/SKILL.md:102` — `curl -sf http://127.0.0.1:4301/health` | 무해 (loopback) |
+
+**비밀·자격 증명·개인 식별자 0건.** (`~/workspace/myFitness` 디렉터리 절대경로 3건은 앞 절 M3 정정에서 이미 셌다 — 사용자명 `sagan` 이 경로에 노출되는 것은 fin `.claude/` 가 이미 PUBLIC 으로 공개 중인 것과 동일한 수준.)
