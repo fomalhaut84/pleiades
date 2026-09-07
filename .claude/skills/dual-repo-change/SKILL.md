@@ -13,8 +13,8 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 
 | 모드 | 언제 | 어디서 | base | 이 스킬에서 적용되는 것 |
 |---|---|---|---|---|
-| **I** 통합 | 통합 단계(1a 등) | `repos/*` worktree | `integration/pleiades` | **전부** |
-| **S** 단독 | 그 저장소만의 평시 변경 | **원본** | 그 저장소 `dev` | 승인 게이트 · 착수 직전 재감사 · 저장소별 검증 · 롤백 문서화 |
+| **I** 통합 | **pleiades 발 변경 전부** (통합 단계 · 룰 정정 · tracked 화 등) | `repos/*` worktree | `integration/pleiades` (브랜치 `integration/<type>-pleiades-<name>`) | **전부** |
+| **S** 단독 | 그 저장소만의 평시 변경 (**pleiades 무관**) **또는 서비스 미러**(모드 I 로 `integration/pleiades` 에 들어간 변경을 서비스 `dev` 에도 복제 — 별도 이슈는 그 저장소에, 본문에 원 PR 링크) | **원본** | 그 저장소 `dev` | 승인 게이트 · 착수 직전 재감사 · 저장소별 검증 · 롤백 문서화 |
 | **H** 핫픽스 | 실서비스 버그 | **원본** | 그 저장소 `main` | 위와 같음 + 긴급 수정 절 |
 
 > **모드 S·H 는 `repos/` 도 `integration/pleiades` 도 쓰지 않는다 (PR #6 Codex 리뷰 P1).**
@@ -91,8 +91,8 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 공통:
 - **pleiades 통합 작업의 base 는 `dev` 가 아니라 `integration/pleiades` 다.**
   작업은 `~/workspace/pleiades/repos/<repo>` **worktree** 에서 하고,
-  `integration/pleiades-<단계>` 를 따서 **`integration/pleiades` 로 PR** 한다.
-  `integration/pleiades` → `dev` PR 은 **1a 전체가 끝난 뒤 한 번**이다.
+  `integration/<type>-pleiades-<name>` 을 따서 **`integration/pleiades` 로 PR** 한다 (이슈 #25 · 7절 표).
+  `integration/pleiades` 는 **`dev` 로 머지되지 않는다** — pleiades 내부 메인이다 (이슈 #25). 서비스에도 필요한 변경은 단독 작업 경로(모드 S)로 별도 PR.
   근거는 `docs/specs/004-repo-layout.md` · `.claude/rules/workflow.md` 7절 base 표.
   **미완성 단계를 `dev` 로 보내면 서비스 브랜치가 오염되고 003 §5-2 의 단계별
   되돌리기 등급이 무너진다** (PR #6 Codex 리뷰 P1).
@@ -151,10 +151,13 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 - [ ] **9-3 봇 리뷰 → 9-4 루프**(봇 수정 시 **8절 검증 재실행 + 9-5 회귀 테스트**) **→ 9-6 PR body 확정.** 봇 `P0`/`P1` = 0
 - [ ] **머지는 사용자가 직접**
 
-### 모드 I — 통합 (저장소 2개 · PR 은 `integration/pleiades` 로)
+### 모드 I — 통합 (저장소 1개 또는 2개 · PR 은 `integration/pleiades` 로)
 
-- [ ] 저장소 A → 검증 → 커밋 → 9-1 → **통과했을 때만** 저장소 B
-- [ ] 저장소 B → 검증 → 커밋 → 9-1
+> **저장소 수는 변경의 성격이 정한다 (PR #26 Codex P1).** pleiades 발 변경이 전부 모드 I 가 되면서 **한 저장소만 바꾸는 모드 I**
+> (예: H-4 fit tracked 화)가 정상 경로가 됐다. 아래 "저장소 B" 항목은 **대칭 변경일 때만** 적용한다 — 무관한 변경을 지어내 두 번째 PR 을 만들지 않는다.
+
+- [ ] 저장소 A → 검증 → 커밋 → 9-1 (단독이면 여기서 PR 로)
+- [ ] **(대칭 변경만)** A 가 통과했을 때만 저장소 B → 검증 → 커밋 → 9-1
 - [ ] **9-2 PR 생성** — `--base integration/pleiades`.
       **대칭 변경이면 PR 2개**(`Refs <issue-repo>#<issue>`, **`Closes` 금지**)
 - [ ] 대칭 변경은 **PR 2개 모두 머지된 뒤** 이슈를 닫는다

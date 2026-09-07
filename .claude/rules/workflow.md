@@ -26,8 +26,25 @@ dev ──┬──┬──┬────────merge──────�
       └───── feat/8-package-scaffold
 ```
 
-**대상 저장소(myFinance·myFitness)는 브랜치 체계가 다르다.** 그쪽은 `integration/pleiades`
-worktree 에서 작업하고 `integration/pleiades-<단계>` 를 따서 PR 로 합친다 — `docs/specs/004-repo-layout.md`.
+**대상 저장소(myFinance·myFitness)는 브랜치 체계가 다르다.** pleiades 에서 그 두 저장소에 하는 **모든** 코드 관리는
+(사용자 결정 2026-09-07, 이슈 #25):
+
+| | 값 |
+|---|---|
+| 작업(통합) 브랜치 · PR base | **`integration/pleiades`** (두 저장소 원격에 존재) |
+| 피처 브랜치 | **`integration/feature-pleiades-<feature>`** |
+| 기타 유형 | **`integration/{fix\|chore\|…}-pleiades-<branchname>`** (피처 네이밍 차용) |
+| `dev` 진입 | **없다.** `integration/pleiades` 는 pleiades 가 공식 서비스가 되기 전까지 두 저장소의 **pleiades 내부 메인**이며 `dev` 로 머지되지 않는다. 통합은 모노레포 전환이 끝나 두 프로젝트가 pleiades 로 흡수될 때 한다 (사용자 2026-09-07) |
+
+> **정정 (이슈 #25).** 이전 서술은 *"통합 단계"* 만 `integration/pleiades` 로 보내고(`integration/pleiades-<단계>`),
+> pleiades 가 촉발한 단독 변경(#8 fin · fit tracked 화)은 원본 `dev` 로 보냈다(모드 S). 이제 **pleiades 발 변경은
+> 전부 `integration/pleiades` 로 모인다.** 단독 작업·핫픽스는 **pleiades 와 무관한** 변경에만 남는다.
+> **`integration/pleiades` 는 `dev` 로 가지 않는다** — 서비스 중인 개별 저장소와 pleiades 작업을 분리하기 위한 장기 메인이다.
+> 그러므로 `integration/pleiades` 에 넣은 변경(#8 룰 정정 · fit tracked 화 등)은 **서비스 `dev`/`main` 에 도달하지 않는다.**
+> 서비스에도 필요하면 **서비스 미러** — 단독 작업 경로(모드 S · 원본 · 그 저장소 `dev`)로 **별도 PR** 을 내되, 이슈는 그 저장소에 만들고 본문에 원 PR 을 링크한다.
+> 미러는 pleiades 가 촉발했어도 **모드 S 로 분류한다** (PR #26 Codex P2 — 아니면 미러 자체가 규정 위반이 된다). 004 Q43 은 이 경로를 쓴다.
+> 단계 브랜치 `integration/pleiades-<단계>` 표기는 `integration/feature-pleiades-<단계>` 로 읽는다.
+> **GitHub 브랜치 rename 은 그 브랜치의 열린 PR 을 닫는다** — 열린 PR 의 head 는 개명하지 않는다(#492·#369 는 옛 이름 유지).
 
 ## 릴리즈 전략
 
@@ -155,8 +172,8 @@ pleiades 작업과 **통합 작업**의 이슈는 pleiades 에, **단독 작업�
 | 작업 대상 | 어디서 | 브랜치 | `<base>` | PR 종착 | **`<issue-repo>`** | `dual-repo-change` |
 |---|---|---|---|---|---|---|
 | **pleiades** (`docs/**`·`packages/**`·`.claude/**`) | pleiades | `<type>/<issue>-<n>` | **`dev`** | `dev` | `fomalhaut84/pleiades` | 해당 없음 |
-| **통합 작업** (대상 저장소) | **`repos/*` worktree** | `integration/pleiades-<단계>` | **`integration/pleiades`** | `integration/pleiades` | `fomalhaut84/pleiades` | **모드 I — 전체 적용** |
-| **단독 작업** (대상 저장소 하나만, 통합과 무관) | **원본 `~/workspace/myF*`** | `<type>/<issue>-<n>` | **그 저장소의 `dev`** | 그 저장소 `dev` | **`fomalhaut84/<그 저장소>`** | **모드 S — 승인 게이트·검증·롤백만** |
+| **통합 작업** (대상 저장소 — **pleiades 발 변경 전부**) | **`repos/*` worktree** | `integration/<type>-pleiades-<name>` (피처는 `feature`) | **`integration/pleiades`** | `integration/pleiades` | `fomalhaut84/pleiades` | **모드 I — 전체 적용** |
+| **단독 작업** (대상 저장소 하나만, **pleiades 와 무관**) | **원본 `~/workspace/myF*`** | `<type>/<issue>-<n>` | **그 저장소의 `dev`** | 그 저장소 `dev` | **`fomalhaut84/<그 저장소>`** | **모드 S — 승인 게이트·검증·롤백만** |
 | **서비스 핫픽스** (실서비스 버그) | **원본 `~/workspace/myF*`** | `hotfix/<issue>-<n>` | **그 저장소의 `main`** | `main` + `dev` | **`fomalhaut84/<그 저장소>`** | **모드 H — 승인 게이트·검증·롤백만** |
 
 > **`<issue-repo>` 가 갈린다 (PR #6 Codex 리뷰 P2).** 통합 작업의 이슈는 pleiades 에 만들지만
@@ -179,11 +196,11 @@ pleiades 작업과 **통합 작업**의 이슈는 pleiades 에, **단독 작업�
 git checkout dev && git pull && git checkout -b feat/<issue>-<n>
 
 # 대상 저장소 (repos/ 아래 worktree 에서)
-git checkout integration/pleiades && git checkout -b integration/pleiades-<단계>
+git checkout integration/pleiades && git checkout -b integration/<type>-pleiades-<name>   # 예: integration/feature-pleiades-1a-0 · integration/chore-pleiades-8
 ```
 
 > **대상 저장소 작업은 `dev` 로 직행하지 않는다 (PR #6 Codex 리뷰 P1).**
-> `integration/pleiades` → `dev` PR 은 **1a 전체가 끝난 뒤 한 번**이다 (`004-repo-layout.md`).
+> `integration/pleiades` 는 `dev` 로 **머지되지 않는다** (브랜치 전략 절 · 이슈 #25). 모노레포 전환 완료 시점에 두 프로젝트가 pleiades 로 흡수된다.
 > 그 전에 단계 브랜치를 `dev` 로 보내면 **미완성 단계가 서비스 브랜치로 들어가고**
 > 003 §5-2 의 단계별 되돌리기 등급이 무너진다.
 

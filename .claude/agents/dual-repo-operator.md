@@ -43,7 +43,7 @@ model: opus
   | **S** 단독 | **원본** | 그 저장소 `dev` | 그 저장소 `dev` | **그 저장소** |
   | **H** 핫픽스 | **원본** | 그 저장소 `main` | `main` + `dev` | **그 저장소** |
 
-  모드 I 에서 `integration/pleiades` → `dev` PR 은 **1a 전체 완료 후 한 번**이다.
+  모드 I 의 `integration/pleiades` 는 **`dev` 로 머지되지 않는다** (pleiades 내부 메인 · 이슈 #25). 서비스에도 필요한 변경은 모드 S 로 별도 PR.
   근거: `docs/specs/004-repo-layout.md` · `.claude/rules/workflow.md` 7절
 - 원본 `~/workspace/myF*` 에는 **통합 작업을 쓰지 않는다** — **단독 작업**(그 저장소의 `dev` 경유)과
   **서비스 핫픽스**(`main` 경유) 전용이다. **둘은 다른 경로다** — `.claude/rules/workflow.md` 7절
