@@ -118,6 +118,7 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
 - **기존 두 저장소에 쓰기 전 반드시 사용자 확인.** 둘 다 실서비스 중이다 (PM2 + Nginx, finance:4100 / fitness:4200).
 - **통합 작업은 `repos/` 아래 worktree 에서, 브랜치는 `integration/pleiades`.** 원본 `~/workspace/myF*` 에는 **통합 작업을 쓰지 않는다** — 서비스 핫픽스·단일 저장소 작업 전용이다 (위 표 참조).
 - **절대경로 측정에는 반드시 `grep --binary-files=text`.** 없으면 `.next/cache` 같은 파일이 binary 로 판정돼 조용히 0건 오탐이 난다 (004).
+  **그리고 ignored 경로에는 `--no-ignore-files` 또는 `/usr/bin/grep`.** 이 환경의 `grep` 은 ugrep 래퍼로 `.gitignore` 를 따라 fit `.claude/` 같은 디렉터리를 통째로 건너뛴다 (005 §4-11).
 - 새 옵션·단계를 제안할 때는 **되돌리기 비용을 항상 함께 적는다.** 이 저장소 문서의 일관된 형식이다.
 - 실측값은 추정하지 않는다. `docs/research/measured-facts.md` 에 없으면 직접 측정하고 그 파일에 측정 명령과 함께 추가한다.
 - 문서는 한국어. 코드·변수명·경로는 영어.

@@ -20,6 +20,10 @@ model: opus
 > **`grep` 에는 반드시 `--binary-files=text` (PR #6 Codex 리뷰 P2).** 없으면 `.next/cache`
 > 같은 파일이 binary 로 판정돼 **조용히 0건 오탐**이 난다. 실제로 실측·감사 에이전트가
 > 독립적으로 같은 오탐을 냈다 (`004-repo-layout.md`). 아래 명령에도 전부 붙어 있다.
+> **그리고 이 환경의 `grep` 은 ugrep 래퍼로 `.gitignore` 를 따른다** (005 §4-11 · 2026-09-07 실측). ignored 디렉터리
+> (fit `.claude/` 등)는 `--binary-files=text` 로도 막지 못하고 **통째로 0건**이 된다. ignored 경로를 포함하는
+> 측정은 **(a) `--no-ignore-files` · (b) `/usr/bin/grep` · (c) 경로 직접 지정** 중 하나를 반드시 쓴다.
+> `git grep` 은 인덱스만 보므로 ignored 경로에는 원리상 쓸 수 없다.
 > **경로 규율 (PR #6 Codex 리뷰 P1).** 통합 작업의 측정·감사 대상은
 > **`~/workspace/pleiades/repos/{myFinance,myFitness}`** (worktree, 브랜치 `integration/pleiades`) 다.
 > `~/workspace/myFinance`(`dev`) · `~/workspace/myFitness`(`main`) 은 **서비스 유지용 원본**이라
@@ -44,8 +48,9 @@ model: opus
 > | **S** 단독 | `~/workspace/$d` | 그 저장소의 **`dev`** |
 > | **H** 핫픽스 | `~/workspace/$d` | 그 저장소의 **`main`** |
 >
-> 파일 목록·행수처럼 `git grep` 으로 안 되는 측정은 **감사 전에 그 ref 를 체크아웃했는지 확인**하고,
-> 확인하지 못했으면 **"미확인"으로 보고한다.** 임의로 checkout 하지 않는다.
+> 파일 목록·행수는 `git ls-tree <ref>` / `git show <ref>:<path>` 로 ref 에서 직접 읽는다 — 체크아웃과 무관하다.
+> **워킹트리 전용 데이터**(`du`, `node_modules` 크기, `.next/` 등)만 감사 전에 그 ref 가 체크아웃됐는지 확인하고,
+> 확인하지 못했으면 **"미확인"으로 보고한다.** 임의로 checkout 하지 않는다. (#10 ①)
 
 
 당신의 일은 문서에 적힌 **되돌리기 비용이 거짓말인지 확인하는 것**이다. 문서를 칭찬하러 온 게 아니다.
