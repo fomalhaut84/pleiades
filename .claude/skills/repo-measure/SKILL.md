@@ -18,11 +18,19 @@ description: myFinance·myFitness 두 저장소를 실측하고 docs/research/me
 > **`<target>` 도 `(디렉터리, ref)` 쌍이다 (PR #6 Codex 리뷰 P2).** 원본은 평소 fin=`dev` · fit=`main`
 > 이라, 디렉터리만 고르면 **모드 S(myFitness)는 `dev` 대신 `main` 을, 모드 H(myFinance)는 `main` 대신
 > `dev` 를** 측정한다. ref 를 읽을 수 있는 패턴은 전부 `git grep --text <ref>` / `git show <ref>:<path>`
-> 형태로 쓴다. **파일시스템에만 있는 측정**(파일 수, `du`, `node_modules` 등)은 ref 를 지정할 수 없으므로
-> **그 ref 가 체크아웃돼 있는지 확인하고, 확인하지 못하면 "미확인"으로 기록한다.** 임의 checkout 금지.
+> 형태로 쓴다. 파일 수·LOC 는 `git ls-tree <ref>` / `git show <ref>:<path>` 로 ref 에서 직접 읽는다 — 체크아웃과 무관하다.
+> **워킹트리 전용 데이터**(`du`, `node_modules` 크기, `.next/` 등)만 ref 를 지정할 수 없으므로 그때만
+> 그 ref 가 체크아웃돼 있는지 확인하고, 확인하지 못하면 "미확인"으로 기록한다. 임의 checkout 금지. (#10 ①)
 > **`grep` 에는 반드시 `--binary-files=text` (PR #6 Codex 리뷰 P2).** 없으면 `.next/cache`
 > 같은 파일이 binary 로 판정돼 **조용히 0건 오탐**이 난다. 실제로 실측·감사 에이전트가
 > 독립적으로 같은 오탐을 냈다 (`004-repo-layout.md`). 아래 명령에도 전부 붙어 있다.
+> **그리고 이 환경의 `grep` 은 ugrep 래퍼로 `.gitignore` 를 따른다** (005 §4-11 · 2026-09-07 실측). ignored 디렉터리
+> (fit `.claude/` 등)는 `--binary-files=text` 로도 막지 못하고 **통째로 0건**이 된다. ignored 경로를 포함하는
+> 측정은 **(a) `--no-ignore-files` · (b) `/usr/bin/grep` · (c) 경로 직접 지정** 중 하나를 반드시 쓴다.
+> `git grep` 은 인덱스만 보므로 ignored 경로에는 원리상 쓸 수 없다.
+> **열거와 합계가 함께 있으면 합계를 신뢰하지 말고 열거를 센다** (005 R1 · #11 유형 재발 방지). 요약 숫자에는
+> 열거의 출처(파일 · 절 · 행 범위)를 붙인다. **대장(숫자 표)에 없는 숫자를 본문에 새로 만들지 않는다.**
+> 같은 숫자를 문서 안에서 두 번 적지 않는다.
 > **경로 규율 (PR #6 Codex 리뷰 P1).** 통합 작업의 측정·감사 대상은
 > **`~/workspace/pleiades/repos/{myFinance,myFitness}`** (worktree, 브랜치 `integration/pleiades`) 다.
 > `~/workspace/myFinance`(`dev`) · `~/workspace/myFitness`(`main`) 은 **서비스 유지용 원본**이라
@@ -89,9 +97,9 @@ done
 
 ### 규모
 ```bash
-# ⚠ 파일시스템 측정 — ref 지정 불가. 그 ref 체크아웃 확인 후 실행, 아니면 \"미확인\"
+# ref 기반(ls-tree/show) — 체크아웃 무관 (#10 ①)
 git -C <dir> ls-tree -r --name-only <ref> -- src | grep -E '\.tsx?$' | wc -l
-# ⚠ 파일시스템 측정 — ref 지정 불가. 그 ref 체크아웃 확인 후 실행, 아니면 \"미확인\"
+# ref 기반(ls-tree/show) — 체크아웃 무관 (#10 ①)
 git -C <dir> ls-tree -r --name-only <ref> -- src/<area> | grep '\.ts$' \
   | while read f; do git -C <dir> show "<ref>:$f"; done | wc -l
 ```
@@ -114,9 +122,9 @@ git -C <dir> grep --text -n "<call>" <ref> -- 'src/**/*.ts' \
 ```bash
 # 양쪽 피연산자 모두 모드가 정한다 (헤더의 <dir>/<ref> 표 참조).
 # 체크아웃 상태에 의존하지 않도록 ref 에서 직접 꺼낸다 — 파일시스템 diff 는 쓰지 않는다.
-git -C <dir:fin> show <ref:fin>:src/<path> > /tmp/fin.ts
-git -C <dir:fit> show <ref:fit>:src/<path> > /tmp/fit.ts
-diff /tmp/fin.ts /tmp/fit.ts | wc -l
+# 임시파일 없이 프로세스 치환 — 병렬 측정이 서로 덮어쓰지 않고 pleiades 밖에 쓰지 않는다 (#10 ②)
+diff <(git -C <dir:fin> show <ref:fin>:src/<path>) \
+     <(git -C <dir:fit> show <ref:fit>:src/<path>) | wc -l
 ```
 
 ### 추출 가능성 — 후보가 정말 무의존인가
