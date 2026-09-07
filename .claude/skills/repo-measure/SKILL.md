@@ -99,11 +99,15 @@ done
 ```bash
 # ref 기반(ls-tree/show) — 체크아웃 무관 (#10 ①). 단 ref 가 없으면 ls-tree 가 실패해도 뒤의 wc 가 0 을 낸다
 # → 먼저 ref 실재를 확인하고, 실패면 "미확인"으로 기록한다 (PR #20 Codex P1 2회차)
-git -C <dir> rev-parse --verify --quiet "<ref>^{commit}" >/dev/null || echo "미확인 — <dir> 에 <ref> 없음"
+# 게이트는 독립 명령이 아니라 if/else 로 파이프를 감싼다 — 독립이면 echo 가 성공하고 뒤 파이프가 0 을 낸다 (PR #20 Codex P1 3회차)
 set -o pipefail   # 파이프 중간의 git 실패를 종료 상태에 반영
-git -C <dir> ls-tree -r --name-only <ref> -- src | grep -E '\.tsx?$' | wc -l
-git -C <dir> ls-tree -r --name-only <ref> -- src/<area> | grep '\.ts$' \
-  | while read f; do git -C <dir> show "<ref>:$f"; done | wc -l
+if git -C <dir> rev-parse --verify --quiet "<ref>^{commit}" >/dev/null; then
+  git -C <dir> ls-tree -r --name-only <ref> -- src | grep -E '\.tsx?$' | wc -l
+  git -C <dir> ls-tree -r --name-only <ref> -- src/<area> | grep '\.ts$' \
+    | while read f; do git -C <dir> show "<ref>:$f"; done | wc -l
+else
+  echo "미확인 — <dir> 에 <ref> 없음"   # 값을 기록하지 않는다
+fi
 ```
 
 ### 결합도 — 무엇이 무엇에 묶여 있나
