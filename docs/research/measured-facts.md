@@ -1556,3 +1556,721 @@ npm overrides 는 범위 검사를 우회하므로 **resolve 는 통과하지만
 | fit 에서 vitest 가 **런타임에 실제로 도는지** | 설치 후 `npx vitest run` 필요. 읽기 전용 범위 밖 → 003 §9 **U3** |
 | fit 테스트 파일이 `eslint src/ --max-warnings 0` 을 **통과하는지** | 테스트 파일 미작성 → 003 §9 **U2 여전히 미확인** |
 | `$postcss` 를 **유지한 채** 회피하는 방법 | 확인하지 못함. `--legacy-peer-deps` 는 아님 |
+
+---
+
+# 하네스 통합 실측 (2026-09-07)
+
+Q20(하네스 통합 · 이슈 #1) 범위 산정용. 사용자가 정한 분할 원칙 **"공통은 pleiades 로,
+저장소별 특수는 그 저장소에 유지"** 를 파일 단위로 옮기기 위한 측정.
+상세 표는 `_workspace/harness/01_surveyor_harness_content.md`. **읽기 전용 — 대상 저장소 쓰기 0건.**
+
+## 측정 대상과 ref
+
+| 대상 | 경로 | ref/상태 |
+|---|---|---|
+| pleiades | `~/workspace/pleiades/.claude/` + `CLAUDE.md` | `dev` |
+| myFinance | `~/workspace/pleiades/repos/myFinance/.claude/` + `CLAUDE.md` | worktree · `integration/pleiades` · clean |
+| myFitness | **원본** `~/workspace/myFitness/.claude/` + `CLAUDE.md` | 원본 · `main` |
+
+> **fit 만 원본을 쟀다.** fit `.claude/` 는 `.gitignore:35` 로 ignored 이고 004 배치 때
+> **의도적으로 worktree 에 복사하지 않았다**(하네스 통합 대상). **잴 수 있는 체크아웃이 원본뿐이다.**
+> fin 은 tracked 라 규율대로 worktree 를 쟀다.
+
+## H1. 하네스 규모 (파일 · LOC · 바이트)
+
+```bash
+find <root>/.claude -type f | sort            # 파일 목록
+wc -l <f> ; wc -c <f>                          # LOC · 바이트
+git -C ~/workspace/pleiades/repos/myFinance ls-files .claude | wc -l   # → 16
+```
+
+| | agents | rules | skills | settings | **`.claude/` 계** | `CLAUDE.md` |
+|---|---:|---:|---:|---:|---:|---:|
+| **myFinance** 파일 | 4 | 5 | 7 | 0 | **16** | 1 |
+| LOC | 322 | 524 | 783 | 0 | **1,629** | 163 |
+| bytes | 17,126 | 20,344 | 31,352 | 0 | **68,822** | 9,549 |
+| **myFitness** 파일 | 5 | 3 | 9 | **1** | **18** | 1 |
+| LOC | 231 | 281 | 1,262 | 111 | **1,885** | 173 |
+| bytes | 10,409 | 11,180 | 39,583 | 6,749 | **67,921** | 8,621 |
+| **pleiades** 파일 | 4 | 1 | 7 | 0 | **12** | 1 |
+| LOC | 520 | 486 | 1,012 | 0 | **2,018** | 147 |
+| bytes | 32,382 | 29,635 | 51,304 | 0 | **113,321** | 12,587 |
+
+**이관 대상 = fin 16 + fit 18 = 34파일 / 3,514 LOC / 136,743 B.**
+pleiades 기존 12파일(2,018 LOC / 113,321 B)과 합치면 **46파일 / 5,532 LOC / 250,064 B** (중복 제거 전 상한).
+검산: 종류별 합 = 저장소별 합 (9행 전부 일치, 상세 산출물 §1-4).
+
+> **정정 (2026-09-07 재측정).** 위 M1 표의 *"myFitness `.claude/` 전체 — ignored, 18 files / 104 K"* 중
+> **파일 수 18 은 맞고 크기는 `du` 값**이다. 실제 내용 합은 **67,921 B (66.3 KB)** —
+> 차이는 `du` 의 블록 단위 계상(파일 18 + 디렉터리 13)이다. 이관 비용 계산에는 66.3 KB 를 쓴다.
+
+## H2. 쌍둥이 드리프트 — 역할 쌍은 텍스트 쌍이 아니다
+
+```bash
+diff <fin파일> <fit파일> | grep -c '^<'    # fin 전용 줄
+diff <fin파일> <fit파일> | grep -c '^>'    # fit 전용 줄
+# 공통줄 = fin 총 줄수 − fin 전용 줄수  (빈 줄 포함이므로 상한값)
+```
+
+| 역할 | fin / fit | fin줄 | fit줄 | fin전용 | fit전용 | 공통줄 | 공통/fin |
+|---|---|---:|---:|---:|---:|---:|---:|
+| rules `api-routes` | `api-routes.md` / 동명 | 119 | 8 | 115 | 4 | 4 | **3.4%** |
+| rules `components` | `components.md` / 동명 | 11 | 9 | 5 | 3 | 6 | 54.5% |
+| rules `workflow` | `workflow.md` / 동명 | 241 | 264 | 47 | 69 | 194 | **80.5%** |
+| 세션재개 | `session-resume` / `session-primer` | 98 | 103 | 65 | 70 | 33 | 33.7% |
+| 인계 | `session-boundary` / `session-handoff` | 133 | 122 | 95 | 84 | 38 | 28.6% |
+| 오케스트레이터 | `milestone-workflow` / `myfitness-orchestrator` | 123 | 119 | 105 | 101 | 18 | **14.6%** |
+| 릴리즈 | `release-publisher` / `release-flow` | 134 | 223 | 89 | 178 | 45 | 33.6% |
+| Codex | `codex-response-patterns` / `codex-review-loop` | 87 | 113 | 57 | 83 | 30 | 34.5% |
+| 브랜치 | `milestone-workflow` / `branch-workflow` | 123 | 175 | 100 | 152 | 23 | 18.7% |
+| agent `release-manager` | 동명 | 103 | 46 | 84 | 27 | 19 | 18.4% |
+| (참고) `CLAUDE.md` | 동명 | 163 | 173 | 90 | 100 | 73 | 44.8% |
+
+→ **`rules/workflow.md`(80.5%)를 빼면 10쌍 중 9쌍이 공통줄 55% 미만, 6쌍은 35% 미만.**
+`api-routes.md` 는 3.4%(119줄 대 8줄)로 사실상 다른 문서다.
+위 "하네스 구성" 절의 *"역할은 쌍둥이인데 이름이 다르고"* 는 **이름 대응이지 텍스트 대응이 아니다.**
+합치는 작업은 **병합이 아니라 재작성**이다.
+
+## H3. `workflow.md` 3자 비교 (fin · fit · pleiades)
+
+```bash
+norm() { sed 's/^[[:space:]]*//;s/[[:space:]]*$//' "$1" | grep -v '^$' | sort -u; }
+norm <fin>/.claude/rules/workflow.md > fin.w ; norm <fit>/… > fit.w ; norm ~/workspace/pleiades/… > ple.w
+comm -12 fin.w fit.w | wc -l ; comm -12 fin.w ple.w | wc -l ; comm -12 fit.w ple.w | wc -l
+cat fin.w fit.w | sort -u > orig.w ; comm -13 orig.w ple.w | wc -l ; comm -23 orig.w ple.w | wc -l
+```
+
+| 집합 | 줄 |
+|---|---:|
+| fin / fit / pleiades 유니크 비공백 줄 | 161 / 172 / **344** |
+| fin ∩ fit | 118 |
+| fin ∪ fit | 215 |
+| (fin ∪ fit) ∩ pleiades | **34** |
+| pleiades 신규 (원본에 없는 줄) | **310 / 344 = 90.1%** |
+| pleiades 가 버린 원본 줄 | **181 / 215 = 84.2%** |
+
+**절 구조는 계승됐다** — 최상위 4절 동일, 10단계 유지, fit 의 8-0·8-5·8-6 이 9-0·9-5·9-6 으로 이어짐,
+`4. UI/UX 디자인` 삭제 · `2. 실측`·`4. 되돌리기 비용 산정` 신설.
+**그러나 exact-line 계승률은 15.8%(34/215)** 다. `.claude/rules/workflow.md` 머리말의 "계승"은
+**구조 계승**이고, fin·fit 원본을 "이미 흡수했으니 버려도 된다"고 볼 근거는 이 숫자에 없다.
+버려진 181줄의 의도성 판정은 **미측정** (줄 단위 대응 필요).
+
+## H4. 저장소 결합도 · 3등급 분류
+
+```bash
+occ() { grep -o --binary-files=text -E "$2" "$1" | wc -l; }   # 파일 경로를 직접 지정 (H6 참조)
+P_ABS='(~|/Users/sagan)/workspace/my(Finance|Fitness)|/Users/sagan'
+P_APP='src/(app|lib|components|bot|mcp|generated)/|prisma/(schema|migrations)|prisma/[a-z]'
+P_PORT='\b(4100|4200|4210|4301)\b' ; P_PM2='pm2|PM2'
+P_REPO='myFinance|myFitness|myfinance|myfitness|fomalhaut84'
+P_DOMAIN='세금|주식|매매|배당|증권|환율|자산|가계부|지출|수익률|Garmin|garmin|체중|운동|식단|칼로리|러닝|수면|바디|영양|health|Health'
+```
+
+**성분별 출현 건수 (fin 17파일 + fit 19파일 = 36파일 / 3,850 LOC)**
+
+| 성분 | fin | fit | 합 | 파라미터화 |
+|---|---:|---:|---:|---|
+| 절대경로 | 0 | 3 | 3 | 가능 |
+| 앱경로 | 17 | 27 | 44 | 불필요 (레이아웃 동일) |
+| 포트 | 3 | 5 | 8 | 가능 |
+| pm2 | 7 | 24 | 31 | 가능 (`X`/`X-bot`/`X-mcp` 명명 동일) |
+| 저장소명 리터럴 | 39 | 57 | 96 | 가능 |
+| **도메인 용어** | **40** | **36** | **76** | **불가** |
+| **합계** | **106** | **152** | **258** | |
+
+→ **258건 중 182건(70.5%)은 `{repo}`·`{port}`·`{pm2-app}` 치환으로 흡수 가능.**
+흡수 불가한 도메인 76건은 **4파일에 61건(80.3%)이 집중** — fin `tax-logic`(6)·`stock-trading-method`(5)·
+`feature-implementer`(4), fin `CLAUDE.md`(21) + fit `CLAUDE.md`(19)·`ops-diagnose`(10).
+
+**3등급 (규칙: 참조 0 → 무파라미터 / 도메인≥3 또는 총≥20 → 고유 / 나머지 → 파라미터화)**
+
+| 등급 | 파일 | 비율 | LOC |
+|---|---:|---:|---:|
+| 무파라미터 공통화 | **3** | 8.3% | 362 |
+| 파라미터화 필요 | **26** | 72.2% | 2,652 |
+| 저장소 고유 | **7** | 19.4% | 836 |
+
+무파라미터 3: fin `rules/workflow.md` · fit `rules/api-routes.md` · fit `skills/orphan-check`.
+저장소 고유 7: fin `rules/tax-logic`·`rules/stock-trading-method`·`agents/feature-implementer`·`CLAUDE.md`,
+fit `skills/ops-diagnose`·`settings.local.json`·`CLAUDE.md`.
+
+**pleiades 자신(13파일)**: 총 175건 · 저장소명 리터럴 125건 · **도메인 용어 0건.**
+
+## H5. pleiades 와의 중복 — 34파일 중 15파일만 역할이 겹친다
+
+| | 파일 | LOC |
+|---|---:|---:|
+| pleiades 에 **대응 역할 없음** | **19** | 1,371 |
+| pleiades 와 **역할 겹침** | **15** | 2,143 |
+| 계 (`.claude/` 만) | 34 | 3,514 |
+
+역할 겹침 15 = fin 8 (`session-resume`·`session-boundary`·`milestone-workflow`·`project-spec-writer`·
+`project-verify`·`release-publisher`·`codex-response-patterns`·`rules/workflow`)
++ fit 7 (`session-primer`·`session-handoff`·`myfitness-orchestrator`·`release-flow`·
+`codex-review-loop`·`branch-workflow`·`rules/workflow`).
+
+**"겹친다 = 대체 가능"이 아니다** (기능 대조, 산출물 §4-2):
+
+| 역할 | 대체 가능? | 근거 |
+|---|---|---|
+| 세션 재개 | **불가** | `pleiades-resume` 에 없는 것 5종: `project_session_active.md` 소비·삭제 / `gh pr·issue list` / 미커밋 하네스 안내 / 태그·릴리즈 상태 / 백로그 우선순위. **교집합은 "인계 노트 읽고 3문단 브리핑" 1개** |
+| 세션 인계 | **불가** | pleiades 5절 중 대응 3절. fin 6 Step 중 3개, fit 6 Step 중 4개가 대응 없음 |
+| 오케스트레이터 | **불가** | 라우팅 대상 에이전트가 다르다 (pleiades 4 / fin 4 / fit 5, 이름 겹침 0) |
+| 스펙 작성 | **불가** | `decision-doc`(결정 문서 7절) vs `project-spec-writer`(Sub-Phase 분할 + 서브이슈 템플릿 + `gh issue` 발행). **공통 절 1개(제외 사항)** |
+| 워크플로우 룰 | **가능(조건부)** | 절 구조 계승 확인. 단 exact-line 15.8% (H3) |
+| 검증·Codex·릴리즈·브랜치 | **부분** | 절차는 pleiades `workflow.md` 에 흡수, **Prisma/MCP 특수 검증 · 응답 패턴 템플릿 · 배포 확인·롤백 절차는 미포함** |
+
+## H6. `settings.local.json` 2열
+
+```bash
+python3 -c "import json,re,collections; d=json.load(open(F)); a=d['permissions']['allow']; ..."
+```
+
+| | myFinance | myFitness |
+|---|---|---|
+| 위치 | **원본만** (gitignored · worktree tracked 16파일에 **없음**) | fit `.claude/` 18파일 **안에 포함** |
+| 크기 | 17,469 B / 156줄 | **6,749 B / 111줄** |
+| `permissions.allow` | **150** | **105** |
+| 도구별 | Bash 135 · WebFetch 9 · codex-cli 4 · WebSearch 1 · Read 1 | Bash 96 · WebFetch 4 · codex-cli 3 · WebSearch 1 · Read 1 |
+| 절대경로 규칙 | **6 (4.0%)** | **1 (1.0%)** |
+| 저장소명 리터럴 규칙 | 9 | 4 |
+| 앱경로 규칙 | 4 | **10** |
+| 포트 규칙 | 1 | 3 (4301·4302) |
+| **저장소에 묶인 규칙(합집합)** | **14 / 150 = 9.3%** | **15 / 105 = 14.3%** |
+| **그대로 이식 가능** | **136 / 150 = 90.7%** | **90 / 105 = 85.7%** |
+
+fit 의 절대경로 규칙 1건: `Bash(ls /Users/sagan/workspace/myFitness/src/generated/prisma/index*)`.
+
+> **004 Q21 보정.** Q21 은 fin `.claude/` **16파일(tracked)** 만 이관 단위로 잡는데,
+> fin 하네스에는 **gitignored `settings.local.json`(156줄 / 17,469 B / allow 150)** 이 하나 더 있고
+> **worktree 에 따라오지 않았다.** 실제 이관 단위는 **fin 17 + fit 18 = 35파일**이고,
+> fin 쪽은 `git rm` 커밋(16) + **수동 복사(1)** 로 **작업 종류가 둘**이다.
+
+## H7. **`grep` 이 `.gitignore` 를 따른다 — `--binary-files=text` 로는 못 막는다**
+
+```bash
+type grep
+# grep is a shell function ... exec -a ugrep "$CLAUDE_CODE_EXECPATH" \
+#   -G --ignore-files --hidden -I --exclude-dir=.git ... "$@"
+grep --version    # → ugrep 7.8.4  (GNU grep 아님)
+```
+
+`--ignore-files` 는 **`.gitignore` 를 존중한다.** myFitness `.gitignore:35` 가 `.claude/` 를
+**디렉터리째** 무시하므로 저장소 루트 재귀 grep 은 **하네스 18파일을 통째로 건너뛴다.**
+
+| 명령 | 결과 |
+|---|---:|
+| `grep -rn --binary-files=text -- "/workspace/myFitness" ~/workspace/myFitness` | **0** |
+| `grep -rn --binary-files=text --no-ignore-files -- (동)` | **1,617** |
+| `/usr/bin/grep -rn --binary-files=text -- (동)` | **1,617** |
+| `grep -rn --binary-files=text -- "…" ~/workspace/myFitness/.claude` (경로 직접) | **3** |
+
+**비대칭**: myFinance 는 `.gitignore:35` 가 `.claude/settings.local.json` 을 **파일 단위**로 무시하는데
+이 경우 래퍼 grep 이 **여전히 찾는다** (M3 의 6건이 그래서 재현된다). **디렉터리 패턴일 때만 사라진다.**
+
+> **정정 (2026-09-07 재측정).** M3 의 *"(myFitness) 소스·설정 전체 **0건**"* 은 틀렸다.
+> `/usr/bin/grep` 으로 재측정하면 (`node_modules`·`.next`·`dist`·`.git` 제외)
+> **`.claude/settings.local.json` · `.claude/skills/branch-workflow/SKILL.md` ·
+> `.claude/skills/session-primer/SKILL.md` 3건** + `src/generated/prisma/internal/class.ts` 1건(생성물)이 나온다.
+> **손으로 쓴 앱 소스·설정은 여전히 0건**이므로 M3 의 결론 방향(이동해도 앱은 무사)은 유지된다.
+> 바뀌는 것은 **하네스 이관 시 경로 치환이 3곳 필요**하다는 점이다.
+
+**규율 보강 필요.** `CLAUDE.md` 와 `.claude/rules/workflow.md` 2절의
+*"`grep` 에는 반드시 `--binary-files=text`"* 는 **binary 오탐만** 막고 **gitignore 오탐은 못 막는다.**
+ignored 경로를 재는 측정에는 셋 중 하나가 필요하다:
+**(a) `--no-ignore-files` · (b) `/usr/bin/grep` 직접 호출 · (c) 검색 경로를 그 디렉터리로 직접 지정.**
+이 절의 측정은 (c) 로 했고, 표본 3파일을 (b) 로 재계산해 건수 일치를 확인했다.
+→ 004 **Q22** 의 재검증 범위는 *"binary 를 포함할 수 있는 측정"* 에서
+***"ignored 경로를 포함하는 모든 grep 측정"*** 으로 넓어진다.
+
+## 못 잰 값 (이 절 범위)
+
+| 항목 | 이유 |
+|---|---|
+| 버려진 `workflow.md` 181줄의 의도성(삭제 vs 누락) | 줄 단위 대응 필요. 이번 범위 밖 |
+| 하네스 파일 간 상호 참조(`[[wikilink]]`) 그래프 | 이번 과제 범위 밖 |
+| 하네스가 실제로 로드·발동되는지 | 정적 측정 불가. 004 §3-2 가 "중첩 `.claude/` 는 로드 안 됨"으로 이미 실측 |
+| auto memory 재측정 | 위 "auto memory 현황" 절 값을 그대로 인용 (fin 126줄/37토픽 · fit 16줄/16토픽) |
+
+---
+
+## 하네스 참조 그래프 실측 (2026-09-07)
+
+Q20 / 이슈 #1(하네스 통합) 근거. 초안 `_workspace/harness/01_surveyor_harness_refs.md`.
+**읽기 전용 — 대상 저장소 쓰기 0건.**
+
+**측정 대상과 ref**
+
+| 대상 | 디렉터리 | ref |
+|---|---|---|
+| myFinance 하네스 | `repos/myFinance` (worktree) | `integration/pleiades` (모드 I) |
+| myFitness 하네스 | **원본 `~/workspace/myFitness/.claude/`** | **ref 없음 — gitignored.** `git ls-files .claude` → 0, worktree 에 `.claude/` 자체가 없다 |
+| fin `workflow.md` (#8) | `repos/myFinance` | **`dev`** — #8 은 원본 저장소 결함. `diff dev integration/pleiades` = **0줄** |
+| pleiades 하네스 | `~/workspace/pleiades` | 워킹트리 (`dev`, clean) |
+
+### H1. 참조 그래프 — 총 285줄
+
+```bash
+# 인벤토리
+ls <root>/.claude/agents | sed 's/\.md$//'
+ls -d <root>/.claude/skills/*/ | xargs -n1 basename
+ls <root>/.claude/rules | sed 's/\.md$//'
+# 각 이름을 하네스 md + CLAUDE.md 전체에서 검색 (자기 정의 파일 제외)
+#   agent·skill → \b<name>\b      rule → rules/<name>\.md | `<name>\.md`
+grep -nE --binary-files=text "<pattern>" <file>
+# 전수 스크립트: _workspace/harness/refgraph.sh
+```
+
+| 방향 | myFinance | myFitness | pleiades |
+|---|---|---|---|
+| `CLAUDE.md` → rule | 7 | 4 | 5 |
+| `CLAUDE.md` → skill | **0** | **13** | 4 |
+| `CLAUDE.md` → agent | **0** | **0** | **0** |
+| agent → agent | 32 | 17 | 30 |
+| agent → skill | **0** | 7 | 6 |
+| agent → rule | 7 | 1 | 7 |
+| skill → agent | 40 | 18 | 19 |
+| skill → skill | 11 | 16 | 15 |
+| skill → rule | 3 | 4 | 8 |
+| rule → agent | 0 | 0 | 2 |
+| rule → skill | 0 | 0 | 9 |
+| **합** | **100** | **80** | **105** |
+
+→ **fin `CLAUDE.md` 는 skill·agent 를 한 번도 부르지 않는다.** fin 하네스의 유일한 진입점은
+`CLAUDE.md:128` 의 `.claude/rules/workflow.md` 한 줄. fit 은 `CLAUDE.md` → skill 13건.
+**두 저장소의 트리거 구조가 다르다.**
+
+**에이전트 호출 구문 전수** (`grep -rnE --binary-files=text --include='*.md' 'subagent_type|Task\(|Skill\('`)
+
+| | 건수 | 저장소 로컬 에이전트를 부르는 것 |
+|---|---|---|
+| fin | 7 | **5** (`skills/milestone-workflow/SKILL.md:33,40,46,53,57`) |
+| fit | 4 | **1** (`skills/myfitness-orchestrator/SKILL.md:77` → codex-liaison) |
+| pleiades | 1 | **0** |
+
+나머지는 전부 외부 플러그인 `pr-review-toolkit:code-reviewer`. 그 외 파급은 **산문 참조**다.
+
+### H2. 저장소 간 이름 참조 = **6방향 전부 0**
+
+```bash
+grep -rnE --binary-files=text --include='*.md' "<상대 저장소의 agent+skill+rule 이름 전부>" \
+  <root>/.claude <root>/CLAUDE.md | wc -l
+```
+
+pleiades→fin 0 · pleiades→fit 0 · fin→fit 0 · fit→fin 0 · fin→ple 0 · fit→ple 0.
+
+→ **옮겨도 끊길 참조가 없다. 위험은 통합 네임스페이스의 이름 충돌이다.**
+
+| 충돌 이름 | 종류 | fin | fit | ple | 그 이름을 가리키는 참조 |
+|---|---|---|---|---|---|
+| `release-manager` | agent | ✅ | ✅ | — | fin 18 · fit 7 = **25** |
+| `workflow` | rule | ✅ | ✅ | ✅ | fin 8 · fit 5 · ple 20 = **33** |
+| `api-routes` | rule | ✅ | ✅ | — | **5** |
+| `components` | rule | ✅ | ✅ | — | **4** |
+| skill 23개 | skill | 7 | 9 | 7 | **충돌 0** |
+
+**충돌 4건이 67줄의 참조를 모호하게 만든다.**
+
+### H3. 실재하지 않는 참조 (이관 전부터 dangling)
+
+| 저장소 | 파일:줄 | 참조 | 판정 |
+|---|---|---|---|
+| fin | `CLAUDE.md:92` | `stock-trading-method 스킬` | **종류 불일치** — 실체는 **rule** |
+| fin | `docs/specs/321-api-response-envelope.md:12` | `.claude/rules/common/patterns.md` | 경로 없음 |
+| fin | `docs/milestone-2.md:233` | `.claude/config.toml` | 경로 없음 |
+| fit | `docs/specs/m2-8-date-fix.md:22` | `.claude/plans/jiggly-hugging-kahan.md` | 경로 없음 |
+
+외부 플러그인으로 해소되는 것(이관 대상 아님): `frontend-design` · `pr-review-toolkit:code-reviewer`
+— 둘 다 `~/.claude/settings.json` `enabledPlugins` 에 **user scope 활성**.
+
+### H4. fin `.claude/` 16파일 `git rm` 파급 — **활성 5건 · 빌드/CI 0**
+
+```bash
+cd ~/workspace/pleiades/repos/myFinance
+git grep --text -n '\.claude' integration/pleiades -- ':!.claude/**' | cut -d: -f2-            # 20
+git grep --text -nE '<fin agent 4 + skill 7 이름>' integration/pleiades -- ':!.claude/**' | wc -l   # 0
+git grep --text -n 'claude' integration/pleiades -- package.json '.github/**' 'scripts/**' '*.yml' 'ecosystem.config.js' | cut -d: -f2-   # 1 (오탐)
+git grep --text -n -i 'claude' integration/pleiades -- 'README*' | cut -d: -f2-                # 4 (전부 산문)
+git grep --text -n -E '\.claude/(rules|agents|skills)/' integration/pleiades -- ':!.claude/**' | cut -d: -f2-   # 15
+```
+
+| 검색 | 히트 | 깨지는 것 |
+|---|---|---|
+| `.claude` 문자열 전체 | 20 | 15 |
+| **하네스 이름 (agent 4 + skill 7)** | **0 / 733 tracked 파일** | **0** |
+| `package.json`·`.github/**`·`scripts/**`·`*.yml`·`ecosystem.config.js` | 1 | **0** (`deploy.yml:109` 주석의 `claude-advisor.ts`) |
+| `README.md` | 4 | **0** (`.claude/` 경로 0) |
+| 삭제 대상 16파일 직접 참조 | **15** | 15 |
+
+**15건 중 갱신이 필요한 활성 참조는 5건**:
+`CLAUDE.md:62,118,128,140` + **`src/app/api/alerts/history/export/route.ts:5`**.
+나머지 10건은 완료 스펙·로드맵의 이력 기록(1건은 이미 dangling).
+
+> **그 5건 중 1건이 `src/` 실행 파일이다.** `.claude/rules/workflow.md` 9-0 표의
+> *"대상 저장소 변경 — 경로 무관"* 은 **에이전트 사전 리뷰 필수**이므로 이 PR 은 self-review 경로를 탈 수 없다.
+
+**fit 대칭** (`repos/myFitness`, `integration/pleiades`): `.claude` 히트 **5** —
+`.gitignore:35` · `docs/specs/359-…:14`·`364-…:129`(둘 다 `.claude/rules/workflow.md`) ·
+`docs/specs/m2-8-date-fix.md:22`(이미 dangling) · `src/lib/monitoring/admin-alerts.ts:272`(`ALERT_TYPE.claude_auth_expired` **오탐**).
+fit 하네스 **이름** 참조: **0 / 396 tracked 파일**.
+
+### H5. auto memory 의존 — 11파일
+
+```bash
+d=~/.claude/projects/-Users-sagan-workspace-<proj>/memory
+grep -rnE --binary-files=text '\.claude/(rules|agents|skills)' $d
+grep -rnE --binary-files=text '<그 저장소의 agent+skill 이름 전부>' $d
+```
+
+(rule 이름 `components`·`api-routes` 는 `src/components/`·API 산문과 구분 불가 → 이름 검색에서 제외. 경로 검색에는 포함)
+
+| | memory 파일 | `.claude/**` 경로 줄 | skill·agent 이름 줄 | 참조를 가진 파일 |
+|---|---|---|---|---|
+| myFinance | 38 + MEMORY.md | **6** | **12** (1건 오탐) | **6 / 39** |
+| myFitness | 18 | **2** | **1** | **3 / 18** |
+| pleiades | 4 | **1** | **1** | **2 / 5** |
+
+**세션 동작을 실제로 좌우하는 트리거 줄 4개**:
+fin `MEMORY.md:4,5,7`(`session-resume`·`session-boundary`) · ple `MEMORY.md:4`(`pleiades-resume`). fit 은 0.
+memory 는 git 대상이 아니므로 **스킬 이름을 바꾸면 PR 밖에서 따로 고쳐야 한다.**
+
+> **fin memory 에 이미 틀린 기록이 있다.** `feedback_session_management.md:59` 가
+> `.claude/agents/`·`.claude/skills/` 를 **untracked** 로 기술하나 fin `.claude/` 는 **tracked 16파일**이다.
+
+### H6. `--add-dir` 영속 설정 — **키는 있으나 설정된 곳은 0**
+
+```bash
+python3 -c "import json;d=json.load(open('/Users/sagan/.claude.json'));print(sorted(d['projects']['/Users/sagan/workspace/pleiades'].keys()))"
+grep -l --binary-files=text 'additionalDirectories' ~/.claude/settings.json ~/.claude.json ~/workspace/pleiades/.claude
+ls -la ~/workspace/pleiades/.claude/
+claude --help | grep -i -B2 -A2 'add-dir'
+B=/Users/sagan/.local/share/claude/versions/2.1.263      # CLI v2.1.263 (Mach-O)
+grep -o --binary-files=text '.\{200\}permissions\.additionalDirectories.\{200\}' $B
+grep -o --binary-files=text 'if(Ie(a.CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD)).\{700\}' $B
+grep -o --binary-files=text 'function mp(.\{0,400\}' $B
+```
+
+| 위치 | `additionalDirectories` |
+|---|---|
+| `~/.claude/settings.json` | **0건** |
+| `~/.claude/settings.local.json` | **파일 없음** |
+| pleiades `.claude/settings.json` · `settings.local.json` | **파일 없음** — pleiades `.claude/` 는 `agents/`·`rules/`·`skills/` 3디렉터리뿐 |
+| `~/.claude.json` `projects[…/pleiades]` (키 28개) | **0건** — 디렉터리 목록 키 자체가 없다 |
+| `~/.claude.json` `projects` 전체 14키 | **0건** |
+
+**그러나 CLI 에는 정식 키가 있다** (v2.1.263 문자열 실측):
+
+```
+permissions.additionalDirectories
+  tip: 'Must be an array of directory paths. Example: ["~/projects", "/tmp/workspace"].
+        You can also use --add-dir flag or /add-dir command'
+  로딩 스코프: projectSettings(".claude/settings.json") · localSettings(".claude/settings.local.json")
+```
+
+CLAUDE.md·rules 로딩은 **별도 조건**이 붙는다:
+
+```js
+if(Ie(a.CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD)){
+  let Me=mp();   // = extensionsConfig.additionalDirectoriesForClaudeMd()
+  for(let xe of Me){ ...ak(xe,"CLAUDE.md") ...ak(xe,".claude","CLAUDE.md")
+                     ...ak(xe,".claude","rules") ...ak(xe,"CLAUDE.local.md") }
+}
+```
+
+| 사실 | 판정 |
+|---|---|
+| 툴 접근 디렉터리를 settings 로 영속화 가능 | **확인** |
+| additional dir 의 `CLAUDE.md`·`.claude/rules/` 로딩은 **환경변수 `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD` 필요** | **확인** |
+| 그 환경변수를 settings 파일로 고정 가능한지 | **미측정** — CLI 문자열에서 settings `env` 키 미확인 |
+| `permissions.additionalDirectories` 가 `mp()` 목록에 반영되는지 | **미측정** — 별도 접근자. 런타임 검증 필요 |
+| 그 경로의 `.claude/skills`·`agents` 발견 여부 | **미측정** — `--add-dir` **플래그**로는 발견됨이 기존 실측(§"중첩 `.claude/` 는 로드되지 않는다") |
+
+> **정정 (2026-09-07 실측).** `004-repo-layout.md` §6 Q20 의 *"회피는 `--add-dir` 를 계속 넘기는 것뿐"* 은
+> **단정할 수 없다.** `permissions.additionalDirectories` 라는 영속 키가 CLI 에 실재한다.
+> 다만 그 키가 하네스(skills·agents) 로딩까지 커버하는지는 **미측정**이므로,
+> Q20 의 결론(하네스 통합이 선결 조건)이 뒤집힌 것은 아니다. **런타임 검증 1회로 갈린다.**
+
+### H7. fit 하네스는 **버전 관리 밖**
+
+```bash
+grep -n --binary-files=text -E '^\s*(\.claude|CLAUDE\.md|\.runtime)' ~/workspace/myFitness/.gitignore
+git -C ~/workspace/myFitness check-ignore -v CLAUDE.md .claude/rules/workflow.md .claude/
+git -C ~/workspace/myFitness ls-files .claude | wc -l
+grep -n --binary-files=text -i 'claude' ~/workspace/pleiades/repos/myFinance/.gitignore
+```
+
+```
+myFitness/.gitignore:35  .claude/
+myFitness/.gitignore:36  CLAUDE.md
+myFitness/.gitignore:37  .runtime/
+check-ignore -v (exit 0):
+  .gitignore:36:CLAUDE.md	CLAUDE.md
+  .gitignore:35:.claude/	.claude/rules/workflow.md
+  .gitignore:35:.claude/	.claude/
+myFinance/.gitignore:35  .claude/settings.local.json
+```
+
+| | myFitness | myFinance |
+|---|---|---|
+| `.claude/` tracked | **0** | **16** |
+| `CLAUDE.md` | **ignored** | tracked |
+| worktree(`repos/*`)에 존재 | **`.claude/` 없음**, `CLAUDE.md` 는 수동 복사분 | `.claude/` 16파일 자동 · **`settings.local.json` 없음** |
+
+→ **"fit 특수 하네스를 저장소에 유지" = "버전 관리 밖·원본 워킹 디렉터리에만 유지".**
+통합 작업 중에는 보이지 않고 PR·리뷰·이력에도 남지 않는다.
+tracked 로 바꾸려면 `.gitignore` 2줄 변경 = **fit 소스 변경(사용자 확인 대상)**.
+
+**부수**: worktree fin `.claude/` 에는 `settings.local.json`(원본 17,469 B)이 **없다**.
+권한 허용 규칙은 원본 세션에만 있다.
+
+### H8. #8 · #10 잔여 항목 — **전부 미수정**
+
+```bash
+cd ~/workspace/pleiades/repos/myFinance
+diff <(git show dev:.claude/rules/workflow.md) <(git show integration/pleiades:.claude/rules/workflow.md) | wc -l  # 0
+git show dev:.claude/rules/workflow.md | grep -n --binary-files=text -E 'git merge dev|git tag|git push origin main'
+git show dev:.claude/rules/workflow.md | grep -n --binary-files=text -E 'P0|P1|P2'
+grep -n --binary-files=text -E 'P0|P1|P2' ~/workspace/myFitness/.claude/rules/workflow.md
+cd ~/workspace/pleiades
+grep -n --binary-files=text '체크아웃' .claude/skills/repo-measure/SKILL.md .claude/agents/repo-surveyor.md
+grep -n --binary-files=text '/tmp/'   .claude/skills/repo-measure/SKILL.md .claude/agents/repo-surveyor.md
+```
+
+| 이슈 | 결함 | 이슈 기재 | 현재 실측 | 상태 |
+|---|---|---|---|---|
+| #8 ① | 릴리즈가 `main` 직접 push | fin `:34-36` / fit `:35-37` | fin **34,35,36** · fit **35,36,37** | **미수정 (일치)** |
+| #8 ② | `P0` 를 최저로 정의 | fin `:169` / fit `:166` | fin 정의 **145-147** · **169** · fit 정의 **142-144** · **166** | **미수정 (일치)** |
+| #10 ① | 낡은 체크아웃 게이트 | `repo-measure/SKILL.md:22` · `repo-surveyor.md` | `repo-measure:22,92,94` · `repo-surveyor:24,70,72` = **6줄** | **미수정. 표면이 이슈 기재보다 넓다** |
+| #10 ② | 공유 `/tmp` 임시파일 | `repo-surveyor.md:85` · `repo-measure/SKILL.md` | `repo-measure:117-119` · `repo-surveyor:84-86` = **6줄** | **미수정** |
+
+**#8 ②의 실제 수정 표면**: `P0/P1/P2` 를 쓰는 줄이 **fin 17줄**(241줄 중) · **fit 26줄**(264줄 중) = **43줄**.
+
+**이슈 #8 에 없는 같은 계열 결함 1건**: fin `workflow.md:240` / fit `workflow.md:262` 의
+hotfix 절차 `리뷰(1회, P2만)` — 그 척도에서 `P2`=critical 이므로 **로직·엣지케이스(major) 리뷰를
+건너뛴 채 실서비스로 나간다.** pleiades 는 이미 고쳤다(`.claude/rules/workflow.md` 긴급 수정 절 정정 블록).
+
+> **이 측정이 #10 ①에 실제로 걸렸다.** fit `.claude/` 는 gitignored 라 **ref 자체가 없다.**
+> 체크아웃 게이트를 문자 그대로 따르면 유효한 측정을 "미확인"으로 버려야 했다.
+> 사유를 명시하고 원본 파일시스템으로 측정했다.
+
+### H9. 못 잰 값 (이 절 범위)
+
+| 항목 | 이유 |
+|---|---|
+| `permissions.additionalDirectories` 가 skills·agents 발견까지 커버하는지 | 런타임 동작. 정적 문자열로 판별 불가 |
+| `settings.json` 으로 `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD` 고정 가능 여부 | CLI 문자열에서 settings `env` 키 미확인 |
+| 이름 충돌 시 CLI 의 우선순위·경고 유무 | 실제 통합 전에는 관측 불가 |
+| fit 하네스의 변경 이력 | `.claude/` 가 커밋된 적이 없어 git 이력 자체가 없다 |
+
+## `permissions.additionalDirectories` 는 하네스를 로드하지 않는다 (2026-09-07 런타임 실측 · 결정적)
+
+앞 절 "하네스 참조 그래프 실측" H4 가 미측정으로 남긴 두 항목을 런타임으로 확인했다.
+CLI v2.1.263, 모델 `claude-haiku-4-5-20251001`, `--permission-mode plan`, cwd = `~/workspace/pleiades`(신뢰됨).
+질문: myFitness 고유 skill(`fitness`·`ops-`·`prisma`·`orphan`·`session-` 포함) · agent(`db-migrator` 등 4개) ·
+fit `api-routes.md`/`workflow.md` 노출 여부를 JSON 으로 답하게 했다.
+
+```bash
+Q='Answer with only a JSON object {"skills":[...],"agents":[...],"rules_seen":bool} ...'
+J='{"permissions":{"additionalDirectories":["/Users/sagan/workspace/myFitness"]}}'
+# (6)(7) --settings 플래그
+CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude -p "$Q" --settings "$J" < /dev/null
+claude -p "$Q" --settings "$J" < /dev/null
+# (9)(10) 신뢰된 프로젝트의 .claude/settings.local.json 에 같은 JSON 을 쓰고 (테스트 후 삭제)
+CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude -p "$Q" < /dev/null
+claude -p "$Q" < /dev/null
+# (8) 대조군
+CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude -p "$Q" --add-dir /Users/sagan/workspace/myFitness < /dev/null
+```
+
+| # | 경로 | env | skills | agents | rules |
+|---|---|---|---|---|---|
+| 6 | `--settings` JSON | 켬 | 0 | 0 | 아니오 |
+| 7 | `--settings` JSON | 끔 | 0 | 0 | 아니오 |
+| 9 | `.claude/settings.local.json` (신뢰된 프로젝트) | 켬 | 0 | 0 | 아니오 |
+| 10 | `.claude/settings.local.json` (신뢰된 프로젝트) | 끔 | 0 | 0 | 아니오 |
+| **8** | **`--add-dir`** | 켬 | **6** (`myfitness-orchestrator`·`session-handoff`·`session-primer`·`prisma-drift-fix`·`orphan-check`·`ops-diagnose`) | **4** (전부) | **예** |
+
+부수 관측: 신뢰되지 않은 디렉터리(스크래치)에서는 `Ignoring 1 permissions.additionalDirectories entry ... this workspace has not been trusted` 로 키 자체가 무시된다.
+`--add-dir` 는 variadic 이라 **프롬프트를 플래그 앞에** 두지 않으면 프롬프트가 디렉터리로 먹힌다 (`Input must be provided ...` 오류로 1회 실패).
+
+> **판정.** `permissions.additionalDirectories` 는 **툴 접근 권한만** 영속화한다. skills·agents·rules·CLAUDE.md 로딩은
+> **`--add-dir` 플래그 경로에만** 붙어 있다. 따라서 004 Q20 의 *"회피는 `--add-dir` 를 계속 넘기는 것뿐"* 은
+> 앞 절 H4 의 유보에도 불구하고 **결과적으로 맞다.** 저장소별 특수 하네스를 저장소에 남기면
+> **세션마다 `--add-dir` + 환경변수**를 넘겨야 하고 `--resume` 시 복원되지 않는다 (`CLAUDE.md` 안내 그대로).
+
+## `--add-dir` 로딩 범위와 환경변수 (Q37 · 2026-09-07 런타임 실측)
+
+앞 절과 같은 방식(haiku · plan 모드 · 프롬프트를 플래그 앞에). 변별 질문: `ple_rules` = *"pleiades 고유"* 리터럴(pleiades `workflow.md` 에만 4회 존재)을 포함한 룰을 봤는가.
+
+```bash
+Q='Answer with only a JSON object {"skills":[...],"agents":[...],"fit_rules":bool,"ple_rules":bool} ...'
+cd ~/workspace/pleiades;  claude -p "$Q" --add-dir ~/workspace/myFitness < /dev/null                                     # a
+cd ~/workspace/pleiades;  CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude -p "$Q" --add-dir ~/workspace/myFitness < /dev/null   # a2
+cd ~/workspace/myFitness; claude -p "$Q" --add-dir ~/workspace/pleiades < /dev/null                                      # b
+cd ~/workspace/myFitness; CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude -p "$Q" --add-dir ~/workspace/pleiades < /dev/null    # b2
+grep -c "pleiades 고유" ~/workspace/pleiades/.claude/rules/workflow.md   # → 4
+```
+
+| # | cwd | `--add-dir` | env | add-dir 쪽 skills | add-dir 쪽 agents | add-dir 쪽 rules |
+|---|---|---|---|---|---|---|
+| a | pleiades | fit | 끔 | 6 (전부) | 4 (전부) | (변별 불가 — fit skill 설명에 리터럴 포함) |
+| a2 | pleiades | fit | 켬 | 6 | 4 | (동) |
+| **b** | fit | pleiades | **끔** | 3 (전부) | 2 (전부) | **아니오** (`ple_rules: false`) |
+| **b2** | fit | pleiades | **켬** | 3 | 2 | **예** (`ple_rules: true`) |
+
+> **판정.** ① `--add-dir` 는 **환경변수 없이 skills·agents 를 로드**한다. ② **rules·CLAUDE.md 는 `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1` 이 있어야** 로드된다 (b vs b2). ③ 방향은 **대칭** — 대상 저장소 cwd 세션도 `--add-dir` 로 pleiades 하네스를 본다.
+> 이름 충돌 시 우선순위는 이 실측 범위 밖(감사 3회차 항목).
+
+부수 관측 (b·b2): cwd 가 fit 일 때 `Permission allow rule (.claude/settings.local.json): Bash(grep -n "SplitChart..." ...) has a wildcard before the rest of the command` 경고가 매번 출력된다 — fit `settings.local.json` 의 허용 규칙 1건이 CLI 검사에 걸린다.
+
+## fit 하네스 민감 문자열 스캔 (Q33 · 2026-09-07)
+
+```bash
+/usr/bin/grep -rniE --binary-files=text \
+  -e 'token|secret|password|passwd|api[_-]?key|bearer|BEGIN (RSA|OPENSSH)|AKIA[0-9A-Z]{12}|ghp_[A-Za-z0-9]{20}|sk-[A-Za-z0-9]{20}|[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|@gmail|@[a-z0-9-]+\.(com|net|kr)|ssh [a-z]+@|https?://[^ )]*:[^ )]*@' \
+  ~/workspace/myFitness/.claude ~/workspace/myFitness/CLAUDE.md
+```
+
+| 매치 | 판정 |
+|---|---|
+| `.claude/settings.local.json:88` — curl User-Agent 문자열 (`Mozilla/5.0 (X11; ...)`) 안의 `.` 패턴 | 무해 |
+| `.claude/skills/ops-diagnose/SKILL.md:102` — `curl -sf http://127.0.0.1:4301/health` | 무해 (loopback) |
+
+**비밀·자격 증명·개인 식별자 0건.** (`~/workspace/myFitness` 디렉터리 절대경로 3건은 앞 절 M3 정정에서 이미 셌다 — 사용자명 `sagan` 이 경로에 노출되는 것은 fin `.claude/` 가 이미 PUBLIC 으로 공개 중인 것과 동일한 수준.)
+
+---
+
+## workflow.md 계승 시 버린 줄 분류 (2026-09-07)
+
+**측정 목적.** Q31 — fin·fit `.claude/rules/workflow.md` 를 폐기해도 되는가.
+pleiades 판이 버린 원본 줄 중 **단독 작업·핫픽스에 필요한데 pleiades 에 없는 것**이 있으면 폐기 불가다.
+상세: `_workspace/harness/01_surveyor_harness_workflow_diff.md`
+
+**측정 대상 `(디렉터리, ref)`** — fin 은 worktree(`integration/pleiades`), fit 은 **원본**(`main`).
+**fit 원본을 잰 이유: fit `.claude/` 는 디렉터리째 gitignored 라 worktree 에 존재하지 않고
+`git show <ref>:<path>` 도 불가능하다.** tracked 가 아니므로 1a 단계 변경의 영향을 받지 않아
+통합 트리 측정과 어긋나지 않는다. 이 셸의 `grep` 은 ugrep 래퍼로 `.gitignore` 를 따르므로
+fit `.claude/` 접근에는 `/usr/bin/grep` 을 썼다.
+
+### 1. 기존 숫자 재현 — 재현됨 (정정 없음)
+
+```bash
+norm() { sed 's/^[[:space:]]*//;s/[[:space:]]*$//' "$1" | /usr/bin/grep -v '^$' | sort -u; }
+norm ~/workspace/pleiades/repos/myFinance/.claude/rules/workflow.md > fin.w
+norm ~/workspace/myFitness/.claude/rules/workflow.md                > fit.w
+norm ~/workspace/pleiades/.claude/rules/workflow.md                 > ple.w
+cat fin.w fit.w | sort -u > orig.w
+comm -12 orig.w ple.w | wc -l    # 유지 34
+comm -23 orig.w ple.w | wc -l    # 버림 181
+```
+
+fin 161 · fit 172 · ple 344 · fin∪fit 215 · 유지 **34** · 버림 **181 / 215 = 84.2%**.
+`01_surveyor_harness_content.md` §2-2 의 값과 **전 항목 일치**.
+
+**제외 규칙.** 빈 줄 제외 · 앞뒤 공백 정규화 · `sort -u`. 표 구분선(`|---|`)·코드펜스는
+추가 제외가 **불필요했다** — 버린 181줄 안에 0건이다
+(`/usr/bin/grep -cE '^(\|[-: |]*\||```|---+$)' dropped.w` → 0). 원본과 pleiades 가 같은 표기를
+쓰므로 그 줄들은 전부 *유지된* 34줄 쪽으로 갔다.
+
+### 2. 유지된 34줄의 성분 — 실질 계승은 12줄
+
+| 성분 | 줄 |
+|---|---:|
+| heading (`#`~`####`) | 11 |
+| 구조 노이즈 (코드펜스 2 · 표 구분선 1 · ASCII 다이어그램/화살표 6) | 9 |
+| 프롬프트 템플릿 placeholder | 2 |
+| **실질 산문·명령** | **12** |
+
+→ **exact-line 계승률 15.8%(34/215)는 상한.** 실질은 **5.6%(12/215)**.
+
+### 3. 버린 181줄의 등급 분류
+
+절 귀속은 **코드펜스 인식 파서**로 했다 — `# 릴리즈 절차`·`# 1. 이슈에 완료 코멘트` 등이
+bash 주석이라 단순 `grep '^#'` 은 오귀속한다. 181줄 전부 귀속(미귀속 0).
+**(c) 판정은 주관이 아니라 hard zero 실측**: 그 줄의 주제어가 pleiades 판에 0건인 것.
+
+```bash
+for pat in 'docs/designs' 'frontend-design' 'roadmap' '마이그레이션' 'phase-'; do
+  printf '%-18s: ' "$pat"; /usr/bin/grep -c "$pat" ~/workspace/pleiades/.claude/rules/workflow.md; done
+# 전부 0
+```
+
+| 등급 | 줄 수 | 비율 |
+|---|---:|---:|
+| (a) pleiades 판에 의미상 흡수됨 | 92 | 50.8% |
+| (b) 의도적 삭제·대체 (pleiades 가 결함으로 명시 지적한 것 포함) | 39 | 21.5% |
+| **(c) 단독 작업에 필요한데 pleiades 에 없음** | **35** | **19.3%** |
+| (d) 판단 불가 (`8-4 codex-cli MCP` 운영 파라미터 14 + 릴리즈 `배포` 1) | 15 | 8.3% |
+| 합계 | **181** | 100% |
+
+**(c) 35줄의 주제:** UI/UX 디자인 단계 19 (`docs/designs/<issue>-<feature>/`·`frontend-design` 스킬·
+프로토타입·디자인 범위 판단) · 이슈 라벨 taxonomy 3 (`phase-N`/`feature`/`bug`/`chore`) ·
+`docs/specs/<issue-number>-<feature>.md` 명명 + 필수 항목 2 · DB 마이그레이션 3 (구현 계획 + 리뷰 트리거) ·
+`docs/roadmap.md` 체크 1 · PR 제목 `[Phase N]` 1 · 릴리즈 major=`Phase 완료` 1 · 기타 디자인 연계 5.
+
+**(c) 는 죽은 문서가 아니다 — 산출물 실측:**
+
+| | `docs/designs/` | `docs/specs/*.md` | `docs/roadmap.md` |
+|---|---:|---:|---:|
+| myFinance | **25 디렉터리** | 126 | 419줄 |
+| myFitness | **8 디렉터리** | 95 | 381줄 |
+
+`docs/specs` 실제 명명도 원본 규약과 일치 — fin `170-nav-improvement.md`, fit `10-heart-body-page.md`
+= `<issue-number>-<feature>.md`. **pleiades 의 `<NNN>-<주제>` 가 아니다.**
+
+### 4. pleiades 판의 위임 문구 — 1줄
+
+```bash
+/usr/bin/grep -n 'workflow\.md' ~/workspace/pleiades/.claude/rules/workflow.md
+# 5:   출처 표기 (계승한다)
+# 165: 단독 작업은 그 저장소 자신의 `.claude/rules/workflow.md`(계승 전 원본)를 따르고…
+```
+
+**위임은 165행 1줄뿐이고 `단독 작업`(모드 S) 에만 걸린다.** 그 1줄이 (c) 35줄 전부를 가리킨다.
+
+**핫픽스 절(모드 H)의 (c) = 0건.** `## 긴급 수정 (Hotfix)` 이 버린 4줄은 a 3 · b 1 이고
+pleiades 판은 원본보다 **강화**됐다(봇 게이트 분리 · 재검증 ★ · 척도 정정).
+→ **폐기를 막는 것은 핫픽스가 아니라 단독 작업이다.**
+
+### 5. (c) 가 저장소별로 다른가 — 30/35(85.7%)가 공통
+
+```bash
+diff <(sed -n '61,93p' <fin>)   <(sed -n '62,88p' <fit>)     # 4. UI/UX 디자인
+diff <(sed -n '51,60p' <fin>)   <(sed -n '52,61p' <fit>)     # 2·3·5절
+diff <(sed -n '218,235p' <fin>) <(sed -n '240,257p' <fit>)   # 10. 머지 완료 후
+```
+
+| 절 | diff |
+|---|---|
+| `4. UI/UX 디자인` | **fin 에만 5줄** (기존 디자인 시스템 준수 블록 + 텔레그램 커맨드). 나머지 동일 |
+| `2·3·5절` | **1줄** — 라벨 `phase-1~phase-6`(fin) vs `phase-1~phase-N`(fit) |
+| `10. 머지 완료 후` | **차이 0** |
+
+(c) 귀속: 공통 24 · fin 전용 7 · fit 전용 4. 다만 `DB 스키마/마이그레이션`은 fin 8-1 / fit 8-0 으로
+**같은 주제가 다른 절에 놓인 것**이고 라벨 2줄은 한 토큰 차이다.
+**주제 단위로는 (c) 30/35(85.7%)가 공통이고, 진짜 fin 고유는 디자인 시스템 5줄뿐이다**
+(`Tailwind + Recharts` · 다크 테마 · `docs/examples/dashboard-prototype.jsx` · 텔레그램 커맨드).
+
+### 6. 결론 — 가정을 뒤집는 숫자
+
+1. **`181줄 / 84.2%` 는 재현되지만 그 숫자만으로는 폐기 판단이 불가능했다.**
+   분해하면 **(c) 35줄(19.3%)** 이 나온다 → **fin·fit `workflow.md` 폐기는 성립하지 않는다.**
+2. **폐기를 막는 것은 핫픽스가 아니라 단독 작업이다** — 핫픽스 절 (c) = 0건.
+   "핫픽스 때문에 원본을 남긴다"고 적으면 틀린다.
+3. **위임 고리는 165행 1줄**인데 거기 매달린 것이 (c) 35줄 전부다.
+4. **(c) 는 저장소 고유가 아니라 공통(85.7%)** → "저장소별 워크플로우라 저장소별로 둬야 한다"가 뒤집힌다.
+   **pleiades 에 단독 작업 절을 신설(+30줄)하고 저장소별 잔여를 5줄로 줄이는 선택지**가 열린다.
+5. **계승 34줄도 상한** — 실질 12줄(5.6%).
+
+## 정정 — 하네스 참조 그래프 실측 H4·H5 (2026-09-07 감사 1·2회차)
+
+> 위 "하네스 참조 그래프 실측" 절의 두 요약 숫자가 감사에서 정정됐다. 원문은 그대로 두고 여기서 바로잡는다.
+> 근거: `_workspace/harness/03_auditor_harness.md` 1회차 정정 ④·⑥, 2회차 ⑤.
+
+| 원문 | 원값 | 정정값 | 근거 |
+|---|---|---|---|
+| H4 *"fin `.claude/` 16파일 `git rm` 파급 — 활성 5건"* | 5 | **6** | `repos/myFinance/CLAUDE.md:145` 누락. 열거: `CLAUDE.md` 5줄(62·118·128·140·145) + `src/app/api/alerts/history/export/route.ts:5`(JSDoc 주석) |
+| H5 *"auto memory 의존 — 11파일"* | 11 | **13** | fin 6→**9** · fit 3→**2** · ple 2 (재열거는 감사 1회차 정정 ④ 표) |
+
+재현: `/usr/bin/grep -rn --binary-files=text -e '\.claude/' -e 'workflow\.md' ~/workspace/pleiades/repos/myFinance/CLAUDE.md`

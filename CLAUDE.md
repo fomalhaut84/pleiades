@@ -4,9 +4,14 @@
 
 **pleiades** — `myFinance` 와 `myFitness` 두 프로젝트를 어디까지 통합할지 검토하고, 결정된 범위를 실행하는 저장소.
 
-**현재 상태: 방향 확정 · 배치·룰 완료 · 단계 0 미착수 · 단계 1(1a) 착수 대기.**
+**현재 상태: 방향 확정 · 배치·룰 완료 · 하네스 통합(#1) 방향 확정·집행 미착수 · 단계 0 미착수 · 단계 1(1a) 착수 대기.**
 2026-09-04 에 **worktree 배치**(004) · **GitHub 발행**(PUBLIC, 기본 `dev`) · **gitflow** · **룰 계승**(`.claude/rules/workflow.md`) 이 끝났고, 측정 2건(#2·#4)으로 **003 이 개정**됐다.
-**1a-0 은 막는 질문이 없다. 단 1a-1 부터는 하네스 통합(#1)이 선결이다** — 1a-1 이 이미 두 저장소 코드를 흡수한다.
+2026-09-07 에 **Q20 이 답을 받아 하네스 통합의 방향이 확정**됐고, 같은 날 **Q29·Q30·Q32·Q39 도 확정**됐다 —
+**형태 B(복사) · 저장소별 래퍼 스크립트 · fit tracked 화 · W-2(원본 workflow.md 유지)**.
+정본은 `docs/specs/005-harness-integration.md`(초안 4회 개정 · 감사 4회 통과).
+**집행 단계 H-0~H-5 는 아직 하나도 착수되지 않았다** — H-0·H-1b·H-3(fin)·H-4·H-5 는 **지금 착수 가능**,
+H-1 은 Q41(산출물 이름), H-3(fit)은 H-4 머지 후. 이슈 분할 초안은 005 §4-14.
+**1a-0 은 막는 질문이 없다. 단 1a-1 부터는 하네스 통합(#1)이 선결이고, #1 은 방향만 확정됐다** — 1a-1 이 이미 두 저장소 코드를 흡수한다.
 
 > **단계 0 은 끝나지 않았다.** 002 §4 는 단계 0(통합 어드바이저)을 *"지금, 반나절 → 하루"* 로 두고
 > `002:3` 상태도 *"단계 0 실행"* 이다. 2026-09-03 세션에서 범위만 실측하고 실행은 보류했다.
@@ -19,7 +24,8 @@
 001 은 분석 근거로 유효하나 권고 경로는 002 가 대체한다.
 
 1a 착수 전 남은 것 — **단계별로 무엇이 막는지는 `003` §10-1 의존 지도가 정본이다** (1a-0 은 막는 것 없음 · 1a-2 는 **#1 + Q16·Q17·Q18** · 1a-1·1a-3·1a-4 는 Q10 외 다수):
-**Q20**(두 저장소 하네스를 pleiades 로 통합 — 004 가 **배치의 선결 조건**으로 판정, 이슈 #1) ·
+**Q20**(두 저장소 하네스를 pleiades 로 통합, 이슈 #1 — **답을 받았다**: *공통은 pleiades, 특수는 그 저장소*.
+설계·집행 계획은 **005**. **집행 결정도 전부 확정됐고(Q29·Q30·Q32·Q39) 남은 것은 실행뿐이다** — 미결은 Q36·Q38·Q41) ·
 **Q10**(fit 절단→분할 · plain 폴백 정본, 이슈 #3) · 미확인 **U1**(vitest resolve, 이슈 #2 — **해소됨**,
 blocker 는 fit `overrides` 의 `$postcss` 1줄) · **U2**(fit zero-warning 게이트, 1a-2 완료 판정) ·
 1a-4 청구서 확정 측정 (이슈 #4 — **완료**).
@@ -55,17 +61,24 @@ Q7(DB 경계) · Q2(독립 배포) · Q3(봇 인바운드 통합).
 `repos/` 는 pleiades `.gitignore` 에 등재돼 있다. 그 결과 **Grep 은 루트 검색에서 `repos/` 를 건너뛴다** —
 두 저장소를 검색할 때는 **`path` 를 `repos/` 이하로 지정**해야 한다 (Glob·Read 는 영향 없음).
 
-**하네스는 아직 통합되지 않았다.** 하위 디렉터리의 `.claude/skills`·`agents` 는 **로드되지 않으므로**
-(`--add-dir` 로 붙였을 때만 보인다) `repos/*/.claude/` 는 현재 동작하지 않는다.
-두 저장소 하네스(fin 16 tracked + fit 18 ignored)를 pleiades 로 모으는 것이 **002 단계 2** 이고,
-이 배치의 선결 조건이다. 그때까지 저장소별 하네스가 필요하면 `--add-dir` 로 원본을 붙인다:
+**하네스: 공통은 pleiades, 저장소별 특수는 그 저장소** (Q20 확정 2026-09-07 · **정본 `docs/specs/005-harness-integration.md`**).
+**방향·집행 결정 모두 확정됐고 집행(H-0~H-5)은 미착수다.** 아래는 요약이므로 판단은 005 를 읽고 한다.
+확정: **`orphan-check` 는 복사(원본 유지)** · **저장소별 `--add-dir` 래퍼 스크립트** ·
+**fit `.claude/` tracked 화**(모드 S · 이슈는 `fomalhaut84/myFitness`) · **fin·fit `workflow.md` 원본 유지 + #8 부분 갱신**.
+
+- 34파일(fin 16 tracked + fit 18 ignored) 중 pleiades 가 얻는 것은 **복사 1**(`orphan-check`) + **신규 작성 1**(Codex 대응)뿐이고 **나머지는 저장소에 남는다.** fin·fit `rules/workflow.md` 는 **폐기 불가**(단독 작업 절차 35줄이 pleiades 에 없다) — **fin `git rm` 범위는 0** 이다.
+- **저장소에 남은 하네스는 pleiades 세션에서 자동 로드되지 않는다.** 하위 디렉터리의 `.claude/` 는 보이지 않고(004 §3-2), `permissions.additionalDirectories` 는 **툴 권한만** 영속화한다. **`--add-dir` 가 유일한 경로다.**
 
 ```bash
 CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
-  claude --add-dir ~/workspace/myFinance --add-dir ~/workspace/myFitness
+  claude --add-dir ~/workspace/myFinance      # 한 번에 한 저장소
 ```
 
-주의: `--add-dir` 는 `--resume` 시 복원되지 않는다. 세션을 재개할 때마다 다시 넘겨야 한다.
+- **환경변수를 빼면 skills·agents 만 로드되고 rules·`CLAUDE.md` 는 조용히 빠진다.** 방향은 대칭이라 대상 저장소 cwd 세션도 `--add-dir` 로 pleiades 하네스를 본다.
+- **대상은 항상 원본**이다 (`repos/*` worktree 아님 — fit `.claude/` 는 worktree 에 없다).
+- 둘 다 붙이면 rule 은 **드롭 없이 여러 벌 공존**하고 agent 는 **마지막 `--add-dir` 이 이겨 나머지가 조용히 사라진다.** 그래서 한 번에 하나만 붙인다.
+- `--add-dir` 는 `--resume` 시 복원되지 않는다. 세션을 재개할 때마다 다시 넘긴다.
+- **fit `.claude/` 는 git 이력이 없다** (`.gitignore:35,36`). 지우면 복원 수단이 없다 — 005 §4-7.
 
 ## 문서 지도
 
@@ -74,7 +87,8 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
 | `docs/handoff/` 의 최신 파일 | 직전 세션 인계 노트 (현재 `2026-09-04-layout-and-rules.md`. `ls` 로 재확인) | **새 세션 시작 시 먼저** |
 | `docs/specs/002-platform-direction.md` | **정본 방향** — 개인 비서 플랫폼, 개정 경로 0~4, 확정된 답 | **방향 판단 시 먼저** |
 | `docs/specs/003-notify-package.md` | **단계 1 상세 설계** — `@pleiades/notify`. 확정된 답 Q15·Q9·Q8·Q11, 발견 8~15, L3 인터페이스, 1a-0~1a-4 · 1b, 되돌리기 표, 제외 목록 | **단계 1 작업 시.** 002 를 대체하지 않는다 |
-| `docs/specs/004-repo-layout.md` | **배치 정본** — worktree 배치(`repos/*`), 변형 A/B 구분, 감사 정정 3건, 미결 Q20~Q24 | **경로·배치 판단 시.** 하네스가 어디를 읽어야 하는지 여기가 정한다 |
+| `docs/specs/004-repo-layout.md` | **배치 정본** — worktree 배치(`repos/*`), 변형 A/B 구분, 감사 정정 3건, 미결 Q23·Q24 (**Q20 답 → 005 · Q21 소멸 · Q22 → 005 Q38**, §8 정정) | **경로·배치 판단 시.** 하네스가 어디를 읽어야 하는지 여기가 정한다 |
+| `docs/specs/005-harness-integration.md` | **하네스 처분 정본** — 37행 파일별 처분 표, 역할 이관, `--add-dir` 운영 규약, #8·#10 처리, 집행 단계 H-0~H-5, 확정 Q29·Q30·Q32·Q39, 미결 Q36·Q38·Q41 | **하네스가 어디에 있어야 하는지 판단할 때** |
 | `docs/specs/001-integration-master.md` | 축 A/B 분해·옵션·리스크 분석 (권고 경로는 002 가 대체) | 분석 근거가 필요할 때 |
 | `docs/research/measured-facts.md` | 두 저장소 실측 데이터 (2026-09-03) | 숫자가 필요할 때. **재측정 전에 여기부터** |
 | `docs/research/claude-code-mechanisms.md` | Claude Code 기능 조사 (메모리·세션·플러그인·모노레포) | 축 A 작업 시 |
@@ -128,6 +142,8 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
 |------|----------|------|------|
 | 2026-09-03 | 초기 구성 — 에이전트 4 + 스킬 6(오케스트레이터 포함) | 전체 | - |
 | 2026-09-04 | `.claude/rules/workflow.md` 신설 · worktree 배치 반영 · **Codex 20라운드 + 교차 정합성 감사 1회로 78건 정정** | 룰 1 · 스킬 7 · 에이전트 4 · CLAUDE.md | 두 저장소 룰 계승 (#5, PR #6) · 004 배치 |
+| 2026-09-07 | **005 발행** (초안 4회 개정 · 감사 4회 · 정정 10→8→7→0) · 004 정정 append(Q20·Q21·Q22·§3-2) · 하네스 절 교체 | 스펙 2 · CLAUDE.md | Q20 답 (#1). **하네스 자체는 아직 변경되지 않았다 — H-0~H-5 미착수** |
+| 2026-09-07 | **Q29·Q30·Q32·Q39 확정** → 005 §2·§4-13 갱신 · **집행 이슈 분할 초안(§4-14) 신설** | 스펙 1 · CLAUDE.md | 사용자 결정. **여전히 집행 미착수** |
 
 ## 상속하는 컨벤션
 
