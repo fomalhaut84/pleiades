@@ -4,8 +4,9 @@ description: Squash merge 후 로컬 브랜치에 push 된 커밋이 <base> 에 
 ---
 
 > **pleiades 판 (005 §4-4 · Q29 형태 B 복사).** 원본은 myFitness `.claude/skills/orphan-check/SKILL.md`(113줄, gitignored)이고
-> 이 파일은 그 **사본**이다 — 두 벌이 갈라지는 것을 알고 택했다. 원본과의 차이는 **`dev` 리터럴 12줄을 `<base>` 로
-> 바꾼 것뿐**이다. `<base>` 는 `.claude/rules/workflow.md` **7절 표**가 정한다: pleiades 작업 → `dev` ·
+> 이 파일은 그 **사본**이다 — 두 벌이 갈라지는 것을 알고 택했다. 원본과의 차이는 (1) **`dev` 리터럴 12줄을 `<base>` 로**
+> 바꾼 것과 (2) **Step 2~4 의 orphan 판정·복구 로직 정정**(pleiades PR #22 Codex P1 2건 — 타임스탬프 판정 → 머지된
+> PR head 기준, 복구 diff 를 orphan 커밋 범위로 한정)이다. **fit 원본에는 같은 결함이 남아 있다** (fit 이슈로 추적). `<base>` 는 `.claude/rules/workflow.md` **7절 표**가 정한다: pleiades 작업 → `dev` ·
 > 통합 작업(`repos/*`) → `integration/pleiades` · 단독 작업 → 그 저장소 `dev` · 핫픽스 → 그 저장소 `main`.
 > "자동 검사" 절의 `release-flow`·`codex-review-loop`·`workflow-conductor` 는 **fit 의 스킬·에이전트**다 — pleiades 에서는
 > `workflow.md` **10절(머지 완료 후)** 과 `pleiades-handoff` 가 그 자리다. 참조 텍스트는 원본 대조를 위해 그대로 둔다.
@@ -40,10 +41,12 @@ git log origin/<base> --oneline -3
 ## Step 2: PR 머지 상태
 
 ```bash
-# 브랜치와 연결된 PR
-gh pr list --head $CURRENT --state merged --limit 1 --json number,mergedAt
+# 브랜치와 연결된 PR — 머지된 PR 의 head 커밋(머지 시점의 브랜치 끝)을 함께 가져온다
+gh pr list --head $CURRENT --state merged --limit 1 --json number,mergedAt,headRefOid
+MERGED_HEAD=$(gh pr list --head $CURRENT --state merged --limit 1 --json headRefOid -q '.[0].headRefOid')
 
-# 대상 PR 이 이미 머지됐고 로컬 브랜치에 이후 커밋이 있으면 → orphan
+# 대상 PR 이 이미 머지됐고 로컬 브랜치에 $MERGED_HEAD 이후 커밋이 있으면 → orphan
+git log --oneline "$MERGED_HEAD..$CURRENT"
 ```
 
 ## Step 3: Orphan 감지 로직
@@ -53,8 +56,12 @@ gh pr list --head $CURRENT --state merged --limit 1 --json number,mergedAt
 | 조건 | 결과 |
 |---|---|
 | PR state=OPEN + 로컬 커밋 있음 | 정상 진행 중 |
-| PR state=MERGED + 로컬 마지막 커밋이 PR merged commit 이전 | 정상 (다 반영됨) |
-| **PR state=MERGED + 로컬 마지막 커밋이 mergedAt 이후** | **⚠ ORPHAN** |
+| PR state=MERGED + `git log $MERGED_HEAD..$CURRENT` 가 비어 있음 | 정상 (다 반영됨) |
+| **PR state=MERGED + `git log $MERGED_HEAD..$CURRENT` 에 커밋 있음** | **⚠ ORPHAN** — 그 커밋들이 orphan |
+
+> **타임스탬프(`mergedAt`)로 판정하지 않는다 (pleiades PR #22 Codex P1).** 머지 전에 만들고 머지 후에 push 한
+> 커밋은 `mergedAt` 보다 오래돼 "정상"으로 오판되고, 그 뒤 브랜치를 지우면 커밋을 잃는다. 이 스킬이 도는
+> 시점이 정확히 그 경합 구간이다. 판정은 **머지된 PR 의 head 커밋 집합**으로 한다.
 
 ## Step 4: Orphan 회수
 
@@ -68,12 +75,13 @@ git checkout <base> && git pull
 git checkout -b <type>/<issue>-<N+1>
 
 # orphan 커밋을 새 브랜치에 재적용
-# 방법 A: git cherry-pick (한 개씩)
+# 방법 A: git cherry-pick (한 개씩 — $MERGED_HEAD..$OLD_BRANCH 의 각 커밋)
 git cherry-pick <orphan-hash>
 
 # 방법 B: 파일 직접 편집 (여러 커밋 통합)
-# — 원 브랜치 diff 확인
-git diff origin/<base>..$OLD_BRANCH -- <file>
+# — orphan 커밋만의 diff. origin/<base>..$OLD_BRANCH 로 비교하면 머지 후 base 에 들어온
+#   무관한 변경의 역전이 섞여 복구 PR 이 최신 base 작업을 되돌릴 수 있다 (pleiades PR #22 Codex P1)
+git diff $MERGED_HEAD..$OLD_BRANCH -- <file>
 # — 최종 목표 상태로 파일 재작성 후 하나의 커밋
 ```
 
