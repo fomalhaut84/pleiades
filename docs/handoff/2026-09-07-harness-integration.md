@@ -37,7 +37,7 @@
 | **Q20** | 공통은 pleiades, 특수는 저장소 | 사용자 2026-09-07 |
 | 실측 적용 결과 | 34파일 중 **복사 1**(`orphan-check`) + **역할 이관 1**(Codex 대응 신규 작성) + **유지 33**. fin `git rm` 범위 **0**. fin·fit `workflow.md` **폐기 불가**(단독 작업 35줄) | 005 §2-1 · §4-2 · Q31 |
 | **Q29** | `orphan-check` 형태 **B 복사** (+ base 12줄) | 사용자 |
-| **Q30** | `--add-dir` **저장소별 래퍼** `bin/claude-with <fin|fit>` | 사용자 |
+| **Q30** | `--add-dir` **저장소별 래퍼** `bin/claude-with <fin\|fit>` | 사용자 |
 | **Q32** | fit 하네스 **tracked 화** (`settings.local.json` 은 ignore 유지) | 사용자 · 정정 N |
 | **Q39** | `workflow.md` **W-2 원본 유지** + #8 부분 갱신 | 사용자 |
 | Q31·Q33·Q37 | 측정으로 해소 (폐기 불가 · 민감 문자열 0 · `--add-dir` 로딩 범위) | measured-facts |

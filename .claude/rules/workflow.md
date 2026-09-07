@@ -33,7 +33,7 @@ dev ──┬──┬──┬────────merge──────�
 |---|---|
 | 작업(통합) 브랜치 · PR base | **`integration/pleiades`** (두 저장소 원격에 존재) |
 | 피처 브랜치 | **`integration/feature-pleiades-<feature>`** |
-| 기타 유형 | **`integration/{fix|chore|…}-pleiades-<branchname>`** (피처 네이밍 차용) |
+| 기타 유형 | **`integration/{fix\|chore\|…}-pleiades-<branchname>`** (피처 네이밍 차용) |
 | `dev` 진입 | `integration/pleiades` → `dev` PR **한 번** (1a 전체가 끝난 뒤) |
 
 > **정정 (이슈 #25).** 이전 서술은 *"통합 단계"* 만 `integration/pleiades` 로 보내고(`integration/pleiades-<단계>`),
