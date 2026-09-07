@@ -66,15 +66,15 @@ Q7(DB 경계) · Q2(독립 배포) · Q3(봇 인바운드 통합).
 확정: **`orphan-check` 는 복사(원본 유지)** · **저장소별 `--add-dir` 래퍼 스크립트** ·
 **fit `.claude/` tracked 화**(모드 S · 이슈는 `fomalhaut84/myFitness`) · **fin·fit `workflow.md` 원본 유지 + #8 부분 갱신**.
 
-- 34파일(fin 16 tracked + fit 18 ignored) 중 pleiades 가 얻는 것은 **복사 1**(`orphan-check`) + **신규 작성 1**(Codex 대응)뿐이고 **나머지는 저장소에 남는다.** fin·fit `rules/workflow.md` 는 **폐기 불가**(단독 작업 절차 35줄이 pleiades 에 없다) — **fin `git rm` 범위는 0** 이다.
+- 34파일(fin 16 tracked + fit 18 ignored) 중 pleiades 가 얻는 것은 **복사 1**(`orphan-check` — **H-1b 완료**, `.claude/skills/orphan-check/`) + **신규 작성 1**(Codex 대응, Q41 대기)뿐이고 **나머지는 저장소에 남는다.** fin·fit `rules/workflow.md` 는 **폐기 불가**(단독 작업 절차 35줄이 pleiades 에 없다) — **fin `git rm` 범위는 0** 이다.
 - **저장소에 남은 하네스는 pleiades 세션에서 자동 로드되지 않는다.** 하위 디렉터리의 `.claude/` 는 보이지 않고(004 §3-2), `permissions.additionalDirectories` 는 **툴 권한만** 영속화한다. **`--add-dir` 가 유일한 경로다.**
 
 ```bash
-CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
-  claude --add-dir ~/workspace/myFinance      # 한 번에 한 저장소
+bin/claude-with fin      # = CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude --add-dir ~/workspace/myFinance
+bin/claude-with fit      # 한 번에 한 저장소 (H-5 · Q30). --resume 도 이 래퍼로 연다
 ```
 
-- **환경변수를 빼면 skills·agents 만 로드되고 rules·`CLAUDE.md` 는 조용히 빠진다.** 방향은 대칭이라 대상 저장소 cwd 세션도 `--add-dir` 로 pleiades 하네스를 본다.
+- **환경변수를 빼면 skills·agents 만 로드되고 rules·`CLAUDE.md` 는 조용히 빠진다** — 래퍼가 그래서 환경변수를 고정한다. 방향은 대칭이라 대상 저장소 cwd 세션도 `--add-dir` 로 pleiades 하네스를 본다.
 - **대상은 항상 원본**이다 (`repos/*` worktree 아님 — fit `.claude/` 는 worktree 에 없다).
 - 둘 다 붙이면 rule 은 **드롭 없이 여러 벌 공존**하고 agent 는 **마지막 `--add-dir` 이 이겨 나머지가 조용히 사라진다.** 그래서 한 번에 하나만 붙인다.
 - `--add-dir` 는 `--resume` 시 복원되지 않는다. 세션을 재개할 때마다 다시 넘긴다.
