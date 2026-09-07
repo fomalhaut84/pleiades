@@ -123,6 +123,11 @@ git -C <dir> grep --text -n "<call>" <ref> -- 'src/**/*.ts' \
 # 양쪽 피연산자 모두 모드가 정한다 (헤더의 <dir>/<ref> 표 참조).
 # 체크아웃 상태에 의존하지 않도록 ref 에서 직접 꺼낸다 — 파일시스템 diff 는 쓰지 않는다.
 # 임시파일 없이 프로세스 치환 — 병렬 측정이 서로 덮어쓰지 않고 pleiades 밖에 쓰지 않는다 (#10 ②)
+# 단, 프로세스 치환 안의 git show 실패는 파이프 상태에 반영되지 않는다 — ref/path 가 없으면 wc 가 0 을 내고
+# "동일"로 오기록된다 (PR #20 Codex P1 · 재현 _workspace/harness/regress_pr20_p1.sh). 두 피연산자를 먼저 확인한다.
+git -C <dir:fin> cat-file -e "<ref:fin>:src/<path>" || echo "미확인 — fin <ref:fin>:src/<path> 없음"
+git -C <dir:fit> cat-file -e "<ref:fit>:src/<path>" || echo "미확인 — fit <ref:fit>:src/<path> 없음"
+# 둘 다 통과했을 때만 실행하고, 하나라도 "미확인"이면 드리프트 값을 기록하지 않는다
 diff <(git -C <dir:fin> show <ref:fin>:src/<path>) \
      <(git -C <dir:fit> show <ref:fit>:src/<path>) | wc -l
 ```
