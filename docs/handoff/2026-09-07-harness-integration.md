@@ -28,7 +28,7 @@
 
 **머지 순서 제약:** pleiades 는 #19 → #20 → #22 → #24 (스택). fit `#369` 머지 후에야 H-3(fit) 착수 가능.
 **#8 종료:** #492 와 H-3(fit) PR **둘 다** 머지된 뒤 수동 종료 (5절 대칭 변경 예외).
-**base 정책 (세션 말미, #25):** pleiades 발 변경은 전부 `integration/pleiades` 로. #492·#369 base 를 `dev` → `integration/pleiades` 로 바꿨다 — **`dev` 에는 `integration/pleiades` → `dev` PR 때 들어간다.** GitHub 브랜치 rename 이 열린 PR 을 닫아 head 이름은 옛것을 유지했다.
+**base 정책 (세션 말미, #25):** pleiades 발 변경은 전부 `integration/pleiades` 로. #492·#369 base 를 `dev` → `integration/pleiades` 로 바꿨다 — **`integration/pleiades` 는 `dev` 로 머지되지 않는다**(pleiades 내부 메인, 모노레포 전환 완료까지). 따라서 #8 fin 정정과 fit tracked 화는 **서비스 `dev` 에 도달하지 않는다** — 서비스에도 필요하면 단독 작업(모드 S)으로 별도 PR. GitHub 브랜치 rename 이 열린 PR 을 닫아 head 이름은 옛것을 유지했다.
 
 ## 결정된 것
 

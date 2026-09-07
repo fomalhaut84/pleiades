@@ -92,7 +92,7 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 - **pleiades 통합 작업의 base 는 `dev` 가 아니라 `integration/pleiades` 다.**
   작업은 `~/workspace/pleiades/repos/<repo>` **worktree** 에서 하고,
   `integration/<type>-pleiades-<name>` 을 따서 **`integration/pleiades` 로 PR** 한다 (이슈 #25 · 7절 표).
-  `integration/pleiades` → `dev` PR 은 **1a 전체가 끝난 뒤 한 번**이다.
+  `integration/pleiades` 는 **`dev` 로 머지되지 않는다** — pleiades 내부 메인이다 (이슈 #25). 서비스에도 필요한 변경은 단독 작업 경로(모드 S)로 별도 PR.
   근거는 `docs/specs/004-repo-layout.md` · `.claude/rules/workflow.md` 7절 base 표.
   **미완성 단계를 `dev` 로 보내면 서비스 브랜치가 오염되고 003 §5-2 의 단계별
   되돌리기 등급이 무너진다** (PR #6 Codex 리뷰 P1).

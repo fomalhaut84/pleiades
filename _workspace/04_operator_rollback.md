@@ -44,7 +44,7 @@ git -C ~/workspace/myFitness checkout main && git -C ~/workspace/myFitness branc
 
 ```
 dev
- └─ integration/pleiades            (장기 베이스 · dev 로 PR 은 1a 전체가 끝난 뒤)
+ └─ integration/pleiades            (장기 베이스 · **dev 로 머지되지 않음** — #25, 2026-09-07 정정)
      ├─ integration/pleiades-1a-2   → PR → integration/pleiades
      ├─ integration/pleiades-1a-3   → PR → integration/pleiades
      └─ integration/pleiades-1a-4   → PR → integration/pleiades

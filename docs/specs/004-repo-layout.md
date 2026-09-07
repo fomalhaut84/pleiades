@@ -342,3 +342,12 @@ git -C ~/workspace/myFitness worktree remove ~/workspace/pleiades/repos/myFitnes
 넓어지고 이름이 바뀐다: 피처 `integration/feature-pleiades-<feature>` · 기타 `integration/{fix|chore|…}-pleiades-<branchname>`.
 `integration/pleiades` 는 2026-09-07 두 저장소 원격에 push 됐다(fin `c549fa6` · fit `ac034be`, 각각 당시 `origin/dev` 와 동일).
 정본은 `.claude/rules/workflow.md` 브랜치 전략 절.
+
+**추가 결정 (같은 날):** `integration/pleiades` 는 **`dev` 로 머지되지 않는다.** pleiades 가 공식 서비스가 되기 전까지 두 저장소의
+pleiades 내부 메인이며, 통합은 모노레포 전환이 끝나 두 프로젝트가 pleiades 로 흡수될 때 한다. §4 의 *"`integration/pleiades` → `dev` PR 은
+1a 전체가 끝난 뒤 한 번"* 과 Q21 의 *"`dev` 머지 시 서버 체크아웃에서도 사라진다"* 는 **폐기**.
+
+| 미결 | 질문 | 왜 중요한가 | 언제 |
+|---|---|---|---|
+| **Q42** *(신설)* | **003 의 배포 전제와의 정합** — 003 은 1a 변경이 `integration/pleiades` → `dev` → `main` 으로 실서비스에 배포되는 것을 전제한다(§2-2 git 의존성, 1a-4 청구서의 `pm2 restart`, 혼합 운영 Q11). `integration/pleiades` 가 `dev` 로 가지 않으면 **1a 는 모노레포 전환 전까지 실서비스에 도달하지 않는다.** 단계 1 의 목적(Discord 아웃바운드가 실제로 울리는가)을 어디서 검증하나 — pleiades 쪽 별도 배포? `repos/*` 를 다른 포트로 띄우나? | **1a-0 착수 전** (003 §2-2·§5 의 전제가 바뀐다) | 높음 |
+| **Q43** *(신설)* | `integration/pleiades` 에만 들어간 룰 정정(#8)과 fit tracked 화를 **서비스 저장소에도** 적용할 것인가 — 단독 작업(모드 S) PR 2건으로 | #8 결함 ②(봇 최고 심각도 무시)는 서비스 `dev` 에서 계속 활성이다 | 중간 |

@@ -56,7 +56,7 @@ Q7(DB 경계) · Q2(독립 배포) · Q3(봇 인바운드 통합).
 > `dev`/`main` 에서 분기할 수 없고 통합 미완성분이 섞이기 때문이다.
 > 경로는 `.claude/rules/workflow.md` **7절 base 표**. **양쪽 다 사용자 승인 게이트가 적용된다.**
 pleiades 발 변경은 **전부** `integration/<type>-pleiades-<name>` 을 따서 `integration/pleiades` 로 PR 한다 (사용자 결정 2026-09-07 · #25 · `workflow.md` 브랜치 전략). 단계별 되돌리기 등급(003 §5-2)은 브랜치 단위로 보존된다.
-`dev` 로의 PR 은 1a 전체가 끝난 뒤. `main` 직접 변경 금지. 롤백은 `_workspace/04_operator_rollback.md`.
+**`integration/pleiades` 는 `dev` 로 머지되지 않는다** — pleiades 가 공식 서비스가 되기 전까지 두 저장소의 pleiades 내부 메인이고, 통합은 모노레포 전환 완료 시점에 한다 (사용자 2026-09-07 · #25). 서비스에도 필요한 변경은 단독 작업 경로로 별도 PR. `main` 직접 변경 금지. 롤백은 `_workspace/04_operator_rollback.md`.
 
 `repos/` 는 pleiades `.gitignore` 에 등재돼 있다. 그 결과 **Grep 은 루트 검색에서 `repos/` 를 건너뛴다** —
 두 저장소를 검색할 때는 **`path` 를 `repos/` 이하로 지정**해야 한다 (Glob·Read 는 영향 없음).

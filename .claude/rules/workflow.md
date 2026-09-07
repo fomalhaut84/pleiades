@@ -34,11 +34,13 @@ dev ──┬──┬──┬────────merge──────�
 | 작업(통합) 브랜치 · PR base | **`integration/pleiades`** (두 저장소 원격에 존재) |
 | 피처 브랜치 | **`integration/feature-pleiades-<feature>`** |
 | 기타 유형 | **`integration/{fix\|chore\|…}-pleiades-<branchname>`** (피처 네이밍 차용) |
-| `dev` 진입 | `integration/pleiades` → `dev` PR **한 번** (1a 전체가 끝난 뒤) |
+| `dev` 진입 | **없다.** `integration/pleiades` 는 pleiades 가 공식 서비스가 되기 전까지 두 저장소의 **pleiades 내부 메인**이며 `dev` 로 머지되지 않는다. 통합은 모노레포 전환이 끝나 두 프로젝트가 pleiades 로 흡수될 때 한다 (사용자 2026-09-07) |
 
 > **정정 (이슈 #25).** 이전 서술은 *"통합 단계"* 만 `integration/pleiades` 로 보내고(`integration/pleiades-<단계>`),
 > pleiades 가 촉발한 단독 변경(#8 fin · fit tracked 화)은 원본 `dev` 로 보냈다(모드 S). 이제 **pleiades 발 변경은
 > 전부 `integration/pleiades` 로 모인다.** 단독 작업·핫픽스는 **pleiades 와 무관한** 변경에만 남는다.
+> **`integration/pleiades` 는 `dev` 로 가지 않는다** — 서비스 중인 개별 저장소와 pleiades 작업을 분리하기 위한 장기 메인이다.
+> 그러므로 `integration/pleiades` 에 넣은 변경(#8 룰 정정 · fit tracked 화 등)은 **서비스 `dev`/`main` 에 도달하지 않는다.** 서비스에도 필요하면 **단독 작업 경로로 별도 PR** 을 낸다.
 > 단계 브랜치 `integration/pleiades-<단계>` 표기는 `integration/feature-pleiades-<단계>` 로 읽는다.
 > **GitHub 브랜치 rename 은 그 브랜치의 열린 PR 을 닫는다** — 열린 PR 의 head 는 개명하지 않는다(#492·#369 는 옛 이름 유지).
 
@@ -196,7 +198,7 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 ```
 
 > **대상 저장소 작업은 `dev` 로 직행하지 않는다 (PR #6 Codex 리뷰 P1).**
-> `integration/pleiades` → `dev` PR 은 **1a 전체가 끝난 뒤 한 번**이다 (`004-repo-layout.md`).
+> `integration/pleiades` 는 `dev` 로 **머지되지 않는다** (브랜치 전략 절 · 이슈 #25). 모노레포 전환 완료 시점에 두 프로젝트가 pleiades 로 흡수된다.
 > 그 전에 단계 브랜치를 `dev` 로 보내면 **미완성 단계가 서비스 브랜치로 들어가고**
 > 003 §5-2 의 단계별 되돌리기 등급이 무너진다.
 
