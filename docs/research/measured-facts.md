@@ -2138,3 +2138,127 @@ grep -c "pleiades 고유" ~/workspace/pleiades/.claude/rules/workflow.md   # →
 | `.claude/skills/ops-diagnose/SKILL.md:102` — `curl -sf http://127.0.0.1:4301/health` | 무해 (loopback) |
 
 **비밀·자격 증명·개인 식별자 0건.** (`~/workspace/myFitness` 디렉터리 절대경로 3건은 앞 절 M3 정정에서 이미 셌다 — 사용자명 `sagan` 이 경로에 노출되는 것은 fin `.claude/` 가 이미 PUBLIC 으로 공개 중인 것과 동일한 수준.)
+
+---
+
+## workflow.md 계승 시 버린 줄 분류 (2026-09-07)
+
+**측정 목적.** Q31 — fin·fit `.claude/rules/workflow.md` 를 폐기해도 되는가.
+pleiades 판이 버린 원본 줄 중 **단독 작업·핫픽스에 필요한데 pleiades 에 없는 것**이 있으면 폐기 불가다.
+상세: `_workspace/harness/01_surveyor_harness_workflow_diff.md`
+
+**측정 대상 `(디렉터리, ref)`** — fin 은 worktree(`integration/pleiades`), fit 은 **원본**(`main`).
+**fit 원본을 잰 이유: fit `.claude/` 는 디렉터리째 gitignored 라 worktree 에 존재하지 않고
+`git show <ref>:<path>` 도 불가능하다.** tracked 가 아니므로 1a 단계 변경의 영향을 받지 않아
+통합 트리 측정과 어긋나지 않는다. 이 셸의 `grep` 은 ugrep 래퍼로 `.gitignore` 를 따르므로
+fit `.claude/` 접근에는 `/usr/bin/grep` 을 썼다.
+
+### 1. 기존 숫자 재현 — 재현됨 (정정 없음)
+
+```bash
+norm() { sed 's/^[[:space:]]*//;s/[[:space:]]*$//' "$1" | /usr/bin/grep -v '^$' | sort -u; }
+norm ~/workspace/pleiades/repos/myFinance/.claude/rules/workflow.md > fin.w
+norm ~/workspace/myFitness/.claude/rules/workflow.md                > fit.w
+norm ~/workspace/pleiades/.claude/rules/workflow.md                 > ple.w
+cat fin.w fit.w | sort -u > orig.w
+comm -12 orig.w ple.w | wc -l    # 유지 34
+comm -23 orig.w ple.w | wc -l    # 버림 181
+```
+
+fin 161 · fit 172 · ple 344 · fin∪fit 215 · 유지 **34** · 버림 **181 / 215 = 84.2%**.
+`01_surveyor_harness_content.md` §2-2 의 값과 **전 항목 일치**.
+
+**제외 규칙.** 빈 줄 제외 · 앞뒤 공백 정규화 · `sort -u`. 표 구분선(`|---|`)·코드펜스는
+추가 제외가 **불필요했다** — 버린 181줄 안에 0건이다
+(`/usr/bin/grep -cE '^(\|[-: |]*\||```|---+$)' dropped.w` → 0). 원본과 pleiades 가 같은 표기를
+쓰므로 그 줄들은 전부 *유지된* 34줄 쪽으로 갔다.
+
+### 2. 유지된 34줄의 성분 — 실질 계승은 12줄
+
+| 성분 | 줄 |
+|---|---:|
+| heading (`#`~`####`) | 11 |
+| 구조 노이즈 (코드펜스 2 · 표 구분선 1 · ASCII 다이어그램/화살표 6) | 9 |
+| 프롬프트 템플릿 placeholder | 2 |
+| **실질 산문·명령** | **12** |
+
+→ **exact-line 계승률 15.8%(34/215)는 상한.** 실질은 **5.6%(12/215)**.
+
+### 3. 버린 181줄의 등급 분류
+
+절 귀속은 **코드펜스 인식 파서**로 했다 — `# 릴리즈 절차`·`# 1. 이슈에 완료 코멘트` 등이
+bash 주석이라 단순 `grep '^#'` 은 오귀속한다. 181줄 전부 귀속(미귀속 0).
+**(c) 판정은 주관이 아니라 hard zero 실측**: 그 줄의 주제어가 pleiades 판에 0건인 것.
+
+```bash
+for pat in 'docs/designs' 'frontend-design' 'roadmap' '마이그레이션' 'phase-'; do
+  printf '%-18s: ' "$pat"; /usr/bin/grep -c "$pat" ~/workspace/pleiades/.claude/rules/workflow.md; done
+# 전부 0
+```
+
+| 등급 | 줄 수 | 비율 |
+|---|---:|---:|
+| (a) pleiades 판에 의미상 흡수됨 | 92 | 50.8% |
+| (b) 의도적 삭제·대체 (pleiades 가 결함으로 명시 지적한 것 포함) | 39 | 21.5% |
+| **(c) 단독 작업에 필요한데 pleiades 에 없음** | **35** | **19.3%** |
+| (d) 판단 불가 (`8-4 codex-cli MCP` 운영 파라미터 14 + 릴리즈 `배포` 1) | 15 | 8.3% |
+| 합계 | **181** | 100% |
+
+**(c) 35줄의 주제:** UI/UX 디자인 단계 19 (`docs/designs/<issue>-<feature>/`·`frontend-design` 스킬·
+프로토타입·디자인 범위 판단) · 이슈 라벨 taxonomy 3 (`phase-N`/`feature`/`bug`/`chore`) ·
+`docs/specs/<issue-number>-<feature>.md` 명명 + 필수 항목 2 · DB 마이그레이션 3 (구현 계획 + 리뷰 트리거) ·
+`docs/roadmap.md` 체크 1 · PR 제목 `[Phase N]` 1 · 릴리즈 major=`Phase 완료` 1 · 기타 디자인 연계 5.
+
+**(c) 는 죽은 문서가 아니다 — 산출물 실측:**
+
+| | `docs/designs/` | `docs/specs/*.md` | `docs/roadmap.md` |
+|---|---:|---:|---:|
+| myFinance | **25 디렉터리** | 126 | 419줄 |
+| myFitness | **8 디렉터리** | 95 | 381줄 |
+
+`docs/specs` 실제 명명도 원본 규약과 일치 — fin `170-nav-improvement.md`, fit `10-heart-body-page.md`
+= `<issue-number>-<feature>.md`. **pleiades 의 `<NNN>-<주제>` 가 아니다.**
+
+### 4. pleiades 판의 위임 문구 — 1줄
+
+```bash
+/usr/bin/grep -n 'workflow\.md' ~/workspace/pleiades/.claude/rules/workflow.md
+# 5:   출처 표기 (계승한다)
+# 165: 단독 작업은 그 저장소 자신의 `.claude/rules/workflow.md`(계승 전 원본)를 따르고…
+```
+
+**위임은 165행 1줄뿐이고 `단독 작업`(모드 S) 에만 걸린다.** 그 1줄이 (c) 35줄 전부를 가리킨다.
+
+**핫픽스 절(모드 H)의 (c) = 0건.** `## 긴급 수정 (Hotfix)` 이 버린 4줄은 a 3 · b 1 이고
+pleiades 판은 원본보다 **강화**됐다(봇 게이트 분리 · 재검증 ★ · 척도 정정).
+→ **폐기를 막는 것은 핫픽스가 아니라 단독 작업이다.**
+
+### 5. (c) 가 저장소별로 다른가 — 30/35(85.7%)가 공통
+
+```bash
+diff <(sed -n '61,93p' <fin>)   <(sed -n '62,88p' <fit>)     # 4. UI/UX 디자인
+diff <(sed -n '51,60p' <fin>)   <(sed -n '52,61p' <fit>)     # 2·3·5절
+diff <(sed -n '218,235p' <fin>) <(sed -n '240,257p' <fit>)   # 10. 머지 완료 후
+```
+
+| 절 | diff |
+|---|---|
+| `4. UI/UX 디자인` | **fin 에만 5줄** (기존 디자인 시스템 준수 블록 + 텔레그램 커맨드). 나머지 동일 |
+| `2·3·5절` | **1줄** — 라벨 `phase-1~phase-6`(fin) vs `phase-1~phase-N`(fit) |
+| `10. 머지 완료 후` | **차이 0** |
+
+(c) 귀속: 공통 24 · fin 전용 7 · fit 전용 4. 다만 `DB 스키마/마이그레이션`은 fin 8-1 / fit 8-0 으로
+**같은 주제가 다른 절에 놓인 것**이고 라벨 2줄은 한 토큰 차이다.
+**주제 단위로는 (c) 30/35(85.7%)가 공통이고, 진짜 fin 고유는 디자인 시스템 5줄뿐이다**
+(`Tailwind + Recharts` · 다크 테마 · `docs/examples/dashboard-prototype.jsx` · 텔레그램 커맨드).
+
+### 6. 결론 — 가정을 뒤집는 숫자
+
+1. **`181줄 / 84.2%` 는 재현되지만 그 숫자만으로는 폐기 판단이 불가능했다.**
+   분해하면 **(c) 35줄(19.3%)** 이 나온다 → **fin·fit `workflow.md` 폐기는 성립하지 않는다.**
+2. **폐기를 막는 것은 핫픽스가 아니라 단독 작업이다** — 핫픽스 절 (c) = 0건.
+   "핫픽스 때문에 원본을 남긴다"고 적으면 틀린다.
+3. **위임 고리는 165행 1줄**인데 거기 매달린 것이 (c) 35줄 전부다.
+4. **(c) 는 저장소 고유가 아니라 공통(85.7%)** → "저장소별 워크플로우라 저장소별로 둬야 한다"가 뒤집힌다.
+   **pleiades 에 단독 작업 절을 신설(+30줄)하고 저장소별 잔여를 5줄로 줄이는 선택지**가 열린다.
+5. **계승 34줄도 상한** — 실질 12줄(5.6%).
