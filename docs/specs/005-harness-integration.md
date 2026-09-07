@@ -146,7 +146,7 @@
 | **Q37** | `--add-dir` 의 로딩 범위와 방향 | **skills·agents 는 환경변수 없이 로드 · rules·CLAUDE.md 는 `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1` 필요 · 방향 대칭**(대상 저장소 cwd 도 `--add-dir` 로 pleiades 하네스를 본다) | [MF] "`--add-dir` 로딩 범위와 환경변수" |
 | **Q29** | `orphan-check` 이관 형태 | **B — 복사.** pleiades 에 두고 fit 원본도 그대로. **base 파라미터화 12줄은 형태와 무관하게 붙는다**(정정 K) | 사용자, 2026-09-07 |
 | **Q30** | `--add-dir` 부착 정책 | **저장소별 래퍼 스크립트** — pleiades tracked 1파일(§4-6 ④). 환경변수를 항상 켜고 **한 번에 한 저장소**만 붙인다 | 사용자, 2026-09-07 |
-| **Q32** | fit 하네스 버전 관리 | **ii — fit 에서 tracked 화** (`.gitignore:35,36` 2줄 제거). **모드 S · 승인 게이트 · 이슈는 `fomalhaut84/myFitness`** | 사용자, 2026-09-07 |
+| **Q32** | fit 하네스 버전 관리 | **ii — fit 에서 tracked 화** (`.gitignore:35,36` 2줄 → `.claude/settings.local.json` 1줄 치환, 정정 N). **모드 S · 승인 게이트 · 이슈는 `fomalhaut84/myFitness`** | 사용자, 2026-09-07 |
 | **Q39** | `workflow.md` 중복을 줄이나 | **W-2 — 원본 2파일 유지 + #8 부분 갱신만.** pleiades 에 "단독 작업" 절을 신설하지 않는다 (N11 6줄과 재귀분을 치르지 않는다) | 사용자, 2026-09-07 |
 | **Q34** | #8 의 fit 쪽 수정 방식 | **Q32-ii 확정으로 결정됐다 — a-2(H-4 이후 브랜치·PR 경로).** 되돌리기 **즉시** | Q32 의 답에서 파생, 2026-09-07 |
 | **Q40** | 정본화할 때 1회차의 폐기·이관 서술과 정정 블록을 어떻게 남기나 | **유지한다.** 정정 규약상 지우지 않는다 — 기록은 §0-00 · §0-0 · §0-1 · §5 9~15행 · 정정 블록 A~L | 이 문서, 2026-09-07 |
@@ -472,7 +472,7 @@ fit `.claude/` tracked 0 · `CLAUDE.md` ignored · **커밋 이력 없음**([감
 | 안 | **되돌리기** | 되돌리는 행위 | 비용·리스크 |
 |---|---|---|---|
 | **i · 그대로** | **즉시** (변경 0) | — | fit 유지 **18파일** 무보호(권고 B 기준). #8 수정(33줄)도 이력이 남지 않는다 |
-| **ii · fit tracked 화** (`.gitignore:35,36` 2줄) | **중간** | revert 커밋 — 단 push 된 이력엔 영구히 남는다 | fit 소스 변경 = 모드 S · 승인 게이트 · 이슈는 fit 저장소. **Q33 해소(N20)로 공개 장애물은 사라졌다** |
+| **ii · fit tracked 화** (`.gitignore:35,36` 2줄 → `.claude/settings.local.json` 1줄, 정정 N) | **중간** | revert 커밋 — 단 push 된 이력엔 영구히 남는다 | fit 소스 변경 = 모드 S · 승인 게이트 · 이슈는 fit 저장소. **Q33 해소(N20)로 공개 장애물은 사라졌다** |
 | **iii · pleiades 사본** | **즉시** | 디렉터리 삭제 | 18파일 두 벌 드리프트. 공개 범위는 ii 와 같고 **N20 으로 무해 확인** |
 
 > **2회차 변경: Q33 이 해소되어 ii·iii 가 실행 가능해졌다.** 1회차는 *"민감 문자열 미측정이라 판단 보류"*
@@ -480,6 +480,15 @@ fit `.claude/` tracked 0 · `CLAUDE.md` ignored · **커밋 이력 없음**([감
 > 그것은 fin `.claude/` 가 **이미 PUBLIC 으로 공개 중인 것과 같은 수준**이다(N22).
 > **권고: ii.** 근거는 되돌리기가 아니라 **되돌릴 수 없는 쪽을 없애는 것**이다 —
 > i 을 유지하는 한 fit 하네스에 대한 모든 변경(§4-9 의 33줄 포함)이 편도로 남는다.
+
+> **정정 N (착수 직전 재감사 2026-09-07 · 저지 1건).** 이 절과 §4-13·§4-14 는 ii 를 *"`.gitignore:35,36` 2줄 제거 +
+> `git add .claude CLAUDE.md`"* 로 적었다. 그대로 집행하면 **`.claude/settings.local.json`(111줄, 로컬 권한 허용 목록)이
+> PUBLIC 저장소에 올라가고**, push 된 이력에 영구히 남아 그 1파일만 사실상 편도다. fin 의 선례(`dev:.gitignore:35` =
+> `.claude/settings.local.json`, tracked 16 에 local 없음)가 정확한 형태다 → **2줄 제거가 아니라 2줄 → 1줄 치환.**
+> 따라서 tracked 화 대상은 **18파일이 아니라 17파일 / 1,774 LOC + `CLAUDE.md`(173줄)** 다 — 위 "18파일 / 1,885 LOC" 는
+> local 을 포함한 워킹트리 전수이고, "형태 A·C 면 17 / 1,772" 는 orphan-check 를 뺀 **다른** 17 이다 (같은 수, 다른 집합).
+> 부수: fit `dev` 는 `main` 을 포함하지 않으나(`dev..main` 3건, 전부 머지 커밋) 트리는 동일해 `dev` 분기는 안전하다.
+> 양쪽 `ci.yml` 은 paths 필터가 없어 문서 전용 PR 에도 전체 CI 가 돈다 — 되돌리기 "즉시"는 revert PR + CI 수 분을 뜻한다.
 
 ### 4-8. fin `git rm` (Q21 / Q35) — **2회차에서 범위가 거의 사라졌다**
 
@@ -576,7 +585,7 @@ pleiades 세션에서 보이지 않는 것은 `--add-dir` 로 해결한다.
 | **H-2 (fit)** | 원본 파일 삭제·축약 | — | — | — | — | **범위 0** (형태 B 권고) |
 | **H-3 (fin)** | #8 fin 25줄 — 원본 `~/workspace/myFinance` · base `dev` · **모드 S** · 이슈는 `fomalhaut84/myFinance` | fin 의 활성 리뷰 결함이 사라진다 | **에이전트 사전 리뷰 필수** — 9-0 *"대상 저장소 변경 — 경로 무관"* | **즉시** | `git revert` 1회 | **25줄** (P 22 + 릴리즈 3) |
 | **H-3 (fit)** | #8 fit 33줄 — **Q32-ii(H-4) 선행 필수.** 그 뒤 브랜치·PR 경로로 수정 | fit 의 활성 리뷰 결함이 사라진다 | **에이전트 사전 리뷰 필수** — 9-0 같은 행. **Q32-i 에서는 집행 불가**(9-1 이 `branch vs base` 를 요구하는데 ref 가 없다) | **즉시** (H-4 이후) | `git revert` | **33줄** (P 30 + 릴리즈 3) |
-| **H-4** *(확정 · Q32-ii)* | fit `.gitignore:35,36` 2줄 제거 + `git add .claude CLAUDE.md` — **모드 S · 승인 게이트 · 이슈는 `fomalhaut84/myFitness`** | fit 하네스 **18파일**이 이력을 갖는다. **H-3(fit) 의 등급이 내려간다** | **에이전트 사전 리뷰 필수** — fit 소스(`.gitignore`) 변경 | **중간** | revert 커밋 (push 된 이력엔 남는다) | **2줄 + 18파일 tracked 화** |
+| **H-4** *(확정 · Q32-ii)* | fit `.gitignore:35,36` 2줄 → `.claude/settings.local.json` 1줄 치환 + `git add .claude CLAUDE.md`(local 은 ignore 로 남는다, 정정 N) — **모드 S · 승인 게이트 · 이슈 `fomalhaut84/myFitness#368`** | fit 하네스 **17파일 + `CLAUDE.md`** 가 이력을 갖는다. **H-3(fit) 의 등급이 내려간다** | **에이전트 사전 리뷰 필수** — fit 소스(`.gitignore`) 변경 | **중간** | revert 커밋 (push 된 이력엔 남는다) | **2줄 + 18파일 tracked 화** |
 | **H-5** *(확정 · Q30)* | `--add-dir` 저장소별 래퍼 (pleiades `bin/`) | 유지 33파일이 1명령으로 보인다 | self-review (config 소규모) | **즉시** | 파일 삭제 | **1파일** |
 
 > **정정 H (감사 2회차 정정 ④ · T6).** 2회차 단계 표에는 **에이전트 사전 리뷰 필수 표기가 한 곳도 없었다.**
@@ -621,7 +630,7 @@ pleiades 세션에서 보이지 않는 것은 `--add-dir` 로 해결한다.
   H-1 입력 = 200 LOC / 2파일       (§4-2 10·28행)   · 산출 = 미산출
   H-1b = 113 LOC 복사 + base 파라미터화 12줄 · 참조 0줄   (§4-4 형태 B · 정정 K)
   H-3 = 58줄 (fin 25 · fit 33)     (N15)
-  H-4 = 2줄 + 18파일               (§4-7 ii)
+  H-4 = 2줄→1줄 + 17파일 + CLAUDE.md (§4-7 ii · 정정 N)
   형태 A·C 를 택할 경우에만 추가 = 10줄  (N13 — 부록 C-4 ※ 재산출)
   원본 workflow.md 를 축약할 경우에만 추가 = 6줄  (N11)
 ```
@@ -640,7 +649,7 @@ pleiades 세션에서 보이지 않는 것은 `--add-dir` 로 해결한다.
 | **H-0** (#10 14줄 + grep 6곳 + R1·R2) | `fomalhaut84/pleiades` | **기존 #10** (`Closes`) | pleiades · `dev` | `dev` | self-review | 불필요 |
 | **H-1 · H-1b · H-5** (pleiades 하네스 집행) | `fomalhaut84/pleiades` | **신설 1개** (`Closes`) — #1 은 005 발행 PR 이 닫는다 | pleiades · `dev` | `dev` | self-review | 불필요 |
 | **H-3 (fin)** #8 fin 25줄 | `fomalhaut84/pleiades` | **기존 #8 공유** (`Refs`, 양쪽 머지 후 수동 종료 — 5절 예외 표 *대칭 변경*) | 원본 `~/workspace/myFinance` · **`dev`** (모드 S) | 그 저장소 `dev` | **에이전트 사전 리뷰 필수** | **필요** — 실서비스 저장소 |
-| **H-4** fit `.gitignore` 2줄 + tracked 화 | **`fomalhaut84/myFitness`** | **신설 1개** (`Closes`) | 원본 `~/workspace/myFitness` · **`dev`** (모드 S) | 그 저장소 `dev` | **에이전트 사전 리뷰 필수** | **필요** — fit 소스 변경 |
+| **H-4** fit `.gitignore` 2줄→1줄 + tracked 화 | **`fomalhaut84/myFitness`** | **#368** (`Closes`, 2026-09-07 신설) | 원본 `~/workspace/myFitness` · **`dev`** (모드 S) | 그 저장소 `dev` | **에이전트 사전 리뷰 필수** | **필요** — fit 소스 변경 |
 | **H-3 (fit)** #8 fit 33줄 | `fomalhaut84/pleiades` | **기존 #8 공유** (`Refs`) — **H-4 머지 후 착수** | 원본 `~/workspace/myFitness` · **`dev`** (모드 S) | 그 저장소 `dev` | **에이전트 사전 리뷰 필수** | **필요** |
 
 **권고 — pleiades 쪽은 두 이슈로 나눈다 (하나로 묶지 않는다).**
