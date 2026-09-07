@@ -11,5 +11,6 @@ if git -C $FIN cat-file -e "$REF:$P" 2>/dev/null && git -C $FIT cat-file -e "$RE
 else
   echo "  미확인 — ref/path 없음 (diff 미실행)"
 fi
-echo -n "REF-GATE (없는 ref nope/x): "; git -C $FIN rev-parse --verify --quiet "nope/x^{commit}" >/dev/null || echo "미확인 — ref 없음"
+echo -n "REF-GATE (없는 ref nope/x, if/else — 3회차): "
+if git -C $FIN rev-parse --verify --quiet "nope/x^{commit}" >/dev/null; then git -C $FIN ls-tree -r --name-only nope/x -- src | grep -E "\.tsx?$" | wc -l; else echo "미확인 — ref 없음 (ls-tree 미실행)"; fi
 echo -n "CONTROL (실재 경로 package.json): "; git -C $FIN cat-file -e "$REF:package.json" && git -C $FIT cat-file -e "$REF:package.json" && diff <(git -C $FIN show $REF:package.json) <(git -C $FIT show $REF:package.json) | wc -l | tr -d ' '
