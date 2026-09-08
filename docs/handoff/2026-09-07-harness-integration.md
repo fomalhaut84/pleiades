@@ -99,3 +99,12 @@
 
 - **아티팩트 재발행** — 005·집행 상태가 반영되지 않았다. `docs/artifacts/integration-artifact.html` 를 고친 뒤
   `Artifact(file_path=..., url="https://claude.ai/code/artifact/88cd616a-efe0-4d84-b298-e6961675ae0d")`. 발행 전 `action:"read"`
+
+## 세션 말미 추가 결정 (2026-09-07 · #25 · #29)
+
+- **브랜치 정책 (#25):** pleiades 발 변경은 전부 `integration/pleiades` 기반, `integration/<type>-pleiades-<name>`. **`integration/pleiades` 는 `dev` 로 머지되지 않는다** — 모노레포 전환 완료까지 두 저장소의 pleiades 내부 메인. 귀결: 오늘 머지한 fin #492·fit #369 는 서비스 `dev` 에 없다(Q43 서비스 미러는 모드 S 로 별도).
+- **Q42 확정 (#29):** 1a 검증은 로컬 `repos/*`(즉시 실행 가능 — `.env`·`node_modules`·로컬 Postgres 실측) + **서버 병행 인스턴스**(`integration/pleiades` 체크아웃 · **읽기 전용 DB 롤** · 별도 포트/pm2 · 봇 미기동 · cron off · Nginx 미연결). **1a-0 은 다시 착수 가능**, 착수 시 발송 경로의 DB 쓰기 지점을 먼저 잰다. 병행 인스턴스가 MCP 도 띄우면 **Q23 도 같이 풀린다**.
+- **머지 완료:** pleiades #19·#20·#22·#24·#26·#28 · myFinance#492 · myFitness#369. 열린 PR 0. 스택 PR 은 앞 PR 이 squash/rebase 머지될 때마다 `--onto` 리베이스가 필요했다(merge commit 만 SHA 보존).
+- **함정 3개 → 룰 반영 (#27/#28):** `integration/pleiades` base 는 `Closes` 미실행(수동 종료) · worktree 는 pull 해야 움직임 · tracked 화 브랜치 → `main` 체크아웃이 파일을 지움(fit 원본 하네스 복원함, `git archive … | tar -x`).
+
+**다음 세션 첫 액션 (갱신):** ① 1a-0 착수 — 발송 경로 DB 쓰기 측정 + 병행 인스턴스 5조건 확정(서버 작업은 승인 게이트) ② H-3(fit) 승인 게이트 ③ H-1 (Q41 이름) ④ #14 · #17.
