@@ -21,10 +21,10 @@
 | **E3** | 신규 7 + 수정 1 — 루트 `package.json` · `package-lock.json` · `packages/notify/{package.json,package-lock.json,tsconfig.json,src/index.ts,src/index.test.ts}` · `.gitignore` +1줄 | **초안은 신규 6** — `packages/notify/package-lock.json` 이 하나 더 생겼다(서브 `npm install` 산출물, `files` 밖이라 소비자 무영향). 커밋했다 — lockfile 을 ignore 하지 않는다 | `baceb96` |
 | **E5** | `npm install`(루트) → `npm --prefix packages/notify install` → `npm run typecheck` → `npm test` → `npm run build` | typecheck exit 0 · vitest **4.1.11** `1 passed (1)` · build → `dist/index.js`+`index.d.ts`(ignored) · 루트 registry 패키지 **typescript 1개** · 서브 41 packages | — |
 | **E4** | 스크래치패드 소비자(fin·fit 동일 tsconfig 옵션: `module esnext` · `moduleResolution bundler` · `target ES2017` · `"type"` 없음) `npm install git+file://…#baceb96` | 설치 트리 `packages/notify/dist` + `packages/notify/package.json` + README(npm 강제 포함) · **`src`·`tsconfig` 미포함** · `require('@pleiades/notify').VERSION` = `0.0.0` · `tsc --noEmit` exit 0 · lockfile `resolved` = `git+file://…#baceb967…`(커밋 SHA 핀) · **`npm ci` 2.13 / 2.18 / 2.35 s** · 설치 크기 20 K | — |
-| E2 | 정본 정정 (003·004·CLAUDE.md·workflow.md 8절) | `decision-writer` — 이 파일 작성 시점에 진행 중 | (뒤 커밋) |
-| E6 | 에이전트 사전 리뷰(9-0 "공개 인터페이스 — 두 저장소 동시 파급" 행) → PR base `dev` | 뒤 | — |
+| E2 | 정본 정정 (003·004·CLAUDE.md·workflow.md 8절) | 정정 블록 append(기존 서술 취소선) · 4파일 +182/−8 | `c1af2a1` |
+| **E6** | 에이전트 사전 리뷰(`pr-review-toolkit:code-reviewer` · 9-0 "공개 인터페이스 — 두 저장소 동시 파급" 행) → PR | **critical 0 · major 2 · info 3.** M1 `skipLibCheck` 누락(1a-1 grammy peerDep 이 `prepare` 에서 TS2583 — 재현) · M2 `exclude` 가 `*.spec.ts`/`__tests__` 를 못 막음(TS2307 재현). **둘 다 반영** + I2 `./package.json` export 반영 · I1·I3 → **#32**. 회귀 테스트 `build-config.test.ts`. 재검증: typecheck 0 · test 3/3 · build 0 · `npm pack --dry-run` 5파일. 리뷰가 추가로 반증한 것: `npm ci --omit=dev`·`NODE_ENV=production` 에서도 `prepare` 성공(pacote 가 `--include=dev` 강제) · 루트 lockfile 을 임시 클론이 실제로 따름(결정성) | `b293358` · **PR #33** (base `dev`) |
 
-**초안과 달라진 점 2개 (범위 변경 아님):** ① 서브 `package-lock.json` 1개 추가(위) ② 서브 vitest 는 감사 재현의 `^2` 가 아니라 **`^4.1.8`** — fin 선언(`^4.1.8`)·003 1a-2 지시와 동일. 소비자 경로엔 실리지 않는다(E4 트리 확인).
+**초안과 달라진 점 3개 (범위 변경 아님):** ① 서브 `package-lock.json` 1개 추가(위) ② 서브 vitest 는 감사 재현의 `^2` 가 아니라 **`^4.1.8`** — fin 선언(`^4.1.8`)·003 1a-2 지시와 동일. 소비자 경로엔 실리지 않는다(E4 트리 확인). ③ 사전 리뷰 반영으로 **신규 8**(`build-config.test.ts` 추가) + `tsconfig` `skipLibCheck`·`exclude` 4패턴 + `exports["./package.json"]`.
 
 ## 2. E4·E5 명령 (재현)
 
@@ -47,8 +47,8 @@ for i in 1 2 3; do rm -rf node_modules; s=$(date +%s.%N); npm ci >/dev/null 2>&1
 
 | 범위 | 등급 | 행위 |
 |---|---|---|
-| **1a-0 전체** | **즉시** | `git revert baceb96` (스캐폴딩) + 정본 정정 커밋 revert. 또는 브랜치 `feat/31-1` 폐기 — `dev` 무변경 |
-| 스캐폴딩만 | **즉시** | 신규 7 삭제 + `.gitignore` 마지막 1줄 삭제. **루트 `package.json` 은 이 PR 이 신규 생성한 파일**이다(pleiades 에 원래 없었다 — 감사 3회차 정정 1) |
+| **1a-0 전체** | **즉시** | PR #33 revert (커밋 6개: `990ca7a`·`6d8df37`·`baceb96`·`fabab96`·`c1af2a1`·`b293358`). 또는 브랜치 `feat/31-1` 폐기 — `dev` 무변경 |
+| 스캐폴딩만 | **즉시** | 신규 8 삭제 + `.gitignore` 마지막 1줄 삭제. **루트 `package.json` 은 이 PR 이 신규 생성한 파일**이다(pleiades 에 원래 없었다 — 감사 3회차 정정 1) |
 | 형태만 케이스 B 로 | **즉시** | 루트 `name` 1줄 |
 | 로컬 산출물 | **즉시** | `rm -rf node_modules packages/notify/node_modules packages/notify/dist` |
 
