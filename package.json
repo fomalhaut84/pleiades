@@ -1,0 +1,31 @@
+{
+  "name": "pleiades",
+  "version": "0.0.0",
+  "private": true,
+  "description": "pleiades — 루트는 @pleiades/notify 의 git 의존성 위임점이다 (003 §2-1 정정 · ALT-d). 패키지 본체는 packages/notify/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fomalhaut84/pleiades.git"
+  },
+  "main": "packages/notify/dist/index.js",
+  "types": "packages/notify/dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./packages/notify/dist/index.d.ts",
+      "default": "./packages/notify/dist/index.js"
+    }
+  },
+  "files": [
+    "packages/notify/dist",
+    "packages/notify/package.json"
+  ],
+  "scripts": {
+    "prepare": "tsc -p packages/notify",
+    "build": "tsc -p packages/notify",
+    "typecheck": "tsc --noEmit -p packages/notify",
+    "test": "npm --prefix packages/notify run test"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}
