@@ -2688,3 +2688,22 @@ npm ci
 | **npm 11/12 동작** | 로컬 10.8.2. npm 12.0.2 존재(설치 중 notice). pacote 의 https-우선 로직 유지 여부 미확인 |
 | **실제 `@pleiades/notify` 로 두 저장소를 빌드한 `npm ci` 시간** | 대상 저장소 설치·쓰기 금지. 위 수치는 **더미 패키지 기준** |
 | **`dist` 를 커밋해 `prepare` 를 없앤 변형의 비용** | 더미로 재현 안 함. 대조군 0.19초가 하한 근사 |
+
+# 추가 측정 — 2026-09-08 (1a-0 실제 스캐폴딩의 소비자 설치 · RM-3 부분)
+
+측정 시점: pleiades `feat/31-1` `baceb96` (E3 스캐폴딩 커밋). 두 대상 저장소 무접촉.
+감사(`_workspace/1a-0/03_auditor_1a0.md`)의 ALT-d 재현은 **더미 저장소**였다 — 여기는 **실제 pleiades 저장소를 git 의존성으로** 설치한 값이다. 명령은 `_workspace/1a-0/04_operator_1a0.md` §2.
+
+| 항목 | 값 | 비고 |
+|---|---|---|
+| 소비자 `npm install` (cold, `prepare` 포함) | 2.75 s | `added 2 packages` (`@pleiades/notify` + typescript) |
+| 소비자 `npm ci` ×3 | **2.35 / 2.13 / 2.18 s** | 감사 더미 2.01~2.14 s 와 같은 대역 |
+| 설치 트리 | `package.json` · `README.md` · `packages/notify/package.json` · `packages/notify/dist/{index.js,index.d.ts}` | `src`·`tsconfig`·`package-lock` 미포함. README 는 `files` 와 무관하게 npm 이 포함 |
+| 설치 크기 | 20 K | |
+| `require('@pleiades/notify').VERSION` | `0.0.0` | CJS |
+| `tsc --noEmit` (fin·fit 옵션 `bundler`/`esnext`/`ES2017`) | exit 0 | `exports.types` 해석 |
+| lockfile `resolved` | `git+file:///…/pleiades#baceb967…` | 커밋 SHA 핀 |
+| pleiades 루트 `node_modules` registry 패키지 | **typescript 1개** | S-2 형태 |
+| pleiades 서브 `npm --prefix packages/notify install` | 41 packages · ~5 s | vitest **4.1.11** 해석 (`^4.1.8`) — 소비자 경로 밖 |
+
+**못 잰 값:** 실제 GitHub 원격(`git+https://github.com/…`)에서의 설치 — 이 측정은 `git+file://` 이다. 프로토콜 측면은 2026-09-08 "npm git 의존성 역학 · Q28" 절이 이미 쟀다(https 우선). 서버 값(Q45)은 보류.
