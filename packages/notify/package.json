@@ -1,0 +1,13 @@
+{
+  "name": "@pleiades/notify",
+  "version": "0.0.0",
+  "description": "아웃바운드 알림 포트(Transport) + 파사드(Notifier). 구현은 1a-1 (003 §4-2)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.8"
+  }
+}

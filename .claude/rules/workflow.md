@@ -217,7 +217,7 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 
 | 대상 | lint | 타입 | 테스트 | 빌드 |
 |---|---|---|---|---|
-| **pleiades** | 1a-0 이후 정의 | — | — | — |
+| **pleiades** | **해당 없음** (린터 미도입 — 타입체크가 그 자리를 대신한다) | **`npm run typecheck`** (= `tsc --noEmit -p packages/notify`) | **`npm test`** (= `npm --prefix packages/notify run test` → `vitest run`) | **`npm run build`** (= `tsc -p packages/notify`) |
 | **`repos/myFinance`** | `npm run lint` | **`npx tsc --noEmit`** | **`npm run test:run`** | `npm run build` |
 | **`repos/myFitness`** | `npm run lint` | `npm run typecheck` | `npm run test` | `npm run build` |
 
@@ -230,8 +230,21 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 > verify 스크립트다(1a-2 가 vitest 를 도입할 때까지). 그대로 따르면 **missing-script 로
 > 실패하고 "건너뛰기 금지" 때문에 대상 저장소 PR 이 막힌다.**
 
-> **pleiades 자체에는 아직 npm 프로젝트가 없다.** pleiades 행은 1a-0(`package.json` 신설)
-> 이후 채운다. 그때까지 pleiades 문서 변경은 9절의 self-review 경로를 따른다.
+> **정정 (2026-09-08 · 이슈 #31 · 1a-0 · 초안 `_workspace/1a-0/02_writer_1a0.md` · 감사 3회).**
+> 이전 서술은 *"pleiades 자체에는 아직 npm 프로젝트가 없다. pleiades 행은 1a-0(`package.json` 신설) 이후 채운다"* 였다.
+> **1a-0 이 그 `package.json` 을 만들었으므로 값을 채웠다.** 문서만 바꾸는 변경에서 이 네 칸은 여전히 "해당 없음"이고,
+> 9절 self-review 경로도 그대로다 — 바뀐 것은 **패키지 코드를 건드릴 때 무엇을 돌려야 하는지가 정의됐다**는 것뿐이다.
+>
+> **`npm test` 는 자족적이지 않다 — 선행 단계가 있다.**
+> `vitest` 는 **`packages/notify` 의 devDependency** 이고 루트 `package.json` 에는 **`workspaces` 가 없다**(1a-0 확정 형태 · 003 §2-1 정정).
+> 그래서 루트 `node_modules/.bin` 에 `vitest` 가 없고, 그냥 돌리면 **`sh: vitest: command not found`** 가 난다(실측).
+> **`npm --prefix packages/notify install` 을 먼저 돌린다.** (`workspaces` 를 넣으면 이 선행이 불필요해지지만,
+> 그러면 소비자 `npm ci` 가 2.14 s → 3.67~3.96 s, npm 캐시가 19 MB → 134 MB 로 늘어 **넣지 않기로 확정**했다.)
+>
+> **`lint` 칸의 "해당 없음" 은 건너뛰기가 아니다.** 이 절이 금지하는 것은 *"통과하지 않은 채 넘어가는 것"* 이고,
+> 도입하지 않은 도구를 **사유와 함께 미해당으로 명시**하는 것은 `repos/myFinance` 행이 `typecheck` 를
+> `npx tsc --noEmit` 으로 대체 표기한 것과 같은 형식이다. 린터를 도입하지 않은 이유는
+> **루트 devDependencies 가 소비자 설치 경로에서 실제로 설치되기 때문**이다(실측) — 배포마다 서버가 그만큼 더 받는다.
 ### 9. 코드 리뷰 + PR
 
 리뷰는 **PR 오픈을 사이에 두고 두 단계**로 나뉜다. 목적: **수정 필수 등급**을 걸러내되
