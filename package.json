@@ -13,7 +13,8 @@
     ".": {
       "types": "./packages/notify/dist/index.d.ts",
       "default": "./packages/notify/dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "packages/notify/dist",
