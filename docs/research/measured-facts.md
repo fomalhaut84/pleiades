@@ -2274,3 +2274,417 @@ diff <(sed -n '218,235p' <fin>) <(sed -n '240,257p' <fit>)   # 10. 머지 완료
 | H5 *"auto memory 의존 — 11파일"* | 11 | **13** | fin 6→**9** · fit 3→**2** · ple 2 (재열거는 감사 1회차 정정 ④ 표) |
 
 재현: `/usr/bin/grep -rn --binary-files=text -e '\.claude/' -e 'workflow\.md' ~/workspace/pleiades/repos/myFinance/CLAUDE.md`
+
+---
+
+# 추가 측정 — 2026-09-08 (1a 발송 경로 DB 쓰기 · 병행 인스턴스 격리 조건)
+
+출처 `_workspace/1a-0/01_surveyor_db_writes.md` (GitHub 이슈 `fomalhaut84/pleiades#31`).
+004 Q42 가 확정한 **병행 인스턴스**(읽기 전용 DB 롤 · 별도 포트/pm2 이름 · Nginx 미연결 · 봇 미기동 · cron off)가
+성립하는지에 대한 선행 측정. **모드 I** — 측정 대상은 worktree 다.
+
+## 측정 시점 저장소 상태
+
+```bash
+for d in myFinance myFitness; do echo "$d $(git -C repos/$d rev-parse --abbrev-ref HEAD) $(git -C repos/$d rev-parse --short HEAD) dirty=$(git -C repos/$d status --porcelain | wc -l | tr -d ' ')"; done
+```
+
+| 대상 | 경로 | 브랜치 | HEAD | dirty |
+|---|---|---|---|---|
+| myFinance | `~/workspace/pleiades/repos/myFinance` | `integration/pleiades` | `6542152` | 0 |
+| myFitness | `~/workspace/pleiades/repos/myFitness` | `integration/pleiades` | `626a201` | 0 |
+
+> 이 절의 모든 값은 **worktree(`integration/pleiades`)** 기준이다. 이 문서 상단의 2026-09-03/04 측정은
+> 원본(`~/workspace/myF*`, fin `dev` / fit `main`)에서 잰 것이다. 모집단(fin 20 / fit 6 호출)은 양쪽이 일치했다.
+
+## 방법론 주의 — zsh 는 미인용 변수를 단어 분할하지 않는다
+
+```bash
+FILES="a.ts b.ts"; git grep -n --text "prisma" -- $FILES     # ← zsh 에서 0건 (경고 없음)
+```
+`bash` 와 달리 zsh 는 `$FILES` 를 **한 덩어리 pathspec** 으로 넘긴다. 이번 측정 첫 시도에서
+`custom-strategy-alert.ts:310` 의 `prisma.customStrategy.updateMany` 를 **"쓰기 0건"으로 오보고**했다.
+004 의 `--binary-files=text`, 005 §4-11 의 ugrep `.gitignore`, 2026-09-04 의 `"$F"` glob 함정과 같은 계열이다.
+**대상 파일 목록은 `for f in … ; do … "$f" ; done` 루프로 넘긴다.**
+
+## M1. 아웃바운드 발송 경로의 DB 쓰기 — 전수
+
+```bash
+cd repos/<repo>
+for f in <호출부 모듈 …>; do
+  echo "### $f"
+  grep -nE --binary-files=text \
+    'prisma\.[A-Za-z]+\.(create|update|upsert|delete|updateMany|deleteMany|createMany)|\$executeRaw|\$transaction' \
+    "$f" || echo "  (쓰기 0건)"
+done
+```
+
+**myFinance — 15 모듈 / 20 호출**
+
+| 파일:행(전송) | 쓰기 API (파일:행) | 테이블 | 전/후 | 전송 실패 시에도 쓰나 | 예외 |
+|---|---|---|---|---|---|
+| `active-review.ts:125`·`:142` | `alertConfig.upsert` (`active-review.ts:44`, 호출 `:154`·`:168`) | `AlertConfig` | **전 · 게이트** | 전송 전 | **무가드** |
+| `alert-dispatcher.ts:124` | `alertHistory.createMany` (`alert-history.ts:67` ← `retry/route.ts:74`) | `AlertHistory` | 후 | **예** | 삼킴 (`alert-history.ts:83`) |
+| `briefing.ts:71`·`:93` · `budget-alert.ts:83`·`:124` · `daily.ts:134` · `monthly-report.ts:55`·`:69` · `monthly.ts:67` · `quarterly-report.ts:39`·`:68` · `quarterly.ts:107` · `rsu.ts:113` · `advisor-monitor.ts:222` | — | — | — | — | **쓰기 0건 (10 모듈)** |
+| `custom-strategy-alert.ts:292` | `alertConfig.upsert` (`:61`, 게이트 `:131`) | `AlertConfig` | **전 · 게이트** | 전송 전 | **무가드** |
+| 〃 | `alertHistory.createMany` (`:302`) | `AlertHistory` | 후 | **예** | 삼킴 |
+| 〃 | `customStrategy.updateMany` **×2** (`:310`·`:316`) | `CustomStrategy` | 후 | **아니오** (`sentCount===0` → `:304 return`) | **무가드** |
+| `networth-snapshot.ts:95` | `netWorthSnapshot.upsert` (`:63`) | `NetWorthSnapshot` | **전** | 전송 전 | **무가드** |
+| `price-alert.ts:340` | `alertHistory.createMany` (`:350`) | `AlertHistory` | 후 | **예** | 삼킴 |
+| `ta-signal-alert.ts:334` | `alertConfig.upsert` (`:51`, 호출 `:290`) | `AlertConfig` | **전 · 게이트** | 전송 전 | **무가드** |
+| 〃 | `alertHistory.createMany` (`:376`) | `AlertHistory` | 후 | **예** | 삼킴 |
+| **상류** `lib/cron.ts:95` | `priceCache.upsert` (`price-fetcher.ts:76`·`:190`) | `PriceCache` | **전 · 게이트** | — | `result.success > 0` 이어야 price/TA/custom 알림 실행 |
+
+| fin 합계 (위 표에서 셈) | 값 |
+|---|---|
+| 전송 **전 · 무가드** | **4** (`active-review:44` · `custom-strategy:61` · `networth-snapshot:63` · `ta-signal:51`) |
+| 전송 **후 · 삼킴** | **1 코드 지점**(`alert-history.ts:67`) · **도달 호출부 4**(`:302`·`:350`·`:376`·`alert-dispatcher:178`) |
+| 전송 **후 · 무가드** | **2** (`custom-strategy-alert:310`·`:316`) |
+| 쓰기 0건 모듈 | **10 / 15** |
+| 상류 게이트 쓰기 | **2** (`price-fetcher:76`·`:190`) |
+
+**myFitness — 4 모듈 / 6 호출** (`scheduler.ts:34`·`:59` · `auto-adjust.ts:395`·`:455` · `auto-adjust-cron.ts:78` · `admin-alerts.ts:232`)
+
+| 파일:행(전송) | 쓰기 API (파일:행) | 테이블 | 전/후 | 전송 실패 시에도 쓰나 | 예외 |
+|---|---|---|---|---|---|
+| `scheduler.ts:34` | `reportJob.create` (`report-job.ts:74`) | `ReportJob` | **전** | 전송 전 | **무가드** |
+| 〃 | `reportJob.update` (`report-job.ts:129`·`:153`) | `ReportJob` | **전** | 전송 전 | **무가드** |
+| 〃 | `$transaction([aIAdvice.deleteMany, aIAdvice.create])` (`daily-report.ts:109-113` · 주간은 `weekly-report.ts:185-190`) | `AIAdvice` | **전** | 전송 전 | **무가드** |
+| 〃 | `syncMetadata.upsert` ×3 + `$executeRaw` (`garmin/sync.ts:137`·`:200`·`:214`·`:173`) | `SyncMetadata` 외 | **전** | 전송 전 | `preSyncForReport` 삼킴 (`daily-report.ts:59`) |
+| `scheduler.ts:59` | — | — | — | — | 위 예외가 여기로 → **"❌ … 생성 실패" 문구를 대신 전송** |
+| `auto-adjust.ts:395` | `workoutAdjustment.create` (`:368`) | `WorkoutAdjustment` | **전** | 전송 전 | **무가드** |
+| 〃 | `workoutAdjustment.update` (`:415` — `telegramMessageId`/`telegramChatId`) | `WorkoutAdjustment` | 후 | **아니오** (`sent===0` → `:407` throw) | 삼킴 |
+| 〃 | `aIAdvice.create` (`:431`) | `AIAdvice` | 후 | **아니오** (동일) | 삼킴 |
+| `auto-adjust.ts:455` | — | — | — | — | 위 예외가 여기로 |
+| `auto-adjust-cron.ts:78` | `workoutAdjustment.updateMany` (`:91`) | `WorkoutAdjustment` | 후 | **아니오** (`sent===0` → `:83` throw) | **무가드** |
+| 〃 (같은 tick, 전송 독립) | `workoutAdjustment.updateMany` (`:123` TTL expire) | `WorkoutAdjustment` | — | 예 | try/catch |
+| `admin-alerts.ts:232` | `systemAlertState.updateMany` (`:202`) + `.create` (`:212`) | `SystemAlertState` | **전 · 전송을 게이트** (`reserved` false → `:227 return`) | 전송 전 | 삼킴 → **전송 자체 안 됨** |
+| 〃 | `systemAlertState.deleteMany` (`:248`) | `SystemAlertState` | 후 (미전송 롤백) | **예** (`delivered=false` 시) | 삼킴 |
+
+| fit 합계 (위 표에서 셈) | 값 |
+|---|---|
+| 전송 **전 · 무가드** | **5** (`report-job:74`·`:129`·`:153` · `daily-report:109`(주간은 `weekly-report:185`) · `auto-adjust:368`) |
+| 전송 **전 · 삼키지만 전송을 게이트** | **2** (`admin-alerts:202`·`:212`) |
+| 전송 **전 · 삼킴 · 게이트 아님** | **4** (`garmin/sync.ts:137`·`:173`·`:200`·`:214`) |
+| 전송 **후 · 삼킴** | **3** (`auto-adjust:415`·`:431` · `admin-alerts:248`) |
+| 전송 **후 · 무가드** | **1** (`auto-adjust-cron:91`) |
+| 쓰기 0건 모듈 | **1 / 4** (`send.ts` 초크포인트) |
+
+> **⚠ "1a 발송 경로는 DB 쓰기가 불필요하다" 는 성립하지 않는다.**
+> RO 롤에서 **정상 본문 전송에 도달하는** 경로는 fin **10 / 15 모듈**, fit **0 / 3 발송 흐름**이다
+> (fit 리포트·auto-adjust 제안은 폴백 에러 문구로, admin alert 는 아예 미전송으로 바뀐다).
+> **전송 자체는 관측 가능하다** — fin `POST /api/alerts/history/[id]/retry` 는 쓰기가 전송 **후**이고
+> `recordAlertHistory` 가 예외를 삼키므로 **RO 롤에서도 실제 전송 + HTTP 200** 을 낸다.
+
+## M2. 웹 프로세스 기동만으로 도는 쓰기
+
+```bash
+git -C repos/<repo> ls-files | grep -iE 'instrumentation|ecosystem|middleware'
+cat repos/<repo>/next.config.mjs repos/<repo>/src/instrumentation.ts
+git -C repos/<repo> grep -nE --text "DISABLE_[A-Z_]+|ENABLE_[A-Z_]+|[A-Z_]*CRON[A-Z_]*|SCHEDULER_[A-Z_]+" -- src | grep "process.env"
+```
+
+| | myFinance | myFitness |
+|---|---|---|
+| `next.config.mjs` | `experimental.instrumentationHook: true` | **`{}`** (그럼에도 훅은 돈다 — Next 15 stable) |
+| `src/instrumentation.ts` `register()` | **no-op** (주석 1줄: cron 은 standalone 봇에서) | `startCronJobs()` · **`sweepOrphanedJobs()`** · `startOrphanSweeper()` · photo sweep 2 |
+| **기동 시 DB 쓰기** | **0건** | **1건** — `reportJob.updateMany` (`report-job.ts:270`), 부팅 1회 + **5분 주기** (`:290`) |
+| 세션/로그인 테이블 쓰기 | **0건** (`next-auth ^5.0.0-beta.31` 이나 `lib/auth.ts:109 strategy:'jwt'`, `PrismaAdapter` 0건) | **0건** (next-auth 의존성 없음) |
+| `prisma migrate deploy` | 앱 부팅 경로 **0건** — `deploy/deploy.sh:109` · `.github/workflows/ci.yml:56` 에만 | 동일 (`deploy/deploy.sh:52` · `ci.yml:56`) |
+| 시드 | 부팅 경로 0건 (`active-review.ts:24` 주석이 *"deploy.sh 는 migrate deploy 만, seed 재실행 X"* 라 명시) | 0건 |
+| 초기화 `upsert` (`ensure*Setting`) | **4** (`active-review:29`·`custom-strategy-alert:44`·`price-alert:29`·`ta-signal-alert:38`) — 호출은 `bot/notifications/scheduler.ts:49`·`:53`·`:57`·`:62` 로 **봇 프로세스 전용**, 전부 삼킴 | 없음 |
+
+**cron on/off 스위치 — 양쪽 다 0건.**
+
+| | 실측 |
+|---|---|
+| `DISABLE_*` / `ENABLE_*` / `SCHEDULER_*` on-off 플래그 | **fin 0 · fit 0** |
+| 스케줄 문자열 env | **fin 0 (전부 하드코딩)** — `lib/cron.ts:84`·`:131`·`:156`·`:193`·`:218`·`:298` + `bot/notifications/scheduler.ts` 13곳 |
+| 〃 | **fit 6** — `SYNC_CRON`(`lib/cron.ts:21`) · `MORNING_REPORT_CRON`(`scheduler.ts:68`) · `EVENING_REPORT_CRON`(`:80`) · `REPORT_CRON`(`:91`) · `AUTO_ADJUST_CRON`(`:103`) · `AUTO_ADJUST_MAINTENANCE_CRON`(`:110`) |
+
+| "cron off" 의 실제 스위치 | 방법 | 등급 |
+|---|---|---|
+| fin 웹 | 불필요 — 웹은 cron 을 등록하지 않는다 | 즉시 |
+| fin 봇 · fit 봇 | 그 pm2 앱을 안 띄운다 (`standalone.ts` 가 유일한 등록 지점) | 즉시 |
+| **fit 웹** | `SYNC_CRON` 에 발화하지 않는 표현식(`0 0 30 2 *`)을 넣는 **편법**. `startOrphanSweeper()` 는 우회 수단이 없어 **코드 변경 필요** | **중간** |
+
+> **⚠ "cron off" 는 env 토글이 아니다.** fit 웹 프로세스는 **기동만으로 `reportJob.updateMany` 를 쓰고**,
+> 그 쓰기를 끄는 env 가 없다. 병행 인스턴스를 **쓰기 가능 롤로** 띄우면 실서비스 웹의 pending/running job 을
+> `failed` 로 마킹할 수 있다 — **RO 롤이 오히려 안전 장치다.** RO 에서는 `instrumentation.ts:34 .catch()` 가
+> 삼켜 **프로세스는 정상 기동**하고 5분마다 에러 로그만 남는다.
+
+## M3. 격리 6조건의 코드 측 근거
+
+```bash
+cat repos/<repo>/ecosystem.config.js
+sed -n '/"scripts"/,/^  }/p' repos/<repo>/package.json
+sed -n '/^datasource/,/^}/p' repos/<repo>/prisma/schema.prisma
+git -C repos/<repo> grep -oh --text -E 'process\.env\.[A-Z0-9_]+' -- src scripts deploy ecosystem.config.js prisma.config.ts | sed 's/process\.env\.//' | sort -u
+grep -oE --binary-files=text '^[A-Z0-9_]+' repos/<repo>/.env.example | sort -u    # 값 미열람
+```
+
+| 조건 | myFinance | myFitness |
+|---|---|---|
+| **포트** | `package.json` `start`=`next start` (인자 없음) / `ecosystem` `args:'start -p 4100'` + `env.PORT:4100` | 동일 구조, 4200 |
+| → 별도 포트로 띄우기 | **`-p` 가 `PORT` 를 이긴다.** ecosystem 을 안 쓰고 `pm2 start npm --name … -- start` 로 띄우면 **`PORT` env 만으로 충분 · 파일 수정 불필요** | 동일 |
+| **pm2 이름** | `myfinance`·`myfinance-bot`·`myfinance-mcp`. `cwd: __dirname` — **이식 가능** | `myfitness`·`myfitness-bot`·`myfitness-mcp`. **`cwd: '/home/nasty68/myFitness'` 하드코딩 (3개 앱 전부)** |
+| → 병행 인스턴스 | 이름 충돌만 피하면 됨 (`--name` 으로 충분) | ⚠ **`--name` 만으로는 부족** — `cwd` 를 덮거나 별도 ecosystem 파일 필요 |
+| **DB 롤** | `datasource db { provider="postgresql"; url=env("DATABASE_URL") }` · `directUrl`/`shadowDatabaseUrl` **0건** → **`DATABASE_URL` 하나로 전환** | 동일 |
+| → 연결 시점 자동 쓰기 | 코드·설정 범위 **0건** (부팅 경로에 `migrate`/`db push` 없음). fin 은 `lib/prisma.ts:20` 이 URL 에 `connection_limit/pool_timeout/connect_timeout` 을 주입할 뿐 | 동일 |
+| **봇 미기동** | long polling 시작은 `bot/standalone.ts:54 bot.start()` 뿐(+`:28 deleteWebhook()`). `getBot()`(`bot/index.ts:34~`)은 **연결하지 않는다** → **pm2 봇 앱을 안 띄우면 충분** | 동일 |
+| → 웹의 봇 참조 | 정적 3(`retry/route.ts:21`·`deposits/route.ts:5`·`lib/cron.ts:6,7,8`) + **동적 2**(`advisor-monitor.ts:216`·`:217`). 토큰 미설정 시 `bot/index.ts:37` throw 이나 **호출될 때만** → 웹은 크래시 안 함 | 정적 2(`admin-alerts.ts:9`·`:10`) — `bot` 인자가 웹에서는 null (`:193` 가드) |
+| **Nginx 미연결** | 저장소에 nginx 설정 없음 — 측정 불가 | 동일 |
+
+> ⚠ **병행 *봇* 프로세스는 띄우면 안 된다.** `standalone.ts:28` 의 `deleteWebhook()` + `:54` 의 long polling 이
+> **같은 토큰의 실서비스 봇과 409 로 충돌**한다.
+> ✅ 반대로 **fin 은 봇 없이 아웃바운드를 트리거할 수 있다** — `POST /api/alerts/history/[id]/retry` 는
+> 웹에서 `getBot()`(연결 없음)+`sendHtml`(HTTP)만 쓴다. **1a 검증 트리거 후보.** fit 에는 대응 경로가 없다.
+
+**병행 인스턴스가 반드시 달라야 하는 env (열거에서 셈: fin 7 · fit 6)**
+
+| 키 | fin | fit | 이유 |
+|---|---|---|---|
+| `DATABASE_URL` | ● | ● | RO 롤 |
+| `PORT` | ● | ● | 4100/4200 회피 |
+| `TELEGRAM_BOT_TOKEN` | ● | ● | 같은 토큰이면 **실사용자에게 실제 메시지가 간다** (폴링 안 하므로 409 는 없음) |
+| `TELEGRAM_ALLOWED_CHAT_IDS` | ● | ● | 검증용 chat 만 |
+| `TELEGRAM_ADMIN_CHAT_IDS` | ● | — | 동일 |
+| `MCP_PORT` | ● | ● | 4210/4301 회피 |
+| `AUTH_SECRET` | ● | — | 실서비스 세션과 격리 |
+| `SYNC_CRON` | — | ● | cron off 우회 (위) |
+
+그 밖의 키(참고, 그대로 재사용 가능): fin `MCP_TRANSPORT`·`MCP_LOG_*`·`AUTH_PIN`·`AUTH_TRUST_HOST`·`BASE_URL`·`WHOOING_WEBHOOK_URL`·`MYFINANCE_ROOT`·`MCP_CONFIG_PATH`·`NODE_ENV` /
+fit `MCP_TRANSPORT`·`MCP_HTTP_URL`·`MCP_LOG_*`·`APP_BASE_URL`·`GARMIN_EMAIL`·`GARMIN_PASSWORD`·`MFDS_API_KEY`·`MFDS_BASE_URL`·`CLAUDE_BIN`·`NODE_ENV`·`TZ`·`NEXT_RUNTIME`·리포트 cron 5종.
+`.env.example` 은 **양쪽 다 존재**한다 (키 이름만 인용 — 값은 열람하지 않았다).
+
+## M4. 로컬 `repos/*` 개발 루프
+
+```bash
+for d in myFinance myFitness; do for f in .env .env.local node_modules .next dist src/generated/prisma .garmin-tokens; do
+  [ -e "repos/$d/$f" ] && echo "$d/$f 존재" || echo "$d/$f 없음"; done; done
+lsof -iTCP -sTCP:LISTEN -P -n | grep -iE 'postgres|5432'; pg_isready
+lsof -iTCP -sTCP:LISTEN -P -n | grep -E ':(4100|4200|4210|4301)'; command -v pm2
+```
+
+| 항목 | myFinance | myFitness |
+|---|---|---|
+| `.env` / `.env.local` | 존재 / 없음 | 존재 / 없음 |
+| `node_modules` | 존재 | 존재 |
+| `.next` · `dist` | **둘 다 없음** | **둘 다 없음** |
+| Prisma client | `node_modules/.prisma/client` **존재** (`libquery_engine-darwin-arm64.dylib.node`) | **`src/generated/prisma` 없음** ⚠ — `src/lib/prisma.ts:1` 이 `@/generated/prisma/client` 를 import |
+| `.garmin-tokens` | 해당 없음 | 존재 |
+
+| 로컬 런타임 | 실측 |
+|---|---|
+| Postgres 5432 리슨 | **있음** — pid 2348, `[::1]:5432` · `127.0.0.1:5432` |
+| `pg_isready` | **`/tmp:5432 - accepting connections`** |
+| 4100 / 4200 / 4210 / 4301 리슨 | **없음** |
+| `pm2` | **미설치** |
+
+> **보완 (2026-09-08 측정).** 위 *"로컬에는 실행 중인 서비스가 없다"* 절(2026-09-04)은
+> **pm2 미설치 · 4100/4200 리슨 없음** 에 한해 여전히 유효하다. 그 절이 재지 않은 값으로
+> **로컬 Postgres 는 5432 에서 리슨 중이고 연결을 받는다.** 로컬 개발 루프의 DB 전제는 성립한다.
+
+> **로컬 병행 인스턴스는 "env 만 바꿔 띄우기" 가 아니다.** 양쪽 다 `.next` 가 없어 `npm run build` 가 선행돼야 하고,
+> **fit 은 그 앞에 `npx prisma generate`** 가 필요하다 (`src/generated/prisma` 부재). 둘 다 worktree 에 파일을 쓰므로
+> 이번 측정(읽기 전용)에서는 실행하지 않았다.
+
+## 못 잰 값 (이 절 범위)
+
+| 항목 | 왜 못 쟀나 |
+|---|---|
+| RO 롤에서 `alertConfig.upsert` 가 **실제로** 던지는지 | 실행 필요. Postgres 는 `INSERT … ON CONFLICT` 를 conflict 여부와 무관하게 INSERT 권한으로 검사하므로 거부가 예상되나 **런타임 미검증** |
+| `PrismaClient` 연결 자체의 RO 쓰기 시도 (advisory lock 등) | 실행 필요. 부팅 경로에 `migrate` 호출이 없다는 것까지만 확인 |
+| `pm2 start … --cwd` 로 fit ecosystem 우회가 실제로 되는지 | 로컬 pm2 미설치 · 서버 접근 없음 |
+| 서버의 실제 pm2 앱 목록·env·Nginx 설정 | 서버 접근 없음. `ecosystem.config.js` 기준으로만 기술. nginx 설정 파일은 저장소에 없다 |
+| `.env` 실제 값 | **값 열람 금지.** 키 목록은 `.env.example` + `process.env.*` 전수로 대체 |
+| fit `SYNC_CRON="0 0 30 2 *"` 를 node-cron 이 수용하는지 | 실행 필요 (문법상 유효하나 미검증) |
+| 빌드 시간·`.next` 디스크 | 빌드 미실행 (읽기 전용 규율) |
+
+---
+
+# 추가 측정 — 2026-09-08 (npm git 의존성 역학 · Q28)
+
+출처 `_workspace/1a-0/01_surveyor_gitdep.md` (GitHub 이슈 #31). 003 §1-1·§2-1·§5-2(Q28)·§8-1 정정 4 의 이행.
+환경 node **v20.18.0** / npm **10.8.2** / git **2.50.1 (Apple Git-155)** / darwin 25.6.0.
+측정 장소는 스크래치패드 `…/scratchpad/gitdep/` — **대상 저장소 쓰기 0건**(M3 는 `repos/*` worktree `integration/pleiades` ref 에서 `git show` 로만 읽음, 모드 I).
+`~/.gitconfig` 에 `insteadOf` URL 재작성 **없음**(측정 전 확인).
+
+## 요약 — 가정을 뒤집는 값 3건
+
+| # | 뒤집힌 가정 | 실측 |
+|---|---|---|
+| 1 | *"패키지를 `packages/notify/` 에 두고 `git+ssh://…/pleiades#tag` 로 설치한다"* (003 §1-1 + §2-1) | **불가.** npm 은 클론 **루트의 `package.json`** 만 읽는다. 루트에 없으면 `ENOENT`(EXIT 254). 서브디렉터리 지정 문법은 npm 10 문서에 **없다** |
+| 2 | Q28 — *"어느 형태가 자격 증명 없이 설치되나"* | **셋 다 된다.** pacote 가 GitHub-hosted spec 을 **https 우선**으로 해석하고 ssh 는 폴백이다. `git+ssh://` 로 써도 **ssh 호출 0회** |
+| 3 | *"`prepare` 는 설치 때 한 번"* | **`npm ci` 마다 재실행된다.** 두 저장소 `deploy/deploy.sh` 가 `npm ci` 를 쓰므로 **배포마다 서버에서 클론+devDeps+`tsc`** 가 돈다 |
+
+## M1. git 의존성과 서브디렉터리
+
+더미 저장소 3종(각 tag `v0.0.1`, `dist` 는 gitignore):
+`fake-A` = 루트 `package.json` 없음 · `fake-B` = 루트가 곧 `@pleiades/notify`(`exports`/`files`/`prepare`) · `fake-C` = 루트가 `name:pleiades, private:true, workspaces:["packages/*"]` (**003 §2-1 형태**).
+
+| 케이스 | 명령 | 결과 |
+|---|---|---|
+| **A** (루트 pkg 없음) | `npm install "git+file://$S/fake-A#v0.0.1"` | **실패 EXIT 254** — `npm error enoent Could not read package.json: … /_cacache/tmp/git-cloneoobaAt/package.json`. `node_modules` 미생성 |
+| **B** (루트 = 패키지) | `npm install "git+file://$S/fake-B#v0.0.1"` | **성공.** `added 1 package … in 5s` |
+| **C** (workspaces 루트) | `npm install "git+file://$S/fake-C#v0.0.1"` | 설치는 되나 **`node_modules/pleiades/`** 로 들어온다. `prepare` 미실행 → `dist` 없음 → `require('@pleiades/notify')` = `MODULE_NOT_FOUND`. `private:true` 는 git 설치를 막지 않는다 |
+
+케이스 B 설치 내용 (`find node_modules/@pleiades/notify -maxdepth 3`):
+```
+node_modules/@pleiades/notify/package.json
+node_modules/@pleiades/notify/packages/notify/dist          ← prepare 가 생성
+node_modules/@pleiades/notify/packages/notify/package.json
+```
+`dist/index.js`(`exports.hello = 'notify';`) · `dist/index.d.ts` 생성 · `require('@pleiades/notify')` → `{"hello":"notify"}` ·
+`src/`·`tsconfig.json` 은 `files` 가 제외 · 크기 **16 KB**(`node_modules` 전체 20 KB, typescript 잔존 없음).
+
+**서브디렉터리 문법은 없다.** `npm help package-spec`(NPM@10.8.2) git urls 절과 `npm help install` 의 URL 문법:
+```
+ <protocol>://[<user>[:<password>]@]<hostname>[:<port>][:][/]<path>[#<commit-ish> | #semver:<semver>]
+ <protocol> is one of git, git+ssh, git+http, git+https, or git+file.
+```
+`#<commit-ish>` 와 `#semver:` **둘뿐**. `npm help {install,package-spec,package-json,ci} | col -b | grep -iE 'subdirector|#path:|sub-?folder'` → git spec 관련 hit **0**.
+실행 확인: `#path:packages/notify` → 같은 루트 `ENOENT` · `git+file://…/fake-A/packages/notify#v0.0.1` → `fatal: … does not appear to be a git repository`.
+
+**`prepare` 문서 (`npm help scripts`):**
+```
+NOTE: If a package being installed through git contains a prepare script, its
+dependencies and devDependencies will be installed, and the prepare script will be run,
+before the package is packaged and installed.
+```
+실측(격리 캐시 `--cache $S/npmcache --loglevel verbose --foreground-scripts`): `npm verbose cwd …/_cacache/tmp/git-clone9axX7V` 에서 실행되고,
+빈 캐시에 `registry.npmjs.org/typescript/-/typescript-5.9.3.tgz` 가 적재됐다(캐시 19 MB).
+**단 devDeps 는 클론 *루트* 것만 설치된다** — 서브디렉터리 패키지의 devDeps 는 루트 `prepare` 안의 `npm --prefix packages/notify install` 이 끌어왔다.
+
+**lockfile 은 커밋 해시로 핀한다** (lockfileVersion 3):
+```json
+"node_modules/@pleiades/notify": { "version": "0.0.1",
+  "resolved": "git+file:///…/fake-B#e63696c268e92976ede31fbcfe1719ff79828baa" }
+```
+`git rev-parse v0.0.1^{commit}` = `e63696c…` (일치). 루트 `dependencies` 에는 태그 표기(`#v0.0.1`)가 남는다.
+
+**`npm ci` 비용** (`rm -rf node_modules` 후):
+
+| 시나리오 | real |
+|---|---|
+| `npm install <git dep>` 최초 | **5.24 s** |
+| `npm ci` cold 캐시 | **4.74 s** (캐시 19 MB) |
+| `npm ci` warm 1회 / 2회 | **4.05 s** / **4.32 s** |
+| 대조군 — git dep 없는 빈 consumer `npm ci` | **0.19 s** |
+
+cold·warm 차이가 0.4~0.7초뿐 → **비용의 본체는 다운로드가 아니라 매번 반복되는 클론 + devDeps + `tsc`** 다. 산출물은 16 KB.
+`npm ci --foreground-scripts` 로그에 `> @pleiades/notify@0.0.1 build` / `> tsc -p .` 가 그대로 찍힌다.
+
+## M2. Q28 — 형태별 자격 증명 (public `github.com/fomalhaut84/pleiades`)
+
+전제 확인: `git cat-file -e origin/dev:package.json` → `does not exist`. 따라서 **"클론 성공 → 루트 `package.json` ENOENT"** 로 끝나면 접근에 성공한 것이다.
+
+```bash
+npm install --dry-run --loglevel silly "<spec>" --cache $S/npmcache-t-<n>
+```
+
+| spec | EXIT | 종료 지점 | 키 무력화 시 |
+|---|---|---|---|
+| `github:fomalhaut84/pleiades#dev` | 254 | 루트 `package.json` ENOENT (= 클론 성공) | **동일 (성공)** |
+| `git+https://github.com/fomalhaut84/pleiades.git#dev` | 254 | 동일 | **동일 (성공)** |
+| `git+ssh://git@github.com/fomalhaut84/pleiades.git#dev` | 254 | 동일 | **동일 (성공)** |
+
+**방법론 함정 1건.** `~/.ssh/config` 에 `Host github.com / IdentityFile ~/.ssh/id_ed25519` 가 있어
+`GIT_SSH_COMMAND='ssh -o IdentitiesOnly=yes -o IdentityFile=/dev/null -o BatchMode=yes'` 만으로는 **ssh 가 차단되지 않는다**(그대로 성공).
+**`-F /dev/null -o IdentityAgent=none` 을 함께 줘야** `Permission denied (publickey)` 가 난다. 이 검증 없이 "키 없이도 됐다"고 적으면 오측이다.
+
+**ssh 호출 계측** — `GIT_SSH_COMMAND` 를 호출 기록 + 항상 실패하는 래퍼(`$S/ssh-fail.sh`)로 교체:
+
+| 대상 | ssh 호출 횟수 | 결과 |
+|---|---|---|
+| `github:` / `git+https://` / `git+ssh://` (GitHub) | **0 / 0 / 0** | 셋 다 클론 성공 |
+| 대조군 `git ls-remote git@github.com:…` (npm 아님) | **2** | 실패 |
+| 대조군 `npm install git+ssh://git@example.invalid/x/y.git#main` (비-hosted) | **2** | `npm error command git --no-replace-objects ls-remote ssh://git@example.invalid/x/y.git` |
+
+→ 래퍼는 npm 의 git 자식에게 확실히 전달된다(`npm help install` 의 인식 환경변수 목록에 `GIT_SSH_COMMAND` 포함,
+`@npmcli/git/lib/opts.js` 가 `env: { ...finalGitEnv, ...process.env }` 로 통째 상속). 그럼에도 GitHub-hosted 는 **0회**다.
+
+**근거 — `pacote/lib/git.js`:**
+```js
+// Fall back to SSH to support private repos
+#resolvedFromHosted (hosted) {
+  return this.#resolvedFromRepo(hosted.https && hosted.https()).catch(er => {
+    if (er instanceof git.errors.GitPathspecError) { throw er }
+    const ssh = hosted.sshurl && hosted.sshurl()
+    if (!ssh || hosted.auth) { throw er }
+    return this.#resolvedFromRepo(ssh)
+  })
+}
+```
+**https 우선 · ssh 는 catch 폴백.** 입력 표기와 무관하다.
+
+**lockfile 함정** — 같은 파일의 `repoUrl` 은 resolved 필드를 **ssh 우선**으로 만든다
+(`h.sshurl && !(h.https && h.auth) && addGitPlus(h.sshurl(opts)) || h.https && …`). 실측:
+```bash
+npm install "github:isaacs/inherits#v2.0.4"
+# lock → "resolved": "git+ssh://git@github.com/isaacs/inherits.git#9a2c2940…"
+rm -rf node_modules && GIT_SSH_COMMAND=<항상 실패 래퍼> npm ci --cache <빈 캐시>
+# ssh 호출 0회 · require('inherits') 정상
+```
+**lockfile 의 `git+ssh://` 는 표기일 뿐 요구사항이 아니다.**
+
+**Q28 답:** 세 형태 모두 public 저장소에서 자격 증명 **불필요**, 실제 전송은 **https**.
+실측 차이 0. 남는 차이는 (i) `package.json` 문자열, (ii) **https 가 막힌 망에서는 ssh 폴백이 유일 경로** 뿐이다.
+
+## M3. 소비자 측 호환 조건 (읽기 전용 · 모드 I)
+
+대상 `~/workspace/pleiades/repos/{myFinance,myFitness}` @ `integration/pleiades`
+(fin `654215240cb3ddfa4c9bf0db3181c86642fee985` · fit `626a2016b30b9b79bc89ae7fb8080ea4d6187cbb`, 둘 다 clean).
+명령: `git -C <worktree> show integration/pleiades:<path>`.
+
+| 항목 | myFinance | myFitness |
+|---|---|---|
+| `module` | `esnext` | `esnext` |
+| **`moduleResolution`** | **`bundler`** | **`bundler`** |
+| `target` | `ES2017` | `ES2017` |
+| `esModuleInterop` | `true` | `true` |
+| `jsx` | `preserve` | `react-jsx` |
+| `package.json` `"type"` | **없음**(CJS 기본) | **없음** |
+| `next` / `react` | `^15.5.16` / `^19.2.7` | `^16.2.6` / `^19.2.5` |
+| `engines` · `packageManager` · `.nvmrc` | **전부 없음** | **전부 없음** |
+| `grammy` spec / lock 설치본 | `^1.41.1` / **1.44.0** | `^1.42.0` / **1.42.0** |
+| `grammy` import 하는 `src` 파일 | **24** | **20** |
+
+**둘 다 `moduleResolution: bundler` → `exports.types` 를 읽는다.** 최상위 `types` 필드는 불필요(둬도 무해).
+실증 — fin/fit 옵션을 복제한 소비자에서 `npx tsc --noEmit` 오류 0, `--traceResolution`:
+```
+File '…/@pleiades/notify/packages/notify/dist/index.d.ts' exists - use it as a name resolution result.
+```
+
+**`transpilePackages` — 양쪽 `next.config.mjs` 에 없다** (003 §8-1 정정 4 재확인). 원문 전체:
+```js
+// myFinance
+const nextConfig = { experimental: { instrumentationHook: true } };
+export default nextConfig;
+// myFitness
+const nextConfig = {};
+export default nextConfig;
+```
+→ 패키지가 컴파일된 JS 를 배포하면 **두 저장소 코드 변경 0**. TS 소스를 배포하면 두 파일 모두 수정해야 한다.
+
+**`deploy/deploy.sh` 가 `npm ci` 를 쓴다** (fin 106행 부근 · fit 49행 부근):
+```
+echo "=== 3. Install dependencies ==="
+npm ci
+```
+→ M1 의 `prepare` 재실행 비용이 **배포마다** 발생하고, 서버에 `git` + registry/github 네트워크가 필요하며 `prepare` 실패 = 배포 실패다.
+
+**grammy peer 표기:** `^1.41.1`(= `>=1.41.1 <2.0.0`) 이 양쪽을 만족한다.
+`^1.42.0` 으로 적으면 fin 의 선언 하한 `1.41.1` 을 배제한다(semver 검증: `satisfies('1.41.1','^1.42.0') === false`).
+
+## 못 잰 값 (이 절 범위)
+
+| 항목 | 왜 못 쟀나 |
+|---|---|
+| **서버 node / npm 버전** | 코드에 핀이 없다 — `.nvmrc`·`engines`·`ecosystem.config.js`·`deploy/deploy.sh` 전부 무지정. 간접 단서는 `build:mcp:staged` 의 `esbuild --target=node20` 뿐 |
+| **서버의 github.com https 아웃바운드 허용 여부** | 로컬에서 확인 불가. 막히면 M2 결론이 뒤집혀 **ssh 폴백 = 키 필요**가 된다 |
+| **서버 git 설치 여부 · 배포 사용자 ssh 키** | 동일 |
+| **PRIVATE 저장소일 때의 동작** | pleiades 는 현재 PUBLIC. private 전환 시 https 가 인증을 요구해 ssh 폴백이 실제로 발동한다 — 그때 재측정 필요 |
+| **npm 11/12 동작** | 로컬 10.8.2. npm 12.0.2 존재(설치 중 notice). pacote 의 https-우선 로직 유지 여부 미확인 |
+| **실제 `@pleiades/notify` 로 두 저장소를 빌드한 `npm ci` 시간** | 대상 저장소 설치·쓰기 금지. 위 수치는 **더미 패키지 기준** |
+| **`dist` 를 커밋해 `prepare` 를 없앤 변형의 비용** | 더미로 재현 안 함. 대조군 0.19초가 하한 근사 |
