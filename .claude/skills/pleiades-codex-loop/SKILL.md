@@ -121,6 +121,9 @@ gh pr edit -R <owner>/<repo> <N> --body "$NEW"
 gh pr view -R <owner>/<repo> <N> --json body -q .body | grep -c 'Closes\|Refs'      # 1 이어야 한다 — 0 이면 body 가 날아간 것
 ```
 
+**함정 (PR #41 에서 실제로 겪음):** 치환 문자열을 **perl 이중따옴표**로 만들면 `@codex` 가 배열 보간으로 **사라진다**(`\`@codex review\`` → `\` review\``).
+섹션 텍스트는 파일에 써 두고 `-F`/heredoc 으로 넣거나, perl 은 **단일따옴표** 안에서만 쓴다. 갱신 뒤 `grep '@codex'` 로 확인한다.
+
 섹션 최소 포함:
 
 - **리뷰 방식** — `에이전트 사전 리뷰 N회 + Codex M회` 또는 `self-review + Codex M회`. **`only` 는 쓰지 않는다**
