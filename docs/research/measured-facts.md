@@ -2707,3 +2707,560 @@ npm ci
 | pleiades 서브 `npm --prefix packages/notify install` | 41 packages · ~5 s | vitest **4.1.11** 해석 (`^4.1.8`) — 소비자 경로 밖 |
 
 **못 잰 값:** 실제 GitHub 원격(`git+https://github.com/…`)에서의 설치 — 이 측정은 `git+file://` 이다. 프로토콜 측면은 2026-09-08 "npm git 의존성 역학 · Q28" 절이 이미 쟀다(https 우선). 서버 값(Q45)은 보류.
+
+---
+
+## Q41 — 하네스 이름 전수 (2026-09-09)
+
+이슈 #37 Phase 1 실측 A. **모드 I** — 대상은 worktree(`repos/*` · `integration/pleiades`).
+fit 원본은 *"fit `.claude/` 는 원본만 잴 수 있다"*(H1)는 전제의 유효성 확인을 위해 함께 쟀다.
+산출물: `_workspace/1a-1-prep/01_surveyor_q41.md`.
+
+**측정 시점 저장소 상태**
+
+| 체크아웃 | 브랜치 | HEAD | dirty |
+|---|---|---|---|
+| `~/workspace/pleiades` | `chore/37-1` | `362e6e8` | 0 |
+| `~/workspace/pleiades/repos/myFinance` | `integration/pleiades` | `6542152` | 0 |
+| `~/workspace/pleiades/repos/myFitness` | `integration/pleiades` | `626a201` | 0 |
+| `~/workspace/myFitness` (원본, 참조) | `main` | `5809c48` | 0 |
+
+```bash
+# 파일·이름 전수
+find <root>/.claude -type f | sed "s|^<root>/.claude/||" | sort
+awk 'NR==1&&/^---/{fm=1;next} fm&&/^---/{exit} fm&&/^name:/{sub(/^name:[ ]*/,"");print;exit}' <file>
+
+# 이름 우주 + 중복(= 이름 충돌)
+for p in repos/myFinance repos/myFitness .; do
+  find "$p/.claude/skills" -name SKILL.md | sed 's|.*/skills/||;s|/SKILL.md||'
+  find "$p/.claude/agents" -name '*.md'   | sed 's|.*/agents/||;s|\.md$||'
+done | sort -u | wc -l        # → 35 (유니크)
+# 위에서 -u 없이 | sort | uniq -d  → orphan-check · release-manager
+```
+
+### Q41-1. 전수 목록 (frontmatter `name` = 디렉터리/파일명, **불일치 0건**)
+
+| 층 | fin | fit | pleiades |
+|---|---|---|---|
+| **skills** | `codex-response-patterns` · `milestone-workflow` · `project-spec-writer` · `project-verify` · `release-publisher` · `session-boundary` · `session-resume` (**7**) | `branch-workflow` · `codex-review-loop` · `myfitness-orchestrator` · `ops-diagnose` · `orphan-check` · `prisma-drift-fix` · `release-flow` · `session-handoff` · `session-primer` (**9**) | `decision-doc` · `dual-repo-change` · `orphan-check` · `pleiades-handoff` · `pleiades-orchestrator` · `pleiades-resume` · `repo-measure` · `reversibility-audit` (**8**) |
+| **agents** | `feature-implementer` · `quality-guardian` · `release-manager` · `spec-planner` (**4**) | `codex-liaison` · `db-migrator` · `ops-analyst` · `release-manager` · `workflow-conductor` (**5**) | `decision-writer` · `dual-repo-operator` · `repo-surveyor` · `reversibility-auditor` (**4**) |
+| **rules** (frontmatter 없음) | `api-routes` · `components` · `stock-trading-method` · `tax-logic` · `workflow` (**5**) | `api-routes` · `components` · `workflow` (**3**) | `workflow` (**1**) |
+
+- skill·agent 엔트리 **37** → 유니크 **35** · rule 엔트리 **9** → 유니크 **5** (rule 5개는 skill·agent 35개와 정확 일치 0)
+- 3층 합산: 엔트리 **46** / 유니크 **40**
+
+### Q41-2. **정정 (2026-09-09 재측정) — skill 층 이름 충돌은 이미 1건 있다**
+
+> **정정 (2026-09-09 재측정).** 005 §4-5 표는 skill 층을 *"H-1 산출물이 pleiades 에만 있으면 **0**"* 으로,
+> 정정 G 는 *"H-1 이 `codex-*` 이름을 쓰면 **첫** 충돌"* 로 적었다. **둘 다 H-1b 집행 전 값이다.**
+> H-1b(PR #22 · pleiades `4ed13aa`)가 **형태 B(복사)** 로 `pleiades/.claude/skills/orphan-check/` 를 만들었고
+> **fit 원본이 그대로 남아 있는 것이 형태 B 의 정의**이므로, 디렉터리명·`name` 이 완전히 같은 **skill 충돌이 이미 존재**한다.
+> **현 이름 충돌은 4건이 아니라 5건**이다: rule `workflow`·`api-routes`·`components` · agent `release-manager` · **skill `orphan-check`**.
+> 따라서 *"겹치는 이름을 고르면 skill 충돌 런타임 측정 1회가 선결"* 이라는 Q41 조건은 **H-1 의 이름 선택과 무관하게 이미 성립**해 있다
+> (skill 충돌 런타임 동작은 여전히 **미측정** — N18 은 rule·agent 만 쟀다). H-1 이 겹치지 않는 이름을 고르면 **부채를 늘리지 않을 뿐**이다.
+
+> **정정 (2026-09-09 재측정) — H-1 입력 LOC.** 005 §4-13 H-1 행의 *"입력 **200** LOC / 2파일"*(fin 87 + fit 113)에서
+> fin 값은 **`dev` 의 값**이다. `integration/pleiades` 에서는 H-3(fin) / myFinance#492(`6542152`)가 척도 정정을 전파해 **91줄**이다.
+> 모드 I 의 피연산자는 worktree 이므로 **정본은 91 + 113 = 204 LOC**.
+> ```bash
+> git -C repos/myFinance show dev:.claude/skills/codex-response-patterns/SKILL.md | wc -l   # 87
+> wc -l repos/myFinance/.claude/skills/codex-response-patterns/SKILL.md                     # 91
+> ```
+
+**H1 표 대비 변화 (측정 오류 아님 — 집행 결과):** pleiades skill **7 → 8** · `.claude/` 파일 **12 → 13** (H-1b).
+fit worktree tracked `.claude/` 는 **17파일**(H-4 가 `settings.local.json` 을 제외하고 tracked 화 — 원본은 18).
+fin·fit 의 skill·agent·rule 개수(7·4·5 / 9·5·3)는 **005 기재와 전부 일치**.
+
+**fit 원본 vs worktree**: `diff -rq` 결과 **`settings.local.json` 1파일 차이뿐, 나머지 17파일 바이트 동일**.
+`.gitignore` 는 갈라졌다 — 원본 `main` 은 `:35 .claude/` · `:36 CLAUDE.md`(디렉터리 ignore, H7 의 ugrep 함정 유효),
+worktree `integration/pleiades` 는 `:35 .claude/settings.local.json`(파일 단위, **함정 해소**).
+
+### Q41-3. H-1 입력 2파일 frontmatter
+
+| | fin `codex-response-patterns` (91줄) | fit `codex-review-loop` (113줄) |
+|---|---|---|
+| `name` | `codex-response-patterns` | `codex-review-loop` |
+| 성격 | **패턴 카탈로그** — 반복 P0/P1 결함 10종(`### 1.`~`### 10.`) + `## 대응 워크플로우` 1절 | **7-Step 실행 루프** — fetch → severity → fix → commit → 재리뷰 + 릴리즈 특수 처리 · orphan 감지 |
+| 겹침 | H2 측정: 공통줄 30 / fin 87 = **34.5%** (당시 값) — 실질 겹침은 severity 판단 1절 | |
+
+`description` 원문은 산출물 §3 참조.
+
+### Q41-4. 후보 이름 판정 (E = 정확 일치 · S = 부분 문자열)
+
+| 후보 | E | S | 판정 |
+|---|---:|---|---|
+| `codex-liaison-patterns` | **0** | **fit agent `codex-liaison`** | **회피 권고.** 005 가 든 "불가"는 **접두 중복(S)** 근거이고 **정확 일치는 0**이다 — 판정 기준(E vs S)이 005 에 명시돼 있지 않다 |
+| `pleiades-codex-loop` | 0 | 없음 | **가능 — 최우선** (소유 저장소가 이름에 드러남) |
+| `bot-review-response` | 0 | 없음 | 가능 |
+| `review-bot-playbook` | 0 | 없음 | 가능 |
+
+**접두 규약 (실측 관찰).** pleiades skill 8개 중 `pleiades-*` 는 **3개(37.5%)** 이고 **세션 생애주기 스킬에만** 붙는다
+(`pleiades-handoff`·`pleiades-orchestrator`·`pleiades-resume`). 나머지 5개와 agent 4개는 전부 **무접두 `<명사>-<명사/행위자>`**.
+→ *"pleiades 스킬은 `pleiades-*`"* 는 규약이 아니라 **세션 스킬 표지**다.
+
+**못 잰 값 (의도적 미측정):**
+- Claude Code 가 skill 이름 충돌 시 **디렉터리명과 frontmatter `name` 중 무엇을 기준으로** 삼는지 — 본 측정에서 **둘이 100% 일치**하므로 이 저장소들에서는 결과가 같다. 구분이 필요한 사례 자체가 없다
+- **skill 충돌 런타임 동작**(rule 처럼 공존 vs agent 처럼 조용한 드롭) — Q41-2 때문에 H-1 과 무관하게 이미 필요조건. 별건 등재 권고
+
+---
+
+## #32 I1 — 테스트 타입체크 게이트 실측 (2026-09-09)
+
+이슈 #37 Phase 1 실측 B. 산출물 `_workspace/1a-1-prep/01_surveyor_i1.md`.
+**대상은 pleiades `packages/notify` 뿐이다** — 두 대상 저장소 무접촉(모드 무관).
+측정은 전부 **스크래치패드 사본**(`…/scratchpad/i1/root/`, 루트 `package.json` + `packages/notify/` 를
+위임형 구조 그대로 복사)에서 했다. 원본 `packages/notify`·`package-lock.json`·루트 `node_modules` **쓰기 0건**.
+
+환경 node **v20.18.0** / npm **10.8.2** / tsc **5.9.3** / vitest **4.1.11**(`^4.1.8` 해석 · `packages/notify/package-lock.json`) / darwin 25.6.0
+— 1a-0(E5·E6, 위 2026-09-08 절)과 동일 환경.
+
+### 1. 현행 게이트 재현 — 세 개가 전부 통과한다
+
+주입: 사본 `src/index.test.ts` 말미에 `const bad: number = VERSION;`
+
+| 명령 (사본 `packages/notify/`) | 주입 전 | **주입 후** | 판정 |
+|---|---|---|---|
+| `npx tsc --noEmit -p .` | 0 | **0** | 못 잡음 — 테스트가 `exclude` |
+| `npx tsc -p .` (= `prepare`) | 0 | **0** | **정상** (안전 조건이 의도대로 동작) |
+| `npx vitest run` | 0 | **0** | 못 잡음 — transpile-only |
+
+루트 스크립트도 동일: `npm run typecheck`=0 · `npm test`=0 · `npm run build`=0. **#32 I1 서술은 그대로 재현된다.**
+
+### 2. ⚠ 가정을 뒤집는 값 6건
+
+| # | 값 |
+|---|---|
+| **F1** | **`vitest --typecheck` 는 기본값으로 `.test.ts` 를 보지 않는다.** vitest 4.1.11 기본 include = `**/*.{test,spec}-d.?(c\|m)[jt]s?(x)` (`node_modules/vitest/dist/chunks/defaults.9aQKnqFk.js:73-77`). 설정 없이 `npx vitest run --typecheck` → **exit 0 · `Type Errors no errors`** |
+| **F2** | **`typecheck.include: ['**/*.test.ts']` 를 넣어도 안 잡힌다** — base `tsconfig.json` 의 `exclude`(손대면 안 되는 안전 조건)가 tsc 프로그램에서 테스트를 뺀다. `npx tsc -p . --showConfig` → `files: ["./src/index.ts"]`. `typecheck.tsconfig: './tsconfig.test.json'` 을 **함께** 줘야 exit 1 로 잡는다. → **(a) = (b) + 10줄. 배타적 선택지가 아니다** |
+| **F3** | **`vitest.config.ts` 는 로드 자체가 실패한다** — `ERR_REQUIRE_ESM` (`vitest/dist/config.cjs:4` → `std-env/dist/index.mjs`). `packages/notify` 에 `"type":"module"` 이 없고 node v20.18.0 에 `require(esm)` 이 없다. **`.mts` 확장자 필수.** `"type":"module"` 추가는 불가 — `dist` 가 `module:"commonjs"` |
+| **F4** | **두 안 모두 `@types/node` devDep 이 선결.** 현재 `packages/notify` devDeps 는 `vitest` 1개뿐인데, `exclude` 를 푸는 순간 기존 `build-config.test.ts` 가 TS2307×2 + TS2304×1 을 먼저 낸다(`node:fs`·`node:path`·`__dirname`). 기본 설치는 **`^26.5.0`** 이 들어온다 — 런타임 v20 에 맞추려면 **`^20` 핀**(해석 20.19.43) |
+| **F5** | **`"noEmit": true` 를 `tsconfig.test.json` 파일 안에 박지 않으면** 누가 플래그 없이 `tsc -p tsconfig.test.json` 을 돌렸을 때 **테스트가 `dist/` 로 산출된다**(실측 6파일: `index.test.js`·`build-config.test.js`·`.d.ts` 등). 루트 `files` 가 `packages/notify/dist` 라 **소비자 tarball 로 나간다.** 파일에 박으면 `dist` 미생성 |
+| **F6** | **vitest 4.1.11 은 타입 오류를 잡고도 요약줄에 `Type Errors  no errors` 를 찍는다.** 실패는 `Failed Suites` 로 보고. **exit code 는 정확(1)** — 요약줄을 읽으면 오판한다 |
+
+### 3. 최소 설정 원문
+
+`packages/notify/tsconfig.test.json` — **5줄** ((a)·(b) 공용):
+```json
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "exclude": []
+}
+```
+(`include` 는 `extends` 로 상속되므로 불필요 — 4줄판도 검출은 되나 F5 위험.)
+
+`packages/notify/vitest.config.mts` — **10줄** ((a) 만):
+```ts
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    typecheck: {
+      include: ['**/*.test.ts'],
+      tsconfig: './tsconfig.test.json',
+    },
+  },
+});
+```
+
+`packages/notify/package.json` devDependencies **+1줄** `"@types/node": "^20"` (양 안 공통) → `packages/notify/package-lock.json` **+18줄**(`@types/node` + `undici-types`, 2 packages, 2.3 M).
+
+### 4. 소요 (각 3회 · 중앙값 · warm)
+
+**사본 루트 npm 스크립트** (실제 8절 검증 형태)
+
+| 게이트 | 3회 (s) | **중앙값** | 현행 대비 |
+|---|---|---|---|
+| 현행 `npm run typecheck` | 0.618/0.563/0.565 | **0.565** | — |
+| 현행 `npm test` | 0.651/0.628/0.603 | **0.628** | — |
+| 현행 `npm run build` | 0.563/0.585/0.568 | **0.568** | — |
+| **(b)** `npm run typecheck:test` | 0.639/0.610/0.620 | **0.620** | **+0.620** |
+| **(a)** `npm run test:types` | 1.085/1.030/1.041 | **1.041** | `npm test` 대체 시 **+0.413** · 추가 시 **+1.041** |
+
+**패키지 디렉터리 직접** (npm 오버헤드 제외)
+
+| 명령 | 3회 (s) | 중앙값 |
+|---|---|---|
+| `npx vitest run` | 0.600/0.575/0.575 | 0.575 |
+| `npx vitest run --typecheck` | 1.114/1.025/1.039 | **1.039** (내부 계측 `typecheck 304~534 ms`) |
+| `npx tsc --noEmit -p .` | 0.661/0.661/0.657 | 0.661 |
+| `npx tsc --noEmit -p tsconfig.test.json` | 0.724/0.734/0.731 | **0.731** |
+| (참고) `npx tsc --noEmit -p . --types` | 0.332/0.315/0.321 | 0.321 |
+
+> **`@types/node` 도입 자체가 기존 `npm run typecheck` 를 약 +0.34 s 늘린다** (tsc 자동 @types 포함).
+> 위 0.565/0.661 은 이미 그것을 포함한 값이고, 현행 원본(= `@types/node` 없음)은 0.321 s 쪽이다.
+
+**(c) 둘 다** = **+1.661 s** (tsc 가 사실상 2회). **(c) 가 (a)·(b) 보다 더 잡는 오류는 이번 범위에서 0건.**
+**(d)** = 0 s · 0 파일, 대신 §1 세 행이 그대로 남는다.
+
+### 5. 소비자 계약 무영향 — 3중 확인 + end-to-end
+
+| 확인 | 명령 | 결과 |
+|---|---|---|
+| `prepare` 가 `tsconfig.test.json` 을 읽는가 | 그 파일을 **고의 파손**(`{ THIS IS NOT JSON`) 후 `npx tsc -p .` | **exit 0** — 읽지 않는다 (대조군 `tsc -p tsconfig.test.json` 은 exit 2) |
+| `tsc -p .` 해석 결과 | `npx tsc -p . --showConfig` | `files: ["./src/index.ts"]` · `exclude` 4패턴 유지 · `tsconfig.test.json` 흔적 0 |
+| tarball | 사본 루트 `npm pack --dry-run` | **4파일** — `package.json` · `packages/notify/dist/index.{js,d.ts}` · `packages/notify/package.json`. `tsconfig*`·`vitest.config.mts`·`src` 미포함 (1a-0 E6 의 5파일과 차이는 `README.md` — 사본에 없음) |
+
+**소비자 end-to-end** — (a)+(b) 적용본을 커밋(`21de95f`)해 `git+file://…#21de95f` 로 설치:
+
+| 항목 | 값 |
+|---|---|
+| `npm install` exit | **0** — 임시 클론 `prepare` 정상 |
+| 설치 트리 | `package.json` · `packages/notify/dist/` · `packages/notify/package.json` (1a-0 E4 와 동일) |
+| `@types/node` · `vitest` 누수 | **0 · 0** (`node_modules/@types` 자체가 없다) |
+| `require('@pleiades/notify').VERSION` | `0.0.0` |
+| `npm ci` 3회 | 1.65/1.55/1.51 s → 중앙값 **1.55 s** · 설치 크기 16 K |
+
+> `npm ci` 는 1a-0 E4 의 2.13/2.18/2.35(중앙값 2.18) 보다 빠르나 **다른 세션·캐시 상태라 통제된 비교가 아니다.**
+> 말할 수 있는 것은 **"증가가 관측되지 않았다"** 까지다.
+
+**`build-config.test.ts` 단언은 (b) 에 걸리지 않는다** — 그 테스트는 `../tsconfig.json` 을 읽고, (b) 는 별도 파일에서
+`exclude: []` 를 쓴다. (a)+(b) 적용 후 `npx vitest run` = `3 passed (3)`.
+> 다만 **그 M2 단언이 곧 F2 의 원인**이다 — base `exclude` 를 고정하고 있어 두 안 모두 두 번째 tsconfig 없이는 성립하지 않는다.
+> 어느 안을 골라도 `build-config.test.ts` 는 그대로 둔다(지우면 `prepare` 안전 조건이 풀린다).
+
+### 6. `workflow.md` 8절 pleiades 행 — 안별 1줄
+
+| 안 | 8절 변경 | 추가 스크립트(루트) |
+|---|---|---|
+| **(a)** | **테스트** 칸 `npm test` → `npm test` + `npm run test:types` (또는 `packages/notify` 의 `test` 를 `vitest run --typecheck` 로 → 칸 표기 무변경) | `"test:types": "npm --prefix packages/notify run test -- --typecheck"` |
+| **(b)** | **타입** 칸 `npm run typecheck` → `npm run typecheck && npm run typecheck:test` (또는 `typecheck` 를 두 tsc 의 `&&` 로 합쳐 칸 무변경) | `"typecheck:test": "tsc --noEmit -p packages/notify/tsconfig.test.json"` |
+| **(c)** | 위 두 줄 모두 | 위 두 스크립트 모두 |
+| **(d)** | 없음 | 없음 |
+
+선행 조건 `npm --prefix packages/notify install` 은 그대로 필요(`vitest` + `@types/node` 둘 다 서브 devDep).
+`npm test -- --typecheck` 인자 전달은 동작 확인(clean 0 · 주입 1).
+
+### 7. 되돌리기
+
+| 안 | 등급 | 행위 | 규모 |
+|---|---|---|---|
+| (a) | **즉시** | `vitest.config.mts`·`tsconfig.test.json` 삭제 · 루트 `test:types` 1줄 · `@types/node` 1줄 삭제 · 서브 `npm install` | 삭제 2파일(15줄) · 수정 2파일(−2줄) · lockfile −18줄 |
+| (b) | **즉시** | `tsconfig.test.json` 삭제 · 루트 `typecheck:test` 1줄 · `@types/node` 1줄 삭제 · 서브 `npm install` | 삭제 1파일(5줄) · 수정 2파일(−2줄) · lockfile −18줄 |
+| (c) | **즉시** | (a) + 스크립트 1줄 더 | 삭제 2파일(15줄) · 수정 2파일(−3줄) · lockfile −18줄 |
+| (d) | — | 해당 없음 | — |
+
+**되돌릴 수 없는 것: 없다.** 세 안 모두 `files`·`exports`·`dist` 계약 무변경(§5).
+단 `@types/node` 되돌리기는 **1a-1 테스트가 이미 `node:*` 를 쓰면 `build-config.test.ts` 가 다시 깨진다** —
+"게이트 도입 이전 상태로" 만 즉시다.
+
+### 8. 못 잰 값
+
+| 항목 | 왜 못 쟀나 |
+|---|---|
+| node 22.12+ 에서 F3 재현 여부 | 로컬 node 는 v20.18.0 하나. 22.12+ 는 `require(esm)` 기본 활성이라 **재현되지 않을 수 있다.** 서버 node 버전은 Q45 미측정 |
+| 1a-1 실테스트 유입 후 소요 | 그 코드가 없다. 위 값은 **테스트 2파일 3케이스** 기준 — 하한 |
+| `grammy` peerDep 이 `exclude: []` 경로에서 TS2583 을 내는지 | grammy 미설치. base 의 `skipLibCheck: true` 를 상속한다는 것까지만 확인 |
+| GitHub 원격(`git+https`) 소비자 설치 | 이번도 `git+file://` — 1a-0 과 동일한 한계 |
+| `@types/node@^20` vs `^26` 의 실제 API 표면 차이 | 범위 밖. 게이트 통과 여부(둘 다 0)만 쟀다 |
+
+---
+
+# Q10·Q19 정적 근거 (2026-09-09)
+
+**맥락:** 이슈 #37 Phase 1 실측 C. 003 §10 Q10(fit 절단→분할 + plain 폴백 정본) · Q19(`lastError` raw 노출)를
+**실서비스 DB 읽기(Q14, 미승인) 없이 정적으로 좁힐 수 있는 만큼 좁힌다.**
+산출물 초안: `_workspace/1a-1-prep/01_surveyor_q10_q19.md`.
+
+**측정 대상 (모드 I — 통합 로드맵용이므로 worktree):**
+
+| 저장소 | 경로 | ref | 측정 시점 HEAD | 워킹트리 |
+|---|---|---|---|---|
+| myFinance | `~/workspace/pleiades/repos/myFinance` | `integration/pleiades` | `654215240cb3ddfa4c9bf0db3181c86642fee985` | clean |
+| myFitness | `~/workspace/pleiades/repos/myFitness` | `integration/pleiades` | `626a2016b30b9b79bc89ae7fb8080ea4d6187cbb` | clean |
+
+`grammy` 소스만 워킹트리 전용(`node_modules/`)이라 ref 지정 불가 — 위 ref 가 체크아웃·clean 임을 확인 후 읽었다 (v1.44.0).
+
+## C-1. 절단·분할·폴백은 로그를 남기지 않는다 — 로그 기반 사후 계량 경로 부재
+
+```bash
+for f in ~/workspace/pleiades/repos/myFinance/src/bot/utils/telegram.ts \
+         ~/workspace/pleiades/repos/myFinance/src/bot/utils/formatter.ts \
+         ~/workspace/pleiades/repos/myFitness/src/bot/notifications/send.ts \
+         ~/workspace/pleiades/repos/myFitness/src/bot/utils/telegram.ts; do
+  echo "--- $f"; grep -n --binary-files=text 'console\.' "$f"; done
+```
+
+| 지점 | 파일:줄 | 로그 |
+|---|---|---|
+| fit 절단 | `myFitness send.ts:35-37` `truncate` | **없음** |
+| fit plain 폴백 | `myFitness send.ts:56-62` | **없음** |
+| fin 분할 | `myFinance formatter.ts:52-78` `splitMessage` | **없음** (파일 전체 `console.` 0건) |
+| fin plain 폴백 | `myFinance telegram.ts:43-48`·`:66-71` | **없음** |
+
+로그가 나오는 곳은 **재시도**(`fin telegram.ts:113` · `fit send.ts:68`)와 **전송 실패**(`fit send.ts:87`·`:118`)뿐이다.
+
+→ **"서버 로그로 4096 초과·폴백 빈도를 사후 계량한다"는 경로는 현재 코드에 존재하지 않는다.**
+계량하려면 계측 코드를 먼저 넣어야 하고, 그것은 두 실서비스 저장소에 대한 쓰기·배포다.
+799행·1430행 "못 잰 값"의 *"운영 로그 필요"* 는 **"운영 로그에 그 정보가 없다"** 로 정정한다.
+
+> **정정 (2026-09-09 재측정).** 557행 *"4096자 초과가 실제로 몇 번 발생하는지 → 운영 로그 필요"* 는
+> 로그만 확보하면 알 수 있다는 뜻으로 읽힌다. **로그에 기록 자체가 없다.** 남은 경로는
+> (a) 계측 코드 추가 후 대기, (b) DB 조회(Q14) 둘뿐이다.
+
+## C-2. fit 아웃바운드 6 호출 중 4096 초과 가능한 것은 1개뿐
+
+measured-facts 2346행의 **4 모듈 / 6 호출**을 본문 생성부로 분류했다.
+
+| # | 호출 | 본문 생성 | 분류 | 정적 상한 |
+|---|---|---|---|---|
+| 1 | `scheduler.ts:34` | `lib/daily-report.ts:99 askAdvisor(prompt, …)` | **LLM** | **없음** |
+| 2 | `scheduler.ts:59` | `formatUserFriendlyError` (`lib/monitoring/admin-alerts.ts:137-153`) | 정적 문자열 6종 | ~60자 + 라벨 |
+| 3 | `auto-adjust.ts:395` | `formatAutoAdjustMessage` (`auto-adjust.ts:166-233`) | 템플릿 | 유한 필드 (하드 상한 없음 ↓) |
+| 4 | `auto-adjust.ts:455` | `formatUserFriendlyError` | 정적 문자열 6종 | ~60자 |
+| 5 | `auto-adjust-cron.ts:78` | 템플릿 (`auto-adjust-cron.ts:35-51`) | 템플릿 | 〃 |
+| 6 | `admin-alerts.ts:232` | `buildMessage` 3벌 (`:274`·`:295`·`:317`) | 템플릿 | **≈200자 + 고정 6~7줄** (`errSnippet = errMsg.slice(0, 200)`, `admin-alerts.ts:190`) |
+
+**LLM 경로의 상한:**
+```bash
+git -C <repo> grep -n --text 'max_tokens\|maxTokens\|max_output_tokens' integration/pleiades -- 'src'
+git -C <repo> grep -n --text -iE '자 이내|글자|이내로|짧게|간결|characters|줄 이내|줄로' \
+  integration/pleiades -- 'src/lib/ai' 'src/bot/notifications' 'src/bot/commands' | cut -d: -f2-
+```
+
+| 항목 | myFitness | myFinance |
+|---|---|---|
+| `max_tokens`/`maxTokens`/`max_output_tokens` | **0건** | **0건** |
+| 프롬프트 **문자 수** 지시 | 0건 | 0건 |
+| 프롬프트 **줄 수** 지시 | 0건 (`lib/ai/system-prompt.ts:121` `- 간결하게 핵심만` 정성 문구뿐) | 2건 (`active-review.ts:69` `총 6~8줄` · `ta-signal-alert.ts:302` `1~2줄 가이드`) |
+
+→ **LLM 출력 길이의 정적 상한은 없다.** 템플릿 3·5 도 `intervalDesc`·`zone`·`label`·`detail` 이
+Prisma `String?` 이고 `@db.VarChar` 제약 **0건**(`myFitness prisma/schema.prisma:317,344,351`)이라
+하드 상한은 유도되지 않는다 — 다만 필드 수가 유한하고 짧은 라벨이라 4096 도달은 이상값에서만 가능하다.
+`rationale` 은 LLM 이 아니라 **규칙 생성**이다 (`lib/training/workout-recommender.ts:169-191 rationaleFor`).
+
+**절단 방식:** `myFitness send.ts:35-37` = `text.slice(0, MAX_MSG - 3) + "..."` — 하드 슬라이스 + 말줄임.
+적용 3곳(`:44` html · `:45` plain · `:104` 키보드). `:44` 는 **HTML 을 먼저 자르므로** 경계가 태그 중간이면
+파싱 실패 → 폴백을 유발한다(`:45` 의 plain 은 태그를 벗긴 뒤 자른다).
+
+**Q14 가 열릴 때의 최소 질의 (정적으로 좁힌 결과).** 길이 분포가 필요한 대상은 `scheduler.ts:34` 하나이고
+그 원문은 이미 fit DB 에 있다 — `lib/daily-report.ts:109-114` 가 `prisma.aIAdvice.create({ data: { …, response: result } })`
+(`prisma/schema.prisma:228-238 model AIAdvice`, `deleteMany` 후 create 이라 `(category, reportDate)` 당 1행).
+→ **단일 테이블·단일 컬럼 길이 집계 하나면 충분하다.** chat id·개인 식별자 불필요.
+단 전송본은 `` `${emoji} <b>${label}</b>\n\n${mdToHtml(report)}` ``(`scheduler.ts:33`)이라 `length(response)` 는 **하한**이다.
+
+## C-3. plain 폴백 — 라이브 구현은 둘 다 "엔티티를 디코드하지 않는다"
+
+```bash
+git -C <repo> grep -n --text 'replace(/<\[\^>\]' integration/pleiades -- 'src' | cut -d: -f2-
+git -C ~/workspace/pleiades/repos/myFinance grep -n --text 'stripHtml' integration/pleiades -- 'src' | cut -d: -f2-
+```
+
+| 구현 | 태그 제거 | 엔티티 디코드 | 라이브 |
+|---|---|---|---|
+| fin `bot/utils/telegram.ts:44`(inbound)·`:67`(**outbound**) | `/<[^>]+>/g` | ✕ | **○** |
+| fit `bot/notifications/send.ts:45`(**outbound**) · `bot/utils/telegram.ts:33`(inbound) | `/<[^>]*>/g` | ✕ | **○** |
+| fin `bot/utils/markdown.ts:97-103` `stripHtml` | `/<[^>]*>/g` | **○** | **✕ — importer 0** |
+
+> **정정 (2026-09-09 재측정) — 003 §3-1(562-567행)의 대비 구도.**
+> ① 003 이 든 두 구현은 **둘 다 myFinance 파일**이다. myFitness 에는 `src/bot/utils/markdown.ts` 가
+> **존재하지 않는다** (`myFitness/src/bot/utils/` = `error.ts`·`formatter.ts`·`telegram.ts`).
+> ② `myFinance markdown.ts:97 stripHtml` 은 **import 0건 — 죽은 export** 다. `utils/markdown` 을 import 하는
+> 6곳(`commands/ai.ts:13`·`commands/briefing.ts:5`·`notifications/active-review.ts:12`·`notifications/briefing.ts:10`·
+> `notifications/monthly-report.ts:9`·`notifications/ta-signal-alert.ts:13`)은 **전부 `markdownToTelegramHtml`** 만
+> 가져간다. src 전체의 `import … stripHtml` 1건은 **동명의 다른 함수**다(`app/alerts/history/client-utils.ts:27`, 자체 정의).
+> → 003 의 *"어느 쪽을 고르든 **한쪽 저장소의** 폴백 출력이 관측 가능하게 바뀐다"* 는 **불성립**한다. 정확한 서술은 C-4 다.
+> **라이브 두 구현의 실제 차이는 정규식 수량자(`+` vs `*`)뿐**이고, 차이가 나는 입력은 리터럴 `<>` 하나다.
+
+**폴백 트리거 (참고, 484·516행 기록 보완):** fin 은 로컬 `isParseError`(`telegram.ts:79-88` —
+`error_code===400` **또는** `message.includes("can't parse")`), fit 은 공유 `isHtmlParseError`.
+**양쪽 다 폴백 발생 로그 0** (C-1).
+
+## C-4. 엔티티 생성 지점 — fit 아웃바운드 폴백이 보는 엔티티는 0건
+
+```bash
+git -C <repo> grep -n --text '\bescapeHtml(' integration/pleiades -- 'src' \
+  | cut -d: -f2- | grep -v '__tests__' | grep -v 'export function escapeHtml' | wc -l
+git -C ~/workspace/pleiades/repos/myFinance grep -l --text '\bescapeHtml(\|markdownToTelegramHtml' \
+  integration/pleiades -- 'src/bot/notifications' | cut -d: -f2- | sort -u
+```
+
+| | myFinance | myFitness |
+|---|---|---|
+| `escapeHtml(` 호출 줄 / 파일 (정의·테스트 제외) | **87 / 23** | **16 / 2** |
+| 그중 아웃바운드(`src/bot/notifications`) 줄 | **18** | 16 |
+| md→HTML 변환기가 엔티티를 만드나 | **○** — `markdownToTelegramHtml` (`bot/utils/markdown.ts:59-61` `&`→`&amp;` 등) | **✕** — `mdToHtml` (`bot/utils/telegram.ts:6-15`, 태그 생성만) |
+| 엔티티를 만드는 **아웃바운드 모듈** | **11** | 2 |
+| **그중 plain 폴백 경로에 도달하는 모듈** | **11** | **0** |
+
+fin 11개 모듈 열거: `active-review` · `alert-dispatcher` · `briefing` · `budget-alert` · `custom-strategy-alert` ·
+`monthly-report` · `monthly` · `price-alert` · `quarterly` · `rsu` · `ta-signal-alert` (`src/bot/notifications/*.ts`).
+
+**fit 이 0 인 이유 (경로 추적).** fit 의 엔티티 생성 16줄은 전부 `auto-adjust.ts`·`auto-adjust-cron.ts` 이고,
+둘의 전송은 **`sendToAllWithKeyboard`**(`auto-adjust-cron.ts:78` · `auto-adjust.ts:395`) — **HTML 폴백이 없는 함수**다
+(`send.ts:98` 주석 *"HTML fallback 없음"*, 본문 `:104-121` 에 폴백 분기 부재 — 384행 기능 매트릭스와 일치).
+폴백이 있는 `sendToAll` 로 가는 4개 호출의 본문은 전부 엔티티를 만들지 않는다:
+`scheduler.ts:34`(`mdToHtml`, 미이스케이프) · `scheduler.ts:59`·`auto-adjust.ts:455`(정적 문자열 6종) ·
+`admin-alerts.ts:232`(`<b>`/`<code>` 직타 + **미이스케이프** `errSnippet`).
+
+→ **Q10 의 plain 절반 판정: 태그-only 를 정본으로 고르면 두 저장소 모두 동작 변경 0.
+엔티티 디코드를 고르면 myFinance 만 바뀌고(11 모듈) myFitness 는 0 이다.**
+"양쪽 저장소 절충"이 아니라 **fin 한쪽의 개선을 넣을지 말지**의 단방향 결정이다.
+
+## C-5. Q19 — `lastError` 쓰기 4줄 · 읽기 **5 표면**
+
+```bash
+git -C ~/workspace/pleiades/repos/myFinance grep -n --text 'lastError' integration/pleiades -- 'src' | cut -d: -f2- | grep -v '__tests__'
+git -C ~/workspace/pleiades/repos/myFinance grep -n --text 'errorMessage' integration/pleiades -- 'src' | cut -d: -f2- | grep -v '__tests__'
+```
+
+**쓰기 4곳** (전부 `error instanceof Error ? error.message : String(error)`):
+`alert-dispatcher.ts:127` · `custom-strategy-alert.ts:295` · `price-alert.ts:343` · `ta-signal-alert.ts:337`.
+
+> **정정 (2026-09-09 재측정).** 1379~1381행 M3 표 C 행의 행번호(`:126`·`:294`·`:342`·`:336`)는 **`catch` 줄**이고
+> **대입 줄은 각각 +1** 이다. 결론은 바뀌지 않지만 **1a-4 가 편집할 줄은 위 4개**다.
+
+**읽기 5 표면** (발견 20 의 4 표면 + retry API):
+
+| 표면 | 위치 |
+|---|---|
+| DB 쓰기 | `bot/notifications/alert-history.ts:63,76` → `prisma/schema.prisma:344 errorMessage String?` |
+| API (history) | `app/api/alerts/history/route.ts:77` |
+| 화면 1 | `app/alerts/history/AlertHistoryClient.tsx:448-449` |
+| 화면 2 | `components/alerts/AlertHistoryDetailModal.tsx:101-103` |
+| CSV | `app/api/alerts/history/export/csv-format.ts:19,131,146` |
+| **API (retry) — DB 미경유 직접 반환** | `app/api/alerts/history/[id]/retry/route.ts:82` |
+
+→ 발견 20 의 "DB → UI → CSV" 3단 서술에 **API 계약 1개가 더 있다** (M1-B 1321행은 이미 *"DB + API 계약"* 으로 적었다).
+
+## C-6. Q19 위험 판정 — 비밀 노출이 아니라 형식 위반
+
+**grammY 1.44.0** (`repos/myFinance/node_modules/grammy`, `out/core/error.js`) — message 조립부:
+
+- `GrammyError` (`:19-36`, `:38-48`): `super(\`${message} (${err.error_code}: ${err.description})\`)`,
+  `toGrammyError` 가 `message = \`Call to '${method}' failed!\``.
+  → **메서드명·에러코드·텔레그램 description 만.** 호출 payload(`chat_id`, `text`)는 **`this.payload` 프로퍼티**에만 있고
+  message 에 직렬화되지 않는다. **봇 토큰 없음, chat id 없음.**
+- `HttpError` (`:62-70`, `toHttpError` `:76-82`):
+  `msg = \`Network request for '${method}' failed!\`` (+ status/statusText) **+ `sensitiveLogs` 일 때만 `err.message`**
+  ← 토큰이 들어올 수 있는 **유일한 경로**.
+
+| `sensitiveLogs` | 값 | 근거 |
+|---|---|---|
+| grammY 기본값 | **`false`** | `out/core/client.js:82` (`options.sensitiveLogs ?? false`) |
+| myFinance | **미설정** | `src/bot/index.ts:39-44` (`client: { baseFetchConfig, timeoutSeconds }`), `grep sensitiveLogs src` → 0건 |
+| myFitness | **미설정** | `src/bot/index.ts:36-41` (동형), `grep` → 0건 |
+
+또한 chat id·토큰을 메시지에 넣어 던지는 코드는 fin src 전체 **0건**
+(백틱 템플릿 리터럴 안에 `chatId`/`token` 보간을 넣어 `new Error(...)` 를 던지는 패턴 → 빈 결과).
+
+→ **판정: 현행 유지(raw)는 `CLAUDE.md` 컨벤션(형식) 위반이지, 실측 가능한 비밀 노출 경로가 아니다.**
+남는 실질 노출은 텔레그램 description 원문과 비-grammY 예외(Prisma 등) message 가 웹 UI·CSV 에 그대로 뜨는 것.
+**단서:** 이 판정은 `sensitiveLogs` 가 꺼져 있다는 사실에 전적으로 의존한다. 누가 켜면
+`HttpError.message` 에 `…/bot<TOKEN>/…` URL 이 붙고 **`lastError` 는 마스킹하지 않으므로** 즉시 노출 경로가 된다.
+
+**⚠ `sanitizeError` 는 축소가 아니라 확장이다** (`myFinance src/bot/utils/error.ts:8,19-53`).
+마스킹 대상은 정규식 **하나뿐**: `TOKEN_RE = /bot\d+:[A-Za-z0-9_-]+/g`. chat id·URL·개인정보는 대상이 아니다.
+그리고 `.error ?? .cause` 를 **깊이 5까지 순회해 `' | '` 로 join** 한다:
+
+| 에러 유형 | raw `error.message` | `sanitizeError(error)` | 차이 |
+|---|---|---|---|
+| `GrammyError` | `Call to 'sendMessage' failed! (400: Bad Request: …)` | `GrammyError: Call to … (400: …)` | **`"GrammyError: "` 접두만** (`.error`/`.cause` 없음) |
+| `HttpError` | `Network request for 'sendMessage' failed!` | `HttpError: Network request … \| <inner name>: <inner message>` | **내부 fetch 에러 추가 — 정보 증가** |
+
+→ *"sanitize 로 통일하면 안전해진다"* 는 **틀린 독법**이다. 토큰이 없는 현 상황에서 마스킹은 사실상 no-op 이고,
+실제 효과는 **이름 접두 추가 + HttpError 내부 체인 노출** — **UI·CSV 문자열이 더 길고 더 기술적으로 바뀐다.**
+(안전 이득은 `sensitiveLogs` 를 켰을 때의 방어로서만 존재한다.)
+
+## C-7. Q19 두 설계의 호출부 변경 지점 (정적 열거)
+
+| 설계 | `deliveries[].error` | **호출부 변경 지점** | 관측 변경 |
+|---|---|---|---|
+| **A. 파사드가 sanitize** | sanitized | **0** (4곳이 그대로 파생) | **5 표면 전부** — 문자열이 C-6 표대로 바뀐다 |
+| **B. raw 유지 + 호출부가 sanitize** | raw | **4** — `alert-dispatcher.ts:127`·`custom-strategy-alert.ts:295`·`price-alert.ts:343`·`ta-signal-alert.ts:337` | **A 와 동일** (지점만 늘어난다) |
+| **C. raw 유지 · sanitize 안 함 (현행 보존)** | raw | **0** | **없음** |
+
+**A 와 B 는 결과가 같다** — 둘 다 5 표면의 문자열을 바꾼다. **관측 변경을 피하는 유일한 안은 C** 이고,
+C 는 컨벤션 위반을 존치한다. C-6 판정(비밀 노출 경로 미발견)을 받아들이면 **C 의 실질 위험은 형식 위반에 그친다.**
+참고로 파사드가 루프를 흡수하면 `console.error` 로그 17종과 `sanitizeError` 적용 불일치(12 raw / 5 sanitized, M3)도
+함께 통일되며 그 12곳 중 4곳이 위 지점과 겹친다 — 로그는 DB·UI 표면이 아니라 위 표에서 분리해 세었다.
+
+> **정정 (2026-09-09 · 이슈 #37 · 감사 1회차 정정 1) — *"A 와 B 는 결과가 같다"* 는 조건부다.**
+> 위 문단 원문: *"**A 와 B 는 결과가 같다** — 둘 다 5 표면의 문자열을 바꾼다. **관측 변경을 피하는 유일한 안은 C** 이고,"*
+> **같아지는 것은 Q26 ②(`onError`)를 함께 고른 조합에서만**이다.
+> `sanitizeError` 는 **객체를 받아** `.error ?? .cause` 를 깊이 5까지 순회해 `' | '` 로 join 하고 `${name}: ` 접두를 붙이므로
+> (`repos/myFinance/src/bot/utils/error.ts:27-52`), **포트가 주는 문자열에서는 재계산할 수 없다.**
+> ∴ **Q26 ①·③ 에서 B 는 성립하지 않고**, 호출부가 쓸 수 있는 것은 `sanitizeMessage`(`:19-21` · `TOKEN_RE` 치환 1개)뿐인 **축퇴형 B′** 이며
+> **그 문자열은 A 와도 C 와도 다르다**(토큰이 있을 때만 C 와 갈린다).
+> 그리고 *"관측 변경을 피하는 유일한 안은 C"* 도 한정이 필요하다 —
+> **무조건 0 은 C 뿐 · B′ 는 현 상황(마스킹 대상 0건 — C-6)에서만 0 이고 `sensitiveLogs` 를 켜는 순간 갈린다. 포트를 건드리지 않는 것은 C·B′ 둘 다.**
+> **확정 (사용자 2026-09-09 · #37): Q26 ①(`label` 만) + Q19 C(포트 raw)** — 003 §4-2 · §10 참조. **B 는 닫혔다.**
+
+## 못 잰 값 (이 절 범위)
+
+| 항목 | 왜 못 쟀나 |
+|---|---|
+| 아웃바운드 메시지 **실제 길이 분포** | DB 조회 필요 (Q14). **로그 우회 경로는 존재하지 않음이 확인됐다**(C-1). fit 은 `AIAdvice.response` 단일 컬럼 집계면 충분한 데까지 좁혔다 (C-2) |
+| 4096 초과 **발생 빈도**(fit 절단 손실량) | 위와 동일 + 절단 로그 0 |
+| **plain 폴백 발동 빈도** | 폴백 로그 0 (C-1). 코드 계측 없이는 불가 |
+| `AlertHistory.errorMessage` **현재 문자열 분포** | 실서비스 DB 조회 필요 (Q14). C-6 은 *어떻게 바뀌는지*를 정적으로 유도했을 뿐 *지금 무엇이 들어 있는지*는 모른다 |
+| 텔레그램 `description` 원문이 담는 값 | 런타임 응답. grammY 가 그대로 전달한다는 것만 확인 |
+
+---
+
+## #37 감사 실측 (2026-09-09)
+
+> **출처.** 이슈 #37 · `_workspace/1a-1-prep/03_auditor_1a1prep.md` 2회차 B-12.
+> 초안(`02_writer_1a1prep.md`)이 **대장에 없는 숫자 6개**를 본문에서 만들었다는 정정에 따라,
+> 그 값들을 **측정 명령과 함께 여기로 옮기고 초안은 이 절을 인용**한다 (005 R1 — *"대장에 없는 숫자를 본문에 새로 만들지 않는다"*).
+> **파생값 `66.7%` 는 기록하지 않는다** — 열거 `78/117` 이 정본이다.
+> 아래 값은 **2026-09-09 에 다시 돌려 확인**했다(감사 2회차 값과 전부 일치).
+
+### A. 003 §4-2 의 정정 블록 비중 — 산출물 형태 3안의 근거
+
+| 값 | 측정 | 명령 |
+|---|---:|---|
+| §4-2 총 행수 | **117** | `sed -n '597,713p' docs/specs/003-notify-package.md \| wc -l` |
+| 그중 정정 블록 | **78** (636~713) | `sed -n '636,713p' docs/specs/003-notify-package.md \| wc -l` |
+| 정정 블록 **개수** | **5** | `awk 'NR>=597 && NR<=713 && /^> \*\*정정/ {print NR}' docs/specs/003-notify-package.md` |
+
+**절 경계:** `### 4-2. 시그니처` = **597행** · `### 4-3.` = **714행** → §4-2 = 597~713 (`grep -n '^### 4-' docs/specs/003-notify-package.md`).
+
+**블록 5개의 시작 행 (열거 — 합계를 신뢰하지 않는다):**
+
+| # | 행 | 블록 |
+|---|---:|---|
+| 1 | **636** | 정정 ① (2026-09-04 · 이슈 #4 · 발견 19) |
+| 2 | **645** | 정정 ② (2026-09-04 · 이슈 #4 · 발견 18) — 파사드 표면이 하나 부족하다 |
+| 3 | **659** | 정정 (PR #9 Codex P2) — ADMIN 인라인 파싱은 "별건"이 아닐 수 있다 |
+| 4 | **668** | 정정 (PR #9 Codex P2) — ②도 `targetCount` 를 남긴다 |
+| 5 | **682** | 정정 ③ (2026-09-04 · 이슈 #4 · 발견 20) — 호출부 라벨 자리가 없다 |
+
+> **부수 확인 — 맨 위 코드 블록이 이미 정본이 아니다.** `003:609-611` 의 `interface Notifier` 는
+> `notify(route, content)` + `targetCount` **둘뿐**이고, `targets?()` 와 `ctx?: NotifyContext` 는
+> **정정 ③ 안의 개정안(`003:691-698`)에만** 있다. `deliveries[].error?: string` 은 `003:617`.
+> (`sed -n '600,620p;690,700p' docs/specs/003-notify-package.md`)
+
+### B. 하네스 LOC — N1·N2 의 기준 확인용 (재기준화 아님)
+
+| 대상 | 파일 | LOC | 명령 |
+|---|---:|---:|---|
+| fin `.claude/` (worktree `integration/pleiades`) | **16** | **1,662** | `find repos/myFinance/.claude -type f \| wc -l` · `find repos/myFinance/.claude -type f -print0 \| xargs -0 cat \| wc -l` |
+| fit `.claude/` tracked (worktree `integration/pleiades`) | **17** | **1,774** | `git -C repos/myFitness ls-tree -r --name-only integration/pleiades -- .claude \| wc -l` · 같은 목록을 `git show` 로 이어 `wc -l` |
+| fit `.claude/` 원본 (`~/workspace/myFitness`) | **18** | **1,885** | `find ~/workspace/myFitness/.claude -type f \| wc -l` · `… -print0 \| xargs -0 cat \| wc -l` |
+
+**005 §3-1 N1 의 기준은 그대로 성립한다.** N1 = fin **1,629**(`dev` 기준) + fit **1,885**(원본) = **3,514**.
+fin 이 1,629 → **1,662** 로 움직인 것은 **집행 결과**(H-3(fin) / myFinance#492 가 `integration/pleiades` 에 전파)이고 측정 오류가 아니다.
+→ **N1·N2 는 재기준화하지 않고 측정 시점·기준 라벨만 붙인다** (근거는 초안 §4 각주).
+
+### C. pleiades `.claude/` 현황 — 005 정정 G 의 열거가 stale 하다
+
+| 값 | 측정 | 명령 |
+|---|---:|---|
+| pleiades skill | **8** | `ls .claude/skills` → `decision-doc` · `dual-repo-change` · **`orphan-check`** · `pleiades-handoff` · `pleiades-orchestrator` · `pleiades-resume` · `repo-measure` · `reversibility-audit` |
+| pleiades `.claude/` 파일 | **13** | `find .claude -type f \| wc -l` |
+
+> **`005:427-428` 의 열거는 7개**(`orphan-check` 누락)로 **H-1b(PR #22) 집행 전 값**이다 — 정정 대상.
+> **`measured-facts.md:1596`·`:1601`**(H1 표 pleiades 행 · 12파일 / 2,018 LOC)은 **Q41-2 의 "H1 표 대비 변화" 블록이 이미 정정했다** — 인용만 한다.
+
+### D. PR 상태 — `CLAUDE.md:7` 정정용
+
+| PR | 상태 | 명령 |
+|---|---|---|
+| **#35** (#14 봇 불가 대체 경로) | **MERGED** 2026-09-08T04:55:33Z | `gh pr view 35 --json number,state,mergedAt` |
+| **#36** (인계 #34) | **MERGED** 2026-09-08T04:55:07Z | `gh pr view 36 --json number,state,mergedAt` |
+
+`CLAUDE.md:7` 은 여전히 *"**열린 PR: #35**(#14 봇 불가 대체 경로) · 인계 **#34**"* 로 적혀 있다 → **열린 PR 0** 으로 정정.
+
+> **측정 단서.** `cat | wc -l` 은 **개행 수**를 센다 — 마지막 줄에 개행이 없는 파일은 1 적게 세어진다.
+> 위 세 LOC 값은 그 정의 아래의 값이고, **005 의 LOC 도 같은 정의**(`wc -l`)라 비교 가능하다.
