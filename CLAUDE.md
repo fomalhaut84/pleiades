@@ -4,7 +4,7 @@
 
 **pleiades** — `myFinance` 와 `myFitness` 두 프로젝트를 어디까지 통합할지 검토하고, 결정된 범위를 실행하는 저장소.
 
-**현재 상태: 방향 확정 · 배치·룰 완료 · 하네스 통합(#1) 집행 · **1a-0 완료(#31 → PR #33 머지 2026-09-08)** — 하네스 PR 5개(#19·#20·#22·#24·#26) · myFinance#492 · myFitness#369 전부 머지됨(2026-09-07). 남은 것 **H-1(Q41 확정 → 착수 가능)** · H-3(fit) · 단계 0 미착수 · **열린 PR 0**(#35·#36 은 2026-09-08 머지됨 — `362e6e8`·`2e07093`).**
+**현재 상태: 방향 확정 · 배치·룰 완료 · 하네스 통합(#1) 집행 · **1a-0 완료(#31 → PR #33 머지 2026-09-08)** — 하네스 PR 5개(#19·#20·#22·#24·#26) · myFinance#492 · myFitness#369 전부 머지됨(2026-09-07). 남은 것 **H-3(fit)** · 단계 0 미착수 — **H-1 은 #40 에서 집행**(`.claude/skills/pleiades-codex-loop/` 신규 · 2026-09-09) · **열린 PR 0**(#35·#36 은 2026-09-08 머지됨 — `362e6e8`·`2e07093`).**
 **2026-09-09 · 이슈 #37 (1a-1 준비):** 측정 3건(Q41 하네스 이름 전수 · #32 I1 테스트 타입체크 게이트 · Q10·Q19 정적 근거 C-1~C-7) →
 초안 `_workspace/1a-1-prep/02_writer_1a1prep.md` **3회 개정 · 감사 3회(정정 11→10→6 · 마지막 6건은 문안 수준이라 직접 반영)** →
 **사용자 확정 7건 (전부 권고안 채택)** — **Q25 ①`targets(route): string[]`** · **하위 ADMIN A**(실값 · fin 전용 · fit 미매핑) ·
@@ -22,7 +22,7 @@
 **형태 B(복사) · 저장소별 래퍼 스크립트 · fit tracked 화 · W-2(원본 workflow.md 유지)**.
 정본은 `docs/specs/005-harness-integration.md`(초안 4회 개정 · 감사 4회 통과).
 **집행 진행:** H-0 (#20) · H-1b·H-5 (#22) · H-3(fin) (myFinance#492) · H-4 (myFitness#369) **전부 머지** — 대상 저장소 쪽은 `integration/pleiades` 에만 있고 서비스 `dev` 에는 없다(004 Q43) ·
-H-1 은 ~~Q41(산출물 이름)~~ **Q41 확정(`pleiades-codex-loop` · 2026-09-09 · #37) → 착수 가능** · H-3(fit)은 H-4 머지 후. 이슈 분할 초안은 005 §4-14.
+H-1 은 ~~Q41(산출물 이름)~~ **Q41 확정(`pleiades-codex-loop` · 2026-09-09 · #37) → 착수 가능** → **집행 #40** · H-3(fit)은 H-4 머지 후. 이슈 분할 초안은 005 §4-14.
 **1a-0 은 완료됐다 (#31 · PR #33) — Q42 는 실측으로 개정됐다(2026-09-08):** ~~6조건~~ → **10조건(정본은 003 §10-1 의 2026-09-08 정정 블록)**. 뒤집힌 셋 — **RO 롤은 검증을 축소하고**(fin 15 중 10 · fit 4 중 1 만 정상 본문 도달) · **cron off 는 env 가 아니며**(플래그 0건, fit sweeper 는 코드 변경) · **fit 웹은 기동만으로 DB 를 쓴다**(부팅 1회 + 5분 주기). 그리고 **텔레그램 격리 축이 빠져 있었다** — 봇을 안 띄워도 **fin 웹 경로 셋**이 전송을 낸다. 검증은 **γ(로컬 `repos/*`) + β2(빈 스키마 사본 `myfinance_int`·`myfitness_int`)**, **서버 작업·β2 승인은 1a-3 과 함께**. **1a-1 부터는 추가로 하네스 통합(#1)이 선결**이고 #1 은 방향만 확정됐다 — 1a-1 이 이미 두 저장소 코드를 흡수한다.
 
 > **단계 0 은 끝나지 않았다.** 002 §4 는 단계 0(통합 어드바이저)을 *"지금, 반나절 → 하루"* 로 두고
@@ -78,7 +78,7 @@ pleiades 발 변경은 **전부** `integration/<type>-pleiades-<name>` 을 따�
 확정: **`orphan-check` 는 복사(원본 유지)** · **저장소별 `--add-dir` 래퍼 스크립트** ·
 **fit `.claude/` tracked 화**(모드 I · base `integration/pleiades` · 이슈 `fomalhaut84/myFitness#368` → PR #369) · **fin·fit `workflow.md` 원본 유지 + #8 부분 갱신**.
 
-- 34파일(fin 16 tracked + fit 18 ignored) 중 pleiades 가 얻는 것은 **복사 1**(`orphan-check` — **H-1b 완료**, `.claude/skills/orphan-check/`) + **신규 작성 1**(Codex 대응 — **이름 `pleiades-codex-loop` 확정 2026-09-09 · #37**, 판정 기준 S · 기존 `orphan-check` 충돌은 별건 이슈 #38)뿐이고 **나머지는 저장소에 남는다.** fin·fit `rules/workflow.md` 는 **폐기 불가**(단독 작업 절차 35줄이 pleiades 에 없다) — **fin `git rm` 범위는 0** 이다.
+- 34파일(fin 16 tracked + fit 18 ignored) 중 pleiades 가 얻는 것은 **복사 1**(`orphan-check` — **H-1b 완료**, `.claude/skills/orphan-check/`) + **신규 작성 1**(Codex 대응 — **`.claude/skills/pleiades-codex-loop/` · H-1 집행 #40 · 2026-09-09**. 이름은 #37 Q41 확정, 판정 기준 S · 기존 `orphan-check` 충돌은 별건 이슈 #38)뿐이고 **나머지는 저장소에 남는다.** fin·fit `rules/workflow.md` 는 **폐기 불가**(단독 작업 절차 35줄이 pleiades 에 없다) — **fin `git rm` 범위는 0** 이다.
 - **저장소에 남은 하네스는 pleiades 세션에서 자동 로드되지 않는다.** 하위 디렉터리의 `.claude/` 는 보이지 않고(004 §3-2), `permissions.additionalDirectories` 는 **툴 권한만** 영속화한다. **`--add-dir` 가 유일한 경로다.**
 
 ```bash
@@ -158,6 +158,7 @@ bin/claude-with fit      # 한 번에 한 저장소 (H-5 · Q30). --resume 도 �
 | 2026-09-07 | **005 발행** (초안 4회 개정 · 감사 4회 · 정정 10→8→7→0) · 004 정정 append(Q20·Q21·Q22·§3-2) · 하네스 절 교체 | 스펙 2 · CLAUDE.md | Q20 답 (#1). 이 시점에는 하네스 무변경 (집행은 같은 날 PR #20·#22 에서 시작) |
 | 2026-09-07 | **Q29·Q30·Q32·Q39 확정** → 005 §2·§4-13 갱신 · **집행 이슈 분할 초안(§4-14) 신설** | 스펙 1 · CLAUDE.md | 사용자 결정 |
 | 2026-09-09 | **`workflow.md` 8절 pleiades 행 타입 칸에 한 구 추가** (#32 I1 (b) 도입 시 `typecheck:test` 를 이 칸에 더한다 — **명령은 1a-1 에서 생긴다**) | 룰 1 | #37 사용자 결정 |
+| 2026-09-09 | **H-1 집행 — 스킬 `pleiades-codex-loop` 신규 작성** (fin `codex-response-patterns` 91줄 + fit `codex-review-loop` 113줄 입력 · 척도는 봇 네이티브 `P0` 최고로 통일 · 카탈로그는 pleiades 자체 Codex 정정 이력 14패턴) | 스킬 1 (총 9) | 005 §4-13 H-1 · #40 |
 | 2026-09-08 | **`workflow.md` 8절 pleiades 행 확정** (lint 미해당 · `typecheck`/`test`/`build` + `npm --prefix packages/notify install` 선행 조건) | 룰 1 | 1a-0 (#31) 이 루트 `package.json` 을 신설 |
 
 ## 상속하는 컨벤션
