@@ -9,7 +9,8 @@
 #   - permissions.additionalDirectories(settings) 는 툴 권한만 영속화한다. skills·agents·rules 는 --add-dir 로만 로드된다.
 #   - 환경변수 CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 이 없으면 skills·agents 만 보이고
 #     rules·CLAUDE.md 는 조용히 빠진다 — 규범 없이 스킬만 도는 가장 나쁜 상태. 래퍼는 이것을 항상 켠다.
-#   - 대상은 항상 원본이다. fit .claude/ 는 worktree 에 없고, repos/*/.claude 는 중첩이라 로드되지 않는다.
+#   - 대상은 항상 원본이다. repos/*/.claude 는 (fit 도 #369 이후 tracked 로 존재하지만) 중첩이라 로드되지 않는다.
+#     fit 원본 .claude/ 는 ignored 물리 파일이라 git 이 갱신하지 않는다 — 통합 브랜치 변경 후 `git archive integration/pleiades … | tar -x` 로 동기화한다(#27 · H-3(fit)).
 #   - 한 번에 한 저장소만: 둘 다 붙이면 rule 은 7벌 공존, agent `release-manager` 는 마지막 디렉터리가 조용히 이긴다.
 #   - --add-dir 는 --resume 시 복원되지 않는다. 재개할 때도 이 래퍼로 연다.
 #   - cwd 가 pleiades 가 아니면 중단한다 — pleiades 하네스 없이 대상 저장소만 붙으면 승인 게이트가 사라진다.

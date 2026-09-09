@@ -629,6 +629,8 @@ pleiades 세션에서 보이지 않는 것은 `--add-dir` 로 해결한다.
 | **H-2 (fit)** | 원본 파일 삭제·축약 | — | — | — | — | **범위 0** (형태 B 권고) |
 | **H-3 (fin)** *(→ myFinance#492)* | #8 fin 25줄 — base **`integration/pleiades`** · 모드 I (이슈 #25 정책, 2026-09-07 base 변경) | fin 의 활성 리뷰 결함이 사라진다 | **에이전트 사전 리뷰 필수** — 9-0 *"대상 저장소 변경 — 경로 무관"* | **즉시** | `git revert` 1회 | **25줄** (P 22 + 릴리즈 3) |
 | **H-3 (fit)** | #8 fit 33줄 — **Q32-ii(H-4) 선행 필수.** 그 뒤 브랜치·PR 경로로 수정 | fit 의 활성 리뷰 결함이 사라진다 | **에이전트 사전 리뷰 필수** — 9-0 같은 행. **Q32-i 에서는 집행 불가**(9-1 이 `branch vs base` 를 요구하는데 ref 가 없다) | **즉시** (H-4 이후) | `git revert` | **33줄** (P 30 + 릴리즈 3) |
+> **H-3(fit) 집행 결과 (2026-09-09 · myFitness#372 `2195854` · 이슈 #8 종료).** 위 행의 *"#8 fit 33줄"* 은 **35줄**이다(`self-review only` 2줄 누락 — 결함 ⑥ · measured-facts "H-3(fit) 집행 실측" §1). 실제 대상은 **10파일**(`workflow.md` + 실행 스킬·에이전트 8 + `CLAUDE.md`) — 착수 직전 재감사가 grep 0 인 `agents/release-manager.md`(봇 게이트 부재)와 3-check 4종화를 추가했다(`_workspace/harness/03_auditor_h3fit.md`). 검증은 `npx prisma generate` 선행 후 4종(cold build 9.5 s). 사전 리뷰 major 1 · 봇 5라운드 P1 2 · P2 6 전부 반영 — 전부 *실행 스킬·템플릿의 경로 누락* 유형. **원본 `~/workspace/myFitness/.claude/` 는 ignored 라 git 이 갱신하지 않으므로 사용자 승인 후 `git archive integration/pleiades <10파일> | tar -x` 로 동기화했다**(되돌리기 **중간** — 폴백 `git archive 626a201`). 잔여 #42.
+
 | **H-4** *(확정 · Q32-ii → myFitness#369)* | fit `.gitignore:35,36` 2줄 → 1줄 치환 + `git add .claude CLAUDE.md`(local 은 ignore 로 남는다, 정정 N) — base **`integration/pleiades`** · 모드 I (이슈 #25) · 승인 게이트 · 이슈 `fomalhaut84/myFitness#368` | fit 하네스 **18파일**이 이력을 갖는다. **H-3(fit) 의 등급이 내려간다** | **에이전트 사전 리뷰 필수** — fit 소스(`.gitignore`) 변경 | **중간** | revert 커밋 (push 된 이력엔 남는다) | **2줄 + 18파일 tracked 화** |
 | **H-5** *(확정 · Q30 → PR #22)* | `--add-dir` 저장소별 래퍼 (pleiades `bin/`) | 유지 33파일이 1명령으로 보인다 | self-review (config 소규모) | **즉시** | 파일 삭제 | **1파일** |
 
@@ -705,7 +707,7 @@ pleiades 세션에서 보이지 않는 것은 `--add-dir` 로 해결한다.
 | **H-1 · H-1b · H-5** (pleiades 하네스 집행) | `fomalhaut84/pleiades` | **신설 1개** (`Closes`) — #1 은 005 발행 PR 이 닫는다 | pleiades · `dev` | `dev` | self-review | 불필요 |
 | **H-3 (fin)** #8 fin 25줄 | `fomalhaut84/pleiades` | **기존 #8 공유** (`Refs`, 양쪽 머지 후 수동 종료 — 5절 예외 표 *대칭 변경*) | **`integration/pleiades`** (모드 I · #25) | `integration/pleiades` | **에이전트 사전 리뷰 필수** | **필요** — 실서비스 저장소 |
 | **H-4** fit `.gitignore` 2줄→1줄 + tracked 화 | **`fomalhaut84/myFitness`** (**예외** — 7절 표대로면 pleiades. #368/#369 는 정책 이전에 만들어져 그대로 둔다) | **#368** (`Closes`) | **`integration/pleiades`** (모드 I · #25) | `integration/pleiades` | **에이전트 사전 리뷰 필수** | **필요** — fit 소스 변경 |
-| **H-3 (fit)** #8 fit 33줄 | `fomalhaut84/pleiades` | **기존 #8 공유** (`Refs`) — **H-4 머지 후 착수** | **`integration/pleiades`** (모드 I · #25) | `integration/pleiades` | **에이전트 사전 리뷰 필수** | **필요** |
+| **H-3 (fit)** #8 fit ~~33~~ **35**줄 *(→ myFitness#372 · 2026-09-09 완료)* | `fomalhaut84/pleiades` | **기존 #8 공유** (`Refs`) — ~~H-4 머지 후 착수~~ 완료 · #8 종료 | **`integration/pleiades`** (모드 I · #25) | `integration/pleiades` | **에이전트 사전 리뷰 필수** | **필요** |
 
 **권고 — pleiades 쪽은 두 이슈로 나눈다 (하나로 묶지 않는다).**
 H-0 은 **이미 이슈 #10 이 존재**하고 H-1·H-1b·H-5 는 **#1(Q20)의 집행**이라 별도 이슈를 신설한다(#1 자체는 이 문서를 발행하는 PR 에 1:1 로 대응한다). 넷을 한 PR 로 묶으면

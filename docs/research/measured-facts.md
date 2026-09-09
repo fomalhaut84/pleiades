@@ -3264,3 +3264,71 @@ fin 이 1,629 → **1,662** 로 움직인 것은 **집행 결과**(H-3(fin) / my
 
 > **측정 단서.** `cat | wc -l` 은 **개행 수**를 센다 — 마지막 줄에 개행이 없는 파일은 1 적게 세어진다.
 > 위 세 LOC 값은 그 정의 아래의 값이고, **005 의 LOC 도 같은 정의**(`wc -l`)라 비교 가능하다.
+
+---
+
+## H-3(fit) 집행 실측 (2026-09-09)
+
+측정 시점: `repos/myFitness` `integration/pleiades` HEAD `626a201` (분기점) · 작업 브랜치 `integration/chore-pleiades-8-fit` · 원본 `~/workspace/myFitness` = `main`, 무접촉.
+
+### 1. #8 결함 표면 — 정정 (H8 · 005 §4-13 대조)
+
+```bash
+cd ~/workspace/pleiades/repos/myFitness
+W=$(git show integration/pleiades:.claude/rules/workflow.md)
+printf '%s\n' "$W" | wc -l                                                                    # 264
+printf '%s\n' "$W" | /usr/bin/grep -cE --binary-files=text '\bP[0-3]\b'                       # 29
+printf '%s\n' "$W" | /usr/bin/grep -cE --binary-files=text 'P0|P1|P2'                         # 30
+printf '%s\n' "$W" | /usr/bin/grep -cE --binary-files=text 'git merge dev|git push origin main|git tag'   # 3 (:35-37)
+printf '%s\n' "$W" | /usr/bin/grep -cE --binary-files=text 'P2만'                             # 1 (:262)
+printf '%s\n' "$W" | /usr/bin/grep -cE --binary-files=text 'self-review only'                 # 2 (:125,203)
+for f in $(git ls-tree -r --name-only integration/pleiades -- .claude CLAUDE.md); do
+  n=$(git show integration/pleiades:$f | /usr/bin/grep -cE --binary-files=text '\bP[0-3]\b|git merge dev|git push origin main|P2만|self-review only'); echo "$n	$f"; done | sort -rn
+# 34 workflow.md · 8 branch-workflow · 6 codex-review-loop · 2 release-flow · 1 CLAUDE.md · 1 session-handoff · 1 workflow-conductor · 1 codex-liaison · 나머지 0
+```
+
+| 값 | 기존 기재 | 실측 | 정정 |
+|---|---|---|---|
+| fit `workflow.md` P 표기 줄 | **26** (H8 표 아래 문장) | **30** (`P0\|P1\|P2`) / **29** (`\bP[0-3]\b`, `:262` `P2만` 은 한글 인접이라 `\b` 불성립) | H8 정정 |
+| fit `workflow.md` #8 대상 줄 | **33** (005 §4-13 "fit 33줄" = P 30 + 릴리즈 3) | **35** = 29 + 릴리즈 3(`:35-37`) + `P2만` 1 + `self-review only` 2 (#8 결함 ⑥ fit 전용 누락) | 005 §4-13 정정 |
+| 대상 파일 | (fin 선례 10파일) | **grep 8파일 / 54 hit** + grep 0 인 `agents/release-manager.md`(봇 게이트 부재) + 3-check 4종화로 `skills/myfitness-orchestrator/SKILL.md` = **10파일** | — |
+| `.claude`·`CLAUDE.md` 밖 절차성 결함 | — | **0** (`git grep --text -nP` — 히트는 과거 리뷰 기록·Prisma `P2025`·CI 주석뿐). PR/이슈 템플릿 부재 | — |
+
+> **방법론 — `git grep -E` 는 `\b` 를 지원하지 않는다.** POSIX ERE 에 `\b` 가 없어 `-lE '\bP[0-3]\b|…'` 는 8파일 중 2파일만 낸다(감사 중 실제 발생). `git grep` 은 `-P`, `/usr/bin/grep` 은 `-E`.
+
+### 2. 검증 5단계 (CI 는 base 가 `integration/pleiades` 라 미발동 — 로컬이 전부)
+
+```bash
+ls -d src/generated/prisma        # 없음 → typecheck·test·build 실패. npx prisma generate 선행 필수 (ci.yml 순서와 동일)
+npx prisma generate               # exit 0 · "Prisma config detected, skipping environment variable loading" — .env 접속 없음
+npm run lint && npm run typecheck && npm run test && npm run build   # 전부 exit 0
+rm -rf .next && time npm run build
+```
+
+| 단계 | 결과 |
+|---|---|
+| `npm run test` (= verify 스크립트 2개) | exit 0 · DB·env 불요(소스 판정 · CI 주석 `# DB 불필요` 일치) |
+| `npm run build` warm | 12.159 s wall |
+| `npm run build` **cold** (`.next` 삭제 후) | **9.515 s** wall · 35.69 s user · 5.40 s sys · 431 % cpu (Next.js 16.3.0 Turbopack + esbuild 3종) |
+| 실서비스 DB 접촉 | **0** — 14 페이지 중 13 `force-dynamic` + 1 `use client`(prisma 참조 0) → 프리렌더 쿼리 없음. worktree `.env` 의 `DATABASE_URL` 은 실서비스 `myfitness` 이므로 이 확인이 필수였다 |
+| 산출물 | `.next`(`.gitignore:11`) · `src/generated/prisma`(`:54`) · `dist`(`:16`) 전부 ignored |
+
+### 3. #27 함정의 방향 — 원본은 안 지워지고 **안 고쳐진다**
+
+```bash
+git -C ~/workspace/myFitness rev-parse --abbrev-ref HEAD                 # main
+git -C ~/workspace/myFitness check-ignore -v .claude/rules/workflow.md   # .gitignore:35:.claude/
+grep -n 'target=\|--add-dir' ~/workspace/pleiades/bin/claude-with        # :23 fit → ~/workspace/myFitness · :46 --add-dir "$target"
+```
+
+원본 `main` 은 `.claude/` 전체가 ignored(untracked 물리 파일). `bin/claude-with fit` 은 원본을 읽는다. **머지만 하면 실사용 세션은 옛 척도를 계속 읽는다** → 원본 동기화(`git archive integration/pleiades <10파일> | tar -x`)는 원본 쓰기 · git 이력 없음 → 사전 사본 필수 · 되돌리기 **중간**. 부수: `bin/claude-with:12` 주석("fit .claude/ 는 worktree 에 없고")은 #369 이후 stale.
+
+### 못 잰 값
+- 옛 척도로 분류된 살아 있는 백로그(`docs/specs/backlog-code-review-issues.md` 등)의 건수 — 범위 밖, 후속 이슈 후보
+
+### 4. 집행 결과 (2026-09-09 · myFitness#372 머지 `2195854`)
+
+- 봇 라운드 **5**(오픈 1 + `@codex review` 2 + push 자동 2): P1 2(1·2회차) · P2 6 — 전부 반영. 3회차부터 P1 0. 사전 리뷰 major 1 · info 4.
+- **원본 동기화 실행**: `git archive integration/pleiades <10경로 명시> | tar -x -C ~/workspace/myFitness` → `diff -rq` 차이 = `settings.local.json` 뿐 · 원본 index 무변경 · `main` 유지. 사전 사본은 세션 스크래치패드(`fit-original-claude-backup-20260909-161547.tar`, 32 entries) — 세션 한정이므로 되돌리기는 `git archive 626a201 <같은 10경로> | tar -x` 폴백(롤백 문서 `_workspace/harness/04_operator_h3fit_rollback.md`).
+- **zsh 함정 재발**: `FILES="a b c"; git archive ref $FILES` 가 **단일 pathspec** 으로 넘어가 `did not match any files` — 이 파일 "방법론 주의 — zsh 는 미인용 변수를 단어 분할하지 않는다" 그대로. 경로를 인자로 직접 나열해 해결.
+- `git pull --ff-only` 는 worktree `integration/pleiades` 에 upstream 이 없어 실패 → `git branch --set-upstream-to=origin/integration/pleiades` 후 성공. **`repos/*` worktree 두 곳 모두 upstream 설정 여부는 미확인**(fin 은 이번에 안 당겼다).
