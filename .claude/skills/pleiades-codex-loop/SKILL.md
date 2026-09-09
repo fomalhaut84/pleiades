@@ -49,8 +49,10 @@ gh api "repos/<owner>/<repo>/pulls/<N>/comments?per_page=100" --paginate \
 BOT='chatgpt-codex-connector[bot]'
 HEAD=$(gh pr view -R <owner>/<repo> <N> --json headRefOid -q .headRefOid)
 # 라운드 기준 시각 = 마지막 "@codex review" 코멘트 시각, 없으면 PR 오픈 시각
+# --paginate 는 페이지마다 배열을 따로 낸다 — 페이지별 last 가 아니라 전체를 합친 뒤 last 여야 한다 (PR #41 Codex P2, 3회차).
+# `--slurp` 은 `--jq` 와 함께 못 쓰므로(실측) jq -s 로 합친다
 SINCE=$(gh api "repos/<owner>/<repo>/issues/<N>/comments?per_page=100" --paginate \
-  -q '[.[] | select(.body | test("^\\s*@codex review\\s*$"))] | last | .created_at // empty')
+  | jq -rs '[.[][] | select(.body | test("^\\s*@codex review\\s*$"))] | last | .created_at // empty')
 : "${SINCE:=$(gh pr view -R <owner>/<repo> <N> --json createdAt -q .createdAt)}"
 # `gh api --jq` 에는 `--arg` 가 없다 — 변수는 jq 로 파이프해서 넣는다 (실측)
 gh api "repos/<owner>/<repo>/pulls/<N>/reviews?per_page=100" --paginate \
@@ -126,14 +128,25 @@ gh pr comment -R <owner>/<repo> <N> --body "@codex review"     # P0/P1 을 실�
 **`gh pr edit --body` 는 body 전체를 교체한다**(`Set the new body.` — PR #41 Codex P2). 섹션만 바꾸려면 **현재 body 를 받아 그 섹션만 치환한 뒤 전체를 다시 넣는다** — 아니면 요약·`Closes`·되돌리기·체크리스트가 조용히 사라진다.
 
 ```bash
-BODY=$(gh pr view -R <owner>/<repo> <N> --json body -q .body)
-NEW=$(printf '%s' "$BODY" | perl -0pe 's{## 코드 리뷰 결과\n.*?(?=\n## |\n🤖|\z)}{## 코드 리뷰 결과\n\n<갱신한 섹션>}s')
-gh pr edit -R <owner>/<repo> <N> --body "$NEW"
+# 1) 갱신할 섹션을 파일로 쓴다 (heredoc — 셸 보간이 필요 없으면 'EOF' 로 인용)
+cat > "$SCRATCH/section.md" <<'EOF'
+## 코드 리뷰 결과
+
+- …
+EOF
+# 2) 현재 body 를 받아 섹션만 치환 — 치환 텍스트는 perl **변수 하나**로 넣는다 (아래 함정)
+gh pr view -R <owner>/<repo> <N> --json body -q .body \
+  | SEC="$SCRATCH/section.md" perl -0pe 'BEGIN{ local $/; open F, "<", $ENV{SEC}; $sec = <F>; close F } s{## 코드 리뷰 결과\n.*?(?=\n🤖|\z)}{$sec}s' \
+  > "$SCRATCH/body.md"
+# 3) 전체 body 를 파일로 제출하고 확인
+gh pr edit -R <owner>/<repo> <N> --body-file "$SCRATCH/body.md"
 gh pr view -R <owner>/<repo> <N> --json body -q .body | grep -c 'Closes\|Refs'      # 1 이어야 한다 — 0 이면 body 가 날아간 것
+gh pr view -R <owner>/<repo> <N> --json body -q .body | grep -c '@codex'            # 섹션에 적었으면 그 수만큼
 ```
 
-**함정 (PR #41 에서 실제로 겪음):** 치환 문자열을 **perl 이중따옴표**로 만들면 `@codex` 가 배열 보간으로 **사라진다**(`\`@codex review\`` → `\` review\``).
-섹션 텍스트는 파일에 써 두고 `-F`/heredoc 으로 넣거나, perl 은 **단일따옴표** 안에서만 쓴다. 갱신 뒤 `grep '@codex'` 로 확인한다.
+**함정 (PR #41 에서 실제로 겪음 · Codex P2 ×2):** perl `s{…}{…}` 의 **치환부는 따옴표와 무관하게 보간된다** — 이중따옴표든 단일따옴표든
+치환부에 `@codex` 를 직접 쓰면 배열 보간으로 **사라진다**(`\`@codex review\`` → `\` review\``, 실측). 안전한 것은 위처럼 **섹션을 파일로 읽어 `$sec` 변수 하나로 넣는 것**뿐이다 —
+변수의 내용은 다시 보간되지 않는다(`@codex` · `$1` · `@x` 전부 보존, 실측). 갱신 뒤 `grep -c '@codex'` 로 확인한다.
 
 섹션 최소 포함:
 
