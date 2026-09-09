@@ -8,7 +8,8 @@ description: GitHub Codex bot 리뷰 URL(`.../pull/<N>#pullrequestreview-<id>`)�
 > **출처 (005 §4-13 H-1 · 이슈 #40).** myFinance `skills/codex-response-patterns/SKILL.md`(91줄 · 패턴 카탈로그)와
 > myFitness `skills/codex-review-loop/SKILL.md`(113줄 · 루프 절차)를 **입력으로** 새로 썼다. 두 원본은 그대로 남는다(Q39 · 원본 무변경).
 > 원본과 다른 점 셋: ① **척도** — fit 원본 Step 2 는 `P2=critical · P0=info` 역방향 척도를 쓴다. 이 파일은 pleiades `workflow.md` 9절과 같이
-> **봇 네이티브 척도(`P0` 최고)** 만 쓴다(#8 · PR #6 Codex P1). ② **저장소 파라미터화** — `gh` 호출은 항상 `-R <owner>/<repo>` 를 붙인다(5절).
+> **봇 네이티브 척도(`P0` 최고)** 만 쓴다(#8 · PR #6 Codex P1). ② **저장소 파라미터화** — `gh pr`·`gh issue` 는 항상 `-R <owner>/<repo>`,
+> `gh api` 는 **전체 경로 `repos/<owner>/<repo>/…`** 로 저장소를 고정한다(5절 · PR #41 Codex P1 — `gh api` 에는 `-R` 플래그가 없다).
 > ③ **카탈로그는 pleiades 자체 이력**에서 뽑았다 — fin 도메인 항목(canonical key · KST · Prisma)은 fin 세션에서 `--add-dir` 로 본다.
 > **정본은 `workflow.md` 9절이다.** 이 파일이 그와 어긋나면 `workflow.md` 가 이긴다.
 
@@ -29,13 +30,35 @@ description: GitHub Codex bot 리뷰 URL(`.../pull/<N>#pullrequestreview-<id>`)�
 
 ## Step 1 — 리뷰 fetch
 
-URL 에서 `<owner>/<repo>` · `<N>` · `<review_id>` 를 뽑는다. **`-R` 없이 `gh` 를 부르지 않는다** — cwd 가 `repos/*` worktree 면 대상 저장소를 잡는다.
+**저장소를 명시하지 않은 `gh` 호출을 하지 않는다** — cwd 가 `repos/*` worktree 면 대상 저장소를 잡는다.
+`gh pr` · `gh issue` 는 `-R <owner>/<repo>`, **`gh api` 는 `-R` 이 없으므로**(`unknown shorthand flag: 'R'` — PR #41 Codex P1)
+엔드포인트를 **`repos/<owner>/<repo>/…` 전체 경로**로 쓴다.
+
+**1-a. URL 이 있을 때** — `<owner>/<repo>` · `<N>` · `<review_id>` 를 뽑는다.
 
 ```bash
 gh api repos/<owner>/<repo>/pulls/<N>/reviews/<review_id> -q '"\(.user.login) \(.state) \(.submitted_at)\n\(.body)"'
 gh api "repos/<owner>/<repo>/pulls/<N>/comments?per_page=100" --paginate \
   -q '.[] | select(.pull_request_review_id == <review_id>) | "--- \(.path):\(.line // .original_line)\n\(.body)\n"'
 ```
+
+**1-b. PR 번호만 있을 때** ("리뷰 확인해줘" · "봇이 안 와" · `@codex review` 뒤 확인 — PR #41 Codex P2) — 봇 리뷰를 **찾는다**.
+
+```bash
+gh api "repos/<owner>/<repo>/pulls/<N>/reviews?per_page=100" --paginate \
+  -q '.[] | select(.user.login == "chatgpt-codex-connector[bot]") | "\(.id) \(.state) \(.submitted_at)"'   # 가장 최근 id 가 <review_id>
+gh api "repos/<owner>/<repo>/issues/<N>/reactions?per_page=100" \
+  -q '.[] | select(.content == "+1") | "\(.user.login) \(.created_at)"'                                    # 지적 없음 = 👍 만
+gh api "repos/<owner>/<repo>/issues/<N>/comments?per_page=100" \
+  -q '.[] | select(.user.login | test("codex")) | "\(.created_at) \(.body[0:120])"'                         # 쿼터 소진·오류 응답
+```
+
+| 결과 | 다음 |
+|---|---|
+| 봇 리뷰 있음 | 최신 `id` 로 **1-a** |
+| 리뷰 없음 · 봇 👍 있음 | **suggestions 없음 = 통과.** 👍 시각을 9-6 에 적는다 |
+| 봇 오류 코멘트 있음 | 쿼터 소진·봇 장애 — 그 시각이 판정. **Step 7** |
+| 셋 다 없음 | 아직 안 온 것. PR 오픈(또는 마지막 `@codex review`) 시각과 비교해 **Step 7 컷오프** |
 
 - 리뷰 body 만 있고 인라인 0건이면 **"suggestions 없음"** — 봇은 그때 👍 만 남긴다.
 - `submitted_at` 을 적어 둔다 — Step 7 컷오프와 9-6 body 에 쓴다.
@@ -89,12 +112,27 @@ gh pr comment -R <owner>/<repo> <N> --body "@codex review"     # P0/P1 을 실�
 
 ## Step 6 — 9-6 PR body 확정
 
-`## 코드 리뷰 결과` 섹션을 `gh pr edit -R … --body` 로 갱신한다. 최소 포함:
+**`gh pr edit --body` 는 body 전체를 교체한다**(`Set the new body.` — PR #41 Codex P2). 섹션만 바꾸려면 **현재 body 를 받아 그 섹션만 치환한 뒤 전체를 다시 넣는다** — 아니면 요약·`Closes`·되돌리기·체크리스트가 조용히 사라진다.
+
+```bash
+BODY=$(gh pr view -R <owner>/<repo> <N> --json body -q .body)
+NEW=$(printf '%s' "$BODY" | perl -0pe 's{## 코드 리뷰 결과\n.*?(?=\n## |\n🤖|\z)}{## 코드 리뷰 결과\n\n<갱신한 섹션>}s')
+gh pr edit -R <owner>/<repo> <N> --body "$NEW"
+gh pr view -R <owner>/<repo> <N> --json body -q .body | grep -c 'Closes\|Refs'      # 1 이어야 한다 — 0 이면 body 가 날아간 것
+```
+
+섹션 최소 포함:
 
 - **리뷰 방식** — `에이전트 사전 리뷰 N회 + Codex M회` 또는 `self-review + Codex M회`. **`only` 는 쓰지 않는다**
 - **라운드 요약** — `1회차 (시각 · 커밋): P0/P1 0 · P2 2건 → 반영` 식으로 전부
-- **최종** — `✅ 코드 리뷰 통과 (사전 critical/major: 0건 · 봇 P0/P1: 0건 · 마지막 수정 후 검증 재통과)`.
-  `info` / `P2` 이하는 **실제 건수와 처리**(반영 또는 후속 이슈 번호)를 적는다 — `0` 을 강제하지 않는다
+- **최종 — 9-0 경로에 따라 템플릿이 다르다** (PR #41 Codex P2 · `workflow.md` 9-4·9-6). 하지 않은 리뷰의 건수를 적지 않는다:
+
+  | 경로 | 최종 문구 |
+  |---|---|
+  | 에이전트 필수 | `✅ 코드 리뷰 통과 (사전 critical/major: 0건 · 봇 P0/P1: 0건 · 마지막 수정 후 검증 재통과)` |
+  | self-review | `✅ 코드 리뷰 통과 (self-review · 봇 P0/P1: 0건 · 검증 통과)` — **`사전 critical/major` 항목 자체를 `self-review` 로 대체** |
+
+  `info` / `P2` 이하는 **실제 건수와 처리**(반영 또는 후속 이슈 번호)를 적는다 — `0` 을 강제하지 않는다. 봇이 안 왔으면 Step 7 의 고정 문구
 - **회귀 테스트** — 파일 목록 또는 `해당 없음 (<사유>)`
 
 **매 라운드 결과를 사용자에게 요약 보고한다.**
@@ -153,6 +191,8 @@ PR 이 `dev → main` 이면 리뷰 반영은 **새 브랜치(`fix/<issue>-<n>` 
 | 10 | **로직 실측 오류** | orphan 판정을 타임스탬프로 함(머지 커밋 포함 여부가 정답) | 스킬·스크립트의 판정 로직은 재현 스크립트로 검증(`_workspace/harness/regress_*.sh`) | PR #22 P1 ×2 · PR #20 P1 |
 | 11 | **선택지 표가 결정을 비워 둔다** | "태그-only" 로 답했지만 코어가 구현할 정규식이 미지정 → "동작 변경 0" 판정 불능 | 확정 답에 **구현이 그대로 옮길 값**까지 적는다 | PR #39 P2 |
 | 12 | **가드 범위가 표면 일부만 덮는다** | `lastError` 4지점만 마스킹 — 파사드가 흡수한 로그 경로 12건은 그대로 | 같은 데이터가 흐르는 표면을 **전수** 열거한 뒤 가드를 건다 | PR #39 P2 |
+| 13 | **절차의 명령이 실제 CLI 에서 안 돈다** | "모든 `gh` 에 `-R`" 인데 `gh api` 에는 그 플래그가 없다 · `gh pr edit --body` 가 부분 갱신인 줄 앎 | 절차에 적는 명령은 **한 번 실행해 본 것**만. 플래그는 `--help` 로 확인하고 부수효과(전체 교체 등)를 적는다 | PR #41 P1 · P2 |
+| 14 | **트리거는 여럿인데 입력 경로가 하나** | "PR 번호만" · "봇이 안 와" 트리거를 걸어 두고 Step 1 은 URL 만 받음 | 트리거마다 **입력 → 첫 명령** 이 이어지는지 표로 대조한다 | PR #41 P2 |
 
 **새 패턴이 나오면 이 표에 행을 더한다** — 전례 열에 `PR #<N> P<등급>` 을 적는다. 3라운드 초과 시 이 표부터 다시 본다.
 

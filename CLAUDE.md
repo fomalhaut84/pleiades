@@ -158,7 +158,7 @@ bin/claude-with fit      # 한 번에 한 저장소 (H-5 · Q30). --resume 도 �
 | 2026-09-07 | **005 발행** (초안 4회 개정 · 감사 4회 · 정정 10→8→7→0) · 004 정정 append(Q20·Q21·Q22·§3-2) · 하네스 절 교체 | 스펙 2 · CLAUDE.md | Q20 답 (#1). 이 시점에는 하네스 무변경 (집행은 같은 날 PR #20·#22 에서 시작) |
 | 2026-09-07 | **Q29·Q30·Q32·Q39 확정** → 005 §2·§4-13 갱신 · **집행 이슈 분할 초안(§4-14) 신설** | 스펙 1 · CLAUDE.md | 사용자 결정 |
 | 2026-09-09 | **`workflow.md` 8절 pleiades 행 타입 칸에 한 구 추가** (#32 I1 (b) 도입 시 `typecheck:test` 를 이 칸에 더한다 — **명령은 1a-1 에서 생긴다**) | 룰 1 | #37 사용자 결정 |
-| 2026-09-09 | **H-1 집행 — 스킬 `pleiades-codex-loop` 신규 작성** (fin `codex-response-patterns` 91줄 + fit `codex-review-loop` 113줄 입력 · 척도는 봇 네이티브 `P0` 최고로 통일 · 카탈로그는 pleiades 자체 Codex 정정 이력 12패턴) | 스킬 1 (총 9) | 005 §4-13 H-1 · #40 |
+| 2026-09-09 | **H-1 집행 — 스킬 `pleiades-codex-loop` 신규 작성** (fin `codex-response-patterns` 91줄 + fit `codex-review-loop` 113줄 입력 · 척도는 봇 네이티브 `P0` 최고로 통일 · 카탈로그는 pleiades 자체 Codex 정정 이력 14패턴) | 스킬 1 (총 9) | 005 §4-13 H-1 · #40 |
 | 2026-09-08 | **`workflow.md` 8절 pleiades 행 확정** (lint 미해당 · `typecheck`/`test`/`build` + `npm --prefix packages/notify install` 선행 조건) | 룰 1 | 1a-0 (#31) 이 루트 `package.json` 을 신설 |
 
 ## 상속하는 컨벤션
