@@ -35,12 +35,14 @@ git push origin --delete integration/chore-pleiades-8-fit
 ```bash
 cd /Users/sagan/workspace/pleiades/repos/myFitness
 git checkout integration/pleiades && git pull --ff-only
-git log --oneline --merges -5          # 머지 커밋 SHA 확인
-git revert -m 1 <merge-sha>            # squash 머지였다면 -m 1 없이 git revert <sha>
+git log --oneline -5                                          # 머지 커밋 SHA 확인 (#372 는 squash → 2195854, 일반 커밋)
+git checkout -b integration/chore-pleiades-8-fit-revert       # ★ revert 전에 되돌리기 브랜치로 옮긴다 — 안 하면 base 에 직접 커밋된다 (PR #44 Codex P2)
+git revert 2195854                                            # merge commit 이었다면 git revert -m 1 <merge-sha>
+git push -u origin integration/chore-pleiades-8-fit-revert
+gh pr create -R fomalhaut84/myFitness --base integration/pleiades --head integration/chore-pleiades-8-fit-revert --title "revert: H-3(fit) (pleiades#8)" --body "Reverts #372. Refs fomalhaut84/pleiades#8"
 ```
 
-revert 는 `integration/pleiades` 직접 커밋이 아니라 **되돌리기 브랜치 + PR** 로 낸다
-(`integration/chore-pleiades-8-fit-revert` → base `integration/pleiades`, 머지는 사용자가 직접).
+revert 는 `integration/pleiades` 직접 커밋이 아니라 **되돌리기 브랜치 + PR** 로 낸다 — 머지는 사용자가 직접. `git revert` 는 즉시 커밋하므로 **브랜치 생성이 반드시 앞선다.**
 
 소요: 1분. `integration/pleiades` 는 `dev` 로 머지되지 않으므로(#25) 이 시점까지도 **서비스는 영향 없다.**
 
@@ -57,10 +59,15 @@ tar czf ~/fit-harness-$(date +%Y%m%d).tgz -C ~/workspace/myFitness .claude CLAUD
 tar xzf ~/fit-harness-<YYYYMMDD>.tgz -C ~/workspace/myFitness
 ```
 
-사본을 뜨지 못한 채 되돌려야 하면 worktree 의 분기점에서 꺼낸다:
+사본을 뜨지 못한 채 되돌려야 하면 worktree 의 분기점에서 **H-3 이 바꾼 10파일만** 꺼낸다 — `.claude` 디렉터리 전체를 꺼내면
+H-3 이후의 다른 하네스 변경까지 옛 판으로 덮는다 (PR #44 Codex P2). 경로는 **인자로 나열**한다(zsh 미인용 변수는 단일 pathspec):
 
 ```bash
-git -C ~/workspace/myFitness archive 626a201 .claude CLAUDE.md \
+git -C ~/workspace/myFitness archive 626a201 \
+  .claude/rules/workflow.md .claude/agents/release-manager.md .claude/agents/workflow-conductor.md \
+  .claude/agents/codex-liaison.md .claude/skills/branch-workflow/SKILL.md .claude/skills/codex-review-loop/SKILL.md \
+  .claude/skills/release-flow/SKILL.md .claude/skills/session-handoff/SKILL.md .claude/skills/myfitness-orchestrator/SKILL.md \
+  CLAUDE.md \
   | tar -x -C ~/workspace/myFitness
 ```
 
