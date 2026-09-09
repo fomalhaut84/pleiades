@@ -42,23 +42,34 @@ gh api "repos/<owner>/<repo>/pulls/<N>/comments?per_page=100" --paginate \
   -q '.[] | select(.pull_request_review_id == <review_id>) | "--- \(.path):\(.line // .original_line)\n\(.body)\n"'
 ```
 
-**1-b. PR 번호만 있을 때** ("리뷰 확인해줘" · "봇이 안 와" · `@codex review` 뒤 확인 — PR #41 Codex P2) — 봇 리뷰를 **찾는다**.
+**1-b. PR 번호만 있을 때** ("리뷰 확인해줘" · "봇이 안 와" · `@codex review` 뒤 확인 — PR #41 Codex P2) — **이번 라운드의** 봇 응답만 찾는다.
+이전 라운드 리뷰는 이력이지 현재 응답이 아니다 — 재요청 뒤 옛 리뷰를 집어 "통과" 로 적으면 **리뷰하지 않은 커밋을 승인한 기록**이 된다(PR #41 Codex P1, 2회차).
 
 ```bash
+BOT='chatgpt-codex-connector[bot]'
+HEAD=$(gh pr view -R <owner>/<repo> <N> --json headRefOid -q .headRefOid)
+# 라운드 기준 시각 = 마지막 "@codex review" 코멘트 시각, 없으면 PR 오픈 시각
+SINCE=$(gh api "repos/<owner>/<repo>/issues/<N>/comments?per_page=100" --paginate \
+  -q '[.[] | select(.body | test("^\\s*@codex review\\s*$"))] | last | .created_at // empty')
+: "${SINCE:=$(gh pr view -R <owner>/<repo> <N> --json createdAt -q .createdAt)}"
+# `gh api --jq` 에는 `--arg` 가 없다 — 변수는 jq 로 파이프해서 넣는다 (실측)
 gh api "repos/<owner>/<repo>/pulls/<N>/reviews?per_page=100" --paginate \
-  -q '.[] | select(.user.login == "chatgpt-codex-connector[bot]") | "\(.id) \(.state) \(.submitted_at)"'   # 가장 최근 id 가 <review_id>
+  | jq -r --arg bot "$BOT" --arg since "$SINCE" \
+    '.[] | select(.user.login == $bot and .submitted_at > $since) | "\(.id) \(.state) \(.submitted_at) reviewed=\(.commit_id[0:7])"'
 gh api "repos/<owner>/<repo>/issues/<N>/reactions?per_page=100" \
-  -q '.[] | select(.content == "+1") | "\(.user.login) \(.created_at)"'                                    # 지적 없음 = 👍 만
-gh api "repos/<owner>/<repo>/issues/<N>/comments?per_page=100" \
-  -q '.[] | select(.user.login | test("codex")) | "\(.created_at) \(.body[0:120])"'                         # 쿼터 소진·오류 응답
+  | jq -r --arg bot "$BOT" --arg since "$SINCE" \
+    '.[] | select(.content == "+1" and .user.login == $bot and .created_at > $since) | "\(.user.login) \(.created_at)"'   # 봇의 👍 만 — 사람 👍 는 게이트가 아니다 (PR #41 Codex P2)
+gh api "repos/<owner>/<repo>/issues/<N>/comments?per_page=100" --paginate \
+  | jq -r --arg bot "$BOT" --arg since "$SINCE" \
+    '.[] | select(.user.login == $bot and .created_at > $since) | "\(.created_at) \(.body[0:120])"'                       # 쿼터 소진·오류 응답
 ```
 
-| 결과 | 다음 |
+| 결과 (전부 `SINCE` 이후 · 봇 로그인) | 다음 |
 |---|---|
-| 봇 리뷰 있음 | 최신 `id` 로 **1-a** |
-| 리뷰 없음 · 봇 👍 있음 | **suggestions 없음 = 통과.** 👍 시각을 9-6 에 적는다 |
+| 봇 리뷰 있음 | 그 `id` 로 **1-a**. `reviewed=` 가 `$HEAD` 와 다르면 **그 뒤 커밋은 미리뷰** — 9-6 에 적는다(P2 이하만 반영한 커밋이면 정상) |
+| 리뷰 없음 · **봇** 👍 있음 | **suggestions 없음 = 통과.** 👍 시각을 9-6 에 적는다 |
 | 봇 오류 코멘트 있음 | 쿼터 소진·봇 장애 — 그 시각이 판정. **Step 7** |
-| 셋 다 없음 | 아직 안 온 것. PR 오픈(또는 마지막 `@codex review`) 시각과 비교해 **Step 7 컷오프** |
+| 셋 다 없음 | 이번 라운드 응답이 아직 없다. `SINCE` 부터 **Step 7 컷오프**를 센다 — 이전 라운드 리뷰를 대신 쓰지 않는다 |
 
 - 리뷰 body 만 있고 인라인 0건이면 **"suggestions 없음"** — 봇은 그때 👍 만 남긴다.
 - `submitted_at` 을 적어 둔다 — Step 7 컷오프와 9-6 body 에 쓴다.
