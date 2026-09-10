@@ -218,7 +218,7 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 
 | 대상 | lint | 타입 | 테스트 | 빌드 |
 |---|---|---|---|---|
-| **pleiades** | **해당 없음** (린터 미도입 — 타입체크가 그 자리를 대신한다) | **`npm run typecheck`** (= `tsc --noEmit -p packages/notify`) (#37 결정 (b): 1a-1 이 `tsconfig.test.json` + `typecheck:test` 를 도입하면 이 칸에 추가한다 — #32 I1) | **`npm test`** (= `npm --prefix packages/notify run test` → `vitest run`) | **`npm run build`** (= `tsc -p packages/notify`) |
+| **pleiades** | **해당 없음** (린터 미도입 — 타입체크가 그 자리를 대신한다) | **`npm run typecheck && npm run typecheck:test`** (= `tsc --noEmit -p packages/notify` + `tsc --noEmit -p packages/notify/tsconfig.test.json` — 후자가 테스트 파일을 타입체크한다. #37 결정 (b) · #32 I1 · 1a-1(#47)에서 도입) | **`npm test`** (= `npm --prefix packages/notify run test` → `vitest run`) | **`npm run build`** (= `tsc -p packages/notify`) |
 | **`repos/myFinance`** | `npm run lint` | **`npx tsc --noEmit`** | **`npm run test:run`** | `npm run build` |
 | **`repos/myFitness`** | `npm run lint` | `npm run typecheck` | `npm run test` | `npm run build` |
 
