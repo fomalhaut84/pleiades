@@ -3,6 +3,13 @@ import { TELEGRAM_MAX_LENGTH, splitMessage } from './split';
 
 // 정본: myFinance src/bot/utils/formatter.ts:50-78 (003 §3-1 "길이 초과 처리 — myFinance 분할")
 
+// 청크가 반쪽 서로게이트로 끝나거나 시작하는가 (String.prototype.isWellFormed 는 ES2024 lib — 타입 target ES2017 이라 직접 검사)
+const hasLoneSurrogateEdge = (s: string): boolean => {
+  const first = s.charCodeAt(0);
+  const last = s.charCodeAt(s.length - 1);
+  return (first >= 0xdc00 && first <= 0xdfff) || (last >= 0xd800 && last <= 0xdbff);
+};
+
 describe('splitMessage', () => {
   it('한도 이하면 그대로 1청크', () => {
     expect(splitMessage('abc', 10)).toEqual(['abc']);
@@ -31,6 +38,16 @@ describe('splitMessage', () => {
   });
   it('한도를 넘는 본문이 전부 빈 줄이면 [] 를 돌려준다 (fin 정본의 성질 — deliver 가 실패로 올린다 · M-1)', () => {
     expect(splitMessage('\n'.repeat(10), 4)).toEqual([]);
+  });
+  // 회귀: PR #49 Codex P2 — 하드 슬라이스 경계가 서로게이트 쌍 사이에 떨어지면 반쪽이 각 청크에서 무효 문자가 된다
+  it('하드 슬라이스가 UTF-16 서로게이트 쌍(이모지)을 가르지 않는다', () => {
+    const chunks = splitMessage('a'.repeat(4095) + '😀Z', 4096);
+    expect(chunks).toEqual(['a'.repeat(4095), '😀Z']);
+    for (const c of chunks) expect(hasLoneSurrogateEdge(c)).toBe(false);
+    // 경계가 쌍 사이가 아니면 정확히 maxLength 에서 끊는다
+    expect(splitMessage('a'.repeat(4094) + '😀Z', 4096)).toEqual(['a'.repeat(4094) + '😀', 'Z']);
+    // 연속 이모지 — 어느 청크도 반쪽으로 끝나거나 시작하지 않는다
+    for (const c of splitMessage('😀'.repeat(50), 7)) expect(hasLoneSurrogateEdge(c)).toBe(false);
   });
   it('Infinity 한도는 항상 1청크 (어댑터 소유 모드)', () => {
     const long = 'x\n'.repeat(5000);

@@ -18,8 +18,16 @@ export function splitMessage(text: string, maxLength = TELEGRAM_MAX_LENGTH): str
   for (const line of lines) {
     if (line.length > maxLength) {
       if (current) chunks.push(current);
-      for (let i = 0; i < line.length; i += maxLength) {
-        chunks.push(line.slice(i, i + maxLength));
+      let i = 0;
+      while (i < line.length) {
+        let end = Math.min(i + maxLength, line.length);
+        // 경계가 UTF-16 서로게이트 쌍(이모지 등) 사이에 떨어지면 한 자 앞에서 끊는다 — 잘린 반쪽은 각 청크에서 무효 문자가 된다.
+        // fin 정본(`formatter.ts:62-64`)과 다른 유일한 지점. 회귀: PR #49 Codex P2
+        if (end < line.length && end > i + 1 && isHighSurrogate(line.charCodeAt(end - 1)) && isLowSurrogate(line.charCodeAt(end))) {
+          end--;
+        }
+        chunks.push(line.slice(i, end));
+        i = end;
       }
       current = '';
       continue;
@@ -35,3 +43,6 @@ export function splitMessage(text: string, maxLength = TELEGRAM_MAX_LENGTH): str
 
   return chunks;
 }
+
+const isHighSurrogate = (code: number): boolean => code >= 0xd800 && code <= 0xdbff;
+const isLowSurrogate = (code: number): boolean => code >= 0xdc00 && code <= 0xdfff;
