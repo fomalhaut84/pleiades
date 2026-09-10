@@ -25,6 +25,13 @@ describe('splitMessage', () => {
   it('빈 줄은 개행만 소비하며 살아남는다', () => {
     expect(splitMessage('a\n\nb', 3)).toEqual(['a\n', 'b']);
   });
+  // 회귀: #47 사전 리뷰 M-2 — 0·음수는 for 루프가 무한 증식, NaN 은 비교가 전부 false
+  it.each([0, -1, Number.NaN, 0.5])('maxLength %s 는 RangeError', (bad) => {
+    expect(() => splitMessage('x', bad)).toThrow(RangeError);
+  });
+  it('한도를 넘는 본문이 전부 빈 줄이면 [] 를 돌려준다 (fin 정본의 성질 — deliver 가 실패로 올린다 · M-1)', () => {
+    expect(splitMessage('\n'.repeat(10), 4)).toEqual([]);
+  });
   it('Infinity 한도는 항상 1청크 (어댑터 소유 모드)', () => {
     const long = 'x\n'.repeat(5000);
     expect(splitMessage(long, Number.POSITIVE_INFINITY)).toEqual([long]);

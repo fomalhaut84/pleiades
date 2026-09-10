@@ -12,8 +12,10 @@ export type MessageRef = string;
 /**
  * 채널별 불투명 markup (§5-1 "components 옵션 · 텔레그램 구현만").
  * `TelegramTransport` 는 이 값을 `reply_markup` 으로 그대로 전달한다 — 예: grammY `InlineKeyboard` 인스턴스.
+ * `object` 인 이유: `Record<string, unknown>` 은 클래스 인스턴스(`InlineKeyboard`)를 받지 못한다 — TS 는 클래스에 암묵적
+ * index signature 를 주지 않아 TS2322 (사전 리뷰 M-3 · fit grammy 1.42.0 프로브). 원시값은 여전히 거부된다.
  */
-export type Components = Record<string, unknown>;
+export type Components = object;
 
 /**
  * 전송 본문 (1a-1 계획 D-1 · 003 은 이 타입을 참조만 하고 정의하지 않았다).
@@ -41,6 +43,7 @@ export const html = (text: string, components?: Components): Content =>
  */
 export interface Transport {
   readonly channel: string;
+  /** 유한이면 **1 이상**이어야 한다 (0·음수·NaN 은 코어가 RangeError 로 거부한다). */
   readonly maxLength: number;
   send(target: string, content: Content): Promise<MessageRef>;
 }
@@ -67,7 +70,12 @@ export interface Delivery {
   ok: boolean;
   /** 성공 시. 청크가 여럿이면 **마지막 청크**의 ref (components 가 붙은 메시지). */
   ref?: MessageRef;
-  /** 실패 시 raw `error.message` (Q19 C). 파사드는 sanitize 하지 않는다 — 로그는 별도로 sanitize 된다. */
+  /**
+   * 실패 시 raw `error.message` (Q19 C). 파사드는 sanitize 하지 않는다 — 로그만 별도로 sanitize 된다.
+   * **봇 토큰이 포함될 수 있다** (grammy `HttpError` 는 `https://api.telegram.org/bot<token>/…` 을 message 에 담는다).
+   * 로그·DB·API 응답·UI 에 쓰기 전 반드시 `sanitizeMessage`(또는 `sanitizeError`)를 통과시킨다 — 상속 컨벤션
+   * "catch 블록에서 `error.message` 원문 노출 금지" · 003 §10 Q19 `sensitiveLogs` 단서. (사전 리뷰 M-4)
+   */
   error?: string;
 }
 

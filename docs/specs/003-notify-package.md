@@ -725,7 +725,8 @@ interface BroadcastResult {
 >
 > ```ts
 > export interface Content { text: string; format: 'html' | 'plain'; components?: Components }
-> export type Components = Record<string, unknown>;   // 채널별 불투명 markup. TelegramTransport 가 reply_markup 으로 그대로 전달
+> export type Components = object;                    // 채널별 불투명 markup. TelegramTransport 가 reply_markup 으로 그대로 전달.
+>                                                     // Record<string, unknown> 이면 grammY InlineKeyboard(클래스)가 TS2322 — 사전 리뷰 M-3 · 프로브 실측
 > export const html = (text: string, components?: Components): Content => …   // 호출부 대부분이 쓰는 헬퍼
 > ```
 >

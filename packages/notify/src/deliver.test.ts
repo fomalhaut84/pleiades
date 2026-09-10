@@ -173,6 +173,27 @@ describe('deliverOne — 분할 (maxLength 유한 · 코어 소유)', () => {
   });
 });
 
+describe('deliverOne — 회귀 (#47 사전 리뷰)', () => {
+  it('M-1: 분할 결과가 비면(본문이 빈 줄뿐) 전송 0회를 성공으로 보고하지 않고 throw', async () => {
+    const { transport, calls } = fakeTransport([], 4);
+    await expect(deliverOne(transport, 't', html('\n'.repeat(10)), policy())).rejects.toThrow(/분할 결과가 비었다/);
+    expect(calls).toHaveLength(0);
+  });
+  it('info: maxLength NaN 은 어댑터 소유 모드로 빠지지 않고 RangeError', async () => {
+    const { transport, calls } = fakeTransport([], Number.NaN);
+    await expect(deliverOne(transport, 't', html('x'), policy())).rejects.toThrow(RangeError);
+    expect(calls).toHaveLength(0);
+  });
+  it('retryDelaysMs 가 비면 총 1회 시도 — 첫 네트워크 오류를 그대로 던진다', async () => {
+    const e = net();
+    const { transport, calls } = fakeTransport([e]);
+    const p = policy({ retryDelaysMs: [] });
+    await expect(deliverOne(transport, 't', html('x'), p)).rejects.toBe(e);
+    expect(calls).toHaveLength(1);
+    expect(p.slept).toEqual([]);
+  });
+});
+
 describe('deliverOne — maxLength Infinity (어댑터 소유)', () => {
   it('분할·재시도·폴백 없이 send 를 정확히 1회 호출한다', async () => {
     const e = net();

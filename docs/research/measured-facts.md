@@ -3401,3 +3401,11 @@ tsc -p …/scratchpad/e6/probe/<repo>/tsconfig.json
 | `npm pack --dry-run` 파일 목록 | 사본 루트에 `node_modules` 가 없어 `pack` 이 `prepare`(`tsc`) 에서 127 로 멈춘다. 소비자 설치 트리(위 22파일)로 갈음 — 1a-0 E6 의 5파일(당시 `dist` 2 + README)과 같은 구성에 `dist` 가 20 으로 늘었다 |
 | GitHub 원격(`git+https`) 경유 설치 | 이번도 `git+file://` (1a-0 · #32 I1 · 감사와 같은 한계 · M2 가 https 우선을 실측) |
 | fin 비-파싱 400 폴백 빈도 · `TELEGRAM_*_CHAT_IDS` 비숫자 토큰 유무 | 감사 §11 그대로 (계측 코드 없음 · `.env` 열람 금지) |
+
+## E7 후속 — 사전 리뷰 반영 뒤 재실측 (2026-09-10)
+
+`pr-review-toolkit:code-reviewer` 1회: critical 0 · major 5 · info 5. major 5 전부 + info 2(NaN 가드 · `targetCount` 복사 제거) 반영 · 회귀 테스트 10건 추가(82 → 92).
+- **M-3 재프로브** — `Components = Record<string, unknown>` 은 grammy `InlineKeyboard`(클래스)를 받지 못한다(`TS2322: Index signature for type 'string' is missing`). `object` 로 바꾼 뒤 위 E6b 프로브에서 **`kb as unknown as …` 캐스트를 제거**(`html('<b>x</b>', kb)` 직접 전달) → fin 1.44.0 · fit 1.42.0 **둘 다 exit 0**. 대조군 TS2322 재현 유지.
+- **M-1 재현** — `splitMessage('\n'.repeat(5000), 4096)` → `[]`(fin 정본의 성질). 수정 전 `deliverOne` 은 전송 0회에 `ref undefined` 를 성공으로 집계했다. 수정 후 throw → `deliveries[].error`.
+- **M-2 재현** — `splitMessage('x', 0)` · `(-1)` 무한 루프(배열 무한 증식) → `RangeError` 가드. `NaN` 은 `Number.isFinite` 판정에서 어댑터 소유 모드로 새던 것을 `=== Infinity` 로 좁혀 같은 가드에 걸린다.
+- E6 소비자 e2e 재실행: `npm install` exit 0 · 누수 0 · 결과 동일(호출 7 · ref 4/7).

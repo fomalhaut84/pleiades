@@ -85,12 +85,12 @@ export function createNotifier(config: NotifierConfig): Notifier {
     const sent = deliveries.filter((d) => d.ok).length;
     const firstOk = deliveries.find((d) => d.ok);
     const result: BroadcastResult = { sent, failed: ids.length - sent, total: ids.length, deliveries };
-    return firstOk === undefined ? result : { ...result, first: { target: firstOk.target, ref: firstOk.ref as string } };
+    return firstOk?.ref === undefined ? result : { ...result, first: { target: firstOk.target, ref: firstOk.ref } };
   };
 
   return {
     notify,
     targets,
-    targetCount: (route) => targets(route).length,
+    targetCount: (route) => config.targets[route]?.().length ?? 0, // 가드 10 + 분모 11곳에서 호출된다 — 복사 없이
   };
 }

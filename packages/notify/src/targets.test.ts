@@ -27,8 +27,8 @@ describe('csvEnv', () => {
     process.env[NAME] = '111,abc,-5';
     expect(csvEnv(NAME)()).toEqual(['111', 'abc', '-5']);
   });
-  it('numericOnly 면 Number 변환 실패 토큰을 조용히 탈락시킨다 (fin 규칙 · total 의미 보존)', () => {
-    process.env[NAME] = '111,abc,-5, 7 ,1e3';
-    expect(csvEnv(NAME, { numericOnly: true })()).toEqual(['111', '-5', '7', '1e3']);
+  it('numericOnly 면 Number 변환 실패 토큰을 조용히 탈락시키고 값을 Number 로 정규화한다 (fin 규칙 · total 의미 보존 · M-5)', () => {
+    process.env[NAME] = '111,abc,-5, 7 ,1e3,007,0x10,-1001234567890';
+    expect(csvEnv(NAME, { numericOnly: true })()).toEqual(['111', '-5', '7', '1000', '7', '16', '-1001234567890']);
   });
 });

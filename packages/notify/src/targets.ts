@@ -21,6 +21,10 @@ export function csvEnv(name: string, opts: CsvEnvOptions = {}): () => string[] {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
-    return opts.numericOnly ? tokens.filter((t) => !Number.isNaN(Number(t))) : tokens;
+    // numericOnly: fin 은 Number 로 변환한 값을 chat id 로 쓴다 — 탈락 규칙과 함께 정규화(`1e3` → `1000` · `007` → `7`)도 보존한다
+    // (사전 리뷰 M-5). 반환은 여전히 string[].
+    return opts.numericOnly
+      ? tokens.filter((t) => !Number.isNaN(Number(t))).map((t) => String(Number(t)))
+      : tokens;
   };
 }

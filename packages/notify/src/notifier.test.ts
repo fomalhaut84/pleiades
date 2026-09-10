@@ -180,6 +180,30 @@ describe('createNotifier — transport 해석 (지연 생성 · Route 매핑)', 
     await expect(n.notify(Route.ADMIN, html('y'))).rejects.toThrow(/transport.*ADMIN/);
   });
 
+  it('팩토리가 throw 하면 캐시되지 않고 다음 notify 에서 다시 시도한다', async () => {
+    const { transport } = fake();
+    let fail = true;
+    const factory = vi.fn(() => {
+      if (fail) throw new Error('bot not ready');
+      return transport;
+    });
+    const n = createNotifier({ transport: factory, targets: { ALLOWED: () => ['a'] }, sleep: noSleep, logger: logger() });
+    await expect(n.notify(Route.ALLOWED, html('x'))).rejects.toThrow('bot not ready');
+    fail = false;
+    await expect(n.notify(Route.ALLOWED, html('x'))).resolves.toMatchObject({ sent: 1 });
+    expect(factory).toHaveBeenCalledTimes(2);
+  });
+
+  it('M-1: 빈 분할은 실패로 집계된다 — first 없음 · error 에 사유', async () => {
+    const { transport, calls } = fake({}, 4);
+    const n = createNotifier({ transport, targets: { ALLOWED: () => ['a'] }, sleep: noSleep, logger: logger() });
+    const r = await n.notify(Route.ALLOWED, html('\n'.repeat(10)));
+    expect(calls).toHaveLength(0);
+    expect(r).toMatchObject({ sent: 0, failed: 1, total: 1 });
+    expect(r.first).toBeUndefined();
+    expect(r.deliveries[0].error).toMatch(/분할 결과가 비었다/);
+  });
+
   it('domain 은 자리만 — 결과·로그에 나타나지 않는다', async () => {
     const { transport } = fake({ a: [new Error('e')] });
     const log = logger();

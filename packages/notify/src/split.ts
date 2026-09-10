@@ -6,6 +6,9 @@
 export const TELEGRAM_MAX_LENGTH = 4096;
 
 export function splitMessage(text: string, maxLength = TELEGRAM_MAX_LENGTH): string[] {
+  // maxLength 는 이제 어댑터가 채우는 공개 포트 필드다 — 0·음수는 아래 for 가 무한 루프(배열 무한 증식), NaN 은 비교가 전부 false.
+  // 회귀: 사전 리뷰 M-2 · info(NaN)
+  if (!(maxLength >= 1)) throw new RangeError(`splitMessage: maxLength 는 1 이상이어야 한다 (${maxLength})`);
   if (text.length <= maxLength) return [text];
 
   const lines = text.split('\n');

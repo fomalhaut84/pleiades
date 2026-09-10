@@ -30,23 +30,30 @@ export async function deliverOne(
   content: Content,
   policy: DeliveryPolicy,
 ): Promise<MessageRef> {
-  if (!Number.isFinite(transport.maxLength)) {
-    // 어댑터 소유 모드 — 분할·재시도·폴백 전부 어댑터 몫.
+  if (transport.maxLength === Number.POSITIVE_INFINITY) {
+    // 어댑터 소유 모드 — 분할·재시도·폴백 전부 어댑터 몫. (NaN·0·음수는 splitMessage 가 RangeError — 사전 리뷰 M-2·info)
     return transport.send(target, content);
   }
 
   const chunks = splitMessage(content.text, transport.maxLength);
-  const last = chunks.length - 1;
-  let ref: MessageRef | undefined;
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk: Content =
-      i === last && content.components !== undefined
-        ? { text: chunks[i], format: content.format, components: content.components }
-        : { text: chunks[i], format: content.format };
-    ref = await sendChunkWithRetry(transport, target, chunk, policy);
+  if (chunks.length === 0) {
+    // 본문이 한도를 넘는데 전부 빈 줄이면 fin 정본 splitMessage 는 [] 를 돌려준다. 보낼 것이 없으므로
+    // 조용한 "성공"(전송 0회 · ref undefined) 대신 실패로 올린다 — deliveries[].error 에 남는다. 회귀: 사전 리뷰 M-1
+    throw new Error('@pleiades/notify: 분할 결과가 비었다 (본문이 빈 줄뿐)');
   }
-  // chunks 는 최소 1개 (splitMessage 는 빈 문자열에도 [''] 를 돌려준다)
-  return ref as MessageRef;
+  const last = chunks.length - 1;
+  let ref = await sendChunkWithRetry(transport, target, chunkAt(chunks, 0, content), policy);
+  for (let i = 1; i <= last; i++) {
+    ref = await sendChunkWithRetry(transport, target, chunkAt(chunks, i, content), policy);
+  }
+  return ref;
+}
+
+/** i 번째 청크 — `components` 는 마지막 청크에만 붙는다. */
+function chunkAt(chunks: string[], i: number, content: Content): Content {
+  return i === chunks.length - 1 && content.components !== undefined
+    ? { text: chunks[i], format: content.format, components: content.components }
+    : { text: chunks[i], format: content.format };
 }
 
 async function sendChunkWithRetry(
