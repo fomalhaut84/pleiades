@@ -260,6 +260,50 @@ code{
 }
 .delta b{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);white-space:nowrap;font-weight:500}
 
+/* ---- progress / timeline ---- */
+.prog{display:grid;grid-template-columns:auto 1fr auto;gap:8px 16px;align-items:center;margin-top:6px;font-size:14px}
+.prog .lab{font-family:var(--f-display);font-weight:700;color:var(--ink);white-space:nowrap}
+.prog .bar{height:10px;background:var(--surface-2);border:1px solid var(--rule);border-radius:99px;overflow:hidden;position:relative}
+.prog .bar i{display:block;height:100%;background:var(--fin);border-radius:99px}
+.prog .bar i.acc{background:var(--accent)}
+.prog .val{font-family:var(--f-mono);font-size:12.5px;color:var(--ink-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.prog .note{grid-column:1 / -1;font-size:12.5px;color:var(--ink-3);font-family:var(--f-mono);line-height:1.6}
+.tl{margin-top:22px;border-left:2px solid var(--rule)}
+.tl-row{position:relative;padding:0 0 26px 30px;display:grid;grid-template-columns:1fr;gap:8px}
+.tl-row:last-child{padding-bottom:0}
+.tl-row::before{
+  content:attr(data-n);position:absolute;left:-13px;top:2px;width:24px;height:24px;border-radius:50%;
+  background:var(--ground);border:2px solid var(--rule);color:var(--ink-3);
+  font-family:var(--f-mono);font-size:11px;font-weight:500;display:flex;align-items:center;justify-content:center;
+}
+.tl-row.done::before{background:var(--fin);border-color:var(--fin);color:#fff}
+.tl-row.part::before{border-color:var(--accent);color:var(--accent)}
+.tl-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.tl-head h3{font-size:16px}
+.tl-head .sum{font-family:var(--f-mono);font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.steps{display:flex;flex-wrap:wrap;gap:8px}
+.step{
+  display:inline-flex;flex-direction:column;gap:2px;min-width:118px;
+  padding:8px 11px;border-radius:6px;border:1px solid var(--rule);background:var(--surface);
+  font-size:13px;color:var(--ink-2);line-height:1.45;
+}
+.step b{font-family:var(--f-display);font-weight:700;color:var(--ink);font-size:13.5px}
+.step .dt{font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.02em}
+.step.done{border-color:color-mix(in srgb,var(--fin) 45%,transparent);background:color-mix(in srgb,var(--fin) 8%,transparent)}
+.step.done .dt{color:var(--fin)}
+.step.next{border-color:var(--accent);box-shadow:var(--shadow)}
+.step.next .dt{color:var(--accent)}
+.step.todo{opacity:.72}
+.step.gate{border-style:dashed}
+.tl-row p{font-size:13.5px;color:var(--ink-2);max-width:66ch}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3)}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;border:1px solid var(--rule);background:var(--surface)}
+.legend .l-done::before{background:color-mix(in srgb,var(--fin) 30%,transparent);border-color:var(--fin)}
+.legend .l-next::before{border-color:var(--accent);background:var(--surface)}
+.legend .l-todo::before{opacity:.6}
+.legend .l-gate::before{border-style:dashed}
+@media (max-width:640px){.prog{grid-template-columns:1fr auto}.prog .lab{grid-column:1 / -1}}
+
 /* ---- questions ---- */
 .qs{display:flex;flex-direction:column;gap:0;margin-top:4px}
 .q{padding:20px 0;border-bottom:1px solid var(--rule-soft);display:grid;grid-template-columns:auto 1fr;gap:0 20px}
@@ -291,12 +335,12 @@ code{
 <div class="wrap">
 
 <header class="masthead">
-  <div class="kicker"><span class="dot"></span>통합 방향 노트<span class="dot"></span>개정 002 · 설계 003 · 배치 004 · 하네스 005<span class="dot"></span>1a-0 완료 · 1a-1 착수 전</div>
+  <div class="kicker"><span class="dot"></span>통합 방향 노트<span class="dot"></span>개정 002 · 설계 003 · 배치 004 · 하네스 005<span class="dot"></span>1a-1 완료 · 1a-2 / 1a-3 준비</div>
   <h1>myFinance × myFitness<br>통합 검토</h1>
   <p class="dek">두 프로젝트는 이미 <strong>같은 아키텍처의 두 갈래</strong>다. 처음 질문은 "어디까지 합치고 어디서 멈출까?"였다. 목표가 <strong>개인 비서 플랫폼</strong>으로 확정되면서 답이 바뀌었다 — 멈추는 지점을 찾는 문제가 아니라, <strong>도메인을 계속 붙일 수 있는 자리를 만드는 문제</strong>다. 가는 길은 그대로 되돌리기 비용 순이다.</p>
   <div class="meta">
     <span><b>초판</b> 2026-09-03 (001)</span>
-    <span><b>개정</b> 2026-09-03 (002) · 2026-09-04 (003 · 004) · 2026-09-07 (005) · 2026-09-08 (1a-0) · 2026-09-09 (#37)</span>
+    <span><b>개정</b> 2026-09-03 (002) · 2026-09-04 (003 · 004) · 2026-09-07 (005) · 2026-09-08 (1a-0) · 2026-09-09 (#37) · 2026-09-10 (1a-1 · 진척도)</span>
     <span><b>하네스 통합</b> 집행 완료 2026-09-09 (#1)</span>
     <span><b>통합 작업</b> repos/* · integration/pleiades</span>
     <span><b>서비스 유지</b> fin v0.16.4 dev · fit v2.27.2 main</span>
@@ -856,7 +900,7 @@ code{
     </div>
 
     <div class="stage live" data-n="1">
-      <div class="when">진행 중 · 1a-0 완료 · 1a-1 착수 전</div>
+      <div class="when">진행 중 · 1a-0 · 1a-1 완료 · 다음 1a-2</div>
       <div class="stage-head"><h3>알림 어댑터 + Discord 아웃바운드</h3><span class="chip r2">되돌리기: 채널은 env 1줄</span></div>
       <p><code>@pleiades/notify</code> 로 <code>Notifier</code> 인터페이스와 Telegram·Discord 어댑터를 만든다. 재시도 백오프·HTML 파싱 실패 시 plain 폴백·4096자 분할은 myFitness <code>send.ts</code> 에 이미 있다 — 추출 시 양쪽 구현을 비교해 정본을 고른다. 채널 라우팅(<code>#finance</code> <code>#fitness</code> <code>#calendar</code>)은 어댑터 안에 둔다.</p>
       <p><b>선결:</b> 이 코드에 테스트. myFitness 의 첫 vitest 도입 지점이고, 범위는 추출 대상으로만 한정한다.</p>
@@ -865,6 +909,7 @@ code{
       <div class="delta" style="border-color:var(--risk)"><b>착수 조건</b> <b>1a-0 만 막는 것이 없다.</b> 1a-1 부터는 <b>하네스 통합</b>이 선결이고, 그 위에 결정 8개(Q10 · Q16~Q19 · Q25~Q27)가 단계별로 걸린다. 정본은 003 §10-1 의존 지도.</div>
       <div class="delta" style="border-color:var(--fin)"><b>1a-0 완료</b> <b>2026-09-08 · PR #33.</b> 루트 <code>package.json</code> + <code>packages/notify/</code> 스캐폴딩. 배포 형태 <b>ALT-d 위임형</b>(Q47) · 의존성 표기 <code>git+https://…#&lt;tag&gt;</code>(Q28 소멸) · 검증 경로 <b>γ + β2</b>(Q44) · 검증용 봇 토큰(Q46). 병행 인스턴스 격리 조건은 실측으로 <b>6 → 10</b>(정본 003 §10-1). 봇 리뷰는 머지까지 오지 않았다 — 그 대체 경로가 #14 로 룰이 됐다.</div>
       <div class="delta" style="border-color:var(--fin)"><b>2026-09-09</b> <b>1a-1 선결 0.</b> 하네스 통합(#1) 집행 완료 + #37 이 Q25 · Q26 · Q19 · Q10 을 답했다. 남은 결정은 <b>넷</b> — Q16 · Q17 · Q18(1a-2) · Q27(1a-4) — 이고 Q45(서버 https·node)는 1a-3 착수 전 측정이다. 위 본문의 <em>"양쪽 구현을 비교해 정본을 고른다"</em> 는 답이 났다: plain 폴백은 <b>태그-only(fin 정규식)</b>, 4096 초과는 <b>절단이 아니라 분할로 통일</b>(fit 의 사용자 가시 변경 · 1a-3 에서 승인). 003 §3-1 의 <em>"어느 쪽을 고르든 한쪽 폴백 출력이 바뀐다"</em> 는 불성립으로 정정됐다 — 두 구현 다 fin 이었고 디코드본은 죽은 export 였다.</div>
+      <div class="delta" style="border-color:var(--fin)"><b>1a-1 완료</b> <b>2026-09-10 · PR #49.</b> <code>@pleiades/notify</code> 포트 + 코어(재시도·폴백·분할·집계·라우팅) + <code>TelegramTransport</code> + 테스트 93건 + 테스트 타입체크 게이트. 사용자 승인 4건 — <code>Content</code> 정의 · <code>Transport.maxLength</code>(유한=코어 소유 / Infinity=어댑터 소유) · grammy 무의존 <code>TelegramApi</code> · <code>Route→Transport</code> 매핑 config. 착수 직전 재감사가 블로커 1(타입 대입 불가)을 잡았고, 소비자 e2e 가 결함 1(임시 클론 <code>prepare</code> 에 <code>@types/node</code> 없음)을 잡았다. <b>소비자 0 이므로 되돌리기는 아직 즉시.</b></div>
       <div class="stopline"><b>여기서 멈춰도</b> 어댑터 경계가 남는다. 통합 인박스도 이미 얻었다.</div>
     </div>
 
@@ -893,6 +938,90 @@ code{
       <div class="stopline"><b>여기서 검증된다</b> 계약이 실제로 성립하면 도메인 #4 부터는 싸진다. 성립하지 않으면 단계 3 에서 멈추는 것이 옳았다는 뜻이다.</div>
     </div>
   </div>
+</section>
+
+<!-- ============ 진척도 ============ -->
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">진척도 · 2026-09-10</div>
+    <h2>최종 목표까지 어디쯤 왔나</h2>
+    <p>최종 목표는 <b>개인 비서 플랫폼</b> — 도메인을 추가 프로젝트 없이 붙일 수 있는 자리(단계 4 · 모노레포 + 도메인 계약)다. 아래 숫자는 <b>열거된 단위의 개수</b>이지 작업량이 아니다. 단계마다 크기가 다르고 시간 기록이 없으므로 퍼센트는 단위 수로만 읽는다.</p>
+  </div>
+
+  <div class="prog">
+    <span class="lab">기반 (문서 · 배치 · 룰)</span><span class="bar"><i style="width:100%"></i></span><span class="val">7 / 7 완료</span>
+    <span class="lab">실행 단위</span><span class="bar"><i style="width:27.3%"></i></span><span class="val">3 / 11 완료</span>
+    <span class="note">기반 7 = 001 · 002 · 003 · 004 · 005 · worktree 배치 · <code>workflow.md</code> 룰 계승. 실행 11 = 단계 0 (1) · 단계 1 (6: 1a-0 ~ 1a-4 · 1b) · 단계 2 (2: 하네스 · 메모리) · 단계 3 (1) · 단계 4 (1). 완료 3 = 1a-0 · 1a-1 · 하네스.</span>
+  </div>
+
+  <div class="tl">
+    <div class="tl-row done" data-n="✓">
+      <div class="tl-head"><h3>기반 — 방향 · 설계 · 배치 · 룰</h3><span class="sum">2026-09-03 ~ 09-07 · 완료</span></div>
+      <div class="steps">
+        <span class="step done"><b>001 분석</b><span class="dt">09-03</span></span>
+        <span class="step done"><b>002 방향 (Q1·Q4·Q5·Q6)</b><span class="dt">09-03</span></span>
+        <span class="step done"><b>003 단계 1 설계</b><span class="dt">09-04 · 정정 09-08 · 09-09 · 09-10</span></span>
+        <span class="step done"><b>004 worktree 배치</b><span class="dt">09-04</span></span>
+        <span class="step done"><b>workflow.md 룰 계승</b><span class="dt">09-04 · #5</span></span>
+        <span class="step done"><b>005 하네스 처분</b><span class="dt">09-07</span></span>
+        <span class="step done"><b>GitHub 발행 · gitflow</b><span class="dt">09-04</span></span>
+      </div>
+    </div>
+
+    <div class="tl-row" data-n="0">
+      <div class="tl-head"><h3>단계 0 — 통합 어드바이저</h3><span class="sum">미착수 · 0 / 1</span></div>
+      <div class="steps">
+        <span class="step todo gate"><b>Q23 — 두 MCP 로컬 상주 확인</b><span class="dt">착수 전 선결</span></span>
+        <span class="step todo"><b>TS 2파일 + JSON + 재배포</b><span class="dt">되돌리기 revert + restart</span></span>
+      </div>
+      <p>단계 1 을 먼저 하기로 결정된 적은 없다 — 1a-0·1a-1 이 두 저장소를 건드리지 않아 먼저 갈 수 있었을 뿐이다. 병행 인스턴스(Q42)가 MCP 도 띄우면 Q23 이 함께 풀린다.</p>
+    </div>
+
+    <div class="tl-row part" data-n="1">
+      <div class="tl-head"><h3>단계 1 — 알림 계층 (1a 텔레그램 유지 → 1b Discord)</h3><span class="sum">진행 중 · 2 / 6</span></div>
+      <div class="steps">
+        <span class="step done"><b>1a-0 스캐폴딩</b><span class="dt">09-08 · PR #33</span></span>
+        <span class="step done"><b>1a-1 패키지 구현</b><span class="dt">09-10 · PR #49 · 테스트 93</span></span>
+        <span class="step next"><b>1a-2 fit vitest</b><span class="dt">다음 후보 · Q16~Q18 · 즉시</span></span>
+        <span class="step todo gate"><b>1a-3 fit send.ts 교체</b><span class="dt">첫 태그 · Q45 · β2 서버 승인 · 중간</span></span>
+        <span class="step todo"><b>1a-4 fin 호출부 20건</b><span class="dt">Q27 · 약 94 지점 · 중간</span></span>
+        <span class="step todo"><b>1b Discord 전환</b><span class="dt">Q12 DB · 어댑터 · env 플립</span></span>
+      </div>
+      <p><b>되돌리기 등급이 여기서 오른다.</b> 1a-1 까지는 소비자 0 이라 즉시, 1a-3 부터는 두 저장소 <code>npm ci</code>·재빌드·<code>pm2 restart</code>(병행 인스턴스)가 따라와 중간이다. 1a-3 전에 <b>첫 태그(릴리즈 PR)</b> 와 <b>Q45(서버 https·node)</b> 가 필요하다.</p>
+    </div>
+
+    <div class="tl-row part" data-n="2">
+      <div class="tl-head"><h3>단계 2 — 하네스 + 메모리 (축 A)</h3><span class="sum">절반 · 1 / 2</span></div>
+      <div class="steps">
+        <span class="step done"><b>하네스 통합 (#1 · H-0~H-5)</b><span class="dt">09-07 ~ 09-09 · 복사 + --add-dir 래퍼</span></span>
+        <span class="step todo"><b>메모리 공유 (A2)</b><span class="dt">미착수 · 005 범위 밖 · 200줄 한도 압축 선행</span></span>
+      </div>
+      <p>플러그인이 아니라 복사(형태 B)와 저장소별 래퍼로 실현됐다. 이름 충돌 규칙은 전부 실측됐다 — rule 공존 · agent 마지막 <code>--add-dir</code> 승 · skill <code>cwd</code> 승(#38 · 09-10).</p>
+    </div>
+
+    <div class="tl-row" data-n="3">
+      <div class="tl-head"><h3>단계 3 — Next 16 정렬 + 나머지 공유 패키지</h3><span class="sum">미착수 · 0 / 1</span></div>
+      <div class="steps">
+        <span class="step todo gate"><b>fin Next 15 → 16</b><span class="dt">PR #58 폐기 후 새로</span></span>
+        <span class="step todo"><b>mcp-core · advisor 패키지</b><span class="dt">packages/* 레이아웃 · 중간</span></span>
+      </div>
+      <p>1a 가 검증한 추출 패턴(git 의존성 · 위임형 루트 · 소비자 e2e)을 그대로 쓴다. 단계 1 과 달리 Next 정렬이 선결이다(발견 6).</p>
+    </div>
+
+    <div class="tl-row" data-n="4">
+      <div class="tl-head"><h3>단계 4 — 모노레포 + 도메인 계약 (최종 목표)</h3><span class="sum">미착수 · 0 / 1 · 진입 조건: 도메인 #3</span></div>
+      <div class="steps">
+        <span class="step todo gate"><b>Q7 DB 경계 · Q2 독립 배포 · Q3 인바운드</b><span class="dt">단계 3 이후 답</span></span>
+        <span class="step todo"><b>apps/{finance,fitness,calendar} + packages/*</b><span class="dt">되돌리기 높음</span></span>
+        <span class="step todo"><b>도메인 모듈 계약</b><span class="dt">캘린더를 붙이며 확정</span></span>
+      </div>
+      <p>여기서 최종 목표가 검증된다 — 새 도메인이 무엇을 구현하면 플랫폼에 꽂히는가. 계약이 성립하면 도메인 #4 부터 싸진다.</p>
+    </div>
+  </div>
+
+  <div class="legend"><span class="l-done">완료 (날짜 · PR)</span><span class="l-next">다음 후보</span><span class="l-todo">미착수</span><span class="l-gate">선결·승인 게이트가 걸린 단위</span></div>
+
+  <div class="pullout" style="margin-top:22px"><b>지금 위치를 한 줄로.</b> 기반은 끝났고, 실행은 단계 1 의 중간(1a-1)이다. 지금까지의 모든 변경은 <b>두 실서비스에 닿지 않았다</b> — 대상 저장소 쪽 변경은 전부 <code>integration/pleiades</code> 에만 있고 서비스 <code>dev</code>·<code>main</code> 에는 없다. 실서비스에 처음 닿는 지점은 1a-3(fit) 이고, 그래서 그 앞에 태그·서버 측정·승인 게이트가 몰려 있다.</div>
 </section>
 
 <!-- ============ 남은 질문 ============ -->
@@ -953,7 +1082,7 @@ code{
   <h3>근거</h3>
   <ul>
     <li>정본 문서 — <code>002-platform-direction.md</code>(방향) · <code>003-notify-package.md</code>(단계 1 설계 · §4-2 재작성 시그니처 · §10-1 의존 지도와 10조건) · <code>004-repo-layout.md</code>(배치) · <code>005-harness-integration.md</code>(하네스 처분 37행 · 집행 H-0~H-5). 이 페이지는 그 요약이다</li>
-    <li>세션 인계 — <code>docs/handoff/</code> 2026-09-07(005) · 09-08(1a-0) · 09-09(#37 · H-1 · H-3(fit)). 진행 상태의 정본은 <code>CLAUDE.md</code> 상단 상태 문단</li>
+    <li>세션 인계 — <code>docs/handoff/</code> 2026-09-07(005) · 09-08(1a-0) · 09-09(#37 · H-1 · H-3(fit)) · 09-10(1a-1 · #38 · #42). 진행 상태의 정본은 <code>CLAUDE.md</code> 상단 상태 문단 · 단계 정의는 002 §4 · 1a 세부는 003 §5-2</li>
     <li>미결 추적 — <code>github.com/fomalhaut84/pleiades</code> 이슈. <b>미결의 정본은 문서가 아니라 이슈다</b></li>
     <li>로컬 실측 — 두 저장소의 <code>package.json</code>, <code>ecosystem.config.js</code>, <code>.claude/</code> 트리, <code>src/</code> LOC, 봇 구조·전송 호출 분포·import 그래프, auto memory 디렉터리 (2026-09-03) · 하네스 참조 그래프·<code>--add-dir</code> 로딩 범위 (2026-09-07) · 발송 경로 DB 쓰기·npm git 의존성 역학 (2026-09-08) · 하네스 이름 전수·Q10/Q19 정적 근거 (2026-09-09). 측정 명령은 <code>docs/research/measured-facts.md</code></li>
     <li><a href="https://code.claude.com/docs/en/memory">Claude Code — How Claude remembers your project</a> (CLAUDE.md 로드 순서, <code>autoMemoryDirectory</code>, MEMORY.md 200줄/25KB 한도)</li>
