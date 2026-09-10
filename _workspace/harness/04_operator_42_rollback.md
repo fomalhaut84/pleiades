@@ -1,12 +1,14 @@
 # pleiades#42 롤백 절차 — fit `workflow.md` 8-4 문구·절 순서 정정
 
+> **현재 단계 = 3단계 (2026-09-10 · 머지 + 원본 동기화 완료 · PR #53 Codex P2 반영).** myFitness#373 이 `8b7a224` 로 머지됐고 원본 `~/workspace/myFitness/.claude/rules/workflow.md` 가 동기화됐다. **되돌리려면 1단계(브랜치 삭제)는 무의미하고 2단계 revert + 3단계 원본 복원을 함께 한다.** 아래 1·2단계의 "현재 상태" 표기는 작성 시점(머지 전) 기록으로 남긴다.
+
 - **작성일**: 2026-09-10
 - **모드**: I (통합) — `repos/myFitness` worktree · base `integration/pleiades`
 - **브랜치**: `integration/chore-pleiades-42`
-- **커밋**: `af839dd` (단일 커밋)
+- **커밋**: `af839dd` + 사전 리뷰·봇 반영 `6d53be5` · `97cc725` → 머지 커밋 **`8b7a224`** (myFitness#373 · squash)
 - **분기점 (base)**: `2195854` (= H-3(fit) myFitness#372 머지 지점 · `origin/integration/pleiades`)
 - **범위**: `.claude/rules/workflow.md` **1파일** · 21 insertions / 16 deletions · **실행 코드 0**
-- **원본 `~/workspace/myFitness`**: **무변경** (동기화는 아직 하지 않았다 — 아래 3단계 참조)
+- **원본 `~/workspace/myFitness`**: ~~무변경~~ **동기화 완료 (2026-09-10 · 사용자 승인 · `git archive integration/pleiades .claude/rules/workflow.md | tar -x`)** — 되돌리기는 3단계
 - **대칭 상대**: 없다. fin `.claude/rules/workflow.md` 8-4 가 **이미 정본 판단을 담고 있어** 이번 변경은 fit 단독이다
   (비대칭이 아니라 fit 이 fin 을 따라잡은 것)
 
@@ -29,7 +31,7 @@
 
 되돌리기 등급: **즉시** (각 단계 명령 1~2줄, 1분 미만).
 
-## 1단계 — 머지 전 (현재 상태)
+## 1단계 — 머지 전 (작성 시점 상태 · **지금은 해당 없음** — 머지됨)
 
 PR 이 아직 없다(9-1 사전 리뷰 후 오케스트레이터가 연다). worktree 에서:
 
@@ -62,11 +64,9 @@ revert 는 `integration/pleiades` 직접 커밋이 아니라 **되돌리기 브�
 
 소요: 1분. `integration/pleiades` 는 `dev` 로 머지되지 않으므로(#25) 이 시점까지도 **서비스는 영향 없다.**
 
-## 3단계 — 원본 동기화 후 (아직 하지 않았음 · 별도 승인 사항)
+## 3단계 — 원본 동기화 후 (**현재 상태** · 2026-09-10 동기화 완료)
 
-**이번 집행은 원본 `~/workspace/myFitness` 를 건드리지 않았다.** 원본의 `.claude/rules/workflow.md` 는
-여전히 옛 8-4(선택 대안·8-6 뒤)를 담고 있다. 원본 동기화는 **별도 사용자 승인**을 받아 수행한다
-(H-3(fit) 때와 같은 절차 — 005 §4-7 · #27).
+~~이번 집행은 원본을 건드리지 않았다~~ → **동기화됐다 (2026-09-10 · 승인 후 `git archive integration/pleiades .claude/rules/workflow.md | tar -x -C ~/workspace/myFitness` · `diff -rq` 로 worktree 와 동일 확인 · index 무변경).** 되돌리기는 아래 명령으로 **직전 판(`2195854` 의 파일)을 원본에 다시 풀면 된다** — `git archive 2195854 .claude/rules/workflow.md | tar -x -C ~/workspace/myFitness`. 사전 사본은 세션 스크래치패드라 소멸했다(원본 복원 경로는 `git archive` 가 유일).
 
 동기화를 한 뒤에 되돌려야 하는 경우: fit `.claude/` 는 원본에서 **gitignored** 라 git 으로 복원되지 않는다.
 **동기화 직전에 사본을 떠 둔다.**
@@ -114,4 +114,4 @@ git -C ~/workspace/myFitness archive 2195854 \
 
 - 착수 직전 재감사: worktree clean · `integration/pleiades` = `origin/integration/pleiades` = `2195854`
 - 브랜치 `integration/chore-pleiades-42` 생성 → 커밋 `af839dd` → `git push -u origin` 완료
-- **PR 미개설** (9-1 사전 리뷰 후 오케스트레이터가 연다) · 원본 동기화 미실행
+- ~~PR 미개설~~ → 9-1 사전 리뷰(major 1 반영 `6d53be5`) → **myFitness#373** → 봇 P2 1 반영(`97cc725`) → **머지 `8b7a224`** → worktree pull · orphan 0 → **원본 동기화 완료** → #42 종료
