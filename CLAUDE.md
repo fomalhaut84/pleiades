@@ -4,7 +4,8 @@
 
 **pleiades** — `myFinance` 와 `myFitness` 두 프로젝트를 어디까지 통합할지 검토하고, 결정된 범위를 실행하는 저장소.
 
-**현재 상태: 방향 확정 · 배치·룰 완료 · 하네스 통합(#1) 집행 · **1a-0 완료(#31 → PR #33 머지 2026-09-08)** — 하네스 PR 5개(#19·#20·#22·#24·#26) · myFinance#492 · myFitness#369 전부 머지됨(2026-09-07). **하네스 통합(#1) 집행 완료 2026-09-09** — H-1(#40 → PR #41 `1f2f292` · `pleiades-codex-loop`) · H-3(fit)(#8 → myFitness#372 `2195854` · 10파일 · **원본 `.claude/` 동기화 완료**) · #8 종료. **1a-1 선결 0.** 단계 0 미착수 · **열린 PR 0**(#35·#36 은 2026-09-08 머지됨 — `362e6e8`·`2e07093`).**
+**2026-09-10 · 1a-1 완료(#47 → PR #49 머지 `c44f5c8`)** — `@pleiades/notify` 포트·코어·`TelegramTransport` + 테스트 93건 + 타입체크 게이트(#32 I1 (b) · 8절 pleiades 타입 칸 = `npm run typecheck && npm run typecheck:test`). 사용자 승인 4건 **D-1 `Content{text,format,components?}` · D-2 `Transport.maxLength`(유한=코어 소유/Infinity=어댑터 소유) · D-3 grammy 무의존 `TelegramApi`(`parse_mode?: string` · 메서드 단축 문법) · D-4 `Route→Transport` 매핑 config**. 003 §4-2 는 **2026-09-10 정정 블록과 함께가 정본**. 같은 날 아티팩트 **v6**(#45·PR #46) · **#38 실측**(skill 충돌 = 이름 단위 · cwd 승 · 개명 불필요 · PR #50) · **#42 집행**(myFitness#373 · 원본 동기화 완료 · fin 같은 결함 → #51). 후속 #48(1a-3 인계). **다음은 1a-2(fit vitest · Q16~Q18) 또는 1a-3 준비(첫 태그 · Q45).** 소비자 0 이므로 1a-1 되돌리기는 여전히 **즉시**.
+**현재 상태: 방향 확정 · 배치·룰 완료 · 하네스 통합(#1) 집행 · **1a-0 완료(#31 → PR #33 머지 2026-09-08)** — 하네스 PR 5개(#19·#20·#22·#24·#26) · myFinance#492 · myFitness#369 전부 머지됨(2026-09-07). **하네스 통합(#1) 집행 완료 2026-09-09** — H-1(#40 → PR #41 `1f2f292` · `pleiades-codex-loop`) · H-3(fit)(#8 → myFitness#372 `2195854` · 10파일 · **원본 `.claude/` 동기화 완료**) · #8 종료. ~~**1a-1 선결 0.**~~ **1a-1 완료(2026-09-10).** 단계 0 미착수 · **열린 PR 0**(#35·#36 은 2026-09-08 머지됨 — `362e6e8`·`2e07093`).**
 **2026-09-09 · 이슈 #37 (1a-1 준비):** 측정 3건(Q41 하네스 이름 전수 · #32 I1 테스트 타입체크 게이트 · Q10·Q19 정적 근거 C-1~C-7) →
 초안 `_workspace/1a-1-prep/02_writer_1a1prep.md` **3회 개정 · 감사 3회(정정 11→10→6 · 마지막 6건은 문안 수준이라 직접 반영)** →
 **사용자 확정 7건 (전부 권고안 채택)** — **Q25 ①`targets(route): string[]`** · **하위 ADMIN A**(실값 · fin 전용 · fit 미매핑) ·
@@ -96,9 +97,9 @@ bin/claude-with fit      # 한 번에 한 저장소 (H-5 · Q30). --resume 도 �
 
 | 파일 | 내용 | 언제 읽나 |
 |---|---|---|
-| `docs/handoff/` 의 최신 파일 | 직전 세션 인계 노트 (현재 `2026-09-09-1a-1-prep-h1-h3.md`. `ls` 로 재확인) | **새 세션 시작 시 먼저** |
+| `docs/handoff/` 의 최신 파일 | 직전 세션 인계 노트 (현재 `2026-09-10-1a-1-done.md`. `ls` 로 재확인) | **새 세션 시작 시 먼저** |
 | `docs/specs/002-platform-direction.md` | **정본 방향** — 개인 비서 플랫폼, 개정 경로 0~4, 확정된 답 | **방향 판단 시 먼저** |
-| `docs/specs/003-notify-package.md` | **단계 1 상세 설계** — `@pleiades/notify`. 확정된 답 Q15·Q9·Q8·Q11 · **Q47(배포 형태 ALT-d)·Q44(검증 경로 γ+β2)·Q46(검증용 봇 토큰)·Q28 소멸** · **Q25(①`targets`+ADMIN A)·Q26(①`label`)·Q19(방향 C)·Q10(L ① 분할 / P ① 태그-only) — 2026-09-09 확정**, **§4-2 는 재작성된 정본 시그니처(그 아래는 소진 이력)**, 발견 8~15, L3 인터페이스, 1a-0~1a-4 · 1b, 되돌리기 표, **§10-1 의 병행 인스턴스 10조건(정본)**, 미결 **Q45**(서버 https — 1a-3 전) | **단계 1 작업 시.** 002 를 대체하지 않는다 |
+| `docs/specs/003-notify-package.md` | **단계 1 상세 설계** — `@pleiades/notify`. 확정된 답 Q15·Q9·Q8·Q11 · **Q47(배포 형태 ALT-d)·Q44(검증 경로 γ+β2)·Q46(검증용 봇 토큰)·Q28 소멸** · **Q25(①`targets`+ADMIN A)·Q26(①`label`)·Q19(방향 C)·Q10(L ① 분할 / P ① 태그-only) — 2026-09-09 확정**, **§4-2 는 재작성된 정본 시그니처 + 2026-09-10 정정 블록(`Content`·`maxLength`·`transport` 맵·`TelegramApi`·`csvEnv` — 1a-1 이 채운 빈칸)(그 아래는 소진 이력)**, 발견 8~15, L3 인터페이스, 1a-0~1a-4 · 1b, 되돌리기 표, **§10-1 의 병행 인스턴스 10조건(정본)**, 미결 **Q45**(서버 https — 1a-3 전) | **단계 1 작업 시.** 002 를 대체하지 않는다 |
 | `docs/specs/004-repo-layout.md` | **배치 정본** — worktree 배치(`repos/*`), 변형 A/B 구분, 감사 정정 3건, 미결 Q23·Q24 (**Q20 답 → 005 · Q21 소멸 · Q22 → 005 Q38**, §8 정정) | **경로·배치 판단 시.** 하네스가 어디를 읽어야 하는지 여기가 정한다 |
 | `docs/specs/005-harness-integration.md` | **하네스 처분 정본** — 37행 파일별 처분 표, 역할 이관, `--add-dir` 운영 규약, #8·#10 처리, 집행 단계 H-0~H-5, 확정 Q29·Q30·Q32·Q39 · **Q41(`pleiades-codex-loop` · 기준 S · 2026-09-09)**, 미결 Q36·Q38 | **하네스가 어디에 있어야 하는지 판단할 때** |
 | `docs/specs/001-integration-master.md` | 축 A/B 분해·옵션·리스크 분석 (권고 경로는 002 가 대체) | 분석 근거가 필요할 때 |
@@ -161,6 +162,8 @@ bin/claude-with fit      # 한 번에 한 저장소 (H-5 · Q30). --resume 도 �
 | 2026-09-09 | **H-1 집행 — 스킬 `pleiades-codex-loop` 신규 작성** (fin `codex-response-patterns` 91줄 + fit `codex-review-loop` 113줄 입력 · 척도는 봇 네이티브 `P0` 최고로 통일 · 카탈로그는 pleiades 자체 Codex 정정 이력 14패턴) | 스킬 1 (총 9) | 005 §4-13 H-1 · #40 |
 | 2026-09-09 | `bin/claude-with:12` stale 주석 정정(fit `.claude/` 는 worktree 에 **있다**(#369 tracked) — 로드가 안 되는 이유는 중첩) · H-3(fit) 완료로 fit 원본 하네스가 pleiades·fin 과 같은 척도·게이트 | 스크립트 주석 1 | #43 인계 |
 | 2026-09-08 | **`workflow.md` 8절 pleiades 행 확정** (lint 미해당 · `typecheck`/`test`/`build` + `npm --prefix packages/notify install` 선행 조건) | 룰 1 | 1a-0 (#31) 이 루트 `package.json` 을 신설 |
+| 2026-09-10 | **`workflow.md` 8절 pleiades 타입 칸에 `typecheck:test` 추가** (#32 I1 (b) 이행 · `tsconfig.test.json`) | 룰 1 | 1a-1 (#47) |
+| 2026-09-10 | 하네스 절에 **skill 충돌 규칙**(이름 단위 · cwd 승) 1줄 — N18 에 셋째 규칙 | CLAUDE.md | #38 실측 (PR #50) |
 
 ## 상속하는 컨벤션
 
