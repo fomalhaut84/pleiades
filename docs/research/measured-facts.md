@@ -3419,13 +3419,17 @@ frontmatter `name` 은 둘 다 `orphan-check`. CLI **v2.1.267** · 모델 `claud
 
 ```bash
 # Q1: 목록에서 orphan-check 개수 · description 인용 (JSON)              → count 1 · descriptions [] (인용 불가)
+Q1='Answer with only a JSON object and nothing else: {"orphan_check_count": <number of skills named exactly orphan-check you can see>, "descriptions": [<the exact description text of each orphan-check skill entry, verbatim>], "has_base_placeholder": <true if any orphan-check description contains the literal string "<base>">, "has_dev_literal": <true if any orphan-check description contains the phrase "dev 에 반영">, "skill_names": [<all skill names visible to you, sorted>]}. Do not call any tool. Do not run the skill.'
 # Q2: description 에 "<base>" 인지 "dev" 인지                          → 4세션 전부 "목록에 설명이 없다" (haiku 가 받는 목록 형식의 한계 — 변별 불가)
-# Q3: Skill 도구로 orphan-check 를 로드만 하고(Bash·Edit·Write·Agent 차단) Base directory · 첫 본문 줄 · "pleiades 판" 포함 여부 보고
+Q2='Look at the skill listing you were given. Find the skill named orphan-check. Its description sentence contains either the literal placeholder token "<base>" (angle brackets, the word base) or the literal word "dev". Answer with only a JSON object: {"variant": "base" or "dev", "quote": "<copy the first 60 characters of that orphan-check description exactly>", "count": <how many orphan-check entries exist in the listing>}. Do not call any tool.'
+# Q3 (결정적): Skill 도구로 orphan-check 를 로드만 하고(Bash·Edit·Write·Agent 차단) Base directory · 첫 본문 줄 · "pleiades 판" 포함 여부 보고
+Q3='Use the Skill tool exactly once to load the skill named orphan-check, then STOP — do not execute any command, do not follow the skill instructions, do not call any other tool. After loading, answer with only a JSON object: {"base_directory": "<the Base directory path shown for the skill>", "first_body_line": "<the first non-frontmatter, non-empty line of the loaded skill text, verbatim, max 120 chars>", "mentions_pleiades_edition": <true if the loaded text contains the phrase "pleiades 판">, "mentions_base_placeholder": <true if the loaded text contains the literal "<base>">, "count_in_listing": <how many orphan-check entries were in your skill listing>}'
 cd ~/workspace/pleiades;  CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude -p "$Q3" --model claude-haiku-4-5-20251001 --permission-mode plan \
   --disallowedTools "Bash,Edit,Write,MultiEdit,NotebookEdit,Agent" --add-dir ~/workspace/myFitness < /dev/null      # a2
-cd ~/workspace/myFitness; CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude -p "$Q3" … --add-dir ~/workspace/pleiades < /dev/null   # b2
+cd ~/workspace/myFitness; CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude -p "$Q3" --model claude-haiku-4-5-20251001 --permission-mode plan \
+  --disallowedTools "Bash,Edit,Write,MultiEdit,NotebookEdit,Agent" --add-dir ~/workspace/pleiades < /dev/null       # b2
 ```
-프롬프트 원문은 스크래치패드 `i38/Q{1,2,3}.txt`(세션 종료 시 소멸) — 위 요약이 정본.
+세 프롬프트 원문은 위 블록이 정본이다 (PR #50 Codex P2 — 스크래치패드는 세션 종료 시 소멸).
 
 ## 결과
 
