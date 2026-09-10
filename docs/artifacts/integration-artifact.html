@@ -961,10 +961,10 @@ code{
         <span class="step done"><b>001 분석</b><span class="dt">09-03</span></span>
         <span class="step done"><b>002 방향 (Q1·Q4·Q5·Q6)</b><span class="dt">09-03</span></span>
         <span class="step done"><b>003 단계 1 설계</b><span class="dt">09-04 · 정정 09-08 · 09-09 · 09-10</span></span>
-        <span class="step done"><b>004 worktree 배치</b><span class="dt">09-04</span></span>
-        <span class="step done"><b>workflow.md 룰 계승</b><span class="dt">09-04 · #5</span></span>
+        <span class="step done"><b>004 배치 설계</b><span class="dt">09-04</span></span>
         <span class="step done"><b>005 하네스 처분</b><span class="dt">09-07</span></span>
-        <span class="step done"><b>GitHub 발행 · gitflow</b><span class="dt">09-04</span></span>
+        <span class="step done"><b>worktree 배치 집행</b><span class="dt">09-04 · repos/* · GitHub 발행 포함</span></span>
+        <span class="step done"><b>workflow.md 룰 계승</b><span class="dt">09-04 · #5 · gitflow</span></span>
       </div>
     </div>
 
@@ -987,7 +987,7 @@ code{
         <span class="step todo"><b>1a-4 fin 호출부 20건</b><span class="dt">Q27 · 약 94 지점 · 중간</span></span>
         <span class="step todo"><b>1b Discord 전환</b><span class="dt">Q12 DB · 어댑터 · env 플립</span></span>
       </div>
-      <p><b>되돌리기 등급이 여기서 오른다.</b> 1a-1 까지는 소비자 0 이라 즉시, 1a-3 부터는 두 저장소 <code>npm ci</code>·재빌드·<code>pm2 restart</code>(병행 인스턴스)가 따라와 중간이다. 1a-3 전에 <b>첫 태그(릴리즈 PR)</b> 와 <b>Q45(서버 https·node)</b> 가 필요하다.</p>
+      <p><b>되돌리기 등급이 여기서 오른다.</b> 1a-1 까지는 소비자 0 이라 즉시, 1a-3 부터는 두 저장소 <code>npm ci</code>·재빌드·<code>pm2 restart</code>(<b>병행 인스턴스만</b> — 실서비스 프로세스는 무관)가 따라와 중간이다. 1a-3 전에 <b>첫 태그(릴리즈 PR)</b> 와 <b>Q45(서버 https·node)</b> 가 필요하다.</p>
     </div>
 
     <div class="tl-row part" data-n="2">
@@ -1021,7 +1021,7 @@ code{
 
   <div class="legend"><span class="l-done">완료 (날짜 · PR)</span><span class="l-next">다음 후보</span><span class="l-todo">미착수</span><span class="l-gate">선결·승인 게이트가 걸린 단위</span></div>
 
-  <div class="pullout" style="margin-top:22px"><b>지금 위치를 한 줄로.</b> 기반은 끝났고, 실행은 단계 1 의 중간(1a-1)이다. 지금까지의 모든 변경은 <b>두 실서비스에 닿지 않았다</b> — 대상 저장소 쪽 변경은 전부 <code>integration/pleiades</code> 에만 있고 서비스 <code>dev</code>·<code>main</code> 에는 없다. 실서비스에 처음 닿는 지점은 1a-3(fit) 이고, 그래서 그 앞에 태그·서버 측정·승인 게이트가 몰려 있다.</div>
+  <div class="pullout" style="margin-top:22px"><b>지금 위치를 한 줄로.</b> 기반은 끝났고, 실행은 단계 1 의 중간(1a-1)이다. 지금까지의 모든 변경은 <b>두 실서비스에 닿지 않았다</b> — 대상 저장소 쪽 변경은 전부 <code>integration/pleiades</code> 에만 있고 서비스 <code>dev</code>·<code>main</code> 에는 없다. <b>1a 는 모노레포 전환 전까지 실서비스에 도달하지 않는다</b>(004 §8-4 · 003 §10-1 — 재시작은 병행 인스턴스 pm2 만, 실서비스 웹·봇은 어느 단계에서도 재시작하지 않는다). 1a-3(fit) 은 <b>서버 병행 인스턴스(β2 · 빈 스키마 사본)에서 처음 검증되는 지점</b>이고, 그래서 그 앞에 태그·서버 측정·승인 게이트가 몰려 있다.</div>
 </section>
 
 <!-- ============ 남은 질문 ============ -->
@@ -1048,10 +1048,10 @@ code{
       </div>
     </div>
     <div class="q">
-      <div class="qm">Q23 · #38 · #42</div>
+      <div class="qm">Q23 · #48 · #51</div>
       <div>
-        <h3>단계 0 의 전제와 하네스 잔여</h3>
-        <p>Q23 — 두 MCP 가 로컬에 상주하는가(단계 0 착수 전). #38 — skill 이름 충돌의 런타임 동작(<code>orphan-check</code> 가 pleiades·fit 양쪽에 있다 · 읽기 전용 측정 1회). #42 — fit <code>workflow.md</code> 8-4 문구(모드 I · 1파일). 그 외 #32(README · 게이트) · #17 · #11 · Q36 · Q38 · Q12~Q14.</p>
+        <h3>단계 0 의 전제와 하네스·패키지 잔여</h3>
+        <p>Q23 — 두 MCP 가 로컬에 상주하는가(단계 0 착수 전). #48 — 1a-1 후속 3건(<code>VERSION</code> 이중 관리 · <code>[bot]</code> 로그 prefix grep · fit keyboard 실패 로그 문자열 · 1a-3 인계). #51 — fin <code>workflow.md</code> 8-4 의 오류 진단 문장(모드 I · 1파일). <span class="fin">해소됨(09-10): #38 skill 충돌 실측(cwd 승) · #42 fit 8-4 · #32 게이트·README.</span> 그 외 #17 · #11 · Q36 · Q38 · Q12~Q14.</p>
       </div>
     </div>
     <div class="q">
@@ -1082,7 +1082,7 @@ code{
   <h3>근거</h3>
   <ul>
     <li>정본 문서 — <code>002-platform-direction.md</code>(방향) · <code>003-notify-package.md</code>(단계 1 설계 · §4-2 재작성 시그니처 · §10-1 의존 지도와 10조건) · <code>004-repo-layout.md</code>(배치) · <code>005-harness-integration.md</code>(하네스 처분 37행 · 집행 H-0~H-5). 이 페이지는 그 요약이다</li>
-    <li>세션 인계 — <code>docs/handoff/</code> 2026-09-07(005) · 09-08(1a-0) · 09-09(#37 · H-1 · H-3(fit)) · 09-10(1a-1 · #38 · #42). 진행 상태의 정본은 <code>CLAUDE.md</code> 상단 상태 문단 · 단계 정의는 002 §4 · 1a 세부는 003 §5-2</li>
+    <li>세션 인계 — <code>docs/handoff/</code> 2026-09-07(005) · 09-08(1a-0) · 09-09(#37 · H-1 · H-3(fit)) · <b>09-10(1a-1 · #38 · #42 — PR #53, 머지 전에는 그 브랜치 <code>chore/52-1</code> 에만 있다)</b>. 09-10 완료 주장의 <b>커밋된 근거</b>는 인계 노트가 아니라 머지 기록이다 — 1a-1: <code>dev</code> <code>c44f5c8</code>(PR #49) + <code>docs/research/measured-facts.md</code> "1a-1 집행 실측" + 003 §4-2·§5-2 의 2026-09-10 정정 블록 · #38: <code>c22b475</code>(PR #50) + measured-facts "#38" 절 · #42: myFitness <code>8b7a224</code>(#373). <code>CLAUDE.md</code> 상단 상태 문단은 PR #53 머지 후 09-10 상태가 된다 · 단계 정의는 002 §4 · 1a 세부는 003 §5-2</li>
     <li>미결 추적 — <code>github.com/fomalhaut84/pleiades</code> 이슈. <b>미결의 정본은 문서가 아니라 이슈다</b></li>
     <li>로컬 실측 — 두 저장소의 <code>package.json</code>, <code>ecosystem.config.js</code>, <code>.claude/</code> 트리, <code>src/</code> LOC, 봇 구조·전송 호출 분포·import 그래프, auto memory 디렉터리 (2026-09-03) · 하네스 참조 그래프·<code>--add-dir</code> 로딩 범위 (2026-09-07) · 발송 경로 DB 쓰기·npm git 의존성 역학 (2026-09-08) · 하네스 이름 전수·Q10/Q19 정적 근거 (2026-09-09). 측정 명령은 <code>docs/research/measured-facts.md</code></li>
     <li><a href="https://code.claude.com/docs/en/memory">Claude Code — How Claude remembers your project</a> (CLAUDE.md 로드 순서, <code>autoMemoryDirectory</code>, MEMORY.md 200줄/25KB 한도)</li>
