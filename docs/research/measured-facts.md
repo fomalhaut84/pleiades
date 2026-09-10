@@ -3409,3 +3409,49 @@ tsc -p …/scratchpad/e6/probe/<repo>/tsconfig.json
 - **M-1 재현** — `splitMessage('\n'.repeat(5000), 4096)` → `[]`(fin 정본의 성질). 수정 전 `deliverOne` 은 전송 0회에 `ref undefined` 를 성공으로 집계했다. 수정 후 throw → `deliveries[].error`.
 - **M-2 재현** — `splitMessage('x', 0)` · `(-1)` 무한 루프(배열 무한 증식) → `RangeError` 가드. `NaN` 은 `Number.isFinite` 판정에서 어댑터 소유 모드로 새던 것을 `=== Infinity` 로 좁혀 같은 가드에 걸린다.
 - E6 소비자 e2e 재실행: `npm install` exit 0 · 누수 0 · 결과 동일(호출 7 · ref 4/7).
+# #38 — skill 이름 충돌 런타임 동작 (2026-09-10 · 읽기 전용)
+
+**맥락:** Q41 부수 결정 (i) 의 미측정 가정(*"skill 충돌은 이름 단위"*)을 N18 과 같은 방식으로 잰다. 충돌 대상은 `orphan-check`
+(pleiades `.claude/skills/orphan-check/SKILL.md` 135줄 — H-1b 형태 B 복사 · `<base>` 파라미터화 / fit 원본 `~/workspace/myFitness/.claude/skills/orphan-check/SKILL.md` 113줄 — `dev` 리터럴).
+frontmatter `name` 은 둘 다 `orphan-check`. CLI **v2.1.267** · 모델 `claude-haiku-4-5-20251001` · `--permission-mode plan` · 환경변수 켬 · 두 저장소 워킹트리 쓰기 0(전후 `git status` 0줄).
+
+## 방법 — 3단계 (앞 둘은 변별 실패 · 셋째가 결정적)
+
+```bash
+# Q1: 목록에서 orphan-check 개수 · description 인용 (JSON)              → count 1 · descriptions [] (인용 불가)
+Q1='Answer with only a JSON object and nothing else: {"orphan_check_count": <number of skills named exactly orphan-check you can see>, "descriptions": [<the exact description text of each orphan-check skill entry, verbatim>], "has_base_placeholder": <true if any orphan-check description contains the literal string "<base>">, "has_dev_literal": <true if any orphan-check description contains the phrase "dev 에 반영">, "skill_names": [<all skill names visible to you, sorted>]}. Do not call any tool. Do not run the skill.'
+# Q2: description 에 "<base>" 인지 "dev" 인지                          → 4세션 전부 "목록에 설명이 없다" (haiku 가 받는 목록 형식의 한계 — 변별 불가)
+Q2='Look at the skill listing you were given. Find the skill named orphan-check. Its description sentence contains either the literal placeholder token "<base>" (angle brackets, the word base) or the literal word "dev". Answer with only a JSON object: {"variant": "base" or "dev", "quote": "<copy the first 60 characters of that orphan-check description exactly>", "count": <how many orphan-check entries exist in the listing>}. Do not call any tool.'
+# Q3 (결정적): Skill 도구로 orphan-check 를 로드만 하고(Bash·Edit·Write·Agent 차단) Base directory · 첫 본문 줄 · "pleiades 판" 포함 여부 보고
+Q3='Use the Skill tool exactly once to load the skill named orphan-check, then STOP — do not execute any command, do not follow the skill instructions, do not call any other tool. After loading, answer with only a JSON object: {"base_directory": "<the Base directory path shown for the skill>", "first_body_line": "<the first non-frontmatter, non-empty line of the loaded skill text, verbatim, max 120 chars>", "mentions_pleiades_edition": <true if the loaded text contains the phrase "pleiades 판">, "mentions_base_placeholder": <true if the loaded text contains the literal "<base>">, "count_in_listing": <how many orphan-check entries were in your skill listing>}'
+cd ~/workspace/pleiades;  CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude -p "$Q3" --model claude-haiku-4-5-20251001 --permission-mode plan \
+  --disallowedTools "Bash,Edit,Write,MultiEdit,NotebookEdit,Agent" --add-dir ~/workspace/myFitness < /dev/null      # a2
+cd ~/workspace/myFitness; CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude -p "$Q3" --model claude-haiku-4-5-20251001 --permission-mode plan \
+  --disallowedTools "Bash,Edit,Write,MultiEdit,NotebookEdit,Agent" --add-dir ~/workspace/pleiades < /dev/null       # b2
+```
+세 프롬프트 원문은 위 블록이 정본이다 (PR #50 Codex P2 — 스크래치패드는 세션 종료 시 소멸).
+
+## 결과
+
+| # | cwd | `--add-dir` | 목록의 `orphan-check` 수 | 로드된 Base directory | 첫 본문 줄 |
+|---|---|---|---|---|---|
+| **a2** | pleiades | fit | **1** | **`/Users/sagan/workspace/pleiades/.claude/skills/orphan-check`** | `> **pleiades 판 (005 §4-4 · Q29 형태 B 복사).** …` (`<base>` 포함 true) |
+| **b2** | fit | pleiades | **1** | **`/Users/sagan/workspace/myFitness/.claude/skills/orphan-check`** | `Squash merge 특성상 … 첫 커밋만 dev 로 압축된다 …` (`pleiades 판` false) |
+
+Q1 에서도 두 방향 모두 `orphan_check_count: 1` · 나머지 skill 은 양쪽 합집합(pleiades 9 + fit 9 − 중복 1 = 17 + 플러그인)이 전부 보였다.
+
+> **판정 (N18 에 셋째 규칙이 추가된다).**
+> - **rule**: N 벌 전부 공존 (N18) · **agent**: 마지막 `--add-dir` 이 이기고 나머지 조용한 드롭 (N18) ·
+>   **skill: 이름 단위로 1개만 남고 `cwd` 쪽이 이긴다 — `--add-dir` 쪽이 조용히 드롭된다.** agent 와 **방향이 반대**다.
+> - 충돌 판정은 **이름 단위**다 — 다른 이름의 skill 은 양쪽 것이 전부 보였다(층 단위 드롭 아님). Q41 (i) 의 전제는 **성립**한다.
+> - `bin/claude-with fit`(cwd pleiades)에서는 **pleiades 판**(`<base>` 파라미터화)이 로드되고, fit cwd 세션에서는 **fit 판**이 로드된다.
+>   → 각 저장소 세션이 자기 판을 쓴다. **(ii) pleiades 쪽 개명은 불필요** — 개명하면 오히려 pleiades 세션에 두 벌(`orphan-check` fit 판 + 개명본)이 공존해 혼선이 는다.
+> - 남는 부채는 **fit 원본의 Step 2~4 결함**(pleiades PR #22 Codex P1 2건이 pleiades 판에만 정정됨)이고, 그것은 이름과 무관한 fit 이슈다.
+
+## 못 잰 값
+
+| 항목 | 왜 |
+|---|---|
+| 디렉터리명 ≠ frontmatter `name` 일 때의 기준 | 두 파일 모두 100% 일치 — 구분할 사례가 없다 (Q41-4 와 같음) |
+| `--add-dir` 를 둘 붙였을 때 add-dir 끼리의 skill 충돌 순서 | 한 번에 한 저장소만 붙인다(Q30)라 운영에 없는 조합 — 측정하지 않았다 |
+| description 만으로의 변별 | haiku 세션 4회 전부 "목록에 설명이 없다" — 모델·목록 형식의 한계이지 로딩 실패가 아니다(Q3 가 본문을 로드했다) |

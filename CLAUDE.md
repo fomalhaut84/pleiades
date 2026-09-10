@@ -88,7 +88,7 @@ bin/claude-with fit      # 한 번에 한 저장소 (H-5 · Q30). --resume 도 �
 
 - **환경변수를 빼면 skills·agents 만 로드되고 rules·`CLAUDE.md` 는 조용히 빠진다** — 래퍼가 그래서 환경변수를 고정한다. 방향은 대칭이라 대상 저장소 cwd 세션도 `--add-dir` 로 pleiades 하네스를 본다.
 - **대상은 항상 원본**이다 (`repos/*` worktree 아님 — fit `.claude/` 는 worktree 에 없다).
-- 둘 다 붙이면 rule 은 **드롭 없이 여러 벌 공존**하고 agent 는 **마지막 `--add-dir` 이 이겨 나머지가 조용히 사라진다.** 그래서 한 번에 하나만 붙인다.
+- 둘 다 붙이면 rule 은 **드롭 없이 여러 벌 공존**하고 agent 는 **마지막 `--add-dir` 이 이겨 나머지가 조용히 사라진다.** **skill 은 이름 단위로 1개만 남고 `cwd` 쪽이 이긴다**(#38 실측 2026-09-10 — `orphan-check` 는 pleiades 세션에서 pleiades 판, fit 세션에서 fit 판 · 개명 불필요). 그래서 한 번에 하나만 붙인다.
 - `--add-dir` 는 `--resume` 시 복원되지 않는다. 세션을 재개할 때마다 다시 넘긴다.
 - **fit 원본 `.claude/` 는 git 이력이 없다**(원본 `main` 의 `.gitignore:35` = `.claude/` 전체 ignore — worktree `integration/pleiades` 는 #369 로 tracked). 지우거나 낡으면 **`git -C ~/workspace/myFitness archive integration/pleiades .claude CLAUDE.md | tar -x -C ~/workspace/myFitness`** 로 복원·갱신한다(2026-09-09 H-3(fit) 에서 실행 검증 · 경로는 인자로 나열 — zsh 함정) — 005 §4-7 · #27.
 
