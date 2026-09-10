@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -19,4 +21,16 @@ describe('packages/notify/tsconfig.json — prepare 안전 조건', () => {
       expect(tsconfig.exclude).toContain(pattern);
     }
   });
+  // 회귀: 1a-1 (#47) E6 — 소비자 임시 클론에는 @types/node 가 없다(루트 devDep 만 설치 · measured-facts M1).
+  // src 가 전역 process 등 @types/node 에 기대면 prepare 가 TS2580 으로 깨져 소비자 npm install 이 통째로 실패한다.
+  // 빈 typeRoots 로 컴파일해 그 환경을 재현한다 (tsc 는 루트 devDep — 임시 클론과 같은 조건).
+  it('M3: @types 없이(빈 typeRoots) src 가 컴파일된다 — 소비자 prepare 재현', () => {
+    const emptyTypeRoots = mkdtempSync(join(tmpdir(), 'notify-typeroots-'));
+    const tsc = require.resolve('typescript/lib/tsc.js');
+    expect(() =>
+      execFileSync(process.execPath, [tsc, '-p', join(__dirname, '..'), '--noEmit', '--typeRoots', emptyTypeRoots], {
+        stdio: 'pipe',
+      }),
+    ).not.toThrow();
+  }, 20_000);
 });

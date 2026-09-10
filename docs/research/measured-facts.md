@@ -3332,3 +3332,80 @@ grep -n 'target=\|--add-dir' ~/workspace/pleiades/bin/claude-with        # :23 f
 - **원본 동기화 실행**: `git archive integration/pleiades <10경로 명시> | tar -x -C ~/workspace/myFitness` → `diff -rq` 차이 = `settings.local.json` 뿐 · 원본 index 무변경 · `main` 유지. 사전 사본은 세션 스크래치패드(`fit-original-claude-backup-20260909-161547.tar`, 32 entries) — 세션 한정이므로 되돌리기는 `git archive 626a201 <같은 10경로> | tar -x` 폴백(롤백 문서 `_workspace/harness/04_operator_h3fit_rollback.md`).
 - **zsh 함정 재발**: `FILES="a b c"; git archive ref $FILES` 가 **단일 pathspec** 으로 넘어가 `did not match any files` — 이 파일 "방법론 주의 — zsh 는 미인용 변수를 단어 분할하지 않는다" 그대로. 경로를 인자로 직접 나열해 해결.
 - `git pull --ff-only` 는 worktree `integration/pleiades` 에 upstream 이 없어 실패 → `git branch --set-upstream-to=origin/integration/pleiades` 후 성공. **`repos/*` worktree 두 곳 모두 upstream 설정 여부는 미확인**(fin 은 이번에 안 당겼다).
+
+---
+
+# 1a-1 집행 실측 (2026-09-10 · 이슈 #47)
+
+**맥락:** `_workspace/1a-1/01_plan_1a1.md`(2회차) E1·E6. 대상은 pleiades `packages/notify` 뿐 — 두 대상 저장소 무접촉(`repos/*/node_modules/grammy` 는 **읽기만**).
+스크래치패드 `…/scratchpad/e6/`(스크립트 `run.sh`). 환경 node v20.18.0 / npm 10.8.2 / tsc 5.9.3 (1a-0 · #32 I1 · 감사 `03_auditor_1a1plan.md` 와 동일).
+
+## E1. `typecheck:test` 게이트 — #32 I1 (b) 재현
+
+| 확인 | 결과 |
+|---|---|
+| `tsconfig.test.json` 5줄 · `@types/node ^20` → lockfile `node_modules/@types/node` 1건 | 일치 |
+| 주입 `const bad: number = VERSION;` → `npm run typecheck` | exit 0 (못 잡음 — 설계대로) |
+| 〃 → **`npm run typecheck:test`** | **`index.test.ts(11,7): error TS2322`** · exit 2 |
+| 제거 후 | exit 0 |
+| 부수: 새 테스트의 `new Error(msg, { cause })` 3곳을 게이트가 잡았다 (target ES2017 lib 에 `ErrorOptions` 없음) | `Object.assign` 으로 교체 — tsconfig 무변경 |
+
+## E6. 소비자 e2e — 결함 1건 발견 · 수정 후 통과
+
+```bash
+bash …/scratchpad/e6/run.sh   # 사본 git init → 소비자 package.json {"@pleiades/notify":"git+file://…#<sha>"} → npm install → node run.js → tsc 프로브
+```
+
+**1차 (커밋 `faebe87`) — `npm install` 실패.** 임시 클론 `prepare` 로그:
+```
+packages/notify/src/targets.ts(15,21): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node?
+packages/notify/src/targets.ts(17,13): error TS7006 · (19,46): error TS7006
+```
+원인: git 의존성은 **루트 devDependencies 만** 설치한다(M1 · `--include=dev --include=peer` 는 루트 기준). `@types/node` 는 서브 `packages/notify` devDep 이라 임시 클론에 없고,
+`process.env` 참조가 TS2580. **로컬 4종 게이트는 통과했다** — 게이트용 `@types/node` 가 로컬에는 있기 때문. 1a-0 `exclude` 누락 · 감사 케이스 B 와 같은 경로.
+수정(`40f1497`): `targets.ts` 에 모듈 스코프 `declare const process: { env: Record<string, string | undefined> }`. 회귀 `build-config.test.ts` **M3** —
+빈 `--typeRoots` 로 `tsc -p packages/notify --noEmit` (수정 전 TS2580 1 + TS7006 2 · 수정 후 0).
+
+**2차 (수정 후 · 사본 sha `c5bee83`) — 전부 통과.**
+
+| 항목 | 값 |
+|---|---|
+| `npm install` (임시 클론 `prepare` 포함) | **exit 0** |
+| 소비자 설치 트리 | `node_modules/@pleiades/notify/` — `package.json` + `packages/notify/dist/` **20파일**(10 모듈 × `.js`/`.d.ts`) + `packages/notify/package.json` = **22파일 · 100 K** |
+| 누수 | `node_modules/@types` **0** · `grammy` **0** · `vitest` **0** |
+| `require('@pleiades/notify')` | `VERSION` `0.0.0` · export 18개 (`createNotifier` · `createTelegramTransport` · `csvEnv` · `html` · `Route` · `deliverOne` · `splitMessage` · `toPlain` · `escapeHtml` · error 5 · 상수 3) |
+| fake api 전송 1건 (본문 `<b>hi</b>\n` + 5000자 · 키보드 · 대상 2 · 1회차 파싱 실패 주입) | `sent 2 · failed 0 · total 2 · first {111, ref "4"}` · API 호출 **7** = 대상 111: html 9자 → **plain 2자**(폴백) → 4096 → 904(+`reply_markup`) · 대상 222: 9 → 4096 → 904(+`reply_markup`). `ref` = 마지막 청크(4 · 7) · `targetCount(ADMIN)` **0** |
+| 소비자 `npm ci` ×3 (warm · 같은 캐시) | 1.91 / 1.84 / 1.94 → **중앙값 1.91 s** · 트리 100 K (감사 대조군 1.56 s 와 다른 시점 — 통제 비교 아님) |
+| `README.md` | `packages/notify/README.md` 는 **tarball 에 실리지 않는다**(`files` 밖 · npm 은 루트 README 만 자동 포함). 저장소 독자용 — #32 I3 의 두 선택지 중 후자 |
+
+## E6b. grammy 대입 프로브 — 감사 A-1 블로커 해소 확인
+
+```bash
+# tsconfig paths: { grammy: [repos/<repo>/node_modules/grammy], "@pleiades/notify": [<소비자 설치본 dist/index.d.ts>] } · strict · skipLibCheck · types []
+tsc -p …/scratchpad/e6/probe/<repo>/tsconfig.json
+```
+프로브 내용: `const api: TelegramApi = bot.api` · `createTelegramTransport({ api: () => bot.api })` · `new InlineKeyboard()` → `components` · `api.sendMessage('1','x',{ parse_mode:'HTML', reply_markup: kb })`.
+
+| grammy | tsc |
+|---|---|
+| myFinance **1.44.0** | **exit 0** |
+| myFitness **1.42.0** | **exit 0** |
+| 대조군 — `parse_mode?: 'HTML'` 리터럴(1회차 계획 시그니처) | **`error TS2322`** 재현 (감사 A-1 그대로) |
+
+→ `TelegramApi { sendMessage(chatId, text, other?: { parse_mode?: string; reply_markup?: unknown }) }`(메서드 단축 문법)가 두 저장소의 `bot.api` 를 받는다. **1a-3·1a-4 에서 이 자리는 막히지 않는다.**
+
+## 못 잰 값 (이 절 범위)
+
+| 항목 | 왜 |
+|---|---|
+| `npm pack --dry-run` 파일 목록 | 사본 루트에 `node_modules` 가 없어 `pack` 이 `prepare`(`tsc`) 에서 127 로 멈춘다. 소비자 설치 트리(위 22파일)로 갈음 — 1a-0 E6 의 5파일(당시 `dist` 2 + README)과 같은 구성에 `dist` 가 20 으로 늘었다 |
+| GitHub 원격(`git+https`) 경유 설치 | 이번도 `git+file://` (1a-0 · #32 I1 · 감사와 같은 한계 · M2 가 https 우선을 실측) |
+| fin 비-파싱 400 폴백 빈도 · `TELEGRAM_*_CHAT_IDS` 비숫자 토큰 유무 | 감사 §11 그대로 (계측 코드 없음 · `.env` 열람 금지) |
+
+## E7 후속 — 사전 리뷰 반영 뒤 재실측 (2026-09-10)
+
+`pr-review-toolkit:code-reviewer` 1회: critical 0 · major 5 · info 5. major 5 전부 + info 2(NaN 가드 · `targetCount` 복사 제거) 반영 · 회귀 테스트 10건 추가(82 → 92).
+- **M-3 재프로브** — `Components = Record<string, unknown>` 은 grammy `InlineKeyboard`(클래스)를 받지 못한다(`TS2322: Index signature for type 'string' is missing`). `object` 로 바꾼 뒤 위 E6b 프로브에서 **`kb as unknown as …` 캐스트를 제거**(`html('<b>x</b>', kb)` 직접 전달) → fin 1.44.0 · fit 1.42.0 **둘 다 exit 0**. 대조군 TS2322 재현 유지.
+- **M-1 재현** — `splitMessage('\n'.repeat(5000), 4096)` → `[]`(fin 정본의 성질). 수정 전 `deliverOne` 은 전송 0회에 `ref undefined` 를 성공으로 집계했다. 수정 후 throw → `deliveries[].error`.
+- **M-2 재현** — `splitMessage('x', 0)` · `(-1)` 무한 루프(배열 무한 증식) → `RangeError` 가드. `NaN` 은 `Number.isFinite` 판정에서 어댑터 소유 모드로 새던 것을 `=== Infinity` 로 좁혀 같은 가드에 걸린다.
+- E6 소비자 e2e 재실행: `npm install` exit 0 · 누수 0 · 결과 동일(호출 7 · ref 4/7).
