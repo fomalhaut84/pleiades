@@ -10,6 +10,11 @@ export interface CsvEnvOptions {
   numericOnly?: boolean;
 }
 
+// 소비자 임시 클론의 `prepare`(tsc) 에는 `@types/node` 가 없다 — git 의존성은 루트 devDependencies 만 설치한다(measured-facts M1).
+// 전역 `process` 를 쓰면 TS2580 으로 `npm install` 이 통째로 깨진다(1a-1 E6 실측 · #47). 여기서 필요한 최소 형태만 모듈 스코프에
+// 선언한다 — 모듈 로컬 선언이라 `@types/node` 가 있는 환경에서도 충돌하지 않는다. 회귀: build-config.test.ts M3.
+declare const process: { env: Record<string, string | undefined> };
+
 export function csvEnv(name: string, opts: CsvEnvOptions = {}): () => string[] {
   return () => {
     const tokens = (process.env[name] ?? '')
