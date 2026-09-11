@@ -1147,6 +1147,7 @@ Q10 이 "아니오"면 1a 는 **관측 가능한 동작 변경이 0** 인 상태
 > 실측은 measured-facts *"1a-2 집행 실측"*. 표의 *"scripts 3줄"* 은 **`test` 1줄 수정 + `test:run`·`test:coverage` 2줄 추가**로 읽는다 — fit 에는 이미 `test`(verify 2종)가 있고 CI·하네스·스펙 9행이 그 이름을 부르므로 이름을 유지하고 `vitest run && verify 2종` 으로 바꿨다(1회 실행형 · fin `test` 는 watch 라 비대칭이 남는다).
 > **되돌리기 단위는 4파일 → 8파일**(테스트 3 · 하네스 문서 2 — fit `workflow.md:165,275`·`branch-workflow:83` 의 *"vitest 가 아니라 verify"*·*"프레임워크 부재 시 스크립트로 대체"* 가 도입 후 거짓·역행 지시가 된다) — 등급 **즉시** 불변(`npm ci` 가 vitest·vite 를 실제로 제거함을 실측). 원본 fit 하네스 동기화분만 **중간**(git 이력 없음 · #42 동일).
 > 테스트 대상은 **1a-3 이 교체하는 `src/bot/notifications/send.ts`**(절단 4093+`...` · 재시도 `[2000,8000,30000]` 총 4회 · HTML→plain 폴백 · `SendResult`) 11건 + 그 의존 `bot/utils/error.ts` 25건 + 인바운드 순수 함수 `bot/utils/telegram.ts` 9건 = **45건**(사전 리뷰 info 반영 후 · PR myFitness#374). 1회차 계획이 `bot/utils` 를 *"1a 추출 대상"* 이라 적은 것은 재감사가 뒤집었다(블로커 3). U2·U3 해소(§9). 소비자 0 이라 1a-1 되돌리기 등급도 불변.
+> **완료 (2026-09-11).** myFitness#374 머지 `3818208` · 원본 fit 하네스 2파일 동기화 완료 · 인계 `docs/handoff/2026-09-11-1a-2-done.md`. 1a-3 의 전제(회귀 baseline)가 성립한다.
 
 
 ### 5-3. 1a 가 끝났을 때 남는 것 (전체)
