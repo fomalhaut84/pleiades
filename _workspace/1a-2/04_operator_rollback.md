@@ -154,7 +154,6 @@ git checkout integration/pleiades && git pull --ff-only
 
 - `integration/pleiades` 는 `dev` 로 머지되지 않는다(#25). 이 정정은 **fin 서비스 `dev`/`main` 에 도달하지 않는다.**
 - fin `.claude/` 는 **tracked** 라 fit 과 달리 `git archive | tar -x` 복원 절차가 필요 없다 — 원본 `~/workspace/myFinance` 체크아웃(`dev`)에는 그냥 옛 문장이 남는다.
-- 원본에도 반영하려면 **모드 S 미러 PR** 로 별도 진행한다 — 원본 `~/workspace/myFinance` · base 그 저장소 `dev` · 이슈는 `fomalhaut84/myFinance` 에. (`workflow.md` 7절 표 · 004 Q43)
 - 원본에도 반영하려면 **모드 S 미러 PR** 로 진행한다 — 원본 `~/workspace/myFinance` · base 그 저장소 `dev` · 이슈는 `fomalhaut84/myFinance` 에 (`workflow.md` 7절 표 · 004 Q43). **이 미러는 이미 승인된 머지 후 작업이다**(사용자 G-2 · 2026-09-11 · 계획 §2·§7 — 세션이 읽는 하네스는 원본이라 미러 없이는 #51 의 목적이 달성되지 않는다 · 재감사 블로커 5). #493 머지 후 별도 승인 없이 착수한다 · 되돌리기 즉시(fin 저장소 PR revert). (PR #60 Codex 3회차 P1 — 이전 문장은 *"이번 승인 범위 밖"* 이라 적어 G-2 와 모순됐다.)
 
 ### 서비스 영향 — **없음**
