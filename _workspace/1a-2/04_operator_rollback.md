@@ -34,8 +34,9 @@
 
 ```bash
 cd /Users/sagan/workspace/pleiades/repos/myFitness
+gh pr close 374 -R fomalhaut84/myFitness --delete-branch   # 열린 PR 닫기 + 원격 브랜치 삭제 (PR #60 Codex P1)
 git checkout integration/pleiades
-git branch -D integration/feature-pleiades-1a-2
+git branch -D integration/feature-pleiades-1a-2            # 로컬 브랜치 (원격은 위에서 삭제됨)
 npm ci                    # node_modules 를 8b7a224 의 lock 대로 복원 (vitest·vite·@vitest 제거)
 ```
 
@@ -128,23 +129,26 @@ git -C ~/workspace/myFitness archive integration/pleiades \
 **머지 전 (현재 상태 — 소요 수 초)**
 
 ```bash
+gh pr close 493 -R fomalhaut84/myFinance --delete-branch   # 열린 PR 닫기 + 원격 브랜치 삭제
 git -C ~/workspace/pleiades/repos/myFinance checkout integration/pleiades
 git -C ~/workspace/pleiades/repos/myFinance branch -D integration/chore-pleiades-51
 ```
 
-브랜치만 지우면 흔적이 남지 않는다. push 하지 않았으므로 원격 조치 불필요.
-PR 을 이미 열었다면 `gh pr close -R fomalhaut84/myFinance <pr>` + `git push origin --delete integration/chore-pleiades-51` 를 먼저.
+**머지 후 (소요 수 분 + 사용자 머지 대기)**
 
-**머지 후 (소요 수 분)**
+`integration/pleiades` 에 직접 커밋·push 하지 않는다 — revert 도 **브랜치 → PR → 사용자 머지** 를 거친다(PR #60 Codex P1 ×2).
 
 ```bash
-git -C ~/workspace/pleiades/repos/myFinance checkout integration/pleiades
-git -C ~/workspace/pleiades/repos/myFinance pull --ff-only
-git -C ~/workspace/pleiades/repos/myFinance revert --no-edit <merge-commit> -m 1   # 또는 c064298
-# → revert 브랜치로 PR (main/dev 직접 push 금지 · 머지는 사용자)
+cd /Users/sagan/workspace/pleiades/repos/myFinance
+git checkout integration/pleiades && git pull --ff-only
+git checkout -b integration/fix-pleiades-51-revert
+git revert --no-edit <squash-merge-sha>      # 1파일 1커밋
+git push -u origin integration/fix-pleiades-51-revert
+gh pr create -R fomalhaut84/myFinance --base integration/pleiades --head integration/fix-pleiades-51-revert \
+  --title "revert: workflow.md 8-4 문장 정정 되돌림 (pleiades#51)" --body "Refs fomalhaut84/pleiades#51 · 되돌리기: 즉시"
+# → 사용자 머지 후
+git checkout integration/pleiades && git pull --ff-only
 ```
-
-되돌리기 등급 **즉시** — 문서 1파일, 실행 코드·서비스 무접촉.
 
 ### 원본 도달 — **없다 (머지 후에도)**
 

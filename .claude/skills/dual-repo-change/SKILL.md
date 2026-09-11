@@ -117,14 +117,14 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 | | myFinance | myFitness |
 |---|---|---|
 | 검증 | `npm run lint` / **`npx tsc --noEmit`** / **`npm run test:run`** / `npm run build` | `npm run lint` / `npm run typecheck` / **`npm run test`** / `npm run build` |
-| 테스트 | vitest 있음 (`test` 는 watch — **`test:run` 을 쓴다**) | **vitest 있음 (1a-2 · #58)** — `npm run test` = **`vitest run` + verify 스크립트 2개**(1회 실행형 · CI 가 부르므로 watch 가 아니다) · `test:run` 은 fin 대칭 alias · 테스트는 `src/**/__tests__/**/*.test.ts` |
+| 테스트 | vitest 있음 (`test` 는 watch — **`test:run` 을 쓴다**) | **vitest 있음 (1a-2 · #58 · myFitness#374 머지 후)** — `npm run test` = **`vitest run` + verify 스크립트 2개**(1회 실행형 · CI 가 부르므로 watch 가 아니다) · `test:run` 은 fin 대칭 alias · 테스트는 `src/**/__tests__/**/*.test.ts` |
 | 같은 역할 다른 위치 | 아웃바운드 전송: `bot/utils/telegram.ts` | 아웃바운드 전송: `bot/notifications/send.ts` |
 
 > **검증 명령은 `.claude/rules/workflow.md` 8절 표가 정본이다** (PR #6 Codex 리뷰 P1).
 > myFitness 의 `npm run test` 는 vitest 가 아니라 **verify 스크립트 2개**다 — 테스트 프레임워크가
 > 없다는 것과 **실행할 것이 없다는 것은 다르다.** 1a-2 가 vitest 를 도입하기 전에도 반드시 돌린다.
 >
-> **소진 (2026-09-11 · #59).** 위 블록의 전제는 1a-2(#58)로 끝났다 — fit `npm run test` 는 이제 vitest 회귀 baseline + verify 2종이다(myFitness#374). 명령 이름은 그대로라 8절 표 fit 행은 무변경.
+> **소진 (2026-09-11 · #59).** 위 블록의 전제는 1a-2(#58)로 끝났다 — fit `npm run test` 는 이제 vitest 회귀 baseline + verify 2종이다(myFitness#374). 명령 이름은 그대로라 8절 표 fit 행은 무변경. **선결: myFitness#374 머지** — 그 전까지 fit `integration/pleiades` 의 `npm run test` 는 verify 2종뿐이다(PR #60 Codex P1).
 
 **같은 역할 코드가 다른 파일에 있다는 것을 전제로 찾는다.** 경로가 대칭일 거라 가정하지 않는다.
 정본을 고를 때는 더 성숙한 구현을 택하고, 어느 쪽을 왜 골랐는지 커밋 메시지에 남긴다.

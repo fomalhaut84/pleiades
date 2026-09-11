@@ -231,7 +231,7 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 > verify 스크립트다(1a-2 가 vitest 를 도입할 때까지). 그대로 따르면 **missing-script 로
 > 실패하고 "건너뛰기 금지" 때문에 대상 저장소 PR 이 막힌다.**
 >
-> **소진 (2026-09-11 · #59).** *"1a-2 가 vitest 를 도입할 때까지"* 가 왔다 — 1a-2(#58 · myFitness#374)로 fit `npm run test` = `vitest run`(회귀 baseline) + verify 2종.
+> **소진 (2026-09-11 · #59).** *"1a-2 가 vitest 를 도입할 때까지"* 가 왔다 — 1a-2(#58 · myFitness#374)로 fit `npm run test` = `vitest run`(회귀 baseline) + verify 2종. **선결: myFitness#374 머지** — 그 전까지 fit `integration/pleiades` 의 `npm run test` 는 verify 2종뿐이다(PR #60 Codex P1).
 > **표의 fit 행은 무변경**(명령 이름이 같다). fin 과의 남은 비대칭은 fit `test` 가 1회 실행형(CI 가 부른다)이고 fin `test` 가 watch 라는 점뿐이다.
 
 > **정정 (2026-09-08 · 이슈 #31 · 1a-0 · 초안 `_workspace/1a-0/02_writer_1a0.md` · 감사 3회).**
