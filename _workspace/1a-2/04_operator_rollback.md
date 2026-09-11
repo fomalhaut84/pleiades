@@ -51,7 +51,7 @@ npm ci                    # node_modules 를 8b7a224 의 lock 대로 복원 (vit
 cd /Users/sagan/workspace/pleiades/repos/myFitness
 git checkout integration/pleiades && git pull --ff-only
 git checkout -b integration/fix-pleiades-1a-2-revert
-git revert --no-edit <squash-merge-sha>      # 8파일 1커밋
+git revert --no-edit 3818208      # 8파일 1커밋  # myFitness#374 squash (2026-09-11)
 git push -u origin integration/fix-pleiades-1a-2-revert
 gh pr create -R fomalhaut84/myFitness --base integration/pleiades --head integration/fix-pleiades-1a-2-revert \
   --title "revert: 1a-2 vitest 도입 되돌림 (pleiades#58)" --body "Refs fomalhaut84/pleiades#58 · 되돌리기: 즉시"
@@ -142,7 +142,7 @@ git -C ~/workspace/pleiades/repos/myFinance branch -D integration/chore-pleiades
 cd /Users/sagan/workspace/pleiades/repos/myFinance
 git checkout integration/pleiades && git pull --ff-only
 git checkout -b integration/fix-pleiades-51-revert
-git revert --no-edit <squash-merge-sha>      # 1파일 1커밋
+git revert --no-edit ef43c03      # 1파일 1커밋  # myFinance#493 squash (2026-09-11)
 git push -u origin integration/fix-pleiades-51-revert
 gh pr create -R fomalhaut84/myFinance --base integration/pleiades --head integration/fix-pleiades-51-revert \
   --title "revert: workflow.md 8-4 문장 정정 되돌림 (pleiades#51)" --body "Refs fomalhaut84/pleiades#51 · 되돌리기: 즉시"
@@ -158,13 +158,13 @@ git checkout integration/pleiades && git pull --ff-only
 - **미러 머지 후 롤백** (PR #60 Codex 4회차 P2 · 위 `integration/pleiades` revert 와 별개로 원본 `dev` 도 되돌려야 하네스가 돌아온다):
   ```bash
   cd ~/workspace/myFinance && git checkout dev && git pull --ff-only
-  git checkout -b fix/<fin-issue>-revert && git revert --no-edit <mirror-squash-sha> && git push -u origin fix/<fin-issue>-revert
+  git checkout -b fix/494-revert && git revert --no-edit 8ed402c && git push -u origin fix/494-revert
   gh pr create -R fomalhaut84/myFinance --base dev --head fix/<fin-issue>-revert --title "revert: workflow.md 8-4 미러 되돌림 (#<fin-issue>)" --body "Refs fomalhaut84/myFinance#<fin-issue>"
   # → 사용자 머지 · 되돌리기 즉시
   ```
 
 - **실행 기록 (2026-09-11).** 미러 집행 완료 — 이슈 `fomalhaut84/myFinance#494` · 브랜치 `chore/494-1`(원본 `~/workspace/myFinance` · base `dev`) · 커밋 `562537e`(1파일 +5/-1) · PR **`fomalhaut84/myFinance#495`**(리뷰 대기 · 머지는 사용자).
-  검증: `npm run lint` **exit 0**(나머지 3종 해당 없음 — 문서 1파일). 위 *미러 머지 후 롤백* 블록의 `<fin-issue>` = **494**, `<mirror-squash-sha>` 는 #495 머지 후 확정.
+  검증: `npm run lint` **exit 0**(나머지 3종 해당 없음 — 문서 1파일). 위 *미러 머지 후 롤백* 블록의 `<fin-issue>` = **494**, PR **myFinance#495 머지 `8ed402c`**(2026-09-11 · 봇 미실행 — 컷오프 전 사용자 머지 · 이슈 #494 종료). 위 블록의 SHA 는 전부 실값으로 채웠다(PR #64 Codex P2).
 
 ### 서비스 영향 — **없음**
 
