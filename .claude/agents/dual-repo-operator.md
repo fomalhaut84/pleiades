@@ -61,13 +61,15 @@ model: opus
 
 | | myFinance | myFitness |
 |---|---|---|
-| 테스트 | vitest 있음 (`test` 는 watch — **`test:run`**) | vitest **없음**. 단 `npm run test` = **verify 스크립트 2개**이므로 **반드시 돌린다** |
+| 테스트 | vitest 있음 (`test` 는 watch — **`test:run`**) | **vitest 있음 (1a-2 · #58 · myFitness#374 머지 후)** — `npm run test` = **`vitest run` + verify 스크립트 2개**(1회 실행형) · 테스트는 `src/**/__tests__/**/*.test.ts` |
 | 검증 | `lint` / **`npx tsc --noEmit`** / **`test:run`** / `build` | `lint` / `typecheck` / **`test`** / `build` |
 | 상세 규칙 | `.claude/rules/` 5종 | `.claude/rules/` 3종 |
 
 > **검증 명령은 `.claude/rules/workflow.md` 8절 표가 정본이다** (PR #6 Codex 리뷰 P1).
 > myFitness 의 `npm run test` 는 vitest 가 아니라 **verify 스크립트 2개**다 — 테스트 프레임워크가
 > 없다는 것과 **실행할 것이 없다는 것은 다르다.** 1a-2 가 vitest 를 도입하기 전에도 반드시 돌린다.
+>
+> **소진 (2026-09-11 · #59).** 1a-2(#58)로 fit 에 vitest 가 들어갔다 — `npm run test` = vitest + verify 2종. 명령 이름 불변. **선결: myFitness#374 머지** — 그 전까지 fit `integration/pleiades` 의 `npm run test` 는 verify 2종뿐이다(PR #60 Codex P1).
 
 **정본은 `.claude/rules/workflow.md`(pleiades)다.** 대상 저장소의 `CLAUDE.md`·`.claude/rules/` 는
 **읽기 전용 참고**로만 본다.
@@ -75,6 +77,11 @@ model: opus
 > **myFitness worktree 에는 `.claude/` 가 없다 (PR #6 교차 감사 M8).** fit 의 하네스는 gitignored 라
 > worktree 에 따라오지 않는다(004 §3′, 의도적 제외). 필요하면 **원본 `~/workspace/myFitness/.claude/`** 를
 > 읽는다 — 쓰지는 않는다. myFinance 는 tracked 라 worktree 에 있다.
+>
+> **정정 (2026-09-11 · #59 · PR #60 Codex P2).** 위 문단은 **myFitness#369(H-4 tracked 화) 이후 거짓**이다 — fit `.claude/`·`CLAUDE.md` 는
+> `integration/pleiades` 에 tracked 라 **worktree 에 있고 모드 I 하네스 변경은 거기서 한다**(#42 · 1a-2). 원본 `~/workspace/myFitness/.claude/` 는
+> 세션이 로드하는 사본일 뿐이며 **쓰지 않는다** — 머지 후 `git archive integration/pleiades <paths> | tar -x -C ~/workspace/myFitness` 로 동기화한다(10절 · #27).
+> `dual-repo-change/SKILL.md` 의 같은 문단도 같은 날 정정했다. 되돌리기: 즉시.
 
 ## 양쪽 대칭 변경의 원칙
 

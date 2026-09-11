@@ -3455,3 +3455,99 @@ Q1 에서도 두 방향 모두 `orphan_check_count: 1` · 나머지 skill 은 �
 | 디렉터리명 ≠ frontmatter `name` 일 때의 기준 | 두 파일 모두 100% 일치 — 구분할 사례가 없다 (Q41-4 와 같음) |
 | `--add-dir` 를 둘 붙였을 때 add-dir 끼리의 skill 충돌 순서 | 한 번에 한 저장소만 붙인다(Q30)라 운영에 없는 조합 — 측정하지 않았다 |
 | description 만으로의 변별 | haiku 세션 4회 전부 "목록에 설명이 없다" — 모델·목록 형식의 한계이지 로딩 실패가 아니다(Q3 가 본문을 로드했다) |
+
+# 1a-2 집행 실측 — myFitness vitest 도입 (2026-09-11 · #58 · 계획 `_workspace/1a-2/01_plan_1a2.md` 2회차 · 감사 `03_auditor_1a2plan.md`)
+
+기준: worktree `repos/myFitness@8b7a224` · `repos/myFinance@6542152` · node v20.18.0 · npm 10.8.2. **대상 저장소에는 승인(2026-09-11) 후 E2 부터만 썼다** — 아래 "스크래치" 표기는 `package.json`·`package-lock.json`(+ 필요한 소스 3파일) 사본 디렉터리에서 돌린 것이다.
+
+## 1. lock 재현 (스크래치 · 2026-09-04 U1 값과 전부 일치)
+
+```bash
+cp repos/myFitness/package.json repos/myFitness/package-lock.json <scratch>/ && cd <scratch>
+python3 - <<'EOF'   # "postcss": "$postcss" → "^8.5.10" (Q16)
+...
+EOF
+npm install --package-lock-only --save-dev --ignore-scripts 'vitest@^4.1.8' '@vitest/coverage-v8@^4.1.8' 'vite-tsconfig-paths@^6.1.1'
+python3 -c "import json;print(len(json.load(open('package-lock.json'))['packages']))"
+```
+
+| 항목 | 값 |
+|---|---|
+| lock `packages` 엔트리 | **716 → 785 (+69)** |
+| vitest / @vitest/coverage-v8 / vite-tsconfig-paths | **4.1.11 / 4.1.11 / 6.1.1** |
+| vite | **6.4.3** (fin 과 동일) |
+| postcss / esbuild | 8.5.25 / 0.28.1 **무변경** · `vite/node_modules/esbuild` 중첩 **없음** |
+| `dependencies` 오염 | 0 (`--save-dev`) |
+| ⚠ npm 이 적는 범위 | `vitest@^4.1.8` 지시 → devDeps 에 **`^4.1.11`** 이 적힌다. fin 은 `^4.1.8` → **직접 편집 후 인자 없는 `npm install`** 로 `^4.1.8` 고정. 이때 `package.json` md5 전후 동일(키 순서·`overrides` 재정렬 0 · 감사 주장 10) · lock 785 동일 |
+
+## 2. `npm audit` — vitest 3종이 새 취약점을 더하지 않는다
+
+```bash
+npm audit --package-lock-only --json | python3 -c "import json,sys;d=json.load(sys.stdin);print(d['metadata']['vulnerabilities'],sorted(d['vulnerabilities']))"
+```
+
+| | critical | high | moderate | 집합 |
+|---|---|---|---|---|
+| 도입 전 (worktree lock) | 1 | 2 | 1 | `hono` · `js-yaml` · `next` · `sharp` |
+| 도입 후 (스크래치 lock) | 1 | 2 | 1 | **같은 집합** |
+| 도입 후 `--omit=dev` | 1 | 1 | 1 | — |
+| (참고) fin | 3 | 10 | 7 | — |
+
+fit `security-audit.yml` 은 `push: [main, dev]`(paths `package*.json`) + 주간 cron + dispatch — **`integration/pleiades` 무관.**
+
+## 3. U3 해소 — vite 6.4.3 은 `"esbuild": "$esbuild"` override 의 top-level esbuild 0.28.1 위에서 돈다 (감사 주장 8)
+
+스크래치 전체 설치 `npm install --ignore-scripts` → **682 packages · EXIT 0** · 신규 EBADENGINE 0(경고 7종은 전부 baseline). `require.resolve('esbuild')` = `<scratch>/node_modules/esbuild/lib/main.js`(top-level 0.28.1 · 중첩 사본 없음 · vite 선언 `esbuild: ^0.25.0` 범위 밖). `npx vitest run` 통과 · `--coverage` 정상. → 003 §9 U3 의 대안(`$esbuild` 리터럴화 · vitest 하향)은 **불필요.**
+
+같은 설치본에 fit 원문 3파일(`bot/utils/error.ts`·`telegram.ts`·`bot/notifications/send.ts`)과 초안 테스트 3파일을 얹어: **`vitest run` 43/43 · `tsc --noEmit` EXIT 0 · `eslint src/ --max-warnings 0` EXIT 0 / warning 0**(fit `eslint.config.mjs` 사본 · `src/app` 부재로 Pages 경고만 출력 — exit 0). U2 는 실트리 E5 로 최종 확정.
+
+## 4. 되돌리기 실측 — `npm ci` 가 devDeps 를 실제로 지운다 (감사 주장 5)
+
+되돌린 lock(716) 으로 `npm ci` → `node_modules/{vitest,vite,@vitest}` · `.bin/vitest` **전부 제거**(실행 확인). 머지 후 `git revert` + `npm ci`, 머지 전 `git checkout integration/pleiades && npm ci` 둘 다 같다.
+
+## 5. `npm test` 참조 전수 — 이름을 유지해야 하는 이유
+
+```bash
+cd repos/myFitness && /usr/bin/grep -rn --binary-files=text -E "npm (run )?test" . --exclude-dir={node_modules,.git,.next,dist}
+```
+
+**10행 / 7파일**(`ci.yml:66` 은 주석이라 명령 참조는 9행): `ci.yml:66,69` · `.claude/rules/workflow.md:135,165` · `.claude/skills/branch-workflow/SKILL.md:76,83` · `.claude/skills/codex-review-loop/SKILL.md:68` · `CLAUDE.md:34` · `docs/specs/bot-telegram-ipv6-timeout-202606.md:214` · `docs/specs/training-plan-ui.md:119`.
+도입 후 **거짓이 되는 문장 3곳**(`workflow.md:165` · `:275` 작성 원칙 — *살아 있는 지시* · `branch-workflow:83`)은 1a-2 PR 에서 정정. `docs/specs/` 6파일 8행은 시점 기록 · `ci.yml:64-68` 주석·스텝 이름은 제외(후속).
+
+verify 2종은 DB 를 열지 않는다 — `verify-food-edit-pending.ts` 는 순수 모듈 2개만 import · `verify-mcp-date-labels.ts` 는 `mcp/tools/weight-loss` 경유 prisma import 가 있으나 lazy connect(fit `docs/specs/364-mcp-date-label-off-by-one.md:111`).
+
+## 6. 워크플로우 트리거 — `integration/pleiades` 는 어느 것도 건드리지 않는다
+
+| 파일 | 트리거 |
+|---|---|
+| `ci.yml` | `push: [dev, main]` · `pull_request: [dev, main]` — 순서 `npm ci` → prisma generate → migrate deploy → lint → `npx tsc --noEmit` → `npm test` → build (postgres service · job env `DATABASE_URL`) |
+| `security-audit.yml` | `push: [main, dev]`(paths) · cron · dispatch |
+| `deploy.yml` | `release.published` · `workflow_dispatch(tag)` |
+
+## 7. 테스트 대상 (감사 정정 3)
+
+1a-3 이 교체하는 fit 모듈은 **`src/bot/notifications/send.ts`(124줄)** 이다 — 003 §5-2 1a-3 행 · `dual-repo-change` §4 표. 런타임 import 는 `../utils/error` 하나(`Bot`·`InlineKeyboard` 는 type) → fake `bot.api.sendMessage` + `TELEGRAM_ALLOWED_CHAT_IDS` stub + fake timers 로 절단(`:36` 4093+`...`)·재시도(`[2000,8000,30000]` · 총 4회)·HTML→plain 폴백(`:59` · 백오프 없음)·`SendResult` 집계를 잡는다. `bot/utils/telegram.ts` 의 `splitMessage`/`replyLong` 은 **인바운드**(`commands/report.ts:3` · `commands/ai.ts:12` 소비)라 1a-3 과 무관 — 순수 함수 baseline 으로만 둔다. `send.ts` 호출부: `lib/monitoring/admin-alerts.ts:10` 외(003 "호출 6건").
+
+## 8. E5 — 실트리 8절 4종 (`dual-repo-operator` 집행 · 브랜치 `integration/feature-pleiades-1a-2` · 커밋 8파일)
+
+`npm install`(직접 편집 후 인자 없이): `added 44 packages, changed 1 package, and audited 683 packages in 5s` · lock 716 → **785(추가 69 · 제거 0)** · `package.json` md5 전후 동일 · vitest 4.1.11 / vite 6.4.3 / postcss 8.5.25 / esbuild 0.28.1 · `vite/node_modules` = `fdir`·`picomatch` 뿐(esbuild 중첩 없음). 신규 경고 1: `npm warn deprecated tsconfck@3.1.6: unmaintained`(vite-tsconfig-paths 의존 · deprecation 이라 게이트 무관). EBADENGINE 3종(`@csstools/css-tokenizer`·`eslint-visitor-keys`·`entities`)은 **도입 전 lock 에 이미 있던 패키지** → 신규 EBADENGINE 0.
+
+RED 게이트: `send.test.ts` 절단 단언 반전 → `1 failed | 42 passed` exit 1 → 원복.
+
+| 명령 | exit | 관측 |
+|---|---|---|
+| `npm run lint` (`eslint src/ --max-warnings 0`) | **0** | 출력 0줄 — **warning 0 → U2 해소** |
+| `npm run typecheck` | **0** | 무출력 |
+| `npm run test` (`vitest run && verify 2종`) | **0** | **43 passed (3 files)** · 143 ms · verify `✅ 전체 통과` |
+| `npm run build` (`next build` + esbuild 2) | **0** | **8 s**(Turbopack) · 정적 18페이지 · 동적 34 라우트 on-demand |
+
+**U4 — `next build` 는 DB 를 요구하지 않았다(한정 포함).** 빌드 로그에 prisma 쿼리·연결 오류·`ECONNREFUSED`·`P1001` **0건**("prisma" 문자열 2건은 esbuild `--external:@prisma/client` 에코). 단 로컬 postgres(pid 2348)가 LISTEN 중이었으므로 *조용히 연결에 성공했을 가능성*은 로그만으로 배제하지 못한다 — postgres 를 내리고 재빌드해야 닫힌다(미실행 · 필요 시 후속). 빌드 경고 4건은 기존 코드(`src/lib/ai/claude-advisor.ts` dynamic filesystem access 등) · 이번 변경 무관. 산출물 4종(`.next`·`dist`·`tsconfig.tsbuildinfo`·`next-env.d.ts`) `git check-ignore` 4/4.
+
+커밋 diff(초판 `7b43d6e`): 8파일 · 1524 insertions / 16 deletions.
+
+## 9. 9-1 사전 리뷰 → PR
+
+fit 사전 리뷰(`pr-review-toolkit:code-reviewer` · 5회 연속 43/43 · lock +69/−0 · non-dev 0 · `@types/estree` 1.0.8→1.0.9 dev 1건 · postcss resolved 동일): **critical 0 · major 0 · info 5** → 3건 반영(`splitMessage` 경계 **2047/2048** 테스트 · 실패 로그 `bot<REDACTED>` 단언 · 하네스 "43건" 하드코딩 제거) → 재검증 4종 exit 0 → **테스트 45건**(send 11 · error 25 · telegram 9). PR **myFitness#374**(`dc5ef5a` · 2026-09-11 02:14 UTC 오픈 · 8파일 · 1546/16).
+info 미반영 2: `overrides.postcss` 리터럴화로 devDeps 와의 자동 연동 소실(범위 변경 시 두 줄 동시 수정 — PR body 비용 메모) · coverage include `src/lib/**` 0%(fin 대칭 유지). 리뷰 부수 발견: `deploy/deploy.sh:49` 의 `npm ci` 에 `--omit=dev` 가 없어 **서버가 배포마다 dev 69개를 더 받는다**(fin 동일 · 별건).
+fin #51 사전 리뷰: **0 · 0 · info 2** → 1건 반영(정정 블록 커밋 귀속 — 오귀인 유입 `e228c81` · 현재 문장 `4226941`) · PR **myFinance#493**(`ace0606` · 02:12 UTC 오픈).
+
