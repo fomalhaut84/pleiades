@@ -77,6 +77,11 @@ model: opus
 > **myFitness worktree 에는 `.claude/` 가 없다 (PR #6 교차 감사 M8).** fit 의 하네스는 gitignored 라
 > worktree 에 따라오지 않는다(004 §3′, 의도적 제외). 필요하면 **원본 `~/workspace/myFitness/.claude/`** 를
 > 읽는다 — 쓰지는 않는다. myFinance 는 tracked 라 worktree 에 있다.
+>
+> **정정 (2026-09-11 · #59 · PR #60 Codex P2).** 위 문단은 **myFitness#369(H-4 tracked 화) 이후 거짓**이다 — fit `.claude/`·`CLAUDE.md` 는
+> `integration/pleiades` 에 tracked 라 **worktree 에 있고 모드 I 하네스 변경은 거기서 한다**(#42 · 1a-2). 원본 `~/workspace/myFitness/.claude/` 는
+> 세션이 로드하는 사본일 뿐이며 **쓰지 않는다** — 머지 후 `git archive integration/pleiades <paths> | tar -x -C ~/workspace/myFitness` 로 동기화한다(10절 · #27).
+> `dual-repo-change/SKILL.md` 의 같은 문단도 같은 날 정정했다. 되돌리기: 즉시.
 
 ## 양쪽 대칭 변경의 원칙
 

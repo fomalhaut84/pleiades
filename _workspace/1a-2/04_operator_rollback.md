@@ -42,12 +42,20 @@ npm ci                    # node_modules 를 8b7a224 의 lock 대로 복원 (vit
 브랜치를 지우지 않고 되돌리려면 `git reset --hard 8b7a224` 후 `npm ci`.
 **bare `git stash` 는 쓰지 않는다** — worktree 가 스택을 공유한다.
 
-### 머지 후 (소요 수 분)
+### 머지 후 (소요 수 분 + 사용자 머지 대기)
+
+`integration/pleiades` 에 직접 커밋·push 하지 않는다 — revert 도 **브랜치 → PR → 사용자 머지** 를 거친다(`workflow.md` 7절 · "머지는 사용자가 직접" · PR #60 Codex P1).
 
 ```bash
 cd /Users/sagan/workspace/pleiades/repos/myFitness
 git checkout integration/pleiades && git pull --ff-only
-git revert <squash-merge-sha>      # 8파일 1커밋
+git checkout -b integration/fix-pleiades-1a-2-revert
+git revert --no-edit <squash-merge-sha>      # 8파일 1커밋
+git push -u origin integration/fix-pleiades-1a-2-revert
+gh pr create -R fomalhaut84/myFitness --base integration/pleiades --head integration/fix-pleiades-1a-2-revert \
+  --title "revert: 1a-2 vitest 도입 되돌림 (pleiades#58)" --body "Refs fomalhaut84/pleiades#58 · 되돌리기: 즉시"
+# → 사용자 머지 후
+git checkout integration/pleiades && git pull --ff-only
 npm ci
 ```
 

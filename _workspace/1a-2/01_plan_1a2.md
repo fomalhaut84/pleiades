@@ -102,7 +102,7 @@ fit worktree 원문(아래 §0) · 이슈 #51 본문.
 | 시점 | 행위 |
 |---|---|
 | 머지 전 | 브랜치 삭제 · worktree `git checkout integration/pleiades && npm ci`(node_modules 를 lock 대로 복원) |
-| 머지 후 | `git revert <squash>` 1커밋(8파일) + `npm ci`(**실측: 되돌린 lock 에서 `node_modules/{vitest,vite,@vitest}`·`.bin/vitest` 전부 제거** — 감사 주장 5). 서버 무접촉(미배포 브랜치) |
+| 머지 후 | revert 브랜치 → PR → 사용자 머지(직접 push 금지 · PR #60 Codex P1) → pull + `npm ci`(**실측: 되돌린 lock 에서 `node_modules/{vitest,vite,@vitest}`·`.bin/vitest` 전부 제거** — 감사 주장 5). 서버 무접촉(미배포 브랜치) |
 | 원본 동기화 (G-2 a) | fit: `git -C ~/workspace/myFitness archive integration/pleiades .claude/rules/workflow.md .claude/skills/branch-workflow/SKILL.md \| tar -x -C ~/workspace/myFitness`(되돌린 커밋 기준 재실행) — ignored 파일 · index 무변경 · **중간**(git 이력 없음 · #42 와 같은 등급) · fin: 미러 PR revert(즉시) |
 | #51 | 문서 1파일 revert |
 
