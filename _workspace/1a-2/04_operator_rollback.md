@@ -163,6 +163,9 @@ git checkout integration/pleiades && git pull --ff-only
   # → 사용자 머지 · 되돌리기 즉시
   ```
 
+- **실행 기록 (2026-09-11).** 미러 집행 완료 — 이슈 `fomalhaut84/myFinance#494` · 브랜치 `chore/494-1`(원본 `~/workspace/myFinance` · base `dev`) · 커밋 `562537e`(1파일 +5/-1) · PR **`fomalhaut84/myFinance#495`**(리뷰 대기 · 머지는 사용자).
+  검증: `npm run lint` **exit 0**(나머지 3종 해당 없음 — 문서 1파일). 위 *미러 머지 후 롤백* 블록의 `<fin-issue>` = **494**, `<mirror-squash-sha>` 는 #495 머지 후 확정.
+
 ### 서비스 영향 — **없음**
 
 - 문서 1파일. 빌드·`pm2 restart`·세션 초기화 **전부 불필요**.
