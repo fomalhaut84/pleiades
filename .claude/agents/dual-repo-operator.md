@@ -61,13 +61,15 @@ model: opus
 
 | | myFinance | myFitness |
 |---|---|---|
-| 테스트 | vitest 있음 (`test` 는 watch — **`test:run`**) | vitest **없음**. 단 `npm run test` = **verify 스크립트 2개**이므로 **반드시 돌린다** |
+| 테스트 | vitest 있음 (`test` 는 watch — **`test:run`**) | **vitest 있음 (1a-2 · #58)** — `npm run test` = **`vitest run` + verify 스크립트 2개**(1회 실행형) · 테스트는 `src/**/__tests__/**/*.test.ts` |
 | 검증 | `lint` / **`npx tsc --noEmit`** / **`test:run`** / `build` | `lint` / `typecheck` / **`test`** / `build` |
 | 상세 규칙 | `.claude/rules/` 5종 | `.claude/rules/` 3종 |
 
 > **검증 명령은 `.claude/rules/workflow.md` 8절 표가 정본이다** (PR #6 Codex 리뷰 P1).
 > myFitness 의 `npm run test` 는 vitest 가 아니라 **verify 스크립트 2개**다 — 테스트 프레임워크가
 > 없다는 것과 **실행할 것이 없다는 것은 다르다.** 1a-2 가 vitest 를 도입하기 전에도 반드시 돌린다.
+>
+> **소진 (2026-09-11 · #59).** 1a-2(#58)로 fit 에 vitest 가 들어갔다 — `npm run test` = vitest + verify 2종. 명령 이름 불변.
 
 **정본은 `.claude/rules/workflow.md`(pleiades)다.** 대상 저장소의 `CLAUDE.md`·`.claude/rules/` 는
 **읽기 전용 참고**로만 본다.
