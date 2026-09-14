@@ -141,29 +141,38 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 4. 롤백 절차를 `_workspace/<주제>/04_operator_rollback.md` 로 남긴다 — **필수 항목은 5-1**
 5. 결과를 pleiades 문서에 반영 (`decision-doc`)
 
-### 5-1. 롤백 문서 필수 항목 (#61 · PR #60 Codex 4라운드)
+### 5-1. 롤백 문서 필수 항목 (#61)
 
-롤백 문서는 아래 **세 시점을 전부** 담는다. 하나라도 빠지면 미완성이다 — 형식 전례는
-`_workspace/1a-2/04_operator_rollback.md`(Codex 4라운드 통과본). 모드 S 도 같은 셋이고 base·브랜치 이름만 7절 표를 따른다.
-**모드 H 는 PR 이 `main`·`dev` 둘이므로 머지 후 절차도 둘이다** — 대상마다 revert 브랜치·PR 을 따로 내고 **각 대상의 실제 squash SHA** 를 쓴다(같은 수정이라도 두 SHA 는 다르다).
-`main` 만 되돌리면 `dev` 에 남은 수정이 다음 릴리즈에서 다시 올라간다 (PR #65 Codex P1).
-두 PR 은 따로 머지되므로 **한쪽만 머지된 혼합 상태**가 생긴다 — 그때는 **대상별로 시점을 따로 판정**한다: 머지된 대상은 머지 후 절차(revert PR), 아직 열린 대상은 머지 전 절차(`gh pr close --delete-branch`). 롤백 문서는 두 대상의 상태를 각각 적는다 (PR #65 Codex 4회차 P1).
+롤백 문서(`_workspace/<주제>/04_operator_rollback.md`)가 **무엇을 담는가**는 여기서 정한다. **상황별 명령**은
+`_workspace/61/rollback-checklist.md`(초안 · **#66 에서 확정**)를 참고하고, 형식 전례는 `_workspace/1a-2/04_operator_rollback.md`.
 
-| 시점 | 필수 명령 (순서대로) | 빠지면 |
+**1. 상태 판정 표가 먼저다.** 롤백 명령은 상태에 따라 갈리므로 문서 첫머리에 **PR 마다 한 행**으로 적는다 —
+모드 H 는 `main`·`dev` 두 행(따로 머지되므로 한쪽만 머지된 상태가 있다) · 모드 S 미러 PR 은 별도 행:
+
+| PR | 머지 여부 · SHA | 배포·재시작 여부 (어느 프로세스 · β2 병행 인스턴스 포함) | 원본 도달 (fit `git archive` 동기화 · 모드 S 미러) | 의존성 변경 |
+|---|---|---|---|---|
+
+**2. 세 시점을 전부 담는다.** 하나라도 빠지면 미완성이다.
+
+| 시점 | 반드시 들어가는 것 | 빠지면 |
 |---|---|---|
-| **머지 전** | `git checkout <base>` → `gh pr close <n> -R <owner>/<repo> --delete-branch`(PR 이 열려 있으면 — **로컬·원격 브랜치를 함께 지운다**) → 남아 있을 때만 `git show-ref --verify --quiet refs/heads/<branch> && git branch -D <branch>`(PR 을 안 열었거나 `gh` 가 로컬을 못 찾은 경우 · 무조건 `-D` 하면 이미 지워져 스크립트가 중단된다 · PR #65 Codex P2) → **PR 없이 push 만 된 상태면** `git ls-remote --exit-code --heads origin <branch> && git push origin --delete <branch>`(`gh pr create --head` 는 push 하지 않으므로 push 뒤 PR 전이 정상 중간 상태다 · PR #65 Codex 6회차 P2) → 의존성 변경이면 `npm ci` | 열린 PR·원격 브랜치가 남는다 (PR #60 Codex P1 ②) |
-| **머지 후** | `git checkout <base> && git pull --ff-only` → **`git checkout -b <revert-branch>`** → `git revert --no-edit <sha>` → `git push -u origin <revert-branch>` → `gh pr create -R <owner>/<repo> --base <base> --head <revert-branch>`(본문 `Refs <issue-repo>#<issue>` · 되돌리기 등급) → **사용자 머지** → **`git checkout <base> && git pull --ff-only`**(revert 브랜치에 머문 채 pull 하면 base 가 갱신되지 않는다 · PR #65 Codex P2) → 의존성 변경이면 `npm ci` → **이미 빌드·배포된 변경(모드 S·H 런타임)이면 `npm run build` + `pm2 restart <app>` 를 정확한 프로세스 이름으로 적는다 — 실행은 사용자**(소스만 되돌리면 PM2 가 옛 빌드를 계속 서빙한다 · PR #65 Codex 5회차 P1). **모드 S 변경이 이미 `dev`→`main` 릴리즈까지 갔으면 `dev` revert 만으로는 서비스가 안 돌아온다** — 되돌리기도 **모드 H 경로**(`main` 에서 revert 브랜치 → `main`·`dev` 두 PR → 태그·재배포)를 탄다 (7회차 P1). **모드 I** 는 `integration/pleiades` 가 배포 트리거 밖이라 평소 해당 없지만, **β2 병행 인스턴스**(`myfinance-int`·`myfitness-int` · 003 §8-1 · 004 §8-4 Q42)가 서버에 떠 있으면 그 인스턴스의 재빌드·`pm2 restart` 를 적는다 (7회차 P2) | `<base>` 에 직접 revert 커밋·push 하게 된다 — **"머지는 사용자가 직접"은 revert 에도 적용된다** (PR #60 Codex P1 ①·③) |
-| **원본 도달분** | **fit 원본 하네스 동기화**가 있었으면 → **되돌려진 트리** 기준으로 `git -C ~/workspace/myFitness archive <reverted-sha> <paths> \| tar -x -C ~/workspace/myFitness` 재실행. `<reverted-sha>` = **revert PR 머지 후의 `integration/pleiades` HEAD**(머지 전이면 원 커밋의 부모 `<sha>^`) — 위 행의 `<sha>`(되돌릴 커밋)를 넣으면 **되돌리려던 하네스를 원본에 다시 푼다**(PR #65 Codex P1). **풀기 전에 동기화가 원본에 *새로 만든* 파일만 지운다.** 그 목록은 **동기화 시점에 만든다** — `git -C ~/workspace/myFitness diff --no-renames --name-only --diff-filter=A <sha>^ <sha> -- <paths>` 의 각 경로 중 **동기화 직전 원본에 없던 것**(`test -e` 로 판정)만 `absent-before-sync.txt` 에 적고, 롤백은 그 파일만 `rm -f` 한다. **`A` 필터만으로 지우지 않는다** — "git 에 추가됨"과 "원본에 새로 생김"은 다르다: tracked 화 커밋(#369 유형)을 되돌리면 원본에 이미 있던 하네스를 지우는데 되돌려진 트리에는 복원본이 없다 (PR #65 Codex 6회차 P1). **`--no-renames` 필수**: 기본 rename 감지는 옮겨진 파일을 `R` 로 분류해 `A` 필터에서 빠지고, 새 경로가 원본에 남는다 (PR #65 Codex 4회차 P2). **사전 사본(`tar` · 동기화 경로 전체)과 목록 파일은 세션 스크래치패드가 아니라 `~/workspace/pleiades/_workspace/<주제>/backup/`(`.gitignore` 에 `_workspace/**/backup/` 등재 · 이 PR) 같은 **세션 밖 경로**에 두고 롤백 문서에 경로를 적는다** — 스크래치패드 사본은 세션과 함께 사라져 #42 에서 실제로 소멸했다. `tar -x` 는 아카이브에 없는 파일을 지우지 않으므로 **동기화가 새로 만든 파일이 원본에 남고**, 그 파일을 `git archive` 에 이름 지으면 `<reverted-sha>` 에 없어 pathspec 오류가 난다. **디렉터리를 통째로 `rm -rf` 하지 않는다** — 원본 `.claude/` 에는 `settings.local.json` 같은 **아카이브에 없는 로컬 전용 파일**이 있어 복구할 수 없다(PR #65 Codex 3회차 P1). archive 에는 `<reverted-sha>` 에 **존재하는 경로만** 넣는다. 사전 사본(스크래치 tar)이 살아 있으면 그것을 풀어도 된다(PR #65 Codex P1). **모드 S 서비스 미러 PR** 이 있었으면(fin·fit 어느 쪽이든 — 미러는 두 저장소 모두 허용된다 · 7회차 P1) → **미러를 받은 저장소의 원본** `dev` 에서 **위 머지 후 절차를 한 번 더**(`fix/<그 저장소 issue>-revert` → PR `--base dev` → 사용자 머지). fit 은 하네스 `git archive` 재실행과 **별개로** 필요하다 — archive 는 ignored 원본만 되돌리고 `dev` 의 tracked 변경은 남는다 | `integration/pleiades` 만 되돌리고 **세션이 읽는 하네스는 그대로** 남는다 (PR #60 Codex P2 ④ · G-2) |
+| **머지 전** | 열린 PR 닫기(`gh pr close --delete-branch`) · 남은 로컬·원격 브랜치 정리 · 의존성 변경이면 `npm ci` | 열린 PR·원격 브랜치가 남는다 (PR #60 Codex P1) |
+| **머지 후** | **revert 브랜치 → `git revert` → push → `gh pr create` → 사용자 머지 → base 재체크아웃·pull** · 의존성이면 `npm ci` · 배포됐던 변경이면 `npm run build` + `pm2 restart <app>`(실행은 사용자) | `<base>` 에 직접 revert — **"머지는 사용자가 직접"은 revert 에도 적용된다** (PR #60 Codex P1) |
+| **원본 도달분** | fit 원본 하네스 동기화의 되돌리기(사전 사본 복원 또는 되돌려진 트리 `git archive`) · 모드 S 미러 PR 의 revert PR(**미러를 받은 저장소**에서) | `integration/pleiades` 만 되돌리고 **세션이 읽는 하네스는 그대로** (PR #60 Codex P2 · G-2) |
 
-- **`git revert` 는 즉시 커밋한다** — 브랜치 생성이 반드시 앞선다. 브랜치 없이 revert 하면 `<base>` 로컬이 원격과 갈라진다.
-- `<sha>` 는 머지 방식으로 갈린다 — 대상 저장소 PR 은 squash(부모 1개 · myFitness#374 `3818208` 실측)라 그 1커밋, merge commit 이면 `git revert -m 1 <merge-sha>`.
-  **머지 전에 쓴 문서는 SHA 자리를 `<머지 SHA>` 로 비워 두고 머지 후 실값으로 채운다** (PR #64 Codex P2). "현재 상태" 표기도 머지 후 갱신한다.
-- 되돌리기 **등급은 원본 도달분까지 포함**해 매긴다 — 1a-2 는 worktree 만 보면 즉시, 원본 동기화분은 중간(원본 fit `.claude/` 는 git 이력이 없어 `git archive` 재실행이 유일한 복원 경로).
-- 이 항목들은 **승인 게이트(1절) 의 롤백 칸에도 그대로** 들어간다 — 승인 시점 롤백과 집행 후 롤백 문서가 달라지면 승인이 무효다.
+**3. 원칙**
+- **되돌리기도 PR 을 거친다.** `<base>` 에 직접 커밋·push 하지 않는다. `git revert` 는 즉시 커밋하므로 **브랜치 생성이 앞선다**
+- **SHA 는 실값.** 머지 전에 쓴 문서는 `<머지 SHA>` 로 비워 두고 머지 후 채운다(PR #64 Codex P2). 대상 저장소·pleiades PR 은 squash 라 1커밋(myFitness#374 `3818208` 실측)
+- **사전 사본은 세션 밖에.** 원본 동기화 **전에** 동기화 경로 tar + 원본에 없던 파일 목록을 `_workspace/<주제>/backup/`(`.gitignore` 등재)에 두고 경로를 적는다 — 스크래치패드 사본은 #42 에서 소멸했다
+- **등급은 원본 도달분까지 포함해 매긴다.** 승인 게이트(1절) 롤백 칸과 같은 내용이어야 한다 — 달라지면 승인 무효
 
 > **왜 규칙이 필요한가.** 이전 §5-4 는 *"롤백 절차를 남긴다"* 만 있고 **형식을 정하지 않았다.** 그 결과 1a-2 롤백 문서가
 > Codex 4라운드 연속 같은 성격의 결함(로컬 revert 만 · 열린 PR 방치 · push·PR 누락 · 미러 revert 부재)으로 P1 3건·P2 1건을 받았고,
-> 앞선 `_workspace/harness/04_operator_rollback.md`(2026-09-07)도 머지 후 절에서 **pleiades 는 `dev` 에서 브랜치 없이 revert 하고, 세 저장소 모두 `gh pr create` 가 없다**(2026-09-14 정정 블록 append · 실행하지 말 것). 나머지는 통과(`harness/04_operator_42_rollback` · `h3fit` · `1a-2`) 또는 해당 없음(`_workspace/04_operator_rollback` 은 배치라 PR 이 없고 · `1a-0` 은 pleiades 만). 되돌리기: 즉시.
+> 앞선 `_workspace/harness/04_operator_rollback.md`(2026-09-07)도 머지 후 절에서 **pleiades 는 `dev` 에서 브랜치 없이 revert 하고, 세 저장소 모두 `gh pr create` 가 없다**(2026-09-14 정정 블록 append · 실행하지 말 것). 나머지는 통과(`harness/04_operator_42_rollback` · `h3fit` · `1a-2`) 또는 해당 없음(`_workspace/04_operator_rollback` 은 배치라 PR 이 없고 · `1a-0` 은 pleiades 만).
+>
+> **왜 명령 목록이 아닌가 (PR #65 · 사용자 2026-09-14).** 처음엔 이 절이 상황별 명령 표였다. Codex 가 **7라운드 연속 P1**(누적 P1 9 · P2 5 · 전부 타당)을 냈고,
+> 성격이 같았다 — 명령으로 쓴 규칙은 상황(머지·배포·원본 동기화·미러·rename·tracked 화·병행 인스턴스·릴리즈 경유)마다 반례가 나온다. 9-4 의 스코프 재점검 신호로 보고
+> **규칙은 "무엇"으로 줄이고 "어떻게"는 체크리스트 초안(#66)으로 분리**했다. 되돌리기: 즉시.
 
 > **커밋으로 끝나지 않는다 (PR #6 교차 감사 M5).** 이전 체크리스트는 승인 → 검증 → 커밋
 > → 빌드 안내 → 롤백 문서화로 끝나 **9-1 사전 리뷰와 9-2 PR 생성이 빠져 있었다.**
