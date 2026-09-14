@@ -46,3 +46,11 @@ git -C ~/workspace/myFitness revert -m 1 <merge-sha> && git push -u origin chore
 
 - auto memory 트리거 줄: fin `MEMORY.md:4,5,7` · ple `MEMORY.md:4` — 스킬 이름은 바뀌지 않았으므로 **이번 집행에서는 갱신 불필요**.
 - fin `feedback_session_management.md:59` 는 fin `.claude/` 를 untracked 로 기술 — **사실과 다름**(tracked 16). fin 세션에서 고친다.
+
+---
+
+> **정정 (2026-09-14 · #61 · `dual-repo-change` 5-1 신설 시 확인).** 위 "머지 후 롤백" 블록은 **실행하지 말 것** — 세 결함이 있다.
+> ① pleiades 절은 `dev` 에서 **브랜치 없이 `git revert`** 한다. `git revert` 는 즉시 커밋하므로 로컬 `dev` 가 원격과 갈라진다 — *"→ PR 로 올린다"* 는 그 뒤에 성립하지 않는다.
+> ② 세 절 모두 **`gh pr create` 가 없다** — push 로 끝나 PR 이 열리지 않는다.
+> ③ `revert -m 1 <merge-sha>` 는 **merge commit 전제**인데 다섯 PR(#19·#20·#22·myFinance#492·myFitness#369)은 전부 **squash**(부모 1개 · 실측)라 `-m 1` 은 *"commit is not a merge"* 로 실패한다.
+> 올바른 형식은 `dual-repo-change` 5-1(브랜치 → `git revert --no-edit <squash-sha>` → push → `gh pr create` → 사용자 머지). 이 문서는 기록으로 남기고 고쳐 쓰지 않는다. 되돌리기: 즉시.
