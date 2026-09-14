@@ -165,6 +165,7 @@ bin/claude-with fit      # 한 번에 한 저장소 (H-5 · Q30). --resume 도 �
 | 2026-09-08 | **`workflow.md` 8절 pleiades 행 확정** (lint 미해당 · `typecheck`/`test`/`build` + `npm --prefix packages/notify install` 선행 조건) | 룰 1 | 1a-0 (#31) 이 루트 `package.json` 을 신설 |
 | 2026-09-10 | **`workflow.md` 8절 pleiades 타입 칸에 `typecheck:test` 추가** (#32 I1 (b) 이행 · `tsconfig.test.json`) | 룰 1 | 1a-1 (#47) |
 | 2026-09-10 | 하네스 절에 **skill 충돌 규칙**(이름 단위 · cwd 승) 1줄 — N18 에 셋째 규칙 | CLAUDE.md | #38 실측 (PR #50) |
+| 2026-09-14 | **`dual-repo-change` 5-1 롤백 문서 필수 항목 신설**(머지 전 `gh pr close --delete-branch` · 머지 후 revert 브랜치→PR→사용자 머지 · 원본 도달분 fit `git archive`/fin 미러 revert) + 승인 게이트 롤백 칸·체크리스트 · `dual-repo-operator` 4번·집행 후 4번 동기화 · `_workspace/harness/04_operator_rollback.md` 정정 블록 | 스킬 1 · 에이전트 1 · 롤백 문서 1 | #61 (PR #60 Codex 4라운드 교훈) |
 
 ## 상속하는 컨벤션
 

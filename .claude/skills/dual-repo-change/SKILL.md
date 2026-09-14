@@ -42,11 +42,11 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 - 재시작: <어떤 PM2 프로세스>
 - 세션 초기화: <필요 시 — 예: 텔레그램 /reset>
 
-### 롤백
+### 롤백 — 머지 전 · 머지 후 · 원본 도달분 (5-1 필수 항목 셋 전부)
 ```bash
-<정확한 명령>
+<정확한 명령 — 머지 후는 revert 브랜치 → push → gh pr create 까지>
 ```
-소요: <시간>
+소요: <시간> · 등급: <즉시 / 중간 / 높음 / 편도 — 원본 도달분까지 포함해 매긴다>
 
 ### 서비스 중단 가능성
 <있음 / 없음. 있으면 어느 구간>
@@ -138,8 +138,29 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
    pm2 restart <app>        # 어떤 프로세스인지 명시
    ```
 3. 세션·캐시 초기화 안내 (예: 텔레그램 `/reset` — `--resume` 세션이 옛 도구 목록을 붙잡는다)
-4. 롤백 절차를 `_workspace/NN_operator_rollback.md` 로 남긴다
+4. 롤백 절차를 `_workspace/<주제>/04_operator_rollback.md` 로 남긴다 — **필수 항목은 5-1**
 5. 결과를 pleiades 문서에 반영 (`decision-doc`)
+
+### 5-1. 롤백 문서 필수 항목 (#61 · PR #60 Codex 4라운드)
+
+롤백 문서는 아래 **세 시점을 전부** 담는다. 하나라도 빠지면 미완성이다 — 형식 전례는
+`_workspace/1a-2/04_operator_rollback.md`(Codex 4라운드 통과본). 모드 S·H 도 같은 셋이고 base·브랜치 이름만 7절 표를 따른다.
+
+| 시점 | 필수 명령 (순서대로) | 빠지면 |
+|---|---|---|
+| **머지 전** | `gh pr close <n> -R <owner>/<repo> --delete-branch`(PR 이 열려 있으면 — **원격 브랜치까지**) → `git checkout <base>` → `git branch -D <branch>` → 의존성 변경이면 `npm ci` | 열린 PR·원격 브랜치가 남는다 (PR #60 Codex P1 ②) |
+| **머지 후** | `git checkout <base> && git pull --ff-only` → **`git checkout -b <revert-branch>`** → `git revert --no-edit <sha>` → `git push -u origin <revert-branch>` → `gh pr create -R <owner>/<repo> --base <base> --head <revert-branch>`(본문 `Refs <issue-repo>#<issue>` · 되돌리기 등급) → **사용자 머지** → `git pull --ff-only` → 의존성 변경이면 `npm ci` | `<base>` 에 직접 revert 커밋·push 하게 된다 — **"머지는 사용자가 직접"은 revert 에도 적용된다** (PR #60 Codex P1 ①·③) |
+| **원본 도달분** | **fit 원본 하네스 동기화**가 있었으면 → 되돌린 커밋 기준으로 `git -C ~/workspace/myFitness archive <sha> <paths> \| tar -x -C ~/workspace/myFitness` 재실행. **fin 모드 S 미러 PR** 이 있었으면 → 원본 `~/workspace/myFinance` `dev` 에서 **위 머지 후 절차를 한 번 더**(`fix/<fin-issue>-revert` → PR `--base dev` → 사용자 머지) | `integration/pleiades` 만 되돌리고 **세션이 읽는 하네스는 그대로** 남는다 (PR #60 Codex P2 ④ · G-2) |
+
+- **`git revert` 는 즉시 커밋한다** — 브랜치 생성이 반드시 앞선다. 브랜치 없이 revert 하면 `<base>` 로컬이 원격과 갈라진다.
+- `<sha>` 는 머지 방식으로 갈린다 — 대상 저장소 PR 은 squash(부모 1개 · myFitness#374 `3818208` 실측)라 그 1커밋, merge commit 이면 `git revert -m 1 <merge-sha>`.
+  **머지 전에 쓴 문서는 SHA 자리를 `<머지 SHA>` 로 비워 두고 머지 후 실값으로 채운다** (PR #64 Codex P2). "현재 상태" 표기도 머지 후 갱신한다.
+- 되돌리기 **등급은 원본 도달분까지 포함**해 매긴다 — 1a-2 는 worktree 만 보면 즉시, 원본 동기화분은 중간(원본 fit `.claude/` 는 git 이력이 없어 `git archive` 재실행이 유일한 복원 경로).
+- 이 항목들은 **승인 게이트(1절) 의 롤백 칸에도 그대로** 들어간다 — 승인 시점 롤백과 집행 후 롤백 문서가 달라지면 승인이 무효다.
+
+> **왜 규칙이 필요한가.** 이전 §5-4 는 *"롤백 절차를 남긴다"* 만 있고 **형식을 정하지 않았다.** 그 결과 1a-2 롤백 문서가
+> Codex 4라운드 연속 같은 성격의 결함(로컬 revert 만 · 열린 PR 방치 · push·PR 누락 · 미러 revert 부재)으로 P1 3건·P2 1건을 받았고,
+> 앞선 `_workspace/harness/04_operator_rollback.md`(2026-09-07)도 머지 후 절에서 **pleiades 는 `dev` 에서 브랜치 없이 revert 하고, 세 저장소 모두 `gh pr create` 가 없다**(2026-09-14 정정 블록 append · 실행하지 말 것). 나머지는 통과(`harness/04_operator_42_rollback` · `h3fit` · `1a-2`) 또는 해당 없음(`_workspace/04_operator_rollback` 은 배치라 PR 이 없고 · `1a-0` 은 pleiades 만). 되돌리기: 즉시.
 
 > **커밋으로 끝나지 않는다 (PR #6 교차 감사 M5).** 이전 체크리스트는 승인 → 검증 → 커밋
 > → 빌드 안내 → 롤백 문서화로 끝나 **9-1 사전 리뷰와 9-2 PR 생성이 빠져 있었다.**
@@ -189,7 +210,7 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 > 고정**했다. 모드 S 는 정당한 단독 변경이 막히거나 `dev` 대신 통합 브랜치로 가고,
 > 모드 H 는 `main`+`dev` 두 PR 이 필요한데 통합 PR 하나로 끝났다.
 - [ ] 빌드·재시작·세션 초기화 명령 사용자에게 전달
-- [ ] 롤백 절차 문서화
+- [ ] 롤백 절차 문서화 — **5-1 세 시점(머지 전 · 머지 후 revert 브랜치→PR · 원본 도달분) 전부**. 머지 후 SHA 실값 채움
 - [ ] pleiades 문서에 결과 반영
 
 ## 에러 대응

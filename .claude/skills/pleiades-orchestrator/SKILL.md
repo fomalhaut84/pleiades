@@ -112,7 +112,7 @@ Phase 2 ↔ 3 은 정정이 0 이 될 때까지 순환한다. 3회를 넘으면 
 2. `reversibility-auditor` 에게 **착수 직전 재감사** 요청. 정정 나오면 중단
 3. 한쪽 저장소씩 순차 변경 → 검증 → 커밋
 4. 빌드·재시작·세션 초기화 명령을 사용자에게 전달 (**실행은 사용자가 한다**)
-5. 롤백 절차 문서화 → `decision-writer` 가 pleiades 문서에 반영
+5. 롤백 절차 문서화(형식은 `dual-repo-change` 5-1 — 머지 전 · 머지 후 revert 브랜치→PR · 원본 도달분) → `decision-writer` 가 pleiades 문서에 반영
 
 ## 데이터 전달
 
