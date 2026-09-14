@@ -4,3 +4,4 @@ node_modules/
 _workspace_prev/
 repos/
 packages/notify/dist/
+_workspace/**/backup/
