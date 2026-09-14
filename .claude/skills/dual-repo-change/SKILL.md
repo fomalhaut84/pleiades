@@ -144,13 +144,15 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 ### 5-1. 롤백 문서 필수 항목 (#61 · PR #60 Codex 4라운드)
 
 롤백 문서는 아래 **세 시점을 전부** 담는다. 하나라도 빠지면 미완성이다 — 형식 전례는
-`_workspace/1a-2/04_operator_rollback.md`(Codex 4라운드 통과본). 모드 S·H 도 같은 셋이고 base·브랜치 이름만 7절 표를 따른다.
+`_workspace/1a-2/04_operator_rollback.md`(Codex 4라운드 통과본). 모드 S 도 같은 셋이고 base·브랜치 이름만 7절 표를 따른다.
+**모드 H 는 PR 이 `main`·`dev` 둘이므로 머지 후 절차도 둘이다** — 대상마다 revert 브랜치·PR 을 따로 내고 **각 대상의 실제 squash SHA** 를 쓴다(같은 수정이라도 두 SHA 는 다르다).
+`main` 만 되돌리면 `dev` 에 남은 수정이 다음 릴리즈에서 다시 올라간다 (PR #65 Codex P1).
 
 | 시점 | 필수 명령 (순서대로) | 빠지면 |
 |---|---|---|
 | **머지 전** | `gh pr close <n> -R <owner>/<repo> --delete-branch`(PR 이 열려 있으면 — **원격 브랜치까지**) → `git checkout <base>` → `git branch -D <branch>` → 의존성 변경이면 `npm ci` | 열린 PR·원격 브랜치가 남는다 (PR #60 Codex P1 ②) |
-| **머지 후** | `git checkout <base> && git pull --ff-only` → **`git checkout -b <revert-branch>`** → `git revert --no-edit <sha>` → `git push -u origin <revert-branch>` → `gh pr create -R <owner>/<repo> --base <base> --head <revert-branch>`(본문 `Refs <issue-repo>#<issue>` · 되돌리기 등급) → **사용자 머지** → `git pull --ff-only` → 의존성 변경이면 `npm ci` | `<base>` 에 직접 revert 커밋·push 하게 된다 — **"머지는 사용자가 직접"은 revert 에도 적용된다** (PR #60 Codex P1 ①·③) |
-| **원본 도달분** | **fit 원본 하네스 동기화**가 있었으면 → 되돌린 커밋 기준으로 `git -C ~/workspace/myFitness archive <sha> <paths> \| tar -x -C ~/workspace/myFitness` 재실행. **fin 모드 S 미러 PR** 이 있었으면 → 원본 `~/workspace/myFinance` `dev` 에서 **위 머지 후 절차를 한 번 더**(`fix/<fin-issue>-revert` → PR `--base dev` → 사용자 머지) | `integration/pleiades` 만 되돌리고 **세션이 읽는 하네스는 그대로** 남는다 (PR #60 Codex P2 ④ · G-2) |
+| **머지 후** | `git checkout <base> && git pull --ff-only` → **`git checkout -b <revert-branch>`** → `git revert --no-edit <sha>` → `git push -u origin <revert-branch>` → `gh pr create -R <owner>/<repo> --base <base> --head <revert-branch>`(본문 `Refs <issue-repo>#<issue>` · 되돌리기 등급) → **사용자 머지** → **`git checkout <base> && git pull --ff-only`**(revert 브랜치에 머문 채 pull 하면 base 가 갱신되지 않는다 · PR #65 Codex P2) → 의존성 변경이면 `npm ci` | `<base>` 에 직접 revert 커밋·push 하게 된다 — **"머지는 사용자가 직접"은 revert 에도 적용된다** (PR #60 Codex P1 ①·③) |
+| **원본 도달분** | **fit 원본 하네스 동기화**가 있었으면 → **되돌려진 트리** 기준으로 `git -C ~/workspace/myFitness archive <reverted-sha> <paths> \| tar -x -C ~/workspace/myFitness` 재실행. `<reverted-sha>` = **revert PR 머지 후의 `integration/pleiades` HEAD**(머지 전이면 원 커밋의 부모 `<sha>^`) — 위 행의 `<sha>`(되돌릴 커밋)를 넣으면 **되돌리려던 하네스를 원본에 다시 푼다**(PR #65 Codex P1). **fin 모드 S 미러 PR** 이 있었으면 → 원본 `~/workspace/myFinance` `dev` 에서 **위 머지 후 절차를 한 번 더**(`fix/<fin-issue>-revert` → PR `--base dev` → 사용자 머지) | `integration/pleiades` 만 되돌리고 **세션이 읽는 하네스는 그대로** 남는다 (PR #60 Codex P2 ④ · G-2) |
 
 - **`git revert` 는 즉시 커밋한다** — 브랜치 생성이 반드시 앞선다. 브랜치 없이 revert 하면 `<base>` 로컬이 원격과 갈라진다.
 - `<sha>` 는 머지 방식으로 갈린다 — 대상 저장소 PR 은 squash(부모 1개 · myFitness#374 `3818208` 실측)라 그 1커밋, merge commit 이면 `git revert -m 1 <merge-sha>`.
