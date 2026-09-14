@@ -3551,3 +3551,84 @@ fit 사전 리뷰(`pr-review-toolkit:code-reviewer` · 5회 연속 43/43 · lock
 info 미반영 2: `overrides.postcss` 리터럴화로 devDeps 와의 자동 연동 소실(범위 변경 시 두 줄 동시 수정 — PR body 비용 메모) · coverage include `src/lib/**` 0%(fin 대칭 유지). 리뷰 부수 발견: `deploy/deploy.sh:49` 의 `npm ci` 에 `--omit=dev` 가 없어 **서버가 배포마다 dev 69개를 더 받는다**(fin 동일 · 별건).
 fin #51 사전 리뷰: **0 · 0 · info 2** → 1건 반영(정정 블록 커밋 귀속 — 오귀인 유입 `e228c81` · 현재 문장 `4226941`) · PR **myFinance#493**(`ace0606` · 02:12 UTC 오픈).
 
+
+# #62 실측 — codex-cli MCP 지원 모델 · Codex 봇 관측 (2026-09-14 · 계획 `_workspace/62/01_plan_62.md` · 감사 `03_auditor_62plan.md`)
+
+기준: 로컬 macOS · codex-cli **0.142.4**(`codex --version`) · `~/.codex/config.toml` 존재 · `CODEX_HOME` 미설정. **쿼터 소비 0** — 전부 로컬 파일 읽기. `auth.json` 은 열지 않았다(키 이름만 확인: `OPENAI_API_KEY`·`last_refresh`·`tokens`).
+
+## 1. 지원 모델 — `models_cache.json` 의 slug 4개, `gpt-4o` 없음
+
+```bash
+python3 - <<'PY'
+import json,os
+d=json.load(open(os.path.expanduser('~/.codex/models_cache.json')))
+print(d['fetched_at'], d['client_version'])
+for m in d['models']: print(m['slug'], m['visibility'], m.get('supported_in_api'))
+PY
+```
+
+| slug | visibility | 비고 |
+|---|---|---|
+| `gpt-5.5` | list | `config.toml` `tui.model_availability_nux."gpt-5.5"=1` 이 노출을 뒷받침 |
+| `gpt-5.4` | list | |
+| `gpt-5.4-mini` | list | |
+| `codex-auto-review` | **hide** | description "Automatic approval review model for Codex." — 사전 리뷰용 범용 모델 아님(9-1 사전 리뷰 major: 문안에 `visibility: "list"` 필터가 필요했던 이유) |
+
+`fetched_at` **2026-07-02T01:56:15Z** · `client_version` 0.142.4(= `codex --version`). 캐시는 CLI 가 etag 로 갱신하므로 현재 목록과 다를 수 있다 — 그래서 8-4 문안은 모델명을 예시로 박지 않고 파일을 출처로 가리킨다. `gpt-4o` 는 목록에 없다(myFinance#493 Codex P2 의 근거).
+
+## 2. `mcp__codex-cli__codex` 의 실체 — `codex-mcp-server` npm 래퍼 · env 없음
+
+```bash
+python3 - <<'PY'
+import json,os
+d=json.load(open(os.path.expanduser('~/.claude.json')))
+for proj,cfg in d.get('projects',{}).items():
+    for name,m in (cfg.get('mcpServers') or {}).items():
+        if 'codex' in name: print(proj.split('/')[-1], m.get('command'), m.get('args'), sorted((m.get('env') or {}).keys()))
+PY
+```
+
+→ `myFinance`·`myFitness`(+ 다른 프로젝트 2)에 `npx -y codex-mcp-server`(stdio) · **env 키 0**. `model` 파라미터는 codex CLI 로 전달되므로 지원 목록은 §1 과 같다. `CODEX_HOME` 이 설정된 환경이면 캐시 경로는 `$CODEX_HOME/models_cache.json`(myFinance#496·#375 Codex P2) — 따옴표 안 `~` 는 확장되지 않으므로 `${CODEX_HOME:-$HOME/.codex}`(myFinance#498 Codex P2 · #67).
+
+## 3. `gpt-4o` 언급 전수 — 세 하네스에서 2곳(+ 원본 2)
+
+```bash
+/usr/bin/grep -rn gpt-4o ~/workspace/pleiades/.claude ~/workspace/pleiades/repos/myFinance/.claude ~/workspace/pleiades/repos/myFitness/.claude ~/workspace/myFinance/.claude ~/workspace/myFitness/.claude
+```
+
+→ worktree fin `:219` · fit `:257` · 원본 fin `dev:199` · fit `main:257`(fit 원본 = worktree 판 완전 동일 · fin 원본은 #51 미러 블록 때문에 cherry-pick 불가 → 문장 단위). pleiades 하네스 0. **ugrep 래퍼는 fit 원본 `.claude/`(ignored)를 건너뛰므로 `/usr/bin/grep` 필수.**
+
+## 4. PR 머지 방식 — pleiades·대상 저장소 전부 squash(부모 1개)
+
+```bash
+for h in <sha>...; do git cat-file -p $h | grep -c '^parent'; done
+```
+
+→ pleiades #19·#20·#22·#64·#65 · myFinance#492·#496·#498 · myFitness#369·#374·#375 **전부 1**. 롤백의 `git revert` 는 그 1커밋 대상이고 `revert -m 1` 은 *"commit is not a merge"* 로 실패한다(옛 `harness/04_operator_rollback.md` 의 결함 ③).
+
+## 5. `git diff --diff-filter=A` 와 rename · tracked 화 (5-1 원본 도달분 근거)
+
+```bash
+git -C repos/myFitness diff --name-only --diff-filter=A 3818208^ 3818208 -- .claude | wc -l     # 0 (수정만)
+git -C repos/myFitness diff --name-only --diff-filter=A 3818208^ 3818208 -- src vitest.config.mts  # 4
+r=$(git -C repos/myFitness log --format=%H --diff-filter=R -1 -M integration/pleiades)   # f2f27ed
+git -C repos/myFitness diff --name-only --diff-filter=A $r^ $r | wc -l                # 1
+git -C repos/myFitness diff --no-renames --name-only --diff-filter=A $r^ $r | wc -l   # 11
+```
+
+→ rename 감지 기본값에서 옮겨진 파일은 `R` 로 분류돼 `A` 에서 빠진다(`--no-renames` 필수). 그리고 `A` 는 "git 에 추가됨"이지 "원본에 새로 생김"이 아니다(tracked 화 #369 유형) — 그래서 삭제 목록은 **동기화 시점에 `test -e` 로** 만든다(`_workspace/61/rollback-checklist.md` §3-1). `gh pr close --delete-branch` 는 **로컬·원격 둘 다** 지운다(`--help`).
+
+## 6. Codex 봇 관측 — 이번 세션 4 PR 전부 자동 리뷰
+
+| PR | 오픈 | 첫 리뷰 | 재리뷰 응답 |
+|---|---|---|---|
+| pleiades#65 | 00:35Z | 00:38Z(3분) | `@codex review` 마다 3~4분 · 8회 |
+| myFinance#496 | 01:53Z | 01:56Z(3분) | — |
+| myFitness#375 | 01:53Z | 01:56Z(3분) | — |
+| myFinance#498(원본 `dev`) | 06:40Z | 06:43Z(3분) | — |
+
+1a-2(2026-09-11 · 대상 저장소 PR 30분 컷오프까지 미게시)와 다르다. 9-3 컷오프 절차는 유지.
+
+## 7. fit 원본 동기화 실행 기록 (5-1 원칙 3 첫 적용)
+
+`_workspace/62/backup/` — `absent-before-sync.txt` 0줄 · `fit-harness-pre-sync.tar` 22016 B(`.claude/rules/workflow.md` 1항목) · 사전 md5 `1560173fc55cc1db4310287a7c265da9`. 동기화 후 worktree 판과 `diff -q` 동일 · `git status -s` 0(ignored) · 브랜치 `main` 유지. 명령은 `_workspace/62/04_operator_rollback.md` §3-1.
