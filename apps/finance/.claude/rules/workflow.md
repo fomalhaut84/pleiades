@@ -196,14 +196,20 @@ mcp__codex-cli__codex 호출:
 - fullAuto: true
 - workingDirectory: <repo path>
 - resetSession: true
-- model 파라미터는 생략 (기본 model 미지원 오류 시 지정 필요 — 예: "gpt-4o")
+- model 파라미터는 생략 (기본 model 미지원 오류 시 지정 필요 — 지원 모델은 아래 참조)
 ```
+
+**지원 모델 출처:** `${CODEX_HOME:-~/.codex}/models_cache.json`(`CODEX_HOME` 이 설정된 환경이면 그 아래 · myFitness#375 Codex P2) 에서 `"visibility": "list"` 인 `slug` 중에서 고른다(`hide` 항목 `codex-auto-review` 는 자동 리뷰 전용 — 제외). 로컬 파일이라 쿼터 소비 없음. 실측 2026-09-14(codex-cli 0.142.4 · 캐시 `fetched_at` 2026-07-02 — etag 로 갱신되므로 바뀌었을 수 있다): `gpt-5.5` · `gpt-5.4` · `gpt-5.4-mini`. **`gpt-4o` 는 목록에 없다.**
 
 품질은 유사하지만 model/quota 이슈 잦음. 실패 시 pr-review-toolkit 으로 폴백. 에러가 나면 종류를 가른다 — `"model not supported when using Codex with a ChatGPT account"` 는 **model 미지원**이므로 위 `model` 파라미터를 지원 모델로 지정해 재시도하고, usage limit·rate limit 계열 메시지가 **쿼터 초과**이므로 사용자에게 확인한다(쿼터는 GitHub Codex bot 과 공유된다).
 
 > **정정 (2026-09-11 · pleiades#51 · 미러 fomalhaut84/myFinance#494).** 이전 문장은 *"model not supported…" 형태면 대개 쿼터 초과*라 적어 바로 위 파라미터 줄(*"기본 model 미지원 오류 시 지정 필요"*)과 모순됐다 —
 > 운영자가 `model` 지정 대신 쿼터 회복을 기다리게 된다. myFitness#373(pleiades#42) Codex P2 가 fit 에서 잡았고, 이 오귀인은 fin `e228c81` 에서 처음 들어와 `4226941` 의 8-4 재구조화 때 현재 문장으로 옮겨진 것이라 fin 에도 같은 결함이 있었다.
 > fit 머지본 문안으로 맞췄다. fin 8절에는 8-5·8-6 이 없다 — 이 정정은 문장 1개뿐이고 8절 대칭화는 하지 않는다. 되돌리기: 즉시. 원 PR 은 myFinance#493(`integration/pleiades`) — 그 브랜치는 `dev` 로 머지되지 않으므로 서비스 `dev` 에 같은 정정을 미러한다(004 Q43).
+
+> **정정 (2026-09-14 · pleiades#62 · 미러 fomalhaut84/myFinance#497).** 이전 예시 `"gpt-4o"` 는 ChatGPT 인증 Codex 가 지원하지 않는 모델이라
+> *"model 미지원이면 지원 모델로 지정해 재시도"* 안내를 따라도 같은 오류가 났다. 하드코딩 예시를 빼고 로컬 모델 캐시(쿼터 소비 없음)를 출처로 바꿨다 — 실측값은 날짜·버전과 함께. 되돌리기: 즉시.
+> 원 PR: fomalhaut84/myFinance#496(`integration/pleiades` · 모드 I) — 이 미러는 서비스 `dev` 에 같은 문장을 옮긴 것이다(모드 S).
 
 ### 9. PR 생성
 ```bash
