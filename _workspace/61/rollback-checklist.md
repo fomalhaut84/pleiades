@@ -56,11 +56,13 @@ npm run build && pm2 restart <app>                           # 배포됐던 변�
 **동기화 시점에 해 둘 것** (안 해 두면 롤백이 불가능한 경우가 있다):
 
 ```bash
-mkdir -p ~/workspace/pleiades/_workspace/<주제>/backup            # gitignored (_workspace/**/backup/) · 세션 밖 — 스크래치 사본은 #42 에서 소멸
-tar -C ~/workspace/myFitness -cf ~/workspace/pleiades/_workspace/<주제>/backup/fit-harness-pre-sync.tar <paths>
+B=~/workspace/pleiades/_workspace/<주제>/backup; mkdir -p "$B"   # gitignored (_workspace/**/backup/) · 세션 밖 — 스크래치 사본은 #42 에서 소멸
+# 1) 원본에 없는 경로 목록이 먼저 — tar 는 없는 경로에 "Cannot stat" exit 2 로 실패한다 (8회차 P2)
 git -C ~/workspace/myFitness diff --no-renames --name-only --diff-filter=A <sha>^ <sha> -- <paths> \
-  | while read -r p; do test -e ~/workspace/myFitness/"$p" || echo "$p"; done \
-  > ~/workspace/pleiades/_workspace/<주제>/backup/absent-before-sync.txt
+  | while read -r p; do test -e ~/workspace/myFitness/"$p" || echo "$p"; done > "$B/absent-before-sync.txt"
+# 2) 사전 사본은 지금 원본에 존재하는 경로만
+for p in <paths>; do test -e ~/workspace/myFitness/"$p" && echo "$p"; done \
+  | tar -C ~/workspace/myFitness -cf "$B/fit-harness-pre-sync.tar" -T -
 ```
 
 - `--no-renames` 필수 — rename 은 `R` 로 분류돼 `A` 에서 빠진다 (fit `f2f27ed` 실측: A 1 → 11 · 4회차 P2)
@@ -109,3 +111,4 @@ fit 은 3-1 과 **별개로** 필요하다 — archive 는 ignored 원본만 되
 | 7 | P1 | 릴리즈된 모드 S 는 `dev` revert 로 안 돌아온다 | §0 |
 | 7 | P2 | β2 병행 인스턴스 재시작 | §0 |
 | 7 | P1 | 미러는 fin 만이 아니다 | §3-2 |
+| 8 | P2 | 사전 사본 tar 에 원본 부재 경로를 주면 `Cannot stat` 실패 — 목록 먼저, 존재 경로만 tar | §3-1 |
