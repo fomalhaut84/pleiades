@@ -2,7 +2,7 @@
  * Phase 37-B (#445) — CSV export 포맷 pure 함수 회귀 테스트.
  *
  * 테스트 대상:
- *   - formatKstDateTime: UTC → KST 벽시계 문자열
+ *   - formatKstDateTimeForCsv: UTC → KST 벽시계 문자열
  *   - stripHtmlForCsv: HTML 태그 제거
  *   - summarizeContext: kind 별 필드 요약 + retriedFrom 마커
  *   - toCsvRow: Prisma row → 헤더 순서와 정합
@@ -12,7 +12,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  formatKstDateTime,
+  formatKstDateTimeForCsv,
   stripHtmlForCsv,
   messageForCsv,
   summarizeContext,
@@ -22,30 +22,30 @@ import {
 } from '../csv-format'
 import { toCSV } from '@/lib/csv'
 
-describe('formatKstDateTime', () => {
+describe('formatKstDateTimeForCsv', () => {
   it('UTC 00:00 → KST 09:00 (같은 날)', () => {
     // 2026-07-08 00:00 UTC = 2026-07-08 09:00 KST
-    expect(formatKstDateTime('2026-07-08T00:00:00Z')).toBe('2026-07-08 09:00:00')
+    expect(formatKstDateTimeForCsv('2026-07-08T00:00:00Z')).toBe('2026-07-08 09:00:00')
   })
 
   it('UTC 15:00 → KST 다음날 00:00 (달 넘김 없음)', () => {
-    expect(formatKstDateTime('2026-07-08T15:00:00Z')).toBe('2026-07-09 00:00:00')
+    expect(formatKstDateTimeForCsv('2026-07-08T15:00:00Z')).toBe('2026-07-09 00:00:00')
   })
 
   it('Date 인스턴스도 처리', () => {
     const d = new Date('2026-07-08T00:00:00Z')
-    expect(formatKstDateTime(d)).toBe('2026-07-08 09:00:00')
+    expect(formatKstDateTimeForCsv(d)).toBe('2026-07-08 09:00:00')
   })
 
   it('잘못된 값은 빈 문자열', () => {
-    expect(formatKstDateTime('not-a-date')).toBe('')
+    expect(formatKstDateTimeForCsv('not-a-date')).toBe('')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(formatKstDateTime(new Date('invalid') as any)).toBe('')
+    expect(formatKstDateTimeForCsv(new Date('invalid') as any)).toBe('')
   })
 
   it('zero-pad — 한자리 시/분/초를 항상 2자리로', () => {
     // UTC 00:00:05 → KST 09:00:05
-    expect(formatKstDateTime('2026-01-02T00:00:05Z')).toBe('2026-01-02 09:00:05')
+    expect(formatKstDateTimeForCsv('2026-01-02T00:00:05Z')).toBe('2026-01-02 09:00:05')
   })
 })
 

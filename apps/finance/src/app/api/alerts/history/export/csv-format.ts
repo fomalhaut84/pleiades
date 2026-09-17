@@ -5,7 +5,7 @@
  * `@/lib/csv` 의 `toCSV` 가 RFC 4180 escape + BOM + 수식 주입 방어를 이미 담당.
  */
 
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000
+import { KST_OFFSET_MS } from '@/lib/kst-date'
 
 export const HISTORY_CSV_HEADERS = [
   'firedAt (KST)',
@@ -21,10 +21,13 @@ export const HISTORY_CSV_HEADERS = [
 ] as const
 
 /**
- * ISO 시각을 KST YYYY-MM-DD HH:mm:ss 형식으로 변환.
+ * ISO 시각을 KST `YYYY-MM-DD HH:mm:ss` 형식으로 변환 (CSV 전용).
  * 스프레드시트에서 그대로 sort 가능하도록 zero-pad + colon-separated.
+ *
+ * `@/lib/kst-date` 의 `formatKstDateTime` (`MM-DD HH:mm KST`) 과 용도·포맷이 달라
+ * 이름을 분리한다 (#499 사전 리뷰 P0 — 동명이형 혼동 방지).
  */
-export function formatKstDateTime(iso: string | Date): string {
+export function formatKstDateTimeForCsv(iso: string | Date): string {
   const d = typeof iso === 'string' ? new Date(iso) : iso
   if (Number.isNaN(d.getTime())) return ''
   const kst = new Date(d.getTime() + KST_OFFSET_MS)
@@ -135,7 +138,7 @@ export interface HistoryCsvSourceRow {
 /** Prisma row → CSV row (string[]). */
 export function toCsvRow(row: HistoryCsvSourceRow): string[] {
   return [
-    formatKstDateTime(row.firedAt),
+    formatKstDateTimeForCsv(row.firedAt),
     row.kind,
     row.ticker ?? '',
     row.price != null ? String(row.price) : '',
@@ -153,8 +156,8 @@ export function toCsvRow(row: HistoryCsvSourceRow): string[] {
  * 예: alert-history_2026-07-01_2026-07-14.csv
  */
 export function buildExportFilename(from: Date, to: Date): string {
-  const fromKey = formatKstDateTime(from).slice(0, 10)
-  const toKey = formatKstDateTime(to).slice(0, 10)
+  const fromKey = formatKstDateTimeForCsv(from).slice(0, 10)
+  const toKey = formatKstDateTimeForCsv(to).slice(0, 10)
   return `alert-history_${fromKey}_${toKey}.csv`
 }
 

@@ -12,6 +12,17 @@ export function formatUSD(amount: number): string {
   return `$${amount.toFixed(2)}`
 }
 
+/**
+ * 지수 포인트 포맷: 6717.28 → "6,717.28" (#499)
+ * 지수는 통화가 아니므로 기호/`원` 을 붙이지 않는다.
+ */
+export function formatIndexPoint(value: number): string {
+  return value.toLocaleString('ko-KR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
 /** 기본 환율 (USD→KRW). avgFxRate가 없는 경우 폴백용. */
 export const DEFAULT_FX_RATE_USD_KRW = 1450
 

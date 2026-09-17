@@ -175,6 +175,10 @@ async function fetchAndReplyWithFallback(ctx: Context, ticker: string): Promise<
         market: cached.market,
         change: cached.change,
         changePercent: cached.changePercent,
+        // 캐시는 시세가 찍힌 시각을 보관하지 않는다 (updatedAt = 캐시 기록 시각).
+        // 거짓 기준 시각을 만들지 않고 null — 캐시 시각은 아래 suffix 로 안내 (#499).
+        marketTime: null,
+        marketState: null,
       }, `⚠️ 실시간 조회 실패, 캐시 데이터 표시 (${updatedAt})`)
     } else {
       await ctx.reply(`⚠️ 주가 조회 중 일시적 오류가 발생했습니다. 잠시 후 다시 시도해주세요.`)

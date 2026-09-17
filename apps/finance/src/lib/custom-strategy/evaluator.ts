@@ -310,6 +310,26 @@ export function collectCrossTickers(
 }
 
 /**
+ * 주가 갱신 cron 이 유지해야 하는 활성 전략 관련 티커 = 전략 자기 티커 + cross_ticker 참조.
+ *
+ * Codex #501 P2: checkCustomStrategies() 는 자기 티커 시세를 PriceCache 에서 읽는데
+ * refreshPrices() 가 cross 티커만 갱신 대상에 넣어, 보유·관심종목이 아닌 티커의
+ * 전략은 stale 캐시로 평가될 수 있었다. 자기 티커는 checkCustomStrategies 의
+ * priceMap 조회 키와 같아야 하므로 trim 만 하고 대소문자는 보존한다.
+ */
+export function collectStrategyRefreshTickers(
+  strategies: Array<{ ticker: string; conditions: unknown }>,
+): Set<string> {
+  const out = new Set<string>()
+  for (const s of strategies) {
+    const own = s.ticker.trim()
+    if (own) out.add(own)
+  }
+  for (const t of collectCrossTickers(strategies)) out.add(t)
+  return out
+}
+
+/**
  * Phase 38-A (#448) — TA 리포트가 필요한 크로스 티커 metric 여부.
  */
 const CROSS_TICKER_TA_METRICS = new Set<string>(['rsi', 'macd_signal', 'sma_cross', 'bb_position'])

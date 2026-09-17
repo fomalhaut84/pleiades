@@ -384,9 +384,9 @@ server.tool(
 
 server.tool(
   'get_prices',
-  '보유 종목 또는 지정 종목의 현재 시세',
+  '보유 종목 또는 지정 종목의 현재 시세 (지수도 지원: ^KS11, ^KQ11, ^GSPC, ^IXIC, ^DJI). 시세 기준 시각/장 상태 포함',
   {
-    tickers: z.array(z.string()).max(100).optional().describe('티커 목록 (미지정 시 전체 보유 종목, 최대 100개)'),
+    tickers: z.array(z.string()).max(100).optional().describe('티커 목록 (미지정 시 전체 보유 종목, 최대 100개). 지수 티커 (^KS11 등) 도 조회 가능'),
   },
   async (args) => getPrices(args)
 )

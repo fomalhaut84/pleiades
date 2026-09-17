@@ -6,6 +6,7 @@ import {
   requiresTAForCrossTickers,
   daysUntilEarnings,
   collectCrossTickers,
+  collectStrategyRefreshTickers,
   buildCrossTickerSnapshot,
   mapCrossTickerBBPosition,
   type MarketSnapshot,
@@ -471,6 +472,28 @@ describe('collectCrossTickers (pure, Phase 34-B / #420)', () => {
 
   it('빈 입력 → 빈 Set', () => {
     expect(collectCrossTickers([])).toEqual(new Set())
+  })
+})
+
+describe('collectStrategyRefreshTickers (Codex #501 P2 / #499)', () => {
+  it('자기 티커 + cross_ticker 를 합친다 — 자기 티커는 대소문자 보존 (priceMap 키)', () => {
+    const strategies = [
+      { ticker: '^DJI', conditions: [{ type: 'price', operator: '<', value: 40000 }] },
+      { ticker: ' soxl ', conditions: [{ type: 'cross_ticker', crossTicker: 'vix', metric: 'price' }] },
+    ]
+    expect(collectStrategyRefreshTickers(strategies)).toEqual(new Set(['^DJI', 'soxl', 'VIX']))
+  })
+
+  it('빈 티커는 제외, cross 가 없는 전략도 자기 티커는 포함', () => {
+    const strategies = [
+      { ticker: '   ', conditions: [] },
+      { ticker: 'QQQ', conditions: 'not-an-array' },
+    ]
+    expect(collectStrategyRefreshTickers(strategies)).toEqual(new Set(['QQQ']))
+  })
+
+  it('빈 입력 → 빈 Set', () => {
+    expect(collectStrategyRefreshTickers([])).toEqual(new Set())
   })
 })
 
