@@ -17,7 +17,7 @@
 import type { Condition, WeekdayCode } from './types'
 import { TIME_WINDOW_RE } from './types'
 import type { TAReport, BBPosition } from '@/lib/ta/types'
-import { kstDayDiff } from '@/lib/kst-date'
+import { kstDayDiff, KST_OFFSET_MS } from '@/lib/kst-date'
 
 export interface PriceSnapshot {
   price: number
@@ -103,13 +103,13 @@ function compareNumeric(actual: number, op: string, expected: number): boolean {
 
 /** UTC Date → KST 시각 (분 단위 0~1439) */
 function kstMinutes(now: Date): number {
-  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+  const kst = new Date(now.getTime() + KST_OFFSET_MS)
   return kst.getUTCHours() * 60 + kst.getUTCMinutes()
 }
 
 /** UTC Date → KST 요일 코드 */
 function kstWeekday(now: Date): WeekdayCode {
-  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+  const kst = new Date(now.getTime() + KST_OFFSET_MS)
   const dow = kst.getUTCDay() // 0=Sun, 1=Mon, ...
   const codes: WeekdayCode[] = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
   return codes[dow]

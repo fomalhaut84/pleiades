@@ -18,6 +18,7 @@ import {
   profitEmoji,
 } from '@/bot/utils/formatter'
 import { sendHtml } from '@/bot/utils/telegram'
+import { KST_OFFSET_MS } from '@/lib/kst-date'
 
 export async function sendDailySummary(chatIds: number[]): Promise<void> {
   const bot = getBot()
@@ -44,7 +45,7 @@ export async function sendDailySummary(chatIds: number[]): Promise<void> {
   const priceMap = new Map(prices.map((p) => [p.ticker, p]))
 
   // 전일 스냅샷 조회 (D-1 변동 계산용)
-  const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  const kstNow = new Date(Date.now() + KST_OFFSET_MS)
   const yesterday = new Date(Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate() - 1))
   const prevSnapshots = await prisma.portfolioSnapshot.findMany({
     where: { snapshotDate: yesterday },

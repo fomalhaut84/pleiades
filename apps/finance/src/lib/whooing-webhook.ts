@@ -6,6 +6,7 @@
  */
 
 import { prisma } from './prisma'
+import { KST_OFFSET_MS } from './kst-date'
 
 interface WhooingTransactionData {
   amount: number
@@ -60,7 +61,7 @@ export async function sendToWhooing(data: WhooingTransactionData): Promise<void>
 
 function formatWhooingDate(date: Date): string {
   // KST (UTC+9) 기준 날짜 — 서버 타임존 무관하게 일관된 결과
-  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000)
+  const kst = new Date(date.getTime() + KST_OFFSET_MS)
   const y = kst.getUTCFullYear()
   const m = String(kst.getUTCMonth() + 1).padStart(2, '0')
   const d = String(kst.getUTCDate()).padStart(2, '0')

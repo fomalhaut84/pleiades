@@ -36,6 +36,8 @@ import {
   validateCondition,
   type Condition,
 } from '@/lib/custom-strategy/types'
+import { KST_OFFSET_MS } from '@/lib/kst-date'
+import { formatQuoteValue } from '@/lib/format'
 
 const CUSTOM_STRATEGY_ALERTS_KEY = 'custom_strategy_alerts'
 const CUSTOM_STRATEGY_ALERTS_LABEL = '커스텀 전략 알림 (on/off)'
@@ -70,10 +72,35 @@ async function isCustomStrategyAlertsEnabled(): Promise<boolean> {
   return config.value.toLowerCase() !== 'off'
 }
 
+/** 알림 본문의 현재가 표기용 시세 행. */
+export interface StrategyPriceRow {
+  price: number
+  currency: string
+}
+
+/**
+ * 전략 알림의 현재가 표기 (#500).
+ *
+ * 지수 (`^KS11`) 는 통화 단위가 아니라 포인트다. 커스텀 전략의 cross_ticker 는
+ * 지수를 1급으로 다루므로 (`^KS11` 이 -2% 면 …) 여기서 `6,717.28 KRW` 로 찍히면
+ * 알림 본문이 그대로 오보가 된다. 지수 판별은 `@/lib/format` 공용 규칙.
+ */
+export function formatStrategyPriceLabel(
+  ticker: string,
+  priceRow: StrategyPriceRow | null | undefined,
+): string {
+  if (!priceRow) return '(가격 미확인)'
+  return formatQuoteValue(
+    ticker,
+    priceRow.price,
+    (v) => `${v.toLocaleString('ko-KR')} ${priceRow.currency}`,
+  )
+}
+
 /** KST 오늘 date string (YYYY-MM-DD) */
 function todayKST(): string {
   const now = new Date()
-  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+  const kst = new Date(now.getTime() + KST_OFFSET_MS)
   return kst.toISOString().slice(0, 10)
 }
 
@@ -90,10 +117,10 @@ function shouldFire(
 
   if (frequency === 'daily') {
     // KST 기준 같은 날이면 skip
-    const last = new Date(lastTriggeredAt.getTime() + 9 * 60 * 60 * 1000)
+    const last = new Date(lastTriggeredAt.getTime() + KST_OFFSET_MS)
       .toISOString()
       .slice(0, 10)
-    const today = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+    const today = new Date(now.getTime() + KST_OFFSET_MS)
       .toISOString()
       .slice(0, 10)
     return last !== today
@@ -239,9 +266,7 @@ async function runScan(chatIds: number[]): Promise<void> {
       .map((p) => `  ${p.result ? '✅' : '❌'} ${conditionToString(p.condition)}`)
       .join('\n')
 
-    const priceLabel = priceRow
-      ? `${priceRow.price.toLocaleString('ko-KR')} ${priceRow.currency}`
-      : '(가격 미확인)'
+    const priceLabel = formatStrategyPriceLabel(s.ticker, priceRow)
 
     const alertBlock =
       `🎯 <b>${escapeHtml(s.name)}</b> (${escapeHtml(s.ticker)})\n` +

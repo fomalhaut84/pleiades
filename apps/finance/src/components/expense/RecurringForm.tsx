@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useToast } from '@/components/ui/Toast'
 import IconButton from '@/components/ui/IconButton'
 import type { RecurringRow } from './RecurringTable'
+import { KST_OFFSET_MS } from '@/lib/kst-date'
 
 interface CategoryOption {
   id: string
@@ -45,7 +46,7 @@ export default function RecurringForm({ mode, item, prefill, categories, onClose
   const [monthOfYear, setMonthOfYear] = useState(item?.monthOfYear ?? 1)
   const [nextRunAt, setNextRunAt] = useState(() => {
     if (item?.nextRunAt) return item.nextRunAt.slice(0, 10)
-    const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+    const kst = new Date(Date.now() + KST_OFFSET_MS)
     return kst.toISOString().slice(0, 10)
   })
 

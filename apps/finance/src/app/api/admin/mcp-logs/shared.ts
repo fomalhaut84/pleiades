@@ -6,10 +6,11 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { LEVEL_ORDER, KNOWN_MSGS } from '@/lib/mcp-logs/constants'
 import { parseLines, applyFilter, tailN, type Filter, type LogEntry } from '@/lib/mcp-logs/parser'
+import { KST_OFFSET_MS } from '@/lib/kst-date'
 
 /** KST 오늘 (YYYY-MM-DD) */
 export function todayKst(now: number = Date.now()): string {
-  const kst = new Date(now + 9 * 60 * 60 * 1000)
+  const kst = new Date(now + KST_OFFSET_MS)
   return kst.toISOString().slice(0, 10)
 }
 

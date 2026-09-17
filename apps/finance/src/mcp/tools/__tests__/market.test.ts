@@ -241,3 +241,80 @@ describe('getPrices — 보유종목 전체 분기 갱신 시각 KST (#499)', ()
     expect(text).not.toContain('2026.09.17')
   })
 })
+
+describe('getPrices — 장 상태 라벨 시장별 분기 (#500)', () => {
+  it('미국 종목의 POST 는 애프터마켓이 진행 중이므로 (시간외)', async () => {
+    vi.mocked(fetchQuote).mockResolvedValueOnce({
+      ticker: 'AAPL',
+      displayName: 'Apple Inc.',
+      price: 252.82,
+      currency: 'USD',
+      market: 'US',
+      change: 1.1,
+      changePercent: 0.44,
+      marketTime: new Date('2026-09-16T20:00:00Z'),
+      marketState: 'POST',
+    })
+
+    const text = (await getPrices({ tickers: ['AAPL'] })).content[0].text
+
+    expect(text).toContain('(시간외)')
+    expect(text).not.toContain('장 마감 후')
+  })
+
+  it('POSTPOST 도 미국 종목이면 (시간외) — raw exchange 코드는 정규화 누락 시 방어층', async () => {
+    vi.mocked(fetchQuote).mockResolvedValueOnce({
+      ticker: 'AAPL',
+      displayName: 'Apple Inc.',
+      price: 252.82,
+      currency: 'USD',
+      // 현재 호출부는 정규화된 'US' 를 넘긴다. 호출부가 야후 raw 코드를 넘기도록
+      // 바뀌어도 라벨이 조용히 틀리지 않는지 확인하는 방어층 테스트.
+      market: 'NMS',
+      change: null,
+      changePercent: null,
+      marketTime: new Date('2026-09-17T01:00:00Z'),
+      marketState: 'POSTPOST',
+    })
+
+    const text = (await getPrices({ tickers: ['AAPL'] })).content[0].text
+
+    expect(text).toContain('(시간외)')
+  })
+
+  it('한국 종목의 POST 는 마감 후 거래가 없으므로 (장 마감 후)', async () => {
+    vi.mocked(fetchQuote).mockResolvedValueOnce(kospiQuote({ marketState: 'POST' }))
+
+    const text = (await getPrices({ tickers: ['^KS11'] })).content[0].text
+
+    expect(text).toContain('(장 마감 후)')
+    expect(text).not.toContain('시간외')
+  })
+
+  it('market 이 미지정이면 기본 라벨 (장 마감 후)', async () => {
+    vi.mocked(fetchQuote).mockResolvedValueOnce(kospiQuote({ market: '', marketState: 'POST' }))
+
+    const text = (await getPrices({ tickers: ['^KS11'] })).content[0].text
+
+    expect(text).toContain('(장 마감 후)')
+  })
+
+  it('PRE 계열은 시장과 무관하게 동일 라벨', async () => {
+    vi.mocked(fetchQuote)
+      .mockResolvedValueOnce(kospiQuote({ marketState: 'PREPRE' }))
+      .mockResolvedValueOnce(
+        kospiQuote({
+          ticker: 'AAPL',
+          displayName: 'Apple Inc.',
+          currency: 'USD',
+          market: 'US',
+          marketTime: new Date('2026-09-16T20:00:00Z'),
+          marketState: 'PREPRE',
+        }),
+      )
+
+    const text = (await getPrices({ tickers: ['^KS11', 'AAPL'] })).content[0].text
+
+    expect(text.match(/\(장 시작 전\)/g)).toHaveLength(2)
+  })
+})

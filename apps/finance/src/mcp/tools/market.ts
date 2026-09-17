@@ -36,7 +36,7 @@ export async function getPrices(args: { tickers?: string[] }) {
             : ''
           entries.push({
             text: `- ${quote.displayName} (${ticker}): ${priceStr}${changeStr}`,
-            stamp: formatMarketStamp(quote.marketTime, quote.marketState),
+            stamp: formatMarketStamp(quote.marketTime, quote.marketState, quote.market),
           })
         } else {
           // 실시간 실패 → PriceCache fallback.

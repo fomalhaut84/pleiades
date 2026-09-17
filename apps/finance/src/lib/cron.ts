@@ -9,6 +9,7 @@ import { checkCustomStrategies } from '@/bot/notifications/custom-strategy-alert
 import { isKRMarketOpen, isUSMarketOpen } from './market-hours'
 import { calculateNextRunAt, type Frequency } from './recurring-utils'
 import { sendToWhooing } from './whooing-webhook'
+import { KST_OFFSET_MS } from './kst-date'
 
 function getAllowedChatIds(): number[] {
   return (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
@@ -300,7 +301,7 @@ export function scheduleVestingStatusUpdate(): void {
     () => {
       void guard(async () => {
         // KST 기준 오늘 자정 (23:59:59까지 포함하도록 내일 0시)
-        const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+        const kst = new Date(Date.now() + KST_OFFSET_MS)
         const todayEnd = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + 1))
 
         // pending → exercisable (vestingDate < 내일 0시 UTC = 오늘까지)

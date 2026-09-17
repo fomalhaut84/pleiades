@@ -1,3 +1,5 @@
+import { isIndexTicker } from './price-fetcher-utils'
+
 /**
  * 원화 금액 포맷: 1234567 → "1,234,567원"
  */
@@ -21,6 +23,24 @@ export function formatIndexPoint(value: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
+}
+
+/**
+ * 시세 값 표기 규칙 (#499 → #500 공용화).
+ *
+ * 지수 티커 (`^KS11`, `^GSPC`) 는 통화 단위가 아니라 포인트이므로 통화 기호/`원` 을
+ * 붙이지 않는다. 이 분기를 MCP·봇이 각자 구현하면 한쪽만 고쳐져 표기가 갈리므로
+ * (실제로 #499 가 MCP 만 고쳐 `/주가 ^KS11` 이 `₩6,717` 로 남았다) 규칙은 여기 하나만 둔다.
+ *
+ * 통화 표기 스타일은 호출자마다 다르다 (MCP `1,234원` · 봇 `₩1,234`). 통일하면 봇 UI 가
+ * 통째로 바뀌므로 통화 포맷터를 주입받는다.
+ */
+export function formatQuoteValue(
+  ticker: string,
+  value: number,
+  formatCurrencyValue: (value: number) => string,
+): string {
+  return isIndexTicker(ticker) ? formatIndexPoint(value) : formatCurrencyValue(value)
 }
 
 /** 기본 환율 (USD→KRW). avgFxRate가 없는 경우 폴백용. */

@@ -3,6 +3,8 @@
  * `AlertHistoryClient.tsx` 로 분리해 테스트 편이.
  */
 
+import { KST_OFFSET_MS } from '@/lib/kst-date'
+
 /** UTC now 로부터 N일 전 시각 반환 (ISO 8601) */
 export function periodFromISO(days: number, now: number = Date.now()): string {
   const d = new Date(now - days * 24 * 60 * 60 * 1000)
@@ -12,7 +14,7 @@ export function periodFromISO(days: number, now: number = Date.now()): string {
 /** ISO 8601 → "MM-DD HH:mm" (KST 기준) */
 export function formatFiredAt(iso: string): string {
   const d = new Date(iso)
-  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
+  const kst = new Date(d.getTime() + KST_OFFSET_MS)
   const s = kst.toISOString()
   return `${s.slice(5, 10)} ${s.slice(11, 16)}`
 }

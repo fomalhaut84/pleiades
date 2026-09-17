@@ -17,6 +17,7 @@ import {
   type AlertEventInput,
 } from './alert-history'
 import { buildPriceContext, buildFxContext } from '@/lib/alert-history/context'
+import { KST_OFFSET_MS } from '@/lib/kst-date'
 
 const WATCHLIST_MHO_KEY = 'watchlist_market_hours_only'
 const WATCHLIST_MHO_LABEL = '관심종목 매수 알림 — 장중에만'
@@ -58,7 +59,7 @@ const sentToday = new Map<string, string>()
 
 function getTodayKST(): string {
   const now = new Date()
-  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+  const kst = new Date(now.getTime() + KST_OFFSET_MS)
   return kst.toISOString().slice(0, 10)
 }
 

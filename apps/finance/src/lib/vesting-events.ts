@@ -4,6 +4,8 @@
  * 모든 날짜는 KST 기준 YYYY-MM-DD 캘린더 문자열로 저장.
  */
 
+import { KST_OFFSET_MS } from './kst-date'
+
 export type VestingEventType = 'RSU' | 'OPTION'
 export type VestingEventStatus =
   | 'pending'
@@ -53,8 +55,6 @@ interface OptionSource {
     status: string
   }>
 }
-
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000
 
 /** Date/문자열을 KST 캘린더 날짜 (YYYY-MM-DD) 로 변환. */
 export function toKSTDateString(input: Date | string): string {

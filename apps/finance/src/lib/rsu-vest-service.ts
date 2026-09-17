@@ -12,6 +12,7 @@
 import YahooFinance from 'yahoo-finance2'
 import { prisma } from '@/lib/prisma'
 import { recalcHolding, calcTotalKRW } from '@/lib/trade-utils'
+import { KST_OFFSET_MS } from '@/lib/kst-date'
 
 const RSU_TICKER = '035720.KS'
 const RSU_DISPLAY_NAME = '카카오'
@@ -56,7 +57,6 @@ const MARKET_CLOSE_MIN_KST_INCLUSIVE = 35 // 15:35 KST 부터 commit 허용
  * - vestingDate 가 미래: 별도 NOT_YET_VESTED 분기에서 차단됨 (호출 전 검사)
  */
 function isVestPriceSettled(vestingDate: Date, nowMs: number): boolean {
-  const KST_OFFSET_MS = 9 * 60 * 60 * 1000
   const nowKst = new Date(nowMs + KST_OFFSET_MS)
   const vestKst = new Date(vestingDate.getTime() + KST_OFFSET_MS)
   const nowYmd = `${nowKst.getUTCFullYear()}-${nowKst.getUTCMonth()}-${nowKst.getUTCDate()}`

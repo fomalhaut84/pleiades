@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { sendToWhooing } from '@/lib/whooing-webhook'
 import { toolResult, toolError, formatMoney } from '../utils'
+import { KST_OFFSET_MS } from '@/lib/kst-date'
 
 /**
  * get_spending_summary: 월별 소비/수입 요약 (DB 집계)
@@ -91,7 +92,7 @@ export async function getTransactions(args: {
   try {
     const days = Math.min(args.days ?? 7, 365)
     // KST 기준 날짜 경계로 앵커 (자정 기준)
-    const now = new Date(Date.now() + 9 * 60 * 60 * 1000)
+    const now = new Date(Date.now() + KST_OFFSET_MS)
     const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - days))
 
     // 카테고리 ID 후보 수집 (category + type 교집합)

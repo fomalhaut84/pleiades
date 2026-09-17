@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { formatKRW, formatUSD, formatDate } from '@/lib/format'
 import type { StockOptionOverview } from '@/lib/stock-option-utils'
 import Notice from '@/components/ui/Notice'
+import { KST_OFFSET_MS } from '@/lib/kst-date'
 
 interface StockOptionDashboardProps {
   overview: StockOptionOverview
@@ -165,7 +166,7 @@ export default function StockOptionDashboard({ overview, currentPrice, currency 
                         </button>
                       )}
                       {v.status === 'pending' && (() => {
-                        const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+                        const kst = new Date(Date.now() + KST_OFFSET_MS)
                         const todayEnd = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + 1))
                         return new Date(v.vestingDate) < todayEnd
                       })() && (

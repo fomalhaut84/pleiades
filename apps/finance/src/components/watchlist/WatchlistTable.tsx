@@ -1,10 +1,17 @@
 'use client'
 
-import { formatKRW, formatUSD } from '@/lib/format'
+import { formatKRW, formatUSD, formatQuoteValue } from '@/lib/format'
 import IconButton from '@/components/ui/IconButton'
 
-function formatPrice(value: number, market: string): string {
-  return market === 'US' ? formatUSD(value) : formatKRW(value)
+/**
+ * 관심종목 가격 표기 (#500).
+ *
+ * 지수 (`^KS11`) 는 통화가 아니라 포인트다 — 관심종목으로 등록 가능하고
+ * 커스텀 전략의 cross_ticker 로도 유입되므로 목표가/매수구간까지 같은 규칙을 쓴다.
+ * 지수 판별은 `@/lib/format` 공용 규칙 (봇 `주가`·MCP `get_prices` 와 동일).
+ */
+export function formatPrice(ticker: string, value: number, market: string): string {
+  return formatQuoteValue(ticker, value, (v) => (market === 'US' ? formatUSD(v) : formatKRW(v)))
 }
 
 export interface WatchlistRow {
@@ -87,17 +94,17 @@ export default function WatchlistTable({ items, onEdit, onDelete }: WatchlistTab
                     </div>
                     <div className="text-right shrink-0">
                       <div className={`text-[13px] font-semibold tabular-nums ${highlight ? 'text-emerald-400' : 'text-bright'}`}>
-                        {item.currentPrice !== null ? formatPrice(item.currentPrice, item.market) : '-'}
+                        {item.currentPrice !== null ? formatPrice(item.ticker, item.currentPrice, item.market) : '-'}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-[11px] text-sub tabular-nums min-w-0 flex flex-wrap gap-x-3 gap-y-0.5">
                       {item.targetBuy !== null && (
-                        <span>목표 {formatPrice(item.targetBuy, item.market)}</span>
+                        <span>목표 {formatPrice(item.ticker, item.targetBuy, item.market)}</span>
                       )}
                       {item.entryLow !== null && item.entryHigh !== null && (
-                        <span>구간 {formatPrice(item.entryLow, item.market)} ~ {formatPrice(item.entryHigh, item.market)}</span>
+                        <span>구간 {formatPrice(item.ticker, item.entryLow, item.market)} ~ {formatPrice(item.ticker, item.entryHigh, item.market)}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-0.5 shrink-0">
@@ -147,14 +154,14 @@ export default function WatchlistTable({ items, onEdit, onDelete }: WatchlistTab
                         </span>
                       </td>
                       <td className={`px-4 py-3 text-right font-semibold tabular-nums ${highlight ? 'text-emerald-400' : 'text-bright'}`}>
-                        {item.currentPrice !== null ? formatPrice(item.currentPrice, item.market) : '-'}
+                        {item.currentPrice !== null ? formatPrice(item.ticker, item.currentPrice, item.market) : '-'}
                       </td>
                       <td className="px-4 py-3 text-right text-sub tabular-nums">
-                        {item.targetBuy !== null ? formatPrice(item.targetBuy, item.market) : '-'}
+                        {item.targetBuy !== null ? formatPrice(item.ticker, item.targetBuy, item.market) : '-'}
                       </td>
                       <td className="px-4 py-3 text-right text-sub tabular-nums whitespace-nowrap">
                         {item.entryLow !== null && item.entryHigh !== null
-                          ? `${formatPrice(item.entryLow, item.market)} ~ ${formatPrice(item.entryHigh, item.market)}`
+                          ? `${formatPrice(item.ticker, item.entryLow, item.market)} ~ ${formatPrice(item.ticker, item.entryHigh, item.market)}`
                           : '-'}
                       </td>
                       <td className="px-4 py-3 text-sub max-w-[200px] truncate">

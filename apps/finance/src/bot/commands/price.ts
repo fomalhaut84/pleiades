@@ -2,20 +2,8 @@ import { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { fetchQuote, InvalidTickerError, searchYahooByName, type QuoteResult } from '@/lib/price-fetcher'
 import { searchKrxByName } from '@/lib/krx-stocks'
-import { formatUSD } from '../utils/formatter'
 import { replyHtml, escapeHtml, h } from '../utils/telegram'
-
-function formatChange(change: number, currency: string): string {
-  const sign = change >= 0 ? '+' : ''
-  if (currency === 'USD') return `${sign}${formatUSD(change)}`
-  if (currency === 'KRW') return `${sign}₩${Math.round(change).toLocaleString('ko-KR')}`
-  return `${sign}${change.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`
-}
-
-function formatChangePercent(changePercent: number): string {
-  const sign = changePercent >= 0 ? '+' : ''
-  return ` (${sign}${changePercent.toFixed(2)}%)`
-}
+import { buildQuoteMessage, formatChange, formatChangePercent } from './price-format'
 
 async function handlePrice(ctx: Context): Promise<void> {
   const text = ctx.message?.text ?? ''
@@ -203,25 +191,8 @@ async function fetchAndReply(ctx: Context, ticker: string): Promise<void> {
   }
 }
 
-function formatPrice(price: number, currency: string): string {
-  if (currency === 'USD') return formatUSD(price)
-  if (currency === 'KRW') return `₩${Math.round(price).toLocaleString('ko-KR')}`
-  return `${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`
-}
-
 async function replyQuote(ctx: Context, quote: QuoteResult, suffix?: string): Promise<void> {
-  const changeStr = quote.change != null ? formatChange(quote.change, quote.currency) : ''
-  const changePctStr = quote.changePercent != null ? formatChangePercent(quote.changePercent) : ''
-  const emoji = quote.changePercent != null ? (quote.changePercent >= 0 ? '🟢' : '🔴') : ''
-
-  const priceStr = formatPrice(quote.price, quote.currency)
-  const suffixLine = suffix ? `\n\n${suffix}` : ''
-
-  await replyHtml(ctx,
-    `📈 ${h.b(escapeHtml(quote.displayName))} (${escapeHtml(quote.ticker)})\n\n` +
-      `현재가: ${h.b(priceStr)} ${emoji}\n` +
-      `변동: ${changeStr}${changePctStr}${suffixLine}`
-  )
+  await replyHtml(ctx, buildQuoteMessage(quote, suffix))
 }
 
 async function handleFxRate(ctx: Context): Promise<void> {
@@ -234,7 +205,7 @@ async function handleFxRate(ctx: Context): Promise<void> {
     return
   }
 
-  const changeStr = fxData.change != null ? formatChange(fxData.change, 'KRW') : ''
+  const changeStr = fxData.change != null ? formatChange(fxData.ticker, fxData.change, 'KRW') : ''
   const changePctStr = fxData.changePercent != null ? formatChangePercent(fxData.changePercent) : ''
 
   const updatedAt = fxData.updatedAt.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
