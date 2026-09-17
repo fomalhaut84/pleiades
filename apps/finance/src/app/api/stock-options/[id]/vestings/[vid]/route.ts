@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { ok, fail, noContent } from '@/lib/api-response'
+import { KST_OFFSET_MS } from '@/lib/kst-date'
 
 interface RouteParams {
   params: Promise<{ id: string; vid: string }>
@@ -71,7 +72,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     // pending → exercisable: 베스팅일 도래 검증 (KST 일 단위)
     if (vesting.status === 'pending' && newStatus === 'exercisable') {
-      const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+      const kst = new Date(Date.now() + KST_OFFSET_MS)
       const todayEnd = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + 1))
       if (vesting.vestingDate >= todayEnd) {
         return fail('베스팅일이 아직 도래하지 않았습니다.', 400)

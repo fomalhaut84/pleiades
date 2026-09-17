@@ -1,7 +1,7 @@
 import { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { fetchQuote } from '@/lib/price-fetcher'
-import { formatKRWFull, formatUSD, formatPercent } from '../utils/formatter'
+import { formatWatchlistPriceInfo } from './price-format'
 import { replyHtml, escapeHtml, h } from '../utils/telegram'
 import { sanitizeError } from '../utils/error'
 
@@ -214,16 +214,7 @@ async function handleWatchlist(ctx: Context): Promise<void> {
       }
     }
 
-    let priceInfo = '시세 없음'
-    if (price) {
-      const priceStr = price.currency === 'USD'
-        ? formatUSD(price.price)
-        : formatKRWFull(price.price)
-      const changeStr = price.changePercent != null
-        ? ` (${formatPercent(price.changePercent)})`
-        : ''
-      priceInfo = `${priceStr}${changeStr}`
-    }
+    const priceInfo = formatWatchlistPriceInfo(w.ticker, price)
 
     lines.push(`${h.b(escapeHtml(w.displayName))} (${escapeHtml(w.ticker)}) — ${stratLabel}`)
     lines.push(`  현재가: ${priceInfo}`)

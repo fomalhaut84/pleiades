@@ -8,6 +8,7 @@ import { isAiQuestion } from '../utils/ai-trigger'
 import { isTradeMessage } from '../utils/trade-trigger'
 import { checkBudgetUsage } from '../notifications/budget-alert'
 import { sendToWhooing } from '@/lib/whooing-webhook'
+import { KST_OFFSET_MS } from '@/lib/kst-date'
 
 interface PendingTransaction {
   requestedByUserId: number
@@ -399,7 +400,7 @@ function cleanExpiredMulti(): void {
 }
 
 function buildMultiParsePrompt(): string {
-  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  const kst = new Date(Date.now() + KST_OFFSET_MS)
   const today = kst.toISOString().slice(0, 10)
   return `다음 메시지에서 여러 건의 소비/수입 거래를 추출하세요.
 오늘 날짜: ${today}

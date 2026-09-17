@@ -12,6 +12,7 @@ import { askAdvisor, describeAdvisorError } from '@/lib/ai/claude-advisor'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 import { sendHtml } from '@/bot/utils/telegram'
 import { sanitizeError } from '@/bot/utils/error'
+import { formatKstDate } from '@/lib/kst-date'
 
 type MarketSession = 'KR' | 'US'
 
@@ -49,7 +50,21 @@ async function isActiveReviewEnabled(): Promise<boolean> {
   return config.value.toLowerCase() !== 'off'
 }
 
-function buildClosingPrompt(session: MarketSession): string {
+/**
+ * 세션별 클로징 리뷰에서 확인할 주요 지수 티커 (#499).
+ * KR 클로징은 마감 10분 뒤에 돌아 당일 마감 기사가 검색에 안 잡히는 날이 많다
+ * → 지수 수치는 WebSearch 가 아니라 get_prices 도구값을 출처로 삼는다.
+ */
+const CLOSING_INDEX_TICKERS: Record<MarketSession, string[]> = {
+  KR: ['^KS11', '^KQ11'],
+  US: ['^GSPC', '^IXIC', '^DJI'],
+}
+
+/**
+ * 클로징 리뷰 프롬프트 생성.
+ * `now` 는 테스트 고정을 위한 주입점 (기본값 = 현재 시각).
+ */
+export function buildClosingPrompt(session: MarketSession, now: Date = new Date()): string {
   const sessionLabel = session === 'KR' ? '🇰🇷 한국장' : '🇺🇸 미국장'
   // KR 클로징 (15:40 KST): 방금 마감한 세션 = 오늘 (KST). 다음 세션 = 내일.
   // US 클로징 (07:15 KST 화-토): 방금 마감한 세션 = 지난밤 미국장 (KST 어제 밤 개장 ~ 오늘 이른 아침 마감).
@@ -57,20 +72,31 @@ function buildClosingPrompt(session: MarketSession): string {
   const closedSession = session === 'KR' ? '오늘 한국장' : '방금 마감한 지난밤 미국장'
   const nextSession = session === 'KR' ? '내일' : '오늘밤'
   const marketCurrency = session === 'KR' ? '한국주(KRW)' : '미국주(USD)'
+  const today = formatKstDate(now)
+  const indexArgs = CLOSING_INDEX_TICKERS[session].map((t) => `'${t}'`).join(', ')
 
   return [
-    `${sessionLabel} 클로징 리뷰를 작성해줘.\n`,
+    `${sessionLabel} 클로징 리뷰를 작성해줘. (오늘: ${today} KST 기준)\n`,
     '다음 단계로 진행해:',
     '1. get_all_strategies로 전체 종목 전략 확인',
     '2. get_portfolio(전체)로 현재 보유 상태 (평가금액, 손익)',
-    `3. WebSearch로 ${closedSession} 관련 뉴스/지수 이슈 검색`,
-    `4. ${marketCurrency} 종목 중 ${closedSession} 에서 유의미한 움직임 있는 것만 get_technical_analysis로 재확인`,
+    `3. get_prices([${indexArgs}])로 ${closedSession} 주요 지수 마감치 확인 — 지수 수치는 반드시 이 도구값을 출처로 사용`,
+    `4. WebSearch로 ${closedSession} 관련 뉴스/이슈 보조 검색 (뉴스는 배경 설명용, 지수 수치 출처로 쓰지 말 것)`,
+    `5. ${marketCurrency} 종목 중 ${closedSession} 에서 유의미한 움직임 있는 것만 get_technical_analysis로 재확인`,
     '',
     '리뷰 구성 (총 6~8줄, 간결하게):',
-    `- ${closedSession} 시장 요약 (주요 지수, 이슈 1~2개)`,
+    `- ${closedSession} 시장 요약 (주요 지수 수치 + 등락률, 이슈 1~2개)`,
     `- 보유 종목 ${closedSession} 성과 (전략별 요약, top-3 움직임)`,
     `- ${nextSession} 관찰 필요 종목 (다음 세션 대비 포인트)`,
     `- ${nextSession} 예정 이벤트 (실적/FOMC/일정, 있다면)`,
+    '',
+    '표기 규칙:',
+    '- 지수는 3번 도구값 그대로 쓰고, 도구가 함께 반환한 "시세 기준" 시각이 리뷰 대상 세션과 다르면 그 시각을 명시',
+    `- ${today} 가 아닌 날짜의 기사를 인용할 땐 기사 날짜를 함께 표기하고, 날짜가 불확실하면 인용하지 말 것`,
+    ...(session === 'US'
+      ? ['- 단, 미국장 기사는 미국 현지 날짜 기준이라 KST 로는 어제 날짜인 것이 정상 — 해당 세션 기사면 그대로 인용']
+      : []),
+    '- 도구로 수치를 받았으면 "데이터 부족"·"확인 불가" 라고 쓰지 말 것. 뉴스만 못 찾은 경우엔 "당일 뉴스 미확인" 으로 표현',
     '',
     '주의: 매매 결정은 사용자 몫이라 참고만. 손절 없음 전략 (stock-trading-method 스킬 참조).',
   ].join('\n')

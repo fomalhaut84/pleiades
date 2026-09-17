@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { kstMidnightUtc, isSameOrFutureKstDay, kstDayDiff } from '../kst-date'
+import {
+  kstMidnightUtc,
+  isSameOrFutureKstDay,
+  kstDayDiff,
+  formatKstDate,
+  formatKstDateTime,
+  formatKstDateTimeFull,
+} from '../kst-date'
 
 describe('kstMidnightUtc', () => {
   it('KST 자정 (UTC 15:00 전날) 을 그 UTC 값으로 반환', () => {
@@ -65,5 +72,39 @@ describe('kstDayDiff', () => {
     expect(kstDayDiff(d3proper, today)).toBe(3)
     // sanity
     expect(kstDayDiff(d3, today)).toBe(4)
+  })
+})
+
+describe('formatKstDate / formatKstDateTime (#499)', () => {
+  it('UTC → KST 변환 후 표기', () => {
+    // 2026-09-17 06:30 UTC = 2026-09-17 15:30 KST (한국장 마감)
+    const d = new Date('2026-09-17T06:30:00Z')
+    expect(formatKstDate(d)).toBe('2026-09-17')
+    expect(formatKstDateTime(d)).toBe('09-17 15:30 KST')
+  })
+
+  it('KST 자정 경계: UTC 15:00 = 다음날 KST 00:00', () => {
+    const before = new Date('2026-09-17T14:59:00Z')  // KST 09-17 23:59
+    const after = new Date('2026-09-17T15:00:00Z')   // KST 09-18 00:00
+    expect(formatKstDate(before)).toBe('2026-09-17')
+    expect(formatKstDateTime(before)).toBe('09-17 23:59 KST')
+    expect(formatKstDate(after)).toBe('2026-09-18')
+    expect(formatKstDateTime(after)).toBe('09-18 00:00 KST')
+  })
+
+  it('연말 경계: UTC 12-31 16:00 = KST 다음 해 01-01 01:00', () => {
+    const d = new Date('2026-12-31T16:00:00Z')
+    expect(formatKstDate(d)).toBe('2027-01-01')
+    expect(formatKstDateTime(d)).toBe('01-01 01:00 KST')
+  })
+})
+
+describe('formatKstDateTimeFull (#499 사전 리뷰 P1)', () => {
+  it('연도를 포함해 YYYY-MM-DD HH:mm KST 로 표기', () => {
+    expect(formatKstDateTimeFull(new Date('2026-09-17T06:30:00Z'))).toBe('2026-09-17 15:30 KST')
+  })
+
+  it('UTC 연말 자정 직전은 KST 로 다음 해', () => {
+    expect(formatKstDateTimeFull(new Date('2025-12-31T15:00:00Z'))).toBe('2026-01-01 00:00 KST')
   })
 })

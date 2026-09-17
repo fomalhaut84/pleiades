@@ -5,6 +5,7 @@
 
 import { z } from 'zod'
 import { zodErrorsToValidation, type ValidationError } from './zod-utils'
+import { KST_OFFSET_MS } from './kst-date'
 
 interface TradeInput {
   type: string       // "BUY" | "SELL"
@@ -93,7 +94,6 @@ export function calcTotalKRW(
  */
 export type TradeValidationError = ValidationError
 
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000
 const MIN_TRADE_DATE = '2000-01-01'
 
 /** ms 타임스탬프를 KST 캘린더 날짜 문자열(YYYY-MM-DD)로 변환 */

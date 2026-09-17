@@ -2,6 +2,8 @@
  * 반복 거래 유틸리티: 검증 + nextRunAt 계산
  */
 
+import { KST_OFFSET_MS } from './kst-date'
+
 export type Frequency = 'monthly' | 'weekly' | 'yearly'
 
 export interface RecurringValidationError {
@@ -64,7 +66,7 @@ export function validateRecurringInput(body: Record<string, unknown>): Recurring
 
 /** UTC Date를 KST로 변환 (UTC+9) */
 function toKST(d: Date): Date {
-  return new Date(d.getTime() + 9 * 60 * 60 * 1000)
+  return new Date(d.getTime() + KST_OFFSET_MS)
 }
 
 /** 해당 날짜의 UTC 정오(12:00)로 생성 — 어느 타임존에서든 같은 날짜 */

@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { resolveAccountId, toolResult, toolError, ToolInputError, parseDateStrict } from '../utils'
+import { KST_OFFSET_MS } from '@/lib/kst-date'
 
 /**
  * create_stock_option: 신규 스톡옵션 등록
@@ -315,7 +316,7 @@ export async function exerciseVesting(args: { vestingId: string; action: Vesting
 
       // activate: 베스팅일 도래 검증 (KST 일 단위)
       if (args.action === 'activate') {
-        const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+        const kst = new Date(Date.now() + KST_OFFSET_MS)
         const todayEnd = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + 1))
         if (vesting.vestingDate >= todayEnd) {
           throw new ToolInputError('베스팅일이 아직 도래하지 않았습니다.')
@@ -329,7 +330,7 @@ export async function exerciseVesting(args: { vestingId: string; action: Vesting
         const parent = await tx.stockOption.findUnique({ where: { id: vesting.stockOptionId } })
         if (!parent) throw new ToolInputError(`스톡옵션을 찾을 수 없습니다: ${vesting.stockOptionId}`)
 
-        const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+        const kst = new Date(Date.now() + KST_OFFSET_MS)
         const todayStart = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()))
         if (parent.expiryDate < todayStart) {
           throw new ToolInputError(`만료된 스톡옵션은 행사할 수 없습니다. (만료일: ${parent.expiryDate.toISOString().slice(0, 10)})`)

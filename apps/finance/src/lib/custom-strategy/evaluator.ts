@@ -17,7 +17,7 @@
 import type { Condition, WeekdayCode } from './types'
 import { TIME_WINDOW_RE } from './types'
 import type { TAReport, BBPosition } from '@/lib/ta/types'
-import { kstDayDiff } from '@/lib/kst-date'
+import { kstDayDiff, KST_OFFSET_MS } from '@/lib/kst-date'
 
 export interface PriceSnapshot {
   price: number
@@ -103,13 +103,13 @@ function compareNumeric(actual: number, op: string, expected: number): boolean {
 
 /** UTC Date → KST 시각 (분 단위 0~1439) */
 function kstMinutes(now: Date): number {
-  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+  const kst = new Date(now.getTime() + KST_OFFSET_MS)
   return kst.getUTCHours() * 60 + kst.getUTCMinutes()
 }
 
 /** UTC Date → KST 요일 코드 */
 function kstWeekday(now: Date): WeekdayCode {
-  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+  const kst = new Date(now.getTime() + KST_OFFSET_MS)
   const dow = kst.getUTCDay() // 0=Sun, 1=Mon, ...
   const codes: WeekdayCode[] = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
   return codes[dow]
@@ -306,6 +306,26 @@ export function collectCrossTickers(
       out.add(t)
     }
   }
+  return out
+}
+
+/**
+ * 주가 갱신 cron 이 유지해야 하는 활성 전략 관련 티커 = 전략 자기 티커 + cross_ticker 참조.
+ *
+ * Codex #501 P2: checkCustomStrategies() 는 자기 티커 시세를 PriceCache 에서 읽는데
+ * refreshPrices() 가 cross 티커만 갱신 대상에 넣어, 보유·관심종목이 아닌 티커의
+ * 전략은 stale 캐시로 평가될 수 있었다. 자기 티커는 checkCustomStrategies 의
+ * priceMap 조회 키와 같아야 하므로 trim 만 하고 대소문자는 보존한다.
+ */
+export function collectStrategyRefreshTickers(
+  strategies: Array<{ ticker: string; conditions: unknown }>,
+): Set<string> {
+  const out = new Set<string>()
+  for (const s of strategies) {
+    const own = s.ticker.trim()
+    if (own) out.add(own)
+  }
+  for (const t of collectCrossTickers(strategies)) out.add(t)
   return out
 }
 

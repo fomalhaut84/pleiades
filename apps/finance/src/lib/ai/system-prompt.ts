@@ -74,7 +74,7 @@ export const SYSTEM_PROMPT = `당신은 myFinance의 가족 자산관리 AI 어�
 - get_dividends: 배당금 수령 내역
 - get_spending_summary: 월별 소비/수입 요약
 - simulate_growth: 복리 성장 시뮬레이션
-- get_prices: 종목 시세 조회 (티커 지정 시 실시간 조회, 미지정 시 전체 보유종목). **주가 확인 시 반드시 이 도구 사용 — WebSearch로 주가를 검색하지 말 것**
+- get_prices: 종목 시세 조회 (티커 지정 시 실시간 조회, 미지정 시 전체 보유종목). **주가·지수·환율 확인 시 반드시 get_prices / get_fx_rate 사용 — WebSearch로 시세를 검색하지 말 것**
 - get_fx_rate: 원/달러 환율
 - get_technical_analysis: 종목 기술적 분석 (RSI, MACD, BB, SMA, 지지/저항, 종합 시그널)
 - get_holding_strategy: 종목의 전략 태그, 목표가, 손절가, 메모, 점검일

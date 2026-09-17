@@ -3,6 +3,8 @@
  * `docs/mcp-log-schema.md` 와 동기화 유지.
  */
 
+import { KST_OFFSET_MS } from '@/lib/kst-date'
+
 export const LEVEL_ORDER = ['fatal', 'error', 'warn', 'info', 'debug', 'trace'] as const
 export type LogLevel = (typeof LEVEL_ORDER)[number]
 
@@ -61,7 +63,7 @@ export const MSG_LABELS: Record<string, string> = {
 export function recentLogDates(days: number, now: number = Date.now()): string[] {
   const out: string[] = []
   for (let i = 0; i < days; i++) {
-    const kst = new Date(now + 9 * 60 * 60 * 1000 - i * 24 * 60 * 60 * 1000)
+    const kst = new Date(now + KST_OFFSET_MS - i * 24 * 60 * 60 * 1000)
     out.push(kst.toISOString().slice(0, 10))
   }
   return out
@@ -76,6 +78,6 @@ export function formatKstTime(iso: string | undefined): string {
   if (!iso) return ''
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
-  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
+  const kst = new Date(d.getTime() + KST_OFFSET_MS)
   return kst.toISOString().slice(11, 19)
 }

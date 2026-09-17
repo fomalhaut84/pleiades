@@ -19,6 +19,7 @@ import {
 } from './alert-history'
 import { buildTaContext } from '@/lib/alert-history/context'
 import type { TAReport } from '@/lib/ta/types'
+import { KST_OFFSET_MS } from '@/lib/kst-date'
 
 /** 당일 시그널 발송 기록 (키 → date string) */
 const sentToday = new Map<string, string>()
@@ -73,7 +74,7 @@ export function selectAiGuideTargets<T extends { ticker: string }>(
 }
 
 function getTodayKST(): string {
-  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  const kst = new Date(Date.now() + KST_OFFSET_MS)
   return kst.toISOString().slice(0, 10)
 }
 

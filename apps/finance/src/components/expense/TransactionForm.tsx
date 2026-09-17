@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useToast } from '@/components/ui/Toast'
 import IconButton from '@/components/ui/IconButton'
+import { KST_OFFSET_MS } from '@/lib/kst-date'
 
 interface CategorySuggestion {
   categoryId: string
@@ -51,7 +52,7 @@ interface TransactionFormProps {
 function toDateInputValue(isoString?: string): string {
   if (!isoString) {
     // KST 기준 오늘 날짜
-    const now = new Date(Date.now() + 9 * 60 * 60 * 1000)
+    const now = new Date(Date.now() + KST_OFFSET_MS)
     return now.toISOString().slice(0, 10)
   }
   // UTC ISO 문자열에서 날짜 부분만 추출

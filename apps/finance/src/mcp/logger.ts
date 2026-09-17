@@ -16,6 +16,7 @@ import pino from 'pino'
 import path from 'node:path'
 import fs from 'node:fs'
 import { randomUUID } from 'node:crypto'
+import { KST_OFFSET_MS } from '@/lib/kst-date'
 
 const LOG_DIR = process.env.MCP_LOG_DIR ?? path.join(process.cwd(), 'logs')
 const LOG_ENABLE_FILE = process.env.MCP_LOG_TEE_FILE === '1'
@@ -31,7 +32,7 @@ const LOG_OUT_STREAM = IS_STDIO_MODE ? process.stderr : process.stdout
  * 어긋나 KST 00:00~09:00 로그가 "전날" 파일에 append 됨 → 사후 조회 혼선. KST 로 통일.
  */
 function kstDateString(): string {
-  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  const kst = new Date(Date.now() + KST_OFFSET_MS)
   return kst.toISOString().slice(0, 10)
 }
 

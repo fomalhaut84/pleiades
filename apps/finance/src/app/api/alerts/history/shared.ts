@@ -2,6 +2,8 @@
  * Phase 33-B (#417) — /api/alerts/history 및 stats 라우트 공용.
  */
 
+import { KST_OFFSET_MS } from '@/lib/kst-date'
+
 export const KNOWN_KINDS = new Set([
   'surge', 'drop', 'fx',
   'target_hit', 'stop_loss',
@@ -58,7 +60,7 @@ export function parseKindsParam(params: URLSearchParams): {
 
 /** UTC Date → KST YYYY-MM-DD (버킷 키) */
 export function kstDateKey(d: Date): string {
-  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
+  const kst = new Date(d.getTime() + KST_OFFSET_MS)
   return kst.toISOString().slice(0, 10)
 }
 
