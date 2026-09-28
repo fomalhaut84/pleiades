@@ -3642,7 +3642,7 @@ git -C repos/myFitness diff --no-renames --name-only --diff-filter=A $r^ $r | wc
 ```bash
 for d in myFinance myFitness; do git -C repos/$d fetch -q origin
   echo "$d: dev ahead $(git -C repos/$d rev-list --count integration/pleiades..origin/dev) · integration ahead $(git -C repos/$d rev-list --count origin/dev..integration/pleiades)"
-  git -C repos/$d merge-tree --write-tree --name-only integration/pleiades origin/dev | tail -n +2   # 충돌 파일
+  git -C repos/$d merge-tree --write-tree --name-only --no-messages integration/pleiades origin/dev | tail -n +2   # 충돌 파일 — --no-messages 없으면 메시지 줄이 섞여 fin 1→3 으로 센다 (PR #74 Codex P2)
   git -C repos/$d diff --shortstat integration/pleiades origin/dev
 done
 ```
