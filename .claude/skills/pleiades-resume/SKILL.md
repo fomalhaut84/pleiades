@@ -51,7 +51,7 @@ done
 ```bash
 # 원본 하네스는 읽기 전용이다 (#80 · 2026-09-28 사용자 방침) — pleiades 는 원본 ~/workspace/myF* 에 아무것도 쓰지 않는다. 복원·동기화 절차는 폐기됐다.
 # 대신 드리프트만 잰다: 원본(단독 세션에서 진화) vs worktree(pleiades 가 읽고 고치는 사본 · #369 tracked). 차이가 있으면 브리핑에 넣고 "원본 → worktree 복사(모드 I PR)" 를 후보 액션으로 올린다 — 반대 방향은 없다 (#72)
-for d in myFinance myFitness; do echo "$d harness drift: $(diff -rq ~/workspace/$d/.claude ~/workspace/pleiades/repos/$d/.claude 2>/dev/null | grep -v 'settings.local.json\|worktrees' | wc -l | tr -d ' ') · CLAUDE.md: $(diff -q ~/workspace/$d/CLAUDE.md ~/workspace/pleiades/repos/$d/CLAUDE.md >/dev/null 2>&1 && echo same || echo differ)"; done
+for d in myFinance myFitness; do if [ ! -d ~/workspace/$d/.claude/rules ] || [ ! -f ~/workspace/$d/CLAUDE.md ]; then echo "$d harness: MISSING in original (체크아웃 전환이 지운 전례 #27 — 그 저장소 단독 세션의 일 · 브리핑에 적는다)"; continue; fi; echo "$d harness drift: $(diff -rq ~/workspace/$d/.claude ~/workspace/pleiades/repos/$d/.claude | grep -v 'settings.local.json\|worktrees' | wc -l | tr -d ' ') · CLAUDE.md: $(diff -q ~/workspace/$d/CLAUDE.md ~/workspace/pleiades/repos/$d/CLAUDE.md >/dev/null && echo same || echo differ)"; done   # 부재를 drift 0 으로 오판하지 않는다 (PR #81 Codex P2)
 # 원본 fit 하네스가 아예 없으면(체크아웃 전환이 지운 전례 #27 · 2026-09-28 #494 도중 재현) 그것은 fit 단독 세션의 일이다 — 브리핑에 적고 pleiades 는 복원하지 않는다. 세션이 읽는 하네스는 worktree 라 pleiades 작업은 막히지 않는다.
 # worktree 가 원격 integration/pleiades 보다 뒤처졌는지
 for d in myFinance myFitness; do git -C ~/workspace/pleiades/repos/$d fetch -q origin; echo "$d behind: $(git -C ~/workspace/pleiades/repos/$d rev-list --count HEAD..origin/integration/pleiades)"; done

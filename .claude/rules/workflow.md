@@ -496,11 +496,11 @@ git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 �
 
 그리고 `CLAUDE.md` 의 상태 절을 갱신하고, 다음 작업이 있으면 사용자에게 제안한다.
 
-**대상 저장소 PR 이 머지되면 두 가지를 더 한다 (#27):**
+**대상 저장소 PR 이 머지되면 한 가지를 더 한다 (#27):**
 - `repos/<repo>` worktree 의 `integration/pleiades` 를 `git pull --ff-only` 로 당긴다 (worktree 는 자동으로 움직이지 않는다)
-- **원본 체크아웃이 tracked 화 브랜치에서 `dev`/`main` 으로 돌아가면 그 파일들이 워킹트리에서 지워진다.** 되돌린 직후
+- ~~**원본 체크아웃이 tracked 화 브랜치에서 `dev`/`main` 으로 돌아가면 그 파일들이 워킹트리에서 지워진다.** 되돌린 직후
   `git -C ~/workspace/<repo> archive integration/pleiades <paths> | tar -x -C ~/workspace/<repo>` 로 ignored 파일로 복원한다
-  (실측: fit `.claude/` 17파일 + `CLAUDE.md` 가 사라졌다)
+  (실측: fit `.claude/` 17파일 + `CLAUDE.md` 가 사라졌다)~~ — **폐기 (2026-09-28 · #80 · PR #81 Codex P1).** pleiades 는 원본 `~/workspace/<repo>` 에 쓰지 않는다. 원본 체크아웃 전환은 그 저장소 단독 세션의 일이고, 세션이 읽는 하네스는 worktree 라(`bin/claude-with`) pleiades 작업이 막히지 않는다. 되돌리기: 즉시.
 
 ## 긴급 수정 (Hotfix)
 
