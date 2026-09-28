@@ -24,7 +24,7 @@ bare `git stash` 금지(worktree 스택 공유). 원본 두 체크아웃은 무�
 
 ## 2. 머지 후 (저장소별 · revert 도 PR)
 
-**저장소마다 다르다(머지 후 실값).** fin `af00fe3` 은 merge commit(부모 2) → `git revert -m 1 af00fe3`. **fit `961b130` 은 squash(부모 1) → `git revert 961b130`** — `-m 1` 은 "commit is not a merge" 로 실패한다. #75 의 `-s ours` 복구 머지가 들어간 뒤에는 fit 도 그 머지 커밋을 `-m 1` 로 먼저 revert 해야 한다(트리 무변경 커밋이라 revert 도 트리 무변경 · 조상 관계만 끊긴다).
+**저장소마다 다르다(머지 후 실값).** fin `af00fe3` 은 merge commit(부모 2) → `git revert -m 1 af00fe3`. **fit `961b130` 은 squash(부모 1) → `git revert 961b130`** — `-m 1` 은 "commit is not a merge" 로 실패한다. #75 의 `-s ours` 복구 머지(`5cf4660`)는 **revert 하지 않는다 — revert 로 조상 관계를 끊을 수 없다**(revert 는 자손 커밋을 더할 뿐 부모 간선을 지우지 못하고, 트리가 첫 부모와 같아 `nothing to commit` 으로 끝난다 · PR #77 Codex P2). 내용을 되돌리려면 **squash 커밋 `961b130` 을 직접 revert** 한다. 되돌린 뒤에도 `dev` 는 조상으로 남으므로, 다시 dev 를 받으려면 그 content-revert 를 revert 해야 한다(등급 중간의 실체).
 
 ```bash
 cd ~/workspace/pleiades/repos/<repo> && git checkout integration/pleiades && git pull --ff-only

@@ -18,8 +18,8 @@
 | PR | 내용 | 머지 | 되돌리기 |
 |---|---|---|---|
 | ~~myFinance#505~~ | dev 4 → integration | **merge commit** `af00fe3` | 중간(`revert -m 1`) |
-| ~~myFitness#488~~ | dev 77 → integration | **squash** `961b130` (반례) | 즉시(`revert 961b130`) — 단 #489 를 먼저 `-m 1` |
-| ~~myFitness#489~~ | #75 `-s ours` 조상 복구 | merge commit `5cf4660` | 즉시(`revert -m 1` · 트리 무변경) |
+| ~~myFitness#488~~ | dev 77 → integration | **squash** `961b130` (반례) | 중간(`revert 961b130` 직접 · #489 는 revert 대상 아님 — 조상 관계는 revert 로 못 끊는다 · 재동기화는 revert 의 revert) |
+| ~~myFitness#489~~ | #75 `-s ours` 조상 복구 | merge commit `5cf4660` | **되돌릴 수 없고 되돌릴 이유도 없다** — revert 는 부모 간선을 못 지우고 트리는 이미 같다(PR #77 Codex P2 · 그 PR body 의 "`revert -m 1`" 서술은 틀렸다) |
 | ~~pleiades#74~~ | #70 정책 | `35c7859` | 즉시 |
 | ~~myFinance#508~~ · ~~myFitness#490~~ · ~~myFinance#509~~ | #67 한 줄 ×3 | merge commit `c94cbb8` · `ef00e88` · `5540417` | 즉시(`revert -m 1`) |
 
@@ -67,6 +67,7 @@
 - *"fit 원본 `.claude/` 는 worktree 판의 사본 · 낡으면 통째 복원"*(005 §4-7 · #27) → **깨짐**(#72). 파일 단위만.
 - *"측정·감사는 worktree 를 본다"* → worktree 가 dev 를 따라갈 때만 옳다(resume Step 2 선결).
 - `_workspace/67/04_operator_rollback.md` 초안의 *"squash 1커밋 · `-m` 없음"* → 실제 세 PR 모두 **merge commit** → `revert -m 1`(문서 정정 완료).
+- myFitness#489 PR body 와 `_workspace/71` 초안의 *"`-s ours` 머지를 `revert -m 1` 하면 조상 관계만 끊긴다"* → **틀렸다.** revert 는 간선을 못 지운다(`nothing to commit`). 내용 되돌리기는 `961b130` 직접 revert · 조상은 영구(PR #77 Codex P2).
 
 ## 재현이 필요한 절차
 
