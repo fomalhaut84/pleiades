@@ -3632,3 +3632,52 @@ git -C repos/myFitness diff --no-renames --name-only --diff-filter=A $r^ $r | wc
 ## 7. fit 원본 동기화 실행 기록 (5-1 원칙 3 첫 적용)
 
 `_workspace/62/backup/` — `absent-before-sync.txt` 0줄 · `fit-harness-pre-sync.tar` 22016 B(`.claude/rules/workflow.md` 1항목) · 사전 md5 `1560173fc55cc1db4310287a7c265da9`. 동기화 후 worktree 판과 `diff -q` 동일 · `git status -s` 0(ignored) · 브랜치 `main` 유지. 명령은 `_workspace/62/04_operator_rollback.md` §3-1.
+
+---
+
+# 2026-09-28 — 서비스 `dev` 와 `integration/pleiades` 의 거리 (#70·#71 첫 동기화)
+
+## 1. 뒤처짐·충돌 (동기화 전)
+
+```bash
+for d in myFinance myFitness; do git -C repos/$d fetch -q origin
+  echo "$d: dev ahead $(git -C repos/$d rev-list --count integration/pleiades..origin/dev) · integration ahead $(git -C repos/$d rev-list --count origin/dev..integration/pleiades)"
+  git -C repos/$d merge-tree --write-tree --name-only --no-messages integration/pleiades origin/dev | tail -n +2   # 충돌 파일 — --no-messages 없으면 메시지 줄이 섞여 fin 1→3 으로 센다 (PR #74 Codex P2)
+  git -C repos/$d diff --shortstat integration/pleiades origin/dev
+done
+```
+
+| | dev ahead | integration ahead | 충돌 | diffstat |
+|---|---|---|---|---|
+| myFinance | **4** (#495·#498·#501·#503) | 3 (#492·#493·#496 · 전부 `.claude/rules/workflow.md`) | `.claude/rules/workflow.md` 1 hunk(dev 미러 헤더 vs 통합 원문) | 62파일 +1967/−264 |
+| myFitness | **77** (#376~#487 · M14~M16 · prisma 마이그레이션 3 · next 16.2.6→16.3.5) | 5 (#369·#372~#375) | `package.json` · `package-lock.json` · `vitest.config.mts`(add/add) | 366파일 +23992/−3977 |
+
+fit `dev` 는 **2026-09-18 `d615c4a`(#393 → #399)** 에 vitest 를 독자 도입했다(`git log --format='%h %cd' --date=short origin/dev -- vitest.config.mts | tail -1`). 1a-2(2026-09-11 · #374)의 7일 뒤 — 두 판이 서로를 몰랐다. dev 테스트 60파일 + 1a-2 3파일 = 63.
+1a-3 대상(fit `src/bot/notifications`·`src/bot/utils` · fin `src/bot/utils`)에 dev 유래 변경 **0**.
+
+## 2. `main` 은 `dev` 의 상위집합이 아니라 부분집합이다
+
+```bash
+git -C repos/myFinance rev-list --count origin/dev..origin/main   # 26 — 전부 "Merge pull request #n from fomalhaut84/dev"
+git -C repos/myFinance diff --stat origin/dev origin/main          # (비어 있음)
+git -C repos/myFitness rev-list --count origin/dev..origin/main    # 4 — 전부 릴리즈 머지 커밋
+git -C repos/myFitness rev-list --count origin/main..origin/dev    # 3 — 릴리즈 대기분
+```
+
+→ `main` = `dev` + 릴리즈 머지 커밋. **`dev` 만 받으면 `main` 도 따라온다** (#70 항목 6 근거). 머지 설정은 두 저장소 모두 merge·squash·rebase 허용(`gh api repos/fomalhaut84/<repo> --jq '.allow_merge_commit'` = true) — 동기화 PR 은 merge commit 으로 머지해야 한다.
+
+## 3. 동기화 실행 실측
+
+- fin: 충돌 hunk 는 dev 판이 통합 원문의 상위집합(헤더 출처만 다름 → 둘 다 적음). 의존성 변경 0. 검증 lint ✔ · tsc ✔ · test:run 50파일 866건 · build ✔.
+- fit: `@prisma/client` 6.19.3 이 양쪽 동일 → `npm install` 이 postinstall(`prisma generate`)을 **돌리지 않는다**. 새 마이그레이션 3개의 모델(`FitnessMetricDaily`·`eventType`·`hrr2`)을 코드가 참조하므로 **`npx prisma generate` 를 명시 실행**해야 typecheck 가 통과한다(재감사 블로커). lock 재생성: dev 판 대비 +162줄 · dev 고정 버전 변동 0 · 추가는 `@vitest/coverage-v8` + 의존 11개 · 제거 3(`vite-tsconfig-paths` 계열). 검증 lint ✔ · typecheck ✔ · vitest 63파일 433건 + verify 5종 ✔ · build ✔(DB 접속 없음 · `.env` 는 localhost).
+- 로컬 node **20.18.0** 에 dev 유래 `@csstools/*` 가 `>=20.19.0` 을 요구해 EBADENGINE 경고(설치·검증 영향 없음). **서버 node 버전은 Q45 측정 항목에 추가.**
+- lock 은 integration 이 `@vitest/coverage-v8` 을 갖는 한 dev 와 영구히 다르다 → 다음 동기화마다 `package-lock.json` 충돌이 재발(dev 판 체크아웃 후 `npm install` 로 반복). 해소 경로는 coverage-v8 을 dev 에도 미러(모드 S)하는 것 — 후속 이슈.
+
+## 4. fit 원본 `.claude/` 와 worktree 판의 드리프트
+
+```bash
+diff -rq ~/workspace/myFitness/.claude ~/workspace/pleiades/repos/myFitness/.claude
+```
+
+→ 스킬 6 차이(`branch-workflow`·`codex-review-loop`·`myfitness-orchestrator`·`orphan-check`·`session-handoff`·`session-primer`) + 원본에만 `skills/security-audit-fix`·`worktrees/`·`settings.local.json`. `rules/workflow.md` 는 동일. 원본이 단독 세션에서 진화한 것이며 `dev` 에서 gitignored 라 동기화로 오지 않는다. 005 §4-7 의 통째 `archive | tar -x` 는 이제 원본의 새 판을 덮어쓴다 — 파일 단위로만.
+

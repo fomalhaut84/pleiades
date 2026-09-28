@@ -52,11 +52,20 @@ done
 # 원본 fit 의 하네스 존재 확인 — tracked 화 브랜치 → main 체크아웃 전환이 파일을 지운 전례 (#27)
 test -f ~/workspace/myFitness/CLAUDE.md && test -d ~/workspace/myFitness/.claude/rules || echo "fit 원본 하네스 없음 — 복원 필요"
 # 없으면 브리핑에 그 사실을 넣고, 사용자 승인(원본 쓰기) 후 아래를 실행한다. 복원 전에는 대상 저장소 작업을 시작하지 않는다 (#27 · PR #28 Codex P2)
-#   git -C ~/workspace/myFitness archive integration/pleiades .claude CLAUDE.md | tar -x -C ~/workspace/myFitness
-#   (ignored 파일로 복원되며 index 는 바뀌지 않는다. 확인: diff -rq ~/workspace/myFitness/.claude ~/workspace/pleiades/repos/myFitness/.claude → settings.local.json 만 차이)
+# ⚠️ 통째 복원 금지 — 원본 .claude/ 는 단독 세션에서 독자 진화했고 git 이력이 없다(#70 · #72 · 2026-09-28 실측 스킬 6 차이). 통째 tar -x 는 그 새 판을 덮어쓴다(PR #74 Codex P1).
+#   1) 부재 파일만 나열(확인용):
+#      git -C ~/workspace/myFitness ls-tree -r --name-only integration/pleiades .claude CLAUDE.md | while read -r p; do test -e ~/workspace/myFitness/"$p" || echo "$p"; done
+#   2) 부재 파일만 복원 — 1) 의 목록을 archive 경로 인자로 넘긴다(tar 옵션에 기대지 않는다: bsdtar 3.5.3 은 -k 종료 0 이지만 GNU tar 1.35 는 -k 가 기존 파일을 오류로 보아 종료 2 · --skip-old-files 는 bsdtar 미지원 — 실측 2026-09-28 · PR #74 Codex P2):
+#      git -C ~/workspace/myFitness ls-tree -r --name-only integration/pleiades .claude CLAUDE.md | while read -r p; do test -e ~/workspace/myFitness/"$p" || echo "$p"; done \
+#        | xargs git -C ~/workspace/myFitness archive integration/pleiades | tar -x -C ~/workspace/myFitness      # 목록이 비면 xargs 가 인자 없이 호출해 전체를 풀 수 있으므로 1) 이 빈 출력이면 실행하지 않는다
+#   (ignored 파일로 복원되며 index 는 바뀌지 않는다. 확인: 1) 을 다시 돌려 빈 출력. diff -rq 로 worktree 판과 비교하면 원본이 더 새 파일들이 "differ" 로 나오는 것이 정상 — 그것은 드리프트이지 결손이 아니다)
+#   특정 파일을 worktree 판으로 되돌리려면 -k 없이 그 경로만 인자로 나열한다(#62 선례 · 사전 사본은 _workspace/<주제>/backup/).
 # worktree 가 원격 integration/pleiades 보다 뒤처졌는지
 for d in myFinance myFitness; do git -C ~/workspace/pleiades/repos/$d fetch -q origin; echo "$d behind: $(git -C ~/workspace/pleiades/repos/$d rev-list --count HEAD..origin/integration/pleiades)"; done
+# integration/pleiades 가 서비스 dev 보다 뒤처졌는지 — 0 이 아니면 대상 저장소 작업·측정·감사 전에 동기화 (#70 · workflow.md 브랜치 전략 표 `dev 수용` 행)
+for d in myFinance myFitness; do echo "$d behind dev: $(git -C ~/workspace/pleiades/repos/$d rev-list --count origin/integration/pleiades..origin/dev) · conflicts: $(git -C ~/workspace/pleiades/repos/$d merge-tree --write-tree --name-only --no-messages origin/integration/pleiades origin/dev 2>/dev/null | tail -n +2 | grep -c .)"; done   # 기준은 origin/ — 로컬 integration/pleiades 는 fetch 로 움직이지 않아 다른 세션의 동기화 머지를 놓친다(PR #74 Codex P2). --no-messages 없으면 Auto-merging/CONFLICT 메시지 줄이 세어진다 (실측 fin 1→3 · PR #74 Codex P2)
 ```
+**`behind dev` 가 0 이 아니면 브리핑의 첫 후보 액션은 동기화다** (#70 · 첫 적용 #71). 그 위에서 측정·감사하면 `dev` 가 이미 한 일을 모르고 되풀이한다(fit vitest 이중 도입 · 2026-09-18 vs 1a-2).
 원본이 `dev`/`main` 이 아니면 **누군가 서비스 유지 작업 중일 수 있으므로 사용자에게 확인한다.**
 
 > **측정·감사는 worktree 를 본다 (PR #6 Codex 리뷰 P1).** 원본에는 앞선 1a 단계 변경이

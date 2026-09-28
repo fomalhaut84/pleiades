@@ -369,3 +369,8 @@ pleiades 내부 메인이며, 통합은 모노레포 전환이 끝나 두 프로
 >
 > **Q23 과의 관계:** γ(로컬)은 핵심 전제 3 의 *"**로컬** HTTP 상주"* 를 **원문 그대로** 성립시키고, β2 는 **서버 상주**로 확인한다 —
 > 그런데 **fit 본문 생성이 MCP 4301 상주를 필수 조건으로 요구**하므로(003 §10-1 조건 9), β2 를 세우면 Q23 은 **부수적으로 풀린다.**
+
+> **정정 (2026-09-28 · 이슈 #70 · 첫 적용 #71) — 서비스 `dev` → `integration/pleiades` 동기화 방향이 빠져 있었다.**
+> 이 문서와 #25 는 `integration/pleiades` 가 `dev` 로 **가지 않는다**는 것만 정했고, `dev` 를 **받는** 절차는 없었다. 그 사이 fit `dev` 는 77커밋(2026-09-18 vitest 독자 도입 #399 포함 — 1a-2 와 중복), fin `dev` 는 4커밋 앞섰다.
+> 측정·감사가 worktree 를 본다는 규칙(PR #6 Codex P1)은 worktree 가 `dev` 를 따라갈 때만 옳다. 사용자 결정(2026-09-28): **정기 동기화** — `integration/chore-pleiades-sync-<YYYYMMDD>` 머지 PR · "Create a merge commit" · 리뷰 범위는 충돌 해결분 · `main` 은 받지 않는다(두 저장소 모두 `main` = `dev` + 릴리즈 머지 커밋 · 실측). 정본은 `.claude/rules/workflow.md` 브랜치 전략 표 `dev 수용` 행.
+> **Q43 의 미러 경로는 그대로다** — pleiades 발 변경이 서비스에 필요하면 여전히 모드 S 미러다. 동기화는 반대 방향이다. **§4-7 의 fit 원본 `.claude/` 통째 복원은 더 이상 안전하지 않다** — 원본 `.claude/` 는 `dev` 에서 gitignored 라 동기화로 오지 않고 단독 세션에서 독자 진화했다(2026-09-28 실측: 스킬 6 차이 · `security-audit-fix` 원본에만). 파일 단위 `git archive <paths>` 만 쓴다. 되돌리기: 문서 즉시 · 동기화 머지 중간(`revert -m 1` 뒤 다시 받으려면 revert 의 revert).

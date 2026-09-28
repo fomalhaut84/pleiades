@@ -35,6 +35,7 @@ dev ──┬──┬──┬────────merge──────�
 | 피처 브랜치 | **`integration/feature-pleiades-<feature>`** |
 | 기타 유형 | **`integration/{fix\|chore\|…}-pleiades-<branchname>`** (피처 네이밍 차용) |
 | `dev` 진입 | **없다.** `integration/pleiades` 는 pleiades 가 공식 서비스가 되기 전까지 두 저장소의 **pleiades 내부 메인**이며 `dev` 로 머지되지 않는다. 통합은 모노레포 전환이 끝나 두 프로젝트가 pleiades 로 흡수될 때 한다 (사용자 2026-09-07) |
+| **`dev` 수용** (반대 방향) | **있다 — 정기 동기화** (사용자 2026-09-28 · #70). 서비스 `dev` 는 계속 움직이므로 `integration/pleiades` 가 그것을 **받는다**: `git fetch origin && git checkout integration/pleiades && git pull --ff-only` 로 로컬을 원격에 맞춘 뒤(다른 세션이 이미 동기화했을 수 있다 — 낡은 base 에서 따면 충돌이 PR 머지 시점에야 드러난다 · PR #74 Codex P2) `integration/chore-pleiades-sync-<YYYYMMDD>` 를 따고 `git merge origin/dev`(머지 커밋) → 충돌 해결 → 8절 검증 4종 → PR(base `integration/pleiades`). **사용자는 "Create a merge commit" 으로 머지한다 — squash 금지**(squash 면 `dev` 커밋이 조상이 되지 않아 다음 동기화가 같은 충돌을 되풀이한다). `main` 은 받지 않는다 — 두 저장소 모두 `main` = `dev` + 릴리즈 머지 커밋이고 핫픽스는 `dev` 백포트가 원칙이라 `dev` 가 상위집합이다(2026-09-28 실측). 시점: `pleiades-resume` Step 2 가 `rev-list --count origin/integration/pleiades..origin/dev`(원격 ref 기준 — 로컬 브랜치는 fetch 로 움직이지 않는다 · PR #74 Codex P2)를 저장소마다 재고 **0 이 아닌 저장소는 대상 저장소 작업·측정·감사 전에 동기화**한다 — 뒤처진 쪽만(한쪽이면 PR 1 · 둘이면 대칭 변경 이슈 1 · PR 2 · PR #74 Codex P1). 동기화 뒤 열린 `integration/*-pleiades-*` 작업 브랜치는 `integration/pleiades` 를 merge 해 따라간다 |
 
 > **정정 (이슈 #25).** 이전 서술은 *"통합 단계"* 만 `integration/pleiades` 로 보내고(`integration/pleiades-<단계>`),
 > pleiades 가 촉발한 단독 변경(#8 fin · fit tracked 화)은 원본 `dev` 로 보냈다(모드 S). 이제 **pleiades 발 변경은
@@ -44,6 +45,10 @@ dev ──┬──┬──┬────────merge──────�
 > 서비스에도 필요하면 **서비스 미러** — 단독 작업 경로(모드 S · 원본 · 그 저장소 `dev`)로 **별도 PR** 을 내되, 이슈는 그 저장소에 만들고 본문에 원 PR 을 링크한다.
 > 미러는 pleiades 가 촉발했어도 **모드 S 로 분류한다** (PR #26 Codex P2 — 아니면 미러 자체가 규정 위반이 된다). 004 Q43 은 이 경로를 쓴다.
 > 단계 브랜치 `integration/pleiades-<단계>` 표기는 `integration/feature-pleiades-<단계>` 로 읽는다.
+>
+> **동기화 PR 의 리뷰 범위 (#70 · 2026-09-28).** 동기화 PR 의 diff 는 이미 `dev` 에서 리뷰·머지된 서비스 코드다. 9-1 사전 리뷰는 **충돌 해결분 + 머지 위생 + 8절 검증**으로 한정한다. 봇 P0/P1 이 `dev` 유래 코드를 가리키면 **그 저장소에 이슈를 만들어 이관**한다 — 고치려면 모드 S 로 `dev` 에 낸다. 동기화 PR 에서 고치면 `integration/pleiades` 가 `dev` 와 다시 갈라진다. 충돌 해결분에 대한 P0/P1 만 동기화 PR 에서 고친다. 되돌리기: 머지 커밋 revert(`-m 1`) → **중간**(그 뒤 `dev` 를 다시 받으려면 revert 의 revert 가 필요하다).
+>
+> **왜 생겼나.** 반대 방향(`integration/pleiades` → `dev` 금지)만 정해 두고 받는 절차가 없어서, fit `dev` 가 2026-09-18 에 vitest 를 독자 도입해 1a-2(2026-09-11)와 같은 일을 서로 모르고 두 번 했다(fit dev 77커밋 · fin 4커밋 뒤처짐 · #71 첫 동기화). 측정·감사가 보는 worktree 가 `dev` 에서 멀어지면 되풀이된다.
 > **GitHub 브랜치 rename 은 그 브랜치의 열린 PR 을 닫는다** — 열린 PR 의 head 는 개명하지 않는다(#492·#369 는 옛 이름 유지).
 
 ## 릴리즈 전략
