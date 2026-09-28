@@ -62,7 +62,7 @@ test -f ~/workspace/myFitness/CLAUDE.md && test -d ~/workspace/myFitness/.claude
 # worktree 가 원격 integration/pleiades 보다 뒤처졌는지
 for d in myFinance myFitness; do git -C ~/workspace/pleiades/repos/$d fetch -q origin; echo "$d behind: $(git -C ~/workspace/pleiades/repos/$d rev-list --count HEAD..origin/integration/pleiades)"; done
 # integration/pleiades 가 서비스 dev 보다 뒤처졌는지 — 0 이 아니면 대상 저장소 작업·측정·감사 전에 동기화 (#70 · workflow.md 브랜치 전략 표 `dev 수용` 행)
-for d in myFinance myFitness; do echo "$d behind dev: $(git -C ~/workspace/pleiades/repos/$d rev-list --count integration/pleiades..origin/dev) · conflicts: $(git -C ~/workspace/pleiades/repos/$d merge-tree --write-tree --name-only --no-messages integration/pleiades origin/dev 2>/dev/null | tail -n +2 | grep -c .)"; done   # --no-messages 없으면 Auto-merging/CONFLICT 메시지 줄이 세어진다 (실측 fin 1→3 · PR #74 Codex P2)
+for d in myFinance myFitness; do echo "$d behind dev: $(git -C ~/workspace/pleiades/repos/$d rev-list --count origin/integration/pleiades..origin/dev) · conflicts: $(git -C ~/workspace/pleiades/repos/$d merge-tree --write-tree --name-only --no-messages origin/integration/pleiades origin/dev 2>/dev/null | tail -n +2 | grep -c .)"; done   # 기준은 origin/ — 로컬 integration/pleiades 는 fetch 로 움직이지 않아 다른 세션의 동기화 머지를 놓친다(PR #74 Codex P2). --no-messages 없으면 Auto-merging/CONFLICT 메시지 줄이 세어진다 (실측 fin 1→3 · PR #74 Codex P2)
 ```
 **`behind dev` 가 0 이 아니면 브리핑의 첫 후보 액션은 동기화다** (#70 · 첫 적용 #71). 그 위에서 측정·감사하면 `dev` 가 이미 한 일을 모르고 되풀이한다(fit vitest 이중 도입 · 2026-09-18 vs 1a-2).
 원본이 `dev`/`main` 이 아니면 **누군가 서비스 유지 작업 중일 수 있으므로 사용자에게 확인한다.**
