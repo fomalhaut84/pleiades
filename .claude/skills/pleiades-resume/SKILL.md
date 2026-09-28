@@ -56,7 +56,10 @@ test -f ~/workspace/myFitness/CLAUDE.md && test -d ~/workspace/myFitness/.claude
 #   (ignored 파일로 복원되며 index 는 바뀌지 않는다. 확인: diff -rq ~/workspace/myFitness/.claude ~/workspace/pleiades/repos/myFitness/.claude → settings.local.json 만 차이)
 # worktree 가 원격 integration/pleiades 보다 뒤처졌는지
 for d in myFinance myFitness; do git -C ~/workspace/pleiades/repos/$d fetch -q origin; echo "$d behind: $(git -C ~/workspace/pleiades/repos/$d rev-list --count HEAD..origin/integration/pleiades)"; done
+# integration/pleiades 가 서비스 dev 보다 뒤처졌는지 — 0 이 아니면 대상 저장소 작업·측정·감사 전에 동기화 (#70 · workflow.md 브랜치 전략 표 `dev 수용` 행)
+for d in myFinance myFitness; do echo "$d behind dev: $(git -C ~/workspace/pleiades/repos/$d rev-list --count integration/pleiades..origin/dev) · conflicts: $(git -C ~/workspace/pleiades/repos/$d merge-tree --write-tree --name-only integration/pleiades origin/dev 2>/dev/null | tail -n +2 | grep -c .)"; done
 ```
+**`behind dev` 가 0 이 아니면 브리핑의 첫 후보 액션은 동기화다** (#70 · 첫 적용 #71). 그 위에서 측정·감사하면 `dev` 가 이미 한 일을 모르고 되풀이한다(fit vitest 이중 도입 · 2026-09-18 vs 1a-2).
 원본이 `dev`/`main` 이 아니면 **누군가 서비스 유지 작업 중일 수 있으므로 사용자에게 확인한다.**
 
 > **측정·감사는 worktree 를 본다 (PR #6 Codex 리뷰 P1).** 원본에는 앞선 1a 단계 변경이

@@ -72,6 +72,7 @@ Q7(DB 경계) · Q2(독립 배포) · Q3(봇 인바운드 통합).
 > 경로는 `.claude/rules/workflow.md` **7절 base 표**. **양쪽 다 사용자 승인 게이트가 적용된다.**
 pleiades 발 변경은 **전부** `integration/<type>-pleiades-<name>` 을 따서 `integration/pleiades` 로 PR 한다 (사용자 결정 2026-09-07 · #25 · `workflow.md` 브랜치 전략). 단계별 되돌리기 등급(003 §5-2)은 브랜치 단위로 보존된다.
 **`integration/pleiades` 는 `dev` 로 머지되지 않는다** — pleiades 가 공식 서비스가 되기 전까지 두 저장소의 pleiades 내부 메인이고, 통합은 모노레포 전환 완료 시점에 한다 (사용자 2026-09-07 · #25). 서비스에도 필요한 변경은 단독 작업 경로로 별도 PR. `main` 직접 변경 금지. 롤백은 `_workspace/04_operator_rollback.md`.
+**반대 방향은 정기 동기화다 — 서비스 `dev` → `integration/pleiades`** (사용자 2026-09-28 · #70). 두 저장소는 서비스 중이라 `dev`·`main` 이 계속 바뀌고, pleiades 는 그것을 지켜보다가 `integration/pleiades` 와 열린 작업 브랜치에 반영한다. 세션 시작(`pleiades-resume` Step 2)에 뒤처진 커밋 수를 재고 0 이 아니면 **대상 저장소 작업 전에** `integration/chore-pleiades-sync-<YYYYMMDD>` 로 머지 PR(**"Create a merge commit" · squash 금지**). 절차·리뷰 범위는 `.claude/rules/workflow.md` 브랜치 전략 표. 첫 적용 #71(2026-09-28 · fin dev 4 · fit dev 77). **fit 원본 `.claude/` 는 `dev` 에서 gitignored 라 이 동기화로 오지 않는다** — 원본이 단독 세션에서 진화해 worktree 판과 갈라졌다(2026-09-28 실측 스킬 6 차이). 통째 `archive | tar -x` 복원은 이제 원본의 새 판을 덮어쓰므로 **파일 단위로만** 한다(별도 이슈).
 
 `repos/` 는 pleiades `.gitignore` 에 등재돼 있다. 그 결과 **Grep 은 루트 검색에서 `repos/` 를 건너뛴다** —
 두 저장소를 검색할 때는 **`path` 를 `repos/` 이하로 지정**해야 한다 (Glob·Read 는 영향 없음).
@@ -167,6 +168,7 @@ bin/claude-with fit      # 한 번에 한 저장소 (H-5 · Q30). --resume 도 �
 | 2026-09-10 | **`workflow.md` 8절 pleiades 타입 칸에 `typecheck:test` 추가** (#32 I1 (b) 이행 · `tsconfig.test.json`) | 룰 1 | 1a-1 (#47) |
 | 2026-09-10 | 하네스 절에 **skill 충돌 규칙**(이름 단위 · cwd 승) 1줄 — N18 에 셋째 규칙 | CLAUDE.md | #38 실측 (PR #50) |
 | 2026-09-14 | **`dual-repo-change` 5-1 롤백 문서 필수 항목 신설** — 상태 판정 표 + 세 시점(머지 전 · 머지 후 revert 브랜치→PR→사용자 머지 · 원본 도달분) + 원칙 4. **상황별 명령은 `_workspace/61/rollback-checklist.md` 초안(#66 확정)으로 분리**(PR #65 Codex 7라운드 P1 9·P2 5 → 9-4 스코프 축소 · 사용자 결정) · 승인 게이트 롤백 칸·체크리스트 · `dual-repo-operator` 4번·집행 후 4번 · `pleiades-orchestrator` Phase 5 · `_workspace/harness/04_operator_rollback.md` 정정 블록 · `.gitignore` `_workspace/**/backup/` | 스킬 2 · 에이전트 1 · 롤백 문서 1 · 초안 1 | #61 (PR #60 Codex 4라운드 교훈) |
+| 2026-09-28 | **서비스 `dev` → `integration/pleiades` 정기 동기화 정책 신설** — `workflow.md` 브랜치 전략 표 `dev 수용` 행 + 동기화 PR 리뷰 범위(충돌 해결분) · `pleiades-resume` Step 2 behind-dev 측정 · `dual-repo-change` 모드 I 선결 · 004 정정 블록 · 대상 저장소 절 1문단. 첫 적용 #71(fin dev 4 · fit dev 77 · 충돌 fin 1 · fit 3) | 룰 1 · 스킬 2 · 스펙 1 · CLAUDE.md | #70 (사용자 결정 2026-09-28 — fit dev 가 vitest 를 독자 도입해 1a-2 와 중복) |
 
 ## 상속하는 컨벤션
 
