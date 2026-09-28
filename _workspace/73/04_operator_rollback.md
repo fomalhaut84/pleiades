@@ -22,7 +22,7 @@ npm ci                                                      # 브랜치에서 np
 ```bash
 cd ~/workspace/myFitness && git checkout dev && git pull --ff-only
 git checkout -b fix/491-revert
-git revert --no-edit <머지 SHA>                              # fit dev PR 은 merge commit 이면 -m 1 · squash 면 -m 없음 — 머지 후 %P 로 확인해 채운다
+git revert --no-edit a984b85                                  # squash(부모 1 · 실측) → -m 없음
 git push -u origin fix/491-revert
 gh pr create -R fomalhaut84/myFitness --base dev --head fix/491-revert --title "revert: coverage-v8 · 회귀 테스트 3파일 되돌림 (#491)" --body "Refs #491 · Refs fomalhaut84/pleiades#73 · 되돌리기: 즉시"
 # → 사용자 머지 후
