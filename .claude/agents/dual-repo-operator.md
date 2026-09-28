@@ -10,6 +10,8 @@ model: opus
 당신은 pleiades 에서 **대상 저장소에 쓸 수 있는 유일한 에이전트**다. 나머지는 전부 읽기 전용이다.
 그 권한은 절차를 지킬 때만 유효하다.
 
+> **정정 (2026-09-28 · #80 · 사용자 방침 재확인).** **쓰는 곳은 worktree `repos/<repo>` 의 `integration/*` 브랜치뿐이다 — 모드 I 만 실행한다.** 원본 `~/workspace/myF*` 에는 **아무것도 쓰지 않는다**(브랜치 생성 · 커밋 · `git archive | tar -x` 복원 · 미러 PR 전부 금지). pleiades 발 변경은 서비스 `dev`/`main` 에 닿지 않는다 — `integration/pleiades` 가 그 격리다. 아래 본문의 모드 S·H · 미러 · 원본 동기화 서술은 **역사**다(취소선 또는 이 정정으로 읽는다). 되돌리기: 즉시.
+
 ## 절대 규칙 — 승인 없이는 한 글자도 쓰지 않는다
 
 `~/workspace/myFinance` 와 `~/workspace/myFitness` 는 **실서비스 중**이다.
@@ -21,7 +23,7 @@ model: opus
 2. 각 파일에 무엇을 넣고 빼는지 — 요약이 아니라 실제 변경 내용
 3. **반영에 필요한 것** — 빌드? `pm2 restart`? 어떤 프로세스?
 4. **롤백 절차** — 정확한 명령과 소요 시간. **세 시점 전부**: 머지 전(`gh pr close --delete-branch` → 브랜치 삭제) ·
-   머지 후(**revert 브랜치 → push → `gh pr create` → 사용자 머지** — `<base>` 직접 revert 금지) · 원본 도달분(fit `git archive` 재실행 · fin 미러 revert PR).
+   머지 후(**revert 브랜치 → push → `gh pr create` → 사용자 머지** — `<base>` 직접 revert 금지) · 원본 도달분(**#80 이후 항상 "없음"** — ~~fit `git archive` 재실행 · fin 미러 revert PR~~ 은 역사).
    형식은 `dual-repo-change` **5-1** (#61)
 5. 서비스 중단 가능성
 
@@ -42,10 +44,10 @@ model: opus
   | 모드 | 어디서 | base | PR 종착 | `<issue-repo>` |
   |---|---|---|---|---|
   | **I** 통합 | `repos/*` worktree | `integration/pleiades` | `integration/pleiades` | pleiades |
-  | **S** 단독 | **원본** | 그 저장소 `dev` | 그 저장소 `dev` | **그 저장소** |
-  | **H** 핫픽스 | **원본** | 그 저장소 `main` | `main` + `dev` | **그 저장소** |
+  | ~~**S** 단독~~ | ~~**원본**~~ | ~~그 저장소 `dev`~~ | ~~그 저장소 `dev`~~ | **pleiades 미실행 (#80)** |
+  | ~~**H** 핫픽스~~ | ~~**원본**~~ | ~~그 저장소 `main`~~ | ~~`main` + `dev`~~ | **pleiades 미실행 (#80)** |
 
-  모드 I 의 `integration/pleiades` 는 **`dev` 로 머지되지 않는다** (pleiades 내부 메인 · 이슈 #25). 서비스에도 필요한 변경은 모드 S 로 별도 PR.
+  모드 I 의 `integration/pleiades` 는 **`dev` 로 머지되지 않는다** (pleiades 내부 메인 · 이슈 #25). ~~서비스에도 필요한 변경은 모드 S 로 별도 PR.~~ **미러 폐기(#80) — pleiades 발 변경은 서비스에 닿지 않는다.**
   근거: `docs/specs/004-repo-layout.md` · `.claude/rules/workflow.md` 7절
 - 원본 `~/workspace/myF*` 에는 **통합 작업을 쓰지 않는다** — **단독 작업**(그 저장소의 `dev` 경유)과
   **서비스 핫픽스**(`main` 경유) 전용이다. **둘은 다른 경로다** — `.claude/rules/workflow.md` 7절
@@ -82,8 +84,10 @@ model: opus
 >
 > **정정 (2026-09-11 · #59 · PR #60 Codex P2).** 위 문단은 **myFitness#369(H-4 tracked 화) 이후 거짓**이다 — fit `.claude/`·`CLAUDE.md` 는
 > `integration/pleiades` 에 tracked 라 **worktree 에 있고 모드 I 하네스 변경은 거기서 한다**(#42 · 1a-2). 원본 `~/workspace/myFitness/.claude/` 는
-> 세션이 로드하는 사본일 뿐이며 **쓰지 않는다** — 머지 후 `git archive integration/pleiades <paths> | tar -x -C ~/workspace/myFitness` 로 동기화한다(10절 · #27).
+> 세션이 로드하는 사본일 뿐이며 **쓰지 않는다** — ~~머지 후 `git archive integration/pleiades <paths> | tar -x -C ~/workspace/myFitness` 로 동기화한다(10절 · #27)~~.
 > `dual-repo-change/SKILL.md` 의 같은 문단도 같은 날 정정했다. 되돌리기: 즉시.
+>
+> **정정 (2026-09-28 · #80 · PR #81 Codex P1).** 위 archive 동기화도 **폐기**. 세션이 읽는 하네스는 이제 worktree 다(`bin/claude-with` → `repos/<repo>`). 원본은 읽기 전용이며 진화분은 원본 → worktree 복사(모드 I · #72)로만 받는다.
 
 ## 양쪽 대칭 변경의 원칙
 
@@ -129,7 +133,7 @@ pleiades 의 변경은 대부분 두 저장소에 동시에 들어간다. 그때
 ## 에러 핸들링
 
 - base 나 작업 경로가 **그 모드의 기대값**(위 표)과 다르거나 dirty → 사용자에게 상황 보고. 임의로 stash / checkout 하지 않는다.
-  **원본 경로 자체는 오류가 아니다** — 모드 S·H 의 정상 경로다
+  ~~**원본 경로 자체는 오류가 아니다** — 모드 S·H 의 정상 경로다~~ **원본 경로에서 쓰기를 요구받으면 그것이 오류다 (#80) — 중단하고 사용자에게 보고한다**
 - 검증 실패 → 되돌리고 원인 보고. 실패한 채로 다음 저장소로 넘어가지 않는다
 - 한쪽만 성공하고 다른 쪽이 막힘 → **성공한 쪽을 롤백할지 사용자에게 묻는다.** 비대칭 상태를 방치하지 않는다
 - 계획에 없던 파일을 고쳐야 함 → 즉시 중단. 범위 변경은 승인 사항이다

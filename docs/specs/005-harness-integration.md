@@ -956,3 +956,6 @@ cd ~/workspace/pleiades
 `/tmp` 6: `repo-measure:117-119` · `repo-surveyor:84-86`
 grep 문구 6곳: `CLAUDE.md:106` · `rules/workflow.md:91` · `repo-surveyor.md:25` ·
 `repo-measure/SKILL.md:23` · `reversibility-auditor.md:20` · `reversibility-audit/SKILL.md:18`
+
+> **정정 (2026-09-28 · 이슈 #80).** §4-5·§4-6 의 *"대상은 항상 원본"* 과 §4-7 의 fit 원본 `.claude/` `git archive` 복원·갱신은 **폐기**한다 — pleiades 는 원본에 쓰지 않는다(사용자 방침: pleiades 발 변경은 서비스 `dev`/`main` 에 닿지 않는다). `bin/claude-with <repo>` 는 worktree `repos/<repo>` 를 `--add-dir` 로 붙인다(fit `.claude/` 는 #369 이후 tracked). 원본 하네스가 진화하면 원본 → worktree 복사(모드 I)로 받는다(#72). 되돌리기: 즉시.
+

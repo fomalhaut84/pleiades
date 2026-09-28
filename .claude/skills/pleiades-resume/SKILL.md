@@ -49,17 +49,10 @@ done
 **worktree 브랜치가 `integration/pleiades` 가 아니거나 dirty 면 인계 노트보다 현재 상태를 신뢰한다.**
 
 ```bash
-# 원본 fit 의 하네스 존재 확인 — tracked 화 브랜치 → main 체크아웃 전환이 파일을 지운 전례 (#27)
-test -f ~/workspace/myFitness/CLAUDE.md && test -d ~/workspace/myFitness/.claude/rules || echo "fit 원본 하네스 없음 — 복원 필요"
-# 없으면 브리핑에 그 사실을 넣고, 사용자 승인(원본 쓰기) 후 아래를 실행한다. 복원 전에는 대상 저장소 작업을 시작하지 않는다 (#27 · PR #28 Codex P2)
-# ⚠️ 통째 복원 금지 — 원본 .claude/ 는 단독 세션에서 독자 진화했고 git 이력이 없다(#70 · #72 · 2026-09-28 실측 스킬 6 차이). 통째 tar -x 는 그 새 판을 덮어쓴다(PR #74 Codex P1).
-#   1) 부재 파일만 나열(확인용):
-#      git -C ~/workspace/myFitness ls-tree -r --name-only integration/pleiades .claude CLAUDE.md | while read -r p; do test -e ~/workspace/myFitness/"$p" || echo "$p"; done
-#   2) 부재 파일만 복원 — 1) 의 목록을 archive 경로 인자로 넘긴다(tar 옵션에 기대지 않는다: bsdtar 3.5.3 은 -k 종료 0 이지만 GNU tar 1.35 는 -k 가 기존 파일을 오류로 보아 종료 2 · --skip-old-files 는 bsdtar 미지원 — 실측 2026-09-28 · PR #74 Codex P2):
-#      git -C ~/workspace/myFitness ls-tree -r --name-only integration/pleiades .claude CLAUDE.md | while read -r p; do test -e ~/workspace/myFitness/"$p" || echo "$p"; done \
-#        | xargs git -C ~/workspace/myFitness archive integration/pleiades | tar -x -C ~/workspace/myFitness      # 목록이 비면 xargs 가 인자 없이 호출해 전체를 풀 수 있으므로 1) 이 빈 출력이면 실행하지 않는다
-#   (ignored 파일로 복원되며 index 는 바뀌지 않는다. 확인: 1) 을 다시 돌려 빈 출력. diff -rq 로 worktree 판과 비교하면 원본이 더 새 파일들이 "differ" 로 나오는 것이 정상 — 그것은 드리프트이지 결손이 아니다)
-#   특정 파일을 worktree 판으로 되돌리려면 -k 없이 그 경로만 인자로 나열한다(#62 선례 · 사전 사본은 _workspace/<주제>/backup/).
+# 원본 하네스는 읽기 전용이다 (#80 · 2026-09-28 사용자 방침) — pleiades 는 원본 ~/workspace/myF* 에 아무것도 쓰지 않는다. 복원·동기화 절차는 폐기됐다.
+# 대신 드리프트만 잰다: 원본(단독 세션에서 진화) vs worktree(pleiades 가 읽고 고치는 사본 · #369 tracked). 차이가 있으면 브리핑에 넣고 "원본 → worktree 복사(모드 I PR)" 를 후보 액션으로 올린다 — 반대 방향은 없다 (#72)
+for d in myFinance myFitness; do if [ ! -d ~/workspace/pleiades/repos/$d/.claude/rules ] || [ ! -f ~/workspace/pleiades/repos/$d/CLAUDE.md ]; then echo "$d harness: MISSING in WORKTREE — bin/claude-with 가 읽는 사본이 없다. worktree 가 integration/pleiades 인지 확인·복귀(git -C repos/$d checkout integration/pleiades)가 먼저다 (PR #81 Codex P2)"; continue; fi; if [ ! -d ~/workspace/$d/.claude/rules ] || [ ! -f ~/workspace/$d/CLAUDE.md ]; then echo "$d harness: MISSING in original (체크아웃 전환이 지운 전례 #27 — 그 저장소 단독 세션의 일 · 브리핑에 적는다)"; continue; fi; echo "$d harness drift: $(diff -rq ~/workspace/$d/.claude ~/workspace/pleiades/repos/$d/.claude | grep -v 'settings.local.json\|worktrees' | wc -l | tr -d ' ') · CLAUDE.md: $(diff -q ~/workspace/$d/CLAUDE.md ~/workspace/pleiades/repos/$d/CLAUDE.md >/dev/null && echo same || echo differ)"; done   # 부재를 drift 0 으로 오판하지 않는다 (PR #81 Codex P2)
+# 원본 fit 하네스가 아예 없으면(체크아웃 전환이 지운 전례 #27 · 2026-09-28 #494 도중 재현) 그것은 fit 단독 세션의 일이다 — 브리핑에 적고 pleiades 는 복원하지 않는다. 세션이 읽는 하네스는 worktree 라 pleiades 작업은 막히지 않는다.
 # worktree 가 원격 integration/pleiades 보다 뒤처졌는지
 for d in myFinance myFitness; do git -C ~/workspace/pleiades/repos/$d fetch -q origin; echo "$d behind: $(git -C ~/workspace/pleiades/repos/$d rev-list --count HEAD..origin/integration/pleiades)"; done
 # integration/pleiades 가 서비스 dev 보다 뒤처졌는지 — 0 이 아니면 대상 저장소 작업·측정·감사 전에 동기화 (#70 · workflow.md 브랜치 전략 표 `dev 수용` 행)

@@ -12,7 +12,7 @@ description: 방향 문서에 적힌 비용·되돌리기 추정을 실제 코�
 > **감사 대상은 모드가 정한다 (PR #6 Codex 리뷰 P1).** 아래 명령의 `<audit-target>` 은
 > `.claude/rules/workflow.md` **7절 표**의 "어디서" 열이다:
 > **모드 I** → `~/workspace/pleiades/repos/$d` (worktree, `integration/pleiades`) ·
-> **모드 S·H** → `~/workspace/$d` (원본, 그 저장소의 `dev`/`main`).
+> **모드 S·H** → `~/workspace/$d` (원본, 그 저장소의 `dev`/`main`). **— #80 이후 pleiades 는 S·H 를 실행하지 않으므로 이 대상은 원본을 *읽기만* 할 때(드리프트 비교 등)에 한한다.**
 > **경로를 고정하면 단독 변경·핫픽스가 "바꾸려는 코드가 없는 브랜치"를 감사하고 통과한다** —
 > 반대로 통합 작업이 원본을 감사하면 앞선 단계가 빠진 트리를 본다. 둘 다 잘못된 승인이다.
 > **`grep` 에는 반드시 `--binary-files=text` (PR #6 Codex 리뷰 P2).** 없으면 `.next/cache`

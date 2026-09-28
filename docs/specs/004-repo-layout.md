@@ -374,3 +374,8 @@ pleiades 내부 메인이며, 통합은 모노레포 전환이 끝나 두 프로
 > 이 문서와 #25 는 `integration/pleiades` 가 `dev` 로 **가지 않는다**는 것만 정했고, `dev` 를 **받는** 절차는 없었다. 그 사이 fit `dev` 는 77커밋(2026-09-18 vitest 독자 도입 #399 포함 — 1a-2 와 중복), fin `dev` 는 4커밋 앞섰다.
 > 측정·감사가 worktree 를 본다는 규칙(PR #6 Codex P1)은 worktree 가 `dev` 를 따라갈 때만 옳다. 사용자 결정(2026-09-28): **정기 동기화** — `integration/chore-pleiades-sync-<YYYYMMDD>` 머지 PR · "Create a merge commit" · 리뷰 범위는 충돌 해결분 · `main` 은 받지 않는다(두 저장소 모두 `main` = `dev` + 릴리즈 머지 커밋 · 실측). 정본은 `.claude/rules/workflow.md` 브랜치 전략 표 `dev 수용` 행.
 > **Q43 의 미러 경로는 그대로다** — pleiades 발 변경이 서비스에 필요하면 여전히 모드 S 미러다. 동기화는 반대 방향이다. **§4-7 의 fit 원본 `.claude/` 통째 복원은 더 이상 안전하지 않다** — 원본 `.claude/` 는 `dev` 에서 gitignored 라 동기화로 오지 않고 단독 세션에서 독자 진화했다(2026-09-28 실측: 스킬 6 차이 · `security-audit-fix` 원본에만). 파일 단위 `git archive <paths>` 만 쓴다. 되돌리기: 문서 즉시 · 동기화 머지 중간(`revert -m 1` 뒤 다시 받으려면 revert 의 revert).
+
+> **정정 (2026-09-28 · 이슈 #80 · 사용자 방침 재확인) — Q43 의 미러 경로와 §4-7 원본 동기화를 폐기한다.**
+> 사용자: *"각 서비스의 dev·main 변화 → `integration/pleiades` 에 반영. 그 반대는 불가. hotfix/·feature/ 등은 실서비스용. pleiades 는 `integration/*` 아래에서 모든 걸 처리한다."*
+> Q43 은 pleiades 발 변경을 서비스 `dev` 로 복제하는 경로(모드 S 미러)였고 2026-09-28 에 세 번 쓰였다(myFinance#509 · myFitness#492 · myFitness#494 → 닫음). 폐기. 미러가 필요했던 이유(G-2 · 세션이 읽는 하네스 = 원본)는 `bin/claude-with` 가 **worktree `repos/<repo>` 를 붙이는 것**으로 대체한다 — fit `.claude/` 는 #369 이후 worktree 에 tracked 라 "worktree 에 없다"(§3′)는 낡았다. 원본 `~/workspace/myF*` 는 **읽기 전용**이며 `git archive … | tar -x` 동기화(§4-7 · #27)도 하지 않는다. 원본 하네스의 진화는 **원본 → worktree 복사(모드 I)** 로만 받는다(#72). 되돌리기: 문서·스크립트 즉시.
+

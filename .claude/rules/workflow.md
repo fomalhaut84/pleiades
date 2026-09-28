@@ -35,15 +35,17 @@ dev ──┬──┬──┬────────merge──────�
 | 피처 브랜치 | **`integration/feature-pleiades-<feature>`** |
 | 기타 유형 | **`integration/{fix\|chore\|…}-pleiades-<branchname>`** (피처 네이밍 차용) |
 | `dev` 진입 | **없다.** `integration/pleiades` 는 pleiades 가 공식 서비스가 되기 전까지 두 저장소의 **pleiades 내부 메인**이며 `dev` 로 머지되지 않는다. 통합은 모노레포 전환이 끝나 두 프로젝트가 pleiades 로 흡수될 때 한다 (사용자 2026-09-07) |
-| **`dev` 수용** (반대 방향) | **있다 — 정기 동기화** (사용자 2026-09-28 · #70). 서비스 `dev` 는 계속 움직이므로 `integration/pleiades` 가 그것을 **받는다**: `git fetch origin && git checkout integration/pleiades && git pull --ff-only` 로 로컬을 원격에 맞춘 뒤(다른 세션이 이미 동기화했을 수 있다 — 낡은 base 에서 따면 충돌이 PR 머지 시점에야 드러난다 · PR #74 Codex P2) `integration/chore-pleiades-sync-<YYYYMMDD>` 를 따고 `git merge origin/dev`(머지 커밋) → 충돌 해결 → 8절 검증 4종 → PR(base `integration/pleiades`). **사용자는 "Create a merge commit" 으로 머지한다 — squash 금지**(squash 면 `dev` 커밋이 조상이 되지 않아 다음 동기화가 같은 충돌을 되풀이한다). `main` 은 받지 않는다 — 두 저장소 모두 `main` = `dev` + 릴리즈 머지 커밋이고 핫픽스는 `dev` 백포트가 원칙이라 `dev` 가 상위집합이다(2026-09-28 실측). 시점: `pleiades-resume` Step 2 가 `rev-list --count origin/integration/pleiades..origin/dev`(원격 ref 기준 — 로컬 브랜치는 fetch 로 움직이지 않는다 · PR #74 Codex P2)를 저장소마다 재고 **0 이 아닌 저장소는 대상 저장소 작업·측정·감사 전에 동기화**한다 — 뒤처진 쪽만(한쪽이면 PR 1 · 둘이면 대칭 변경 이슈 1 · PR 2 · PR #74 Codex P1). 동기화 뒤 열린 `integration/*-pleiades-*` 작업 브랜치는 `integration/pleiades` 를 merge 해 따라간다. **머지 후 `git log -1 --format=%P` 로 부모가 2개인지 확인한다** — squash 됐으면(myFitness#488 `961b130` 실증) 트리는 맞지만 `dev` 가 조상이 아니므로 `git merge -s ours --no-ff origin/dev` 를 얹는 PR(diff 0 · merge commit)로 복구한다(#75 · myFitness#489). **모드 S 미러는 `dev` 를 다시 앞서게 한다**(내용 동일) — 다음 동기화가 무충돌로 흡수하므로 미러만으로 동기화 PR 을 열지 않아도 된다(2026-09-28 fin behind 2 실측) |
+| **`dev` 수용** (반대 방향) | **있다 — 정기 동기화** (사용자 2026-09-28 · #70). 서비스 `dev` 는 계속 움직이므로 `integration/pleiades` 가 그것을 **받는다**: `git fetch origin && git checkout integration/pleiades && git pull --ff-only` 로 로컬을 원격에 맞춘 뒤(다른 세션이 이미 동기화했을 수 있다 — 낡은 base 에서 따면 충돌이 PR 머지 시점에야 드러난다 · PR #74 Codex P2) `integration/chore-pleiades-sync-<YYYYMMDD>` 를 따고 `git merge origin/dev`(머지 커밋) → 충돌 해결 → 8절 검증 4종 → PR(base `integration/pleiades`). **사용자는 "Create a merge commit" 으로 머지한다 — squash 금지**(squash 면 `dev` 커밋이 조상이 되지 않아 다음 동기화가 같은 충돌을 되풀이한다). `main` 은 받지 않는다 — 두 저장소 모두 `main` = `dev` + 릴리즈 머지 커밋이고 핫픽스는 `dev` 백포트가 원칙이라 `dev` 가 상위집합이다(2026-09-28 실측). 시점: `pleiades-resume` Step 2 가 `rev-list --count origin/integration/pleiades..origin/dev`(원격 ref 기준 — 로컬 브랜치는 fetch 로 움직이지 않는다 · PR #74 Codex P2)를 저장소마다 재고 **0 이 아닌 저장소는 대상 저장소 작업·측정·감사 전에 동기화**한다 — 뒤처진 쪽만(한쪽이면 PR 1 · 둘이면 대칭 변경 이슈 1 · PR 2 · PR #74 Codex P1). 동기화 뒤 열린 `integration/*-pleiades-*` 작업 브랜치는 `integration/pleiades` 를 merge 해 따라간다. **머지 후 `git log -1 --format=%P` 로 부모가 2개인지 확인한다** — squash 됐으면(myFitness#488 `961b130` 실증) 트리는 맞지만 `dev` 가 조상이 아니므로 `git merge -s ours --no-ff origin/dev` 를 얹는 PR(diff 0 · merge commit)로 복구한다(#75 · myFitness#489). 미러는 폐기됐다(#80) — 2026-09-28 의 마지막 미러(#509·#492)가 `dev` 를 앞서게 한 분은 내용 동일이라 다음 동기화가 무충돌로 흡수한다(fin behind 2 · fit behind 1 실측) |
 
 > **정정 (이슈 #25).** 이전 서술은 *"통합 단계"* 만 `integration/pleiades` 로 보내고(`integration/pleiades-<단계>`),
 > pleiades 가 촉발한 단독 변경(#8 fin · fit tracked 화)은 원본 `dev` 로 보냈다(모드 S). 이제 **pleiades 발 변경은
 > 전부 `integration/pleiades` 로 모인다.** 단독 작업·핫픽스는 **pleiades 와 무관한** 변경에만 남는다.
 > **`integration/pleiades` 는 `dev` 로 가지 않는다** — 서비스 중인 개별 저장소와 pleiades 작업을 분리하기 위한 장기 메인이다.
 > 그러므로 `integration/pleiades` 에 넣은 변경(#8 룰 정정 · fit tracked 화 등)은 **서비스 `dev`/`main` 에 도달하지 않는다.**
-> 서비스에도 필요하면 **서비스 미러** — 단독 작업 경로(모드 S · 원본 · 그 저장소 `dev`)로 **별도 PR** 을 내되, 이슈는 그 저장소에 만들고 본문에 원 PR 을 링크한다.
-> 미러는 pleiades 가 촉발했어도 **모드 S 로 분류한다** (PR #26 Codex P2 — 아니면 미러 자체가 규정 위반이 된다). 004 Q43 은 이 경로를 쓴다.
+> ~~서비스에도 필요하면 **서비스 미러** — 단독 작업 경로(모드 S · 원본 · 그 저장소 `dev`)로 **별도 PR** 을 내되, 이슈는 그 저장소에 만들고 본문에 원 PR 을 링크한다.~~
+> ~~미러는 pleiades 가 촉발했어도 **모드 S 로 분류한다** (PR #26 Codex P2 — 아니면 미러 자체가 규정 위반이 된다). 004 Q43 은 이 경로를 쓴다.~~
+>
+> **정정 (2026-09-28 · #80 · 사용자 방침 재확인).** **서비스 미러는 폐기한다.** pleiades 발 변경은 그것이 무엇이든 서비스 `dev`/`main` 에 닿지 않는다 — `integration/pleiades` 가 그 격리이고, pleiades 는 `integration/*` 아래에서 모든 것을 처리한다. 미러가 필요했던 이유(G-2: 세션이 읽는 하네스가 원본이라 pleiades 의 하네스 정정이 원본에 도달해야 했다)는 **`bin/claude-with` 가 worktree `repos/<repo>` 를 `--add-dir` 로 붙이는 것**으로 대체한다 — fit `.claude/` 도 #369 이후 worktree 에 tracked 다. 마지막 미러는 2026-09-28 의 myFinance#509(문서 한 줄)·myFitness#492(devDeps · 런타임 코드 0)이며 사용자 결정으로 유지한다. myFitness#494(하네스 tracked 화)는 이 방침으로 머지하지 않고 닫았다. 되돌리기: 즉시.
 > 단계 브랜치 `integration/pleiades-<단계>` 표기는 `integration/feature-pleiades-<단계>` 로 읽는다.
 >
 > **동기화 PR 의 리뷰 범위 (#70 · 2026-09-28).** 동기화 PR 의 diff 는 이미 `dev` 에서 리뷰·머지된 서비스 코드다. 9-1 사전 리뷰는 **충돌 해결분 + 머지 위생 + 8절 검증**으로 한정한다. 봇 P0/P1 이 `dev` 유래 코드를 가리키면 **그 저장소에 이슈를 만들어 이관**한다 — 고치려면 모드 S 로 `dev` 에 낸다. 동기화 PR 에서 고치면 `integration/pleiades` 가 `dev` 와 다시 갈라진다. 충돌 해결분에 대한 P0/P1 만 동기화 PR 에서 고친다. 되돌리기: 머지 커밋 revert(`-m 1`) → **중간**(그 뒤 `dev` 를 다시 받으려면 revert 의 revert 가 필요하다).
@@ -187,6 +189,8 @@ pleiades 작업과 **통합 작업**의 이슈는 pleiades 에, **단독 작업�
 > 5절·9-2·10절의 `-R` 과 `Closes` 는 전부 이 열을 따른다. 한정을 빼먹으면
 > **같은 번호의 무관한 이슈를 닫는다.**
 
+> **정정 (2026-09-28 · #80).** **단독 작업·서비스 핫픽스 행은 pleiades 세션이 실행하지 않는다** — 그 저장소의 단독 세션(그 저장소 cwd · 그 저장소 자신의 `workflow.md`) 전용이다. 표에 남겨 두는 이유는 `<issue-repo>`·base 가 어디로 갈리는지, 그리고 pleiades 가 **하지 않는** 일이 무엇인지 알기 위해서다. 2026-09-28 까지 이 행을 "서비스 미러" 로 pleiades 세션이 세 번 탔고(#509·#492·#494) 사용자 방침 재확인으로 폐기했다. 되돌리기: 즉시.
+>
 > **`dual-repo-change` 는 모드가 셋이다 (PR #6 Codex 리뷰 P1).** 그 스킬의 체크리스트는
 > `repos/` worktree · `integration/pleiades` base 를 전제로 쓰였다. **모드 S·H 에서는
 > 그 전제가 성립하지 않으므로** 승인 게이트(§1)·착수 직전 재감사(§2)·저장소별 검증(§4)·
@@ -492,11 +496,11 @@ git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 �
 
 그리고 `CLAUDE.md` 의 상태 절을 갱신하고, 다음 작업이 있으면 사용자에게 제안한다.
 
-**대상 저장소 PR 이 머지되면 두 가지를 더 한다 (#27):**
+**대상 저장소 PR 이 머지되면 한 가지를 더 한다 (#27):**
 - `repos/<repo>` worktree 의 `integration/pleiades` 를 `git pull --ff-only` 로 당긴다 (worktree 는 자동으로 움직이지 않는다)
-- **원본 체크아웃이 tracked 화 브랜치에서 `dev`/`main` 으로 돌아가면 그 파일들이 워킹트리에서 지워진다.** 되돌린 직후
+- ~~**원본 체크아웃이 tracked 화 브랜치에서 `dev`/`main` 으로 돌아가면 그 파일들이 워킹트리에서 지워진다.** 되돌린 직후
   `git -C ~/workspace/<repo> archive integration/pleiades <paths> | tar -x -C ~/workspace/<repo>` 로 ignored 파일로 복원한다
-  (실측: fit `.claude/` 17파일 + `CLAUDE.md` 가 사라졌다)
+  (실측: fit `.claude/` 17파일 + `CLAUDE.md` 가 사라졌다)~~ — **폐기 (2026-09-28 · #80 · PR #81 Codex P1).** pleiades 는 원본 `~/workspace/<repo>` 에 쓰지 않는다. 원본 체크아웃 전환은 그 저장소 단독 세션의 일이고, 세션이 읽는 하네스는 worktree 라(`bin/claude-with`) pleiades 작업이 막히지 않는다. 되돌리기: 즉시.
 
 ## 긴급 수정 (Hotfix)
 
@@ -504,7 +508,7 @@ git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 �
 
 | | 어디서 | base | 절차 |
 |---|---|---|---|
-| **서비스 핫픽스** (myFinance·myFitness 실서비스 버그) | **원본 `~/workspace/myF*`** | 그 저장소의 `main` | 아래 1~5. **`dual-repo-change` 모드 H** 로 탄다 (7절 표) |
+| **서비스 핫픽스** (myFinance·myFitness 실서비스 버그) — **pleiades 세션은 실행하지 않는다(#80)** | ~~원본 `~/workspace/myF*`~~ 그 저장소 **단독 세션** | 그 저장소의 `main` | **그 저장소 자신의 `.claude/rules/workflow.md` 긴급 수정 절**을 따른다. ~~아래 1~5 · `dual-repo-change` 모드 H~~ 는 역사(#80 이후 `dual-repo-change` 는 모드 I 만 실행 · PR #81 Codex P1). 아래 1~5 는 **pleiades 핫픽스** 행에만 적용 |
 | pleiades 핫픽스 | pleiades | pleiades `main` | 아래 1~5 |
 
 > **서비스 핫픽스는 원본에서 한다 (PR #6 Codex 리뷰 P1).** worktree 는

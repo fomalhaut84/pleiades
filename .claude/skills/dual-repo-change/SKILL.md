@@ -14,8 +14,10 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 | 모드 | 언제 | 어디서 | base | 이 스킬에서 적용되는 것 |
 |---|---|---|---|---|
 | **I** 통합 | **pleiades 발 변경 전부** (통합 단계 · 룰 정정 · tracked 화 등) | `repos/*` worktree | `integration/pleiades` (브랜치 `integration/<type>-pleiades-<name>`) | **전부** |
-| **S** 단독 | 그 저장소만의 평시 변경 (**pleiades 무관**) **또는 서비스 미러**(모드 I 로 `integration/pleiades` 에 들어간 변경을 서비스 `dev` 에도 복제 — 별도 이슈는 그 저장소에, 본문에 원 PR 링크) | **원본** | 그 저장소 `dev` | 승인 게이트 · 착수 직전 재감사 · 저장소별 검증 · 롤백 문서화 |
-| **H** 핫픽스 | 실서비스 버그 | **원본** | 그 저장소 `main` | 위와 같음 + 긴급 수정 절 |
+| **S** 단독 | 그 저장소만의 평시 변경 (**pleiades 무관**) — ~~또는 서비스 미러~~ **미러 폐기(#80)** | **원본** | 그 저장소 `dev` | **pleiades 세션은 이 모드를 실행하지 않는다**(#80 · 2026-09-28 사용자 방침). 그 저장소 단독 세션이 자기 `workflow.md` 로 한다 |
+| **H** 핫픽스 | 실서비스 버그 | **원본** | 그 저장소 `main` | **위와 같음 — pleiades 세션 미실행** |
+
+> **정정 (2026-09-28 · #80).** pleiades 발 변경은 서비스 `dev`/`main` 에 닿지 않는다 — `integration/pleiades` 가 격리다. 그래서 **이 스킬이 실제로 실행하는 모드는 I 뿐**이다. S·H 행은 pleiades 가 하지 않는 일을 표시하기 위해 남긴다. 2026-09-28 에 "서비스 미러" 로 S 를 세 번 탄 것(myFinance#509 · myFitness#492 · myFitness#494 → 닫음)이 이 정정의 계기다. 되돌리기: 즉시.
 
 > **모드 S·H 는 `repos/` 도 `integration/pleiades` 도 쓰지 않는다 (PR #6 Codex 리뷰 P1).**
 > 아래 체크리스트와 에러 표는 **모드 I 를 전제로** 쓰여 있다 — 모드 S·H 에서는
@@ -90,14 +92,16 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 >
 > **정정 (2026-09-11 · #59 · 1a-2 재감사 정정 6 부수).** 위 문단은 **myFitness#369(2026-09-07 · H-4 tracked 화) 이후 거짓**이다 —
 > fit `.claude/`·`CLAUDE.md` 는 `integration/pleiades` 에 tracked 라 **worktree 에 있고 거기서 고친다**(#42 · 1a-2 가 그렇게 했다).
-> 여전히 참인 것은 **세션이 로드하는 하네스는 원본**이라는 점뿐이다(`bin/claude-with` · `--add-dir`) — 그래서 worktree 를 고친 뒤
-> **원본 동기화**(`git archive integration/pleiades <paths> | tar -x -C ~/workspace/myFitness`)가 따로 필요하다(10절 · #27). `bin/claude-with:12` 의 같은 결함은 2026-09-09 에 고쳤다. 되돌리기: 즉시.
+> ~~여전히 참인 것은 **세션이 로드하는 하네스는 원본**이라는 점뿐이다(`bin/claude-with` · `--add-dir`) — 그래서 worktree 를 고친 뒤
+> **원본 동기화**(`git archive integration/pleiades <paths> | tar -x -C ~/workspace/myFitness`)가 따로 필요하다(10절 · #27).~~ `bin/claude-with:12` 의 같은 결함은 2026-09-09 에 고쳤다. 되돌리기: 즉시.
+>
+> **정정 (2026-09-28 · #80).** **원본 동기화도 폐기한다.** 원본 `~/workspace/myF*` 에는 pleiades 가 아무것도 쓰지 않는다(읽기 전용). `bin/claude-with` 가 worktree `repos/<repo>` 를 `--add-dir` 로 붙이므로 세션이 읽는 하네스가 곧 pleiades 가 고치는 사본이다. 원본 하네스가 단독 세션에서 진화해 worktree 판보다 새로워지면(#72) **원본 → worktree 복사(모드 I PR)** 로만 맞춘다 — 반대 방향은 없다. 되돌리기: 즉시.
 
 공통:
 - **pleiades 통합 작업의 base 는 `dev` 가 아니라 `integration/pleiades` 다.**
   작업은 `~/workspace/pleiades/repos/<repo>` **worktree** 에서 하고,
   `integration/<type>-pleiades-<name>` 을 따서 **`integration/pleiades` 로 PR** 한다 (이슈 #25 · 7절 표).
-  `integration/pleiades` 는 **`dev` 로 머지되지 않는다** — pleiades 내부 메인이다 (이슈 #25). 서비스에도 필요한 변경은 단독 작업 경로(모드 S)로 별도 PR.
+  `integration/pleiades` 는 **`dev` 로 머지되지 않는다** — pleiades 내부 메인이다 (이슈 #25). ~~서비스에도 필요한 변경은 단독 작업 경로(모드 S)로 별도 PR.~~ **미러 폐기 — pleiades 발 변경은 서비스 `dev`/`main` 에 닿지 않는다(#80).**
   근거는 `docs/specs/004-repo-layout.md` · `.claude/rules/workflow.md` 7절 base 표.
   **미완성 단계를 `dev` 로 보내면 서비스 브랜치가 오염되고 003 §5-2 의 단계별
   되돌리기 등급이 무너진다** (PR #6 Codex 리뷰 P1).
@@ -147,9 +151,9 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 `_workspace/61/rollback-checklist.md`(초안 · **#66 에서 확정**)를 참고하고, 형식 전례는 `_workspace/1a-2/04_operator_rollback.md`.
 
 **1. 상태 판정 표가 먼저다.** 롤백 명령은 상태에 따라 갈리므로 문서 첫머리에 **PR 마다 한 행**으로 적는다 —
-모드 H 는 `main`·`dev` 두 행(따로 머지되므로 한쪽만 머지된 상태가 있다) · 모드 S 미러 PR 은 별도 행:
+~~모드 H 는 `main`·`dev` 두 행(따로 머지되므로 한쪽만 머지된 상태가 있다) · 모드 S 미러 PR 은 별도 행~~ (역사 — #80 이후 pleiades 는 모드 I 만 실행한다):
 
-| PR | 머지 여부 · SHA | 배포·재시작 여부 (어느 프로세스 · β2 병행 인스턴스 포함) | 원본 도달 (fit `git archive` 동기화 · 모드 S 미러) | 의존성 변경 |
+| PR | 머지 여부 · SHA | 배포·재시작 여부 (어느 프로세스 · β2 병행 인스턴스 포함) | 원본 도달 (**#80 이후 항상 "없음"** — 역사: fit `git archive` 동기화 · 모드 S 미러) | 의존성 변경 |
 |---|---|---|---|---|
 
 **2. 세 시점을 전부 담는다.** 하나라도 빠지면 미완성이다.
@@ -158,12 +162,12 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 |---|---|---|
 | **머지 전** | 열린 PR 닫기(`gh pr close --delete-branch`) · 남은 로컬·원격 브랜치 정리 · 의존성 변경이면 `npm ci` | 열린 PR·원격 브랜치가 남는다 (PR #60 Codex P1) |
 | **머지 후** | **revert 브랜치 → `git revert` → push → `gh pr create` → 사용자 머지 → base 재체크아웃·pull** · 의존성이면 `npm ci` · 배포됐던 변경이면 `npm run build` + `pm2 restart <app>`(실행은 사용자) | `<base>` 에 직접 revert — **"머지는 사용자가 직접"은 revert 에도 적용된다** (PR #60 Codex P1) |
-| **원본 도달분** | fit 원본 하네스 동기화의 되돌리기(사전 사본 복원 또는 되돌려진 트리 `git archive`) · 모드 S 미러 PR 의 revert PR(**미러를 받은 저장소**에서) | `integration/pleiades` 만 되돌리고 **세션이 읽는 하네스는 그대로** (PR #60 Codex P2 · G-2) |
+| **원본 도달분** | **#80 이후 "없음" 을 명시한다** — pleiades 는 원본에 쓰지 않는다. ~~fit 원본 하네스 동기화의 되돌리기(사전 사본 복원 또는 되돌려진 트리 `git archive`) · 모드 S 미러 PR 의 revert PR(**미러를 받은 저장소**에서)~~ 은 2026-09-28 이전 집행(#62 · #67 · #73)의 롤백 문서에만 남는다 | 원본 도달이 있었던 옛 집행을 되돌릴 때 그 항목을 빠뜨린다 (PR #60 Codex P2 · G-2 — 이제는 역사) |
 
 **3. 원칙**
 - **되돌리기도 PR 을 거친다.** `<base>` 에 직접 커밋·push 하지 않는다. `git revert` 는 즉시 커밋하므로 **브랜치 생성이 앞선다**
 - **SHA 는 실값.** 머지 전에 쓴 문서는 `<머지 SHA>` 로 비워 두고 머지 후 채운다(PR #64 Codex P2). 대상 저장소·pleiades PR 은 squash 라 1커밋(myFitness#374 `3818208` 실측)
-- **사전 사본은 세션 밖에.** 원본 동기화 **전에** 동기화 경로 tar + 원본에 없던 파일 목록을 `_workspace/<주제>/backup/`(`.gitignore` 등재)에 두고 경로를 적는다 — 스크래치패드 사본은 #42 에서 소멸했다
+- **사전 사본은 세션 밖에.** (#80 이후 원본 동기화가 없으므로 해당 사례가 줄지만 원칙은 유지) 되돌리기가 워킹트리 파일을 지우는 경우(revert 가 add 를 취소할 때 등) **전에** tar + 부재 파일 목록을 `_workspace/<주제>/backup/`(`.gitignore` 등재)에 두고 경로를 적는다 — 스크래치패드 사본은 #42 에서 소멸했다
 - **등급은 원본 도달분까지 포함해 매긴다.** 승인 게이트(1절) 롤백 칸과 같은 내용이어야 한다 — 달라지면 승인 무효
 
 > **왜 규칙이 필요한가.** 이전 §5-4 는 *"롤백 절차를 남긴다"* 만 있고 **형식을 정하지 않았다.** 그 결과 1a-2 롤백 문서가
@@ -203,15 +207,17 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
       **대칭 변경이면 PR 2개**(`Refs <issue-repo>#<issue>`, **`Closes` 금지**)
 - [ ] 대칭 변경은 **PR 2개 모두 머지된 뒤** 이슈를 닫는다
 - [ ] **이슈는 수동으로 닫는다** — base 가 `integration/pleiades` 라 `Closes` 가 자동 실행되지 않는다 (#27)
-- [ ] 머지 후 `repos/<repo>` worktree 를 `git pull --ff-only`. 원본 체크아웃을 `dev`/`main` 으로 되돌렸다면 **tracked 화된 파일이 지워지지 않았는지 확인**하고 `git archive … | tar -x` 로 복원 (#27)
+- [ ] 머지 후 `repos/<repo>` worktree 를 `git pull --ff-only`. ~~원본 체크아웃을 `dev`/`main` 으로 되돌렸다면 **tracked 화된 파일이 지워지지 않았는지 확인**하고 `git archive … | tar -x` 로 복원 (#27)~~ — **원본 복원 폐기(#80 · PR #81 Codex P1). 원본에는 쓰지 않는다**
 
-### 모드 S — 단독 (저장소 **1개** · PR 은 그 저장소 `dev` 로)
+### ~~모드 S — 단독 (저장소 **1개** · PR 은 그 저장소 `dev` 로)~~ — **역사 (#80): pleiades 세션은 실행하지 않는다**
+
+> 아래 S·H 항목은 2026-09-28 이전 기록이다. pleiades 발 변경은 서비스 `dev`/`main` 에 닿지 않으므로 pleiades 세션은 **모드 I 체크리스트만** 탄다. S·H 는 그 저장소 단독 세션이 자기 `workflow.md` 로 한다.
 
 - [ ] **두 번째 저장소를 요구하지 않는다.** 한쪽만 바꾸는 것이 이 모드의 정의다
 - [ ] **9-2 PR 생성** — `--base dev`(그 저장소), `Closes <issue-repo>#<issue>`
       (`<issue-repo>` = **그 대상 저장소**)
 
-### 모드 H — 핫픽스 (저장소 **1개** · PR **2개**: `main` + `dev`)
+### ~~모드 H — 핫픽스 (저장소 **1개** · PR **2개**: `main` + `dev`)~~ — **역사 (#80): pleiades 세션은 실행하지 않는다**
 
 - [ ] `hotfix/<issue>-<n>` 을 그 저장소의 **`main`** 에서 분기
 - [ ] **9-2 PR 2개 생성** — `--base main` 과 `--base dev`.
