@@ -94,7 +94,7 @@ bin/claude-with fit      # 한 번에 한 저장소 (H-5 · Q30). --resume 도 �
 - **대상은 항상 원본**이다 (`repos/*` worktree 아님 — fit `.claude/` 는 worktree 에 없다).
 - 둘 다 붙이면 rule 은 **드롭 없이 여러 벌 공존**하고 agent 는 **마지막 `--add-dir` 이 이겨 나머지가 조용히 사라진다.** **skill 은 이름 단위로 1개만 남고 `cwd` 쪽이 이긴다**(#38 실측 2026-09-10 — `orphan-check` 는 pleiades 세션에서 pleiades 판, fit 세션에서 fit 판 · 개명 불필요). 그래서 한 번에 하나만 붙인다.
 - `--add-dir` 는 `--resume` 시 복원되지 않는다. 세션을 재개할 때마다 다시 넘긴다.
-- **fit 원본 `.claude/` 는 git 이력이 없다**(원본 `main` 의 `.gitignore:35` = `.claude/` 전체 ignore — worktree `integration/pleiades` 는 #369 로 tracked). 지우거나 낡으면 **`git -C ~/workspace/myFitness archive integration/pleiades .claude CLAUDE.md | tar -x -C ~/workspace/myFitness`** 로 복원·갱신한다(2026-09-09 H-3(fit) 에서 실행 검증 · 경로는 인자로 나열 — zsh 함정) — 005 §4-7 · #27.
+- **fit 원본 `.claude/` 는 git 이력이 없다**(원본 `main` 의 `.gitignore:35` = `.claude/` 전체 ignore — worktree `integration/pleiades` 는 #369 로 tracked). 지워졌으면 **부재 파일만** 복원한다 — **`git -C ~/workspace/myFitness archive integration/pleiades .claude CLAUDE.md | tar -x -k -C ~/workspace/myFitness`**(`-k` = 기존 파일 보존 · 2026-09-28 실측). ~~통째 `tar -x` 로 복원·갱신~~ 은 **2026-09-28 부로 금지** — 원본 `.claude/` 가 단독 세션에서 독자 진화해 worktree 판보다 새롭다(#70 · #72 · PR #74 Codex P1). 특정 파일을 worktree 판으로 맞출 때만 `-k` 없이 그 경로를 인자로 나열한다(2026-09-09 H-3(fit) · #62 실행 검증 · zsh 함정) — 005 §4-7 · #27.
 
 ## 문서 지도
 
