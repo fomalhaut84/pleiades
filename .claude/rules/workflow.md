@@ -508,7 +508,7 @@ git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 �
 
 | | 어디서 | base | 절차 |
 |---|---|---|---|
-| **서비스 핫픽스** (myFinance·myFitness 실서비스 버그) — **pleiades 세션은 실행하지 않는다(#80 · 그 저장소 단독 세션 전용)** | **원본 `~/workspace/myF*`** | 그 저장소의 `main` | 아래 1~5. **`dual-repo-change` 모드 H** 로 탄다 (7절 표) |
+| **서비스 핫픽스** (myFinance·myFitness 실서비스 버그) — **pleiades 세션은 실행하지 않는다(#80)** | ~~원본 `~/workspace/myF*`~~ 그 저장소 **단독 세션** | 그 저장소의 `main` | **그 저장소 자신의 `.claude/rules/workflow.md` 긴급 수정 절**을 따른다. ~~아래 1~5 · `dual-repo-change` 모드 H~~ 는 역사(#80 이후 `dual-repo-change` 는 모드 I 만 실행 · PR #81 Codex P1). 아래 1~5 는 **pleiades 핫픽스** 행에만 적용 |
 | pleiades 핫픽스 | pleiades | pleiades `main` | 아래 1~5 |
 
 > **서비스 핫픽스는 원본에서 한다 (PR #6 Codex 리뷰 P1).** worktree 는
