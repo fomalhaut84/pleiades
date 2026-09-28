@@ -207,15 +207,17 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
       **대칭 변경이면 PR 2개**(`Refs <issue-repo>#<issue>`, **`Closes` 금지**)
 - [ ] 대칭 변경은 **PR 2개 모두 머지된 뒤** 이슈를 닫는다
 - [ ] **이슈는 수동으로 닫는다** — base 가 `integration/pleiades` 라 `Closes` 가 자동 실행되지 않는다 (#27)
-- [ ] 머지 후 `repos/<repo>` worktree 를 `git pull --ff-only`. 원본 체크아웃을 `dev`/`main` 으로 되돌렸다면 **tracked 화된 파일이 지워지지 않았는지 확인**하고 `git archive … | tar -x` 로 복원 (#27)
+- [ ] 머지 후 `repos/<repo>` worktree 를 `git pull --ff-only`. ~~원본 체크아웃을 `dev`/`main` 으로 되돌렸다면 **tracked 화된 파일이 지워지지 않았는지 확인**하고 `git archive … | tar -x` 로 복원 (#27)~~ — **원본 복원 폐기(#80 · PR #81 Codex P1). 원본에는 쓰지 않는다**
 
-### 모드 S — 단독 (저장소 **1개** · PR 은 그 저장소 `dev` 로)
+### ~~모드 S — 단독 (저장소 **1개** · PR 은 그 저장소 `dev` 로)~~ — **역사 (#80): pleiades 세션은 실행하지 않는다**
+
+> 아래 S·H 항목은 2026-09-28 이전 기록이다. pleiades 발 변경은 서비스 `dev`/`main` 에 닿지 않으므로 pleiades 세션은 **모드 I 체크리스트만** 탄다. S·H 는 그 저장소 단독 세션이 자기 `workflow.md` 로 한다.
 
 - [ ] **두 번째 저장소를 요구하지 않는다.** 한쪽만 바꾸는 것이 이 모드의 정의다
 - [ ] **9-2 PR 생성** — `--base dev`(그 저장소), `Closes <issue-repo>#<issue>`
       (`<issue-repo>` = **그 대상 저장소**)
 
-### 모드 H — 핫픽스 (저장소 **1개** · PR **2개**: `main` + `dev`)
+### ~~모드 H — 핫픽스 (저장소 **1개** · PR **2개**: `main` + `dev`)~~ — **역사 (#80): pleiades 세션은 실행하지 않는다**
 
 - [ ] `hotfix/<issue>-<n>` 을 그 저장소의 **`main`** 에서 분기
 - [ ] **9-2 PR 2개 생성** — `--base main` 과 `--base dev`.

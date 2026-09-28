@@ -12,7 +12,7 @@ description: myFinance·myFitness 두 저장소를 실측하고 docs/research/me
 > **측정 대상도 모드가 정한다 (PR #6 Codex 리뷰 P1 파생).** 아래 명령의 `<target>` 은
 > `.claude/rules/workflow.md` **7절 표**의 "어디서" 열이다:
 > **통합 작업(모드 I)** → `~/workspace/pleiades/repos/$d` (worktree) ·
-> **단독 작업·핫픽스(모드 S·H)** → `~/workspace/$d` (원본).
+> **단독 작업·핫픽스(모드 S·H)** → `~/workspace/$d` (원본). **— #80 이후 pleiades 는 S·H 를 실행하지 않으므로 이 대상은 원본을 *읽기만* 할 때(드리프트 비교 등)에 한한다.**
 > **통합 로드맵을 위한 측정은 거의 항상 모드 I 다** — 원본에는 앞선 1a 단계 변경이 없다.
 > 원본을 재야 하면 **그 이유를 산출물에 명시한다.**
 > **`<target>` 도 `(디렉터리, ref)` 쌍이다 (PR #6 Codex 리뷰 P2).** 원본은 평소 fin=`dev` · fit=`main`
