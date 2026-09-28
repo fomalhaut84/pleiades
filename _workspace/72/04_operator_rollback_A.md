@@ -16,7 +16,7 @@ gh pr close <n> -R fomalhaut84/myFitness --delete-branch
 ## 2. 머지 후 (revert 도 PR)
 ```bash
 cd ~/workspace/pleiades/repos/myFitness && git checkout integration/pleiades && git pull --ff-only
-git checkout -b integration/fix-pleiades-72-revert && git revert -m 1 --no-edit <머지 SHA>     # merge commit 이면 -m 1 · squash 면 -m 없음 — %P 로 확인
+git checkout -b integration/fix-pleiades-72-revert && git revert --no-edit 02707a3     # squash · 부모 1(실측) → -m 없음 (PR #84 Codex P1)
 git push -u origin integration/fix-pleiades-72-revert
 gh pr create -R fomalhaut84/myFitness --base integration/pleiades --head integration/fix-pleiades-72-revert --title "revert: fit 하네스 복사 되돌림 (pleiades#72)" --body "Refs fomalhaut84/pleiades#72 · 되돌리기: 즉시"
 ```
