@@ -3681,3 +3681,22 @@ diff -rq ~/workspace/myFitness/.claude ~/workspace/pleiades/repos/myFitness/.cla
 
 → 스킬 6 차이(`branch-workflow`·`codex-review-loop`·`myfitness-orchestrator`·`orphan-check`·`session-handoff`·`session-primer`) + 원본에만 `skills/security-audit-fix`·`worktrees/`·`settings.local.json`. `rules/workflow.md` 는 동일. 원본이 단독 세션에서 진화한 것이며 `dev` 에서 gitignored 라 동기화로 오지 않는다. 005 §4-7 의 통째 `archive | tar -x` 는 이제 원본의 새 판을 덮어쓴다 — 파일 단위로만.
 
+## 5. `--add-dir` 로 worktree 하네스가 로드되는가 (#80 · `bin/claude-with` 대상 변경 근거)
+
+```bash
+cd ~/workspace/pleiades && env CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude -p 'Do not use any tools. … list every available skill whose name contains "myfitness", "session-primer", "prisma-drift-fix", or "pleiades-resume" … whether a rule or CLAUDE.md mentioning "myFitness" is present: YES or NO.' --add-dir "$HOME/workspace/pleiades/repos/myFitness" --max-turns 1
+# → myfitness-orchestrator, session-primer, prisma-drift-fix, pleiades-resume
+# → YES
+```
+
+→ cwd 중첩 `.claude/` 는 자동 로드되지 않지만(004 §3-2) **`--add-dir` 로 명시한 worktree 는 skills + rules/CLAUDE.md 가 로드된다.** 따라서 `claude-with` 가 원본 대신 worktree 를 붙여도 하네스 로딩은 같고, 원본 동기화(G-2 · #27 archive)가 불필요해진다. (`timeout` 은 macOS 에 없다 — Bash 도구 자체 timeout 사용.)
+
+## 6. 원본에 쓰지 않는다 — 2026-09-28 에 원본을 건드린 기록(정정 근거)
+
+| 대상 | 무엇 | 상태 |
+|---|---|---|
+| fin 원본 `dev` | myFinance#509 미러(문서 한 줄) | 머지 · 마지막 미러로 유지 |
+| fit 원본 `dev` | myFitness#492 미러(devDeps · 테스트 3 · 런타임 코드 0 · 서버 `npm ci` +12) | 머지 · 유지(사용자 결정) |
+| fit 원본 | myFitness#494 하네스 tracked 화 + Codex 4라운드 스킬 정정 | **닫음**(머지 안 함) · 원본 하네스는 PR 전 판(`0f4d141` 트리)으로 ignored 복원 · 사본 `_workspace/72/backup/` 2개 |
+| fit 원본 하네스 | #67 `git archive` 1파일 동기화 | 실행됨 · 마지막 archive 동기화 |
+

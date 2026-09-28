@@ -14,8 +14,10 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 | 모드 | 언제 | 어디서 | base | 이 스킬에서 적용되는 것 |
 |---|---|---|---|---|
 | **I** 통합 | **pleiades 발 변경 전부** (통합 단계 · 룰 정정 · tracked 화 등) | `repos/*` worktree | `integration/pleiades` (브랜치 `integration/<type>-pleiades-<name>`) | **전부** |
-| **S** 단독 | 그 저장소만의 평시 변경 (**pleiades 무관**) **또는 서비스 미러**(모드 I 로 `integration/pleiades` 에 들어간 변경을 서비스 `dev` 에도 복제 — 별도 이슈는 그 저장소에, 본문에 원 PR 링크) | **원본** | 그 저장소 `dev` | 승인 게이트 · 착수 직전 재감사 · 저장소별 검증 · 롤백 문서화 |
-| **H** 핫픽스 | 실서비스 버그 | **원본** | 그 저장소 `main` | 위와 같음 + 긴급 수정 절 |
+| **S** 단독 | 그 저장소만의 평시 변경 (**pleiades 무관**) — ~~또는 서비스 미러~~ **미러 폐기(#80)** | **원본** | 그 저장소 `dev` | **pleiades 세션은 이 모드를 실행하지 않는다**(#80 · 2026-09-28 사용자 방침). 그 저장소 단독 세션이 자기 `workflow.md` 로 한다 |
+| **H** 핫픽스 | 실서비스 버그 | **원본** | 그 저장소 `main` | **위와 같음 — pleiades 세션 미실행** |
+
+> **정정 (2026-09-28 · #80).** pleiades 발 변경은 서비스 `dev`/`main` 에 닿지 않는다 — `integration/pleiades` 가 격리다. 그래서 **이 스킬이 실제로 실행하는 모드는 I 뿐**이다. S·H 행은 pleiades 가 하지 않는 일을 표시하기 위해 남긴다. 2026-09-28 에 "서비스 미러" 로 S 를 세 번 탄 것(myFinance#509 · myFitness#492 · myFitness#494 → 닫음)이 이 정정의 계기다. 되돌리기: 즉시.
 
 > **모드 S·H 는 `repos/` 도 `integration/pleiades` 도 쓰지 않는다 (PR #6 Codex 리뷰 P1).**
 > 아래 체크리스트와 에러 표는 **모드 I 를 전제로** 쓰여 있다 — 모드 S·H 에서는
@@ -90,8 +92,10 @@ pleiades 에서 대상 저장소에 **쓰는** 유일한 절차다. 나머지 �
 >
 > **정정 (2026-09-11 · #59 · 1a-2 재감사 정정 6 부수).** 위 문단은 **myFitness#369(2026-09-07 · H-4 tracked 화) 이후 거짓**이다 —
 > fit `.claude/`·`CLAUDE.md` 는 `integration/pleiades` 에 tracked 라 **worktree 에 있고 거기서 고친다**(#42 · 1a-2 가 그렇게 했다).
-> 여전히 참인 것은 **세션이 로드하는 하네스는 원본**이라는 점뿐이다(`bin/claude-with` · `--add-dir`) — 그래서 worktree 를 고친 뒤
-> **원본 동기화**(`git archive integration/pleiades <paths> | tar -x -C ~/workspace/myFitness`)가 따로 필요하다(10절 · #27). `bin/claude-with:12` 의 같은 결함은 2026-09-09 에 고쳤다. 되돌리기: 즉시.
+> ~~여전히 참인 것은 **세션이 로드하는 하네스는 원본**이라는 점뿐이다(`bin/claude-with` · `--add-dir`) — 그래서 worktree 를 고친 뒤
+> **원본 동기화**(`git archive integration/pleiades <paths> | tar -x -C ~/workspace/myFitness`)가 따로 필요하다(10절 · #27).~~ `bin/claude-with:12` 의 같은 결함은 2026-09-09 에 고쳤다. 되돌리기: 즉시.
+>
+> **정정 (2026-09-28 · #80).** **원본 동기화도 폐기한다.** 원본 `~/workspace/myF*` 에는 pleiades 가 아무것도 쓰지 않는다(읽기 전용). `bin/claude-with` 가 worktree `repos/<repo>` 를 `--add-dir` 로 붙이므로 세션이 읽는 하네스가 곧 pleiades 가 고치는 사본이다. 원본 하네스가 단독 세션에서 진화해 worktree 판보다 새로워지면(#72) **원본 → worktree 복사(모드 I PR)** 로만 맞춘다 — 반대 방향은 없다. 되돌리기: 즉시.
 
 공통:
 - **pleiades 통합 작업의 base 는 `dev` 가 아니라 `integration/pleiades` 다.**
