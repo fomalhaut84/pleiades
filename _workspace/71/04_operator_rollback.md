@@ -7,8 +7,8 @@
 
 | PR | 머지 여부 · SHA | 배포·재시작 여부 | 원본 도달 | 의존성 변경 |
 |---|---|---|---|---|
-| **myFinance#505** (`integration/chore-pleiades-sync-20260928` → `integration/pleiades` · 오픈 2026-09-28 06:13 UTC · 브랜치 head `1b5dabb`) | `<머지 SHA>` — **"Create a merge commit" 으로 머지해야 한다(squash 금지)** | 없음 (`integration/pleiades` 는 배포되지 않는 브랜치 · β2 없음) | 없음 | dev 의 `package-lock.json` 그대로 (예정) |
-| **myFitness#488** (같은 브랜치명 · 오픈 06:14 UTC · 브랜치 head `e413d7c`) | `<머지 SHA>` — 머지 커밋 | 없음 | 없음 | **있음** — next 16.3.5 · vitest · overrides (dev 유래) + `@vitest/coverage-v8` 유지 · `vite-tsconfig-paths` 제거 → 머지 후 worktree `npm install` |
+| **myFinance#505** (`integration/chore-pleiades-sync-20260928` → `integration/pleiades` · 오픈 2026-09-28 06:13 UTC · 브랜치 head `1b5dabb`) | **머지 `af00fe3`**(merge commit · 부모 2 · 2026-09-28 06:38Z · 브랜치 head `1b5dabb`) · behind dev 0 ✔ | 없음 (`integration/pleiades` 는 배포되지 않는 브랜치 · β2 없음) | 없음 | 없음 (dev 의 `package-lock.json` 그대로) |
+| **myFitness#488** (같은 브랜치명 · 오픈 06:14 UTC · 브랜치 head `e413d7c`) | **머지 `961b130`** — **squash · 부모 1**(06:38Z · 브랜치 head `e413d7c` · 트리 동일 `7773fc6`) · **dev 77커밋이 조상 아님 → #75 `-s ours` 복구 PR myFitness#489 머지 `5cf4660`(merge commit · 부모 2 · 06:47Z) → behind 0 ✔** | 없음 | 없음 | **있음** — next 16.3.5 · vitest · overrides (dev 유래) + `@vitest/coverage-v8` 유지 · `vite-tsconfig-paths` 제거 → worktree `npm install` 완료(브랜치에서 설치한 상태와 동일) |
 
 ## 1. 머지 전 (저장소별 · 소요 수 초)
 
@@ -24,12 +24,12 @@ bare `git stash` 금지(worktree 스택 공유). 원본 두 체크아웃은 무�
 
 ## 2. 머지 후 (저장소별 · revert 도 PR)
 
-**머지 커밋이 둘이다** — PR 머지 커밋(부모 2: integration/pleiades · sync 브랜치)과 그 안의 `git merge origin/dev` 커밋. revert 는 **PR 머지 커밋을 `-m 1`** 로 한다(첫째 부모 = `integration/pleiades`).
+**저장소마다 다르다(머지 후 실값).** fin `af00fe3` 은 merge commit(부모 2) → `git revert -m 1 af00fe3`. **fit `961b130` 은 squash(부모 1) → `git revert 961b130`** — `-m 1` 은 "commit is not a merge" 로 실패한다. #75 의 `-s ours` 복구 머지가 들어간 뒤에는 fit 도 그 머지 커밋을 `-m 1` 로 먼저 revert 해야 한다(트리 무변경 커밋이라 revert 도 트리 무변경 · 조상 관계만 끊긴다).
 
 ```bash
 cd ~/workspace/pleiades/repos/<repo> && git checkout integration/pleiades && git pull --ff-only
 git checkout -b integration/fix-pleiades-71-revert
-git revert -m 1 --no-edit <머지 SHA>
+git revert -m 1 --no-edit af00fe3        # fin · fit 은 `git revert --no-edit 961b130`(squash · -m 없음)
 git push -u origin integration/fix-pleiades-71-revert
 gh pr create -R fomalhaut84/<repo> --base integration/pleiades --head integration/fix-pleiades-71-revert \
   --title "revert: dev 동기화 20260928 되돌림 (pleiades#71)" --body "Refs fomalhaut84/pleiades#71 · 되돌리기: 중간 — 이 revert 뒤 dev 를 다시 받으려면 이 커밋을 다시 revert 해야 한다(git 은 revert 된 머지의 부모를 이미 병합된 것으로 본다)"
