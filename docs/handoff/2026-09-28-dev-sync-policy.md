@@ -17,6 +17,13 @@
 
 7. **#73 집행(사용자 승인 · 테스트 3파일 포함)** — 모드 S · fit 원본 `dev` · 이슈 myFitness#491 → **PR myFitness#492 squash `a984b85`**. `integration/pleiades` 판 6파일을 byte-identical 로 미러(package.json 3줄 · vitest.config coverage 블록 · lock +162 · 1a-2 테스트 3파일 45건). 검증 4종 ✔(원본에서 `npm install` → `npx prisma generate` → lint·typecheck·test 63/433+verify 5·build) · 사전 0/0/0 · 봇 👍. 결과: **fit `dev` 와 `integration/pleiades` 의 하네스 외 차이 0** — behind dev 1(이 미러) · 충돌 0. 롤백 `_workspace/73/04_operator_rollback.md`(즉시).
 
+## 추가 2 (같은 날 · #72 → 방침 재확인 → #80 · #83)
+
+8. **#72 B 시도 → 닫음.** fit `dev` tracked 화 PR myFitness#494 를 열었으나 Codex 4라운드(P1 1→2→1→3 · 매번 새 파일 · fit 하네스 첫 봇 리뷰)에서 **사용자가 방침을 재확인**: pleiades 발 변경은 서비스 `dev`/`main` 에 닿지 않는다. PR 닫음 · 원본 하네스를 PR 전 판으로 ignored 복원(사본 2개 `_workspace/72/backup/`) · **원본을 브랜치에서 `dev` 로 되돌리자 tracked 파일 19개가 워킹트리에서 지워진 사고 1회(즉시 복원 · md5 일치)**.
+9. **#80 — 미러 폐기 · 원본 읽기 전용 · `claude-with` → worktree.** PR #81 `88d224e`(Codex 4라운드 P1 6 · 전부 "원본 쓰기 지시 잔존" · P2 2). 실측: worktree `--add-dir` 로 fit 스킬·rules 로드. #509·#492 는 마지막 미러로 유지(사용자 결정).
+10. **#72 A 집행** — myFitness#499 `02707a3`(모드 I · 원본 → worktree 복사 · 19파일 byte-identical · 원본 무접촉). 봇 P1 2·P2 1 은 원본 유래 → myFitness#500·#497 이관 · 사용자 명시 승인 머지. 드리프트 0.
+11. **#83 이슈 정책** — 이관 이슈는 고치는 저장소에(라벨 `pleiades` · `[pleiades]` 접두 · 출처 줄) · pleiades 이슈에 `fin`/`fit` · **대장 #82**. 오늘 7건 적용(myFinance#506 · myFitness#493·#495~#498·#500).
+
 ## PR 현황 (전부 머지)
 
 | PR | 내용 | 머지 | 되돌리기 |
@@ -26,7 +33,10 @@
 | ~~myFitness#489~~ | #75 `-s ours` 조상 복구 | merge commit `5cf4660` | **되돌릴 수 없고 되돌릴 이유도 없다** — revert 는 부모 간선을 못 지우고 트리는 이미 같다(PR #77 Codex P2 · 그 PR body 의 "`revert -m 1`" 서술은 틀렸다) |
 | ~~pleiades#74~~ | #70 정책 | `35c7859` | 즉시 |
 | ~~myFinance#508~~ · ~~myFitness#490~~ · ~~myFinance#509~~ | #67 한 줄 ×3 | merge commit `c94cbb8` · `ef00e88` · `5540417` | 즉시(`revert -m 1`) |
-| ~~myFitness#492~~ | #73 미러(모드 S · `dev`) | squash `a984b85` | 즉시(`revert a984b85` + `npm ci`) |
+| ~~myFitness#492~~ | #73 미러(모드 S · `dev`) — **마지막 미러** | squash `a984b85` | 즉시(`revert a984b85` + `npm ci`) |
+| ~~myFitness#494~~ | #72 B tracked 화 + Codex 스킬 정정 3커밋 | **닫음(머지 안 함)** | — |
+| ~~pleiades#81~~ | #80 미러 폐기·원본 읽기 전용·claude-with worktree | `88d224e` | 즉시 |
+| ~~myFitness#499~~ | #72 A 원본 → worktree 복사 | squash `02707a3` | 즉시(revert PR) |
 
 ## 결정된 것 (사용자 2026-09-28)
 
@@ -41,7 +51,6 @@
 
 | 이슈 | 내용 | 언제 |
 |---|---|---|
-| **#72** | fit 원본 `.claude/` 드리프트 — 원본→worktree 복사 vs fit `dev` tracked 화 | 다음 fit 하네스 작업 전 |
 | **#66** | 롤백 체크리스트 확정 — 이번 둘째·셋째 적용(`_workspace/71`·`67`)에서 새로 나온 상황: squash/merge 혼재 · `-s ours` revert · 미러가 dev 를 앞서게 함 | 다음 집행 후 |
 | **미러의 부작용** | 미러 PR 머지 = `dev` 가 다시 앞선다(fin behind 2 · 내용 동일). 다음 동기화가 무충돌로 흡수 — 규칙에 1줄 기록 | 기록 완료(이 PR) |
 | Q45 · 첫 태그 · #48 · #17 · #11 · Q23 · Q12~Q14 · Q7·Q2·Q3 | 이전 노트 그대로. **Q45 에 서버 node ≥ 20.19 확인 추가**(fit dev 유래 `@csstools/*` 요구 · 로컬 20.18 EBADENGINE) | 1a-3 전 |
@@ -51,13 +60,16 @@
 ## 다음 세션의 첫 액션 후보
 
 1. **1a-3 준비** — 이제 worktree 가 `dev` 와 같은 트리(fin behind 2 는 미러분). Q45 서버 측정(접속 승인 · https·node·git) + 첫 태그 릴리즈 PR + #48 I1. 되돌리기: 태그 삭제 즉시 · 코드 중간.
-2. **#72** 결정 — fit 원본 `.claude/` 드리프트.
+2. ~~#72~~ 완료. fit 단독 세션 이슈 6건(#493·#495~#498·#500 · 대장 #82)이 정리되면 다음 복사(#493 이후엔 dev 동기화)로 pleiades 에 들어온다.
 3. 다음 resume 에서 fit behind dev 1(#492 미러 · 무충돌) · fin behind dev 2(#509 미러 · 무충돌) — 동기화 PR 을 열지 않아도 된다(`dev 수용` 행 미러 조항). 다음 dev 실변경 때 함께 흡수.
 
 ## 주의사항
 
+- **pleiades 발 변경은 서비스 `dev`/`main` 에 닿지 않는다(#80).** 모드 S·H · 미러 · 원본 `git archive` 동기화 전부 폐기. 원본 `~/workspace/myF*` 는 읽기 전용 — 브랜치도 만들지 않는다(브랜치 → `dev` 전환이 하네스를 지운다 · 오늘 재현). `bin/claude-with` 는 worktree 를 붙인다.
+- **이관 이슈는 그 저장소에**(#83) — 라벨 `pleiades` 로 찾는다. 대장 #82.
+
 - **두 저장소는 실서비스 중.** 쓰기 전 사용자 확인. 이번 세션 쓰기: 위 7 PR + fit 원본 1파일.
-- **세션 종료 시 관측 상태:** worktree fin `c94cbb8`(behind dev **2** · 미러 #509 분 · 내용 동일) · fit `ef00e88`(behind dev **1** · 미러 #492 분 · 충돌 0) · 원본 fin `dev 5540417` · 원본 fit **`dev` `a984b85`**(단독 세션 릴리즈 대기 · CLAUDE.md 표의 "fit=main" 은 평시 값이고 단독 작업 중엔 `dev` 일 수 있다) · 넷 다 clean.
+- **세션 종료 시 관측 상태(최종 · #499 머지 후):** worktree fin `c94cbb8`(behind dev **2** · 미러 #509 분 · 내용 동일) · fit **`02707a3`**(behind dev **1** · 미러 #492 분 · 충돌 0 · 원본과 하네스 드리프트 **0**) · 원본 fin `dev 5540417` · 원본 fit **`dev` `a984b85`**(단독 세션 릴리즈 대기 · CLAUDE.md 표의 "fit=main" 은 평시 값이고 단독 작업 중엔 `dev` 일 수 있다) · 넷 다 clean.
 - **동기화 PR 머지 방법 = merge commit.** 머지 후 `git log -1 --format=%P` 로 부모 2 확인 · 아니면 #75 절차(`-s ours`).
 - **fit 검증 순서:** `npm install` → **`npx prisma generate`** → typecheck. dev 가 마이그레이션을 더할 때마다 필요.
 - **fit 원본 `.claude/` 통째 복원 금지** — 부재 파일만(resume Step 2 명령 · 경로 열거 · `tar -k` 는 GNU 에서 종료 2).
