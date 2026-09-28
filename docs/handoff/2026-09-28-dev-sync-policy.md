@@ -51,7 +51,6 @@
 
 | 이슈 | 내용 | 언제 |
 |---|---|---|
-| **#72** | fit 원본 `.claude/` 드리프트 — 원본→worktree 복사 vs fit `dev` tracked 화 | 다음 fit 하네스 작업 전 |
 | **#66** | 롤백 체크리스트 확정 — 이번 둘째·셋째 적용(`_workspace/71`·`67`)에서 새로 나온 상황: squash/merge 혼재 · `-s ours` revert · 미러가 dev 를 앞서게 함 | 다음 집행 후 |
 | **미러의 부작용** | 미러 PR 머지 = `dev` 가 다시 앞선다(fin behind 2 · 내용 동일). 다음 동기화가 무충돌로 흡수 — 규칙에 1줄 기록 | 기록 완료(이 PR) |
 | Q45 · 첫 태그 · #48 · #17 · #11 · Q23 · Q12~Q14 · Q7·Q2·Q3 | 이전 노트 그대로. **Q45 에 서버 node ≥ 20.19 확인 추가**(fit dev 유래 `@csstools/*` 요구 · 로컬 20.18 EBADENGINE) | 1a-3 전 |
@@ -70,7 +69,7 @@
 - **이관 이슈는 그 저장소에**(#83) — 라벨 `pleiades` 로 찾는다. 대장 #82.
 
 - **두 저장소는 실서비스 중.** 쓰기 전 사용자 확인. 이번 세션 쓰기: 위 7 PR + fit 원본 1파일.
-- **세션 종료 시 관측 상태:** worktree fin `c94cbb8`(behind dev **2** · 미러 #509 분 · 내용 동일) · fit `ef00e88`(behind dev **1** · 미러 #492 분 · 충돌 0) · 원본 fin `dev 5540417` · 원본 fit **`dev` `a984b85`**(단독 세션 릴리즈 대기 · CLAUDE.md 표의 "fit=main" 은 평시 값이고 단독 작업 중엔 `dev` 일 수 있다) · 넷 다 clean.
+- **세션 종료 시 관측 상태(최종 · #499 머지 후):** worktree fin `c94cbb8`(behind dev **2** · 미러 #509 분 · 내용 동일) · fit **`02707a3`**(behind dev **1** · 미러 #492 분 · 충돌 0 · 원본과 하네스 드리프트 **0**) · 원본 fin `dev 5540417` · 원본 fit **`dev` `a984b85`**(단독 세션 릴리즈 대기 · CLAUDE.md 표의 "fit=main" 은 평시 값이고 단독 작업 중엔 `dev` 일 수 있다) · 넷 다 clean.
 - **동기화 PR 머지 방법 = merge commit.** 머지 후 `git log -1 --format=%P` 로 부모 2 확인 · 아니면 #75 절차(`-s ours`).
 - **fit 검증 순서:** `npm install` → **`npx prisma generate`** → typecheck. dev 가 마이그레이션을 더할 때마다 필요.
 - **fit 원본 `.claude/` 통째 복원 금지** — 부재 파일만(resume Step 2 명령 · 경로 열거 · `tar -k` 는 GNU 에서 종료 2).
