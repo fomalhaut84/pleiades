@@ -1,0 +1,4 @@
+import os, sys
+sys.path.insert(0, os.environ["PLEIADES_IMPORT_DIR"])
+from rewrite import rewrite_bytes
+return rewrite_bytes(message, "fin")
