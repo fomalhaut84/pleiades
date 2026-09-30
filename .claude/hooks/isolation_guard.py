@@ -36,7 +36,7 @@ DEPLOY_PATH = re.compile(r"(?:^|/)apps/[^/]+/deploy/")
 ECOSYSTEM = re.compile(r"ecosystem\.config\.[cm]?js$")
 ASSIGNMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$", re.DOTALL)
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
-SHELL_FEED = re.compile(r"^\s*(?:[A-Za-z_]\w*=\S*\s+)*(?:bash|sh|zsh|dash)\b[^<]*<<")  # 셸로 넘기는 heredoc 은 명령이다
+PIPE_TO_SHELL = re.compile(r"\|&?\s*(?:\S*/)?(?:bash|sh|zsh|dash)\b")
 KNOWN_VARS = re.compile(r"\$(?:\{(HOME|CLAUDE_PROJECT_DIR|PWD)\}|(HOME|CLAUDE_PROJECT_DIR|PWD)\b)")
 ANY_VAR = re.compile(r"\$(?:\{(\w+)\}|(\w+))")
 LOOP_PREFIX = "\0for:"  # for 변수 값 목록을 env 에 담는 키 접두
@@ -85,11 +85,25 @@ def _prepare(command: str) -> str:
         out.append(line)
         m = HEREDOC.search(line) if "<<<" not in line else None
         i += 1
-        if m and not SHELL_FEED.match(line):
+        if m and not _feeds_shell(line, m):
             while i < len(lines) and lines[i].lstrip("\t").rstrip() != m.group(2):
                 i += 1
             i += 1  # 종료 구분자 줄
     return re.sub(r"\\\n", " ", "\n".join(out))
+
+
+def _feeds_shell(line: str, m: re.Match) -> bool:
+    """heredoc 을 받는 쪽이 셸이면 본문은 데이터가 아니라 명령이다 — 경로·래퍼가 붙어도(`/bin/bash` ·
+    `command bash` · `sudo -u x /usr/bin/env bash`) · 파이프로 셸에 넘겨도(`cat <<X | sh`). 회귀: PR #106 Codex P1"""
+    if PIPE_TO_SHELL.search(line[m.end():]):
+        return True
+    consumer = re.split(r"[;&|(]", line[:m.start()])[-1]
+    try:
+        words = shlex.split(consumer)
+    except ValueError:
+        words = consumer.split()
+    argv = _unwrap(words)[0]
+    return bool(argv) and os.path.basename(argv[0]) in SHELLS
 
 
 def _substitutions(text: str) -> tuple[list[str], str]:
@@ -144,23 +158,33 @@ def _tokens(text: str) -> list[str]:
         return re.findall(r"[^\s;&|()]+|[;&|()]+", text)
 
 
-def _segments(tokens: list[str]) -> list[list[str]]:
-    segs, cur = [], []
+OPERATORS = ("&&", "||", "|&", ";;", ";", "&", "|", "(", ")")
+
+
+def _stream(tokens: list[str]) -> list[tuple[str, list[str] | str]]:
+    """토큰 → [("seg", 명령 토큰들) | ("op", 연산자)] — 연산자가 cwd 전이를 정한다."""
+    items, cur = [], []
     for t in tokens:
         if t and set(t) <= SEPARATOR_CHARS:
             if cur:
-                segs.append(cur)
-            cur = []
+                items.append(("seg", cur))
+            cur, rest = [], t
+            while rest:
+                op = next((o for o in OPERATORS if rest.startswith(o)), rest[0])
+                items.append(("op", op))
+                rest = rest[len(op):]
         else:
             cur.append(t)
     if cur:
-        segs.append(cur)
-    return segs
+        items.append(("seg", cur))
+    return items
 
 
-def _unwrap(seg: list[str]) -> tuple[list[str], dict[str, str]]:
-    """`FOO=1 env -u X timeout 5 sudo -u y cmd …` → (`cmd …`, {FOO: 1})"""
-    env, i = {}, 0
+def _unwrap(seg: list[str]) -> tuple[list[str], dict[str, str], str | None]:
+    """`FOO=1 env -C d -u X timeout 5 sudo -u y cmd …` → (`cmd …`, {FOO: 1}, "d")
+
+    셋째 값은 `env -C/--chdir` 로 바뀐 실행 디렉터리(원문) — 회귀: PR #106 Codex P1."""
+    env, i, chdir = {}, 0, None
     while i < len(seg):
         t = seg[i]
         a = ASSIGNMENT.match(t)
@@ -169,24 +193,31 @@ def _unwrap(seg: list[str]) -> tuple[list[str], dict[str, str]]:
         elif a:
             env[a.group(1)] = a.group(2)
             i += 1
-        elif t == "env":
+        elif os.path.basename(t) == "env":
             i += 1
             while i < len(seg) and (seg[i].startswith("-") or ASSIGNMENT.match(seg[i])):
-                a = ASSIGNMENT.match(seg[i])
+                f = seg[i]
+                a = ASSIGNMENT.match(f)
                 if a:
                     env[a.group(1)] = a.group(2)
-                i += 2 if seg[i] in ENV_VALUE_FLAGS else 1
+                if f in ("-C", "--chdir") and i + 1 < len(seg):
+                    chdir = seg[i + 1]
+                elif f.startswith("--chdir="):
+                    chdir = f.split("=", 1)[1]
+                elif f.startswith("-C") and len(f) > 2:
+                    chdir = f[2:]
+                i += 2 if f in ENV_VALUE_FLAGS else 1
         elif t == "command" and seg[i + 1:i + 2] in (["-v"], ["-V"]):
-            return [], env  # 조회 — 실행하지 않는다
-        elif t in WRAPPERS:
-            value_flags, positional = WRAPPERS[t]
+            return [], env, chdir  # 조회 — 실행하지 않는다
+        elif os.path.basename(t) in WRAPPERS:
+            value_flags, positional = WRAPPERS[os.path.basename(t)]
             i += 1
             while i < len(seg) and seg[i].startswith("-"):
                 i += 2 if seg[i] in value_flags else 1
             i += positional
         else:
             break
-    return seg[i:], env
+    return seg[i:], env, chdir
 
 
 # ---------- 경로 ----------
@@ -371,13 +402,16 @@ def _check_shell(args: list[str], cwd: str | None, env: dict[str, str], ctx: Con
 
 def _check_segment(seg: list[str], cwd: str | None, env: dict[str, str], ctx: Context) -> tuple[list[Violation], str | None]:
     """(위반, 다음 조각의 cwd). env 는 `export` 로 조각 사이에 이어진다."""
-    seg, local = _unwrap(seg)
+    seg, local, chdir = _unwrap(seg)
     if not seg:
         env.update(local)  # `FOO=1` 단독 = 셸 변수
         return [], cwd
     senv = {**env, **local}
     prog, args = seg[0], seg[1:]
     name = os.path.basename(prog)
+    wd = cwd  # 이 명령이 도는 디렉터리 — `env -C` 는 셸의 cwd 를 바꾸지 않는다
+    if chdir is not None:
+        wd = f"{ctx.root}/repos/_var_" if _frozen_raw(chdir, cwd, senv, ctx) else _resolve(chdir, cwd, ctx)
 
     if prog == "for" and len(args) >= 2 and args[1] == "in":
         env[LOOP_PREFIX + args[0]] = "\0".join(args[2:])
@@ -405,35 +439,57 @@ def _check_segment(seg: list[str], cwd: str | None, env: dict[str, str], ctx: Co
             return [Violation("I-19", "pm2 로 ecosystem.config 실행 — 서비스 배포 설정")], cwd
         return [Violation("I-3", "pm2 — 서버 프로세스 관리자는 쓰지 않는다 (로컬 기동은 앱 엔트리 · 006 L-9)")], cwd
     if name in SHELLS:
-        if "<" in args and args.index("<") + 1 < len(args) and _is_deploy(args[args.index("<") + 1], cwd, ctx):
+        if "<" in args and args.index("<") + 1 < len(args) and _is_deploy(args[args.index("<") + 1], wd, ctx):
             return [Violation("I-19", "서비스 배포 스크립트를 셸 표준입력으로 실행")], cwd
-        return _check_shell(args, cwd, senv, ctx), cwd
+        return _check_shell(args, wd, senv, ctx), cwd
     if prog in SOURCERS:
         script = next((a for a in args if not a.startswith("-")), None)
-        if script and _is_deploy(script, cwd, ctx):
+        if script and _is_deploy(script, wd, ctx):
             return [Violation("I-19", f"서비스 배포 스크립트 실행 ({script})")], cwd
         return [], cwd
     if name == "node" and any(ECOSYSTEM.search(a) for a in args):
         return [Violation("I-19", "ecosystem.config 실행")], cwd
-    if "/" in prog and _is_deploy(prog, cwd, ctx):
+    if "/" in prog and _is_deploy(prog, wd, ctx):
         return [Violation("I-19", f"서비스 배포 스크립트 실행 ({prog})")], cwd
     if name == "git-filter-repo":
-        return _check_filter_repo(cwd, ctx), cwd
+        return _check_filter_repo(wd, ctx), cwd
     if name == "git":
-        return _check_git(args, cwd, senv, ctx), cwd
+        return _check_git(args, wd, senv, ctx), cwd
     if name == "gh":
         return _check_gh(args, senv), cwd
     return [], cwd
 
 
 def _check_text(text: str, cwd: str | None, env: dict[str, str], ctx: Context) -> list[Violation]:
+    """cwd 는 값 하나가 아니라 **가능한 후보들**로 추적한다 — 후보 중 하나라도 위반이면 위반이다.
+    `&&` 는 cd 성공 뒤만 · `;` 는 cd 실패도 이어지므로 전·후 둘 다 · `||` `|` `&` 는 전만(실패 분기 · 서브셸) ·
+    `( … )` 는 닫힐 때 복원한다. 회귀: PR #106 Codex P1 (`cd /missing || git filter-repo`)."""
     inners, outer = _substitutions(_prepare(text))
     out = []
     for inner in inners:
         out.extend(_check_text(inner, cwd, dict(env), ctx))
-    for seg in _segments(_tokens(outer)):
-        found, cwd = _check_segment(seg, cwd, env, ctx)
-        out.extend(found)
+    cur: list[str | None] = [cwd]
+    before, after, stack = cur, cur, []
+    for kind, item in _stream(_tokens(outer)):
+        if kind == "seg":
+            news = []
+            for c in cur:
+                found, new = _check_segment(item, c, env, ctx)
+                out.extend(found)
+                news.append(new)
+            before, after = cur, list(dict.fromkeys(news))
+            cur = after
+        elif item == "&&":
+            cur = after
+        elif item in (";", ";;"):
+            cur = list(dict.fromkeys(before + after))
+        elif item in ("||", "|", "|&", "&"):
+            cur = before
+        elif item == "(":
+            stack.append(cur)
+        elif item == ")":
+            cur = stack.pop() if stack else cur
+            before = after = cur
     return out
 
 

@@ -145,6 +145,22 @@ class DenyTable(unittest.TestCase):
         ("pm2-runtime start x.js", ROOT, "I-3"),
         ("sh -s < apps/finance/deploy/deploy.sh", ROOT, "I-19"),
         ("bash < apps/fitness/deploy/deploy.sh", ROOT, "I-19"),
+        # 회귀: PR #106 Codex P1 (조건·파이프 경계에서 cwd 추적)
+        ("cd /definitely-missing || git filter-repo --force", ROOT, "I-21"),
+        ("cd /tmp/s; git filter-repo --force", ROOT, "I-21"),
+        ("cd /tmp/s | git-filter-repo --force", ROOT, "I-21"),
+        ("(cd /tmp/s) && git filter-repo --force", ROOT, "I-21"),
+        ("cd /tmp/s & git filter-repo --force", ROOT, "I-21"),
+        # 회귀: PR #106 Codex P1 (env -C · --chdir)
+        ("env -C repos/myFinance git status", ROOT, "I-11"),
+        ("env --chdir=repos/myFinance git status", ROOT, "I-11"),
+        ("env -C ~/workspace/myFitness git log", ROOT, "I-11"),
+        ("env -C $ROOT_UNKNOWN git-filter-repo --force", "/tmp", "I-21"),
+        # 회귀: PR #106 Codex P1 (경로·래퍼가 붙은 셸로 넘기는 heredoc)
+        ("/bin/bash <<EOF\nssh host\nEOF", ROOT, "I-3"),
+        ("command bash <<EOF\ngh issue create -R fomalhaut84/myFinance -t x\nEOF", ROOT, "I-1"),
+        ("sudo -u x /usr/bin/env bash <<'X'\nssh host\nX", ROOT, "I-3"),
+        ("cat <<'EOF' | sh\nssh host\nEOF", ROOT, "I-3"),
     ]
 
     def test_denied(self):
@@ -211,6 +227,11 @@ class AllowTable(unittest.TestCase):
         ("git status # then `ssh host`", ROOT),
         ("echo $(date) && git log -1", ROOT),
         ("git commit -m \"chore: $(date +%F)\"", ROOT),
+        # cwd 추적이 보수적이되 정상 흐름은 막지 않는다
+        ("cd /tmp/s && git filter-repo --force", ROOT),
+        ("(cd repos/myFinance && ls); git status", ROOT),
+        ("env -C apps/finance git log -1", ROOT),
+        ("python3 - <<'EOF'\nimport os  # ssh host\nEOF", ROOT),
     ]
 
     def test_allowed(self):
