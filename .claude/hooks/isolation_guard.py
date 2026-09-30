@@ -3,8 +3,9 @@
 
 정본은 .claude/rules/isolation.md(006 §5 I-1~I-21) 다. 이 훅은 **실수 방지**이지 룰의 대체가 아니다 —
 텍스트 매칭이라 임의 변수 치환(`$R`) · `eval` · 스크립트 파일 안의 명령은 보지 못한다. 막히면 우회하지 말고 명령을 다시 쓴다.
-알고 두는 한계: 파이프로 셸에 넘기는 스크립트(`cat x | bash`)는 보지 못한다 · 서브셸 `( cd … )` 의 cwd 가 바깥으로 이어진다
-(보수적 오탐) · cwd 를 알 수 없는 filter-repo 는 막는다(`cd $(mktemp -d)` 포함 — 리터럴 경로나 tools/import 스크립트로).
+알고 두는 한계: 파이프로 셸에 넘기는 스크립트 파일(`cat x | bash`)은 보지 못한다 · 치환 안 따옴표 속 괄호
+(`"$(printf ')'; …)"`)는 치환 경계를 잘못 잡는다 · cwd 를 알 수 없는 filter-repo 는 막는다(`cd $(mktemp -d)` 포함 —
+리터럴 경로나 tools/import 스크립트로). 반례는 끝이 없다 — Claude 가 실제로 칠 형태만 고친다(PR #106 종료 기준).
 
 규약 (Claude Code hooks): stdin 으로 {"tool_name", "tool_input": {"command"}, "cwd"} JSON 을 받는다.
 exit 0 = 통과 · exit 2 = 차단(stderr 가 Claude 에게 간다) · 그 외 = 비차단 오류(사용자에게 보인다).
@@ -307,7 +308,7 @@ def _placeholder(ctx: Context, cwd: str | None):
 
 # ---------- 규칙 ----------
 
-def _check_gh_api(args: list[str]) -> list[Violation]:
+def _check_gh_api(args: list[str], gh_repo: str = "") -> list[Violation]:
     method, has_fields, file_input, endpoint, i = None, False, False, None, 0
     while i < len(args):
         t = args[i]
@@ -338,6 +339,10 @@ def _check_gh_api(args: list[str]) -> list[Violation]:
         if file_input:
             return [Violation("I-1", "gh api graphql 파일 입력 — mutation 여부를 볼 수 없다. 쿼리를 인라인으로 쓴다")]
         return []
+    parts = gh_repo.rstrip("/").split("/")
+    if endpoint and len(parts) >= 2 and ("{owner}" in endpoint or "{repo}" in endpoint):
+        # gh 는 {owner}/{repo} 를 GH_REPO 로 채운다 (회귀: PR #106 Codex P1 4회차)
+        endpoint = endpoint.replace("{owner}", parts[-2]).replace("{repo}", parts[-1])
     if endpoint and SERVICE_API.fullmatch(endpoint):
         effective = (method or ("POST" if has_fields else "GET")).upper()
         if effective != "GET":
@@ -363,7 +368,7 @@ def _check_gh(args: list[str], env: dict[str, str]) -> list[Violation]:
         return []
     group, verb = rest[0], (rest[1] if len(rest) > 1 else "")
     if group == "api":
-        return _check_gh_api(rest[1:])
+        return _check_gh_api(rest[1:], env.get("GH_REPO", ""))
     # 위치 인자(URL · owner/repo) 도 본다 — 토큰 전체가 서비스 참조일 때만 걸린다
     if any(SERVICE_REF.fullmatch(r) for r in refs + rest) and verb not in GH_READ_VERBS:
         return [Violation("I-1", f"gh {group} {verb} — 서비스 저장소에 대한 쓰기 동사 (허용: {', '.join(sorted(GH_READ_VERBS))})")]
@@ -397,7 +402,8 @@ def _check_git(args: list[str], cwd: str | None, env: dict[str, str], ctx: Conte
 
     if frozen or _frozen(d, ctx):
         out.append(Violation("I-11", "동결된 repos/* · 원본 ~/workspace/myF* 에서 git 명령 — 읽기도 index 를 갱신할 수 있다"))
-    if sub == "push" and any(SERVICE_REF.fullmatch(t) for t in rest):
+    push_targets = [t.split("=", 1)[1] if t.startswith("--repo=") else t for t in rest]  # --repo=URL (회귀: PR #106 Codex P1 4회차)
+    if sub == "push" and any(SERVICE_REF.fullmatch(t) for t in push_targets):
         out.append(Violation("I-1", "git push 대상이 서비스 저장소다"))
     if sub == "remote" and rest[:1] and rest[0] in ("add", "set-url") and any(SERVICE_REF.fullmatch(t) for t in rest):
         out.append(Violation("I-1", "서비스 저장소를 리모트로 등록하지 않는다 — https URL 로 직접 읽는다"))

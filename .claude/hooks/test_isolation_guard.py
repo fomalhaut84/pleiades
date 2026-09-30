@@ -184,6 +184,11 @@ class DenyTable(unittest.TestCase):
         ("npx -c 'ssh host'", ROOT, "I-3"),
         ("npx --call='gh issue close 1 -R fomalhaut84/myFinance'", ROOT, "I-1"),
         ("npm exec -c 'ssh host'", ROOT, "I-3"),
+        # 회귀: PR #106 Codex P1 4회차
+        ("GH_REPO=fomalhaut84/myFinance gh api repos/{owner}/{repo}/issues -f title=x", ROOT, "I-1"),
+        ("export GH_REPO=fomalhaut84/myFitness; gh api -X POST repos/{owner}/{repo}/labels", ROOT, "I-1"),
+        ("git push --repo=https://github.com/fomalhaut84/myFinance.git HEAD:dev", ROOT, "I-1"),
+        ("git push --repo https://github.com/fomalhaut84/myFinance.git HEAD:dev", ROOT, "I-1"),
     ]
 
     def test_denied(self):
@@ -255,6 +260,8 @@ class AllowTable(unittest.TestCase):
         ("(cd repos/myFinance && ls); git status", ROOT),
         ("env -C apps/finance git log -1", ROOT),
         ("python3 - <<'EOF'\nimport os  # ssh host\nEOF", ROOT),
+        ("gh api repos/{owner}/{repo}/pulls", ROOT),  # 자리표시는 cwd 저장소(pleiades)
+        ("GH_REPO=fomalhaut84/myFinance gh api repos/{owner}/{repo}/issues", ROOT),  # GET 은 읽기
     ]
 
     def test_allowed(self):
