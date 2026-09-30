@@ -120,7 +120,7 @@
 
 | 단계 | 내용 | 서비스 영향 | 되돌리기 (등급 · 행위 · 시점) | 멈추면 남는 것 |
 |---|---|---|---|---|
-| **M-0** (PR B) | 상위 문서 정정·소진 블록(§9) · **격리 불변식 룰**(§5) · 차단 훅 · `CLAUDE.md` · **`tools/import/`**(callback · 게이트 · 가드 · `VERSIONS` · `claude` shim · env 검사 헬퍼) | 0 | **즉시** — 문서·룰·스크립트 revert PR · 훅은 설정 1블록 삭제 | 방향·규칙·도구. 코드 무변경 |
+| **M-0** (PR B) | 상위 문서 정정·소진 블록(§9) · **격리 불변식 룰**(§5) · 차단 훅 · `CLAUDE.md` · **`tools/import/`**(callback · 게이트 · 가드 · `VERSIONS` · `STATE.json`(M-1 이 생성) · `claude` shim · env 검사 헬퍼) | 0 | **즉시** — 문서·룰·스크립트 revert PR · 훅은 설정 1블록 삭제 | 방향·규칙·도구. 코드 무변경 |
 | **M-1** | 가져오기 — filter-repo 재작성 → `apps/finance` · `apps/fitness` | 쓰기 0 · traffic 흔적 | **push 전: 즉시**(로컬 ref 삭제) · **PR push 후 머지 전: 트리 즉시(PR 닫기) · 객체 편도**(PR ref 가 보존) · `referenced` 이벤트는 게이트 통과 시 기대값 0(파서가 달라도 pleiades 잡음뿐 · 서비스 영향 없음) · **머지 후: 트리 즉시**(revert PR `-m 1`) · **이력·pack 편도** · 재도입은 revert 의 revert → **중간** | `apps/*` = 서비스 dev 트리의 정지 사본(경로 이력 포함). 설치·CI 없음 → 아무것도 돌지 않는다 |
 | **M-2** | 설치·검증 — 앱별 lock(U97-12) · **`pleiades_fin` 생성 + `prisma migrate deploy`**(fin build 선행) · 두 앱 8절 4종 로컬 통과 · 헬퍼(`apps/*` 밖) | 0 | **즉시** — 스크립트 삭제 · `DROP DATABASE pleiades_fin`. `apps/*` 무변경 | 서비스와 **같은 lock** 으로 빌드·테스트된다는 사실 |
 | **M-3** | CI — `apps-ci.yml` · 앱별 job · postgres 서비스 컨테이너 · **secrets 0** | 0 | **즉시** — 파일 삭제(필수 체크였다면 ruleset 에서도) | 수용 PR 마다 자동 신호 |
@@ -169,16 +169,22 @@ git -C "$T/fit" merge-base --is-ancestor <last-Service-Dev> "$SVC" || { echo 중
 git -C "$T/fit" log --format=%B dev | tools/import/gate.py     # 0 이 아니면 exit ≠ 0
 # pleiades 에서
 git fetch --no-tags "$T/fit" dev:refs/import/fit
+# 이전 상태는 추적 파일에서 읽는다 — squash 머지에도 파일 내용은 남는다 (PR #98 Codex P1)
+PREV_TIP=$(git show origin/dev:tools/import/STATE.json | python3 -c 'import json,sys;print(json.load(sys.stdin)["fit"]["rewritten_tip"])')
 # 가드 C (수용 때만): 이전 수용의 재작성 tip 이 origin/dev 의 조상인가 — 이전 동기화 PR 이 squash 머지됐는지 감지
-git merge-base --is-ancestor <prev-rewritten-tip> origin/dev || { echo "중단: 이전 동기화 PR 이 squash 됨 — 복구 PR 먼저"; exit 1; }
-# 가드 B (수용 때만): 이전 재작성 tip(마지막 수용 머지의 둘째 부모)이 새 재작성본의 조상인가 — filter-repo·옵션·git 드리프트도 여기서 잡힌다
-git merge-base --is-ancestor <prev-rewritten-tip> refs/import/fit || { echo 중단; exit 1; }
+git merge-base --is-ancestor "$PREV_TIP" origin/dev || { echo "중단: 이전 동기화 PR 이 squash 됨(또는 객체 없음) — 복구 PR 먼저"; exit 1; }
+# 가드 B (수용 때만): 이전 재작성 tip 이 새 재작성본의 조상인가 — filter-repo·옵션·git 드리프트도 여기서 잡힌다
+git merge-base --is-ancestor "$PREV_TIP" refs/import/fit || { echo 중단; exit 1; }
 git merge --no-ff [--allow-unrelated-histories  # M-1 최초만] refs/import/fit \
   -m "chore(apps): import/sync myFitness dev" -m "Service-Repo: myFitness" -m "Service-Dev: $SVC" -m "Filter-Repo: <버전> · callback <해시>"
+# 상태 갱신 — 같은 PR 의 별도 커밋(squash 돼도 남는다)
+#   tools/import/STATE.json["fit"] = {service_dev: $SVC, rewritten_tip: $(git rev-parse refs/import/fit), filter_repo: <버전>, callback_sha: <해시>, git: <git --version>}
 git update-ref -d refs/import/fit
 ```
 
-**가드 C 실패 시 복구 (#75 식):** 이전 동기화 PR 이 squash 됐으면 트리는 맞지만 재작성 이력이 dev 의 조상이 아니다 — 그대로 두면 가드 B 의 `git log --grep '^Service-Repo'` 가 이전 커밋을 잡거나 `^2` 가 실패한다. 복구 = 새 브랜치에서 **`git merge -s ours --no-ff <rewritten-tip>`**(diff 0) → PR → "Create a merge commit" → 머지 후 부모 2 확인. 되돌리기 **즉시**. 그 뒤 가드 C 를 다시 돌리고 수용을 이어간다.
+**상태 파일 `tools/import/STATE.json` (PR #98 Codex P1).** 가드 B·C 의 입력(이전 재작성 tip)을 **머지 이력이 아니라 추적 파일**에서 읽는다. 동기화 PR 이 squash 되면 재작성 tip 은 `dev` 의 조상이 아니고 `refs/import/*`·PR 브랜치도 지워져 있으며 squash 커밋은 트레일러를 보존하지 않는다 — 머지 이력만으로는 가드 C 가 비교할 SHA 를 얻을 수 없고, 살아남은 이전 머지의 tip 을 쓰면 squash 를 **못 보고 통과**한다. 파일 내용은 squash 에서도 남으므로 이 문제가 없다. 최초 M-1 이 파일을 만들고 매 수용이 같은 PR 안에서 갱신한다.
+
+**가드 C 실패 시 복구 (#75 식):** 이전 동기화 PR 이 squash 됐으면 트리는 맞지만 재작성 이력이 dev 의 조상이 아니다. 복구에 쓸 tip 객체는 이미 로컬·원격 어디에도 없을 수 있으므로 **결정적으로 재구성한다**(PR #98 Codex P1): `STATE.json` 의 `service_dev` 로 스크래치 클론을 그 SHA 에 맞추고(`git checkout -B dev <service_dev>`) **같은 버전·callback**(STATE 기록값과 `VERSIONS` 대조)으로 filter-repo 를 다시 돌린다 → 결과 tip 이 `STATE.json` 의 `rewritten_tip` 과 **같아야 한다**(X2 결정성 실측 · 다르면 중단 — 버전·callback 드리프트). 같으면 pleiades 로 fetch 해 새 브랜치에서 **`git merge -s ours --no-ff <rewritten-tip>`**(diff 0) → PR → "Create a merge commit" → 머지 후 부모 2 확인. 되돌리기 **즉시**. 그 뒤 가드 C 를 다시 돌리고 수용을 이어간다. 서비스 dev 가 그 사이 force-push 돼 `service_dev` 객체를 받을 수 없으면 재구성 불가 → 가드 A 실패와 같은 경로(재병합 · 중간).
 
 **치환 규칙 (callback · U97-5 ② · U97-10 Q62):**
 
@@ -411,7 +417,7 @@ git ls-remote https://github.com/fomalhaut84/myFinance.git refs/heads/dev
 - [ ] `.claude/skills/pleiades-codex-loop`(15) · `pleiades-orchestrator`(6) · `reversibility-audit`(3) · `repo-measure`(3) · `orphan-check`(1) — **정정**(`repos/*`·대상 저장소·이관 서술 → `apps/*`·pleiades 이슈)
 - [ ] `.claude/agents/repo-surveyor`(7) · `reversibility-auditor`(3) — **정정**(측정 대상 = `apps/*` + 서비스 원격 https 읽기 · 스크래치)
 - [ ] `bin/claude-with` — **소진**(파일 유지 + 소진 주석 · 또는 삭제는 M-0 에서 결정)
-- [ ] `tools/import/` — **신설**(§4-1 ⑥)
+- [ ] `tools/import/` — **신설**(§4-1 ⑥) · `STATE.json` 스키마(가드 B·C 입력 · PR #98 Codex P1) — 파일 자체는 M-1 이 생성
 - [ ] `.gitignore` — **정정**(`repos/` 줄은 동결 동안 유지 · `apps/` 는 추적 → Grep 이 `apps/` 를 검색한다는 안내)
 
 ### 9-3. 기록·기타
