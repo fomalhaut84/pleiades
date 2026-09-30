@@ -8,3 +8,4 @@ repos/
 packages/notify/dist/
 _workspace/**/backup/
 __pycache__/
+.claude/worktrees/
