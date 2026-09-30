@@ -484,7 +484,7 @@ fin·fit 의 `feat/<issue>-<n>` → `dev` 가 같은 세션에서 규범이 된�
 **한 저장소만 붙여도 rule 은 2벌이 된다** — 이것은 회피 불가이며, `--add-dir` 를 쓰는 모든 세션의 상수다.
 완화는 래퍼가 그 사실을 세션 시작 시 알리는 것뿐이다(§4-6 ④).
 
-> **소진 (2026-09-30 · 006 · #103).** 이 절의 부착 정책 표는 `--add-dir` 로 대상 저장소 하네스를 붙인다는 전제의 비용이다. 006 은 **붙이지 않는다**(U97-9 · `bin/claude-with` 소진). 대신 `apps/finance/` 의 fin 하네스(skill 7 · agent 4 · rule 5 · `CLAUDE.md` — 006 ⑧)가 **파일을 읽는 순간 지연 로드·발견**되므로 이름 충돌 규칙(rule 공존 · skill cwd 승)은 그 경로에서 다시 의미를 갖는다 — 방어선은 **룰 한 줄(효력 없음 · pleiades 우선) + 훅**이고 `claudeMdExcludes` 는 CLAUDE.md·rules 보조다(006 I-10 · §4-1). skill·agent 발견 차단 수단은 미확인(006 U8). 되돌리기: 문구 (**즉시**).
+> **소진 (2026-09-30 · 006 · #103).** 이 절의 부착 정책 표는 `--add-dir` 로 대상 저장소 하네스를 붙인다는 전제의 비용이다. 006 은 **붙이지 않는다**(U97-9 · `bin/claude-with` 소진). 대신 `apps/finance/` 의 fin 하네스(skill 7 · agent 4 · rule 5 · `CLAUDE.md` — 006 ⑧) 중 **실측된 것은 `CLAUDE.md`·rules 지연 로드와 skill 발견뿐이다 — agent 발견은 미측정**(measured-facts [S2] X10 한계: agents 미시험 · PR #108 Codex P2). 그래서 이름 충돌 규칙 중 rule 공존 · skill cwd 승은 그 경로에서 다시 의미를 갖고, agent 쪽은 측정 전까지 판단하지 않는다 — 방어선은 **룰 한 줄(효력 없음 · pleiades 우선) + 훅**이고 `claudeMdExcludes` 는 CLAUDE.md·rules 보조다(006 I-10 · §4-1). skill·agent 발견 차단 수단은 미확인(006 U8). 되돌리기: 문구 (**즉시**).
 
 ### 4-6. "저장소에 유지"의 운영 비용 (Q30)
 
