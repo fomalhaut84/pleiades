@@ -1,0 +1,809 @@
+From fd8b7c55b540ed22002227b8f6a413e8d6b69a24 Mon Sep 17 00:00:00 2001
+From: "Sagan.ahn" <starryjeju@gmail.com>
+Date: Wed, 30 Sep 2026 12:37:17 +0900
+Subject: [PATCH 3/3] =?UTF-8?q?feat(notify):=20send.ts=20=E2=86=92=20@plei?=
+ =?UTF-8?q?ades/notify=20=EA=B5=90=EC=B2=B4=20=C2=B7=20=ED=98=B8=EC=B6=9C?=
+ =?UTF-8?q?=206=EA=B1=B4=20(pleiades#95)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+pleiades 1a-3 (003 §5-1·§5-2). 아웃바운드 전송 초크포인트를 패키지 파사드로 옮긴다.
+
+- notifier.ts 신규: notifierFor(bot) = createNotifier({ TelegramTransport(bot.api) ·
+  ALLOWED ← csvEnv('TELEGRAM_ALLOWED_CHAT_IDS') }) · BOT_NOTIFY_CTX = { label: 'bot' }
+- send.ts 삭제 (124줄) · scheduler.ts re-export 블록 삭제 (소비자 0 · D-4)
+- 호출 6건: scheduler ×2 · auto-adjust ×2(키보드 1) · auto-adjust-cron ×1(키보드) · admin-alerts ×1
+- first{chatId, messageId:number} → first{target, ref:string} — telegramMessageId 에 저장되는 문자열 값은 동일
+- 호출부 throw 문구 "sendToAll: 모든 채팅 전송 실패 …" 는 운영 로그 호환을 위해 유지
+
+관측 변경 (사용자 승인 U-3): 4096 초과는 절단 대신 줄 경계 분할(Q10-L ①) · 키보드 전송도
+재시도 ×4 + plain 폴백(키보드 유지 · 마지막 청크에 부착) · ENOTFOUND 재시도 · 로그
+"[bot] keyboard 메시지 전송 실패" → "[bot] 메시지 전송 실패" (#48 I3).
+fit bot/utils/error.ts 는 교체하지 않는다 (D-3).
+
+테스트: 1a-2 baseline 11건 이식(불변 9 · 의도 변경 2 — 분할 · 키보드 재시도 fake timers) +
+신규 9(키보드 폴백 · 키보드 분할 · ENOTFOUND · 호출부 label 4 · first.ref 저장 2).
+정본 선택: 재시도·폴백은 fit send.ts, 분할은 fin splitMessage — 패키지 코어가 이미 합쳤다(003 §3-1).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../notifications/__tests__/notifier.test.ts  | 308 +++++++++++++++---
+ src/bot/notifications/auto-adjust-cron.ts     |  15 +-
+ src/bot/notifications/auto-adjust.ts          |  23 +-
+ src/bot/notifications/notifier.ts             |  27 ++
+ src/bot/notifications/scheduler.ts            |  19 +-
+ src/bot/notifications/send.ts                 | 124 -------
+ src/lib/monitoring/admin-alerts.ts            |   5 +-
+ 7 files changed, 330 insertions(+), 191 deletions(-)
+ create mode 100644 src/bot/notifications/notifier.ts
+ delete mode 100644 src/bot/notifications/send.ts
+
+diff --git a/src/bot/notifications/__tests__/notifier.test.ts b/src/bot/notifications/__tests__/notifier.test.ts
+index 24aec80..dac0bd0 100644
+--- a/src/bot/notifications/__tests__/notifier.test.ts
++++ b/src/bot/notifications/__tests__/notifier.test.ts
+@@ -1,11 +1,46 @@
+ import type { Bot, InlineKeyboard } from "grammy";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+-import { sendToAll, sendToAllWithKeyboard } from "../send";
++import { Route, html } from "@pleiades/notify";
++import cron from "node-cron";
++import prisma from "@/lib/prisma";
++import { generateMorningReport } from "@/lib/daily-report";
++import { recommendTodayWorkout } from "@/mcp/tools/recommend-today-workout";
++import { BOT_NOTIFY_CTX, notifierFor } from "../notifier";
++import { startBotScheduler } from "../scheduler";
++import { runAutoAdjustProposal } from "../auto-adjust";
++import { runAutoAdjustMaintenance } from "../auto-adjust-cron";
++import { notifyClaudeAuthExpiredIfNeeded } from "@/lib/monitoring/admin-alerts";
+ 
+-// 1a-2 회귀 baseline (pleiades 003 §5-2 · pleiades#58). 이 모듈은 1a-3 에서 @pleiades/notify 로 교체된다 —
+-// 절단(4096-3+"...") · 재시도 [2000, 8000, 30000] · HTML→plain 폴백 · SendResult 집계가 전환 전 동작이다.
++// 1a-3 (pleiades#95 · 003 §5-2): send.ts(sendToAll / sendToAllWithKeyboard) → @pleiades/notify 교체.
++// 1a-2 회귀 baseline 11건(pleiades#58)을 이 파일로 이식했다 — 불변 9 · 의도 변경 2(절단 → 분할 Q10-L ① ·
++// 키보드 경로 재시도 003 §4-1(a)). 아래 "호출부" 블록은 교체된 호출 6건이 label 'bot' 을 넘기고
++// first.ref 를 telegramMessageId 로 그대로 저장하는지를 고정한다.
+ 
+-const MAX_MSG = 4096;
++vi.mock("node-cron", () => ({ default: { schedule: vi.fn() } }));
++vi.mock("@/lib/prisma", () => ({
++  default: {
++    userProfile: { findFirst: vi.fn() },
++    trainingWorkout: { findFirst: vi.fn() },
++    workoutAdjustment: {
++      create: vi.fn(),
++      update: vi.fn(),
++      updateMany: vi.fn(),
++      findMany: vi.fn(),
++    },
++    aIAdvice: { create: vi.fn() },
++    systemAlertState: { updateMany: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
++  },
++}));
++vi.mock("@/lib/daily-report", () => ({
++  generateMorningReport: vi.fn(),
++  generateEveningReport: vi.fn(),
++  preSyncForReport: vi.fn(),
++}));
++vi.mock("@/lib/weekly-report", () => ({ generateWeeklyReport: vi.fn() }));
++vi.mock("@/mcp/tools/recommend-today-workout", () => ({ recommendTodayWorkout: vi.fn() }));
++vi.mock("@/mcp/tools/injury-risk", () => ({
++  getInjuryRiskScore: vi.fn(async () => ({ content: [{ text: '{"topFactors":[]}' }] })),
++}));
+ 
+ function fakeBot(sendMessage: (...args: unknown[]) => Promise<unknown>) {
+   const spy = vi.fn(sendMessage);
+@@ -16,7 +51,17 @@ function networkError(code: string): Error {
+   return Object.assign(new Error(`request failed: ${code}`), { code });
+ }
+ 
++/** 교체된 호출부와 같은 형태 — `notifierFor(bot).notify(Route.ALLOWED, html(text, keyboard?), BOT_NOTIFY_CTX)`. */
++function send(bot: Bot, text: string, keyboard?: InlineKeyboard) {
++  return notifierFor(bot).notify(Route.ALLOWED, html(text, keyboard), BOT_NOTIFY_CTX);
++}
++
++function errorLogs(): string[] {
++  return vi.mocked(console.error).mock.calls.map((c) => String(c[0]));
++}
++
+ beforeEach(() => {
++  vi.spyOn(console, "log").mockImplementation(() => undefined);
+   vi.spyOn(console, "warn").mockImplementation(() => undefined);
+   vi.spyOn(console, "error").mockImplementation(() => undefined);
+ });
+@@ -27,12 +72,12 @@ afterEach(() => {
+   vi.restoreAllMocks();
+ });
+ 
+-describe("sendToAll", () => {
++describe("notifierFor — 일반 전송 (구 sendToAll baseline)", () => {
+   it("TELEGRAM_ALLOWED_CHAT_IDS 를 trim·빈 항목 제거해 전부에게 HTML 로 보낸다", async () => {
+     vi.stubEnv("TELEGRAM_ALLOWED_CHAT_IDS", " 1, 2,,3 ");
+     const { bot, sendMessage } = fakeBot(async () => ({ message_id: 1 }));
+-    const result = await sendToAll(bot, "<b>hi</b>");
+-    expect(result).toEqual({ sent: 3, failed: 0, total: 3 });
++    const result = await send(bot, "<b>hi</b>");
++    expect(result).toMatchObject({ sent: 3, failed: 0, total: 3 });
+     expect(sendMessage.mock.calls.map((c) => c[0])).toEqual(["1", "2", "3"]);
+     expect(sendMessage).toHaveBeenCalledWith("1", "<b>hi</b>", { parse_mode: "HTML" });
+   });
+@@ -40,17 +85,21 @@ describe("sendToAll", () => {
+   it("수신자가 없으면 아무것도 보내지 않는다", async () => {
+     vi.stubEnv("TELEGRAM_ALLOWED_CHAT_IDS", "");
+     const { bot, sendMessage } = fakeBot(async () => ({}));
+-    expect(await sendToAll(bot, "x")).toEqual({ sent: 0, failed: 0, total: 0 });
++    expect(await send(bot, "x")).toMatchObject({ sent: 0, failed: 0, total: 0 });
+     expect(sendMessage).not.toHaveBeenCalled();
+   });
+ 
+-  it("4096 초과는 4093자 + '...' 로 절단한다 (1a-3 이 분할로 바꾸는 동작)", async () => {
++  it("4096 초과는 절단하지 않고 분할한다 — 한 줄이면 하드 슬라이스 4096 + 904 (의도 변경 · Q10-L ① · pleiades 003 §5-2)", async () => {
+     vi.stubEnv("TELEGRAM_ALLOWED_CHAT_IDS", "1");
+-    const { bot, sendMessage } = fakeBot(async () => ({}));
+-    await sendToAll(bot, "a".repeat(5000));
+-    const sentText = sendMessage.mock.calls[0][1] as string;
+-    expect(sentText).toHaveLength(MAX_MSG);
+-    expect(sentText.endsWith("...")).toBe(true);
++    let id = 1;
++    const { bot, sendMessage } = fakeBot(async () => ({ message_id: id++ }));
++    const text = "a".repeat(5000);
++    const result = await send(bot, text);
++    expect(result).toMatchObject({ sent: 1, failed: 0, total: 1 });
++    const chunks = sendMessage.mock.calls.map((c) => c[1] as string);
++    expect(chunks.map((c) => c.length)).toEqual([4096, 904]);
++    expect(chunks.join("")).toBe(text);
++    expect(chunks.some((c) => c.endsWith("..."))).toBe(false);
+   });
+ 
+   it("HTML 파싱 실패는 백오프 없이 plain 으로 즉시 재전송한다", async () => {
+@@ -60,12 +109,13 @@ describe("sendToAll", () => {
+     const { bot, sendMessage } = fakeBot(async () => {
+       calls += 1;
+       if (calls === 1) throw new Error("Bad Request: can't parse entities");
+-      return {};
++      return { message_id: 1 };
+     });
+-    const result = await sendToAll(bot, "<b>bold</b> x");
+-    expect(result).toEqual({ sent: 1, failed: 0, total: 1 });
++    const result = await send(bot, "<b>bold</b> x");
++    expect(result).toMatchObject({ sent: 1, failed: 0, total: 1 });
+     expect(sendMessage).toHaveBeenCalledTimes(2);
+-    expect(sendMessage.mock.calls[1]).toEqual(["1", "bold x"]);
++    // 셋째 인자 {} 는 인자 생략과 같은 payload (grammy api.sendMessage 가 other 를 펼친다)
++    expect(sendMessage.mock.calls[1]).toEqual(["1", "bold x", {}]);
+     expect(vi.getTimerCount()).toBe(0);
+   });
+ 
+@@ -76,9 +126,9 @@ describe("sendToAll", () => {
+     const { bot, sendMessage } = fakeBot(async () => {
+       calls += 1;
+       if (calls < 4) throw networkError("ETIMEDOUT");
+-      return {};
++      return { message_id: 1 };
+     });
+-    const pending = sendToAll(bot, "x");
++    const pending = send(bot, "x");
+     await vi.advanceTimersByTimeAsync(1999);
+     expect(sendMessage).toHaveBeenCalledTimes(1);
+     await vi.advanceTimersByTimeAsync(1);
+@@ -87,7 +137,7 @@ describe("sendToAll", () => {
+     expect(sendMessage).toHaveBeenCalledTimes(3);
+     await vi.advanceTimersByTimeAsync(30000);
+     expect(sendMessage).toHaveBeenCalledTimes(4);
+-    expect(await pending).toEqual({ sent: 1, failed: 0, total: 1 });
++    expect(await pending).toMatchObject({ sent: 1, failed: 0, total: 1 });
+   });
+ 
+   it("4회 모두 네트워크 오류면 실패로 집계하고 다음 수신자로 넘어간다", async () => {
+@@ -95,11 +145,11 @@ describe("sendToAll", () => {
+     vi.useFakeTimers();
+     const { bot, sendMessage } = fakeBot(async (chatId) => {
+       if (chatId === "1") throw networkError("ECONNRESET");
+-      return {};
++      return { message_id: 1 };
+     });
+-    const pending = sendToAll(bot, "x");
++    const pending = send(bot, "x");
+     await vi.runAllTimersAsync();
+-    expect(await pending).toEqual({ sent: 1, failed: 1, total: 2 });
++    expect(await pending).toMatchObject({ sent: 1, failed: 1, total: 2 });
+     expect(sendMessage).toHaveBeenCalledTimes(5);
+   });
+ 
+@@ -108,35 +158,53 @@ describe("sendToAll", () => {
+     const { bot, sendMessage } = fakeBot(async () => {
+       throw new Error("Forbidden: bot was blocked by the user");
+     });
+-    expect(await sendToAll(bot, "x")).toEqual({ sent: 0, failed: 1, total: 1 });
++    expect(await send(bot, "x")).toMatchObject({ sent: 0, failed: 1, total: 1 });
+     expect(sendMessage).toHaveBeenCalledTimes(1);
+   });
+ 
+-  it("실패 로그는 봇 토큰을 마스킹한다 (사전 리뷰 info 3 · 003 Q19 sensitiveLogs 경계)", async () => {
++  it("실패 로그는 봇 토큰을 마스킹하고 [bot] prefix 를 유지한다 (003 Q19 sensitiveLogs 경계 · #48 I2)", async () => {
+     vi.stubEnv("TELEGRAM_ALLOWED_CHAT_IDS", "1");
+     const { bot } = fakeBot(async () => {
+       throw new Error("call to bot123456:ABC-def_78 failed");
+     });
+-    await sendToAll(bot, "x");
+-    const logged = vi.mocked(console.error).mock.calls[0][0] as string;
++    await send(bot, "x");
++    const logged = errorLogs()[0];
++    expect(logged.startsWith("[bot] 메시지 전송 실패 (1): ")).toBe(true);
+     expect(logged).toContain("bot<REDACTED>");
+     expect(logged).not.toContain("ABC-def_78");
+   });
++
++  it("ENOTFOUND 도 네트워크 오류로 재시도한다 (신규 · 패키지 isNetworkError 7코드 · 1a-3 S-4)", async () => {
++    vi.stubEnv("TELEGRAM_ALLOWED_CHAT_IDS", "1");
++    vi.useFakeTimers();
++    let calls = 0;
++    const { bot, sendMessage } = fakeBot(async () => {
++      calls += 1;
++      if (calls === 1) throw networkError("ENOTFOUND");
++      return { message_id: 1 };
++    });
++    const pending = send(bot, "x");
++    await vi.runAllTimersAsync();
++    expect(await pending).toMatchObject({ sent: 1, failed: 0, total: 1 });
++    expect(sendMessage).toHaveBeenCalledTimes(2);
++    const warned = vi.mocked(console.warn).mock.calls.map((c) => String(c[0]));
++    expect(warned[0].startsWith("[bot] 전송 재시도 1/4 (1, 2000ms 후): ")).toBe(true);
++  });
+ });
+ 
+-describe("sendToAllWithKeyboard", () => {
++describe("notifierFor — 키보드 전송 (구 sendToAllWithKeyboard baseline)", () => {
+   const keyboard = { inline_keyboard: [] } as unknown as InlineKeyboard;
+ 
+-  it("keyboard 를 붙여 보내고 첫 성공의 chatId·messageId 를 돌려준다", async () => {
++  it("keyboard 를 붙여 보내고 첫 성공의 target·ref 를 돌려준다", async () => {
+     vi.stubEnv("TELEGRAM_ALLOWED_CHAT_IDS", "1,2");
+     let id = 10;
+     const { bot, sendMessage } = fakeBot(async () => ({ message_id: id++ }));
+-    const result = await sendToAllWithKeyboard(bot, "<b>q</b>", keyboard);
+-    expect(result).toEqual({
++    const result = await send(bot, "<b>q</b>", keyboard);
++    expect(result).toMatchObject({
+       sent: 2,
+       failed: 0,
+       total: 2,
+-      first: { chatId: "1", messageId: 10 },
++      first: { target: "1", ref: "10" },
+     });
+     expect(sendMessage).toHaveBeenCalledWith("1", "<b>q</b>", {
+       parse_mode: "HTML",
+@@ -144,20 +212,22 @@ describe("sendToAllWithKeyboard", () => {
+     });
+   });
+ 
+-  it("재시도도 HTML 폴백도 없다 — 실패는 그대로 집계하고 first 는 첫 성공만", async () => {
++  it("키보드 경로도 네트워크 오류를 재시도한다 — 4회 실패 후 집계 · first 는 첫 성공 (의도 변경 · 003 §4-1(a))", async () => {
+     vi.stubEnv("TELEGRAM_ALLOWED_CHAT_IDS", "1,2");
++    vi.useFakeTimers();
+     const { bot, sendMessage } = fakeBot(async (chatId) => {
+       if (chatId === "1") throw networkError("ETIMEDOUT");
+       return { message_id: 7 };
+     });
+-    const result = await sendToAllWithKeyboard(bot, "x", keyboard);
+-    expect(result).toEqual({
++    const pending = send(bot, "x", keyboard);
++    await vi.runAllTimersAsync();
++    expect(await pending).toMatchObject({
+       sent: 1,
+       failed: 1,
+       total: 2,
+-      first: { chatId: "2", messageId: 7 },
++      first: { target: "2", ref: "7" },
+     });
+-    expect(sendMessage).toHaveBeenCalledTimes(2);
++    expect(sendMessage).toHaveBeenCalledTimes(5);
+   });
+ 
+   it("모두 실패하면 first 는 undefined 다", async () => {
+@@ -165,8 +235,168 @@ describe("sendToAllWithKeyboard", () => {
+     const { bot } = fakeBot(async () => {
+       throw new Error("x");
+     });
+-    const result = await sendToAllWithKeyboard(bot, "x", keyboard);
++    const result = await send(bot, "x", keyboard);
+     expect(result.first).toBeUndefined();
+     expect(result).toMatchObject({ sent: 0, failed: 1, total: 1 });
+   });
++
++  it("HTML 파싱 실패 → plain 으로 재전송하되 keyboard 는 유지한다 (신규 · 1a-3 S-2)", async () => {
++    vi.stubEnv("TELEGRAM_ALLOWED_CHAT_IDS", "1");
++    let calls = 0;
++    const { bot, sendMessage } = fakeBot(async () => {
++      calls += 1;
++      if (calls === 1) throw new Error("Bad Request: can't parse entities");
++      return { message_id: 3 };
++    });
++    const result = await send(bot, "<b>A &amp; B</b>", keyboard);
++    expect(result).toMatchObject({ sent: 1, first: { target: "1", ref: "3" } });
++    // 엔티티는 디코드하지 않는다 (Q10-P ① 태그-only) — plain 폴백에 리터럴로 남는다
++    expect(sendMessage.mock.calls[1]).toEqual(["1", "A &amp; B", { reply_markup: keyboard }]);
++  });
++
++  it("4096 초과 + keyboard → keyboard 는 마지막 청크에만 · first.ref 는 마지막 청크 (신규 · Q10-L ①)", async () => {
++    vi.stubEnv("TELEGRAM_ALLOWED_CHAT_IDS", "1");
++    let id = 10;
++    const { bot, sendMessage } = fakeBot(async () => ({ message_id: id++ }));
++    const result = await send(bot, "a".repeat(5000), keyboard);
++    expect(sendMessage).toHaveBeenCalledTimes(2);
++    expect(sendMessage.mock.calls[0][2]).toEqual({ parse_mode: "HTML" });
++    expect(sendMessage.mock.calls[1][2]).toEqual({ parse_mode: "HTML", reply_markup: keyboard });
++    expect(result.first).toEqual({ target: "1", ref: "11" });
++  });
++});
++
++describe("호출부 6건 — label 'bot' · first.ref 저장 (신규 · #48 I2)", () => {
++  const db = vi.mocked(prisma, true);
++
++  function failingBot() {
++    return fakeBot(async () => {
++      throw new Error("Forbidden: bot was blocked by the user");
++    });
++  }
++
++  function expectBotLabelOnly(expectedFailures: number) {
++    const logs = errorLogs();
++    expect(logs.filter((l) => l.startsWith("[bot] 메시지 전송 실패"))).toHaveLength(expectedFailures);
++    expect(logs.some((l) => l.startsWith("[notify]"))).toBe(false);
++  }
++
++  const payload = {
++    date: "2026-09-30",
++    base: { source: "plan", type: "tempo", distanceKm: 10, pace: "5:00", planId: "p1" },
++    recommendation: {
++      type: "easy",
++      distanceKm: 6,
++      paceRange: { min: "6:00", max: "6:30" },
++      adjusted: true,
++      adjustmentReason: "피로 & 부하",
++    },
++    factors: {
++      readiness: { score: 40, label: "low" },
++      injury: { score: 70, label: "high" },
++      plan: { hasActivePlan: true, todayWorkoutExists: true, todayIsRestPlanned: false, lthrPaceSource: "x" },
++    },
++    rationale: "r",
++  };
++
++  function arrangeProposal() {
++    db.userProfile.findFirst.mockResolvedValue({ autoAdjustEnabled: true } as never);
++    db.trainingWorkout.findFirst
++      .mockResolvedValueOnce(null as never)
++      .mockResolvedValueOnce({
++        id: "w1",
++        type: "tempo",
++        distanceKm: 10,
++        paceSecPerKm: 300,
++        zone: null,
++        intervalDesc: null,
++        notes: null,
++      } as never);
++    vi.mocked(recommendTodayWorkout).mockResolvedValue({
++      content: [{ type: "text", text: JSON.stringify(payload) }],
++    } as never);
++    db.workoutAdjustment.create.mockResolvedValue({ id: "adj1" } as never);
++    db.workoutAdjustment.update.mockResolvedValue({} as never);
++    db.aIAdvice.create.mockResolvedValue({} as never);
++  }
++
++  function arrangeSnoozed() {
++    db.workoutAdjustment.updateMany.mockResolvedValue({ count: 1 } as never);
++    db.workoutAdjustment.findMany.mockResolvedValue([
++      {
++        id: "adj9",
++        proposedType: "easy",
++        proposedDistanceKm: 6,
++        proposedPaceSecPerKm: 370,
++        proposedZone: null,
++        proposedIntervalDesc: null,
++        reason: {},
++      },
++    ] as never);
++  }
++
++  beforeEach(() => {
++    vi.clearAllMocks();
++    vi.stubEnv("TELEGRAM_ALLOWED_CHAT_IDS", "1");
++  });
++
++  it("scheduler 리포트 전송·에러 문구 전송 (호출 2건) 이 [bot] 으로 로그한다", async () => {
++    vi.mocked(generateMorningReport).mockResolvedValue("hi");
++    const { bot, sendMessage } = failingBot();
++    startBotScheduler(bot);
++    const morning = vi.mocked(cron.schedule).mock.calls[0][1] as () => Promise<void>;
++    await morning();
++    expect(sendMessage).toHaveBeenCalledTimes(2);
++    expect(String(sendMessage.mock.calls[1][1])).toContain("모닝 리포트 생성 실패");
++    expectBotLabelOnly(2);
++  });
++
++  it("auto-adjust 제안(키보드)·에러 문구 전송 (호출 2건) 이 [bot] 으로 로그한다", async () => {
++    arrangeProposal();
++    const { bot, sendMessage } = failingBot();
++    await runAutoAdjustProposal(bot);
++    expect(sendMessage).toHaveBeenCalledTimes(2);
++    expect(sendMessage.mock.calls[0][2]).toMatchObject({ parse_mode: "HTML", reply_markup: expect.anything() });
++    expect(String(sendMessage.mock.calls[1][1])).toContain("Auto-adjust 알림 실패");
++    expectBotLabelOnly(2);
++  });
++
++  it("auto-adjust 제안 성공 → first.ref·target 이 telegramMessageId·ChatId 로 그대로 저장된다", async () => {
++    arrangeProposal();
++    const { bot } = fakeBot(async () => ({ message_id: 42 }));
++    await runAutoAdjustProposal(bot);
++    expect(db.workoutAdjustment.update).toHaveBeenCalledWith({
++      where: { id: "adj1" },
++      data: { telegramMessageId: "42", telegramChatId: "1" },
++    });
++  });
++
++  it("auto-adjust-cron 스누즈 재전송 실패가 [bot] 으로 로그한다", async () => {
++    arrangeSnoozed();
++    const { bot, sendMessage } = failingBot();
++    await runAutoAdjustMaintenance(bot);
++    expect(sendMessage).toHaveBeenCalledTimes(1);
++    expect(sendMessage.mock.calls[0][2]).toMatchObject({ reply_markup: expect.anything() });
++    expectBotLabelOnly(1);
++  });
++
++  it("auto-adjust-cron 스누즈 재전송 성공 → first.ref·target 이 그대로 저장된다", async () => {
++    arrangeSnoozed();
++    const { bot } = fakeBot(async () => ({ message_id: 77 }));
++    await runAutoAdjustMaintenance(bot);
++    expect(db.workoutAdjustment.updateMany).toHaveBeenLastCalledWith({
++      where: { id: "adj9", decision: "snoozed" },
++      data: { decision: "pending", snoozeUntil: null, telegramMessageId: "77", telegramChatId: "1" },
++    });
++  });
++
++  it("admin-alerts 관리자 alert 전송 실패가 [bot] 으로 로그하고 예약을 해제한다", async () => {
++    db.systemAlertState.updateMany.mockResolvedValue({ count: 1 } as never);
++    db.systemAlertState.deleteMany.mockResolvedValue({ count: 1 } as never);
++    const { bot, sendMessage } = failingBot();
++    await notifyClaudeAuthExpiredIfNeeded(bot, new Error("Please run /login · authentication failed"));
++    expect(sendMessage).toHaveBeenCalledTimes(1);
++    expectBotLabelOnly(1);
++    expect(db.systemAlertState.deleteMany).toHaveBeenCalledTimes(1);
++  });
+ });
+diff --git a/src/bot/notifications/auto-adjust-cron.ts b/src/bot/notifications/auto-adjust-cron.ts
+index 2d34076..3c66e4f 100644
+--- a/src/bot/notifications/auto-adjust-cron.ts
++++ b/src/bot/notifications/auto-adjust-cron.ts
+@@ -7,7 +7,8 @@ import type { Bot } from "grammy";
+ import prisma from "@/lib/prisma";
+ import { sanitizeError } from "../utils/error";
+ import { buildAutoAdjustKeyboard, escapeHtml, typeKo } from "./auto-adjust";
+-import { sendToAllWithKeyboard } from "./send";
++import { Route, html } from "@pleiades/notify";
++import { BOT_NOTIFY_CTX, notifierFor } from "./notifier";
+ import { todayKST, ymdKST } from "@/lib/garmin/utils";
+ 
+ const TTL_HOURS = 8;
+@@ -75,7 +76,11 @@ async function processSnoozed(
+ ): Promise<void> {
+   const message = formatSnoozeMessage(adj);
+   const keyboard = buildAutoAdjustKeyboard(adj.id);
+-  const sendResult = await sendToAllWithKeyboard(bot, message, keyboard);
++  const sendResult = await notifierFor(bot).notify(
++    Route.ALLOWED,
++    html(message, keyboard),
++    BOT_NOTIFY_CTX,
++  );
+   if (sendResult.total === 0) {
+     console.warn("[auto-adjust-cron] snooze 재전송 대상 없음");
+     return;
+@@ -94,10 +99,8 @@ async function processSnoozed(
+       decision: "pending",
+       snoozeUntil: null,
+       // 새 message id 로 교체 (이전 message 는 keyboard 유지되어 있으나 새 pending 이 canonical).
+-      telegramMessageId: sendResult.first
+-        ? String(sendResult.first.messageId)
+-        : null,
+-      telegramChatId: sendResult.first?.chatId ?? null,
++      telegramMessageId: sendResult.first?.ref ?? null,
++      telegramChatId: sendResult.first?.target ?? null,
+     },
+   });
+   if (upd.count === 0) {
+diff --git a/src/bot/notifications/auto-adjust.ts b/src/bot/notifications/auto-adjust.ts
+index 30d8c12..56bac66 100644
+--- a/src/bot/notifications/auto-adjust.ts
++++ b/src/bot/notifications/auto-adjust.ts
+@@ -17,7 +17,8 @@ import {
+   notifyAdminIfKnownFailure,
+ } from "@/lib/monitoring/admin-alerts";
+ import { sanitizeError } from "../utils/error";
+-import { sendToAll, sendToAllWithKeyboard, type SendKeyboardResult } from "./send";
++import { Route, html, type BroadcastResult } from "@pleiades/notify";
++import { BOT_NOTIFY_CTX, notifierFor } from "./notifier";
+ 
+ /** M13 Phase 2 callback_data prefix. 형식: `auto_adjust:<action>:<adjustmentId>` */
+ export const CALLBACK_PREFIX = "auto_adjust";
+@@ -237,7 +238,7 @@ export function formatAutoAdjustMessage(
+  * - UserProfile.autoAdjustEnabled === false → skip
+  * - recommendation.adjusted === false → skip (조용, 정상 컨디션)
+  * - adjusted === true → Telegram push + AIAdvice 로그
+- * 조용한 실패 방지: 오류 시 sendToAll 로 사용자 알림.
++ * 조용한 실패 방지: 오류 시 notifier 로 사용자 알림.
+  */
+ export async function runAutoAdjustProposal(bot: Bot): Promise<void> {
+   try {
+@@ -392,10 +393,10 @@ export async function runAutoAdjustProposal(bot: Bot): Promise<void> {
+     });
+ 
+     const keyboard = buildAutoAdjustKeyboard(adjustment.id);
+-    const sendResult: SendKeyboardResult = await sendToAllWithKeyboard(
+-      bot,
+-      message,
+-      keyboard,
++    const sendResult: BroadcastResult = await notifierFor(bot).notify(
++      Route.ALLOWED,
++      html(message, keyboard),
++      BOT_NOTIFY_CTX,
+     );
+ 
+     // 조용한 실패 방지 (기존 runReportCron 패턴): 전송 대상 없음 or 전부 실패 시 escalate.
+@@ -415,8 +416,8 @@ export async function runAutoAdjustProposal(bot: Bot): Promise<void> {
+         await prisma.workoutAdjustment.update({
+           where: { id: adjustment.id },
+           data: {
+-            telegramMessageId: String(sendResult.first.messageId),
+-            telegramChatId: sendResult.first.chatId,
++            telegramMessageId: sendResult.first.ref,
++            telegramChatId: sendResult.first.target,
+           },
+         });
+       } catch (dbErr) {
+@@ -452,7 +453,11 @@ export async function runAutoAdjustProposal(bot: Bot): Promise<void> {
+     void notifyAdminIfKnownFailure(bot, error).catch(() => {});
+     try {
+       const friendly = formatUserFriendlyError(error);
+-      await sendToAll(bot, `❌ Auto-adjust 알림 실패\n${friendly}`);
++      await notifierFor(bot).notify(
++        Route.ALLOWED,
++        html(`❌ Auto-adjust 알림 실패\n${friendly}`),
++        BOT_NOTIFY_CTX,
++      );
+     } catch (notifyErr) {
+       console.error(
+         `[auto-adjust] 에러 알림 전송도 실패: ${sanitizeError(notifyErr)}`,
+diff --git a/src/bot/notifications/notifier.ts b/src/bot/notifications/notifier.ts
+new file mode 100644
+index 0000000..0954825
+--- /dev/null
++++ b/src/bot/notifications/notifier.ts
+@@ -0,0 +1,27 @@
++// pleiades 1a-3 (pleiades#95 · 003 §5-1): 아웃바운드 알림을 @pleiades/notify 파사드로 보낸다.
++// 구 send.ts(sendToAll / sendToAllWithKeyboard) 를 대체 — 재시도 [2000, 8000, 30000] · HTML→plain 폴백 ·
++// 4096 초과 줄 경계 분할(Q10-L ①) 은 패키지 코어가 소유하고, 키보드 전송도 같은 정책을 탄다(003 §4-1(a)).
++// 수신자는 fit 규칙 그대로 TELEGRAM_ALLOWED_CHAT_IDS (Route.ALLOWED · fit 은 ADMIN 미매핑 — 003 §4-2 Q25 하위 A).
++
++import type { Bot } from "grammy";
++import {
++  createNotifier,
++  createTelegramTransport,
++  csvEnv,
++  type Notifier,
++  type NotifyContext,
++} from "@pleiades/notify";
++
++/**
++ * 호출부 공통 로그 컨텍스트 — `[bot] 전송 재시도 …` · `[bot] 메시지 전송 실패 …` 형식 보존(#48 I2 · U-5).
++ * 빠뜨리면 패키지 기본값 `[notify]` 가 찍힌다.
++ */
++export const BOT_NOTIFY_CTX: NotifyContext = Object.freeze({ label: "bot" });
++
++/** 봇 인스턴스로 파사드를 만든다. 호출부가 이미 `bot` 을 인자로 받으므로 `bot.api` 를 그대로 넘긴다(D-2). */
++export function notifierFor(bot: Bot): Notifier {
++  return createNotifier({
++    transport: createTelegramTransport({ api: bot.api }),
++    targets: { ALLOWED: csvEnv("TELEGRAM_ALLOWED_CHAT_IDS") },
++  });
++}
+diff --git a/src/bot/notifications/scheduler.ts b/src/bot/notifications/scheduler.ts
+index 706af31..8e18ae0 100644
+--- a/src/bot/notifications/scheduler.ts
++++ b/src/bot/notifications/scheduler.ts
+@@ -10,15 +10,8 @@ import {
+   formatUserFriendlyError,
+   notifyAdminIfKnownFailure,
+ } from "@/lib/monitoring/admin-alerts";
+-// #253: sendToAll/sendToAllWithKeyboard 은 별도 send.ts 로 이동 (auth-monitor 와 순환 import 방지).
+-// 기존 소비자를 위해 re-export.
+-export {
+-  sendToAll,
+-  sendToAllWithKeyboard,
+-  type SendResult,
+-  type SendKeyboardResult,
+-} from "./send";
+-import { sendToAll } from "./send";
++import { Route, html as htmlContent } from "@pleiades/notify";
++import { BOT_NOTIFY_CTX, notifierFor } from "./notifier";
+ 
+ /** 리포트 cron 콜백 공통 처리: 단계별 로그 + 실패 시 텔레그램 알림 (조용한 실패 차단) */
+ async function runReportCron(
+@@ -31,7 +24,7 @@ async function runReportCron(
+   try {
+     const report = await generate();
+     const html = `${emoji} <b>${label}</b>\n\n${mdToHtml(report)}`;
+-    const r = await sendToAll(bot, html);
++    const r = await notifierFor(bot).notify(Route.ALLOWED, htmlContent(html), BOT_NOTIFY_CTX);
+     if (r.total === 0) {
+       console.warn(
+         `[bot-cron] ${label} 전송 대상 없음 (TELEGRAM_ALLOWED_CHAT_IDS 미설정?)`
+@@ -56,7 +49,11 @@ async function runReportCron(
+     // 조용한 실패 차단: 사용자에게 카테고리 매핑 문구 (기존 raw msg 대체).
+     try {
+       const friendly = formatUserFriendlyError(error);
+-      await sendToAll(bot, `❌ ${label} 생성 실패\n${friendly}`);
++      await notifierFor(bot).notify(
++        Route.ALLOWED,
++        htmlContent(`❌ ${label} 생성 실패\n${friendly}`),
++        BOT_NOTIFY_CTX,
++      );
+     } catch (notifyErr) {
+       console.error(`[bot-cron] ${label} 에러 알림 전송도 실패: ${sanitizeError(notifyErr)}`);
+     }
+diff --git a/src/bot/notifications/send.ts b/src/bot/notifications/send.ts
+deleted file mode 100644
+index e3dc7f3..0000000
+--- a/src/bot/notifications/send.ts
++++ /dev/null
+@@ -1,124 +0,0 @@
+-// #253: sendToAll / sendToAllWithKeyboard 을 별도 모듈로 분리.
+-// scheduler.ts 와 claude-auth-monitor.ts 가 이 함수를 모두 import 하는데, scheduler.ts
+-// 에 두면 claude-auth-monitor.ts → scheduler.ts → claude-auth-monitor.ts 순환 import
+-// 위험. 순수 send helper 라 별도 파일이 자연.
+-
+-import type { Bot, InlineKeyboard } from "grammy";
+-import { sanitizeError, isNetworkError, isHtmlParseError } from "../utils/error";
+-
+-const MAX_MSG = 4096;
+-const RETRY_DELAYS_MS = [2000, 8000, 30000];
+-const MAX_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
+-
+-export interface SendResult {
+-  sent: number;
+-  failed: number;
+-  total: number;
+-}
+-
+-export interface SendKeyboardResult extends SendResult {
+-  /** 첫 번째 성공 전송의 chatId + messageId (callback 매칭용). 모두 실패 시 undefined. */
+-  first?: { chatId: string; messageId: number };
+-}
+-
+-function getChatIds(): string[] {
+-  return (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? "")
+-    .split(",")
+-    .map((id) => id.trim())
+-    .filter(Boolean);
+-}
+-
+-function sleep(ms: number): Promise<void> {
+-  return new Promise((resolve) => setTimeout(resolve, ms));
+-}
+-
+-function truncate(text: string): string {
+-  return text.length > MAX_MSG ? text.slice(0, MAX_MSG - 3) + "..." : text;
+-}
+-
+-async function sendOneWithRetry(
+-  bot: Bot,
+-  chatId: string,
+-  htmlText: string,
+-): Promise<void> {
+-  const html = truncate(htmlText);
+-  const plain = truncate(htmlText.replace(/<[^>]*>/g, ""));
+-  let useHtml = true;
+-  let lastErr: unknown;
+-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+-    try {
+-      if (useHtml) {
+-        await bot.api.sendMessage(chatId, html, { parse_mode: "HTML" });
+-      } else {
+-        await bot.api.sendMessage(chatId, plain);
+-      }
+-      return;
+-    } catch (err) {
+-      lastErr = err;
+-      // HTML parse 에러 → 같은 시도 횟수로 plain 모드 전환 (백오프 없이 즉시 재시도)
+-      if (useHtml && isHtmlParseError(err)) {
+-        useHtml = false;
+-        attempt--;
+-        continue;
+-      }
+-      if (!isNetworkError(err) || attempt === MAX_ATTEMPTS - 1) {
+-        throw err;
+-      }
+-      const delay = RETRY_DELAYS_MS[attempt];
+-      console.warn(
+-        `[bot] 전송 재시도 ${attempt + 1}/${MAX_ATTEMPTS} (${chatId}, ${delay}ms 후): ${sanitizeError(err)}`,
+-      );
+-      await sleep(delay);
+-    }
+-  }
+-  throw lastErr ?? new Error("sendOneWithRetry: 재시도 모두 실패 (원인 미상)");
+-}
+-
+-export async function sendToAll(bot: Bot, text: string): Promise<SendResult> {
+-  const ids = getChatIds();
+-  let sent = 0;
+-  let failed = 0;
+-  for (const chatId of ids) {
+-    try {
+-      await sendOneWithRetry(bot, chatId, text);
+-      sent++;
+-    } catch (err) {
+-      failed++;
+-      console.error(`[bot] 메시지 전송 실패 (${chatId}): ${sanitizeError(err)}`);
+-    }
+-  }
+-  return { sent, failed, total: ids.length };
+-}
+-
+-/**
+- * inline keyboard 첨부 전송. HTML fallback 없음 (HTML 이 실패해도 keyboard 는 유지).
+- * 재시도 로직 없이 단순 전송 — 재시도 필요 시 개별 확장.
+- * 첫 성공 결과만 캡처 (M13 Phase 2 는 사용자 1명 기준).
+- */
+-export async function sendToAllWithKeyboard(
+-  bot: Bot,
+-  text: string,
+-  keyboard: InlineKeyboard,
+-): Promise<SendKeyboardResult> {
+-  const ids = getChatIds();
+-  const html = truncate(text);
+-  let sent = 0;
+-  let failed = 0;
+-  let first: SendKeyboardResult["first"];
+-  for (const chatId of ids) {
+-    try {
+-      const msg = await bot.api.sendMessage(chatId, html, {
+-        parse_mode: "HTML",
+-        reply_markup: keyboard,
+-      });
+-      sent++;
+-      if (!first) first = { chatId, messageId: msg.message_id };
+-    } catch (err) {
+-      failed++;
+-      console.error(
+-        `[bot] keyboard 메시지 전송 실패 (${chatId}): ${sanitizeError(err)}`,
+-      );
+-    }
+-  }
+-  return { sent, failed, total: ids.length, first };
+-}
+diff --git a/src/lib/monitoring/admin-alerts.ts b/src/lib/monitoring/admin-alerts.ts
+index be7b522..1feee8d 100644
+--- a/src/lib/monitoring/admin-alerts.ts
++++ b/src/lib/monitoring/admin-alerts.ts
+@@ -7,7 +7,8 @@
+ import type { Bot } from "grammy";
+ import prisma from "@/lib/prisma";
+ import { sanitizeError } from "@/bot/utils/error";
+-import { sendToAll } from "@/bot/notifications/send";
++import { Route, html } from "@pleiades/notify";
++import { BOT_NOTIFY_CTX, notifierFor } from "@/bot/notifications/notifier";
+ 
+ // ─── 카테고리 정의 ─────────────────────────────────────────────────────────
+ 
+@@ -229,7 +230,7 @@ async function notifyRateLimitedAlert(
+     const message = opts.buildMessage(errSnippet, nowKstDisplay());
+     let delivered = false;
+     try {
+-      const r = await sendToAll(bot, message);
++      const r = await notifierFor(bot).notify(Route.ALLOWED, html(message), BOT_NOTIFY_CTX);
+       delivered = r.sent > 0;
+       if (delivered) {
+         console.warn(`${opts.logPrefix} — admin alert 발송 (${errSnippet})`);
+-- 
+2.50.1 (Apple Git-155)
+

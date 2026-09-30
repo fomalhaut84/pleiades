@@ -3722,3 +3722,192 @@ ssh <host> 'echo "== shell: $0"; which node npm git; node -v; npm -v; git --vers
 → **node 24.12.0 ≥ 20.19** — 2026-09-28 절의 로컬 EBADENGINE(`@csstools/*` `>=20.19.0`)은 서버에서는 해당 없다. 로컬(20.18.0)만 낮다.
 → 서버는 1대(fin·fit 공용 · 위 운영 프로세스 절).
 → 미측정: 서버에서 `prepare`(클론 + devDeps + `tsc`)가 실제로 도는지 — 1a-3 첫 `npm ci` 에서 관측한다.
+
+# 2026-09-30 — 모노레포 가져오기 실측 (#97)
+
+**대상: 서비스 GitHub 원격 `dev`**(fin `5540417` · fit `a984b85`) — 가져올 대상이라 worktree 가 아니라 원격을 잰다(`integration/pleiades` 차이는 7). **서비스 무접촉** — 원본·worktree 는 열지 않고 스크래치에 `git clone --bare https://github.com/fomalhaut84/<repo>.git` 를 새로 받아 읽었다. 실험 클론은 `origin` 제거 · push 0. 로컬 git 2.50.1 · node 20.18.0 · npm 10.8.2. 스크립트 원문·상세는 `_workspace/006/01_surveyor_monorepo.md` · `_workspace/006/scripts/`.
+
+## 1. 이력 규모
+
+```bash
+git -C $S/$r.git rev-list --count dev
+git -C $S/$r.git rev-list --objects dev | git -C $S/$r.git pack-objects --stdout -q | wc -c
+git -C $S/$r.git rev-list --objects dev | git -C $S/$r.git cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' | awk '$1=="blob"' | sort -k3 -nr | awk '!seen[$4]++' | head -10
+```
+> `--batch-check` 포맷에 `%(rest)` 가 없으면 `sha path` 줄 전체를 객체명으로 읽어 **조용히 0** 이 나온다(첫 시도 오측정).
+
+| | myFinance | myFitness | pleiades |
+|---|---|---|---|
+| `dev` 커밋 | 395 | 375 | 48 |
+| `dev` 만 pack | 4,788,647 B | 6,874,787 B | 1,156,656 B (전 ref) |
+| 전 ref pack · 브랜치 · 태그 | 5.34 MiB · 219 · 27 | 7.58 MiB · 185 · 85 | — |
+| 최대 blob | `assets/fonts/NotoSansKR-{Regular,Bold}.ttf` 2.4 MB ×2 · lock 384 KB | lock 379 KB · `docs/designs/*/screenshots/*.png` 323 KB 이하 | — |
+
+1 MB 초과 blob 은 fin 폰트 2개뿐(HEAD 에 있음). 상위 10 전체는 `_workspace/006/01_surveyor_monorepo.md` §1.
+
+## 2. 이력 내 비밀값 — 정규식 기준 0 / 0
+
+gitleaks·trufflehog·detect-secrets 미설치 → `_workspace/006/scripts/scan.py`(패턴 12종) 로 `git log --all -p -U0 --text` 의 추가 줄 전수(fin 281,746 · fit 225,442 줄). 값은 출력하지 않는다.
+
+| | myFinance | myFitness |
+|---|---|---|
+| `.env`·키 파일이 추가된 적 (`git log --all --diff-filter=A --name-only`) | 0 (`.env.example` 만) | 0 (`.env.example` 만) |
+| 토큰·API 키·JWT·webhook 패턴 | 0 | 0 |
+| 걸린 것 | 전부 플레이스홀더 — `.env.example` 안내문 · docs 의 `password`/`...` · `ci.yml` `ci:ci` · `docs/specs/366-deploy-automation.md` 의 `BEGIN OPENSSH PRIVATE KEY\n...` 예시 · `logger.test.ts` redaction 픽스처 · chat id `123456`형 | 전부 플레이스홀더 · `food-db-mfds.ts` 는 `process.env.MFDS_API_KEY` 읽기 코드 |
+
+식별자(비밀 아님 · 이미 PUBLIC): 작성자 이메일(개인·회사) · fit `ecosystem.config.js` 의 서버 홈 절대경로 3곳. 한계: 엔트로피 검사 없음 · 도달 가능 객체만.
+세 저장소 모두 `visibility: PUBLIC`(`gh repo view --json visibility`) — 가져오기로 **새로 공개되는 이력은 없다.**
+
+## 3. `git subtree` 실험 (스크래치 pleiades 클론)
+
+```bash
+git subtree add  --prefix=apps/finance fin $(git rev-parse fin/dev~1)    # 0.39 s  (fit 0.57 s)
+git subtree pull --prefix=apps/finance fin dev                           # 0.20 s  (fit 0.17 s)
+git subtree add  --prefix=apps/finance https://github.com/fomalhaut84/myFinance.git dev   # 2.05 s (fit 3.15 s) · 리모트 등록·자격 증명 불필요
+```
+
+| | 이력 포함 | `--squash` |
+|---|---|---|
+| 커밋 | 48 → 820 (add) → 822 (pull) | 56 |
+| pack (gc) | 1.1 → **11.81~12.15 MiB** | **8.80 MiB** |
+| `HEAD:apps/<a>` == 서비스 `dev^{tree}` | YES · YES | YES · YES |
+| 루트 충돌 | **0** (루트 항목 12 → 13, `apps` 만) | 0 |
+
+- pull 은 `Merge commit '<dev SHA>'` 2-parent 머지 — add 커밋 트레일러 `git-subtree-split` 로 기준을 찾는다. 충돌은 일반 merge 와 같다(`sub3.sh`: 양쪽 README 1줄 → `UU apps/fitness/README.md`).
+- **이력 포함인데 경로 이력은 끊긴다:** `git log -- apps/finance/package.json` **1** 커밋(서비스 `log -- package.json` 19) · `--follow` 0 · `blame` 1 커밋(서비스 16). 옛 커밋에서는 파일이 루트 경로에 있기 때문 — `git log <split-sha> -- package.json` 로만 읽힌다. `filter-repo` 경로 재작성 대안은 SHA 가 바뀌어 이후 `subtree pull` 의 공통 조상이 사라진다(미실험).
+- squash 는 25%만 준다 — 크기 대부분이 HEAD 의 폰트·스크린샷·lock.
+
+## 4. 루트 설정
+
+| | fin `dev` | fit `dev` |
+|---|---|---|
+| `.github/workflows` | `ci.yml`·`deploy.yml`·`security-audit.yml` | 같은 이름 3 |
+| `.claude/` · `CLAUDE.md` | tracked 16 · 있음 | **0 · 없음**(`.gitignore:35-36`) |
+| `ecosystem.config.js` `cwd` | `__dirname` | 서버 절대경로 하드코딩 |
+| prisma migrations | 27 | 36 |
+
+→ `apps/*/.github/` 는 GitHub 가 읽지 않아 **CI·deploy 동작 0.** 루트로 올리면 pleiades `ci.yml`·`security-audit.yml` 과 **이름 충돌 2.** `deploy.yml` 트리거 = `release: published` + `workflow_dispatch` · pleiades Actions secrets **0** (`gh api repos/fomalhaut84/pleiades/actions/secrets --jq .total_count`).
+→ fin 하네스는 `apps/finance/.claude/` 로 들어오고 fit 은 안 온다. `apps/fitness/.gitignore` 가 `CLAUDE.md` 를 계속 ignore(`git check-ignore -v`).
+
+## 5. 의존성 · workspaces 설치
+
+| | fin lock | fit lock | notify |
+|---|---|---|---|
+| next | **15.5.19** | **16.3.5** | — |
+| react | 19.2.7 | 19.2.5 | — |
+| prisma · @prisma/client | 6.19.3 | 6.19.3 | — |
+| typescript · vitest | 5.9.3 · 4.1.9 | 5.9.3 · 4.1.11 | · 4.1.11 |
+| grammy | 1.44.0 | 1.42.0 | 무의존 |
+| eslint | **8.57.1** | **9.39.4** | — |
+| `engines.node` · `overrides` | 없음 · **3** | 없음 · **16** | 없음 · 0 |
+
+주버전 충돌 3: `next` 15↔16 · `eslint` 8↔9 · `eslint-config-next` 15↔16.
+
+```bash
+npm ci --ignore-scripts --no-audit --no-fund                               # 앱별 (git archive dev 추출본)
+# 스크래치 모노 클론 루트 package.json 에 "workspaces":["apps/*","packages/*"] · 루트 lock 삭제
+npm install --ignore-scripts --no-audit --no-fund
+```
+
+| | 소요 | node_modules |
+|---|---|---|
+| 앱별 `npm ci` | 6 s · 6 s | 748 MB + 797 MB = **1,545 MB** |
+| workspaces `npm install` (lock 새로 생성 · 937 패키지) | **36 s** | 루트 957 MB + `apps/fitness/node_modules` 203 MB(`next`·`eslint`·`eslint-config-next`·`postcss`) = **1,160 MB** |
+
+→ fin 이 루트 호이스팅을 차지하고 fit 의 next 16 이 중첩된다. `react` 는 한 벌(19.3.0).
+→ **새 lock 은 서비스 lock 과 크게 갈라진다** (`drift.js` — 서비스 lock 최상위 패키지 vs 각 앱이 실제 해석하는 버전): fin **221 / 719** 다름(직접 의존 21) · fit **242 / 704** 다름(직접 의존 22).
+→ **npm 은 workspace 하위의 `overrides` 를 무시한다** — fit `deepmerge-ts: ^8.0.2` override 가 있는데 7.1.5 로 해석. 보안 override 19개(3+16)를 루트로 합쳐야 하고 `"esbuild":"$esbuild"` 의 `$` 참조는 루트 의존을 가리키게 된다.
+→ EBADENGINE 7(`>=20.19.0` · 로컬 20.18.0 만 해당 · 서버 24.12.0 은 해당 없음 — 위 Q45 절).
+
+## 6. 로컬 실행 분리 (정적)
+
+```bash
+git -C $S/$r.git grep --text -ohE 'process\.env\.[A-Z0-9_]+' dev -- src prisma.config.ts next.config.mjs ecosystem.config.js | sort | uniq -c
+git -C $S/$r.git show dev:src/instrumentation.ts
+```
+
+| | fin | fit |
+|---|---|---|
+| 서비스 포트 | 4100 · MCP 4210 | 4200 · MCP `MCP_PORT` |
+| 로컬 `next dev` | 포트 미지정(`PORT`) | 같음 |
+| 필수 env | `DATABASE_URL` · `AUTH_SECRET` · `AUTH_PIN` | `DATABASE_URL` |
+| 텔레그램 env | `TELEGRAM_BOT_TOKEN` · `_ALLOWED_CHAT_IDS` · `_ADMIN_CHAT_IDS` | `TELEGRAM_BOT_TOKEN` · `_ALLOWED_CHAT_IDS` |
+| 외부 계정 | `WHOOING_WEBHOOK_URL` | **`GARMIN_EMAIL`·`GARMIN_PASSWORD`** · `MFDS_API_KEY` |
+| web 기동만으로 | `instrumentation.ts` 빈 함수 — cron 0 | **`startCronJobs()`**(Garmin 싱크 기본 `0 6,9,12,15,18,21 * * *`) + sweeper 2 |
+| 봇 | long polling `bot.start()` | long polling `.start()` |
+
+→ 최소 격리 env: 로컬 전용 `DATABASE_URL` · 서비스와 다른 `PORT` · **텔레그램 토큰 비움 또는 검증용 토큰(Q46)** · **fit `GARMIN_*` 비움**. 서비스 토큰으로 두 번째 long polling 을 하면 Telegram 이 `getUpdates` 409 Conflict 로 서비스 봇 수신을 끊는다 — **문서화된 동작 · 서비스 영향이라 실측하지 않음.** Garmin 동시 세션 영향도 미측정.
+
+## 7. `integration/pleiades` vs 서비스 `dev`
+
+```bash
+git -C $S/$r.git diff --name-status dev integration/pleiades
+```
+
+| | fin (`c94cbb8`) | fit (`210e875`) |
+|---|---|---|
+| dev → int 뒤처짐 | 2 | 0 |
+| 트리 차이 | `.claude/` 9 + `CLAUDE.md` (M) | `.claude/` 18 + `CLAUDE.md` (A) + `.gitignore` (M) |
+| `src/`·테스트·`package.json` 차이 | **0** | **0** — 1a-2 테스트는 이미 dev 에 있다(#492) |
+| 1a-3 | 없음 | `fd8b7c5` — 10 파일 +471/−324 · `@pleiades/notify` = `git+https://…#d9d1535…` |
+
+→ 가져올 가치: 하네스(fin 10 · fit 19 + `.gitignore` 2줄 제거) · 1a-3 의 `src/` 8 파일(git dep → workspace 참조로 재작성). 1a-2 는 가져올 것 없음.
+
+## 못 잰 값
+
+gitleaks 급 스캔(미설치) · 서비스 lock 시드 병합 · workspaces 로 두 앱 `lint/typecheck/test/build`(설치만 · `--ignore-scripts`) · `filter-repo` 대안 · Telegram 409·Garmin 세션(측정 자체가 서비스 영향) · GitHub 원격 크기(push 금지).
+
+## 2회차 (같은 날 · 초안 `_workspace/006/02_writer_006.md` 요청) — 상세 `_workspace/006/01_surveyor_monorepo_r2.md`
+
+### X1. 닫기 키워드 (`scripts/x1.py` · `gh issue list -R fomalhaut84/pleiades --state open` → 97 96 95 82 66 48 17 11)
+
+| | fin | fit |
+|---|---|---|
+| 키워드 참조 (커밋) | 42 (23) | 34 (26) |
+| 키워드 번호 ∩ pleiades 열린 이슈 | **0** | **0** |
+| 키워드 번호 ≤ 97 | 0 | 10 (#53~#76 · pleiades 에선 전부 closed PR/이슈) |
+| 저장소 한정 참조 | 3 — **`Closes fomalhaut84/myFinance#494`**(closed) · `Refs fomalhaut84/pleiades#51` · `fomalhaut84/myFitness#108` | 0 |
+| 모든 `#N` | 1,331 | 1,945 |
+
+근거: GitHub docs *linking-a-pull-request-to-an-issue* :44 — *"closing keywords in a commit message … closed when you merge the commit into the default branch"* · :37 교차 저장소 형식 `OWNER/REPO#N`. 커밋 참조가 타임라인 이벤트를 남기는지는 **문서 근거 미확인** · 실험하지 않았다.
+
+### X2. `git filter-repo --to-subdirectory-filter apps/<a> --message-callback` (스크래치 venv 설치 · `scripts/x2.sh`·`x2b.sh`)
+
+| | fit | fin |
+|---|---|---|
+| 두 번 실행한 tip | `2110825` = `2110825` | `71f7c4e` = `71f7c4e` |
+| 트리 == 서비스 dev | YES | YES |
+| dev~5 재작성 tip 이 dev 재작성의 조상 | **YES** → 모노에서 일반 `merge` 로 +5 커밋 · 충돌 0 | — |
+| 경로 log · blame (`apps/<a>/package.json`) | **32 · 28** (서비스 32 · 28) | **19 · 16** (서비스 19 · 16) |
+| callback 후 남은 한정 없는 `#N` | 0 | 0 |
+| 남은 닫기 키워드 | 0 | **1** (한정 형식 `Closes fomalhaut84/myFinance#494` — 정규식이 건너뜀) |
+
+→ 결정적이고 증분 merge 가 된다. subtree 방식의 경로 이력 단절(log 1 · blame 1)이 없다.
+
+### X3. 스크래치 모노(`workspaces` 없음 · 앱별 lock) 8절 4종 (`scripts/x3*.sh` · `DATABASE_URL=postgresql://none:none@127.0.0.1:1/none`)
+
+| | lint | 타입 | 테스트 | build |
+|---|---|---|---|---|
+| fin | 0 | 0 | 0 (50 파일 · 866) | **1** — prerender 가 Prisma 호출 · 추출본(모노 밖)도 같은 실패 → 스크래치 `initdb`(55432) + `prisma migrate deploy` 27 적용 뒤 **0** |
+| fit | 0 | 0 | 0 (63 · 433 + verify 5) | 0 |
+| fit + `file:../../packages/notify` + 1a-3 `src` | 0 | 0 | 0 (63 · 442) | 0 · bot 번들에 notify 인라인 |
+
+→ **fin `next build` 는 스키마가 적용된 DB 가 필요하다**(데이터는 불필요). `file:` 는 **루트 `npm ci`(→ `prepare` tsc)로 `packages/notify/dist` 를 먼저 만들어야** 동작한다(빼먹으면 typecheck rc 2). lock 이 3개면 Next 가 *"inferred your workspace root"* 경고를 낸다.
+
+### X7. 최근 90일 (`--since=2026-07-02 --no-merges` · `scripts/x7.sh`)
+
+fit 1a-3 대상 6 파일 → **4** 커밋 / 저장소 158. fin 1a-4 대상 19 파일(grep `sendHtml(|getAllowedChatIds|bot.api.send*` + `telegram.ts`) → **17** / 59.
+
+### X9. 로컬
+
+`pg_isready -h 127.0.0.1 -p 5432` → accepting · PostgreSQL 15.14 (Homebrew) · `lsof` 127.0.0.1·[::1]:5432 LISTEN. `.env` 는 원본 fin·fit + worktree fin·fit **4개 모두 존재**(내용 미열람 · 가리키는 DB 미확인).
+
+### X10. 중첩 `CLAUDE.md`·`.claude/` (Claude Code 2.1.285 · 스크래치 `claude -p` 조건별 1회)
+
+| 조건 | 로드된 것 |
+|---|---|
+| 시작 시 | 루트 `CLAUDE.md` 만 |
+| `apps/x/` 파일을 Read 한 뒤 (추적 경로) | + `apps/x/CLAUDE.md` + `apps/x/.claude/rules/*` + `apps/x/.claude/skills/*` |
+| 같음, `apps/` 가 gitignored | + CLAUDE.md + rules · **skill 없음** |
+
+→ **정정 후보:** 004 §3-2 *"중첩 `.claude/` 미발견"* 은 gitignored 조건의 skill 에 대해서만 재현된다 — CLAUDE.md·rules 는 지연 로드된다. 모노레포에서는 fin 파일을 읽는 순간 fin `CLAUDE.md`·rules 5 가 pleiades 세션에 들어온다.
