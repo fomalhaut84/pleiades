@@ -44,7 +44,9 @@ gh pr list -R fomalhaut84/pleiades --state open
 echo "actions secrets: $(gh api repos/fomalhaut84/pleiades/actions/secrets --jq .total_count)"
 # 정기 수용 판정 (006 §4-S · Q54b) — 서비스 dev tip(ls-remote · 읽기) ↔ 마지막 수용 머지 커밋의 Service-Dev 트레일러
 for r in myFinance myFitness; do
-  svc=$(git ls-remote https://github.com/fomalhaut84/$r.git refs/heads/dev | cut -f1)
+  # --exit-code: ref 가 없으면 2 · 접근 불가면 128 — 빈 SHA 로 판정을 이어가지 않는다 (PR #105 Codex P2)
+  svc=$(git ls-remote --exit-code https://github.com/fomalhaut84/$r.git refs/heads/dev) && svc=${svc%%[[:space:]]*} || svc=
+  if [ -z "$svc" ]; then echo "$r: ls-remote 실패 — 판정 불가 (재시도·우회하지 않고 브리핑에 적는다)"; continue; fi
   last=$(git log origin/dev --grep "^Service-Repo: $r\$" -1 --format=%B | sed -n 's/^Service-Dev: //p')
   if [ -z "$last" ]; then echo "$r: 미수용 (M-1 전) · dev ${svc:0:12}"
   elif [ "$svc" = "$last" ]; then echo "$r: 최신 (${svc:0:12})"

@@ -14,7 +14,7 @@ pleiades 는 세션 사이 간격이 길고, 그 사이 두 서비스(원격 `de
 
 ```bash
 cd ~/workspace/pleiades
-git status -sb | head -1 && git log --oneline origin/dev -5
+git status -sb && git log --oneline origin/dev -5      # head 로 자르지 않는다 — 미커밋·untracked 가 인계 대상이다 (PR #105 Codex P2)
 gh pr list -R fomalhaut84/pleiades --state open
 echo "actions secrets: $(gh api repos/fomalhaut84/pleiades/actions/secrets --jq .total_count)"   # I-9 — 0 이어야 한다
 ```
