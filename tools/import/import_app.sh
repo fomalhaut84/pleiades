@@ -48,16 +48,22 @@ git -C "$ROOT" diff --quiet && git -C "$ROOT" diff --cached --quiet || die "plei
 CB_SHA=$(G callback-sha)
 [[ "$CB_SHA" == "$(pin callback)" ]] || die "callback 이 VERSIONS 와 다르다"
 
-# 이전 상태는 머지된 기준(BASE_REF)의 STATE.json 에서 읽는다 — 작업 브랜치가 낡았으면 멈춘다 (006 §4-2 · #104 사전 리뷰 info)
-[[ "$BASE_REF" != origin/dev ]] || git -C "$ROOT" fetch -q origin dev
+W=$SCRATCH/$APP-import-$$
+REF=refs/import/$APP
 BASE_STATE=$(mktemp)
-git -C "$ROOT" show "$BASE_REF:tools/import/STATE.json" > "$BASE_STATE" 2>/dev/null || rm -f "$BASE_STATE"
-if [[ -e "$STATE" || -e "${BASE_STATE:-/nonexistent}" ]]; then
-  cmp -s "$STATE" "${BASE_STATE:-/dev/null}" || die "작업트리 STATE.json 이 $BASE_REF 와 다르다 — $BASE_REF 에서 브랜치를 새로 딴다"
-fi
-rm -f "${BASE_STATE:-}"
-LAST_SVC=$(G state-get "$STATE" "$APP" service_dev)
-PREV_TIP=$(G state-get "$STATE" "$APP" rewritten_tip)
+cleanup() { git -C "$ROOT" update-ref -d "$REF" 2>/dev/null || true; rm -rf "$W" "$BASE_STATE"; }
+trap cleanup EXIT
+
+# 이전 상태는 머지된 기준(BASE_REF)의 STATE.json 에서 읽는다 (006 §4-2). 작업트리와는 **이 앱 항목만** 대조한다 —
+# 한 브랜치에서 두 앱을 이어 가져오면 파일 전체는 달라진다 (#104 사전 리뷰 2회차 major)
+[[ "$BASE_REF" != origin/dev ]] || git -C "$ROOT" fetch -q origin dev
+git -C "$ROOT" show "$BASE_REF:tools/import/STATE.json" > "$BASE_STATE" 2>/dev/null || echo '{"version": 1}' > "$BASE_STATE"
+for key in service_dev rewritten_tip; do
+  [[ "$(G state-get "$BASE_STATE" "$APP" "$key")" == "$(G state-get "$STATE" "$APP" "$key")" ]] \
+    || die "작업트리 STATE.json[$APP].$key 가 $BASE_REF 와 다르다 — $BASE_REF 에서 브랜치를 새로 딴다"
+done
+LAST_SVC=$(G state-get "$BASE_STATE" "$APP" service_dev)
+PREV_TIP=$(G state-get "$BASE_STATE" "$APP" rewritten_tip)
 if [[ "$MODE" == first ]]; then
   [[ -z "$PREV_TIP" ]] || die "$APP 은 이미 가져왔다 (STATE.json) — sync 를 쓴다"
   [[ ! -e "$ROOT/$DIR" ]] || die "$DIR 가 이미 있다"
@@ -66,11 +72,7 @@ else
 fi
 
 # ---- 스크래치: 읽기 전용 클론 → 재작성 → 게이트
-W=$SCRATCH/$APP-import-$$
 [[ ! -e "$W" ]] || die "$W 가 이미 있다"
-REF=refs/import/$APP
-cleanup() { git -C "$ROOT" update-ref -d "$REF" 2>/dev/null || true; rm -rf "$W"; }
-trap cleanup EXIT
 git clone -q --no-tags --single-branch --branch dev "$SRC" "$W"
 git -C "$W" remote remove origin
 SVC=$(git -C "$W" rev-parse dev)
@@ -95,14 +97,15 @@ FR_VER=$(pin filter-repo-version)
 STATE_ARGS=("service_repo=$REPO" "service_dev=$SVC" "rewritten_tip=$TIP" "filter_repo=$FR_VER" "callback_sha=$CB_SHA" "git=$(git --version)")
 resume_hint() {  # 충돌 뒤 사람이 이어서 할 일 — STATE 를 옛 값으로 남기지 않는다 (#104 사전 리뷰 major 4)
   {
+    local R; R=$(printf %q "$ROOT")
     echo "  충돌을 해결한 뒤 (충돌 해결분이 리뷰 범위 · 006 §4-S):"
-    echo "    git -C $ROOT commit --no-edit        # 트레일러가 든 머지 메시지는 MERGE_MSG 에 남아 있다"
-    echo "    test \"\$(git -C $ROOT rev-parse HEAD^2)\" = $TIP"
+    echo "    git -C $R commit --no-edit        # 트레일러가 든 머지 메시지는 MERGE_MSG 에 남아 있다"
+    echo "    test \"\$(git -C $R rev-parse HEAD^2)\" = $TIP"
     printf '    python3 %q state-set %q %s' "$HERE/guards.py" "$STATE" "$APP"
     printf ' %q' "${STATE_ARGS[@]}"
     printf '\n'
-    echo "    git -C $ROOT add tools/import/STATE.json && git -C $ROOT commit -m 'chore(apps): STATE.json $APP (#$ISSUE)'"
-    echo "  포기: git -C $ROOT merge --abort   (서비스 ${SVC:0:12} · 재작성 ${TIP:0:12})"
+    echo "    git -C $R add tools/import/STATE.json && git -C $R commit -m 'chore(apps): STATE.json $APP (#$ISSUE)'"
+    echo "  포기: git -C $R merge --abort   (서비스 ${SVC:0:12} · 재작성 ${TIP:0:12})"
   } >&2
 }
 MSG=$(printf 'chore(apps): %s %s dev → %s (#%s)\n\nService-Repo: %s\nService-Dev: %s\nFilter-Repo: %s · callback %s' \

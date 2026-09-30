@@ -97,6 +97,14 @@ class RewriteTable(unittest.TestCase):
                 self.assertEqual(gate.findings(out), [], (src, out))
                 self.assertEqual(rewrite(out, app), out, src)
 
+    def test_long_token_is_linear(self):
+        """회귀: #104 사전 리뷰 2회차 info — 공백 없는 긴 경로 토큰에서 2차 시간이 들면 안 된다."""
+        import time
+        src = "a/" * 16000 + "b"
+        t0 = time.perf_counter()
+        rewrite(src, "fin")
+        self.assertLess(time.perf_counter() - t0, 1.0)
+
     def test_bytes_roundtrip_keeps_invalid_utf8(self):
         raw = b"fix #3 \xff\xfe tail"
         self.assertEqual(rewrite_bytes(raw, "fit"), b"fix fit#3 \xff\xfe tail")

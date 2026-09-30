@@ -21,7 +21,10 @@ ZERO_WIDTH = "\u200b"  # ZERO WIDTH SPACE — @멘션 무해화 (U97-10 Q62)
 # 부수 효과로 Python 의 유니코드 DB 버전에 결정성이 기대지 않는다.
 _A = re.ASCII | re.IGNORECASE
 _SEG = r"[A-Za-z0-9_.-]+"
-_PATH = rf"(?:{_SEG}/)*({_SEG})/({_SEG})"  # 앞 경로까지 먹는다 — `a/b/c#12` 가 `a/c#12` 로 남지 않게 (major 3)
+# 앞 경로까지 먹는다 — `a/b/c#12` 가 `a/c#12` 로 남지 않게 (major 3). 앞 lookbehind 둘은 경로 한가운데
+# (`경로문자` 또는 `경로문자/` 뒤)에서 다시 시작하지 않게 한다 — 없으면 공백 없는 긴 토큰에서 2차 시간이 든다
+# (32k 자 ≈ 20 s · 2회차 info). `://` · ` /` 뒤는 시작점이다(퍼징이 잡은 `://github.com/issues/pull/23`).
+_PATH = rf"(?<![A-Za-z0-9_.-])(?<![A-Za-z0-9_.-]/)(?:{_SEG}/)*({_SEG})/({_SEG})"
 URL = re.compile(rf"(?:https?://)?(?:www\.)?github\.com/({_SEG})/({_SEG})/(?:issues|pull|discussions)/(\d+)", _A)
 HOSTLESS_URL = re.compile(rf"{_PATH}/(?:issues|pull)/(\d+)", _A)
 QUALIFIED = re.compile(rf"{_PATH}#(\d+)", _A)

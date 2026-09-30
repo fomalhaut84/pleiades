@@ -121,8 +121,31 @@ class ImportApp(unittest.TestCase):
         self.assertEqual(git(self.root, "for-each-ref", "refs/import"), "")
         self.assertTrue(Path(self.root, ".git", "MERGE_HEAD").exists())
 
+    def test_two_apps_on_one_branch(self):
+        """회귀: #104 사전 리뷰 2회차 major — 한 브랜치에서 fit → fin 을 이어 가져온다 (M-1 · 006 §4-S)."""
+        self.assertEqual(self.run_import("first").returncode, 0)
+        env = {**ENV, "ISSUE": "1", "SCRATCH": str(self.scratch), "FILTER_REPO": FR, "SOURCE_URL": str(self.svc),
+               "PLEIADES_ROOT": str(self.root), "BASE_REF": "dev"}
+        r = subprocess.run(["bash", str(HERE / "import_app.sh"), "fin", "first"], capture_output=True, text=True,
+                           env=env, check=False)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(sorted(p.name for p in (self.root / "apps").iterdir()), ["finance", "fitness"])
+
     def test_stale_branch_state_refused(self):
-        self.assertEqual(self.run_import("first").returncode, 0)  # 브랜치에 STATE 가 생겼지만 dev 에는 없다
+        self.assertEqual(self.run_import("first").returncode, 0)
+        self.merge_pr()
+        git(self.root, "checkout", "-q", "dev")
+        git(self.root, "commit", "-q", "--allow-empty", "-m", "later")
+        stale = git(self.root, "rev-parse", "HEAD~1")
+        git(self.root, "checkout", "-q", "-b", "chore/1-stale", stale)
+        # 다른 세션이 dev 에서 fit 을 한 번 더 수용한 뒤라고 가정 — dev 의 STATE 만 바뀐다
+        git(self.root, "checkout", "-q", "dev")
+        import json as _j
+        st = _j.loads(Path(self.root, "tools/import/STATE.json").read_text())
+        st["fit"]["service_dev"] = "e" * 40
+        Path(self.root, "tools/import/STATE.json").write_text(_j.dumps(st))
+        git(self.root, "commit", "-q", "-am", "newer sync")
+        git(self.root, "checkout", "-q", "chore/1-stale")
         commit(self.svc, "c.txt", "feat")
         r = self.run_import("sync")
         self.assertNotEqual(r.returncode, 0)
