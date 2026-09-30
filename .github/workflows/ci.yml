@@ -1,0 +1,59 @@
+name: CI
+
+# workflow.md 8절 pleiades 행을 그대로 돌린다 (#90). lint 는 미도입(8절 "해당 없음").
+# 이 job 의 체크(verify (20.x) · verify (24.x))는 dev·main ruleset 의 필수 상태 체크다 —
+# job 이름이나 matrix 값을 바꾸면 ruleset 의 required_status_checks 도 함께 바꿔야 머지가 막히지 않는다.
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: verify (${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # 20.x: 두 대상 저장소 CI 와 같은 계열 · 24.x: 운영 서버 실측 v24.12.0 (Q45 · measured-facts 2026-09-30)
+        node-version: [20.x, 24.x]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            packages/notify/package-lock.json
+
+      # 루트 npm ci 는 prepare(tsc -p packages/notify)를 돌린다 — 소비자 설치 경로와 같은 조건이다
+      - name: Install dependencies (root)
+        run: npm ci
+
+      # vitest·@types/node 는 packages/notify devDependency 다 (루트에 workspaces 없음 · 8절 선행 조건)
+      - name: Install dependencies (packages/notify)
+        run: npm --prefix packages/notify ci
+
+      - name: Typecheck
+        run: npm run typecheck && npm run typecheck:test
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
