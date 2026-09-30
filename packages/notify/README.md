@@ -6,8 +6,10 @@ myFinance · myFitness 의 아웃바운드 알림 전송 층. **포트(`Transpor
 ## 설치 (git 의존성 · 소비자 `package.json`)
 
 ```json
-"dependencies": { "@pleiades/notify": "git+https://github.com/fomalhaut84/pleiades.git#<tag>" }
+"dependencies": { "@pleiades/notify": "git+https://github.com/fomalhaut84/pleiades.git#<ref>" }
 ```
+
+**`<ref>` 는 태그가 아니다 (2026-09-30 · #88).** 첫 릴리즈(태그)는 두 저장소가 모노레포로 들어온 뒤라 그 전의 소비자는 태그를 참조할 수 없다 — 참조 방식(커밋 SHA 고정 등)은 003 §10 **Q48** 이 1a-3 착수 시 정한다.
 
 키는 반드시 `@pleiades/notify` 다 — 저장소 루트 `name` 은 `pleiades` 라서 키 없이 설치하면 `node_modules/pleiades` 로 들어간다.
 설치 시 임시 클론에서 `prepare`(`tsc -p packages/notify`)가 돈다. **이 패키지는 런타임·peer 의존성이 없다** — grammy 도 참조하지 않는다.
