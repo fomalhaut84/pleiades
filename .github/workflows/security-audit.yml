@@ -1,0 +1,163 @@
+name: Security Audit
+
+# myFitness security-audit.yml 을 기준으로 옮겼다 (#90). 차이: lockfile 이 두 개(루트 · packages/notify)라
+# 각각 audit 하고 합산한다. 판정할 수 없으면 실패시킨다(fail-closed — fit PR #360 Codex P2 교훈).
+
+on:
+  schedule:
+    # 매주 월요일 03:00 UTC (한국시간 12:00)
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'packages/notify/package.json'
+      - 'packages/notify/package-lock.json'
+
+jobs:
+  audit:
+    name: Security Vulnerability Scan
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24.x'
+
+      # npm audit 은 lockfile 만 읽는다 — 설치하지 않는다
+      - name: Run npm audit (root · packages/notify)
+        run: |
+          for dir in . packages/notify; do
+            name=$(echo "$dir" | tr './' '__')
+            set +e
+            (cd "$dir" && npm audit --json --audit-level=moderate) >"audit-$name.json" 2>"audit-$name.stderr.log"
+            echo "$dir exit=$?"
+            set -e
+          done
+
+      - name: Parse audit results
+        id: check
+        run: |
+          fail() {
+            echo "::error::$1"
+            for f in audit-*.stderr.log; do [ -s "$f" ] && { echo "--- $f ---"; cat "$f"; }; done
+            exit 1
+          }
+
+          CRITICAL=0; HIGH=0; MODERATE=0
+          for f in audit-_.json audit-packages_notify.json; do
+            [ -s "$f" ] || fail "$f: npm audit 결과가 비어 있습니다"
+            jq -e . "$f" >/dev/null 2>&1 || fail "$f: 유효한 JSON 이 아닙니다"
+            jq -e 'has("error")' "$f" >/dev/null 2>&1 && fail "$f: npm audit 에러 — $(jq -rc '.error' "$f")"
+            # metadata.vulnerabilities 가 없으면 카운트를 0 으로 읽어 '취약점 없음' 으로 오인한다
+            jq -e '.metadata.vulnerabilities | objects' "$f" >/dev/null 2>&1 \
+              || fail "$f: metadata.vulnerabilities 가 없습니다"
+            for sev in critical high moderate; do
+              v=$(jq -r ".metadata.vulnerabilities.$sev" "$f")
+              case "$v" in ''|*[!0-9]*) fail "$f: $sev 카운트가 정수가 아닙니다: '$v'" ;; esac
+            done
+            CRITICAL=$((CRITICAL + $(jq -r '.metadata.vulnerabilities.critical' "$f")))
+            HIGH=$((HIGH + $(jq -r '.metadata.vulnerabilities.high' "$f")))
+            MODERATE=$((MODERATE + $(jq -r '.metadata.vulnerabilities.moderate' "$f")))
+          done
+          TOTAL=$((CRITICAL + HIGH + MODERATE))
+
+          {
+            echo "critical=$CRITICAL"
+            echo "high=$HIGH"
+            echo "moderate=$MODERATE"
+            echo "total=$TOTAL"
+            if [ "$TOTAL" -gt 0 ]; then echo "has_vulnerabilities=true"; else echo "has_vulnerabilities=false"; fi
+          } >> "$GITHUB_OUTPUT"
+          echo "취약점 요약: Critical=$CRITICAL, High=$HIGH, Moderate=$MODERATE, Total=$TOTAL"
+
+      - name: Create issue on vulnerabilities
+        if: steps.check.outputs.has_vulnerabilities == 'true'
+        uses: actions/github-script@v8
+        env:
+          CRITICAL: ${{ steps.check.outputs.critical }}
+          HIGH: ${{ steps.check.outputs.high }}
+          MODERATE: ${{ steps.check.outputs.moderate }}
+          TOTAL: ${{ steps.check.outputs.total }}
+        with:
+          script: |
+            const fs = require('fs');
+            const { CRITICAL, HIGH, MODERATE, TOTAL } = process.env;
+            const date = new Date().toISOString().split('T')[0];
+
+            const lines = [];
+            for (const [label, file] of [['루트', 'audit-_.json'], ['packages/notify', 'audit-packages_notify.json']]) {
+              try {
+                const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+                for (const [pkg, data] of Object.entries(parsed.vulnerabilities ?? {}).slice(0, 10)) {
+                  lines.push(`- **${pkg}** (${data.severity}) — ${label} · \`${data.range ?? 'N/A'}\` · ${data.via?.[0]?.url ?? 'N/A'}`);
+                }
+              } catch (e) {
+                lines.push(`- ${label}: 상세를 파싱할 수 없습니다 (${e.message}) — 아티팩트를 확인하세요`);
+              }
+            }
+
+            const body = [
+              '## 보안 취약점 자동 검사 결과',
+              '',
+              `**검사 일시**: ${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}`,
+              `**브랜치**: ${context.ref}`,
+              '',
+              '| 심각도 | 개수 |',
+              '|---|---|',
+              `| Critical | ${CRITICAL} |`,
+              `| High | ${HIGH} |`,
+              `| Moderate | ${MODERATE} |`,
+              `| **Total** | **${TOTAL}** |`,
+              '',
+              '### 발견된 취약점 (lockfile 별 상위 10개)',
+              '',
+              lines.join('\n') || '상세 없음',
+              '',
+              '### 조치',
+              '루트는 `npm audit fix`, 패키지는 `npm --prefix packages/notify audit fix` → 8절 검증 4종 → PR.',
+              '',
+              '---',
+              '자동 생성된 이슈입니다.',
+            ].join('\n');
+
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo, state: 'open', labels: 'security,automated',
+            });
+            const existing = open.find((i) => i.title.includes('[Security] npm audit 취약점 발견'));
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: existing.number,
+                body: `### 새로운 검사 결과 (${date})\n\n${body}`,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title: `[Security] npm audit 취약점 발견 - ${date}`, body,
+                labels: ['security', 'automated', 'dependencies'],
+              });
+            }
+
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: security-audit-results
+          path: audit-*
+          retention-days: 30
+
+      - name: Fail workflow if vulnerabilities found
+        if: steps.check.outputs.has_vulnerabilities == 'true'
+        run: |
+          echo "::error::보안 취약점이 발견되었습니다. 이슈를 확인하고 조치하세요."
+          exit 1
