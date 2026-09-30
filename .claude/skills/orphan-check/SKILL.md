@@ -13,6 +13,10 @@ description: Squash merge 후 로컬 브랜치에 push 된 커밋이 <base> 에 
 
 # Orphan Check
 
+> **정정 (2026-09-30 · 006 · #101 · M-0) — 이 파일의 `repos/*` · 원본 · 대상 저장소 · 모드 I/S/H · 이관 서술을 이렇게 읽는다.**
+> `<base>` 는 **항상 pleiades `dev`** 다 — `workflow.md` 7절에서 살아 있는 행은 pleiades 하나다. "통합 작업(`repos/*`) → `integration/pleiades`" · 단독 작업 · 핫픽스 경로는 소진이고, `repos/*` 에서는 git 명령을 하지 않는다(I-11).
+> 원칙은 `.claude/rules/isolation.md` · 경로는 006. 되돌리기: 문구 (**즉시**).
+
 Squash merge 특성상 로컬 브랜치의 여러 커밋 중 첫 커밋만 <base> 로 압축된다. 이후 push 된 커밋은 <base> 에 반영 안 됨 → 이 세션에서 3회 발생 (fix/223-2, fix/223-3, fix/223-5).
 
 ## Trigger

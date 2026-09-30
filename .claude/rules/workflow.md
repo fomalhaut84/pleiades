@@ -52,6 +52,9 @@ dev ──┬──┬──┬────────merge──────�
 >
 > **왜 생겼나.** 반대 방향(`integration/pleiades` → `dev` 금지)만 정해 두고 받는 절차가 없어서, fit `dev` 가 2026-09-18 에 vitest 를 독자 도입해 1a-2(2026-09-11)와 같은 일을 서로 모르고 두 번 했다(fit dev 77커밋 · fin 4커밋 뒤처짐 · #71 첫 동기화). 측정·감사가 보는 worktree 가 `dev` 에서 멀어지면 되풀이된다.
 > **GitHub 브랜치 rename 은 그 브랜치의 열린 PR 을 닫는다** — 열린 PR 의 head 는 개명하지 않는다(#492·#369 는 옛 이름 유지).
+>
+> **소진 (2026-09-30 · 006 · #101 · M-0).** **위 대상 저장소 표 전체 — 작업 브랜치·피처 네이밍·`dev` 진입·`dev` 수용 행 — 는 소진됐다.** pleiades 는 서비스 저장소에 어떤 브랜치·PR 도 만들지 않는다(`.claude/rules/isolation.md` I-1). 두 서비스는 `apps/finance`·`apps/fitness` 로 **pleiades 안에** 들어오고, pleiades 의 모든 변경은 위 pleiades 브랜치 체계(`<type>/<issue>-<n>` → `dev`)만 탄다.
+> **`dev` 수용 행의 후신은 006 §4-S(정기 수용)다** — 서비스 `dev` 를 https 로 읽기만 해 pleiades 밖 스크래치에서 filter-repo 재작성 → `apps/<app>` 로 머지(`chore/<issue>-sync-apps-<YYYYMMDD>` · base `dev`). **승계되는 것:** 머지 커밋("Create a merge commit" · squash 금지) · 머지 후 부모 2 확인 · squash 됐으면 `-s ours` 복구 PR · 리뷰 범위(아래 인용부 — 충돌 해결분 + 머지 위생 + 8절 · 서비스 유래 코드의 봇 지적은 **pleiades 이슈로만**). **바뀐 것:** 서비스 저장소 쓰기 0 · 게이트·가드 A/B/C(006 §4-2 · `tools/import/` · #104). 동결된 `integration/pleiades` 는 원격에 그대로 남는다 — 처리는 사용자 단독(006 Q54). 되돌리기: 문구 (**즉시**).
 
 ## 릴리즈 전략
 
@@ -86,7 +89,7 @@ gh pr create --base main --head dev --title "Release v1.0.0" --body "..."
 # 4. 머지 확인 후 태그 (Claude)
 git checkout main && git pull
 git tag v1.0.0
-git push origin --tags
+git push origin v1.0.0          # --tags 금지 — 로컬에 서비스 태그가 섞여 있으면 원격에 올라간다 (isolation.md I-16)
 gh release create v1.0.0 --title "v1.0.0" --notes "릴리즈 노트"
 ```
 
@@ -160,6 +163,8 @@ pleiades 작업과 **통합 작업**의 이슈는 pleiades 에, **단독 작업�
 **이슈 없이 작업 브랜치를 만들지 않는다.** 이슈와 PR 은 1:1 로 매칭된다.
 
 > **이관 이슈 — 이슈는 고치는 저장소에, 출처는 pleiades 에 (#83 · 사용자 2026-09-28).** pleiades 세션이 **발견했지만 고치는 곳이 서비스 저장소**인 것(그 저장소의 코드·하네스 결함 — 동기화 PR 의 dev 유래 봇 지적 · 원본 → worktree 복사 PR 의 원본 유래 봇 지적 등)은 **그 저장소에** 이슈를 만든다 — fit·fin 단독 세션은 pleiades 트래커를 보지 않는다. **식별 규약 3**(필수): 라벨 **`pleiades`** · 제목 접두 **`[pleiades]`** · 본문 첫 줄 **`발견: fomalhaut84/pleiades#<n> · <PR/리뷰 링크>`**. 우선순위 라벨(`P0~P2`)은 그 저장소 주인이 정한다 — pleiades 는 붙이지 않는다. pleiades 쪽에는 **고정 이슈 #82(이관 대장)** 에 한 줄 추가한다. **pleiades 가 고치는 것**(통합 작업 · pleiades 하네스·문서)은 여전히 pleiades 이슈다. 미러 이슈(폐기된 경로)는 더 만들지 않는다(#80). 되돌리기: 즉시.
+>
+> **소진 (2026-09-30 · 006 U97-9 · #101).** **이관 이슈 정책은 소진됐다 — 새 발견은 pleiades 이슈에만 만든다.** 서비스 저장소에 이슈를 만드는 것 자체가 서비스 쓰기다(`isolation.md` I-1). 서비스 결함을 발견하면 pleiades 이슈에 적고, 참조는 비링크 `fin#N`·`fit#N` 으로 쓴다(I-2). 대장 #82 는 **동결**(기존 7건 그대로 · 처리는 사용자 단독 · 006 Q54). 라벨 `fin`·`fit` 은 "어느 앱 일인지" 로 계속 쓴다. 되돌리기: 즉시.
 **예외는 3개:**
 
 | 예외 | 이슈 | 처리 |
@@ -226,6 +231,9 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 제시하고 명시 승인을 받는다. 포괄 승인을 이미 받았더라도 **실제 범위가 승인 시점 설명과
 달라지면 다시 확인한다.** 두 저장소는 실서비스 중이다.
 
+> **소진 (2026-09-30 · 006 · #101 · M-0).** **7절 표에서 살아 있는 행은 `pleiades` 하나다.** 통합 작업(모드 I) 행은 소진 — 서비스 저장소 브랜치·PR 이 서비스 쓰기다(`isolation.md` I-1). 단독 작업·서비스 핫픽스 행은 #80 이후 이미 pleiades 가 실행하지 않았다. 따라서 **`<base>` = `dev` · `<issue-repo>` = `fomalhaut84/pleiades`** 가 모든 작업에 적용되고, 위 `# 대상 저장소` 명령과 5절 예외 표의 **"양쪽 저장소 대칭 변경"** 행(서비스 저장소 PR 2개 전제)도 소진이다.
+> **`apps/*` 를 바꾸는 작업**(수용 · M-5 notify 통합)도 이 행을 탄다 — pleiades 브랜치 · base `dev`. `dual-repo-change` 스킬은 소진됐고 그 **승인 게이트 개념**만 `isolation.md` 파생 규칙(격리 경계를 건드리는 작업은 착수 전 사용자 확인)으로 남는다. 되돌리기: 문구 (**즉시**).
+
 ### 8. 검증
 
 **검증 명령은 저장소마다 다르다.** 아래 표대로 실행한다 — **명령을 추측하지 말고 이 표를 쓴다.**
@@ -235,6 +243,12 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 | **pleiades** | **해당 없음** (린터 미도입 — 타입체크가 그 자리를 대신한다) | **`npm run typecheck && npm run typecheck:test`** (= `tsc --noEmit -p packages/notify` + `tsc --noEmit -p packages/notify/tsconfig.test.json` — 후자가 테스트 파일을 타입체크한다. #37 결정 (b) · #32 I1 · 1a-1(#47)에서 도입) | **`npm test`** (= `npm --prefix packages/notify run test` → `vitest run`) | **`npm run build`** (= `tsc -p packages/notify`) |
 | **`repos/myFinance`** | `npm run lint` | **`npx tsc --noEmit`** | **`npm run test:run`** | `npm run build` |
 | **`repos/myFitness`** | `npm run lint` | `npm run typecheck` | `npm run test` | `npm run build` |
+| **`apps/finance`** (M-2 이후 · cwd `apps/finance`) | `npm run lint` | **`npx tsc --noEmit`** | **`npm run test:run`** | `npm run build` — **선행: 로컬 `pleiades_fin` + `npx prisma migrate deploy`**(prerender 가 Prisma 를 부른다 · 006 ㉑) |
+| **`apps/fitness`** (M-2 이후 · cwd `apps/fitness`) | `npm run lint` | `npm run typecheck` | `npm run test` | `npm run build` — **선행: `npx prisma generate`**(더미 `DATABASE_URL` 로 충분) |
+
+> **정정 (2026-09-30 · 006 · #101 · M-0).** **`repos/*` 두 행은 소진이다** — worktree 는 동결됐고 pleiades 는 그 안에서 명령을 돌리지 않는다(`isolation.md` I-11). 후신은 **`apps/*` 두 행**이고 명령은 서비스 CI 와 같다(006 ㉖ — 단 fin 서비스 CI 에는 테스트 단계가 없다 · 필수 여부는 006 Q52·Q57 → M-3).
+> **공통 선행:** 앱별 `npm ci`(앱별 lock · workspaces 없음 · 006 U97-12). **M-5 이후에는 두 행 모두 루트 `npm ci` 가 먼저다** — `prepare` 가 `packages/notify/dist` 를 만들지 않으면 fit typecheck·test·build 가 연쇄 실패한다(006 ㉒).
+> **DB 는 `pleiades_` 접두 로컬 DB 만** · 실효 env 사전 검사 후(`isolation.md` I-14 · 006 L-1·L-2). 되돌리기: 문구 (**즉시**).
 
 전부 통과해야 다음 단계. 실패 시 수정 후 재실행. **건너뛰기 금지.**
 
@@ -283,6 +297,7 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 |---|---|---|
 | 패키지 코드 (`packages/**` 로직) | **에이전트 필수** | 로직 버그·엣지케이스 |
 | **대상 저장소 변경 — 경로 무관** (`repos/**` **또는 원본 `~/workspace/myF*`**) | **에이전트 필수** | **실서비스 영향** |
+| **`apps/**` 변경** (2026-09-30 · 006) | **에이전트 필수** — 단 **수용 PR** 은 동기화 PR 리뷰 범위(충돌 해결분 + 머지 위생(게이트·가드 로그) + 8절 · 브랜치 전략 절 인용부) | 전환 때 서비스로 가는 코드 · 수용 충돌 표면 |
 
 > **경로가 아니라 대상이 기준이다 (PR #6 Codex 리뷰 P1 파생).** 이전 행은 `repos/**` 만 걸어
 > **원본에서 하는 모드 S·H 가 에이전트 리뷰 필수에서 빠졌다.** 서비스 핫픽스야말로
@@ -298,6 +313,8 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 > self-review 행은 **어떤 필수 행에도 걸리지 않을 때만** 적용된다.
 > 그리고 규모 행은 **실행 코드에만** 적용된다 — 문서 3파일이 규모 행과 self-review 행에
 > 동시에 걸려 **어느 행을 고르느냐로 게이트가 달라지는** 모호함이 있었다.
+
+> **정정 (2026-09-30 · 006 · #101).** "대상 저장소 변경" 행은 소진이다 — pleiades 는 서비스 저장소·원본·worktree 에 쓰지 않는다(`isolation.md` I-1·I-11). 그 자리를 **`apps/**` 행**이 잇는다. 수용 PR 의 diff 는 서비스에서 이미 리뷰·머지된 코드라 전체 리뷰 대상이 아니고, **M-1 가져오기 PR** 도 같은 범위(머지 위생 = 트리 동일성 · 루트 무변경 · `.github` 비활성 · 게이트·가드 로그 + 8절 pleiades 행)다(006 §4-2). 되돌리기: 문구 (**즉시**).
 
 self-review 시에도 검증(8절) 필수이고, PR body 초안에 `self-review (변경 성격: <카테고리>)` 를 명시한다.
 9-6 에서 **`self-review + Codex M회`** 로 확정한다 — **`only` 는 쓰지 않는다.** self-review 경로도
@@ -507,6 +524,8 @@ git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 �
   `git -C ~/workspace/<repo> archive integration/pleiades <paths> | tar -x -C ~/workspace/<repo>` 로 ignored 파일로 복원한다
   (실측: fit `.claude/` 17파일 + `CLAUDE.md` 가 사라졌다)~~ — **폐기 (2026-09-28 · #80 · PR #81 Codex P1).** pleiades 는 원본 `~/workspace/<repo>` 에 쓰지 않는다. 원본 체크아웃 전환은 그 저장소 단독 세션의 일이고, 세션이 읽는 하네스는 worktree 라(`bin/claude-with`) pleiades 작업이 막히지 않는다. 되돌리기: 즉시.
 
+> **소진 (2026-09-30 · 006 · #101).** **"대상 저장소 PR 이 머지되면" 전체와 위 명령 블록의 대상 저장소·대칭 변경 주석은 소진이다** — 서비스 저장소 PR 이 더 없고, `repos/*` 에서는 git 명령을 하지 않는다(`isolation.md` I-11). 이 절은 pleiades PR 에만 적용된다: `<issue-repo>` = `fomalhaut84/pleiades` · `<base>` = `dev`. 코멘트 본문의 PR 참조는 pleiades PR 번호(`#<pr>`)만 쓰고 **서비스 저장소를 `<owner>/<repo>#N` 으로 적지 않는다**(I-2 — 서비스 타임라인 이벤트 · 편도). **수용 PR 머지 후에는 부모 2 확인**(`git log -1 --format=%P`)을 더한다(브랜치 전략 절 소진 블록 · 006 §4-S). 되돌리기: 문구 (**즉시**).
+
 ## 긴급 수정 (Hotfix)
 
 **두 종류를 구분한다.**
@@ -580,3 +599,5 @@ git checkout <base> && git pull && git branch -d <branch>   # <base> 는 7절 �
    > 그리고 9-0 은 `repos/**` 쓰기를 전부 통합용 `dual-repo-change` 로 보낸다.
    > 그대로면 **실서비스 긴급 수정을 할 수 있는 경로가 문서에 하나도 남지 않는다.**
 5. **문서는 한국어. 코드·변수명·경로는 영어**
+
+> **정정 (2026-09-30 · 006 · #101).** **3·4 는 `.claude/rules/isolation.md` 로 대체된다** — 서비스 저장소·원본·worktree 에 **쓰지 않는다**(사용자 확인을 받아도 쓰지 않는다 · I-1·I-11). 작업 표면은 pleiades 의 `apps/*` 이고, 격리 경계를 건드리는 작업(로컬 DB · 봇·웹 기동 · 서비스 원격 읽기 방식)만 착수 전 사용자 확인을 받는다. 되돌리기: 문구 (**즉시**).

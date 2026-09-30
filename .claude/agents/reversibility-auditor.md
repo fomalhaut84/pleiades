@@ -6,6 +6,10 @@ model: opus
 ---
 
 # reversibility-auditor — 비용 추정 반증
+
+> **정정 (2026-09-30 · 006 · #101 · M-0) — 이 파일의 `repos/*` · 원본 · 대상 저장소 · 모드 I/S/H · 이관 서술을 이렇게 읽는다.**
+> **감사 대상 = pleiades 안의 `apps/*` + 서비스 원격의 https 읽기(스크래치 클론)** 다. `repos/*` worktree · 원본 `~/workspace/myF*` 는 감사 대상이 아니다(동결 · git 명령 금지 I-11). 모드 I/S/H · `dual-repo-change` 연계는 소진. 격리 경계(006 §5 · `isolation.md`)를 새로 여는 계획은 **I-1~I-21 중 어느 행이 막는지** 를 감사 항목에 넣는다.
+> 원칙은 `.claude/rules/isolation.md` · 경로는 006. 되돌리기: 문구 (**즉시**).
 > **`git grep <ref>` 는 출력에 `<ref>:` 접두사를 붙인다 (PR #6 Codex 리뷰 P2).**
 > 경로로 **필터링·집계하기 전에 반드시 접두사를 벗긴다** — `cut -d: -f2-`.
 > 벗기지 않으면 `grep -v '/src/<expected>/'` 누수 필터가 **하나도 걸러내지 못하고**

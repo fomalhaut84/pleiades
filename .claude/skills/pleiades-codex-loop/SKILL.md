@@ -5,6 +5,10 @@ description: GitHub Codex bot 리뷰 URL(`.../pull/<N>#pullrequestreview-<id>`)�
 
 # pleiades Codex Loop — 봇 리뷰 대응 절차 + 반복 패턴
 
+> **정정 (2026-09-30 · 006 · #101 · M-0) — 이 파일의 `repos/*` · 원본 · 대상 저장소 · 모드 I/S/H · 이관 서술을 이렇게 읽는다.**
+> 봇 리뷰는 **pleiades PR 에만** 돈다 — `<owner>/<repo>` 는 항상 `fomalhaut84/pleiades` 다(서비스 저장소 PR 을 만들지 않는다 · I-1). Step 3 의 "저작하지 않은 내용" 행(동기화 PR 의 dev 유래 코드)은 **수용 PR 의 서비스 유래 코드**로 읽고, 처리는 **이 PR 에서 고치지 않고 pleiades 이슈로만**(이관 이슈 소진 · 대장 #82 동결 · 참조는 비링크 `fin#N`·`fit#N`). 8절 명령의 `repos/*` 두 줄은 `apps/*` 행(`workflow.md` 8절)으로 대체. "대상 저장소 쓰기 → `dual-repo-change`" 는 소진(서비스 쓰기 없음). cwd 가 `repos/*` 가 되는 경우는 더 없다.
+> 원칙은 `.claude/rules/isolation.md` · 경로는 006. 되돌리기: 문구 (**즉시**).
+
 > **출처 (005 §4-13 H-1 · 이슈 #40).** myFinance `skills/codex-response-patterns/SKILL.md`(91줄 · 패턴 카탈로그)와
 > myFitness `skills/codex-review-loop/SKILL.md`(113줄 · 루프 절차)를 **입력으로** 새로 썼다. 두 원본은 그대로 남는다(Q39 · 원본 무변경).
 > 원본과 다른 점 셋: ① **척도** — fit 원본 Step 2 는 `P2=critical · P0=info` 역방향 척도를 쓴다. 이 파일은 pleiades `workflow.md` 9절과 같이

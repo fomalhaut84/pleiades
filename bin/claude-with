@@ -18,6 +18,13 @@
 #   - cwd 가 pleiades 가 아니면 중단한다 — pleiades 하네스 없이 대상 저장소만 붙으면 승인 게이트가 사라진다.
 set -euo pipefail
 
+# 소진 (2026-09-30 · 006 U97-9 · #101 · M-0) — 실행하지 않는다.
+#   repos/* worktree 는 동결됐다. 두 서비스는 apps/finance·apps/fitness 로 pleiades 안에 들어오고,
+#   apps/* 의 하네스는 pleiades 세션에서 효력이 없다(.claude/rules/isolation.md 첫 줄). 방어선은 룰 + 훅(#102)이다.
+#   아래 본문은 이력으로 남긴다. 되돌리기: 이 블록 삭제 (즉시).
+echo "claude-with: 소진됐다 (006 U97-9 · #101) — repos/* 를 --add-dir 로 붙이지 않는다. 'claude' 를 pleiades 에서 그대로 실행한다. 근거: .claude/rules/isolation.md" >&2
+exit 1
+
 usage() { sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-1}"; }
 
 [[ $# -ge 1 ]] || usage 1

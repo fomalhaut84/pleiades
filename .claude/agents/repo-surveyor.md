@@ -6,6 +6,10 @@ model: opus
 ---
 
 # repo-surveyor — 실측 전담
+
+> **정정 (2026-09-30 · 006 · #101 · M-0) — 이 파일의 `repos/*` · 원본 · 대상 저장소 · 모드 I/S/H · 이관 서술을 이렇게 읽는다.**
+> **측정 대상 = pleiades 안의 `apps/*` + 서비스 원격의 https 읽기(스크래치 클론 · `ls-remote` · `gh` GET)** 다. `repos/*` worktree · 원본 `~/workspace/myF*` 는 측정 대상이 아니다(동결 · git 명령 금지 I-11). 스크래치는 **pleiades 밖**이고 `--no-tags` · 리모트 제거 · 산출물에 SHA 기록. 쓰기 권한은 여전히 pleiades 만이다 — 서비스 저장소·서버·서비스 DB 는 읽기 대상도 아니다(https 저장소 읽기 제외 · I-3·I-7).
+> 원칙은 `.claude/rules/isolation.md` · 경로는 006. 되돌리기: 문구 (**즉시**).
 > **`git grep <ref>` 는 출력에 `<ref>:` 접두사를 붙인다 (PR #6 Codex 리뷰 P2).**
 > 경로로 **필터링·집계하기 전에 반드시 접두사를 벗긴다** — `cut -d: -f2-`.
 > 벗기지 않으면 `grep -v '/src/<expected>/'` 누수 필터가 **하나도 걸러내지 못하고**
