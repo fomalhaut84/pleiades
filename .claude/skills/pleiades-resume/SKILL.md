@@ -20,51 +20,42 @@ description: pleiades 통합 프로젝트의 새 세션 시작 시 인계 상태
 
 ```
 Read: docs/handoff/ 의 가장 최근 파일
-Read: docs/specs/002-platform-direction.md   ← 정본 방향
-Bash: ls docs/handoff/ && git -C ~/workspace/pleiades/repos/myFinance log --oneline -3 && git -C ~/workspace/pleiades/repos/myFitness log --oneline -3
+Read: docs/specs/002-platform-direction.md   ← 정본 방향 (목표)
+Read: docs/specs/006-monorepo-first.md        ← 방향 전환 정본 (경로 · 격리) — 002 단계 4·003 배포·004 worktree 를 대체
+Bash: ls docs/handoff/ && git log --oneline -5
 ```
+
+> **정정 (2026-09-30 · 006 · #101).** 옛 Step 1 은 `git -C repos/myF* log` 를 돌렸다. `repos/*` 는 동결됐고 그 안에서 git 명령을 하지 않는다(`.claude/rules/isolation.md` I-11). 되돌리기: 즉시.
 
 `001-integration-master.md` 는 **분석 근거로만 유효하다.** 권고 경로와 단계 0 범위는 002 가 대체했다.
 001 을 읽고 그 전제로 움직이지 않는다.
 
 `docs/research/measured-facts.md` 는 숫자가 실제로 필요할 때만 읽는다. **재측정 전에 반드시 이 파일부터 확인한다.**
 
-### Step 2 — 대상 저장소 상태 확인
+### Step 2 — pleiades · 수용 상태 확인
 
-두 저장소는 이 세션 밖에서도 움직인다. 인계 노트의 기록과 실제가 다를 수 있다.
-
-**체크아웃이 4개다** — 통합 작업용 worktree 2개 + 서비스 유지용 원본 2개 (`docs/specs/004-repo-layout.md`).
+두 서비스는 이 세션 밖에서 계속 움직인다. pleiades 는 그것을 **https 로 읽기만** 한다(`isolation.md` I-1·I-13).
 
 ```bash
-echo "== 통합 작업 (worktree · integration/pleiades 여야 함)"
-for d in myFinance myFitness; do
-  echo "-- repos/$d"; git -C ~/workspace/pleiades/repos/$d branch --show-current; git -C ~/workspace/pleiades/repos/$d status -s | head -5
-done
-echo "== 서비스 유지용 원본 (fin=dev · fit=main · 통합 작업 금지 · 핫픽스는 여기서)"
-for d in myFinance myFitness; do
-  echo "-- ~/workspace/$d"; git -C ~/workspace/$d branch --show-current; git -C ~/workspace/$d status -s | head -3
+cd ~/workspace/pleiades
+git fetch -q origin && git status -sb | head -1
+gh pr list -R fomalhaut84/pleiades --state open
+# I-9 — pleiades Actions secrets 는 0 이어야 한다. 0 이 아니면 브리핑 첫 줄에 적고 사용자에게 보고
+echo "actions secrets: $(gh api repos/fomalhaut84/pleiades/actions/secrets --jq .total_count)"
+# 정기 수용 판정 (006 §4-S · Q54b) — 서비스 dev tip(ls-remote · 읽기) ↔ 마지막 수용 머지 커밋의 Service-Dev 트레일러
+for r in myFinance myFitness; do
+  svc=$(git ls-remote https://github.com/fomalhaut84/$r.git refs/heads/dev | cut -f1)
+  last=$(git log origin/dev --grep "^Service-Repo: $r\$" -1 --format=%B | sed -n 's/^Service-Dev: //p')
+  if [ -z "$last" ]; then echo "$r: 미수용 (M-1 전) · dev ${svc:0:12}"
+  elif [ "$svc" = "$last" ]; then echo "$r: 최신 (${svc:0:12})"
+  else echo "$r: 뒤처짐 — 수용 ${last:0:12} → dev ${svc:0:12}"; fi
 done
 ```
 
-**worktree 브랜치가 `integration/pleiades` 가 아니거나 dirty 면 인계 노트보다 현재 상태를 신뢰한다.**
+**뒤처짐이면 브리핑의 후보 액션에 수용을 올린다** — M-5a·M-5b 착수 직전에는 **필수 0** 이다(006 Q54b). 수용 절차는 006 §4-S · `tools/import/`(#104).
+`ls-remote` 가 실패하면(서비스 저장소가 PRIVATE 으로 바뀌었을 수 있다 — 006 §10) **재시도·우회하지 않고** 브리핑에 적는다.
 
-```bash
-# 원본 하네스는 읽기 전용이다 (#80 · 2026-09-28 사용자 방침) — pleiades 는 원본 ~/workspace/myF* 에 아무것도 쓰지 않는다. 복원·동기화 절차는 폐기됐다.
-# 대신 드리프트만 잰다: 원본(단독 세션에서 진화) vs worktree(pleiades 가 읽고 고치는 사본 · #369 tracked). 차이가 있으면 브리핑에 넣고 "원본 → worktree 복사(모드 I PR)" 를 후보 액션으로 올린다 — 반대 방향은 없다 (#72)
-for d in myFinance myFitness; do if [ ! -d ~/workspace/pleiades/repos/$d/.claude/rules ] || [ ! -f ~/workspace/pleiades/repos/$d/CLAUDE.md ]; then echo "$d harness: MISSING in WORKTREE — bin/claude-with 가 읽는 사본이 없다. worktree 가 integration/pleiades 인지 확인·복귀(git -C repos/$d checkout integration/pleiades)가 먼저다 (PR #81 Codex P2)"; continue; fi; if [ ! -d ~/workspace/$d/.claude/rules ] || [ ! -f ~/workspace/$d/CLAUDE.md ]; then echo "$d harness: MISSING in original (체크아웃 전환이 지운 전례 #27 — 그 저장소 단독 세션의 일 · 브리핑에 적는다)"; continue; fi; echo "$d harness drift: $(diff -rq ~/workspace/$d/.claude ~/workspace/pleiades/repos/$d/.claude | grep -v 'settings.local.json\|worktrees' | wc -l | tr -d ' ') · CLAUDE.md: $(diff -q ~/workspace/$d/CLAUDE.md ~/workspace/pleiades/repos/$d/CLAUDE.md >/dev/null && echo same || echo differ)"; done   # 부재를 drift 0 으로 오판하지 않는다 (PR #81 Codex P2)
-# 원본 fit 하네스가 아예 없으면(체크아웃 전환이 지운 전례 #27 · 2026-09-28 #494 도중 재현) 그것은 fit 단독 세션의 일이다 — 브리핑에 적고 pleiades 는 복원하지 않는다. 세션이 읽는 하네스는 worktree 라 pleiades 작업은 막히지 않는다.
-# 이관 이슈(#83 · 대장 #82) — 서비스 저장소에 열린 label:pleiades 수. 그쪽에서 닫혔으면 대장 #82 체크박스를 갱신한다
-for r in myFinance myFitness; do echo "$r label:pleiades open: $(gh issue list -R fomalhaut84/$r --label pleiades --state open --limit 200 --json number --jq 'length')"; done   # --limit 기본 30 이라 명시 (PR #84 Codex P2)
-# worktree 가 원격 integration/pleiades 보다 뒤처졌는지
-for d in myFinance myFitness; do git -C ~/workspace/pleiades/repos/$d fetch -q origin; echo "$d behind: $(git -C ~/workspace/pleiades/repos/$d rev-list --count HEAD..origin/integration/pleiades)"; done
-# integration/pleiades 가 서비스 dev 보다 뒤처졌는지 — 0 이 아니면 대상 저장소 작업·측정·감사 전에 동기화 (#70 · workflow.md 브랜치 전략 표 `dev 수용` 행)
-for d in myFinance myFitness; do echo "$d behind dev: $(git -C ~/workspace/pleiades/repos/$d rev-list --count origin/integration/pleiades..origin/dev) · conflicts: $(git -C ~/workspace/pleiades/repos/$d merge-tree --write-tree --name-only --no-messages origin/integration/pleiades origin/dev 2>/dev/null | tail -n +2 | grep -c .)"; done   # 기준은 origin/ — 로컬 integration/pleiades 는 fetch 로 움직이지 않아 다른 세션의 동기화 머지를 놓친다(PR #74 Codex P2). --no-messages 없으면 Auto-merging/CONFLICT 메시지 줄이 세어진다 (실측 fin 1→3 · PR #74 Codex P2)
-```
-**`behind dev` 가 0 이 아니면 브리핑의 첫 후보 액션은 동기화다** (#70 · 첫 적용 #71). 그 위에서 측정·감사하면 `dev` 가 이미 한 일을 모르고 되풀이한다(fit vitest 이중 도입 · 2026-09-18 vs 1a-2).
-원본이 `dev`/`main` 이 아니면 **누군가 서비스 유지 작업 중일 수 있으므로 사용자에게 확인한다.**
-
-> **측정·감사는 worktree 를 본다 (PR #6 Codex 리뷰 P1).** 원본에는 앞선 1a 단계 변경이
-> 들어 있지 않다 — 원본을 재면 이전 단계가 빠진 트리를 측정하게 된다.
+> **정정 (2026-09-30 · 006 · #101 · M-0).** 옛 Step 2 — 체크아웃 4개(`repos/*` worktree 2 + 원본 2)의 브랜치·dirty 확인 · 원본↔worktree 하네스 드리프트 · 서비스 저장소의 `label:pleiades` 이관 이슈 수 · worktree behind · `integration/pleiades` behind dev — 는 **전부 소진**이다. `repos/*`·원본에서는 git 명령을 하지 않고(I-11 · `status` 도 index 를 갱신할 수 있다), 이관 이슈는 동결(#82)이며, 서비스 dev 는 pleiades 안 `apps/*` 로 수용한다(006 §4-S). 옛 명령은 git 이력(이 정정 직전 커밋)에 있다. 되돌리기: 즉시.
 
 ### Step 3 — 브리핑 (3문단 이내)
 
@@ -72,9 +63,10 @@ for d in myFinance myFitness; do echo "$d behind dev: $(git -C ~/workspace/pleia
 ## pleiades 상태
 
 **단계:** {0~4 중 어디} — {실행 전 / 진행 중 / 완료}
-**대상 저장소:** myFinance {branch/clean}, myFitness {branch/clean}
-**미결:** Q7({한 줄}), Q2({한 줄}), Q3({한 줄})
-**이관(#82):** fin {n} · fit {n} 열림 — {그쪽에서 닫힌 것이 있으면 대장 갱신 필요}
+**M 단계:** M-{0~6} (006 §4) — {진행 중 / 완료}
+**pleiades:** dev {clean/ahead} · 열린 PR {n} · Actions secrets {0}
+**수용:** fin {미수용/최신/뒤처짐} · fit {…}
+**미결:** 006 §7 중 다음 단계를 막는 것 · 002 Q7·Q2·Q3 는 전환 이후
 
 **다음 후보 액션:**
 1. {가장 자연스러운 다음 스텝 — 범위·소요·되돌리기 비용 병기}

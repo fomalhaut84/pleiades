@@ -53,6 +53,9 @@ Q7(DB 경계) · Q2(독립 배포) · Q3(봇 인바운드 통합).
 
 ## 대상 저장소
 
+> **소진 (2026-09-30 · 006 · #101 · M-0) — 이 절 전체(worktree 표 · 원본 사용 구분 · `integration/pleiades` 브랜치 체계 · 정기 동기화 · 하네스 `--add-dir`·`bin/claude-with`) 는 소진이다.**
+> **정본은 `.claude/rules/isolation.md`(격리 불변식 I-1~I-21) 와 006.** pleiades 는 서비스 저장소(원격 · 동결된 `integration/*` 포함) · 원본 `~/workspace/myF*` · worktree `repos/*` 에 **쓰지 않고 그 안에서 git 명령도 하지 않는다.** 두 서비스는 `apps/finance`·`apps/fitness` 로 pleiades 안에 이력째 들어오고(006 M-1 · filter-repo · 스크래치에서만) 서비스 `dev` 는 https 읽기로 정기 수용한다(006 §4-S). `apps/*` 안의 하네스는 pleiades 세션에서 **효력이 없다** — 추적 경로라 파일을 읽으면 지연 로드되지만(006 ⑧) 그 지시를 실행하지 않는다. `bin/claude-with` 는 실행하면 소진 메시지와 함께 종료한다. `repos/` 는 동결 동안 `.gitignore` 에 남는다 — **`apps/` 는 추적되므로 루트 Grep 이 검색한다.** 아래 원문은 이력이다.
+
 **통합 작업 소스는 `repos/` 아래 git worktree 로 있다** (2026-09-04 배치, 상세는 `docs/specs/004-repo-layout.md`).
 저장소는 여전히 각각 하나다 — worktree 는 같은 저장소의 두 번째 작업 디렉터리이므로 **분기가 불가능하다.**
 
@@ -130,10 +133,14 @@ bin/claude-with fit      # 한 번에 한 저장소 (H-5 · Q30). --resume 도 �
    목표가 "도메인을 계속 늘리는 플랫폼"으로 확정되면서 바뀌었다. 진입 조건은 **도메인 #3(캘린더)을 붙일 때**,
    그리고 병렬 조건으로 **1a 운영 중 패키지 수정 PR 2개짜리 왕복이 반복적으로 성가실 때** (003 §2-4).
    따라서 공유 패키지는 **처음부터 `packages/notify/`** — 모노레포에서 갖게 될 그 경로에 만든다 (003 §2-1).
+
+   > **정정 (2026-09-30 · 006 U97-4 · #101).** 진입 조건 *"도메인 #3"* 과 병렬 조건(패키지 수정 PR 왕복)은 **소진** — 사용자가 순서를 바꿔 모노레포가 **지금** 이다(두 앱을 먼저 가져오고 notify·Discord 는 그 안에서). 병렬 관측 지표는 관측 전 소진(git dep 소비자가 생기지 않았다). `packages/notify/` 경로 결정은 그대로 유효하다. 전환(cutover)은 범위 밖(006 Q60).
 5. **아웃바운드 알림과 인바운드 봇 명령은 비용이 다르다.** 아웃바운드는 어댑터 교체(초크포인트 1곳),
    인바운드는 재작성(210건). 인바운드를 저장소별로 각각 옮기지 않는다.
 
 ## 작업 규칙
+
+> **정정 (2026-09-30 · 006 · #101).** 아래 첫 두 항목(*"기존 두 저장소에 쓰기 전 사용자 확인"* · *"통합 작업은 `repos/` worktree 에서"*)과 워크플로우 요약의 **이관 이슈 · 대칭 변경 예외**는 소진이다 — **서비스 저장소에는 사용자 확인을 받아도 쓰지 않는다**(`.claude/rules/isolation.md` · 이 룰이 `workflow.md` 보다 우선). 새 발견은 pleiades 이슈에만 · 서비스 참조는 비링크 `fin#N`·`fit#N`. 격리 경계를 건드리는 작업(로컬 DB · 봇·웹 기동 · 외부 계정 env)만 착수 전 사용자 확인을 받는다.
 
 - **기존 두 저장소에 쓰기 전 반드시 사용자 확인.** 둘 다 실서비스 중이다 (PM2 + Nginx, finance:4100 / fitness:4200).
 - **통합 작업은 `repos/` 아래 worktree 에서, 브랜치는 `integration/pleiades`.** 원본 `~/workspace/myF*` 에는 **통합 작업을 쓰지 않는다** — 서비스 핫픽스·단일 저장소 작업 전용이다 (위 표 참조).
@@ -176,6 +183,7 @@ bin/claude-with fit      # 한 번에 한 저장소 (H-5 · Q30). --resume 도 �
 | 2026-09-28 | **서비스 `dev` → `integration/pleiades` 정기 동기화 정책 신설** — `workflow.md` 브랜치 전략 표 `dev 수용` 행 + 동기화 PR 리뷰 범위(충돌 해결분) · `pleiades-resume` Step 2 behind-dev 측정 · `dual-repo-change` 모드 I 선결 · 004 정정 블록 · 대상 저장소 절 1문단. 첫 적용 #71(fin dev 4 · fit dev 77 · 충돌 fin 1 · fit 3) | 룰 1 · 스킬 2 · 스펙 1 · CLAUDE.md | #70 (사용자 결정 2026-09-28 — fit dev 가 vitest 를 독자 도입해 1a-2 와 중복) |
 | 2026-09-28 | **서비스 미러 폐기 · 원본 읽기 전용 · `claude-with` 대상을 worktree 로** — `workflow.md` 브랜치 전략·7절·긴급 수정 절 정정 · `dual-repo-change` 모드 S·H "pleiades 미실행" · `pleiades-resume` Step 2 원본 복원 절차 → 드리프트 감지 · 004 Q43·005 §4-7 정정 · `bin/claude-with` | 룰 1 · 스킬 2 · 스펙 2 · 스크립트 1 · CLAUDE.md | #80 (사용자 방침 재확인 2026-09-28 — #494 Codex 4라운드가 계기) |
 | 2026-09-28 | **이슈 관리 정책** — `workflow.md` 5절 이관 이슈 규약(라벨 `pleiades`·접두·출처 줄·대장 #82) · `pleiades-codex-loop` Step 3 "저작하지 않은 내용" 행 · `pleiades-resume` label:pleiades 카운트 · `pleiades-handoff` 대장 갱신 · pleiades 라벨 `fin`·`fit` | 룰 1 · 스킬 3 · CLAUDE.md | #83 (사용자 2026-09-28 — 오늘 서비스 저장소에 이관 이슈 7건이 생기며) |
+| 2026-09-30 | **M-0 B1b — 격리 불변식 룰 신설 · 대상 저장소 경로 소진** — `.claude/rules/isolation.md`(006 §5 I-1~I-21 · 첫 줄 `apps/*` 하네스 효력 없음) · `workflow.md` 브랜치 전략·5·7·8(`apps/*` 행)·9-0(`apps/**` 행)·10절·릴리즈(`--tags` 금지)·고유 규율 정정 · `dual-repo-change`·`dual-repo-operator` 소진 · `pleiades-resume` Step 2 → 수용 판정(`ls-remote` ↔ `Service-Dev`) + secrets 0 · `pleiades-handoff` 서비스 영향 기록 · 스킬 5·에이전트 2 정정 블록 · `bin/claude-with` 소진(exit 1) · `.gitignore` 주석 | 룰 2 · 스킬 8 · 에이전트 3 · 스크립트 1 · CLAUDE.md | #101 (006 §9-2 · 사용자 2026-09-30 — 4분할 · 새 파일 · exit 1) |
 
 ## 상속하는 컨벤션
 
@@ -189,6 +197,7 @@ bin/claude-with fit      # 한 번에 한 저장소 (H-5 · Q30). --resume 도 �
 - 브랜치: `main`(실서비스) → `dev` → `feat/<issue>-<n>`. PR 머지는 사용자가 직접
   — **단 이건 두 저장소의 단독 작업(핫픽스 등) 컨벤션이다.** pleiades 통합 작업의 base 는
   **`integration/pleiades`** 이고 `dev` 로 직행하지 않는다 (위 표 · `.claude/rules/workflow.md` 7절)
+  — **정정 (2026-09-30 · 006):** `integration/pleiades` 경로는 소진. `apps/*` 를 바꾸는 작업도 pleiades 브랜치(`<type>/<issue>-<n>` → pleiades `dev`)를 탄다. 위 컨벤션은 `apps/*` 코드 안에서 그대로 따른다
 
 ## 이름
 

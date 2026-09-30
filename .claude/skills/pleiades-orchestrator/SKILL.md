@@ -8,6 +8,8 @@ description: pleiades 통합 작업 전체를 에이전트 팀으로 조율하�
 pleiades 는 myFinance × myFitness 를 **개인 비서 플랫폼**으로 통합하는 저장소다.
 제품 코드는 아직 없고, 산출물은 결정과 그 근거다. 두 대상 저장소는 실서비스 중이다.
 
+> **정정 (2026-09-30 · 006 · #101).** 제품 코드는 `packages/notify`(1a-1) 가 있다. 두 서비스는 `apps/finance`·`apps/fitness` 로 pleiades 안에 들어온다(006 M-1) — **서비스 저장소 자체에는 쓰지 않는다**(`.claude/rules/isolation.md`). 아래 "대상 저장소" 는 측정·감사 맥락에서 `apps/*`(M-1 전에는 스크래치 읽기 클론)로 읽는다.
+
 ## 실행 모드: 에이전트 팀
 
 네 에이전트가 팀으로 협업한다. 감사가 문서를 되돌리고, 문서가 측정을 요구하는 **양방향 피드백**이
@@ -27,17 +29,10 @@ pleiades 는 myFinance × myFitness 를 **개인 비서 플랫폼**으로 통합
 작업 시작 전 실행 모드를 판별한다.
 
 ```bash
-echo "== 통합 작업 (worktree · integration/pleiades 여야 함)"
-for d in myFinance myFitness; do
-  echo -n "  repos/$d: "; git -C ~/workspace/pleiades/repos/$d branch --show-current
-  git -C ~/workspace/pleiades/repos/$d status -s | head -3
-done
-echo "== 서비스 유지용 원본 (fin=dev · fit=main · 통합 작업 금지 · 핫픽스는 여기서)"
-for d in myFinance myFitness; do
-  echo -n "  ~/workspace/$d: "; git -C ~/workspace/$d branch --show-current
-  git -C ~/workspace/$d status -s | head -3
-done
+cd ~/workspace/pleiades && git status -sb | head -1 && ls _workspace/ | tail -5
 ```
+
+> **정정 (2026-09-30 · 006 · #101 · M-0).** 옛 Phase 0 은 체크아웃 4개(`repos/*` worktree 2 + 원본 2)의 브랜치를 판별했다. `repos/*`·원본에서는 git 명령을 하지 않는다(`.claude/rules/isolation.md` I-11) — 아래 인용부와 "기대값" 표는 **소진**이다. 두 서비스의 상태는 pleiades 안 `apps/*` 와 수용 판정(`pleiades-resume` Step 2)으로 본다. 되돌리기: 즉시.
 
 > **체크아웃이 4개다 (PR #6 Codex 리뷰 P1).** 통합 작업 worktree 2개 + 서비스 유지용 원본 2개.
 > 원본에는 앞선 1a 단계 변경이 들어 있지 않다 — `docs/specs/004-repo-layout.md`.
@@ -107,6 +102,8 @@ Phase 2 ↔ 3 은 정정이 0 이 될 때까지 순환한다. 3회를 넘으면 
 ## Phase 5 — 집행 (승인 시에만)
 
 **실행: `dual-repo-operator`**
+
+> **소진 (2026-09-30 · 006 · #101 · M-0).** `dual-repo-operator` 와 이 Phase 의 대상 저장소 집행은 **소진**이다 — pleiades 는 서비스 저장소·원본·worktree 에 쓰지 않는다(`isolation.md` I-1·I-11). 집행 대상은 pleiades 자신(`apps/*` · `packages/*` · `tools/*` · 문서)이고 `workflow.md` 7절 pleiades 행을 탄다. 남는 것: **격리 경계를 건드리는 집행**(로컬 DB · 봇·웹 기동 · 외부 계정 env)은 1번의 승인 게이트와 2번의 착수 직전 재감사를 거친다. 4번의 "재시작" 은 로컬 프로세스뿐이다(서버·pm2 금지 · I-3). 되돌리기: 즉시.
 
 1. 승인 게이트 5항목 제시 → **명시 승인**
 2. `reversibility-auditor` 에게 **착수 직전 재감사** 요청. 정정 나오면 중단

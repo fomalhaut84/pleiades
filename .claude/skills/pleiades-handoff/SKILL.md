@@ -5,7 +5,7 @@ description: pleiades 세션을 마무리하며 docs/handoff/YYYY-MM-DD-<주제>
 
 # pleiades-handoff — 세션 인계
 
-pleiades 는 세션 사이 간격이 길고, 그 사이 두 대상 저장소는 계속 움직인다.
+pleiades 는 세션 사이 간격이 길고, 그 사이 두 서비스(원격 `dev`)는 계속 움직인다.
 인계 노트의 목적은 "무엇을 짜다 말았나"가 아니라 **"무엇이 결정됐고 무엇이 안 됐나"** 를 남기는 것이다.
 
 ## 절차
@@ -13,23 +13,16 @@ pleiades 는 세션 사이 간격이 길고, 그 사이 두 대상 저장소는 
 ### 1. 세션 중 변경분 확인
 
 ```bash
-echo "== 통합 작업 (worktree · integration/pleiades 여야 함)"
-for d in myFinance myFitness; do
-  echo -n "  repos/$d: "; git -C ~/workspace/pleiades/repos/$d branch --show-current
-  git -C ~/workspace/pleiades/repos/$d status -s | head -3
-done
-echo "== 서비스 유지용 원본 (fin=dev · fit=main · 통합 작업 금지 · 핫픽스는 여기서)"
-for d in myFinance myFitness; do
-  echo -n "  ~/workspace/$d: "; git -C ~/workspace/$d branch --show-current
-  git -C ~/workspace/$d status -s | head -3
-done
+cd ~/workspace/pleiades
+git status -sb | head -1 && git log --oneline origin/dev -5
+gh pr list -R fomalhaut84/pleiades --state open
+echo "actions secrets: $(gh api repos/fomalhaut84/pleiades/actions/secrets --jq .total_count)"   # I-9 — 0 이어야 한다
 ```
 
-> **체크아웃이 4개다 (PR #6 Codex 리뷰 P1).** 통합 작업 worktree 2개 + 서비스 유지용 원본 2개.
-> 원본에는 앞선 1a 단계 변경이 들어 있지 않다 — `docs/specs/004-repo-layout.md`.
+**서비스 영향을 반드시 노트 첫 줄에 적는다** — 서비스 저장소 쓰기 · 서버 · 서비스 봇·DB·외부 계정 접촉. 정상값은 **"0 — https 읽기만"** 이다(`.claude/rules/isolation.md`). 0 이 아니면 무엇을 했는지와 되돌릴 수 없는 흔적을 그대로 적는다.
+로컬 격리 자원(`pleiades_fin`·`pleiades_fit` DB · 기동한 웹·봇 프로세스 · `apps/*/.env`)을 만들었으면 남은 상태를 적는다(006 L-1~L-9).
 
-**대상 저장소 변경 건수를 반드시 확인하고 노트에 적는다.** 0 이면 "읽기만 했다"고 명시한다 —
-다음 세션이 실서비스 상태를 신뢰할 수 있는지가 여기서 갈린다.
+> **정정 (2026-09-30 · 006 · #101 · M-0).** 옛 1절은 체크아웃 4개(`repos/*` worktree 2 + 원본 2)에서 `git -C … branch/status` 를 돌리고 "대상 저장소 변경 건수" 를 적게 했다. `repos/*`·원본에서는 git 명령을 하지 않는다(I-11). 되돌리기: 즉시.
 
 ### 2. 인계 노트 작성
 
@@ -41,7 +34,7 @@ done
 직전 노트: `<파일명>`. 이 노트가 최신이다.
 
 ## 이 세션에서 한 일
-<번호 목록. 대상 저장소를 건드렸는지 첫 줄에 명시>
+<번호 목록. 서비스 영향(정상값 0)을 첫 줄에 명시>
 
 ## 결정된 것
 <표 또는 목록. 근거(누가 언제)와 함께>
@@ -62,8 +55,8 @@ done
 
 ### 3. 주의사항에 반드시 넣을 것
 
-- **대상 저장소는 실서비스 중.** 쓰기 전 사용자 확인
-- **세션 시작 시 관측한 브랜치 상태.** 인계 노트보다 현재 상태를 신뢰하라는 단서와 함께
+- **서비스 영향 0 원칙**(`isolation.md`) — 이번 세션의 서비스 영향과 로컬 격리 자원 상태
+- **세션 시작 시 관측한 상태**(pleiades `dev` · 수용 판정 fin/fit). 인계 노트보다 현재 상태를 신뢰하라는 단서와 함께
 - **이번 세션에서 정정된 기록** — 옛 문서를 읽고 그 전제로 움직이면 안 되는 지점
 - stale 한 것으로 확인된 표기 (예: 다른 저장소 CLAUDE.md 의 버전 표기)
 - 한도에 근접한 것 (예: `MEMORY.md` 줄 수)
@@ -76,7 +69,8 @@ done
 |---|---|
 | `CLAUDE.md` | 현재 상태 문장, 문서 지도의 최신 인계 노트, 핵심 전제 (바뀌었으면) |
 | 메모리 색인 | `MEMORY.md` 는 색인일 뿐. 정본은 `docs/`. 중복 기록하지 않는다 |
-| **이관 대장 #82** | 이 세션에서 서비스 저장소에 만든 이관 이슈(라벨 `pleiades`)를 대장에 한 줄씩 추가하고, 그쪽에서 닫힌 것은 체크한다 (#83) |
+| ~~**이관 대장 #82**~~ | 이 세션에서 서비스 저장소에 만든 이관 이슈(라벨 `pleiades`)를 대장에 한 줄씩 추가하고, 그쪽에서 닫힌 것은 체크한다 (#83) |
+| | **소진 (2026-09-30 · 006 U97-9 · #101)** — 대장 #82 는 동결이다. 새 발견은 pleiades 이슈에만 만든다(`isolation.md` 파생 규칙). 서비스 저장소 이슈 상태를 갱신하지 않는다 |
 | 커밋 | conventional commits. 세션 산출물을 논리 단위로 나눠 커밋 |
 
 #> **커밋·PR 은 `.claude/rules/workflow.md` 를 따른다.** 이슈 → `chore/<issue>-<n>`(base `dev`)
@@ -89,11 +83,11 @@ done
 docs(handoff): <주제> 세션 인계 노트
 
 <무엇을 했고 무엇이 결정됐는지 3~5줄>
-<대상 저장소 변경 여부 명시>
+<서비스 영향 명시 — 정상값 "서비스 영향 0 (https 읽기만)">
 ```
 
 ## 하지 않는 것
 
-- **대상 저장소에 인계 흔적을 남기지 않는다.** pleiades 는 그쪽에 개입하지 않는다
+- **서비스 저장소에 인계 흔적을 남기지 않는다.** pleiades 는 그쪽에 쓰지 않는다(`isolation.md` I-1) — 인계 노트·커밋 메시지의 서비스 참조도 비링크 `fin#N`·`fit#N` 만(I-2)
 - 메모리에 문서 내용을 복사하지 않는다. 색인 한 줄이면 된다
 - 결정되지 않은 것을 결정된 것처럼 적지 않는다. 다음 세션이 그것을 전제로 움직인다
