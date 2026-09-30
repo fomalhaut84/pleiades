@@ -4,6 +4,8 @@
 읽기용 아티팩트: **전용 없음** — 통합 요약본 https://claude.ai/code/artifact/88cd616a-efe0-4d84-b298-e6961675ae0d 에 반영(2026-09-10 · #45)
 (**정본은 이 파일이다.**)
 
+> **소진 (2026-09-30 · 006 · #103) — 이 문서의 작업 표면(worktree `repos/*`)은 동결됐다.** 방향 전환(`006-monorepo-first.md` · 모노레포 먼저 · 서비스 무영향)으로 pleiades 는 서비스 저장소에 쓰지 않는다(006 원칙 · I-1). 두 앱은 GitHub https 읽기 → filter-repo 재작성으로 **`apps/{finance,fitness}`** 에 이력째 들어온다(006 U97-1·U97-5). **`repos/*` worktree · 서비스 원격 `integration/pleiades` 는 동결**(006 U97-3) — `repos/*` 와 원본 `~/workspace/myF*` 에서는 git 명령을 하지 않는다(읽기 명령도 index 를 갱신할 수 있다 · 006 I-11). §4-3 의 `git worktree remove` 를 포함한 동결 산출물 처리는 **사용자 단독**(006 Q54). 이 문서는 배치 판단의 **기록**으로 남는다 — §2-4 · §3-2 · §6 · §7 · §8 에 같은 날 블록. 되돌리기: 문구 (**즉시**).
+
 **이 문서는 계획서가 아니라 기록이다.** 배치는 2026-09-04 에 이미 집행됐다(§4-2).
 따라서 여기서 답하는 것은 *"무엇을 할까"* 가 아니라 ***"무엇을 왜 이렇게 했나, 그리고
 어떤 판단이 뒤집혔나"*** 다.
@@ -120,6 +122,8 @@ worktree 를 "모노레포로 가는 계단"으로 정당화하면 §2-3 을 우
 **`integration/pleiades` 브랜치에 쌓인 커밋과 그 이력 하나뿐**이며, 그것이 단계 4 의 이력 병합
 (subtree/merge) 입력이 된다.
 
+> **정정 (2026-09-30 · 006 · #103).** *"승계되는 것은 `integration/pleiades` 브랜치의 커밋 이력뿐"* 은 성립하지 않는다 — **그 이력도 승계되지 않는다.** 가져오는 것은 서비스 `dev` 이고(006 ⑰ — `integration/pleiades` ↔ 서비스 `dev` 의 `src/`·테스트·`package.json` 차이 0) 방법은 subtree/merge 가 아니라 **filter-repo 재작성**이다(006 U97-5). worktree 는 제거되지 않고 **동결**된다(006 U97-3 · 처리는 Q54 사용자 단독). 단계 4 는 사용자 결정으로 앞당겨졌고(006 U97-4) 진입 조건은 002 §4 정정 블록. 되돌리기: 문구 (**즉시**).
+
 ---
 
 ## 3. 실측 근거
@@ -152,6 +156,8 @@ worktree 를 "모노레포로 가는 계단"으로 정당화하면 §2-3 을 우
 02 초안이 **L4(미측정)** 로 남겼던 항목이고, `claude-code-mechanisms.md:125` 의
 *"패키지별 `.claude/skills/` 지원"* 은 **이 배치에서 성립하지 않는다.**
 → 귀결은 §6-1.
+
+> **정정 (2026-09-30 · 006 · #103).** 위 표의 **"미발견" 은 gitignored 조건의 값이었다** — `repos/` 는 pleiades `.gitignore` 에 있다. *"gitignore 유무와 무관"* 은 이 배치에서 확인한 범위를 넘는 일반화다. 표는 skill·agent 만 쟀다 — gitignored 경로에서도 파일을 읽으면 `CLAUDE.md`·rules 는 지연 로드된다(measured-facts 2026-09-30 절 X10). **pleiades 가 추적하는 하위 경로(`apps/*`)에서는 그 경로의 파일을 읽는 순간 중첩 `CLAUDE.md`·`.claude/rules` 가 지연 로드되고 중첩 skill 도 발견된다**(시작 시에는 로드되지 않음 · 1회 실험 · Claude Code 2.1.285 — 006 ⑧ · [S2] X10). fin `.claude/` tracked 16 + `CLAUDE.md` 가 `apps/finance/` 로 들어오므로 이것이 실재한다. 대응은 **룰 한 줄(`apps/*` 하네스는 효력 없음) + 훅**(006 I-10 · I-19) · 재현성은 미확인(006 U8). 되돌리기: 문구 (**즉시**).
 
 ### 3-3. Grep 도구는 차단되지 않는다 — **루트 traversal 제외일 뿐**
 
@@ -241,6 +247,8 @@ git -C ~/workspace/myFitness worktree remove ~/workspace/pleiades/repos/myFitnes
 | **절대경로 측정은 `--binary-files=text`** | (§3-4) |
 | **`git clean -ffdx` 금지** | pleiades 루트에서 `-ff` 는 `repos/` 를 통째로 삭제한다 (감사 §3). `-fdx` 는 안전 |
 
+> **소진 (2026-09-30 · 006 · #103).** *"통합 작업은 `repos/*` 에서"* 행과 §8-4 이하의 대상 저장소 브랜치 정책(`integration/*` · 모드 S 미러 · `dev` 수용 동기화 PR)은 **소진**이다 — pleiades 는 서비스 저장소에 브랜치·PR 을 만들지 않는다(006 I-1). 서비스 `dev` 수용은 pleiades 안에서 읽기 전용 fetch + filter-repo 로 한다(006 §4-S). `repos/*` 에서는 git 명령 금지(006 I-11). `git clean -ffdx` 금지는 `repos/` 가 남아 있는 동안 유효하다. 되돌리기: 문구 (**즉시**).
+
 ---
 
 ## 5. 판단이 바뀐 것
@@ -273,6 +281,8 @@ git -C ~/workspace/myFitness worktree remove ~/workspace/pleiades/repos/myFitnes
 | **Q23** | `CLAUDE.md` 핵심 전제 3 — *"두 MCP 서버가 이미 **로컬** HTTP 로 상주 중"* 이 맞나 | 감사 §4-1 이 제기했다. 현재 측정은 **로컬 pm2 미설치 · 4100/4200 리슨 없음** — 그 문장은 **서버**를 기술한 것으로 보인다. **이 문서는 판정하지 않는다.** 전제 3 은 002 **단계 0(통합 어드바이저)** 의 근거 — *"`mcp-config.json` 병합만으로 교차 도메인 어드바이저가 된다"* — 이므로, "로컬 상주"가 아니라 "서버 상주"라면 단계 0 의 **검증 위치와 반영 절차**(빌드 + `pm2 restart`)가 달라진다 | **높음 — 단계 0 착수 전** |
 | **Q24** | `autoMemoryDirectory` 가 세션 키까지 옮길 수 있나 | **미확인으로 남긴다.** worktree 채택으로 **지금은 아무것도 막지 않는다**(원본 경로 유지). 다시 필요해지는 시점은 **002 단계 4** — 그때는 경로가 실제로 바뀐다 | 낮음 — 단계 4 까지 유예 |
 
+> **소진 · 정정 (2026-09-30 · 006 · #103).** **Q23 은 소진** — 단계 0 이 보류됐으므로(006 Q59) "로컬 상주냐 서버 상주냐" 를 판정할 필요가 없어졌다(판정 불요). 서버는 어떤 목적으로도 쓰지 않는다(006 I-3). **Q24 는 계속 유예** — 단계 4 가 앞당겨졌지만 모노레포는 pleiades 저장소 안에서 이뤄져 **pleiades 의 경로가 바뀌지 않는다**(`~/.claude` 경로 키가 그대로다). Q20·Q21 의 *"로드되지 않으므로 무해"* 는 시작 시와 gitignored 경로의 skill·agent 에 대해서만 참이다 — 파일을 읽으면 `CLAUDE.md`·rules 가 지연 로드되고, `apps/*` 에서는 skill 도 발견된다(§3-2 정정 블록). 되돌리기: 문구 (**즉시**).
+
 **표에 넣지 않은 것 (사용자 판단 불필요 · 구현 결정).**
 `repos/` ignore vs submodule → **ignore**(M5). `git clean -ffdx` 금지 → 작업 규율(§4-4).
 `.claude/settings.local.json` 의 절대경로 6곳 → **손댈 필요 없음.** worktree 는 원본 경로를
@@ -294,6 +304,8 @@ git -C ~/workspace/myFitness worktree remove ~/workspace/pleiades/repos/myFitnes
 | **002 단계 4(모노레포) 진입 조건이 충족될 때** | worktree 는 **제거**되고 `apps/*` 가 pleiades 의 tracked 경로가 된다. 승계되는 것은 `integration/pleiades` 브랜치의 커밋 이력뿐이다(§2-4). Q24 가 그때 다시 활성화된다 |
 | **`git worktree` 가 작업을 방해하는 사례가 나올 때** | 예: 같은 브랜치를 두 곳에서 체크아웃해야 하는 상황, 또는 `repos/` 하위에서 `git clean` 사고. §4-1 사다리로 돌아가 3′(`cp -Rc` clone)을 재검토한다 — **되돌리기가 `git worktree remove` 라 재검토 비용이 낮다** |
 
+> **정정 (2026-09-30 · 006 · #103).** *"002 단계 4 진입 조건이 충족될 때"* 행이 **사용자 결정으로 발생했다**(006 U97-4) — 단 서술 셋이 다르다: ① worktree 는 **제거되지 않고 동결**된다(006 U97-3 · 제거는 사용자 단독 Q54) ② `apps/*` 는 tracked 경로가 되지만 **입력은 `integration/pleiades` 가 아니라 서비스 `dev`**(§2-4 정정) ③ **Q24 는 활성화되지 않는다**(§6 블록 — pleiades 경로 불변). *"Q23 이 확인될 때"* 행은 Q23 소진으로 발생하지 않는다. 이 문서를 다시 여는 시점은 006 §10 을 따른다. 되돌리기: 문구 (**즉시**).
+
 ---
 
 ## 8. 정정 — Q20·Q21·Q22 와 §3-2 (2026-09-07 · 005 발행에 따른 append)
@@ -312,6 +324,8 @@ git -C ~/workspace/myFitness worktree remove ~/workspace/pleiades/repos/myFitnes
 | **Q22** | *"기존 grep 기반 0건 결론을 재검증하나"* — 원인을 **binary 스킵**으로 봤다 | **의심한 원인과 실측된 원인이 다르다.** 이 환경의 `grep` 은 **ugrep 래퍼**이고 `--ignore-files` 로 `.gitignore` 를 따른다 — ignored **디렉터리**는 통째로 사라지고 ignored **파일**은 사라지지 않는다. 그래서 fit `.claude/`(디렉터리 ignore)만 0건 오탐이 났다. **`--binary-files=text` 로는 막지 못한다.** 재검증 범위는 *"ignored 경로를 포함하는 모든 grep 측정"* 으로 넓어지며 **005 Q38** 로 이관한다 | 005 §4-11 · [MF] H7 |
 
 **Q23 · Q24 는 그대로 미결이다.** Q23 은 여전히 **단계 0 착수 전** 최우선이고, Q24 는 단계 4 까지 유예다.
+
+> **정정 (2026-09-30 · 006 · #103).** Q23 은 **소진**(006 Q59 — 단계 0 보류 · 판정 불요) · Q24 는 **계속 유예**(pleiades 경로 불변). §6 블록. 되돌리기: 문구 (**즉시**).
 
 ### 8-2. §3-2 *"회피는 `--add-dir` 를 계속 넘기는 것뿐"* — 결론은 맞고 기제가 더 좁다
 
@@ -379,3 +393,5 @@ pleiades 내부 메인이며, 통합은 모노레포 전환이 끝나 두 프로
 > 사용자: *"각 서비스의 dev·main 변화 → `integration/pleiades` 에 반영. 그 반대는 불가. hotfix/·feature/ 등은 실서비스용. pleiades 는 `integration/*` 아래에서 모든 걸 처리한다."*
 > Q43 은 pleiades 발 변경을 서비스 `dev` 로 복제하는 경로(모드 S 미러)였고 2026-09-28 에 세 번 쓰였다(myFinance#509 · myFitness#492 · myFitness#494 → 닫음). 폐기. 미러가 필요했던 이유(G-2 · 세션이 읽는 하네스 = 원본)는 `bin/claude-with` 가 **worktree `repos/<repo>` 를 붙이는 것**으로 대체한다 — fit `.claude/` 는 #369 이후 worktree 에 tracked 라 "worktree 에 없다"(§3′)는 낡았다. 원본 `~/workspace/myF*` 는 **읽기 전용**이며 `git archive … | tar -x` 동기화(§4-7 · #27)도 하지 않는다. 원본 하네스의 진화는 **원본 → worktree 복사(모드 I)** 로만 받는다(#72). 되돌리기: 문서·스크립트 즉시.
 
+
+> **소진 (2026-09-30 · 006 · #103) — §8-4 의 두 정정(#70 · #80)과 Q42 · Q43.** 서비스 `dev` → `integration/pleiades` 동기화 PR(#70)과 *"원본 → worktree 복사(모드 I)"*(#72) · `bin/claude-with` 의 worktree 대상(#80)은 전부 서비스 저장소 쓰기 또는 worktree git 조작이라 **소진**이다(006 I-1 · I-11 · U97-9). 서비스 `dev` 는 pleiades 안에서 수용한다(006 §4-S — 머지 커밋·squash 금지·리뷰 범위는 승계 · 006 §6). **Q42(병행 인스턴스)·Q44 β2 는 소진** — 003 §10-1 블록. Q43 은 #80 에서 이미 폐기됐다. 되돌리기: 문구 (**즉시**).
