@@ -83,6 +83,53 @@ class DenyTable(unittest.TestCase):
         ("env GH_TOKEN=x gh issue close 1 -R fomalhaut84/myFinance", ROOT, "I-1"),
         ("FOO=1 ssh host", ROOT, "I-3"),
         ("ls\ngh issue comment 1 -R fomalhaut84/myFitness -b x", ROOT, "I-1"),
+        # 회귀: #102 사전 리뷰 critical 1 (백슬래시 줄 이어쓰기)
+        ("gh api repos/fomalhaut84/myFinance/issues \\\n  -f title=x", ROOT, "I-1"),
+        ("gh issue create \\\n  -R fomalhaut84/myFinance \\\n  --title x --body y", ROOT, "I-1"),
+        ("gh api \\\n  -X POST \\\n  repos/fomalhaut84/myFinance/issues", ROOT, "I-1"),
+        ("git -C \\\n  repos/myFinance status", ROOT, "I-11"),
+        # 회귀: #102 사전 리뷰 major 2 (셸 키워드)
+        ("for r in a b; do git -C repos/myFinance status; done", ROOT, "I-11"),
+        ("while read l; do ssh host; done < f", ROOT, "I-3"),
+        ("if true; then ssh host; fi", ROOT, "I-3"),
+        ("if false; then :; else ssh host; fi", ROOT, "I-3"),
+        ("{ ssh host; }", ROOT, "I-3"),
+        ("! ssh host", ROOT, "I-3"),
+        # 회귀: #102 사전 리뷰 major 3 (인자 있는 래퍼 · 셸 플래그 묶음)
+        ("timeout 5 ssh host", ROOT, "I-3"),
+        ("timeout -s KILL 5 ssh host", ROOT, "I-3"),
+        ("sudo -u x ssh host", ROOT, "I-3"),
+        ("nice -n 5 ssh host", ROOT, "I-3"),
+        ("echo host | xargs ssh", ROOT, "I-3"),
+        ("xargs -n 1 ssh < hosts", ROOT, "I-3"),
+        ("bash -lc 'ssh host'", ROOT, "I-3"),
+        ("zsh -lc 'gh issue create -R fomalhaut84/myFinance -t x'", ROOT, "I-1"),
+        ("bash -euc 'git -C repos/myFitness log'", ROOT, "I-11"),
+        ("bash -o pipefail apps/finance/deploy/deploy.sh", ROOT, "I-19"),
+        # 회귀: #102 사전 리뷰 major 4 ($HOME 류)
+        ('git -C "$HOME/workspace/myFinance" status', ROOT, "I-11"),
+        ("cd $HOME/workspace/myFinance && git log", ROOT, "I-11"),
+        ('git -C "${HOME}/workspace/myFitness" log', ROOT, "I-11"),
+        ('git -C "$CLAUDE_PROJECT_DIR/repos/myFinance" log', ROOT, "I-11"),
+        # 회귀: #102 사전 리뷰 major 6 (GH_REPO · GIT_DIR · 전체 API URL)
+        ("GH_REPO=fomalhaut84/myFinance gh issue create -t x -b y", ROOT, "I-1"),
+        ("export GH_REPO=fomalhaut84/myFitness && gh pr close 3", ROOT, "I-1"),
+        ("gh api https://api.github.com/repos/fomalhaut84/myFinance/issues -f title=x", ROOT, "I-1"),
+        (f"GIT_DIR={HOME}/workspace/myFinance/.git git log", ROOT, "I-11"),
+        # 회귀: #102 사전 리뷰 major 7 (따옴표 안 명령 치환)
+        ('echo "HEAD=$(git -C repos/myFinance rev-parse HEAD)"', ROOT, "I-11"),
+        ('echo "x `ssh host` y"', ROOT, "I-3"),
+        ("echo $(echo $(ssh host))", ROOT, "I-3"),
+        # 회귀: #102 사전 리뷰 info (파일 입력 graphql · pushd · 셸로 넘기는 heredoc)
+        ("gh api graphql -F query=@mut.graphql", ROOT, "I-1"),
+        ("gh api graphql --input q.json", ROOT, "I-1"),
+        ("pushd repos/myFinance && git log", ROOT, "I-11"),
+        ("bash <<'X'\nssh host\nX", ROOT, "I-3"),
+        # 회귀: #102 사전 리뷰 probe (반복문 변수 경로)
+        ("for r in myFinance myFitness; do git -C repos/$r status; done", ROOT, "I-11"),
+        ("for d in repos/*; do git -C $d status; done", ROOT, "I-11"),
+        ('for d in a ~/workspace/myFitness; do git -C "$d" log; done', ROOT, "I-11"),
+        ("cd repos/$X && git status", ROOT, "I-11"),
     ]
 
     def test_denied(self):
@@ -131,6 +178,20 @@ class AllowTable(unittest.TestCase):
         # 이름이 비슷한 다른 저장소
         ("gh issue create -R fomalhaut84/myFinanceTools --title x", ROOT),
         ("gh issue create -R someone/myFinance --title x", ROOT),
+        # 회귀: #102 사전 리뷰 major 5 (gh 전역 -R 뒤의 읽기 동사 — 오탐)
+        ("gh -R fomalhaut84/myFinance issue list", ROOT),
+        ("gh --repo fomalhaut84/myFitness pr view 3", ROOT),
+        ("gh --repo=fomalhaut84/myFitness pr checks 3", ROOT),
+        # 작은따옴표 안 $( ) · 백틱은 실행되지 않는다 — 오탐 금지
+        ("grep -n '$(git -C repos/myFinance' CLAUDE.md", ROOT),
+        ("gh pr create -R fomalhaut84/pleiades --title t --body 'run `ssh host` never'", ROOT),
+        ("for f in a b; do echo $f; done", ROOT),
+        ("timeout 60 npm test", ROOT),
+        ("gh api graphql -f query='query { viewer { login } }' --jq .data", ROOT),
+        ("GH_REPO=fomalhaut84/pleiades gh issue create -t x -b y", ROOT),
+        ('git -C "$HOME/workspace/pleiades" status', ROOT),
+        ("for f in apps/finance apps/fitness; do git -C $f log -1; done", ROOT),
+        ("git -C $UNKNOWN log", ROOT),
     ]
 
     def test_allowed(self):
@@ -166,9 +227,14 @@ class HookProtocol(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
 
     def test_bad_input_is_reported_not_blocking(self):
-        r = self.run_hook("not json")
-        self.assertEqual(r.returncode, 1)  # 비차단 오류 — 사용자에게 보인다
-        self.assertIn("isolation_guard", r.stderr)
+        # 회귀: #102 사전 리뷰 major 9 — 형식이 틀린 입력도 트레이스백이 아니라 정돈된 메시지
+        for payload in ("not json", "[]", json.dumps({"tool_name": "Bash", "tool_input": "x"}),
+                        json.dumps({"tool_name": "Bash", "tool_input": {"command": ["ssh"]}})):
+            with self.subTest(payload=payload):
+                r = self.run_hook(payload)
+                self.assertEqual(r.returncode, 1)  # 비차단 오류 — 사용자에게 보인다
+                self.assertIn("isolation_guard", r.stderr)
+                self.assertNotIn("Traceback", r.stderr)
 
 
 if __name__ == "__main__":

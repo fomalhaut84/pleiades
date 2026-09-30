@@ -7,3 +7,4 @@ _workspace_prev/
 repos/
 packages/notify/dist/
 _workspace/**/backup/
+__pycache__/
