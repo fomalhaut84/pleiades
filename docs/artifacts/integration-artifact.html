@@ -983,11 +983,11 @@ code{
         <span class="step done"><b>1a-0 스캐폴딩</b><span class="dt">09-08 · PR #33</span></span>
         <span class="step done"><b>1a-1 패키지 구현</b><span class="dt">09-10 · PR #49 · 테스트 93</span></span>
         <span class="step next"><b>1a-2 fit vitest</b><span class="dt">다음 후보 · Q16~Q18 · 즉시</span></span>
-        <span class="step todo gate"><b>1a-3 fit send.ts 교체</b><span class="dt">첫 태그 · Q45 · β2 서버 승인 · 중간</span></span>
+        <span class="step todo gate"><b>1a-3 fit send.ts 교체</b><span class="dt">Q48 참조 방식 · β2 서버 승인 · 중간</span></span>
         <span class="step todo"><b>1a-4 fin 호출부 20건</b><span class="dt">Q27 · 약 94 지점 · 중간</span></span>
         <span class="step todo"><b>1b Discord 전환</b><span class="dt">Q12 DB · 어댑터 · env 플립</span></span>
       </div>
-      <p><b>되돌리기 등급이 여기서 오른다.</b> 1a-1 까지는 소비자 0 이라 즉시, 1a-3 부터는 두 저장소 <code>npm ci</code>·재빌드·<code>pm2 restart</code>(<b>병행 인스턴스만</b> — 실서비스 프로세스는 무관)가 따라와 중간이다. 1a-3 전에 <b>첫 태그(릴리즈 PR)</b> 와 <b>Q45(서버 https·node)</b> 가 필요하다.</p>
+      <p><b>되돌리기 등급이 여기서 오른다.</b> 1a-1 까지는 소비자 0 이라 즉시, 1a-3 부터는 두 저장소 <code>npm ci</code>·재빌드·<code>pm2 restart</code>(<b>병행 인스턴스만</b> — 실서비스 프로세스는 무관)가 따라와 중간이다. 1a-3 전에 <b>Q48(태그 없는 참조 방식)</b> 이 필요하다 — 첫 릴리즈는 모노레포 흡수 + Discord 통합 알림 이후로 정해졌다(#88 · 2026-09-30).</p>
     </div>
 
     <div class="tl-row part" data-n="2">
