@@ -131,28 +131,33 @@ class RunSh(Base):
         import subprocess
         (self.root / "apps/fitness/.env").write_text(
             "DATABASE_URL=postgresql://u:p@localhost:5432/pleiades_fit\nPORT=4600\nCLAUDE_BIN=/nonexistent/x\n")
-        full = {"PATH": "/usr/bin:/bin", "PLEIADES_ROOT": str(self.root), **env}
+        import shutil
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("node 없음")
+        full = {"PATH": f"{os.path.dirname(node)}:/usr/bin:/bin", "PLEIADES_ROOT": str(self.root), **env}
         return subprocess.run(["bash", str(HERE / "run.sh"), "fit", "--", *cmd], capture_output=True, text=True,
                               env=full, check=False)
 
     def test_runs_when_clean(self):
-        r = self.run_sh("sh", "-c", "echo ran in $(basename $PWD)")
+        r = self.run_sh("node", "-e", "console.log('ran in ' + require('path').basename(process.cwd()))")
         self.assertEqual((r.returncode, r.stdout.strip()), (0, "ran in fitness"), r.stderr)
 
     def test_shell_database_url_is_dropped(self):
-        r = self.run_sh("sh", "-c", "echo ${DATABASE_URL:-unset}", DATABASE_URL="postgresql://svc@prod/myfitness")
+        r = self.run_sh("node", "-e", "console.log(process.env.DATABASE_URL || 'unset')", DATABASE_URL="postgresql://svc@prod/myfitness")
         self.assertEqual(r.stdout.strip(), "unset", r.stderr)
 
     def test_destructive_prisma_refused(self):
         for cmd in (["npx", "prisma", "migrate", "reset"], ["npx", "prisma", "migrate", "dev"],
-                    ["npx", "prisma", "db", "push", "--force-reset"], ["psql", "-c", "drop database x"]):
+                    ["npx", "prisma", "db", "push", "--force-reset"], ["psql", "-c", "drop database x"],
+                    ["./deploy/deploy.sh", "dev"], ["npx", "pm2", "start", "ecosystem.config.js"]):
             with self.subTest(cmd=cmd):
                 r = self.run_sh(*cmd)
                 self.assertEqual(r.returncode, 1)
-                self.assertIn("L-1", r.stderr)
+                self.assertIn("run.sh: 중단", r.stderr)
 
     def test_violation_blocks(self):
-        r = self.run_sh("echo", "should-not-run", GARMIN_EMAIL="me@x.com")
+        r = self.run_sh("node", "-e", "console.log('should-not-run')", GARMIN_EMAIL="me@x.com")
         self.assertEqual(r.returncode, 1)
         self.assertNotIn("should-not-run", r.stdout)
 
