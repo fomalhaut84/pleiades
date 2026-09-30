@@ -1178,6 +1178,8 @@ grep -o --binary-files=text -- "/Users/sagan/workspace[^\"]*" .next/cache/**/ind
 > **이 배치에 적용되지 않는다.**
 > → 귀결: **하네스 통합(002 단계 2)은 이 배치의 선결 조건**이다 (004 §6 Q20).
 
+> **정정 (2026-09-30 · 006 · #103).** 위 표는 **gitignored 경로(`repos/*`)의 skill·agent 값**이다 — *"gitignore 유무와 무관"* 은 재현되지 않는다. 추적 경로에서는 그 경로의 파일을 읽는 순간 중첩 `CLAUDE.md`·`.claude/rules` 가 지연 로드되고 **중첩 skill 도 발견된다** · gitignored 경로에서도 `CLAUDE.md`·rules 는 지연 로드되고 skill 만 발견되지 않는다 · 시작 시에는 어느 쪽도 로드되지 않는다(아래 *2026-09-30 모노레포 가져오기 실측* 2회차 X10 · 006 ⑧ · 1회 실험 · Claude Code 2.1.285 · agents 미시험). 004 §3-2 에 같은 날 정정 블록. 되돌리기: 문구 (**즉시**).
+
 ## `cp -Rc` (APFS clonefile)
 
 ```bash
@@ -1793,6 +1795,8 @@ ignored 경로를 재는 측정에는 셋 중 하나가 필요하다:
 | 하네스가 실제로 로드·발동되는지 | 정적 측정 불가. 004 §3-2 가 "중첩 `.claude/` 는 로드 안 됨"으로 이미 실측 |
 | auto memory 재측정 | 위 "auto memory 현황" 절 값을 그대로 인용 (fin 126줄/37토픽 · fit 16줄/16토픽) |
 
+> **정정 (2026-09-30 · 006 · #103).** *"004 §3-2 가 '중첩 `.claude/` 는 로드 안 됨' 으로 이미 실측"* 은 gitignored `repos/*` 의 skill·agent 값이다 — 추적 경로와 CLAUDE.md·rules 는 X10(아래 2026-09-30 절)이 다르게 쟀다(006 ⑧). 되돌리기: 문구 (**즉시**).
+
 ---
 
 ## 하네스 참조 그래프 실측 (2026-09-07)
@@ -1985,6 +1989,8 @@ if(Ie(a.CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD)){
 | 그 환경변수를 settings 파일로 고정 가능한지 | **미측정** — CLI 문자열에서 settings `env` 키 미확인 |
 | `permissions.additionalDirectories` 가 `mp()` 목록에 반영되는지 | **미측정** — 별도 접근자. 런타임 검증 필요 |
 | 그 경로의 `.claude/skills`·`agents` 발견 여부 | **미측정** — `--add-dir` **플래그**로는 발견됨이 기존 실측(§"중첩 `.claude/` 는 로드되지 않는다") |
+
+> **정정 (2026-09-30 · 006 · #103).** 인용된 §"중첩 `.claude/` 는 로드되지 않는다" 는 gitignored 조건의 값이다(그 절의 같은 날 정정 · X10 · 006 ⑧). `--add-dir` 운영 자체는 소진됐다(006 U97-9). 되돌리기: 문구 (**즉시**).
 
 > **정정 (2026-09-07 실측).** `004-repo-layout.md` §6 Q20 의 *"회피는 `--add-dir` 를 계속 넘기는 것뿐"* 은
 > **단정할 수 없다.** `permissions.additionalDirectories` 라는 영속 키가 CLI 에 실재한다.
@@ -3543,6 +3549,8 @@ RED 게이트: `send.test.ts` 절단 단언 반전 → `1 failed | 42 passed` ex
 
 **U4 — `next build` 는 DB 를 요구하지 않았다(한정 포함).** 빌드 로그에 prisma 쿼리·연결 오류·`ECONNREFUSED`·`P1001` **0건**("prisma" 문자열 2건은 esbuild `--external:@prisma/client` 에코). 단 로컬 postgres(pid 2348)가 LISTEN 중이었으므로 *조용히 연결에 성공했을 가능성*은 로그만으로 배제하지 못한다 — postgres 를 내리고 재빌드해야 닫힌다(미실행 · 필요 시 후속). 빌드 경고 4건은 기존 코드(`src/lib/ai/claude-advisor.ts` dynamic filesystem access 등) · 이번 변경 무관. 산출물 4종(`.next`·`dist`·`tsconfig.tsbuildinfo`·`next-env.d.ts`) `git check-ignore` 4/4.
 
+> **정정 (2026-09-30 · 006 · #103).** U4 *"`next build` 는 DB 를 요구하지 않았다"* 는 **fit 한정**이다(이 절의 대상이 fit). **fin `next build` 는 스키마가 적용된 DB 가 필요하다** — prerender 가 Prisma 를 호출한다(아래 2026-09-30 절 2회차 X3 · 006 ㉑ · 데이터는 불필요). 되돌리기: 문구 (**즉시**).
+
 커밋 diff(초판 `7b43d6e`): 8파일 · 1524 insertions / 16 deletions.
 
 ## 9. 9-1 사전 리뷰 → PR
@@ -3691,6 +3699,8 @@ cd ~/workspace/pleiades && env CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 cl
 
 → cwd 중첩 `.claude/` 는 자동 로드되지 않지만(004 §3-2) **`--add-dir` 로 명시한 worktree 는 skills + rules/CLAUDE.md 가 로드된다.** 따라서 `claude-with` 가 원본 대신 worktree 를 붙여도 하네스 로딩은 같고, 원본 동기화(G-2 · #27 archive)가 불필요해진다. (`timeout` 은 macOS 에 없다 — Bash 도구 자체 timeout 사용.)
 
+> **정정 · 소진 (2026-09-30 · 006 · #103).** *"cwd 중첩 `.claude/` 는 자동 로드되지 않지만(004 §3-2)"* 은 **시작 시**에 한해 참이다 — 그 경로의 파일을 읽으면 `CLAUDE.md`·rules 는 지연 로드된다(X10 · 006 ⑧). 이 측정이 근거였던 `bin/claude-with` 의 worktree 대상은 소진됐다(006 U97-9 · #101). 되돌리기: 문구 (**즉시**).
+
 ## 6. 원본에 쓰지 않는다 — 2026-09-28 에 원본을 건드린 기록(정정 근거)
 
 | 대상 | 무엇 | 상태 |
@@ -3722,6 +3732,8 @@ ssh <host> 'echo "== shell: $0"; which node npm git; node -v; npm -v; git --vers
 → **node 24.12.0 ≥ 20.19** — 2026-09-28 절의 로컬 EBADENGINE(`@csstools/*` `>=20.19.0`)은 서버에서는 해당 없다. 로컬(20.18.0)만 낮다.
 → 서버는 1대(fin·fit 공용 · 위 운영 프로세스 절).
 → 미측정: 서버에서 `prepare`(클론 + devDeps + `tsc`)가 실제로 도는지 — 1a-3 첫 `npm ci` 에서 관측한다.
+
+> **소진 (2026-09-30 · 006 · #103).** 1a-3 은 서버에 배포하지 않는다(006 원칙 · §4-6 M-5) — 위 미측정 항목은 전환 설계(006 Q60)의 입력으로만 남는다. 이 절의 값은 기록으로 유효하다. 되돌리기: 문구 (**즉시**).
 
 # 2026-09-30 — 모노레포 가져오기 실측 (#97)
 
@@ -3853,6 +3865,8 @@ git -C $S/$r.git diff --name-status dev integration/pleiades
 
 → 가져올 가치: 하네스(fin 10 · fit 19 + `.gitignore` 2줄 제거) · 1a-3 의 `src/` 8 파일(git dep → workspace 참조로 재작성). 1a-2 는 가져올 것 없음.
 
+> **정정 (2026-09-30 · 006 · #103).** 가져오는 대상은 서비스 `dev` 이고 `integration/pleiades` 는 동결이다(006 U97-3) — 하네스 차이분은 가져오지 않는다. 1a-3 참조는 workspace 가 아니라 **`file:../../packages/notify`**(006 U97-12 · ㉒)이고, 소스는 pleiades 에 보존한 패치다(006 §4-6). 되돌리기: 문구 (**즉시**).
+
 ## 못 잰 값
 
 gitleaks 급 스캔(미설치) · 서비스 lock 시드 병합 · workspaces 로 두 앱 `lint/typecheck/test/build`(설치만 · `--ignore-scripts`) · `filter-repo` 대안 · Telegram 409·Garmin 세션(측정 자체가 서비스 영향) · GitHub 원격 크기(push 금지).
@@ -3884,6 +3898,8 @@ gitleaks 급 스캔(미설치) · 서비스 lock 시드 병합 · workspaces 로
 
 → 결정적이고 증분 merge 가 된다. subtree 방식의 경로 이력 단절(log 1 · blame 1)이 없다.
 
+> **정정 (2026-09-30 · 006 · #103).** 위 표의 *"callback 후 남은 한정 없는 `#N` 0 · 0"* 은 틀렸다 — **`/#N` 형식이 fin 3 · fit 3 남는다.** 1차 callback 정규식 `(?<![\w/])` 가 `/` 뒤를 일부러 건너뛰었고, `fin/#N` 류는 렌더에서 링크된다(006 ⑱·⑲ · [A2] R1). 006 §4-2 의 치환 규칙·게이트 (v) 가 이 형식을 포함한다. 되돌리기: 문구 (**즉시**).
+
 ### X3. 스크래치 모노(`workspaces` 없음 · 앱별 lock) 8절 4종 (`scripts/x3*.sh` · `DATABASE_URL=postgresql://none:none@127.0.0.1:1/none`)
 
 | | lint | 타입 | 테스트 | build |
@@ -3911,3 +3927,20 @@ fit 1a-3 대상 6 파일 → **4** 커밋 / 저장소 158. fin 1a-4 대상 19 �
 | 같음, `apps/` 가 gitignored | + CLAUDE.md + rules · **skill 없음** |
 
 → **정정 후보:** 004 §3-2 *"중첩 `.claude/` 미발견"* 은 gitignored 조건의 skill 에 대해서만 재현된다 — CLAUDE.md·rules 는 지연 로드된다. 모노레포에서는 fin 파일을 읽는 순간 fin `CLAUDE.md`·rules 5 가 pleiades 세션에 들어온다.
+
+> **정정 후보 반영 (2026-09-30 · 006 · #103).** 위 정정 후보는 004 §3-2 · 005 · `claude-code-mechanisms.md` 와 이 파일 앞쪽 인용부에 정정 블록으로 반영됐다(006 §9 · M-0). 되돌리기: 문구 (**즉시**).
+
+### [S2] 요약 — 006 이 인용하는 2회차 결과 (추가 2026-09-30 · #103)
+
+이 절은 [S2] = `_workspace/006/01_surveyor_monorepo_r2.md` 의 **결론 표를 옮긴 것**이다. 측정 명령·스크립트 원문은 그 파일과 `_workspace/006/scripts/x*.{sh,py}` 가 정본이고 여기서 다시 적지 않는다. 숫자는 위 X1~X10 표와 006 §3 대장(①~㉗)에 한 번씩만 있다.
+
+| # | 질문 | 결론 (값은 위 표 · 006 대장 참조) |
+|---|---|---|
+| X1 | 서비스 커밋 메시지의 닫기 키워드가 pleiades 이슈를 닫나 | 지금 열린 pleiades 이슈와 겹치는 것 0 · 저장소 한정 참조가 있다 → 006 ⑱ · U97-5 ②③ |
+| X2 | filter-repo 로 경로를 재작성하면 | 결정적 · 증분 merge 성립 · 경로 log/blame 이 서비스와 같다 · **`/#N` 형식은 1차 callback 이 남긴다**(위 X2 정정) → 006 ①④⑱ |
+| X3 | 앱별 lock 스크래치 모노에서 8절 4종 | fit 4/4 · fin 은 build 만 **스키마 DB 필요** · `file:` 참조는 루트 `npm ci` 선행 시 4/4 → 006 ㉑㉒ |
+| X7 | 1a-3·1a-4 대상 파일의 최근 90일 변경 | fin 1a-4 대상이 자주 바뀐다 → 006 ㉓ · §4-6 |
+| X9 | 로컬 postgres · `.env` | 5432 리슨 · `.env` 4곳 존재(내용 미열람) → 006 ㉔ · U97-8 |
+| X10 | 중첩 `CLAUDE.md`·`.claude/` | 시작 시 미로드 · 파일을 읽으면 지연 로드 · skill 은 추적 경로에서만 발견 → 006 ⑧ · I-10 |
+
+**한계([S2] 미측정 절 그대로):** X10 은 모델 자기 보고 · 조건별 1회 · agents 미시험 · GitHub 의 대량 push 키워드 처리 상한과 커밋 참조 타임라인 이벤트는 문서 근거 없음 · 실험 금지 · filter-repo `commit-map` 보존 미측정. filter-repo 버전 고정값은 [S2] 의 `--version` 출력에 [A2] R5 가 pip 버전을 더한 것이다(006 ④).

@@ -116,13 +116,21 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude --add-dir ../other-repo
 - **CLAUDE.md 계층**: 루트에 저장소 전역 규칙, 패키지별 CLAUDE.md 에 스택 고유 규칙
 - 로드 규칙: 작업 디렉터리와 **모든 상위** 디렉터리의 CLAUDE.md 를 시작 시 로드.
   하위 디렉터리 것은 그 디렉터리 파일을 읽을 때 on-demand 로드
+
+  > **정정 (2026-09-30 · 006 · #103) — 실측으로 확인됐고 범위가 더 넓다.** 시작 시에는 하위 `CLAUDE.md` 가 로드되지 않고, 그 디렉터리 파일을 읽으면 **하위 `CLAUDE.md` 와 하위 `.claude/rules` 가 함께 지연 로드**된다(006 ⑧ · measured-facts 2026-09-30 절 X10 · 1회 실험 · Claude Code 2.1.285). 004 §3-2 의 *"중첩 `.claude/` 는 로드되지 않는다"* 는 이 문서와 어긋나 보였으나 gitignored 경로의 skill·agent 값이었다. pleiades 에서는 `apps/finance/` 의 fin 하네스가 이 경로로 들어오며 **효력 없음**으로 다룬다(`.claude/rules/isolation.md` I-10). 되돌리기: 문구 (**즉시**).
+
 - **어디서 시작하느냐가 핵심**: 작업이 한 패키지에 국한되면 **그 패키지 디렉터리에서** 시작.
   루트에서 시작하면 전체 파일 접근 + 하위 CLAUDE.md 가 누적된다
 - `.claude/settings.json` 은 **상위에서 상속되지 않는다.** 각 디렉터리 것이 self-contained 여야 한다
 - `claudeMdExcludes` — 글롭으로 특정 CLAUDE.md·rules 배제. scope 간 배열이 merge 된다
+
+  > **정정 (2026-09-30 · 006 · #103).** `claudeMdExcludes` 는 CLAUDE.md·rules 만 배제하고 **중첩 skill·agent 발견은 막지 못한다** — pleiades 는 보조 수단으로만 쓴다(006 §4-1 ⑤ · I-10). 효과 자체는 미실험(006 U8). 되돌리기: 문구 (**즉시**).
+
 - `permissions.deny` 의 `Read(...)` 규칙으로 생성물·vendor 읽기 차단
 - `worktree.sparsePaths` + `symlinkDirectories` — worktree 를 필요한 디렉터리만 체크아웃, `node_modules` 는 심링크
 - 패키지별 `.claude/skills/` 지원. 스킬이 많아지면 description 이 잘리므로 **짧고 키워드 앞쪽 배치**
+
+  > **정정 (2026-09-30 · 006 · #103).** 중첩 skill 은 **추적되는 경로에서만** 그 경로 파일을 읽은 뒤 발견된다 — gitignored 경로(`repos/*`)에서는 발견되지 않는다(006 ⑧ · X10). 004 §3-2 · measured-facts 의 *"이 배치에 적용되지 않는다"* 는 gitignored 배치에 한정된 값이다. 되돌리기: 문구 (**즉시**).
 
 ## 6. 이 프로젝트에 대한 함의
 
@@ -133,3 +141,5 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude --add-dir ../other-repo
 | 스킬·에이전트 한 벌 | 플러그인 패키징. 에이전트는 원본 삭제 필요 |
 | 한 세션에서 두 저장소 편집 | `--add-dir` + `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1`. 상시 모드로는 부적합 |
 | 세션 저장소까지 한 통 | `CLAUDE_CONFIG_DIR` 필요 — 과함 |
+
+> **정정 (2026-09-30 · 006 · #103).** 위 표 *"한 세션에서 두 저장소 편집"* 행의 `--add-dir` 운영은 pleiades 에서 **소진**됐다(006 U97-9 · `bin/claude-with` 는 #101 에서 `exit 1`). 두 앱은 `apps/*` 로 한 저장소에 들어오고, 그 하네스는 파일을 읽을 때 지연 로드되되 pleiades 세션에서 **효력이 없다**(006 ⑧ · I-10). 되돌리기: 문구 (**즉시**).
