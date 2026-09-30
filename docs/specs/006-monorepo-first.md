@@ -283,7 +283,7 @@ git ls-remote https://github.com/fomalhaut84/myFinance.git refs/heads/dev
 | 항목 | 내용 |
 |---|---|
 | 코드 결정 | 1a-3 계획의 D-1~D-4 · U-3 · U-5 **재사용** — 경로만 `apps/fitness`. src 동일 전제(⑰)는 **M-5 직전 수용 0** 으로 다시 세운다 |
-| 소스 | `fd8b7c5` 의 `src/` 8 파일 diff 를 GitHub 에서 읽기 전용 fetch(`--no-tags`) → `git apply --directory=apps/fitness`. `package.json`·lock 은 버린다. 동작 실측(㉒ · 442 테스트) |
+| 소스 | **pleiades 에 보존한 패치 `_workspace/1a-3/patch/0002·0003`**(`fd8b7c5` 까지 3커밋 `git format-patch` · 동결 브랜치를 읽기 전용 클론해 추출 · PR #98 Codex P2 — 동결 브랜치를 사용자가 정리(Q54)해도 잃지 않는다) → `git am --directory=apps/fitness`(또는 `git apply`). `0001`(`package.json`·lock — git dep)은 버린다. 동작 실측(㉒ · 442 테스트) |
 | 패키지 참조 | **`file:../../packages/notify`** — Q48 소멸 |
 | 선행 | **루트 `npm ci`(`prepare` → `packages/notify/dist`)** — 빠지면 연쇄 실패(㉒). ALT-d **위임 키**(`main`·`types`·`exports`·`files`)만 삭제 후보 · **`prepare`(또는 같은 일을 하는 명시 빌드)는 유지** |
 | 검증 | fit 발송 6건은 전부 봇 프로세스에서 나간다(1a-3 계획 S-1) → **8절 4종 + CI + 봇 기동(L-9 · 검증 봇) 후 검증 채팅 수신**. β2 소멸 |
