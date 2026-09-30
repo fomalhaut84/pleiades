@@ -130,6 +130,21 @@ class DenyTable(unittest.TestCase):
         ("for d in repos/*; do git -C $d status; done", ROOT, "I-11"),
         ('for d in a ~/workspace/myFitness; do git -C "$d" log; done', ROOT, "I-11"),
         ("cd repos/$X && git status", ROOT, "I-11"),
+        # 회귀: #102 사전 리뷰 2회차 critical 1 · major 1 (따옴표 없는 치환이 조각을 쪼갬)
+        ("cd $(git rev-parse --show-toplevel) && git filter-repo --force", ROOT, "I-21"),
+        ("cd `echo /x` && git-filter-repo --force", "/tmp", "I-21"),
+        ("gh issue comment 3 --body $(cat b.txt) -R fomalhaut84/myFinance", ROOT, "I-1"),
+        ("gh issue create --title $(date +%F) --repo fomalhaut84/myFinance -b x", ROOT, "I-1"),
+        ("gh api repos/fomalhaut84/myFinance/issues/$(cat n)/comments -f body=x", ROOT, "I-1"),
+        ("git -C $(pwd)/repos/myFinance status", ROOT, "I-11"),
+        ("git -C `pwd`/repos/myFinance status", ROOT, "I-11"),
+        # 회귀: #102 사전 리뷰 2회차 info (저비용분)
+        ("git push https://user:tok@github.com/fomalhaut84/myFinance.git HEAD", ROOT, "I-1"),
+        ("npx pm2 start ecosystem.config.js", f"{ROOT}/apps/finance", "I-19"),
+        ("npx -y pm2 list", ROOT, "I-3"),
+        ("pm2-runtime start x.js", ROOT, "I-3"),
+        ("sh -s < apps/finance/deploy/deploy.sh", ROOT, "I-19"),
+        ("bash < apps/fitness/deploy/deploy.sh", ROOT, "I-19"),
     ]
 
     def test_denied(self):
@@ -192,6 +207,10 @@ class AllowTable(unittest.TestCase):
         ('git -C "$HOME/workspace/pleiades" status', ROOT),
         ("for f in apps/finance apps/fitness; do git -C $f log -1; done", ROOT),
         ("git -C $UNKNOWN log", ROOT),
+        ("command -v ssh", ROOT),
+        ("git status # then `ssh host`", ROOT),
+        ("echo $(date) && git log -1", ROOT),
+        ("git commit -m \"chore: $(date +%F)\"", ROOT),
     ]
 
     def test_allowed(self):

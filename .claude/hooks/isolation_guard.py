@@ -3,6 +3,8 @@
 
 정본은 .claude/rules/isolation.md(006 §5 I-1~I-21) 다. 이 훅은 **실수 방지**이지 룰의 대체가 아니다 —
 텍스트 매칭이라 임의 변수 치환(`$R`) · `eval` · 스크립트 파일 안의 명령은 보지 못한다. 막히면 우회하지 말고 명령을 다시 쓴다.
+알고 두는 한계: 파이프로 셸에 넘기는 스크립트(`cat x | bash`)는 보지 못한다 · 서브셸 `( cd … )` 의 cwd 가 바깥으로 이어진다
+(보수적 오탐) · cwd 를 알 수 없는 filter-repo 는 막는다(`cd $(mktemp -d)` 포함 — 리터럴 경로나 tools/import 스크립트로).
 
 규약 (Claude Code hooks): stdin 으로 {"tool_name", "tool_input": {"command"}, "cwd"} JSON 을 받는다.
 exit 0 = 통과 · exit 2 = 차단(stderr 가 Claude 에게 간다) · 그 외 = 비차단 오류(사용자에게 보인다).
@@ -24,7 +26,7 @@ RULE_FILE = ".claude/rules/isolation.md"
 # 서비스 저장소 참조 — 소유자·이름이 정확히 같을 때만 (myFinanceTools · someone/myFinance 는 아니다)
 _SVC = r"fomalhaut84/(?:myfinance|myfitness)"
 SERVICE_REF = re.compile(
-    r"(?:(?:https?://)?(?:www\.)?github\.com/|git@github\.com:|ssh://git@github\.com/)?"
+    r"(?:(?:https?://)?(?:[^@/\s]+@)?(?:www\.)?github\.com/|git@github\.com:|ssh://git@github\.com/)?"
     + _SVC + r"(?:\.git)?(?:/.*)?",
     re.IGNORECASE,
 )
@@ -47,6 +49,7 @@ WRAPPERS = {
     "timeout": ({"-s", "-k", "--signal", "--kill-after"}, 1),
     "nice": ({"-n", "--adjustment"}, 0),
     "xargs": ({"-n", "-I", "-L", "-P", "-s", "-d", "-E", "-a"}, 0),
+    "npx": ({"-p", "--package"}, 0),
     "command": (set(), 0), "exec": (set(), 0), "nohup": (set(), 0), "builtin": (set(), 0),
 }
 ENV_VALUE_FLAGS = {"-u", "--unset", "-C", "--chdir"}
@@ -89,35 +92,47 @@ def _prepare(command: str) -> str:
     return re.sub(r"\\\n", " ", "\n".join(out))
 
 
-def _substitutions(text: str) -> list[str]:
-    """작은따옴표 밖의 `$( … )` · 백틱 안쪽 — 따옴표 안이어도 실행되는 코드다."""
-    found, i, n, sq, dq = [], 0, len(text), False, False
+def _substitutions(text: str) -> tuple[list[str], str]:
+    """(작은따옴표 밖 `$( … )` · 백틱의 안쪽 목록, 그 구간을 자리표시로 바꾼 텍스트).
+
+    안쪽은 따옴표 안이어도 실행되는 코드라 따로 검사한다. 바깥에는 자리표시(`$__SUBST__` · `pwd` 는 `$PWD`)를 남겨
+    치환이 조각을 쪼개지 않게 한다 — 쪼개면 `cd $(…)` 가 `cd ~` 로 읽히고 뒤 플래그가 떨어져 나간다
+    (회귀: #102 사전 리뷰 2회차 critical 1 · major 1). 따옴표 밖 `#` 주석은 지운다.
+    """
+    found, out, i, n, sq, dq = [], [], 0, len(text), False, False
     while i < n:
         c = text[i]
         if sq:
             sq = c != "'"
         elif c == "\\":
-            i += 1
+            out.append(text[i:i + 2])
+            i += 2
+            continue
         elif c == "'" and not dq:
             sq = True
         elif c == '"':
             dq = not dq
-        elif c == "$" and text.startswith("(", i + 1) and not text.startswith("((", i + 1):
-            depth, j = 1, i + 2
-            while j < n and depth:
-                depth += {"(": 1, ")": -1}.get(text[j], 0)
-                j += 1
-            found.append(text[i + 2:j - 1])
-            i = j
+        elif c == "#" and not dq and (i == 0 or text[i - 1] in " \t\n;&|("):
+            j = text.find("\n", i)
+            i = n if j < 0 else j
             continue
-        elif c == "`":
-            j = text.find("`", i + 1)
-            j = n if j < 0 else j
-            found.append(text[i + 1:j])
-            i = j + 1
+        elif (c == "$" and text.startswith("(", i + 1) and not text.startswith("((", i + 1)) or c == "`":
+            if c == "`":
+                j = text.find("`", i + 1)
+                j = n if j < 0 else j
+                inner, i = text[i + 1:j], j + 1
+            else:
+                depth, j = 1, i + 2
+                while j < n and depth:
+                    depth += {"(": 1, ")": -1}.get(text[j], 0)
+                    j += 1
+                inner, i = text[i + 2:j - 1], j
+            found.append(inner)
+            out.append("$PWD" if inner.strip() == "pwd" else "$__SUBST__")
             continue
+        out.append(c)
         i += 1
-    return found
+    return found, "".join(out)
 
 
 def _tokens(text: str) -> list[str]:
@@ -132,7 +147,7 @@ def _tokens(text: str) -> list[str]:
 def _segments(tokens: list[str]) -> list[list[str]]:
     segs, cur = [], []
     for t in tokens:
-        if t == "$" or (t and set(t) <= SEPARATOR_CHARS):
+        if t and set(t) <= SEPARATOR_CHARS:
             if cur:
                 segs.append(cur)
             cur = []
@@ -161,6 +176,8 @@ def _unwrap(seg: list[str]) -> tuple[list[str], dict[str, str]]:
                 if a:
                     env[a.group(1)] = a.group(2)
                 i += 2 if seg[i] in ENV_VALUE_FLAGS else 1
+        elif t == "command" and seg[i + 1:i + 2] in (["-v"], ["-V"]):
+            return [], env  # 조회 — 실행하지 않는다
         elif t in WRAPPERS:
             value_flags, positional = WRAPPERS[t]
             i += 1
@@ -383,11 +400,13 @@ def _check_segment(seg: list[str], cwd: str | None, env: dict[str, str], ctx: Co
         return [], cwd
     if name in REMOTE_SHELLS:
         return [Violation("I-3", f"{name} — 서버 접근 금지")], cwd
-    if name == "pm2":
+    if name.startswith("pm2"):
         if any(ECOSYSTEM.search(a) for a in args):
             return [Violation("I-19", "pm2 로 ecosystem.config 실행 — 서비스 배포 설정")], cwd
         return [Violation("I-3", "pm2 — 서버 프로세스 관리자는 쓰지 않는다 (로컬 기동은 앱 엔트리 · 006 L-9)")], cwd
     if name in SHELLS:
+        if "<" in args and args.index("<") + 1 < len(args) and _is_deploy(args[args.index("<") + 1], cwd, ctx):
+            return [Violation("I-19", "서비스 배포 스크립트를 셸 표준입력으로 실행")], cwd
         return _check_shell(args, cwd, senv, ctx), cwd
     if prog in SOURCERS:
         script = next((a for a in args if not a.startswith("-")), None)
@@ -408,11 +427,11 @@ def _check_segment(seg: list[str], cwd: str | None, env: dict[str, str], ctx: Co
 
 
 def _check_text(text: str, cwd: str | None, env: dict[str, str], ctx: Context) -> list[Violation]:
-    prepared = _prepare(text)
+    inners, outer = _substitutions(_prepare(text))
     out = []
-    for inner in _substitutions(prepared):
+    for inner in inners:
         out.extend(_check_text(inner, cwd, dict(env), ctx))
-    for seg in _segments(_tokens(prepared)):
+    for seg in _segments(_tokens(outer)):
         found, cwd = _check_segment(seg, cwd, env, ctx)
         out.extend(found)
     return out
