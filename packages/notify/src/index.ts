@@ -2,7 +2,6 @@
  * @pleiades/notify — 아웃바운드 알림 포트(`Transport`) + 파사드(`Notifier`) + `TelegramTransport`.
  * 설계 정본: pleiades `docs/specs/003-notify-package.md` §4 (L3 · 2층). 1a-1 (#47).
  */
-export const VERSION = '0.0.0';
 
 export type {
   BroadcastResult,
