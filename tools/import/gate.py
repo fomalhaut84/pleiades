@@ -13,13 +13,15 @@ import re
 import sys
 from dataclasses import dataclass
 
+# 006 §4-2 의 다섯 형식 — ASCII 기준(한글이 붙어도 잡는다 · #104 사전 리뷰 major 2) · (v) 는 뒤 경계를 요구하지 않는다(더 엄격)
+_A = re.ASCII | re.IGNORECASE
 PATTERNS = {
-    "i": re.compile(r"[\w.-]+/[\w.-]+#\d+", re.IGNORECASE),
-    "ii": re.compile(r"(https?://)?(www\.)?github\.com/[\w.-]+/[\w.-]+/(issues|pull|discussions)/\d+", re.IGNORECASE),
-    "iii": re.compile(r"(?<![\w.-])[\w.-]+/[\w.-]+/(issues|pull)/\d+", re.IGNORECASE),
-    "iv": re.compile(r"(?<![\w])gh-\d+", re.IGNORECASE),
-    "v": re.compile(r"(?<![A-Za-z0-9_])#\d+\b", re.IGNORECASE),
-    "mention": re.compile(r"(?<![\w.@/+-])@[A-Za-z0-9]"),
+    "i": re.compile(r"[\w.-]+/[\w.-]+#\d+", _A),
+    "ii": re.compile(r"(https?://)?(www\.)?github\.com/[\w.-]+/[\w.-]+/(issues|pull|discussions)/\d+", _A),
+    "iii": re.compile(r"(?<![\w.-])[\w.-]+/[\w.-]+/(issues|pull)/\d+", _A),
+    "iv": re.compile(r"(?<![\w])gh-\d+", _A),
+    "v": re.compile(r"(?<![A-Za-z0-9_])#\d+", _A),
+    "mention": re.compile(r"(?<![\w.@/+-])@[A-Za-z0-9]", _A),
 }
 MAX_REPORT = 20
 

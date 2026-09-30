@@ -104,6 +104,30 @@ class ImportApp(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("가드 A", r.stderr)
 
+    def test_conflict_prints_resume_with_state(self):
+        """회귀: #104 사전 리뷰 major 4 — 충돌이면 멈추고, STATE 갱신을 포함한 이어가기 명령을 낸다."""
+        self.assertEqual(self.run_import("first").returncode, 0)
+        self.merge_pr()
+        Path(self.root, "apps/fitness/a.txt").write_text("pleiades side")
+        git(self.root, "commit", "-q", "-am", "pleiades edit")
+        git(self.root, "checkout", "-q", "dev")
+        git(self.root, "merge", "-q", "--no-ff", "-m", "edit PR", "-")
+        git(self.root, "checkout", "-q", "-b", "chore/1-sync-conflict")
+        commit(self.svc, "a.txt", "service side")
+        r = self.run_import("sync")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("state-set", r.stderr)
+        self.assertIn(f"service_dev={git(self.svc, 'rev-parse', 'dev')}", r.stderr)
+        self.assertEqual(git(self.root, "for-each-ref", "refs/import"), "")
+        self.assertTrue(Path(self.root, ".git", "MERGE_HEAD").exists())
+
+    def test_stale_branch_state_refused(self):
+        self.assertEqual(self.run_import("first").returncode, 0)  # 브랜치에 STATE 가 생겼지만 dev 에는 없다
+        commit(self.svc, "c.txt", "feat")
+        r = self.run_import("sync")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("STATE.json", r.stderr)
+
     def test_refuses_on_dev_and_inside_root_scratch(self):
         git(self.root, "checkout", "-q", "dev")
         self.assertIn("작업 브랜치", self.run_import("first").stderr)

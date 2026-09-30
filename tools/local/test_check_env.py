@@ -69,6 +69,9 @@ class Fit(Base):
             ({"MFDS_API_KEY": "k"}, "MFDS_API_KEY"),
             ({"CLAUDE_BIN": ""}, "CLAUDE_BIN"),
             ({"CLAUDE_BIN": "/bin/sh"}, "CLAUDE_BIN"),
+            ({"CLAUDE_BIN": "claude"}, "CLAUDE_BIN"),  # 상대 이름은 PATH 로 풀린다
+            ({"DOTENV_CONFIG_PATH": "/x/.env"}, "DOTENV_CONFIG_PATH"),
+            ({"DOTENV_CONFIG_OVERRIDE": "true"}, "DOTENV_CONFIG_OVERRIDE"),
         ]
         for patch, key in cases:
             with self.subTest(patch=patch):
@@ -109,8 +112,16 @@ class Fin(Base):
 
     def test_whooing_and_admin_chat(self):
         env = {**self.GOOD, "PATH": f"{self.root}/bin", "WHOOING_WEBHOOK_URL": "https://x",
-               "TELEGRAM_BOT_TOKEN": "222:s", "ADMIN_CHAT_IDS": "777"}
-        self.assertEqual(self.keys("fin", env), {"WHOOING_WEBHOOK_URL", "ADMIN_CHAT_IDS"})
+               "TELEGRAM_BOT_TOKEN": "222:s", "TELEGRAM_ADMIN_CHAT_IDS": "777"}
+        self.assertEqual(self.keys("fin", env), {"WHOOING_WEBHOOK_URL", "TELEGRAM_ADMIN_CHAT_IDS"})
+
+    def test_any_chat_id_key_checked(self):
+        """회귀: #104 사전 리뷰 major 1 — fin 이 읽는 키는 TELEGRAM_ADMIN_CHAT_IDS 다. 이름을 맞히지 말고 *CHAT_ID* 전부."""
+        env = {**self.GOOD, "PATH": f"{self.root}/bin", "TELEGRAM_BOT_TOKEN": "222:s"}
+        for key in ("TELEGRAM_ADMIN_CHAT_IDS", "ADMIN_CHAT_IDS", "REPORT_CHAT_ID", "TELEGRAM_ALLOWED_CHAT_IDS"):
+            with self.subTest(key=key):
+                self.assertIn(key, self.keys("fin", {**env, key: "777"}))
+                self.assertNotIn(key, self.keys("fin", {**env, key: "-100"}))
 
 
 class RunSh(Base):
@@ -134,7 +145,7 @@ class RunSh(Base):
 
     def test_destructive_prisma_refused(self):
         for cmd in (["npx", "prisma", "migrate", "reset"], ["npx", "prisma", "migrate", "dev"],
-                    ["npx", "prisma", "db", "push", "--force-reset"]):
+                    ["npx", "prisma", "db", "push", "--force-reset"], ["psql", "-c", "drop database x"]):
             with self.subTest(cmd=cmd):
                 r = self.run_sh(*cmd)
                 self.assertEqual(r.returncode, 1)

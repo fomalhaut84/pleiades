@@ -48,6 +48,14 @@ git -C "$ROOT" diff --quiet && git -C "$ROOT" diff --cached --quiet || die "plei
 CB_SHA=$(G callback-sha)
 [[ "$CB_SHA" == "$(pin callback)" ]] || die "callback 이 VERSIONS 와 다르다"
 
+# 이전 상태는 머지된 기준(BASE_REF)의 STATE.json 에서 읽는다 — 작업 브랜치가 낡았으면 멈춘다 (006 §4-2 · #104 사전 리뷰 info)
+[[ "$BASE_REF" != origin/dev ]] || git -C "$ROOT" fetch -q origin dev
+BASE_STATE=$(mktemp)
+git -C "$ROOT" show "$BASE_REF:tools/import/STATE.json" > "$BASE_STATE" 2>/dev/null || rm -f "$BASE_STATE"
+if [[ -e "$STATE" || -e "${BASE_STATE:-/nonexistent}" ]]; then
+  cmp -s "$STATE" "${BASE_STATE:-/dev/null}" || die "작업트리 STATE.json 이 $BASE_REF 와 다르다 — $BASE_REF 에서 브랜치를 새로 딴다"
+fi
+rm -f "${BASE_STATE:-}"
 LAST_SVC=$(G state-get "$STATE" "$APP" service_dev)
 PREV_TIP=$(G state-get "$STATE" "$APP" rewritten_tip)
 if [[ "$MODE" == first ]]; then
@@ -60,6 +68,9 @@ fi
 # ---- 스크래치: 읽기 전용 클론 → 재작성 → 게이트
 W=$SCRATCH/$APP-import-$$
 [[ ! -e "$W" ]] || die "$W 가 이미 있다"
+REF=refs/import/$APP
+cleanup() { git -C "$ROOT" update-ref -d "$REF" 2>/dev/null || true; rm -rf "$W"; }
+trap cleanup EXIT
 git clone -q --no-tags --single-branch --branch dev "$SRC" "$W"
 git -C "$W" remote remove origin
 SVC=$(git -C "$W" rev-parse dev)
@@ -75,24 +86,34 @@ TIP=$(git -C "$W" rev-parse dev)
 [[ "$(git -C "$W" rev-parse "dev:$DIR")" == "$SVC_TREE" ]] || die "재작성 트리가 서비스 dev 트리와 다르다"
 
 # ---- pleiades: fetch(리모트 없이 · 태그 없이) → 가드 → 머지 → 상태
-REF=refs/import/$APP
-trap 'git -C "$ROOT" update-ref -d "$REF" 2>/dev/null || true' EXIT
 git -C "$ROOT" fetch -q --no-tags "$W" "+dev:$REF"
 if [[ "$MODE" == sync ]]; then
   G guard-c "$ROOT" "$PREV_TIP" "$BASE_REF"
   G guard-b "$ROOT" "$PREV_TIP" "$REF"
 fi
 FR_VER=$(pin filter-repo-version)
+STATE_ARGS=("service_repo=$REPO" "service_dev=$SVC" "rewritten_tip=$TIP" "filter_repo=$FR_VER" "callback_sha=$CB_SHA" "git=$(git --version)")
+resume_hint() {  # 충돌 뒤 사람이 이어서 할 일 — STATE 를 옛 값으로 남기지 않는다 (#104 사전 리뷰 major 4)
+  {
+    echo "  충돌을 해결한 뒤 (충돌 해결분이 리뷰 범위 · 006 §4-S):"
+    echo "    git -C $ROOT commit --no-edit        # 트레일러가 든 머지 메시지는 MERGE_MSG 에 남아 있다"
+    echo "    test \"\$(git -C $ROOT rev-parse HEAD^2)\" = $TIP"
+    printf '    python3 %q state-set %q %s' "$HERE/guards.py" "$STATE" "$APP"
+    printf ' %q' "${STATE_ARGS[@]}"
+    printf '\n'
+    echo "    git -C $ROOT add tools/import/STATE.json && git -C $ROOT commit -m 'chore(apps): STATE.json $APP (#$ISSUE)'"
+    echo "  포기: git -C $ROOT merge --abort   (서비스 ${SVC:0:12} · 재작성 ${TIP:0:12})"
+  } >&2
+}
 MSG=$(printf 'chore(apps): %s %s dev → %s (#%s)\n\nService-Repo: %s\nService-Dev: %s\nFilter-Repo: %s · callback %s' \
   "$([[ $MODE == first ]] && echo import || echo sync)" "$REPO" "$DIR" "$ISSUE" "$REPO" "$SVC" "$FR_VER" "$CB_SHA")
 MERGE_ARGS=(--no-ff --no-edit -m "$MSG")
 [[ "$MODE" == first ]] && MERGE_ARGS+=(--allow-unrelated-histories)
-git -C "$ROOT" merge -q "${MERGE_ARGS[@]}" "$REF" \
-  || die "머지 충돌 — 해결은 사람이 한다(충돌 해결분이 리뷰 범위 · 006 §4-S). 되돌리기: git -C $ROOT merge --abort"
-[[ "$(git -C "$ROOT" log -1 --format=%P | wc -w | tr -d ' ')" == 2 ]] || die "머지 커밋이 아니다"
+# 머지 커밋 객체는 refs/import 를 지워도 남는다 — 충돌이면 ref 는 정리되지만 TIP 은 MERGE_HEAD 로 남는다
+git -C "$ROOT" merge -q "${MERGE_ARGS[@]}" "$REF" || { resume_hint; die "머지 충돌 — 해결은 사람이 한다"; }
+[[ "$(git -C "$ROOT" rev-parse HEAD^2 2>/dev/null)" == "$TIP" ]] || die "HEAD 가 재작성 tip 을 둘째 부모로 가진 머지 커밋이 아니다"
 
-G state-set "$STATE" "$APP" "service_repo=$REPO" "service_dev=$SVC" "rewritten_tip=$TIP" \
-  "filter_repo=$FR_VER" "callback_sha=$CB_SHA" "git=$(git --version)" >/dev/null
+G state-set "$STATE" "$APP" "${STATE_ARGS[@]}" >/dev/null
 git -C "$ROOT" add tools/import/STATE.json
 git -C "$ROOT" commit -q -m "chore(apps): STATE.json $APP ← ${SVC:0:12} (#$ISSUE)"
 

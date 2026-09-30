@@ -16,10 +16,12 @@ case "$APP" in fin) DIR=finance ;; fit) DIR=fitness ;; *) die "앱은 fin 또는
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=${PLEIADES_ROOT:-$(cd "$HERE/../.." && pwd)}
 CMD=" $* "
+shopt -s nocasematch  # `drop database` 도 잡는다
 # L-1: 공유 인스턴스에서 다른 DB 를 지우거나 shadow DB 를 만드는 명령
 for bad in "migrate reset" "migrate dev" "force-reset" "dropdb" "DROP DATABASE"; do
   [[ "$CMD" != *"$bad"* ]] || die "'$bad' 는 쓰지 않는다 — 로컬 5432 는 사용자 개발 DB 와 공유다 (L-1 · I-14)"
 done
+shopt -u nocasematch
 
 cd "$ROOT/apps/$DIR" || die "$ROOT/apps/$DIR 가 없다 — M-1 전이다"
 export PATH="$ROOT/bin:$PATH"

@@ -144,6 +144,8 @@ class State(unittest.TestCase):
             {"version": 1, "fit": {**ENTRY, "service_repo": "pleiades"}},
             {"version": 1, "fit": {k: v for k, v in ENTRY.items() if k != "git"}},
             {"version": 1, "fit": {**ENTRY, "extra": "x"}},
+            {"version": True, "fit": ENTRY},
+            {"version": 1, "fin": ENTRY},  # fin 항목에 myFitness
             [],
         ]
         for s in bad:

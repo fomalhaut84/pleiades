@@ -26,6 +26,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 APPS = ("fin", "fit")
+SERVICE_REPOS = {"fin": "myFinance", "fit": "myFitness"}
 SHA = re.compile(r"[0-9a-f]{40}")
 STATE_KEYS = {
     "service_repo": re.compile(r"myFinance|myFitness"),
@@ -74,7 +75,7 @@ def guard(name: str, repo: str, older: str, newer: str) -> None:
 # ---------- 상태 파일 ----------
 
 def validate_state(state: object) -> dict:
-    if not isinstance(state, dict) or state.get("version") != 1:
+    if not isinstance(state, dict) or type(state.get("version")) is not int or state["version"] != 1:
         raise UsageError("STATE.json: 최상위는 {\"version\": 1, …} 객체여야 한다")
     for app, entry in state.items():
         if app == "version":
@@ -86,6 +87,8 @@ def validate_state(state: object) -> dict:
         for key, pattern in STATE_KEYS.items():
             if not isinstance(entry[key], str) or not pattern.fullmatch(entry[key]):
                 raise UsageError(f"STATE.json[{app}].{key}: 형식이 틀렸다 ({entry[key]!r})")
+        if entry["service_repo"] != SERVICE_REPOS[app]:
+            raise UsageError(f"STATE.json[{app}].service_repo 는 {SERVICE_REPOS[app]} 여야 한다")
     return state
 
 

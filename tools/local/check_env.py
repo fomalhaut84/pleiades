@@ -29,7 +29,11 @@ MUST_BE_EMPTY = {
     "fin": ("WHOOING_WEBHOOK_URL",),  # 실제 가계부에 기록된다 (L-6)
     "fit": ("GARMIN_EMAIL", "GARMIN_PASSWORD", "MFDS_API_KEY"),  # 서비스 Garmin 세션 · 외부 API (L-5 · L-6)
 }
-CHAT_KEYS = {"fin": ("TELEGRAM_ALLOWED_CHAT_IDS", "ADMIN_CHAT_IDS"), "fit": ("TELEGRAM_ALLOWED_CHAT_IDS",)}
+# 수신자 키 이름을 맞히지 않는다 — fin 은 TELEGRAM_ADMIN_CHAT_IDS 를 읽는다(006 L-4 의 "ADMIN_CHAT_IDS" 는 약칭).
+# 이름에 CHAT_ID 가 든 키 전부를 검증 채팅과 대조한다 (회귀: #104 사전 리뷰 major 1)
+CHAT_KEY = re.compile(r"CHAT_IDS?$|CHAT_ID_", re.IGNORECASE)
+# dotenv 동작을 바꾸는 셸 변수 — prisma.config 의 `dotenv/config` 가 다른 파일을 읽거나 셸 값을 덮게 된다
+DOTENV_CONTROL = ("DOTENV_CONFIG_PATH", "DOTENV_CONFIG_OVERRIDE", "DOTENV_CONFIG_ENCODING", "DOTENV_KEY")
 LINE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
 
 
@@ -109,7 +113,7 @@ def _check_telegram(app: str, env: dict[str, str], bot_ids: set[str], chat_ids: 
         out.append(Problem("TELEGRAM_BOT_TOKEN", "검증 봇 id 허용 목록에 없다 — 서비스 봇이면 409 로 서비스 수신이 끊긴다 (I-4)"))
     elif other_token_id and bot_id == other_token_id:
         out.append(Problem("TELEGRAM_BOT_TOKEN", "다른 앱과 같은 봇이다 — 로컬끼리 409 (L-4)"))
-    for key in CHAT_KEYS[app]:
+    for key in sorted(k for k in env if CHAT_KEY.search(k)):
         extra = _ids(env.get(key, "")) - chat_ids
         if extra:
             out.append(Problem(key, f"검증 채팅이 아닌 id {len(extra)}개 (I-5)"))
@@ -119,8 +123,8 @@ def _check_telegram(app: str, env: dict[str, str], bot_ids: set[str], chat_ids: 
 def _check_advisor(app: str, env: dict[str, str], root: Path) -> list[Problem]:
     if app == "fit":
         path = env.get("CLAUDE_BIN", "")
-        if not path or os.path.exists(path):
-            return [Problem("CLAUDE_BIN", "비어 있지 않은 **없는** 경로여야 한다 — 비우면 PATH 의 claude 로 폴백한다 (L-7)")]
+        if not path.startswith("/") or os.path.exists(path):
+            return [Problem("CLAUDE_BIN", "비어 있지 않은 **없는 절대** 경로여야 한다 — 비우거나 이름만 주면 PATH 로 풀린다 (L-7)")]
         return []
     found = shutil.which("claude", path=env.get("PATH", ""))
     shim = os.path.realpath(root / "bin" / "claude")
@@ -140,6 +144,7 @@ def problems(app: str, env: dict[str, str], *, cwd: Path, root: Path = ROOT, bot
     for f in sorted(app_dir.glob(".env.*")):
         if f.name != ".env.example":
             out.append(Problem(f.name, "Next 가 .env 보다 먼저 읽는다 — 지운다 (L-2)"))
+    out += [Problem(k, "dotenv 동작을 바꾼다 — 셸에서 지운다 (L-2)") for k in DOTENV_CONTROL if k in env]
     out += _check_db(app, env.get("DATABASE_URL", ""))
     out += _check_ports(env)
     out += _check_telegram(app, env, bot_ids, chat_ids, other_token_id)

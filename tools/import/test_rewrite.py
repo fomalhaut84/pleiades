@@ -54,6 +54,17 @@ class RewriteTable(unittest.TestCase):
         ("fin", "color #fff and C# code", "color #fff and C# code"),
         ("fin", "abc#12 word-joined", "abc#12 word-joined"),
         ("fit", "", ""),
+        # 회귀: #104 사전 리뷰 major 2 (한글이 붙은 참조 — 경계는 ASCII 기준)
+        ("fin", "#494에서 수정", "fin#494에서 수정"),
+        ("fit", "(#12번)", "(fit#12번)"),
+        ("fin", "수정GH-12", "수정fin#12"),
+        ("fit", "확인@user", f"확인@{ZW}user"),
+        ("fin", "수정fomalhaut84/myFinance#5", "수정fin#5"),
+        # 회귀: #104 사전 리뷰 major 3 (출력이 자기 게이트에 닫혀 있어야 한다)
+        ("fin", "a/b/c#12", "c#12"),
+        ("fin", "foo/fomalhaut84/myFinance#5", "fin#5"),
+        ("fin", "abc/GH-5", "abc/ fin#5"),
+        ("fin", "#12abc", "fin#12abc"),
     ]
 
     def test_table(self):
@@ -71,6 +82,20 @@ class RewriteTable(unittest.TestCase):
         for app, src, _ in self.CASES:
             with self.subTest(src=src):
                 self.assertEqual(gate.findings(rewrite(src, app)), [])
+
+    def test_property_fuzz_closed_and_idempotent(self):
+        """회귀: #104 사전 리뷰 major 3 — 어떤 입력이든 출력은 게이트를 통과하고 멱등이다."""
+        import random
+        rng = random.Random(104)
+        parts = ["a", "b", "/", "#", "1", "23", "-", ".", ":", "@", "gh-", "GH-", "수", " ", "(", "_",
+                 "fomalhaut84/myFinance", "Owner/Repo", "issues/", "pull/", "discussions/", "https://github.com/",
+                 "www.", "github.com/", "\n", "\u200b"]
+        for _ in range(20000):
+            src = "".join(rng.choice(parts) for _ in range(rng.randint(1, 12)))
+            for app in ("fin", "fit"):
+                out = rewrite(src, app)
+                self.assertEqual(gate.findings(out), [], (src, out))
+                self.assertEqual(rewrite(out, app), out, src)
 
     def test_bytes_roundtrip_keeps_invalid_utf8(self):
         raw = b"fix #3 \xff\xfe tail"
@@ -94,6 +119,9 @@ class GateTable(unittest.TestCase):
         ("fix #82", "v"),
         ("abc/#383", "v"),
         ("@octocat", "mention"),
+        ("#494에서", "v"),
+        ("수정GH-12", "iv"),
+        ("확인@user", "mention"),
     ]
     CLEAN = ["fin#494 fit#3 pleiades#51", "color #fff", "a@b.com", f"@{ZW}octocat", "abc#12"]
 
