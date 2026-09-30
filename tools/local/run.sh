@@ -6,7 +6,7 @@
 # 하는 일: cwd = apps/<app> · 감싼 명령 사전 검사(precheck.py — npm/npx/node 만 · 파괴 명령 · 훅 판정기)
 #         · PATH 맨 앞에 pleiades bin/(claude shim) · 셸의 DATABASE_URL·TELEGRAM_BOT_TOKEN 을 지운다(env -u)
 #         → check_env.py 통과 시에만 실행.
-# 선택 env: OTHER_TOKEN_ID(다른 앱 봇 id — 같은 봇 금지) · PLEIADES_ROOT(테스트용)
+# 선택 env: OTHER_TOKEN_ID(다른 앱 봇 id — 없으면 다른 앱 .env 에서 읽는다 · 같은 봇 금지) · PLEIADES_ROOT(테스트용)
 set -euo pipefail
 
 die() { echo "run.sh: 중단 — $*" >&2; exit 1; }

@@ -147,6 +147,10 @@ def problems(app: str, env: dict[str, str], *, cwd: Path, root: Path = ROOT, bot
     out += [Problem(k, "dotenv 동작을 바꾼다 — 셸에서 지운다 (L-2)") for k in DOTENV_CONTROL if k in env]
     out += _check_db(app, env.get("DATABASE_URL", ""))
     out += _check_ports(env)
+    if other_token_id is None:  # 다른 앱 .env 에서 자동으로 — 넘기지 않아도 같은 봇 둘을 잡는다 (PR #110 Codex P2)
+        other = {"fin": "fit", "fit": "fin"}[app]
+        other_token = parse_dotenv(root / "apps" / APP_DIRS[other] / ".env").get("TELEGRAM_BOT_TOKEN", "")
+        other_token_id = other_token.split(":", 1)[0] or None
     out += _check_telegram(app, env, bot_ids, chat_ids, other_token_id)
     out += [Problem(k, "비워야 한다") for k in MUST_BE_EMPTY[app] if env.get(k)]
     out += _check_advisor(app, env, root)

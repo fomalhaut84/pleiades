@@ -80,6 +80,13 @@ class Fit(Base):
     def test_other_app_same_bot(self):
         self.assertIn("TELEGRAM_BOT_TOKEN", self.keys("fit", GOOD_FIT, other_token_id="111"))
 
+    def test_other_app_same_bot_from_its_env_file(self):
+        """PR #110 Codex P2 — OTHER_TOKEN_ID 를 넘기지 않아도 다른 앱 .env 의 봇과 비교한다."""
+        (self.root / "apps/finance/.env").write_text("TELEGRAM_BOT_TOKEN=111:other\n")
+        self.assertIn("TELEGRAM_BOT_TOKEN", self.keys("fit", GOOD_FIT))
+        (self.root / "apps/finance/.env").write_text("TELEGRAM_BOT_TOKEN=222:other\n")
+        self.assertEqual(self.problems("fit", GOOD_FIT), [])
+
     def test_no_token_is_allowed(self):
         self.assertEqual(self.problems("fit", {**GOOD_FIT, "TELEGRAM_BOT_TOKEN": ""}), [])
 
