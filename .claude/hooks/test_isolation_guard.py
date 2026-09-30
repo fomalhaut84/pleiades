@@ -161,6 +161,20 @@ class DenyTable(unittest.TestCase):
         ("command bash <<EOF\ngh issue create -R fomalhaut84/myFinance -t x\nEOF", ROOT, "I-1"),
         ("sudo -u x /usr/bin/env bash <<'X'\nssh host\nX", ROOT, "I-3"),
         ("cat <<'EOF' | sh\nssh host\nEOF", ROOT, "I-3"),
+        # 회귀: PR #106 Codex P1 2회차 (&&/|| 목록을 지나도 실패한 cd 의 후보를 잃지 않는다)
+        ("cd /definitely-missing && true; git filter-repo --force", ROOT, "I-21"),
+        ("cd /missing && true && true; git filter-repo --force", ROOT, "I-21"),
+        ("cd /missing && true || git filter-repo --force", ROOT, "I-21"),
+        # 회귀: PR #106 Codex P1 2회차 (래퍼의 긴 옵션 값)
+        ("printf 'host\\n' | xargs --max-args 1 ssh", ROOT, "I-3"),
+        ("sudo --user nobody ssh host", ROOT, "I-3"),
+        ("sudo --user=nobody ssh host", ROOT, "I-3"),
+        ("nice --adjustment 5 ssh host", ROOT, "I-3"),
+        ("timeout --signal KILL 5 ssh host", ROOT, "I-3"),
+        ("xargs --delimiter , ssh < f", ROOT, "I-3"),
+        ("env -S 'ssh host'", ROOT, "I-3"),
+        ("env --split-string='git -C repos/myFinance status'", ROOT, "I-11"),
+        ("sudo -D repos/myFinance git status", ROOT, "I-11"),
     ]
 
     def test_denied(self):

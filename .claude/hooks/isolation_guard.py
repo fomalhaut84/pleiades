@@ -45,14 +45,17 @@ SEPARATOR_CHARS = set(";&|()")
 KEYWORDS = {"if", "then", "do", "else", "elif", "while", "until", "!", "{", "}", "time"}
 # 래퍼: 이름 → (값을 받는 플래그, 명령 앞 위치 인자 수)
 WRAPPERS = {
-    "sudo": ({"-u", "-g", "-C", "-D", "-h", "-p", "-r", "-t", "-U"}, 0),
+    # 긴 옵션도 값을 따로 받는다 (`--user x`) — 빠지면 값을 실행 파일로 착각한다 (회귀: PR #106 Codex P1 2회차)
+    "sudo": ({"-u", "-g", "-C", "-D", "-h", "-p", "-r", "-t", "-U", "--user", "--group", "--close-from",
+              "--chdir", "--host", "--prompt", "--role", "--type", "--other-user"}, 0),
     "timeout": ({"-s", "-k", "--signal", "--kill-after"}, 1),
     "nice": ({"-n", "--adjustment"}, 0),
-    "xargs": ({"-n", "-I", "-L", "-P", "-s", "-d", "-E", "-a"}, 0),
+    "xargs": ({"-n", "-I", "-L", "-P", "-s", "-d", "-E", "-a", "--max-args", "--max-lines", "--max-procs",
+               "--max-chars", "--delimiter", "--eof", "--arg-file", "--process-slot-var"}, 0),
     "npx": ({"-p", "--package"}, 0),
     "command": (set(), 0), "exec": (set(), 0), "nohup": (set(), 0), "builtin": (set(), 0),
 }
-ENV_VALUE_FLAGS = {"-u", "--unset", "-C", "--chdir"}
+ENV_VALUE_FLAGS = {"-u", "--unset", "-C", "--chdir", "-S", "--split-string"}
 SHELLS = {"bash", "sh", "zsh", "dash"}
 SHELL_VALUE_FLAGS = {"-o", "+o", "-O", "+O", "--rcfile", "--init-file"}
 SOURCERS = {"source", "."}
@@ -92,17 +95,20 @@ def _prepare(command: str) -> str:
     return re.sub(r"\\\n", " ", "\n".join(out))
 
 
+def _words(text: str) -> list[str]:
+    try:
+        return shlex.split(text)
+    except ValueError:
+        return text.split()
+
+
 def _feeds_shell(line: str, m: re.Match) -> bool:
     """heredoc 을 받는 쪽이 셸이면 본문은 데이터가 아니라 명령이다 — 경로·래퍼가 붙어도(`/bin/bash` ·
     `command bash` · `sudo -u x /usr/bin/env bash`) · 파이프로 셸에 넘겨도(`cat <<X | sh`). 회귀: PR #106 Codex P1"""
     if PIPE_TO_SHELL.search(line[m.end():]):
         return True
     consumer = re.split(r"[;&|(]", line[:m.start()])[-1]
-    try:
-        words = shlex.split(consumer)
-    except ValueError:
-        words = consumer.split()
-    argv = _unwrap(words)[0]
+    argv = _unwrap(_words(consumer))[0]
     return bool(argv) and os.path.basename(argv[0]) in SHELLS
 
 
@@ -206,6 +212,17 @@ def _unwrap(seg: list[str]) -> tuple[list[str], dict[str, str], str | None]:
                     chdir = f.split("=", 1)[1]
                 elif f.startswith("-C") and len(f) > 2:
                     chdir = f[2:]
+                if f in ("-S", "--split-string") and i + 1 < len(seg):
+                    split, rest = seg[i + 1], seg[i + 2:]
+                elif f.startswith("--split-string="):
+                    split, rest = f.split("=", 1)[1], seg[i + 1:]
+                elif f.startswith("-S") and len(f) > 2:
+                    split, rest = f[2:], seg[i + 1:]
+                else:
+                    split, rest = None, []
+                if split is not None:  # `env -S 'cmd args'` — 문자열이 곧 명령이다
+                    seg = seg[:i] + _words(split) + rest
+                    continue
                 i += 2 if f in ENV_VALUE_FLAGS else 1
         elif t == "command" and seg[i + 1:i + 2] in (["-v"], ["-V"]):
             return [], env, chdir  # 조회 — 실행하지 않는다
@@ -213,7 +230,12 @@ def _unwrap(seg: list[str]) -> tuple[list[str], dict[str, str], str | None]:
             value_flags, positional = WRAPPERS[os.path.basename(t)]
             i += 1
             while i < len(seg) and seg[i].startswith("-"):
-                i += 2 if seg[i] in value_flags else 1
+                f = seg[i]
+                if os.path.basename(t) == "sudo" and f in ("-D", "--chdir") and i + 1 < len(seg):
+                    chdir = seg[i + 1]
+                elif os.path.basename(t) == "sudo" and f.startswith("--chdir="):
+                    chdir = f.split("=", 1)[1]
+                i += 2 if f in value_flags else 1
             i += positional
         else:
             break
@@ -462,14 +484,14 @@ def _check_segment(seg: list[str], cwd: str | None, env: dict[str, str], ctx: Co
 
 def _check_text(text: str, cwd: str | None, env: dict[str, str], ctx: Context) -> list[Violation]:
     """cwd 는 값 하나가 아니라 **가능한 후보들**로 추적한다 — 후보 중 하나라도 위반이면 위반이다.
-    `&&` 는 cd 성공 뒤만 · `;` 는 cd 실패도 이어지므로 전·후 둘 다 · `||` `|` `&` 는 전만(실패 분기 · 서브셸) ·
-    `( … )` 는 닫힐 때 복원한다. 회귀: PR #106 Codex P1 (`cd /missing || git filter-repo`)."""
+    `&&` 는 앞 명령이 만든 cwd 만 · `;` `||` `|` `&` 는 그 `;` 목록 안에서 가능했던 cwd 전부(cd 실패 · 서브셸) ·
+    `( … )` 는 닫힐 때 복원한다. 회귀: PR #106 Codex P1 ×2 (`cd /missing || …` · `cd /missing && true; …`)."""
     inners, outer = _substitutions(_prepare(text))
     out = []
     for inner in inners:
         out.extend(_check_text(inner, cwd, dict(env), ctx))
     cur: list[str | None] = [cwd]
-    before, after, stack = cur, cur, []
+    after, seen, stack = cur, list(cur), []  # seen = 이 목록(`;` 사이)에서 가능했던 모든 cwd
     for kind, item in _stream(_tokens(outer)):
         if kind == "seg":
             news = []
@@ -477,19 +499,21 @@ def _check_text(text: str, cwd: str | None, env: dict[str, str], ctx: Context) -
                 found, new = _check_segment(item, c, env, ctx)
                 out.extend(found)
                 news.append(new)
-            before, after = cur, list(dict.fromkeys(news))
+            after = list(dict.fromkeys(news))
+            seen = list(dict.fromkeys(seen + after))
             cur = after
         elif item == "&&":
-            cur = after
+            cur = after  # 앞 명령이 성공했을 때만 — 그 명령이 만든 cwd
         elif item in (";", ";;"):
-            cur = list(dict.fromkeys(before + after))
+            cur = seen = list(seen)  # 앞 목록의 어느 지점에서든 끝났을 수 있다
         elif item in ("||", "|", "|&", "&"):
-            cur = before
+            cur = list(seen)  # 실패 분기 · 서브셸 — 목록 안에서 가능했던 모든 cwd
         elif item == "(":
-            stack.append(cur)
+            stack.append((cur, seen))
+            seen = list(cur)
         elif item == ")":
-            cur = stack.pop() if stack else cur
-            before = after = cur
+            cur, seen = stack.pop() if stack else (cur, seen)
+            after = cur
     return out
 
 
