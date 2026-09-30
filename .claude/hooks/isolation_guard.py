@@ -224,6 +224,15 @@ def _unwrap(seg: list[str]) -> tuple[list[str], dict[str, str], str | None]:
                     seg = seg[:i] + _words(split) + rest
                     continue
                 i += 2 if f in ENV_VALUE_FLAGS else 1
+        elif t == "npm" and seg[i + 1:i + 2] == ["exec"]:
+            seg = seg[:i] + ["npx"] + seg[i + 2:]  # npm exec = npx
+        elif os.path.basename(t) == "npx" and any(
+                f in ("-c", "--call") or f.startswith("--call=") for f in seg[i + 1:] if f.startswith("-")):
+            # `npx -c '<cmd>'` — 문자열이 곧 명령이다 (회귀: PR #106 Codex P1 3회차)
+            j = next(k for k in range(i + 1, len(seg)) if seg[k] in ("-c", "--call") or seg[k].startswith("--call="))
+            call, rest = ((seg[j].split("=", 1)[1], seg[j + 1:]) if "=" in seg[j]
+                          else (seg[j + 1] if j + 1 < len(seg) else "", seg[j + 2:]))
+            seg = seg[:i] + _words(call) + rest
         elif t == "command" and seg[i + 1:i + 2] in (["-v"], ["-V"]):
             return [], env, chdir  # 조회 — 실행하지 않는다
         elif os.path.basename(t) in WRAPPERS:
@@ -323,7 +332,7 @@ def _check_gh_api(args: list[str]) -> list[Violation]:
             endpoint = t
         i += 1
 
-    if endpoint == "graphql":
+    if endpoint and re.fullmatch(r"(?:https?://api\.github\.com)?/?graphql", endpoint, re.IGNORECASE):  # 회귀: PR #106 Codex P1 3회차
         if any(MUTATION.search(a) for a in args):
             return [Violation("I-1", "gh api graphql mutation — 경로 없이 node id 로 서비스 저장소에 쓸 수 있다")]
         if file_input:
@@ -346,7 +355,7 @@ def _check_gh(args: list[str], env: dict[str, str]) -> list[Violation]:
         elif t.startswith("--repo="):
             refs.append(t.split("=", 1)[1])
         elif t.startswith("-R") and len(t) > 2:
-            refs.append(t[2:])
+            refs.append(t[2:].removeprefix("="))  # -R=owner/repo (회귀: PR #106 Codex P1 3회차)
         else:
             rest.append(t)
         i += 1
@@ -441,7 +450,8 @@ def _check_segment(seg: list[str], cwd: str | None, env: dict[str, str], ctx: Co
     if prog in ("cd", "pushd"):
         if args[:1] == ["-"]:
             return [], None
-        target = args[0] if args else "~"
+        dirs = [a for a in args if not a.startswith("-") or a == "-"]  # cd -P/-L/-e/-- 옵션 건너뛰기 (회귀: PR #106 Codex P1 3회차)
+        target = dirs[0] if dirs else "~"
         new = _resolve(target, cwd, ctx)
         if new is None and _frozen_raw(target, cwd, env, ctx):
             new = f"{ctx.root}/repos/_var_"  # 동결 경로로 들어간 것만은 안다

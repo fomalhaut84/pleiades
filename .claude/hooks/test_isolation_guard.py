@@ -175,6 +175,15 @@ class DenyTable(unittest.TestCase):
         ("env -S 'ssh host'", ROOT, "I-3"),
         ("env --split-string='git -C repos/myFinance status'", ROOT, "I-11"),
         ("sudo -D repos/myFinance git status", ROOT, "I-11"),
+        # 회귀: PR #106 Codex P1 3회차
+        ("gh api /graphql -f query='mutation { x }'", ROOT, "I-1"),
+        ("gh api https://api.github.com/graphql --input q.json", ROOT, "I-1"),
+        ("gh issue create -R=fomalhaut84/myFinance -t x -b y", ROOT, "I-1"),
+        ("cd -P repos/myFinance && git status", ROOT, "I-11"),
+        ("cd -L -- repos/myFinance && git status", ROOT, "I-11"),
+        ("npx -c 'ssh host'", ROOT, "I-3"),
+        ("npx --call='gh issue close 1 -R fomalhaut84/myFinance'", ROOT, "I-1"),
+        ("npm exec -c 'ssh host'", ROOT, "I-3"),
     ]
 
     def test_denied(self):
