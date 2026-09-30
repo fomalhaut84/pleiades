@@ -3700,3 +3700,25 @@ cd ~/workspace/pleiades && env CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 cl
 | fit 원본 | myFitness#494 하네스 tracked 화 + Codex 4라운드 스킬 정정 | **닫음**(머지 안 함) · 원본 하네스는 PR 전 판(`0f4d141` 트리)으로 ignored 복원 · 사본 `_workspace/72/backup/` 2개 |
 | fit 원본 하네스 | #67 `git archive` 1파일 동기화 | 실행됨 · 마지막 archive 동기화 |
 
+# 2026-09-30 — Q45 서버 측정 (#91 · 1a-3 선결)
+
+**사용자가 실행**(서버 접속은 사용자 승인 사항 · 003 Q45). 배포(`appleboy/ssh-action`)와 같은 **비대화형 ssh** 조건이다 — nvm 등이 있으면 대화형 셸과 node 가 달라질 수 있어서다. 호스트·계정은 PUBLIC 저장소라 적지 않는다.
+
+```bash
+ssh <host> 'echo "== shell: $0"; which node npm git; node -v; npm -v; git --version; echo "engine-strict: $(npm config get engine-strict)"; curl -sS -m 10 -o /dev/null -w "github https: %{http_code}\n" https://github.com; GIT_TERMINAL_PROMPT=0 timeout 20 git ls-remote https://github.com/fomalhaut84/pleiades.git HEAD && echo "git https: OK"'
+```
+
+| 항목 | 값 |
+|---|---|
+| 셸 (`$0`) | `zsh` (비대화형) |
+| node | `/usr/local/bin/node` **v24.12.0** |
+| npm | `/usr/local/bin/npm` 11.6.2 |
+| git | `/usr/bin/git` 2.53.0 |
+| `npm config get engine-strict` | `false` |
+| `curl https://github.com` | **200** |
+| `git ls-remote https://github.com/fomalhaut84/pleiades.git HEAD` | `8bd0cf9…` (= pleiades `dev` HEAD) · **OK** |
+
+→ **https 아웃바운드 열림** — `git+https://` 의존성은 자격 증명 없이 받힌다(003 §1-1 정정 확정 · deploy key 불필요).
+→ **node 24.12.0 ≥ 20.19** — 2026-09-28 절의 로컬 EBADENGINE(`@csstools/*` `>=20.19.0`)은 서버에서는 해당 없다. 로컬(20.18.0)만 낮다.
+→ 서버는 1대(fin·fit 공용 · 위 운영 프로세스 절).
+→ 미측정: 서버에서 `prepare`(클론 + devDeps + `tsc`)가 실제로 도는지 — 1a-3 첫 `npm ci` 에서 관측한다.
