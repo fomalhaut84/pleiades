@@ -16,6 +16,11 @@ on:
       - 'packages/notify/package.json'
       - 'packages/notify/package-lock.json'
 
+# 조회 → 생성이 겹치면 이슈가 중복 생성된다 — 실행을 직렬화한다 (PR #93 Codex P2)
+concurrency:
+  group: security-audit
+  cancel-in-progress: false
+
 jobs:
   audit:
     name: Security Vulnerability Scan
@@ -99,7 +104,11 @@ jobs:
             for (const [label, file] of [['루트', 'audit-_.json'], ['packages/notify', 'audit-packages_notify.json']]) {
               try {
                 const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
-                for (const [pkg, data] of Object.entries(parsed.vulnerabilities ?? {}).slice(0, 10)) {
+                // 심각도 순으로 정렬한 뒤 자른다 — 삽입 순서로 자르면 critical 이 빠질 수 있다 (PR #93 Codex P2)
+                const rank = { critical: 0, high: 1, moderate: 2, low: 3, info: 4 };
+                const sorted = Object.entries(parsed.vulnerabilities ?? {})
+                  .sort(([, a], [, b]) => (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9));
+                for (const [pkg, data] of sorted.slice(0, 10)) {
                   lines.push(`- **${pkg}** (${data.severity}) — ${label} · \`${data.range ?? 'N/A'}\` · ${data.via?.[0]?.url ?? 'N/A'}`);
                 }
               } catch (e) {
