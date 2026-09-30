@@ -246,6 +246,7 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 | **`apps/finance`** (M-2 이후 · cwd `apps/finance`) | `npm run lint` | **`npx tsc --noEmit`** | **`npm run test:run`** | `npm run build` — **선행: 로컬 `pleiades_fin` + `npx prisma migrate deploy`**(prerender 가 Prisma 를 부른다 · 006 ㉑) |
 | **`apps/fitness`** (M-2 이후 · cwd `apps/fitness`) | `npm run lint` | `npm run typecheck` | `npm run test` | `npm run build` — **선행: `npx prisma generate`**(더미 `DATABASE_URL` 로 충분) |
 | **`.claude/hooks`** (훅 스크립트를 바꿀 때 · #102) | 해당 없음 | 해당 없음 (Python 표준 라이브러리 · 타입체커 미도입) | **`python3 -m unittest discover -s .claude/hooks`** — 허용·거부 표. CI 미포함(006 §9-3 CI 무변경) — 로컬에서 반드시 돌린다 | 해당 없음 |
+| **`tools/`** (가져오기·로컬 헬퍼를 바꿀 때 · #104) | 해당 없음 | 해당 없음 (Python 표준 라이브러리 · 타입체커 미도입) | **`python3 -m unittest discover -s tools/import && python3 -m unittest discover -s tools/local`** — 끝까지 테스트(`test_import_app`)는 `FILTER_REPO=<venv>/bin/git-filter-repo` 가 있어야 돈다(없으면 건너뜀 — **callback·`import_app.sh` 를 바꿨으면 반드시 켜고 돌린다**). CI 미포함 | 해당 없음 |
 
 > **정정 (2026-09-30 · 006 · #101 · M-0).** **`repos/*` 두 행은 소진이다** — worktree 는 동결됐고 pleiades 는 그 안에서 명령을 돌리지 않는다(`isolation.md` I-11). 후신은 **`apps/*` 두 행**이고 명령은 서비스 CI 와 같다(006 ㉖ — 단 fin 서비스 CI 에는 테스트 단계가 없다 · 필수 여부는 006 Q52·Q57 → M-3).
 > **공통 선행:** 앱별 `npm ci`(앱별 lock · workspaces 없음 · 006 U97-12). **M-5 이후에는 두 행 모두 루트 `npm ci` 가 먼저다** — `prepare` 가 `packages/notify/dist` 를 만들지 않으면 fit typecheck·test·build 가 연쇄 실패한다(006 ㉒).

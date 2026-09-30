@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "tools/import/STATE.json — 가드 B·C 의 입력(이전 재작성 tip). 머지 이력이 아니라 추적 파일에서 읽는다(squash 에도 남는다 · PR #98 Codex P1). M-1 이 만들고 매 수용이 같은 PR 의 별도 커밋으로 갱신한다. 검증 구현은 guards.py validate_state (의존성 없이).",
+  "type": "object",
+  "required": ["version"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1 },
+    "fin": { "$ref": "#/$defs/app" },
+    "fit": { "$ref": "#/$defs/app" }
+  },
+  "$defs": {
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service_repo", "service_dev", "rewritten_tip", "filter_repo", "callback_sha", "git"],
+      "properties": {
+        "service_repo": { "enum": ["myFinance", "myFitness"] },
+        "service_dev": { "type": "string", "pattern": "^[0-9a-f]{40}$", "description": "마지막으로 수용한 서비스 dev 원 SHA — 가드 A 입력 · 가드 C 복구 시 재구성 기준" },
+        "rewritten_tip": { "type": "string", "pattern": "^[0-9a-f]{40}$", "description": "그 SHA 를 재작성한 tip — 가드 B·C 입력" },
+        "filter_repo": { "type": "string", "description": "git-filter-repo --version 출력" },
+        "callback_sha": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "git": { "type": "string", "pattern": "^git version " }
+      }
+    }
+  }
+}

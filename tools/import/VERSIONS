@@ -1,0 +1,7 @@
+# 가져오기 도구 고정값 (#104 · 006 U97-10 Q66 · §4-2 "callback·트레일러·버전은 M-1 전에 고정")
+# 바뀌면 재작성 SHA 가 전부 바뀐다 → 가드 B 실패 → 전 이력 재병합(중간) + 이력 중복(편도). 올리지 않는 것이 기본(006 §8).
+# import_app.sh 가 실행 전에 실제 값과 대조하고, 다르면 멈춘다. callback 줄은 test_guards.VersionsPin 이 대조한다.
+git-filter-repo==2.47.0
+filter-repo-version: a40bce548d2c
+git: git version 2.50.1 (Apple Git-155)
+callback: 7b5564271eee579dbee0a7f430ced63cdab870cd1b4c175974b53b4161d337e7
