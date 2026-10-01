@@ -1,0 +1,150 @@
+name: Apps CI
+
+# apps/finance · apps/fitness 를 서비스 CI 와 같은 단계로 돌린다 (#120 · 006 §4-4 M-3 · workflow.md 8절 apps/* 행).
+# - apps/*/.github/ 는 옮기지 않는다 (isolation.md I-9) — 이 파일이 그 단계를 옮겨 적은 것이다(006 ㉖)
+# - secrets 0 (I-9) · DB 는 러너 안 postgres 컨테이너뿐 (I-7)
+# - 워크플로우 수준 paths 필터를 쓰지 않는다 — 필수 체크가 트리거되지 않은 PR 에서 "Expected" 로 막힌다 (006 §4-4)
+# - 필수 체크(Q52 · 2026-10-01): apps-fin · apps-fit. apps-fin-test 는 서비스 CI 에 없는 추가분이라 비필수.
+#   job 이름을 바꾸면 dev·main ruleset 의 required_status_checks 도 함께 바꾼다.
+# - apps/* 서비스 결함으로 실패하면 고치지 않는다 (Q57) — 그 체크를 비필수로 내리고 pleiades 이슈에 기록한다.
+# - M-5 이후 fit job 은 루트 npm ci 를 먼저 한다 (006 ㉒) — 지금은 apps/fitness 가 packages/notify 를 참조하지 않는다.
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apps-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fin:
+    name: apps-fin
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: pleiades_fin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/pleiades_fin
+    defaults:
+      run:
+        working-directory: apps/finance
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: apps/finance/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+
+  fin-test:
+    # 서비스 fin CI 에는 테스트 단계가 없다 — 추가하되 필수로 올리지 않는다 (006 §4-4 · Q52 · Q57)
+    name: apps-fin-test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: pleiades_fin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/pleiades_fin
+    defaults:
+      run:
+        working-directory: apps/finance
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: apps/finance/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+      - name: Test
+        run: npm run test:run
+
+  fit:
+    name: apps-fit
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: pleiades_fit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/pleiades_fit
+    defaults:
+      run:
+        working-directory: apps/fitness
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: apps/fitness/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npx tsc --noEmit   # 서비스 fit CI 그대로 (= npm run typecheck)
+      # 서비스 fit CI 와 같다 — vitest + 회귀 verify 스크립트 · DB 불필요 · build 앞에서 빠르게 실패
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build

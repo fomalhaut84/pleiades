@@ -372,6 +372,11 @@ git ls-remote https://github.com/fomalhaut84/myFinance.git refs/heads/dev
 | **Q60** | 전환(cutover) — 배포 경로 · DB 이전 · 서비스 저장소 보관 · 002 Q2 | 원칙이 풀리는 유일한 지점 · 첫 릴리즈(#88) | **별도 스펙(007 가칭)** — M-6 이후 | 낮음(지금) · **필수(첫 릴리즈 전)** |
 | **Q61** | 1b-2 스키마 변경(003 Q12) | 전환 편도 누적 · 수용 충돌 | **전환 설계 전 스키마 무변경**(003 Q12 권고 D-a 와 정합) | 낮음 — M-6 |
 
+> **확정 (2026-10-01 · #120 · M-3 · 사용자 결정 — 둘 다 권고안).**
+> **Q52 → 서비스 CI 와 같은 단계만 필수.** `.github/workflows/apps-ci.yml` 의 `apps-fin`·`apps-fit` job(서비스 CI 단계 그대로 · 러너 postgres:16 · secrets 0 · 워크플로우 `paths` 필터 없음)을 dev·main ruleset 필수 체크에 더한다(머지 후 · 사용자 확인 뒤). 서비스 fin CI 에 없는 vitest 는 별 job `apps-fin-test` 로 **비필수**.
+> **Q57 → 고치지 않는다.** `apps/*` 의 서비스 결함은 수용으로 고쳐져 온다. pleiades CI 를 막으면 그 체크를 비필수로 내리고 pleiades 이슈에 기록한다. 예외는 M-5 대상 파일. `security-audit.yml` 은 이미 `apps/*` lock 을 포함하지 않는다(무변경).
+> 되돌리기: 워크플로우 파일 삭제 · ruleset 에서 체크 제거 — **즉시**.
+
 ---
 
 ## 8. 제외 사항

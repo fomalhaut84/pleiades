@@ -253,6 +253,8 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 > **DB 는 `pleiades_` 접두 로컬 DB 만** · 실효 env 사전 검사 후(`isolation.md` I-14 · 006 L-1·L-2). 되돌리기: 문구 (**즉시**).
 >
 > **실행 방법 (2026-10-01 · M-2 · #118).** `apps/*` 행의 명령은 전부 **`tools/local/run.sh <fin|fit> -- <명령>`** 으로 돌린다(cwd · 실효 env 검사 · claude shim). 처음 한 번: `python3 tools/local/write_env.py <fin|fit>`(루트 템플릿 → `apps/<app>/.env` · 덮어쓰지 않음) · fin 은 `python3 tools/local/db.py create fin`(삭제는 `db.py drop fin --confirm pleiades_fin`). 첫 통과 실측은 `measured-facts.md` *2026-10-01 — M-2*. 되돌리기: 문구 (**즉시**).
+>
+> **CI (2026-10-01 · M-3 · #120).** 같은 단계가 `.github/workflows/apps-ci.yml` 에서 돈다 — **필수 = `apps-fin`·`apps-fit`**(서비스 CI 단계 그대로) · **`apps-fin-test` 는 비필수**(서비스 CI 에 없는 추가분 · 006 Q52 확정). `apps/*` 서비스 결함으로 실패하면 고치지 않고 그 체크를 비필수로 내린 뒤 pleiades 이슈에 기록한다(006 Q57 확정 · `isolation.md` 파생 규칙). 로컬 8절과 달리 CI 에는 `.env` 가 없다 — `DATABASE_URL` 만 러너 postgres 로. 되돌리기: 문구 (**즉시**).
 
 전부 통과해야 다음 단계. 실패 시 수정 후 재실행. **건너뛰기 금지.**
 
