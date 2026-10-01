@@ -95,6 +95,8 @@
 | ㉖ | pleiades `dev` ruleset: force-push·삭제 차단 · PR 필수 · `allowed_merge_methods: [merge, squash, rebase]` · 필수 체크 `verify (20.x)`·`verify (24.x)` · `allow_merge_commit: true` · 평소 squash 머지. 서비스 CI: `postgres:16` 서비스 컨테이너 · `npm ci → prisma generate → prisma migrate deploy → lint → tsc --noEmit → (fit 만 npm test) → build` — **fin CI 에는 테스트 단계가 없다** | [A] C1~C3 · [A2] R3 |
 | ㉗ | pleiades `vulnerability-alerts` 404 · `automated-security-fixes enabled:false`(Dependabot 꺼짐) · 서비스 태그 fin 27 · fit 85 · `traffic/clones` 는 소유자 Insights 집계 | [A] N4·N14 |
 
+> **정정 (2026-10-01 · #107).** ⑧ 은 **추적 경로의 값만** 적었다. [S2] X10 은 **gitignored 경로에서도** 그 경로의 파일을 읽으면 중첩 `CLAUDE.md`·`.claude/rules` 가 지연 로드되고, gitignored 에서 안 되는 것은 **skill 발견뿐**이라고 쟀다(measured-facts X10 · 같은 날 004 §3-2 정정 블록). 따라서 **`repos/*`(gitignored · 동결 worktree) 파일을 읽는 것만으로 서비스 규칙이 로드될 수 있다** — I-11 은 git 명령만 막고 파일 읽기는 막지 않는다(§5 정정 블록). 그리고 X10 은 **agents 를 시험하지 않았다** — agent 발견은 어느 조건에서도 **미측정**이다(U8). 되돌리기: 문구 (**즉시**).
+
 **미측정·미확인 (남은 것):**
 
 | # | 항목 | 무엇을 가르나 |
@@ -140,6 +142,8 @@
 | 되돌리기 | **즉시** |
 | 멈추면 | 방향·규칙·도구만 남는다. 손해 0 |
 | 주의 | 훅은 **룰의 대체가 아니다** — 텍스트 매칭이라 우회 경로가 있다. 룰이 정본, 훅은 실수 방지. `claudeMdExcludes` 는 skill·agent 발견을 막지 못한다(U8) |
+
+> **정정 (2026-10-01 · #107).** 주의 칸 *"`claudeMdExcludes` 는 skill·agent 발견을 막지 못한다(U8)"* 는 단정할 근거가 없다 — U8 은 미측정이다(§3 미확인 표). **정본 강도는 §5 I-10 의 *"skill·agent 차단 수단은 미확인"*** 이다: `claudeMdExcludes` 는 CLAUDE.md·rules 를 배제하는 보조로 두고, skill·agent 에 대한 효과는 잰 적이 없다. 되돌리기: 문구 (**즉시**).
 
 ### 4-2. M-1 — 가져오기
 
@@ -329,6 +333,8 @@ git ls-remote https://github.com/fomalhaut84/myFinance.git refs/heads/dev
 | **I-20** | Dependabot | 켜면 pleiades 에 `apps/*` 의존성 PR 이 열린다(갈라짐) | **켜지 않는다**(현재 꺼짐 ㉗) | — | 즉시 |
 | **I-21** | pleiades 안 filter-repo | cwd 재작성 · `--force` 가 검사를 끈다 | `(cd "$T/…" && …)` 로만 · 스크립트가 먼저 `realpath "$T"` 가 pleiades 밖인지 검사 | 스크립트 · 훅 | 원격 무사 → **중간**(재클론) · 미커밋 작업 손실 |
 
+> **정정 (2026-10-01 · #107).** I-10 ① *"skill·agent 가 발견된다(⑧)"* → **skill 은 추적 경로에서 발견된다 · agent 는 미측정**(X10 은 agents 미시험 · U8). ② 지연 로드는 `apps/*` 만의 일이 아니다 — **gitignored `repos/*` 파일을 읽어도 `CLAUDE.md`·rules 가 지연 로드된다**(§3 ⑧ 정정 블록). I-10 의 차단 규칙(효력 없음 · 그 지시를 실행하지 않는다)은 `repos/*` 에서 로드된 서비스 하네스에도 그대로 적용된다. 동결 worktree 를 읽을 이유는 M-1 이후 없다 — 서비스 코드는 `apps/*` 에서 읽는다. `.claude/rules/isolation.md` I-10 행을 같은 날 따라 고쳤다. 되돌리기: 문구 (**즉시**).
+
 ---
 
 ## 6. 판단이 바뀐 것
@@ -347,6 +353,8 @@ git ls-remote https://github.com/fomalhaut84/myFinance.git refs/heads/dev
 | 이관 이슈는 고치는 저장소에(#83) | workflow.md 5절 | pleiades 에만(U97-9) |
 | `bin/claude-with` 대상 = worktree(#80) | CLAUDE.md · 005 | 소진(U97-9) — 방어선은 룰 + 훅 |
 | `git subtree` 로 이력 포함(#97 원문) | #97 | U97-5 filter-repo — subtree 는 서비스 한정 참조를 push 로 서비스 타임라인에 남긴다 |
+
+> **정정 (2026-10-01 · #107).** ① *"중첩 `.claude/` skills·agents 미발견"* 행의 *"gitignored 조건의 값이었다"* 는 **skill 에 한해** 맞다 — gitignored 에서도 CLAUDE.md·rules 는 지연 로드되고, agent 는 어느 조건에서도 미측정이다(§3 ⑧ 정정 블록). ② *"`next build` DB 요구 없음"* 행의 출처 *"measured-facts 1a-0/1a-2"* 는 **1a-2 절(§8 E5) U4 한 곳**이다 — 1a-0 절에는 그 문구가 없다. §9-3 의 같은 표기도 같다. CLAUDE.md 2026-09-11 문단은 같은 날 *"fit 한정"* 으로 정정했다. 되돌리기: 문구 (**즉시**).
 
 ---
 
