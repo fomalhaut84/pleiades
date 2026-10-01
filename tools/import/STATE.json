@@ -1,0 +1,19 @@
+{
+  "fin": {
+    "callback_sha": "7b5564271eee579dbee0a7f430ced63cdab870cd1b4c175974b53b4161d337e7",
+    "filter_repo": "a40bce548d2c",
+    "git": "git version 2.50.1 (Apple Git-155)",
+    "rewritten_tip": "f79df0cb04b14ac892aea2281893b522d8b281fb",
+    "service_dev": "55404173bd9c993230a808b0501a8562e52f0345",
+    "service_repo": "myFinance"
+  },
+  "fit": {
+    "callback_sha": "7b5564271eee579dbee0a7f430ced63cdab870cd1b4c175974b53b4161d337e7",
+    "filter_repo": "a40bce548d2c",
+    "git": "git version 2.50.1 (Apple Git-155)",
+    "rewritten_tip": "cc6c862b72fa3103c5ccdaef54d039cb4a4a511f",
+    "service_dev": "a984b856e44bc1a3b81c797ba90316564f290317",
+    "service_repo": "myFitness"
+  },
+  "version": 1
+}

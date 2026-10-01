@@ -1,0 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+/* Light mode */
+:root {
+  --bg: #f5f5f7;
+  --bg-raised: #ffffff;
+  --card: rgba(0, 0, 0, 0.02);
+  --card-hover: rgba(0, 0, 0, 0.05);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.15);
+  --dim: #9ca3af;
+  --sub: #6b7280;
+  --text: #374151;
+  --bright: #111827;
+  --sejin: #059669;
+  --sodam: #2563eb;
+  --dasom: #ea580c;
+  --sidebar-w: 220px;
+  --surface-dim: rgba(0, 0, 0, 0.05);
+  --surface: rgba(0, 0, 0, 0.07);
+  --surface-hover: rgba(0, 0, 0, 0.08);
+  --surface-active: rgba(0, 0, 0, 0.12);
+  --header-blur: rgba(245, 245, 247, 0.85);
+}
+
+/* Dark mode */
+.dark {
+  --bg: #07080c;
+  --bg-raised: #0d0e14;
+  --card: rgba(255, 255, 255, 0.025);
+  --card-hover: rgba(255, 255, 255, 0.045);
+  --border: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.12);
+  --dim: #6e6e82;
+  --sub: #9494a8;
+  --text: #c8c8d4;
+  --bright: #eeeef2;
+  --sejin: #34d399;
+  --sodam: #60a5fa;
+  --dasom: #fb923c;
+  --surface-dim: rgba(255, 255, 255, 0.04);
+  --surface: rgba(255, 255, 255, 0.06);
+  --surface-hover: rgba(255, 255, 255, 0.1);
+  --surface-active: rgba(255, 255, 255, 0.15);
+  --header-blur: rgba(7, 8, 12, 0.85);
+}
+
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-hover);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--sub);
+}
+
+/* AI 마크다운 응답 스타일 */
+.ai-markdown h1,
+.ai-markdown h2,
+.ai-markdown h3,
+.ai-markdown h4 {
+  font-weight: 700;
+  color: var(--bright);
+  margin: 16px 0 8px;
+}
+.ai-markdown h1:first-child,
+.ai-markdown h2:first-child,
+.ai-markdown h3:first-child {
+  margin-top: 0;
+}
+.ai-markdown h1 { font-size: 15px; }
+.ai-markdown h2 { font-size: 14px; }
+.ai-markdown h3,
+.ai-markdown h4 { font-size: 13px; }
+.ai-markdown p { margin: 6px 0; }
+.ai-markdown strong { color: var(--bright); }
+.ai-markdown em { color: var(--sub); }
+.ai-markdown code {
+  background: var(--surface);
+  color: var(--sejin);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  /* Phase 41-B (#471): 긴 URL·변수명 등 인라인 코드가 message 컨테이너 폭을 넘어
+     좌우 스크롤 유발하지 않도록 강제 wrap. mobile 임팩트 큼 (max-w-[85%] 좁음). */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.ai-markdown pre {
+  background: var(--surface-dim);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.6;
+  /* Phase 41-B (#471): `overflow-x: auto` 만으로는 부모 폭을 넘어서 pre 자체가
+     확장됨 → message 컨테이너 오버플로우. max-width 를 부모 100% 로 잠금. */
+  max-width: 100%;
+}
+.ai-markdown pre code {
+  background: transparent;
+  padding: 0;
+  color: var(--text);
+  /* pre 안 code 는 wrap 대신 스크롤 (코드 가독성 유지) — 부모 pre 의 overflow-x. */
+  overflow-wrap: normal;
+  word-break: normal;
+}
+/* Phase 41-B (#471): 긴 URL / 인라인 링크가 mobile 폭을 넘어 확장하는 것 방지. */
+.ai-markdown a {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.ai-markdown hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}
+.ai-markdown blockquote {
+  border-left: 2px solid var(--border);
+  padding-left: 12px;
+  color: var(--sub);
+  margin: 8px 0;
+}
+.ai-markdown ul,
+.ai-markdown ol {
+  padding-left: 20px;
+  margin: 6px 0;
+}
+.ai-markdown li { margin: 3px 0; }
+.ai-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+/* Phase 41-B (#471): 마크다운 테이블은 mobile 에서만 좌우 스크롤 컨테이너로 (display:block
+   전환은 desktop layout 을 깨뜨릴 수 있어 media query 로 격리).
+   Codex #476 P2: 기본 rule 의 `overflow: hidden` shorthand 가 뒤늦게 override 하지
+   않도록 base rule **뒤에** 배치. `overflow-x: auto` 가 hidden 을 최종 덮음. */
+@media (max-width: 640px) {
+  .ai-markdown table {
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+}
+.ai-markdown th {
+  background: var(--surface);
+  text-align: left;
+  padding: 8px 12px;
+  color: var(--sub);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ai-markdown td {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+}
+.ai-markdown a {
+  color: var(--sejin);
+  text-decoration: underline;
+}

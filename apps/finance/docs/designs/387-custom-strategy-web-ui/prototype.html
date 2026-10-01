@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>커스텀 전략 · myFinance</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+<style>
+  :root {
+    --bg: #07080c;
+    --bg-raised: #0d0e14;
+    --card: rgba(255, 255, 255, 0.025);
+    --border: rgba(255, 255, 255, 0.06);
+    --border-hover: rgba(255, 255, 255, 0.12);
+    --dim: #6e6e82;
+    --sub: #9494a8;
+    --text: #c8c8d4;
+    --bright: #eeeef2;
+    --sejin: #34d399;
+    --sodam: #60a5fa;
+    --dasom: #fb923c;
+    --amber: #fbbf24;
+    --red: #ef4444;
+    --surface-dim: rgba(255, 255, 255, 0.04);
+    --surface: rgba(255, 255, 255, 0.06);
+  }
+  html.light {
+    --bg: #f5f5f7;
+    --bg-raised: #ffffff;
+    --card: rgba(0, 0, 0, 0.02);
+    --border: rgba(0, 0, 0, 0.08);
+    --border-hover: rgba(0, 0, 0, 0.15);
+    --dim: #9ca3af;
+    --sub: #6b7280;
+    --text: #374151;
+    --bright: #111827;
+    --sejin: #059669;
+    --sodam: #2563eb;
+    --dasom: #ea580c;
+    --amber: #b45309;
+    --red: #dc2626;
+    --surface-dim: rgba(0, 0, 0, 0.05);
+    --surface: rgba(0, 0, 0, 0.07);
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Pretendard', -apple-system, system-ui, sans-serif; }
+  .bg-bg-raised { background: var(--bg-raised); }
+  .bg-card { background: var(--card); }
+  .bg-surface-dim { background: var(--surface-dim); }
+  .bg-surface { background: var(--surface); }
+  .border-app { border-color: var(--border); }
+  .border-app-hover { border-color: var(--border-hover); }
+  .text-bright { color: var(--bright); }
+  .text-app { color: var(--text); }
+  .text-sub { color: var(--sub); }
+  .text-dim { color: var(--dim); }
+  .text-sejin { color: var(--sejin); }
+  .text-sodam { color: var(--sodam); }
+  .text-dasom { color: var(--dasom); }
+  .text-amber { color: var(--amber); }
+  .text-red { color: var(--red); }
+  .bg-sejin\/10 { background: color-mix(in srgb, var(--sejin) 12%, transparent); }
+  .bg-sodam\/10 { background: color-mix(in srgb, var(--sodam) 12%, transparent); }
+  .bg-dasom\/10 { background: color-mix(in srgb, var(--dasom) 12%, transparent); }
+  .bg-amber\/10 { background: color-mix(in srgb, var(--amber) 14%, transparent); }
+  .bg-red\/10 { background: color-mix(in srgb, var(--red) 12%, transparent); }
+  .bg-sejin\/20 { background: color-mix(in srgb, var(--sejin) 22%, transparent); }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+  .card:hover { border-color: var(--border-hover); }
+  .strategy-card { transition: all 0.15s ease; }
+  .strategy-card:hover { border-color: var(--border-hover); transform: translateY(-1px); }
+  .strategy-card.inactive { opacity: 0.55; }
+  .strategy-card.inactive .status-dot { background: var(--dim); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sejin); box-shadow: 0 0 8px color-mix(in srgb, var(--sejin) 60%, transparent); }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.2px; background: var(--surface); color: var(--sub); border: 1px solid var(--border); }
+  .chip.active { background: color-mix(in srgb, var(--sejin) 14%, transparent); color: var(--sejin); border-color: color-mix(in srgb, var(--sejin) 30%, transparent); }
+  .chip.freq-once { background: color-mix(in srgb, var(--amber) 14%, transparent); color: var(--amber); border-color: color-mix(in srgb, var(--amber) 30%, transparent); }
+  .chip.freq-daily { background: color-mix(in srgb, var(--sodam) 14%, transparent); color: var(--sodam); border-color: color-mix(in srgb, var(--sodam) 30%, transparent); }
+  .chip.freq-always { background: color-mix(in srgb, var(--dasom) 14%, transparent); color: var(--dasom); border-color: color-mix(in srgb, var(--dasom) 30%, transparent); }
+  .chip.logic { background: color-mix(in srgb, var(--sodam) 10%, transparent); color: var(--sodam); border-color: color-mix(in srgb, var(--sodam) 22%, transparent); }
+  .btn { padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; transition: all 0.15s ease; border: 1px solid transparent; }
+  .btn-primary { background: var(--bright); color: var(--bg); }
+  .btn-primary:hover { transform: translateY(-1px); }
+  .btn-primary:disabled { background: var(--surface); color: var(--dim); cursor: not-allowed; transform: none; }
+  .btn-secondary { background: var(--surface); color: var(--bright); border-color: var(--border); }
+  .btn-secondary:hover { background: var(--surface-dim); border-color: var(--border-hover); }
+  .btn-ghost { background: transparent; color: var(--sub); }
+  .btn-ghost:hover { color: var(--bright); background: var(--surface); }
+  .btn-danger { color: var(--red); background: transparent; }
+  .btn-danger:hover { background: color-mix(in srgb, var(--red) 12%, transparent); }
+  .btn-tiny { padding: 4px 8px; font-size: 11px; border-radius: 6px; }
+  .textarea { background: var(--surface-dim); border: 1px solid var(--border); border-radius: 8px; color: var(--bright); padding: 12px 14px; font-size: 14px; line-height: 1.5; width: 100%; resize: vertical; min-height: 88px; }
+  .textarea:focus { outline: none; border-color: var(--sejin); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sejin) 15%, transparent); }
+  .textarea::placeholder { color: var(--dim); }
+  .input { background: var(--surface-dim); border: 1px solid var(--border); border-radius: 8px; color: var(--bright); padding: 8px 12px; font-size: 13px; }
+  .input:focus { outline: none; border-color: var(--sejin); }
+  .select { background: var(--surface-dim); border: 1px solid var(--border); border-radius: 8px; color: var(--bright); padding: 8px 12px; font-size: 13px; }
+  .divider { height: 1px; background: var(--border); }
+  .toggle { position: relative; width: 34px; height: 20px; background: var(--surface); border-radius: 999px; cursor: pointer; transition: background 0.15s ease; border: 1px solid var(--border); }
+  .toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; background: var(--sub); border-radius: 50%; transition: all 0.15s ease; }
+  .toggle.on { background: color-mix(in srgb, var(--sejin) 30%, transparent); border-color: color-mix(in srgb, var(--sejin) 40%, transparent); }
+  .toggle.on::after { left: 16px; background: var(--sejin); }
+  .banner { border-radius: 10px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px; }
+  .banner.warning { background: color-mix(in srgb, var(--amber) 12%, transparent); border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent); color: var(--amber); }
+  .condition-line { display: flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace; font-size: 12px; color: var(--text); background: var(--surface-dim); border-radius: 6px; padding: 6px 10px; }
+  .condition-logic { color: var(--sodam); font-weight: 700; padding: 0 2px; }
+  .example { border: 1px dashed var(--border); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--sub); background: var(--surface-dim); cursor: pointer; transition: all 0.15s ease; }
+  .example:hover { border-color: var(--sejin); color: var(--bright); background: color-mix(in srgb, var(--sejin) 6%, transparent); }
+  .modal-backdrop { background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); }
+  .grid-cards { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  @media (min-width: 768px) { .grid-cards { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1200px) { .grid-cards { grid-template-columns: repeat(3, 1fr); } }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="sticky top-0 z-20 bg-bg-raised border-b border-app">
+  <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-sejin/20 flex items-center justify-center text-sejin font-bold">🧠</div>
+      <div>
+        <h1 class="text-bright font-bold text-lg">커스텀 전략</h1>
+        <p class="text-sub text-xs">자연어 조건으로 종목 감시 · 텔레그램 알림</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="chip active">🟢 알림 켜짐</div>
+      <button class="btn btn-ghost btn-tiny" onclick="toggleTheme()">🌙 다크</button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-6 py-8 space-y-8">
+
+  <!-- Register form (top) -->
+  <section class="card p-6 space-y-4">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-bright font-bold text-base">새 전략 등록</h2>
+        <p class="text-sub text-xs mt-1">자연어로 조건을 적어주면 AI 가 파싱해 감시합니다 (최대 500자, 활성 상한 50개)</p>
+      </div>
+      <span class="chip">활성 <span class="text-bright ml-1">12</span> / 50</span>
+    </div>
+
+    <textarea class="textarea" placeholder="예: SOXL 이 40달러 이하 + RSI 30 이하가 되면 매수 알림" id="strategyInput">SOXL 이 40달러 이하 + RSI 30 이하가 되면 매수 알림</textarea>
+
+    <div class="flex items-center justify-between">
+      <div class="text-sub text-xs">
+        <span id="charCount" class="text-bright font-semibold">32</span> / 500
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="btn btn-ghost" onclick="clearForm()">지우기</button>
+        <button class="btn btn-secondary" onclick="showPreview()">
+          <span class="mr-1">👁️</span> 미리보기
+        </button>
+      </div>
+    </div>
+
+    <!-- Preview panel (shown after preview click) -->
+    <div id="previewPanel" class="rounded-lg bg-surface-dim border border-app p-4 space-y-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="chip active">✅ 파싱 완료</span>
+          <span class="text-bright font-semibold text-sm">SOXL 저점 매수</span>
+          <span class="text-sub text-xs">SOXL</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="chip freq-daily">🗓️ 매일 1회</span>
+          <span class="chip logic">AND</span>
+        </div>
+      </div>
+      <div class="space-y-2">
+        <div class="condition-line">price ≤ 40</div>
+        <div class="condition-logic text-xs">AND</div>
+        <div class="condition-line">rsi ≤ 30</div>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-app">
+        <button class="btn btn-ghost btn-tiny" onclick="cancelPreview()">취소</button>
+        <button class="btn btn-primary btn-tiny">
+          <span class="mr-1">💾</span> 등록하기
+        </button>
+      </div>
+    </div>
+
+    <!-- Examples row -->
+    <div class="pt-3 border-t border-app">
+      <p class="text-sub text-xs mb-2">💡 예시 (클릭하면 채워집니다)</p>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <div class="example" onclick="fillExample(this)">NVDA MACD 골든크로스 시 알림</div>
+        <div class="example" onclick="fillExample(this)">TSLA 볼밴 하단 이탈 시 매수 알림</div>
+        <div class="example" onclick="fillExample(this)">AAPL 5일간 -10% 이상 하락 시 알림</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Strategy list header -->
+  <section class="flex items-center justify-between">
+    <div>
+      <h2 class="text-bright font-bold text-base">등록된 전략</h2>
+      <p class="text-sub text-xs mt-1">활성 12개 · 비활성 3개</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <select class="select">
+        <option>전체</option>
+        <option>활성만</option>
+        <option>비활성만</option>
+      </select>
+    </div>
+  </section>
+
+  <!-- Strategy cards grid -->
+  <section class="grid-cards">
+    <!-- Card 1: active, daily, triggered recently -->
+    <div class="strategy-card card p-4 space-y-3">
+      <div class="flex items-start justify-between">
+        <div class="flex items-center gap-2">
+          <div class="status-dot"></div>
+          <div>
+            <div class="text-bright font-semibold text-sm">SOXL 저점 매수</div>
+            <div class="text-sub text-xs">SOXL · 등록 2일 전</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1">
+          <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+        </div>
+      </div>
+      <div class="space-y-1.5">
+        <div class="condition-line">price ≤ 40 <span class="condition-logic ml-auto">AND</span></div>
+        <div class="condition-line">rsi ≤ 30</div>
+      </div>
+      <div class="flex items-center justify-between text-xs pt-2 border-t border-app">
+        <div class="flex items-center gap-2">
+          <span class="chip freq-daily">🗓️ daily</span>
+          <span class="chip"><span class="mr-1">🎯</span>최근: 어제</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button class="btn btn-ghost btn-tiny">✏️</button>
+          <button class="btn btn-danger btn-tiny">🗑️</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 2: active, always, never triggered -->
+    <div class="strategy-card card p-4 space-y-3">
+      <div class="flex items-start justify-between">
+        <div class="flex items-center gap-2">
+          <div class="status-dot"></div>
+          <div>
+            <div class="text-bright font-semibold text-sm">NVDA 골든크로스</div>
+            <div class="text-sub text-xs">NVDA · 등록 5일 전</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1">
+          <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+        </div>
+      </div>
+      <div class="space-y-1.5">
+        <div class="condition-line">macd_signal is GOLDEN</div>
+      </div>
+      <div class="flex items-center justify-between text-xs pt-2 border-t border-app">
+        <div class="flex items-center gap-2">
+          <span class="chip freq-always">♾️ always</span>
+          <span class="chip"><span class="mr-1">🕰️</span>발동 이력 없음</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button class="btn btn-ghost btn-tiny">✏️</button>
+          <button class="btn btn-danger btn-tiny">🗑️</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 3: active, once, triggered (about to auto-disable) -->
+    <div class="strategy-card card p-4 space-y-3">
+      <div class="flex items-start justify-between">
+        <div class="flex items-center gap-2">
+          <div class="status-dot"></div>
+          <div>
+            <div class="text-bright font-semibold text-sm">TSLA 볼밴 하단</div>
+            <div class="text-sub text-xs">TSLA · 등록 1주 전</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1">
+          <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+        </div>
+      </div>
+      <div class="space-y-1.5">
+        <div class="condition-line">bb_position is BELOW_LOWER</div>
+      </div>
+      <div class="flex items-center justify-between text-xs pt-2 border-t border-app">
+        <div class="flex items-center gap-2">
+          <span class="chip freq-once">🎯 once</span>
+          <span class="chip"><span class="mr-1">🎯</span>최근: 3시간 전</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button class="btn btn-ghost btn-tiny">✏️</button>
+          <button class="btn btn-danger btn-tiny">🗑️</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 4: inactive, OR logic, multi-condition -->
+    <div class="strategy-card card p-4 space-y-3 inactive">
+      <div class="flex items-start justify-between">
+        <div class="flex items-center gap-2">
+          <div class="status-dot"></div>
+          <div>
+            <div class="text-bright font-semibold text-sm">AAPL 급락 감시</div>
+            <div class="text-sub text-xs">AAPL · 등록 2주 전</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1">
+          <div class="toggle" onclick="this.classList.toggle('on')"></div>
+        </div>
+      </div>
+      <div class="space-y-1.5">
+        <div class="condition-line">change_pct(5d) ≤ -10 <span class="condition-logic ml-auto">OR</span></div>
+        <div class="condition-line">rsi ≤ 25</div>
+      </div>
+      <div class="flex items-center justify-between text-xs pt-2 border-t border-app">
+        <div class="flex items-center gap-2">
+          <span class="chip freq-daily">🗓️ daily</span>
+          <span class="chip logic">OR</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button class="btn btn-ghost btn-tiny">✏️</button>
+          <button class="btn btn-danger btn-tiny">🗑️</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 5: sample MSFT -->
+    <div class="strategy-card card p-4 space-y-3">
+      <div class="flex items-start justify-between">
+        <div class="flex items-center gap-2">
+          <div class="status-dot"></div>
+          <div>
+            <div class="text-bright font-semibold text-sm">MSFT 하락 대비</div>
+            <div class="text-sub text-xs">MSFT · 등록 하루 전</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1">
+          <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+        </div>
+      </div>
+      <div class="space-y-1.5">
+        <div class="condition-line">price ≤ 380 <span class="condition-logic ml-auto">AND</span></div>
+        <div class="condition-line">sma_cross is DEAD</div>
+      </div>
+      <div class="flex items-center justify-between text-xs pt-2 border-t border-app">
+        <div class="flex items-center gap-2">
+          <span class="chip freq-daily">🗓️ daily</span>
+          <span class="chip"><span class="mr-1">🕰️</span>발동 이력 없음</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button class="btn btn-ghost btn-tiny">✏️</button>
+          <button class="btn btn-danger btn-tiny">🗑️</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 6: another sample -->
+    <div class="strategy-card card p-4 space-y-3">
+      <div class="flex items-start justify-between">
+        <div class="flex items-center gap-2">
+          <div class="status-dot"></div>
+          <div>
+            <div class="text-bright font-semibold text-sm">삼성전자 매수 지대</div>
+            <div class="text-sub text-xs">005930.KS · 등록 4일 전</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1">
+          <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+        </div>
+      </div>
+      <div class="space-y-1.5">
+        <div class="condition-line">price ≤ 55000</div>
+      </div>
+      <div class="flex items-center justify-between text-xs pt-2 border-t border-app">
+        <div class="flex items-center gap-2">
+          <span class="chip freq-always">♾️ always</span>
+          <span class="chip"><span class="mr-1">🎯</span>최근: 방금 전</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button class="btn btn-ghost btn-tiny">✏️</button>
+          <button class="btn btn-danger btn-tiny">🗑️</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Alert-off banner example (hidden by default in real UI when 'on') -->
+  <section class="banner warning hidden" id="alertOffBanner">
+    <span class="text-lg">⚠️</span>
+    <div class="flex-1">
+      <div class="font-semibold">커스텀 전략 알림이 꺼져있습니다</div>
+      <div class="text-xs opacity-80 mt-1">여기서 등록/편집한 전략이 발동해도 텔레그램 알림이 발송되지 않습니다. 설정 페이지에서 활성화해주세요.</div>
+    </div>
+    <a href="/settings" class="btn btn-secondary btn-tiny">설정 열기</a>
+  </section>
+
+  <!-- Empty state (shown when no strategies) -->
+  <section class="card p-10 text-center hidden" id="emptyState">
+    <div class="text-4xl mb-3">🧠</div>
+    <h3 class="text-bright font-bold text-lg">아직 등록된 전략이 없습니다</h3>
+    <p class="text-sub text-sm mt-2">위 등록 폼에서 자연어로 첫 전략을 만들어보세요.</p>
+  </section>
+
+  <!-- Disclaimer -->
+  <section class="text-center text-dim text-xs pt-4">
+    커스텀 전략 알림은 참고용이며 매매 결정은 본인 판단입니다. 손절 없음 원칙 (stock-trading-method 스킬 참조).
+  </section>
+</main>
+
+<!-- Edit modal (hidden by default) -->
+<div id="editModal" class="hidden fixed inset-0 z-50 flex items-center justify-center px-4 modal-backdrop">
+  <div class="card p-6 w-full max-w-md space-y-4 bg-bg-raised">
+    <div class="flex items-center justify-between">
+      <h3 class="text-bright font-bold text-base">전략 편집</h3>
+      <button class="btn btn-ghost btn-tiny" onclick="closeEdit()">✕</button>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="text-sub text-xs">이름</label>
+        <input class="input w-full mt-1" value="SOXL 저점 매수" />
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-sub text-xs">발동 빈도</label>
+          <select class="select w-full mt-1">
+            <option value="once">한 번만 (once)</option>
+            <option value="daily" selected>매일 1회 (daily)</option>
+            <option value="always">매 스캔 (always)</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-sub text-xs">조건 결합</label>
+          <select class="select w-full mt-1">
+            <option value="AND">AND (모두)</option>
+            <option value="OR">OR (하나)</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex items-center justify-between bg-surface-dim rounded-lg p-3 border border-app">
+        <div class="text-sm">
+          <div class="text-bright font-semibold">활성 상태</div>
+          <div class="text-sub text-xs">비활성 시 감시 중단</div>
+        </div>
+        <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+      </div>
+      <div class="rounded-lg bg-surface-dim border border-app p-3 text-xs text-sub">
+        <div class="font-semibold text-amber mb-1">⚠️ 조건 자체는 편집 불가</div>
+        조건을 변경하려면 이 전략을 삭제 후 다시 등록해주세요.
+      </div>
+    </div>
+    <div class="flex items-center justify-end gap-2 pt-2 border-t border-app">
+      <button class="btn btn-ghost" onclick="closeEdit()">취소</button>
+      <button class="btn btn-primary">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleTheme() {
+    document.documentElement.classList.toggle('light')
+  }
+  function showPreview() {
+    document.getElementById('previewPanel').classList.remove('hidden')
+  }
+  function cancelPreview() {
+    document.getElementById('previewPanel').classList.add('hidden')
+  }
+  function clearForm() {
+    document.getElementById('strategyInput').value = ''
+    document.getElementById('charCount').textContent = '0'
+    document.getElementById('previewPanel').classList.add('hidden')
+  }
+  function fillExample(el) {
+    document.getElementById('strategyInput').value = el.textContent.trim()
+    document.getElementById('charCount').textContent = el.textContent.trim().length
+  }
+  function openEdit() {
+    document.getElementById('editModal').classList.remove('hidden')
+  }
+  function closeEdit() {
+    document.getElementById('editModal').classList.add('hidden')
+  }
+  // char counter
+  document.getElementById('strategyInput').addEventListener('input', (e) => {
+    document.getElementById('charCount').textContent = e.target.value.length
+  })
+</script>
+
+</body>
+</html>

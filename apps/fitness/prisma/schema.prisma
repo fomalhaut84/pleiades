@@ -1,0 +1,400 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model UserProfile {
+  id             String    @id @default(cuid())
+  // 싱글톤 보장용 sentinel. 항상 true로 설정되며 unique 제약으로 중복 row 생성을 차단.
+  singleton      Boolean   @default(true) @unique
+  name           String
+  birthDate      DateTime?
+  height         Float?              // cm
+  targetWeight   Float?              // kg
+  restingHRBase  Int?                // 기준 안정시 심박수
+  maxHR          Int?                // 실측 최대 심박 (bpm)
+  lthr           Int?                // 젖산역치 심박 (bpm)
+  lthrPace       Float?              // LTHR 페이스 (sec/km)
+  targetCalories Int?                // 일일 칼로리 목표 (kcal)
+  targetDate     DateTime?           // M4-6: 목표 체중 도달 목표일
+  // M12 (#223): 평상 개인 목표 — ongoing (기간 미지정). AI 어드바이저 컨텍스트로 활용.
+  targetAvgPace    Float?            // 평균 페이스 목표 (sec/km, 예: 5:45 = 345)
+  targetWeeklyKm   Float?            // 주간 러닝 거리 목표 (km/week)
+  targetVO2max     Float?            // VO2max 목표
+  personalGoalNote String?           // 커스텀 텍스트 목표 (자유 입력)
+  // M13 Phase 1 (#243): auto-adjust 사전 알림 활성화 여부 (기본 활성).
+  autoAdjustEnabled Boolean          @default(true)
+  // M14 Phase 2 #3 (#299): 단백질 목표 g/kg 체중. 러너 권장 1.6 기본.
+  proteinTargetPerKg Float?          @default(1.6)
+  // Garmin 자동 싱크 (#85)
+  vo2maxRunning        Float?    // Garmin VO2max
+  maxHRSource          String?   // "manual" | "garmin"
+  lthrSource           String?   // "manual" | "garmin"
+  restingHRBaseSource  String?   // "manual" | "garmin"
+  lthrAutoDetected     Boolean?  // Garmin thresholdHeartRateAutoDetected
+  lthrMeasuredAt       DateTime? // firstbeatRunningLtTimestamp 변환
+  heartRateZonesRaw    Json?     // Garmin 원본 zone1~5Floor + maxHR (러닝)
+  garminSyncedAt       DateTime? // 마지막 user-settings/biometric 싱크
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// 프로필 메트릭 변경 이력 (#85)
+model MetricChange {
+  id        String   @id @default(cuid())
+  field     String   // "maxHR" | "lthr" | "lthrPace" | "vo2maxRunning" | "restingHRBase"
+  oldValue  Float?   // 이전 값 (null = 최초 설정)
+  newValue  Float?   // 새 값 (null = 삭제)
+  source    String   // "manual" | "garmin"
+  reason    String?  // "user_edit" | "garmin_auto_detect" | "garmin_change_state" | "garmin_initial"
+  changedAt DateTime @default(now())
+
+  @@index([field, changedAt])
+  @@index([changedAt])
+}
+
+model SyncMetadata {
+  id                 String   @id @default(cuid())
+  dataType           String   @unique
+  lastSyncAt         DateTime
+  lastSyncDate       DateTime
+  // #220: 실제 fetch 커버 범위 [oldestFetchedDate, coveredThroughDate] (contiguous).
+  // 새 fetch 는 adjacent/overlap 인 경우만 merge, 그 외 disjoint 는 무시 (혹은 recent
+  // 도달 시 reset). Codex bot P2 (PR #240) contiguity 요구 대응.
+  oldestFetchedDate  DateTime?
+  coveredThroughDate DateTime?
+  syncCount          Int      @default(0)
+  status             String   @default("idle")
+  errorMessage       String?
+  updatedAt          DateTime @updatedAt
+}
+
+model Activity {
+  id              String   @id @default(cuid())
+  garminId        BigInt   @unique
+  activityType    String
+  name            String
+  startTime       DateTime
+  duration        Int                 // seconds
+  distance        Float?              // meters
+  calories        Int?
+  avgHR           Int?                // bpm
+  maxHR           Int?                // bpm
+  avgPace         Float?              // sec/km
+  avgSpeed        Float?              // km/h
+  elevationGain   Float?              // meters
+  trainingEffect  Float?              // 1.0-5.0
+  vo2maxEstimate  Float?
+  // M2: 러닝 다이나믹스
+  avgCadence      Int?                // spm (steps per minute)
+  avgStrideLength Float?              // meters
+  avgVerticalOscillation Float?       // cm
+  avgGroundContactTime   Float?       // ms
+  aerobicTE       Float?              // 유산소 트레이닝 이펙트
+  anaerobicTE     Float?              // 무산소 트레이닝 이펙트
+  avgRespirationRate Float?           // breaths/min
+  lapCount        Int?
+  splitSummaries  Json?               // km별 스플릿 데이터
+  // M4-5: 강도 자동 분류
+  zoneDistribution Json?              // {z1, z2, z3, z4, z5} 초 단위 (Garmin hrTimeInZone_1~5)
+  estimatedZone   Int?                // 대표 Zone (1~5, 가중 평균)
+  intensityScore  Float?              // 강도 점수 (0~100, TRIMP 유사)
+  intensityLabel  String?             // recovery|easy|tempo|threshold|interval|max
+  // #261: 사용자 커스텀 코스명 태그. 같은 GPS/거리 클러스터 + 같은 태그 = 같은 코스로 취급.
+  routeTag        String?
+  // #396: Garmin eventType.typeKey ("race" · "training" · "uncategorized" …) 원문. rawData 에서 승격 — 레이스 마커 · 개인 기록 배지.
+  // Nullable: 기존 행은 backfill:event-type (API 호출 0), 신규 행은 sync 에서 채움.
+  eventType       String?
+  // #425: 종료 후 심박 회복 (2분 HRR = 종료 − 2분 후 · 10분 낙차). #418 의 recoveryCurve 값을 승격 — 하루치 심박 시계열 (HeartRateRecord) 에서 계산, API 호출 0.
+  // Nullable: 하루 심박 없음 · 종료 후 샘플 결측 (부분 데이터) 이면 null 로 두고 다음 싱크 · backfill:hrr 이 다시 시도. 음수 = 종료 뒤 심박 상승 (필터하지 않음).
+  hrr2            Int?
+  hrrDrop10       Int?
+  // #269: 손목 측정 온도 (Garmin rawData 파싱). 햇빛/의류 영향으로 실제 기상과 다를 수 있음.
+  wristTempMaxC        Float?
+  wristTempMinC        Float?
+  // #269: 외부 기상 실측치 (Open-Meteo, 활동 시작 시점).
+  weatherTempC         Float?
+  weatherApparentTempC Float?
+  weatherHumidityPct   Int?
+  weatherWindMs        Float?
+  weatherPrecipMm      Float?              // 활동 duration 커버 시간대 누적 (mm)
+  weatherCode          Int?                // WMO weather interpretation code
+  weatherFetchedAt     DateTime?           // API 호출 성공 시각 — null 이면 backfill 대상
+  weatherSource        String?             // 예: "open-meteo"
+  weatherAttempts      Int?                // #269 후속: 실패 (transient) 누적 횟수. cron/sync backfill 이 fewer-attempts 순으로 우선 처리, MAX 초과 시 sentinel
+  rawData         Json?
+  createdAt       DateTime @default(now())
+
+  @@index([activityType, startTime])
+  @@index([startTime])
+  @@index([routeTag])
+  @@index([eventType, startTime])
+}
+
+model DailySummary {
+  id              String   @id @default(cuid())
+  date            DateTime @unique
+  steps           Int?
+  totalCalories   Int?
+  activeCalories  Int?
+  restingHR       Int?
+  avgStress       Int?                 // 1-100
+  bodyBattery     Int?                 // 5-100 (하루 끝)
+  bodyBatteryHigh Int?
+  bodyBatteryLow  Int?
+  intensityMin    Int?
+  floorsClimbed   Int?
+  // M2: 추가 지표
+  avgSpo2         Float?               // %
+  lowestSpo2      Float?               // %
+  avgRespiration  Float?               // breaths/min
+  stressHighDuration  Int?             // minutes
+  stressMediumDuration Int?            // minutes
+  stressLowDuration   Int?             // minutes
+  bodyBatteryCharged  Int?             // 충전량
+  bodyBatteryDrained  Int?             // 소모량
+  // M4-2: 칼로리 밸런스
+  estimatedIntakeCalories Int?         // 섭취 칼로리 (FoodLog 합계 또는 MFP)
+  availableCalories       Int?         // 목표 + 활성
+  calorieBalance          Int?         // 섭취 - 섭취가능 (음수 = 결손/감량)
+  rawData         Json?
+  createdAt       DateTime @default(now())
+}
+
+model SleepRecord {
+  id            String   @id @default(cuid())
+  date          DateTime @unique
+  sleepStart    DateTime
+  sleepEnd      DateTime
+  totalSleep    Int                    // minutes
+  deepSleep     Int?
+  lightSleep    Int?
+  remSleep      Int?
+  awakeDuration Int?
+  sleepScore    Int?                   // 0-100
+  avgSpO2       Float?
+  lowestSpO2    Float?                 // %, 수면 중 최저 (야간 저산소 판단 기준)
+  highestSpO2   Float?                 // %
+  // M2: 추가 지표
+  avgRespiration    Float?             // breaths/min
+  lowestRespiration Float?
+  highestRespiration Float?
+  avgSleepStress    Float?             // 수면 중 스트레스
+  bodyBatteryChange Int?               // 수면 중 배터리 변화량
+  restingHR         Int?               // 수면 중 안정시 심박
+  hrvOvernight      Float?             // ms, 야간 HRV
+  sleepScoreDetails Json?              // 점수 세부 (duration/stress/rem/deep/light/restlessness)
+  rawData       Json?
+  createdAt     DateTime @default(now())
+}
+
+model HeartRateRecord {
+  id          String   @id @default(cuid())
+  date        DateTime @unique
+  restingHR   Int?
+  avgHR       Int?
+  maxHR       Int?
+  minHR       Int?
+  hrvStatus   Float?                   // ms
+  hrvBaseline Float?                   // ms
+  rawData     Json?
+  createdAt   DateTime @default(now())
+}
+
+model BodyComposition {
+  id         String   @id @default(cuid())
+  date       DateTime @unique
+  weight     Float                     // kg
+  bmi        Float?
+  bodyFat    Float?                    // %
+  muscleMass Float?                    // kg
+  source     String   @default("garmin") // "garmin" | "manual"
+  rawData    Json?
+  createdAt  DateTime @default(now())
+}
+
+// #378: Garmin 성과통계 이력 — VO2max 일별(maxmet) + 러닝 젖산역치(HR·속도, Garmin 감지일만).
+// 어느 한 값이라도 있는 날짜만 row. rawData 에 세 엔드포인트 원본을 소스별로 보존
+// (사이클링 VO2max · heatAltitudeAcclimation 은 컬럼 없이 rawData 에만).
+model FitnessMetricDaily {
+  id            String   @id @default(cuid())
+  date          DateTime @unique       // KST 자정 instant (calendarDate / from → T00:00:00+09:00)
+  vo2maxRunning Float?                 // maxmet generic.vo2MaxPreciseValue (없으면 vo2MaxValue)
+  lthr          Int?                   // bpm (lactateThresholdHeartRate)
+  lthrPace      Float?                 // sec/km (lactateThresholdSpeed × 10 = m/s → 1000 / m/s)
+  fitnessAge    Int?                   // 2023 이후 null 인 날이 많음
+  rawData       Json?
+  createdAt     DateTime @default(now())
+}
+
+model BloodPressure {
+  id            String   @id @default(cuid())
+  date          DateTime @unique
+  highSystolic  Int                         // 당일 최고 수축기 (mmHg)
+  lowSystolic   Int                         // 당일 최저 수축기
+  highDiastolic Int                         // 당일 최고 이완기
+  lowDiastolic  Int                         // 당일 최저 이완기
+  avgPulse      Int?                        // 평균 맥박 (bpm)
+  measureCount  Int      @default(1)        // 측정 횟수
+  category      String?                     // NORMAL, HIGH_NORMAL, STAGE_1_HIGH, STAGE_2_HIGH
+  measurements  Json?                       // 개별 측정값 배열
+  rawData       Json?
+  createdAt     DateTime @default(now())
+}
+
+model AIAdvice {
+  id         String   @id @default(cuid())
+  category   String                     // "morning_report", "evening_report", "weekly_report", "general"
+  reportDate String?                    // "YYYY-MM-DD" (리포트 대상 날짜)
+  prompt     String
+  response   String
+  createdAt  DateTime @default(now())
+
+  @@index([category, createdAt])
+  @@index([reportDate])
+}
+
+// M#191: 리포트 생성 비동기 job.
+// 페이지 이탈 후 재방문 시 진행 상태 복원, cron 진행 이력, 중복 실행 방지 목적.
+model ReportJob {
+  id           String    @id @default(cuid())
+  category     String    // morning_report | evening_report | weekly_report
+  reportDate   String    // YYYY-MM-DD (KST)
+  status       String    @default("pending") // pending | running | completed | failed
+  force        Boolean   @default(false)
+  startedAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt // heartbeat 기준 — runner 가 주기적으로 touch → orphan sweep 판정
+  completedAt  DateTime?
+  errorMessage String?
+  adviceId     String?   // 완료 시 AIAdvice.id 참조 (nullable, 트랜잭션 밖 update)
+
+  @@index([category, reportDate, status])
+  @@index([status, updatedAt])
+}
+
+model FoodLog {
+  id            String   @id @default(cuid())
+  date          DateTime
+  description   String
+  estimatedKcal Int?
+  // M14 Phase 2 #3 (#299): 매크로 (g). 부분 미측정 허용 — 하나라도 null 이면 일별 total 도 null propagate.
+  proteinG      Float?
+  carbsG        Float?
+  fatG          Float?
+  // Codex P2 (PR #300): AI 재추정 시도 카운터. MAX 초과 시 macro null 인 채로 permanent
+  // (매 tick 무한 재호출 방지). weatherAttempts 패턴 (#269) 재사용. PATCH 로 description
+  // 바뀌면 리셋해 새 컨텍스트로 재추정.
+  nutritionAttempts Int?
+  mealType      String?
+  createdAt     DateTime @default(now())
+  // Codex P2 (PR #313 12회차): row 변경마다 auto-updated. kcal 정정 snapshot 매칭에 사용해
+  // description-value 만으로는 커버 못 하는 A→B→A restore 등 edge case 방어.
+  updatedAt     DateTime @updatedAt @default(now())
+  // #322 (M14 Phase 3 #2): estimator 산출 item 별 분해 (비빔밥/계란국 각 kcal + P/C/F).
+  // shape: Array<{ name: string; kcal: number|null; proteinG: number|null; carbsG: number|null; fatG: number|null }>.
+  // nullable — legacy row 및 estimator 실패 시 null. UI 카드는 items 있으면 접기/펼치기로 세부 노출.
+  items         Json?
+
+  @@index([date])
+}
+
+// M6-1: 트레이닝 플랜 (결정적 생성 + 진행 파생). M11 Phase 1 (#222): weekCount 4~24 지원.
+// M11 Phase 2 (#232): goalType 도입 ("distance" | "time" | "endurance"), goalValue Json 페이로드.
+model TrainingPlan {
+  id               String            @id @default(cuid())
+  createdAt        DateTime          @default(now())
+  startDate        DateTime          @db.Date          // KST day, 내일부터
+  endDate          DateTime          @db.Date          // startDate + (weekCount*7 - 1) 일
+  weekCount        Int               @default(4)      // M11 Phase 1: 4 ~ 24 주
+  weeklyFrequency  Int                                  // 3 | 4 | 5
+  goalType         String            @default("distance") // M11 Phase 2: "distance" | "time" | "endurance"
+  goalValue        Json?                                // M11 Phase 2: goalType 별 페이로드 (distance 는 null)
+  targetDistance   String?                              // "5K" | "10K" | "HM" | "FM" (distance/time 유형 사용)
+  targetDate       DateTime?         @db.Date          // race day 또는 목표 도달일
+  baselineWeeklyKm Float?                               // 생성 시점 baseline
+  baselineAcwr     Float?
+  lthrPaceUsed     Float?                               // sec/km, LTHR 부재 시 pseudo
+  status           String            @default("active") // "active" | "archived"
+  workouts         TrainingWorkout[]
+
+  @@index([status, createdAt])
+}
+
+model TrainingWorkout {
+  id            String       @id @default(cuid())
+  planId        String
+  plan          TrainingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  date          DateTime     @db.Date
+  weekNumber    Int                                    // 1 ~ weekCount (플랜 기간에 따라 가변)
+  dayIndex      Int                                    // 0 (Mon) ~ 6 (Sun)
+  type          String                                 // "easy" | "long" | "tempo" | "interval" | "recovery" | "rest"
+  distanceKm    Float?                                 // null for rest
+  paceSecPerKm  Int?                                   // target
+  zone          String?                                // "Z1" | "Z2" | "Z3-4" | "Z5"
+  intervalDesc  String?                                // interval 세부 (e.g., "6x400m Z5")
+  notes         String?                                // 짧은 코칭 노트 (한글)
+
+  // M13 Phase 2 (#249): auto-adjust accept 로 조정된 workout 표시. notes prefix 대신
+  // authoritative flag (사용자가 notes 를 편집해도 뱃지 정확).
+  autoAdjusted  Boolean      @default(false)
+  adjustments   WorkoutAdjustment[]
+
+  @@unique([planId, date])
+  @@index([date])
+}
+
+// M13 Phase 2 (#249): auto-adjust 제안 + confirm/reject/snooze 이력.
+model WorkoutAdjustment {
+  id                   String           @id @default(cuid())
+  // fallback (no active plan) 케이스는 Phase 2 에서 제안 skip 이지만, 향후 확장 대비 nullable.
+  workoutId            String?
+  workout              TrainingWorkout? @relation(fields: [workoutId], references: [id], onDelete: SetNull)
+  proposedAt           DateTime         @default(now())
+  decidedAt            DateTime?
+  decision             String           @default("pending") // "pending"|"accepted"|"rejected"|"snoozed"|"expired"
+
+  // 조정된 workout 스냅샷 (P2 이후 반영값).
+  proposedType         String
+  proposedDistanceKm   Float?
+  proposedPaceSecPerKm Int?
+  proposedZone         String?
+  proposedIntervalDesc String?
+
+  // Accept 시 원 workout 필드가 덮어써지므로 rollback / 감사용으로 함께 스냅샷 (PR #250 P2).
+  originalType         String?
+  originalDistanceKm   Float?
+  originalPaceSecPerKm Int?
+  originalZone         String?
+  originalIntervalDesc String?
+  originalNotes        String?
+
+  // 컨텍스트: injury/readiness score + top factors + adjustmentReason.
+  reason               Json?
+  rejectReason         String?
+
+  // Telegram callback 매칭용.
+  telegramMessageId    String?
+  telegramChatId       String?
+
+  // Snooze: now + 1h. cron 이 <= now 시 재전송 후 null 로 되돌림.
+  snoozeUntil          DateTime?
+
+  @@index([decision, snoozeUntil])
+  @@index([workoutId])
+  @@index([telegramMessageId])
+}
+
+// #253: 관리자 alert rate-limit 상태 (Claude 인증 만료 등).
+// alertType 별 단일 row upsert 로 lastAlertAt tracking. pm2 restart 후에도 유지.
+model SystemAlertState {
+  id           String   @id @default(cuid())
+  alertType    String   @unique  // e.g. "claude_auth_expired"
+  lastAlertAt  DateTime
+  lastErrorMsg String?              // 진단용, 200자 이내
+  updatedAt    DateTime @updatedAt
+}

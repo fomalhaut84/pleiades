@@ -1,0 +1,176 @@
+import prisma from "@/lib/prisma";
+import { resolveMaxHR } from "@/lib/fitness/zones";
+import { weekStartKST } from "@/lib/date";
+import { daysAgoKST, ymdKST } from "@/lib/garmin/utils";
+import { kstInstant, startOfMonthYmd } from "@/lib/history/buckets";
+import ActivitiesClient from "./activities-client";
+
+export const dynamic = "force-dynamic";
+
+
+export default async function ActivitiesPage() {
+  const now = new Date();
+  // #393 (M15-1): KST 월 시작 · 56일 전 자정 — 공용 헬퍼 (서버 로컬 TZ 의존 제거, #365)
+  const monthStart = kstInstant(startOfMonthYmd(ymdKST(now)));
+  const eightWeeksAgo = daysAgoKST(56);
+
+  // 최대 심박수/LTHR: UserProfile 실측값 → 나이 기반 fallback
+  const userProfile = await prisma.userProfile.findFirst();
+  const estimatedMaxHR = resolveMaxHR(userProfile ?? {});
+  const userLTHR = userProfile?.lthr ?? null;
+
+  const activities = await prisma.activity.findMany({
+    orderBy: { startTime: "desc" },
+    take: 20,
+    select: {
+      id: true,
+      name: true,
+      activityType: true,
+      startTime: true,
+      duration: true,
+      distance: true,
+      avgPace: true,
+      avgHR: true,
+      calories: true,
+    },
+  });
+
+  // 이번 달 러닝 요약
+  const monthlyRunning = await prisma.activity.findMany({
+    where: {
+      activityType: { contains: "running" },
+      startTime: { gte: monthStart },
+    },
+    select: { distance: true, duration: true, avgPace: true },
+  });
+
+  const monthSummary = {
+    count: monthlyRunning.length,
+    totalDistance: monthlyRunning.reduce((sum, a) => sum + (a.distance ?? 0), 0),
+    totalDuration: monthlyRunning.reduce((sum, a) => sum + a.duration, 0),
+    avgPace: (() => {
+      const withBoth = monthlyRunning.filter((a) => a.avgPace !== null && (a.distance ?? 0) > 0);
+      if (withBoth.length === 0) return null;
+      // 거리 가중 평균 페이스
+      const totalDist = withBoth.reduce((s, a) => s + (a.distance ?? 0), 0);
+      const totalTime = withBoth.reduce((s, a) => s + (a.avgPace! * ((a.distance ?? 0) / 1000)), 0);
+      return totalTime / (totalDist / 1000);
+    })(),
+  };
+
+  // 러닝 분석 (최근 30일)
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const runningRecords = await prisma.activity.findMany({
+    where: {
+      activityType: { contains: "running" },
+      startTime: { gte: thirtyDaysAgo },
+    },
+    orderBy: { startTime: "desc" },
+    select: {
+      startTime: true,
+      avgPace: true,
+      avgHR: true,
+      maxHR: true,
+      distance: true,
+      trainingEffect: true,
+      vo2maxEstimate: true,
+    },
+  });
+
+  // 주간 볼륨 (8주)
+  const allRecentRunning = await prisma.activity.findMany({
+    where: {
+      activityType: { contains: "running" },
+      startTime: { gte: eightWeeksAgo },
+    },
+    select: { startTime: true, distance: true, duration: true },
+    orderBy: { startTime: "asc" },
+  });
+
+  const weeklyVolumes: { weekLabel: string; distanceKm: number; count: number }[] = [];
+  // #321: KST Mon 00:00 기준 (서버 로컬 TZ 대신). 이번 주 = i=0, 지난 주 = i=1 ...
+  // label 은 KST wall-clock 기준 (UTC 서버에서 Date.getMonth/getDate 쓰면 KST Mon 인스턴트가
+  // 전날 UTC 로 보이므로 하루 밀림 → ymdKST 로 KST 날짜 문자열 파싱).
+  for (let i = 7; i >= 0; i--) {
+    const wStart = weekStartKST(i, now);
+    const wEnd = new Date(wStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const weekRuns = allRecentRunning.filter(
+      (a) => a.startTime >= wStart && a.startTime < wEnd
+    );
+    const [, mm, dd] = ymdKST(wStart).split("-");
+    weeklyVolumes.push({
+      weekLabel: `${Number(mm)}/${Number(dd)}`,
+      distanceKm: Math.round(weekRuns.reduce((s, a) => s + (a.distance ?? 0), 0) / 100) / 10,
+      count: weekRuns.length,
+    });
+  }
+
+  // 오버트레이닝 위험 판단
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const fourteenDaysAgo = new Date();
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+
+  const [recentHR, prevHR, recentSleep, prevSleep] = await Promise.all([
+    prisma.heartRateRecord.findMany({
+      where: { date: { gte: sevenDaysAgo } },
+      select: { restingHR: true, hrvStatus: true },
+    }),
+    prisma.heartRateRecord.findMany({
+      where: { date: { gte: fourteenDaysAgo, lt: sevenDaysAgo } },
+      select: { restingHR: true, hrvStatus: true },
+    }),
+    prisma.sleepRecord.findMany({
+      where: { date: { gte: sevenDaysAgo } },
+      select: { sleepScore: true },
+    }),
+    prisma.sleepRecord.findMany({
+      where: { date: { gte: fourteenDaysAgo, lt: sevenDaysAgo } },
+      select: { sleepScore: true },
+    }),
+  ]);
+
+  const avg = (arr: (number | null)[]) => {
+    const valid = arr.filter((v): v is number => v !== null);
+    return valid.length > 0 ? valid.reduce((s, v) => s + v, 0) / valid.length : null;
+  };
+
+  const recentAvgHR = avg(recentHR.map((r) => r.restingHR));
+  const prevAvgHR = avg(prevHR.map((r) => r.restingHR));
+  const recentAvgHRV = avg(recentHR.map((r) => r.hrvStatus));
+  const prevAvgHRV = avg(prevHR.map((r) => r.hrvStatus));
+  const recentAvgSleep = avg(recentSleep.map((r) => r.sleepScore));
+  const prevAvgSleep = avg(prevSleep.map((r) => r.sleepScore));
+
+  const hrRising = recentAvgHR !== null && prevAvgHR !== null && recentAvgHR - prevAvgHR >= 5;
+  const hrvDropping = recentAvgHRV !== null && prevAvgHRV !== null && prevAvgHRV > 0
+    && (prevAvgHRV - recentAvgHRV) / prevAvgHRV >= 0.2;
+  const sleepDeclining = recentAvgSleep !== null && prevAvgSleep !== null && prevAvgSleep - recentAvgSleep >= 15;
+
+  const riskCount = [hrRising, hrvDropping, sleepDeclining].filter(Boolean).length;
+  const riskLevel = riskCount >= 2 ? "high" as const : riskCount === 1 ? "moderate" as const : "low" as const;
+
+  return (
+    <ActivitiesClient
+      activities={activities.map((a) => ({
+        ...a,
+        startTime: a.startTime.toISOString(),
+      }))}
+      monthSummary={monthSummary}
+      estimatedMaxHR={estimatedMaxHR}
+      userLTHR={userLTHR}
+      runningRecords={runningRecords.map((r) => ({
+        date: ymdKST(r.startTime),
+        avgPace: r.avgPace,
+        avgHR: r.avgHR,
+        maxHR: r.maxHR,
+        distance: r.distance,
+        trainingEffect: r.trainingEffect,
+        vo2maxEstimate: r.vo2maxEstimate,
+      }))}
+      weeklyVolumes={weeklyVolumes}
+      overtrainingRisk={{ hrRising, hrvDropping, sleepDeclining, riskLevel }}
+    />
+  );
+}

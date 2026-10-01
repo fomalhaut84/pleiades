@@ -1,0 +1,420 @@
+# Roadmap
+
+## Phase 1: Foundation
+
+- [x] Next.js 14 + TypeScript + Tailwind 프로젝트 초기화
+- [x] Prisma 설정 + PostgreSQL + schema.prisma 적용
+- [x] 시드 스크립트 작성 (3계좌 보유종목, `@docs/seed-data.md` 참조)
+- [x] 기본 레이아웃 (사이드바 nav, 계좌 탭, 다크 테마)
+- [x] 대시보드 메인 페이지 (계좌별 요약 카드)
+- [x] 계좌 상세 페이지 (보유종목 테이블, 파이차트)
+- [x] PM2 + Nginx 배포 설정
+- [x] Nginx basic auth 설정 (최소 인증 — 외부 접근 차단)
+- [x] .env 구성 (DATABASE_URL, BASE_URL, BASIC_AUTH_USER/PASS)
+
+## Phase 2: Live Prices
+
+- [x] yahoo-finance2 연동 (`src/lib/price-fetcher.ts`)
+- [x] PriceCache upsert 로직
+- [x] node-cron 스케줄러 (장중/장외 분리)
+- [x] 환율 자동 반영 (USDKRW=X)
+- [x] 대시보드에 실시간 가치 표시 (하드코딩 제거)
+- [x] 주가 갱신 상태 표시 (마지막 갱신 시각)
+- [x] 수동 새로고침 버튼
+- [x] **환차손익 분리** — 미국주 평가손익을 "주가 변동분 + 환율 변동분"으로 분해 표시
+  - [x] Holding에 avgFxRate (매수 시점 가중평균 환율) 필드 추가
+  - [x] 평가손익 = (현재가×현재환율) - (평단가×매수환율), 이를 주가분/환율분으로 분리
+  - [x] 대시보드에 종목별 "주가 손익 / 환율 손익" 컬럼 표시
+
+## Phase 3: Trade Management
+
+- [x] 거래 입력 폼 (계좌/종목/매수·매도/수량/가격/환율/메모)
+- [x] Trade 생성 → Holding 자동 업데이트 (트랜잭션)
+- [x] 매수: 가중평균 재계산 / 매도: 수량 차감
+- [x] 거래 내역 리스트 (필터: 계좌, 날짜, 종목)
+- [x] 거래 수정/삭제 + Holding 역보정
+- [x] 기존 거래 데이터 일괄 시드
+- [x] **CSV 임포트** — 증권사(키움/삼성 등) 거래내역 CSV 파싱 → Trade 일괄 등록
+  - [x] CSV 컬럼 매핑 UI (파일 업로드 → 미리보기 → 확인 → 임포트)
+  - [x] 중복 거래 감지 (날짜+종목+수량+가격 기준)
+- [x] RSU 전용 워크플로 (베스팅 → 매도 → 전환)
+- [x] **배당금 추적**
+  - [x] Dividend 전용 모델: ticker, 수령일, 세전/세후 금액, 환율
+  - [x] 배당 CRUD API + 세금 자동 계산 (US 15%, KR 15.4%)
+  - [x] 배당 캘린더 (12개월 그리드)
+  - [x] 연간 요약 (세후 총액, 원천징수, 재투자 건수)
+  - [x] 소담 배당 ETF 재투자 플래그 추적
+
+## Phase 4: Tax Center
+
+- [x] Deposit CRUD (입금/증여 기록)
+- [x] 증여세 대시보드 (계좌별 한도 게이지, 10년 리셋)
+- [x] 양도소득세 계산기 (해외주식 250만 공제 + 22%)
+- [x] 국내 ETF 과세 (15.4%)
+- [x] RSU 근로소득세 예상
+- [x] "매도 전 세금 미리보기" 기능
+- [x] **배당소득세 추적** (Phase 3 배당금 연계)
+  - [x] 미국주 배당 원천징수 15% 자동 반영 (Dividend.taxAmount)
+  - [x] 국내 ETF 배당소득세 15.4%
+  - [x] 연간 배당소득 합산 표시 (금융소득종합과세 2,000만원 기준선 모니터링)
+  - [x] 세금 대시보드에 "배당소득세 YTD" 카드 추가
+
+## Phase 5: Simulator
+
+- [x] **스톡옵션 관리**
+  - [x] StockOption 모델 + StockOptionVesting 스케줄 (DB)
+  - [x] 시드 데이터 (카카오 스톡옵션 4건 + 행사 일정)
+  - [x] 대시보드 — 부여별 내가치(intrinsic value), 행사 가능/대기/만료 상태, 만료일 카운트다운
+  - [x] 행사 시뮬레이터 — 목표 주가 입력 → 행사 이익 + 세금 계산
+- [x] **근로소득 프로필 + 통합 세금 시뮬레이션**
+  - [x] IncomeProfile 모델 — 연도별 세전 총급여 or 종합소득 과세표준 (택1), 기납부 세액
+  - [x] 근로소득공제 자동 계산 (총급여 입력 시)
+  - [x] 연봉 + RSU + 스톡옵션 합산 누진세 정확 계산
+  - [x] 기납부 세액 차감 → 추가 납부 예상액
+  - [x] /tax 페이지 통합 (기존 RSU 세금 계산 고도화)
+- [x] 복리 계산 엔진 (계좌별, 월 적립금 반영)
+- [x] RSU 스케줄 반영 시뮬레이션
+- [x] 시나리오 비교 (낙관 10% / 기본 8% / 비관 5%)
+- [x] Recharts 인터랙티브 차트
+- [x] 증여세 한도 도달 시점 표시
+- [x] 소담 19세, 다솜 20세 시점 예측
+- [x] **수익률 분석 (Performance Attribution)**
+  - [x] PortfolioSnapshot 모델 — 매일 계좌별 총 평가액 스냅샷 자동 저장
+    - Phase 2 PriceCache cron 완료 직후 실행 (주가 갱신 → 스냅샷 순서 보장)
+    - 한국장 종료 후(15:35 KST) + 미국장 종료 후(06:05 KST) 각각 스냅샷
+  - [x] 계좌별 TWR(시간가중수익률) 계산 — 입출금 영향 배제한 순수 운용 성과
+  - [x] 벤치마크 대비 초과수익률 (세진→S&P500, 소담→배당지수, 다솜→나스닥)
+  - [x] 종목별 기여도 분석 (어떤 종목이 수익을 끌어올렸는지)
+  - [x] 기간별 수익률 차트 (1개월/3개월/6개월/1년/전체)
+
+## Phase 6: Polish
+
+- [x] **인증 업그레이드** — Nginx basic auth → NextAuth.js PIN 인증
+  - [x] 세진 전용 풀 액세스 (PIN 로그인)
+  - [x] Phase 15(아이들 뷰) 준비: 역할 기반 접근 제어 기반 마련
+- [x] **모바일 반응형** — 역할 분담: 모바일 웹은 "조회 전용 대시보드", 입력/알림은 텔레그램 중심
+  - [x] 대시보드·차트·세금 페이지 모바일 최적화
+  - [x] 모바일에서는 거래 입력 대신 "텔레그램으로 기록하기" 유도 링크
+- [x] **데이터 엑스포트**
+  - [x] 거래내역 CSV 다운로드 (계좌별/기간별)
+  - [x] 배당내역 CSV 다운로드
+  - [x] 증여 내역 엑스포트 (홈택스 신고 근거자료용)
+- [x] PostgreSQL 자동 백업 (pg_dump + cron)
+- [x] 다크/라이트 모드 토글
+- [x] PWA 설정
+- [x] 에러 바운더리 + 로딩 상태
+
+---
+
+# 2차 마일스톤 (상세: `@docs/milestone-2.md`)
+
+## Phase 7: 텔레그램 봇 — 기본
+
+- [x] grammY + webhook 세팅
+- [x] Chat ID 화이트리스트 인증
+- [x] 알림 (컨텍 분기점검, RSU 베스팅일, 월적립 리마인더) — Phase 6에서 이동
+- [x] /현황, /계좌 — 포트폴리오 조회
+- [x] /매수, /매도 — 거래 기록 (인라인 키보드 확인)
+- [x] /주가, /환율 — 시세 조회
+- [x] /주가 실시간 조회 (yahoo-finance2 직접 호출, 보유 종목은 PriceCache 갱신)
+- [x] 기존 API routes 재사용
+
+## Phase 8: 소비/수입 관리
+
+- [x] Transaction, Category 스키마 추가
+- [x] 카테고리 웹 CRUD (추가/수정/삭제)
+- [x] 텔레그램 소비/수입 입력 ("점심 12000")
+- [x] 규칙 기반 카테고리 자동 분류
+- [x] /소비, /수입, /예산 커맨드
+- [x] 웹 대시보드에 소비/수입 차트 추가
+
+## Phase 9: Claude AI 어드바이저
+
+- [x] MCP 서버 구현 (9개 도구: 포트폴리오, 세금, 소비, 시뮬레이션, 시세)
+- [x] Claude Code CLI 래퍼 + 시스템 프롬프트 (askAdvisor, rate limiter, MCP 연동)
+- [x] 텔레그램 AI 질문 연동 (/ai 커맨드 + 자연어 fallback)
+- [x] 웹 AI 분석 페이지 (/ai 채팅 UI + 프리셋 질문 + marked 렌더링)
+- [x] 자연어 거래 입력 파싱 (AI 파싱 + 확인 키보드)
+- [x] 텔레그램 AI 응답 포맷 개선 (표→리스트, HTML parse_mode)
+
+## Phase 10: 알림 + 자동화
+
+- [x] AlertConfig DB 모델 + /알림설정 커맨드
+- [x] 매일 포트폴리오 요약 알림 (daily_summary_hour 기준)
+- [x] 급등락 / 환율 변동 알림 (refreshPrices 후 체크)
+- [x] 예산 초과 / 증여 한도 경고
+- [x] RSU 베스팅 D-7, D-1 리마인드 (기존 구현 완료)
+- [x] 월간 리포트 자동 발송 (AI sonnet 생성 + 텔레그램 발송)
+
+## Phase 11: 모닝 브리핑 + 전략 맞춤 AI 어드바이저
+
+- [x] **11-A: 종목별 전략 태그 시스템**
+- [x] **11-B: 관심종목 워치리스트**
+- [x] **11-C: 기술적 분석 엔진**
+- [x] **11-D: 전략별 맞춤 조언 로직**
+- [x] **11-E: 모닝 브리핑**
+- [x] **11-F: 수동 종목 심층 분석**
+- [x] **11-G: 텔레그램 메시지 포맷 통합 개선**
+- [x] **11-H: 텔레그램 메시지 포맷 개선 2차**
+
+---
+
+# 3차 마일스톤 (상세: `@docs/milestone-3.md`)
+
+> 3차 마일스톤: 자산 통합 + 교육 + 전략 고도화 — **"성장하는 도구"**
+
+## Phase 12: 순자산 대시보드 (Net Worth Tracker)
+
+- [x] Asset + NetWorthSnapshot DB 모델 + CRUD API
+- [x] 텔레그램 순자산/자산 커맨드
+- [x] 순자산 스냅샷 자동화 (월별 cron + MCP)
+- [x] 웹 순자산 대시보드 (파이차트 + 추이 라인차트 + 자산/부채 목록)
+
+## Phase 13: 분기 리포트 PDF 자동 생성
+
+- [x] AI 분기 리뷰 분석 (데이터 수집 + AI 코멘트)
+- [x] PDF 생성 엔진 (react-pdf 템플릿 + API)
+- [x] 분기 자동 발송 + /리포트 커맨드
+- [x] 웹 리포트 열람/다운로드 페이지
+
+## Phase 14: 백테스팅 엔진
+
+- [x] 전략 룰 DSL + 백테스트 엔진 (프리셋 4종 + 메트릭)
+- [x] 텔레그램 /백테스트 커맨드
+- [x] 웹 백테스팅 페이지 (차트 + 파라미터 + 통화 인식)
+
+## Phase 15: 아이들 금융 교육 뷰
+
+- [x] 아이 전용 간소화 대시보드 (레벨별 뷰 + 이모지 + 종목 설명 + 배당 + 복리 미리보기)
+- [x] "내 투자 이야기" 타임라인
+- [x] 용돈 투자 시뮬레이터
+
+---
+
+# 4차 마일스톤 (상세: `docs/specs/phase16-expense-enhancement.md`, `docs/specs/phase17-admin-center.md`)
+
+> 4차 마일스톤: 가계부 강화 + 관리 페이지 — **"웹에서 모든 데이터를 관리할 수 있는 자급자족 시스템"**
+
+## Phase 16: 가계부 강화
+
+- [x] **16-A**: 거래 CRUD API + 검증 유틸 + 후잉 웹훅 전송 유틸
+- [x] **16-B**: 거래 웹 UI + 네비게이션 개편 + 용어 정리 (Trade→종목 거래, Transaction→내역)
+- [x] **16-C**: 예산 API + UI (카테고리별 월 예산, 진행률, 월 복사)
+- [x] **16-C2**: 카테고리 그루핑 (CategoryGroup 모델 + 그룹별 예산/분석)
+- [x] **16-D**: 가계부 분석 (전월 대비 증감, 지출 트렌드 3~6개월, 그룹별 집계)
+- [x] **16-E**: 반복 거래 (RecurringTransaction 모델 + cron 자동 생성 + 관리 UI)
+- [x] **16-F**: 가계부 자산 연동 (transfer_out/in 유형 + Asset 자동 업데이트)
+
+## Phase 17: 설정/관리 페이지 (Admin Center)
+
+- [x] **17-A**: 계좌 관리 (PATCH API + AccountEditor)
+- [x] **17-B**: RSU 스케줄 CRUD (추가/수정/삭제 API + UI)
+- [x] **17-C**: 스톡옵션 CRUD (옵션 + 행사 스케줄 관리)
+- [x] **17-D**: 관심종목 웹 관리 (API + /watchlist 페이지)
+- [x] **17-E**: 설정 통합 페이지 (계좌, 알림, 근로소득, 후잉 연동)
+
+---
+
+# 5차 마일스톤
+
+> 5차 마일스톤: AI 어드바이저 데이터 확장 + 가계부 입력 개선 — **"AI가 모든 데이터에 접근하고, 텔레그램 입력이 더 편리한 시스템"**
+
+## Phase 18: AI 어드바이저 MCP 도구 확장
+
+- [x] **18-A**: RSU + 스톡옵션 조회 도구 (get_rsu_schedule, get_stock_options)
+- [x] **18-B**: 관심종목 조회 도구 (get_watchlist — 현재가 + 목표가 대비)
+- [x] **18-C**: 가계부 상세 조회 도구 (get_transactions — 기간/카테고리 필터, 개별 내역)
+
+## Phase 19: 텔레그램 가계부 입력 강화
+
+- [x] **19-A**: 복수 항목 자연어 입력 (한 메시지에 여러 거래 + 날짜 파싱)
+
+## Phase 20: 트레이딩 알림 + AI 매매 가이드
+
+- [x] **20-A**: 관심종목 시세 갱신 (refreshPrices에 Watchlist 티커 포함)
+- [x] **20-B**: 목표가 도달 알림 (보유/관심종목 targetBuy/targetPrice 도달 시 텔레그램 알림)
+- [x] **20-C**: 전략 기반 TA 시그널 알림 (스윙/모멘텀/단타 종목의 TA 조건 충족 시 자동 알림)
+- [x] **20-D**: 매매 전략 스킬 연동 (stock-trading-method 스킬을 서버 rules에 배치)
+- [x] **20-E**: 전략 종목 주기적 모니터링 (장중 TA + 스킬 기반 체크 → 시그널 알림, 주기 설정 가능)
+
+## Phase 21: 아이들 자산 + 증여 통합 관리
+
+- [x] **21-A**: 웹 자산 관리 페이지 (Asset CRUD UI — 추가/수정/삭제)
+- [x] **21-B**: 비주식 자산 증여 추적 (Deposit 모델을 Asset에도 연결, 아이별 입금/이체 기록)
+- [x] **21-C**: 아이별 통합 증여 현황 (주식 + 비주식 합산 뷰, 비과세 한도 대비)
+
+## 기타 개선
+
+- [x] AI 주가 실시간 조회 (get_prices에서 fetchQuote 직접 호출)
+- [x] 가계부 수정 시 페이징 초기화 버그 수정
+
+---
+
+# 6차 마일스톤
+
+> 6차 마일스톤: AI 어드바이저 풀 액세스 — **"AI가 myFinance의 모든 데이터에 읽고 쓸 수 있는 완전 자율 어드바이저로 진화"**
+
+## Phase 22: AI 시스템 안내 강화
+
+- [x] **22-A**: 시스템 프롬프트에 봇 기능 + 쓰기 도구 사용 규칙 명시 (CLAUDE.md 직접 참조 금지, 사용자 확인 규칙)
+
+## Phase 23: AI 쓰기 도구 (Tier 1)
+
+- [x] **23-A**: 관심종목 CRUD MCP 도구 (add/update/delete_watchlist)
+- [x] **23-B**: 보유 종목 전략 설정 MCP 도구 (set_holding_strategy)
+- [x] **23-C**: 가계부 거래 CRUD MCP 도구 (create/update/delete_transaction)
+- [x] **23-D**: 카테고리 CRUD MCP 도구 (create/update/delete_category)
+
+## Phase 24: AI 쓰기 도구 (Tier 2)
+
+- [x] **24-A**: 자산 + 자산 입금/이체 CRUD (create/update/delete_asset, create_asset_deposit)
+- [x] **24-B**: 예산 + 반복거래 + 알림 설정 (set_budget, recurring_transaction, update_alert_config)
+- [x] **24-C**: RSU + 스톡옵션 관리 (create/update_rsu_schedule, stock_option, exercise_vesting)
+
+# 7차 마일스톤
+
+> 7차 마일스톤: 웹 버그 수정 + 사용성/기능 개선 — **"웹 UI의 데이터 정합성과 일상 사용성 강화"**
+
+## Phase 25: 웹 버그 수정 + UX 개선
+
+- [x] **25-A**: market 코드 정규화 통일 (price-fetcher/trade-service/import + 마이그레이션 스크립트)
+- [x] **25-B**: 보유종목 dropdown 필터링 (shares > 0)
+- [x] **25-C**: Trade import 검증 강화 (날짜 범위 + ticker 정규화)
+- [x] **25-D**: USD 거래/배당 환율 검증 (헬퍼 추출 + 편집 silent 0 차단)
+- [x] **25-E**: API 응답 형식 일관화 (DELETE 204 통일 + 비즈니스 에러 화이트리스트 헬퍼)
+- [x] **25-F**: 입력 검증 Zod 통합 (핵심 입력 경로 한정 + vitest 도입 + 69 단위 테스트)
+- [x] **25-G**: UX 개선 묶음 (sub-issue 분할)
+  - [x] **25-G-1**: 거래/배당 새 입력 빈 상태 안내
+  - [x] **25-G-2**: 면책 강조 (Disclaimer 컴포넌트 9개 사용처 통합 + light 모드 대응)
+  - [x] **25-G-3**: Holding diff 토스트 (토스트 인프라 신규 + 거래 생성/수정 시 보유 변동 알림)
+  - [x] **25-G-4**: 베스팅 캘린더 (RSU + 스톡옵션 통합 월별 캘린더 + 다가오는 90일 리스트)
+- [x] **25-H-1**: Next.js 14 → 15.5.19 마이그레이션 (Dependabot HIGH 4 + MEDIUM 다수 해결)
+- [x] **25-H-2**: next-auth 4 → Auth.js v5 마이그레이션 (uuid 권고 해결, next HIGH→moderate)
+
+---
+
+# 8차 마일스톤 — 내부 정합성 + 외부 호환성
+
+> 7차에서 남긴 빚 청산 + 동일 패턴 일반화 + 외부 표준 호환. **응답 envelope (Phase 27) 은 영향 범위가 커 단독 마일스톤으로 분리.**
+
+## Phase 26: 정합성 + 호환성
+
+- [x] **26-A**: Prisma TransactionClient 타입 정리 (Codex P1 권고 빚 청산)
+- [x] **26-B**: yellow 톤 안내 박스 → `<Notice>` 컴포넌트 통합 (5+1 사용처, 3 variants, WCAG AAA)
+- [x] **26-C**: GET 쿼리 파라미터 Zod 검증 (zod-schemas lib + 8 라우트 + 26 단위 테스트)
+- [x] **26-D**: Generic 성공 토스트 확장 (22 컴포넌트: 9 DeleteModal + 13 Form/EditPanel)
+- [x] **26-F**: 베스팅 iCal 내보내기 (RFC 5545 + line folding + CR 정규화 + 145 단위 테스트)
+
+---
+
+# 9차 마일스톤 — 응답 envelope `ApiResponse<T>` 전면 도입
+
+> 25-E (API 응답 형식 일관화) 후속 — DELETE 204 / 비즈니스 에러 헬퍼는 끝났지만 **성공 응답 형식** 은 라우트마다 다름. 53 라우트 + 40+ 클라이언트 fetcher 영향 범위 → 단독 마일스톤. 점진 적용 (sub-phase 단위) 으로 안전하게.
+
+## Phase 27: ApiResponse envelope 전면 도입
+
+- [x] **27-A**: `ApiResponse<T>` 타입 + 헬퍼 (`ok` / `fail` / `paginated` / `noContent`) + 16 단위 테스트
+- [x] **27-B**: 단순 GET 라우트 마이그 (10 라우트 + 13 fetcher, atomic)
+- [x] **27-C**: POST/PUT/DELETE + 일부 GET 마이그 (5 sub-PR 완료)
+  - [x] **27-C-1**: Watchlist + Recurring + Settings + IncomeProfile (7 라우트 16 메소드)
+  - [x] **27-C-2**: Category + Budget + Asset (9 라우트 + 2 fetcher)
+  - [x] **27-C-3**: Dividend + Deposit + Transaction (9 라우트 + 2 fetcher)
+  - [x] **27-C-4**: RSU + StockOption (7 라우트 + 1 fetcher)
+  - [x] **27-C-5**: Trade (3 라우트 + 3 fetcher + api-errors 헬퍼 통일)
+- [x] **27-D**: pagination meta 통일 + 복잡한 GET (8 라우트 + ExpensesClient/ImportWizard unwrap)
+- [x] **27-E**: 가이드 문서 갱신 (`.claude/rules/api-routes.md`, `CLAUDE.md`)
+
+---
+
+# 10차 마일스톤 — envelope 잔여 마이그
+
+> 27 시리즈에서 빠진 16 라우트를 envelope 으로 정리. 외부 consumer (cron/MCP) 가 lib 직접 호출이라 영향 적음. 5 sub-PR 로 분할.
+
+## Phase 28: envelope 잔여 16 라우트
+
+- [x] **28-A**: accounts (2 라우트)
+- [x] **28-B**: networth + reports + tax/gift (4 라우트, PDF 다운로드 raw 유지)
+- [x] **28-C**: performance/* (4 라우트, cron/MCP lib 직접 호출 — 영향 없음)
+- [x] **28-D**: prices/* (4 라우트, bot/cron lib 직접 호출 — 영향 없음, 429 throttle 보존)
+- [x] **28-E**: ai/ask + backtest (2 라우트) + 가이드 문서 "전체 마이그 완료" 표기 갱신
+
+---
+
+# 11차 마일스톤 — 능동 AI + 커스텀 전략
+
+> 관심종목 시세 정확도 개선 + long_hold 매수 기회 감시 + 능동 AI 리뷰 (클로징/주간) + 사용자 자연어 커스텀 전략.
+
+## Phase 29: 능동 AI 인사이트 + 커스텀 전략 스킬
+
+- [x] **29-A**: 관심종목 시세 버그 fix + 진단 로깅
+- [x] **29-B v1**: long_hold 매수 기회 + 관심종목 long_hold 지원
+- [x] **29-D v1**: 능동 AI 인사이트 cron — 클로징/주간 리뷰
+- [x] **29-E v1**: 커스텀 전략 스킬 업로드 (자연어 → AI 파싱 → 순수 코드 감시 → 알림)
+- [x] **29-C**: TA 시그널 AI 매매 가이드 (초기 구현 + 12차 30-A 폴리시로 최종 마감)
+
+---
+
+# 12차 마일스톤 — 커스텀 전략 UI + AI 매매 가이드 통합
+
+> 11차 잔여 29-C 클로징 + 커스텀 전략 웹 관리 툴 제공.
+
+## Phase 30: AI 가이드 폴리시 + 웹 UI
+
+- [x] **30-A**: TA 시그널 AI 가이드 폴리시 (on/off + 티커별 6h 쿨다운)
+- [x] **30-B**: 커스텀 전략 웹 UI (`/strategies` CRUD)
+
+---
+
+# 13차 마일스톤 — 설정 UX 통합 + 전략 조건 확장
+
+> 알림 설정 카테고리 그루핑 + 모바일 네비 자동 파생 + 커스텀 전략 시간/보유 조건.
+
+## Phase 31: 설정 UI + 조건 확장
+
+- [x] **31-E**: nav-config 자동 파생 리팩터 (`BottomTab.MORE_ITEMS` 하드코딩 제거)
+- [x] **31-B**: AlertConfig 통합 설정 UI (카테고리 그루핑)
+- [x] **31-A**: 커스텀 전략 v2 조건 확장 (time_window / weekday / holding_status)
+
+---
+
+# 14차 마일스톤 — MCP 인프라 격상 + 관측 개선
+
+> MCP 서버를 stdio 서브프로세스 → 상시 상주 HTTP 서버 (PM2) 로 승격하여 로그 트래킹/cold-start/커넥션 재사용 개선.
+
+## Phase 32: MCP HTTP + PM2 + 로깅
+
+- [x] **32-A**: HTTP transport PoC (multi-session stateful 패턴 확정)
+- [x] **32-B**: MCP server HTTP transport 정식 도입 + PM2 승격
+- [x] **32-C**: 구조화 로깅 (pino + 파일 rotation + SDK bypass 감지)
+
+---
+
+# 15차 마일스톤 — 관측 & 이력 & 전략 확장
+
+> 알림 발동 이력 웹 조회, MCP 로그 대시보드, 커스텀 전략 v3 (어닝 · 크로스-티커).
+
+## Phase 33: 관측 & 이력 & 정책
+- [x] **33-D**: 관심종목 알림 시간대 토글 (24h ↔ 장중 only)
+- [x] **33-A**: AlertHistory 모델 + 발동 hook (9개 kind 자동 저장)
+- [x] **33-B**: 알림 이력 페이지 `/alerts/history` (필터·차트·리스트)
+- [x] **33-C**: MCP 로그 대시보드 `/admin/mcp-logs` + crash 파일 분리 + 스키마 문서화 (#409 흡수)
+
+## Phase 34: 커스텀 전략 v3
+- [x] **34-A**: 어닝 캘린더 조건 (`earnings_within_days`, yahoo-finance2 무료)
+- [x] **34-B**: 크로스-티커 조건 (`cross_ticker` SPY/VIX 등 벤치마크 게이트)
+- [ ] **34-C**: 뉴스 조건 (16차 Phase 36 으로 재구성, 다시 17차로 이월)
+
+---
+
+# 16차 마일스톤 — AI 정책 강화 & 뉴스 조건
+
+> `/ai` sonnet 승격 + 자연어 전략 편집 (Phase 35). 뉴스 조건 (Phase 36) 은 17차 이월.
+
+## Phase 35: AI 정책 강화
+- [x] **35-A**: `/ai` 자유대화 sonnet 승격 + `AdvisorIntent` API
+- [x] **35-B**: 자연어 전략 편집 (미리보기 + diff + PUT conditions 확장)
+
+## Phase 36: 뉴스 조건 (17차 이월)
+- [ ] **36-A**: 뉴스 API 도입 결정 — 조사 완료 (`docs/specs/435-news-api-decision.md`), 17차에서 결정
+- [ ] **36-B**: NewsCache + fetcher + cron
+- [ ] **36-C**: `news_keyword` 조건

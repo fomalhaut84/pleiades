@@ -1,0 +1,451 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                 String              @id @default(cuid())
+  name               String
+  ownerAge           Int?
+  strategy           String?
+  horizon            Int?
+  benchmarkTicker    String?
+  createdAt          DateTime            @default(now())
+  holdings           Holding[]
+  trades             Trade[]
+  deposits           Deposit[]
+  rsuSchedules       RSUSchedule[]
+  stockOptions       StockOption[]
+  dividends          Dividend[]
+  portfolioSnapshots PortfolioSnapshot[]
+}
+
+model Holding {
+  id          String           @id @default(cuid())
+  accountId   String
+  account     Account          @relation(fields: [accountId], references: [id])
+  ticker      String
+  displayName String
+  market      String
+  shares      Int
+  avgPrice    Float
+  currency    String           @default("KRW")
+  avgPriceFx  Float?
+  avgFxRate   Float?
+  strategy    HoldingStrategy?
+
+  @@unique([accountId, ticker])
+}
+
+model HoldingStrategy {
+  id          String    @id @default(cuid())
+  holdingId   String    @unique
+  holding     Holding   @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  strategy    String    @default("long_hold") // long_hold, swing, momentum, value, watch, scalp
+  memo        String?
+  targetPrice Float?
+  stopLoss    Float?
+  entryLow    Float?
+  entryHigh   Float?
+  reviewDate  DateTime?
+  updatedAt   DateTime  @updatedAt
+}
+
+model Trade {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id])
+  ticker      String
+  displayName String
+  market      String
+  type        String
+  shares      Int
+  price       Float
+  currency    String
+  fxRate      Float?
+  totalKRW    Float
+  note        String?
+  tradedAt    DateTime
+  createdAt   DateTime @default(now())
+}
+
+model Deposit {
+  id          String   @id @default(cuid())
+  accountId   String?
+  account     Account? @relation(fields: [accountId], references: [id])
+  assetId     String?
+  asset       Asset?   @relation(fields: [assetId], references: [id])
+  amount      Float
+  source      String
+  note        String?
+  depositedAt DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([assetId, depositedAt])
+}
+
+model PriceCache {
+  ticker        String   @id
+  displayName   String
+  market        String
+  price         Float
+  currency      String
+  change        Float?
+  changePercent Float?
+  updatedAt     DateTime @updatedAt
+}
+
+model RSUSchedule {
+  id          String    @id @default(cuid())
+  accountId   String
+  account     Account   @relation(fields: [accountId], references: [id])
+  vestingDate DateTime
+  shares      Int
+  basisValue  Float
+  basisDate   DateTime?
+  basisPrice  Float?
+  vestPrice   Float?
+  status      String    @default("pending")
+  sellShares  Int?
+  keepShares  Int?
+  note        String?
+  vestedAt    DateTime?
+}
+
+model StockOption {
+  id              String               @id @default(cuid())
+  accountId       String
+  account         Account              @relation(fields: [accountId], references: [id])
+  ticker          String
+  displayName     String
+  grantDate       DateTime             // 부여일
+  expiryDate      DateTime             // 만료일
+  strikePrice     Float                // 행사가격
+  totalShares     Int                  // 총부여수량
+  cancelledShares Int      @default(0) // 취소수량
+  exercisedShares Int      @default(0) // 행사수량
+  adjustedShares  Int      @default(0) // 조정수량
+  remainingShares Int                  // 잔여수량
+  note            String?
+  createdAt       DateTime             @default(now())
+  vestings        StockOptionVesting[]
+
+  @@index([accountId, grantDate])
+}
+
+model StockOptionVesting {
+  id            String      @id @default(cuid())
+  stockOptionId String
+  stockOption   StockOption @relation(fields: [stockOptionId], references: [id])
+  vestingDate   DateTime    // 행사 가능일
+  shares        Int         // 행사 가능 수량
+  status        String      @default("pending") // pending | exercisable | exercised | expired
+  exercisedAt   DateTime?
+  note          String?
+
+  @@index([stockOptionId, vestingDate])
+}
+
+model IncomeProfile {
+  id              String   @id @default(cuid())
+  year            Int                         // 귀속 연도
+  inputType       String                      // "gross" | "taxable"
+  grossSalary     Float?                      // 세전 총급여 (inputType=gross 시)
+  earnedDeduction Float?                      // 근로소득공제 (자동 계산)
+  taxableIncome   Float                       // 종합소득 과세표준
+  prepaidTax      Float    @default(0)        // 기납부 세액 (원천징수 합계)
+  note            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([year])
+}
+
+model Dividend {
+  id          String    @id @default(cuid())
+  accountId   String
+  account     Account   @relation(fields: [accountId], references: [id])
+  ticker      String
+  displayName String
+  exDate      DateTime?
+  payDate     DateTime
+  amountGross Float
+  amountNet   Float
+  taxAmount   Float?
+  currency    String
+  fxRate      Float?
+  amountKRW   Float
+  reinvested  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  @@index([accountId, payDate])
+  @@index([payDate])
+}
+
+model PortfolioSnapshot {
+  id               String            @id @default(cuid())
+  accountId        String
+  account          Account           @relation(fields: [accountId], references: [id])
+  snapshotDate     DateTime
+  totalValueKRW    Float
+  totalCostKRW     Float
+  fxRate           Float
+  createdAt        DateTime          @default(now())
+  holdingSnapshots HoldingSnapshot[]
+
+  @@unique([accountId, snapshotDate])
+}
+
+model HoldingSnapshot {
+  id                  String            @id @default(cuid())
+  portfolioSnapshotId String
+  portfolioSnapshot   PortfolioSnapshot @relation(fields: [portfolioSnapshotId], references: [id], onDelete: Cascade)
+  ticker              String
+  displayName         String
+  shares              Float
+  price               Float
+  currency            String
+  valueKRW            Float
+
+  @@index([portfolioSnapshotId])
+}
+
+model CategoryGroup {
+  id         String     @id @default(cuid())
+  name       String     @unique
+  icon       String?
+  sortOrder  Int        @default(0)
+  createdAt  DateTime   @default(now())
+  categories Category[]
+  budgets    Budget[]
+}
+
+model Category {
+  id           String         @id @default(cuid())
+  slug         String         @unique // 변경 불가 식별자 ("food", "transport" 등)
+  name         String         @unique // 표시명 ("식비", "교통" 등)
+  type         String         // "expense" | "income"
+  icon         String?
+  keywords     String[]       @default([])
+  sortOrder    Int            @default(0)
+  groupId      String?
+  group        CategoryGroup? @relation(fields: [groupId], references: [id])
+  createdAt    DateTime       @default(now())
+  transactions          Transaction[]
+  budgets               Budget[]
+  recurringTransactions RecurringTransaction[]
+  whooingMap            WhooingCategoryMap?
+
+  @@index([groupId])
+}
+
+model Transaction {
+  id             String   @id @default(cuid())
+  amount         Int
+  description    String
+  categoryId     String
+  category       Category @relation(fields: [categoryId], references: [id])
+  userId         String?
+  type           String?  // "transfer_out" | "transfer_in" (null = 카테고리 type 사용)
+  linkedAssetId  String?
+  linkedAsset    Asset?   @relation(fields: [linkedAssetId], references: [id])
+  transactedAt   DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  @@index([transactedAt])
+  @@index([categoryId])
+  @@index([userId])
+  @@index([linkedAssetId])
+}
+
+model RecurringTransaction {
+  id          String    @id @default(cuid())
+  amount      Int
+  description String
+  categoryId  String
+  category    Category  @relation(fields: [categoryId], references: [id])
+  frequency   String    // "monthly" | "weekly" | "yearly"
+  dayOfMonth  Int?      // 1~31 (monthly)
+  dayOfWeek   Int?      // 0=일~6=토 (weekly)
+  monthOfYear Int?      // 1~12 (yearly)
+  isActive    Boolean   @default(true)
+  nextRunAt   DateTime
+  lastRunAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([isActive, nextRunAt])
+  @@index([categoryId])
+}
+
+model Budget {
+  id         String         @id @default(cuid())
+  categoryId String?
+  category   Category?      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  groupId    String?
+  group      CategoryGroup? @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  year       Int
+  month      Int
+  amount     Int
+  createdAt  DateTime       @default(now())
+
+  @@unique([categoryId, year, month])
+  @@unique([groupId, year, month])
+  @@index([year, month])
+}
+
+// KRX 상장 종목 캐시 (한글 종목명 → yahoo ticker 매핑)
+model KrxStock {
+  id          String   @id @default(cuid())
+  code        String   @unique // KRX 종목코드 (예: 005930)
+  name        String   // 한글 종목명 (예: 삼성전자)
+  market      String   // 유가(KOSPI), 코스닥(KOSDAQ)
+  yahooTicker String   // yahoo finance 티커 (예: 005930.KS)
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+}
+
+model BenchmarkPrice {
+  id        String   @id @default(cuid())
+  ticker    String
+  priceDate DateTime
+  close     Float
+  currency  String   @default("USD")
+
+  @@unique([ticker, priceDate])
+}
+
+model AlertConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique // "price_drop_pct", "fx_change_krw" 등
+  value     String           // "-5", "50" 등
+  label     String           // "급락 알림 (%)" — 사용자 표시용
+  updatedAt DateTime @updatedAt
+}
+
+// Phase 33-A (#416): 알림 발동 이력. 33-B 이력 페이지 + 사후 진단 데이터 소스.
+// 1 행 = 1 이벤트. 한 번의 텔레그램 배치 발송에 여러 알림이 포함되면 여러 행 저장.
+// Phase 37-A (#444): contextJson — kind 별 최소 스냅샷 (시세/TA/전략) 을 함께 저장해
+// 사후 진단 시 당시 판단 근거를 재조회할 수 있도록. 하위호환 위해 nullable — 기존 row 는 null.
+model AlertHistory {
+  id             String   @id @default(cuid())
+  firedAt        DateTime @default(now())
+  kind           String   // surge / drop / fx / target_hit / stop_loss / watch_buy / watch_zone / ta_signal / custom_strategy
+  ticker         String?  // 환율 등 티커 없는 알림은 null
+  price          Float?
+  changePercent  Float?
+  message        String   // per-event HTML 본문
+  deliveryStatus String   // 'sent' | 'partial' | 'failed'
+  recipientCount Int      @default(0)
+  errorMessage   String?
+  contextJson    Json?    // Phase 37-A: kind 별 스냅샷 (src/lib/alert-history/context.ts 스키마)
+
+  @@index([firedAt])
+  @@index([kind, firedAt])
+  @@index([ticker, firedAt])
+}
+
+model Asset {
+  id           String    @id @default(cuid())
+  name         String                         // "신한 적금", "전세 보증금"
+  category     String                         // "savings", "insurance", "real_estate", "pension", "loan", "cash", "other"
+  owner        String                         // "세진", "공동", "소담" 등
+  value        Float                          // 현재 평가액 (원)
+  isLiability  Boolean   @default(false)       // true면 부채
+  interestRate Float?                          // 이율 (적금, 대출)
+  maturityDate DateTime?                       // 만기일
+  note         String?
+  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime  @default(now())
+  transactions Transaction[]
+  deposits     Deposit[]
+}
+
+model NetWorthSnapshot {
+  id            String   @id @default(cuid())
+  date          DateTime @unique               // 스냅샷 날짜 (매월 1일)
+  stockValueKRW Float                          // 주식 포트폴리오 총 평가액
+  assetValueKRW Float                          // 비주식 자산 총액
+  liabilityKRW  Float                          // 부채 총액
+  netWorthKRW   Float                          // 순자산 = 주식 + 자산 - 부채
+  breakdown     Json                           // 카테고리별 상세
+  createdAt     DateTime @default(now())
+}
+
+model QuarterlyReport {
+  id          String   @id @default(cuid())
+  year        Int
+  quarter     Int                              // 1, 2, 3, 4
+  title       String                           // "2026년 1분기 리포트"
+  summary     Json                             // 데이터 요약 (성과, 배당, 세금 등)
+  aiComment   String?                          // AI 분석 코멘트
+  pdfPath     String?                          // PDF 파일 경로 (생성 후)
+  createdAt   DateTime @default(now())
+
+  @@unique([year, quarter])
+}
+
+model Watchlist {
+  id          String   @id @default(cuid())
+  ticker      String   @unique
+  displayName String
+  market      String             // "US", "KR"
+  strategy    String   @default("swing") // long_hold, swing, momentum, value, scalp
+  memo        String?
+  targetBuy   Float?             // 목표 매수가
+  entryLow    Float?             // 매수 구간 하한
+  entryHigh   Float?             // 매수 구간 상한
+  addedAt     DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model WhooingConfig {
+  id           String  @id @default(cuid())
+  webhookUrl   String?
+  isActive     Boolean @default(false)
+  defaultRight String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model WhooingCategoryMap {
+  id           String   @id @default(cuid())
+  categoryId   String   @unique
+  category     Category @relation(fields: [categoryId], references: [id])
+  whooingLeft  String
+  whooingRight String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+/// Phase 29-E — 사용자 정의 매매 전략
+/// 사용자가 자연어로 조건 입력 → AI 파싱 → conditions JSON 저장 → cron 이 코드로 평가.
+/// 조건 만족 시 텔레그램 알림. frequency 로 dedup (once/daily/always).
+model CustomStrategy {
+  id              String    @id @default(cuid())
+  name            String    // "SOXL 저점 매수"
+  description     String?   // 자연어 원문 (사용자 표현 보존)
+  ticker          String    // "SOXL"
+  conditions      Json      // Condition[] — { type, operator, value, timeframe? }
+  logic           String    @default("AND") // "AND" | "OR"
+  frequency       String    @default("daily") // "once" | "daily" | "always"
+  isActive        Boolean   @default(true)
+  lastTriggeredAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([ticker, isActive])
+}
+
+// Phase 34-A (#419): 어닝 캘린더 캐시. cron 이 일 1회 yahoo-finance2 로 갱신하고
+// evaluator 의 `earnings_within_days` 조건이 참조.
+model EarningsCache {
+  ticker           String    @id
+  nextEarningsDate DateTime?
+  lastFetchedAt    DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}

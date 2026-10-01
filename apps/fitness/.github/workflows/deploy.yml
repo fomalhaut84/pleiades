@@ -1,0 +1,185 @@
+name: Deploy on Release
+
+# 운영 배포 자동화 — GitHub Release publish 시 운영 서버에서 deploy.sh 실행.
+# 사유: 매 릴리즈마다 사용자가 ssh + git pull + npm run build + pm2 restart 수동 진행
+# 누락 → 코드/dist 불일치 → 운영 장애 (실제 발생: 2026-06-29 cron 리포트 실패, 118 커밋 stale).
+# 이슈 #137, 스펙:  docs/specs/137-deploy-automation.md
+# 트리거: release.published (자동), workflow_dispatch (수동 재실행, inputs.tag 필요).
+
+on:
+  release:
+    types: [published]
+  # 진단/수동 재실행 트리거 — GitHub release event 가 어떤 이유로 발동 안 했을 때
+  # Actions UI 의 "Run workflow" 로 수동 실행. ref 입력에 태그 (예: v2.2.12) 지정.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to deploy (예: v2.2.12)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# 동일 릴리즈/재시도가 겹치면 동일 worktree(node_modules/dist/pm2)에서 deploy.sh 가
+# 동시 실행되어 빌드 손상/PM2 race 위험. 직렬화로 차단. 진행 중 새 release publish 시
+# 새 deploy는 큐잉되어 이전 완료 후 시작.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: SSH Deploy
+    runs-on: ubuntu-latest
+    # 정식 릴리즈(prerelease/draft 아님) 만 운영 배포.
+    # draft 는 publish 이벤트 자체가 안 뜨지만 명시적 가드.
+    # workflow_dispatch 는 항상 통과 (운영자가 의도적으로 트리거).
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.release.prerelease && !github.event.release.draft) }}
+    steps:
+      # Fingerprint secret 누락/typo 시 ssh-action 이 빈 문자열로 진행 → InsecureIgnoreHostKey
+      # default → MITM 재개. 사전 검증으로 차단.
+      - name: Preflight — require host fingerprint
+        env:
+          DEPLOY_SSH_FINGERPRINT: ${{ secrets.DEPLOY_SSH_FINGERPRINT }}
+        run: |
+          if [[ -z "$DEPLOY_SSH_FINGERPRINT" ]]; then
+            echo "ERROR: DEPLOY_SSH_FINGERPRINT secret is empty. SSH MITM 위험 → 배포 중단." >&2
+            echo "운영자: 스펙 docs/specs/137-deploy-automation.md §4.2 의 ssh-keygen -lf 명령으로 추출 후 GitHub Secrets 등록." >&2
+            exit 1
+          fi
+          echo "Fingerprint secret present (length=${#DEPLOY_SSH_FINGERPRINT})"
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          # release event 면 release.tag_name, workflow_dispatch 면 inputs.tag.
+          # 직접 script에 expand 시 shell injection 위험 → env var + 형식 검증.
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT }}
+          # SSH host fingerprint 검증 — 미설정 시 InsecureIgnoreHostKey() default → MITM 위험.
+          # secret 등록 방법은 스펙 §4.2 참조 (ssh-keyscan + ssh-keygen -lf).
+          fingerprint: ${{ secrets.DEPLOY_SSH_FINGERPRINT }}
+          envs: RELEASE_TAG,DEPLOY_PATH
+          # 30분 timeout (npm ci + build + pm2 restart 충분)
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+            # 태그 형식 검증 (semver: vMAJOR.MINOR.PATCH[-suffix])
+            if ! [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
+              echo "ERROR: Invalid tag format: $RELEASE_TAG" >&2
+              exit 1
+            fi
+            cd "$DEPLOY_PATH"
+
+            # #188: bash 는 스크립트를 스트림으로 로드해 실행 중. deploy.sh 안에서
+            # git checkout 이 파일을 갱신해도 이미 로드된 old 버전이 그대로 실행됨.
+            # → 배포 흐름 자체가 바뀐 릴리즈 (v2.6.0 MCP HTTP 승격 등) 는 old
+            # deploy.sh 에 없는 새 단계가 실행 안 됨.
+            # 대응: workflow 에서 먼저 checkout → 새 deploy.sh 를 로드 실행.
+            # deploy.sh 안의 checkout 은 그대로 유지 (idempotent, no-op).
+            git fetch origin --tags --force
+            git checkout -f "$RELEASE_TAG"
+
+            ./deploy/deploy.sh "$RELEASE_TAG"
+
+      # 배포 결과 텔레그램 알림 — myfitness-bot 인프라 재활용. raw curl 로 third-party action 의존 X.
+      # 토큰은 GitHub Actions가 자동 마스킹. always() 로 성공/실패 모두 알림 (무알림이 더 위험).
+      - name: Notify Telegram (success)
+        if: success()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # release event 는 body 를 payload 에 담고 있음. workflow_dispatch 는 없음 → gh 로 폴백.
+          RELEASE_BODY: ${{ github.event.release.body }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+            echo "::warning::TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID secret 미설정 — 알림 skip"
+            exit 0
+          fi
+
+          # 릴리스 본문 확보 — release event 면 payload, 아니면 gh 로 조회.
+          notes_raw="${RELEASE_BODY:-}"
+          if [[ -z "$notes_raw" ]]; then
+            notes_raw=$(gh release view "$RELEASE_TAG" --repo "$GH_REPO" --json body -q .body 2>/dev/null || true)
+          fi
+
+          # 마크다운 노이즈 제거 → HTML 이스케이프. sed 순서: **bold** / ## 헤더 / 백틱 제거 / \/ \` 언이스케이프 후 HTML 이스케이프.
+          # ERE (-E) 로 헤더 매칭 (\+ 는 GNU/BSD sed 호환성 이슈).
+          processed=$(printf '%s' "$notes_raw" \
+            | sed -E -e 's/\\([`/])/\1/g' -e 's/\*\*//g' -e 's/^#+ //' -e 's/`//g' \
+            | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+          # UTF-8 문자 단위 절단 (Python3, Actions runner 기본 탑재). head -c 는 byte 단위라
+          # 한글 UTF-8 문자 중간에서 절단해 HTML entity/multibyte sequence 를 깨뜨릴 수 있음.
+          # 상한은 Telegram sendMessage text 4096 자 이내 안전 마진.
+          notes=$(printf '%s' "$processed" | python3 -c '
+          import sys
+          s = sys.stdin.read()
+          LIMIT = 3500
+          if len(s) > LIMIT:
+              sys.stdout.write(s[:LIMIT] + "…")
+          else:
+              sys.stdout.write(s)
+          ')
+
+          # printf 로 \n literal newline 처리 — multi-line YAML block scalar 들여쓰기 깨짐 회피.
+          if [[ -n "$notes" ]]; then
+            text=$(printf '✅ <b>Deploy %s</b> 성공\n서버: production\n\n<b>변경 내역</b>\n%s\n\n워크플로우: %s' "$RELEASE_TAG" "$notes" "$RUN_URL")
+          else
+            text=$(printf '✅ <b>Deploy %s</b> 성공\n서버: production\n워크플로우: %s' "$RELEASE_TAG" "$RUN_URL")
+          fi
+
+          # 성공 응답 body (sent message + chat metadata) 는 chat 정보 노출 위험 → /tmp 로 격리.
+          # 실패 (HTTP 4xx/5xx) 시에만 body 를 stderr 에 warning 으로 노출 → 다음 리비전 debug.
+          # curl 실패해도 배포 workflow 자체는 성공 유지 (Telegram 미도착이 배포 실패로 이어지지 않게).
+          body=$(mktemp)
+          if curl -sS -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "parse_mode=HTML" \
+            --data-urlencode "text=$text" \
+            --fail-with-body \
+            -o "$body"; then
+            :
+          else
+            echo "::warning::Telegram 알림 실패 (HTTP 에러). 응답:"
+            cat "$body" >&2 || true
+          fi
+          rm -f "$body"
+
+      - name: Notify Telegram (failure)
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+            echo "::warning::TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID secret 미설정 — 알림 skip"
+            exit 0
+          fi
+          text=$(printf '❌ <b>Deploy %s</b> 실패\n워크플로우 로그: %s' "${RELEASE_TAG:-unknown}" "$RUN_URL")
+          body=$(mktemp)
+          if curl -sS -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "parse_mode=HTML" \
+            --data-urlencode "text=$text" \
+            --fail-with-body \
+            -o "$body"; then
+            :
+          else
+            echo "::warning::Telegram 실패 알림 자체가 실패. 응답:"
+            cat "$body" >&2 || true
+          fi
+          rm -f "$body"

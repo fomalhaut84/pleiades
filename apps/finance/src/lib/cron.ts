@@ -1,0 +1,343 @@
+import cron from 'node-cron'
+import { refreshPrices } from './price-fetcher'
+import { takeAllSnapshots } from './performance/snapshot'
+import { syncKrxStocks } from './krx-stocks'
+import { prisma } from './prisma'
+import { checkPriceAlerts } from '@/bot/notifications/price-alert'
+import { checkTASignals } from '@/bot/notifications/ta-signal-alert'
+import { checkCustomStrategies } from '@/bot/notifications/custom-strategy-alert'
+import { isKRMarketOpen, isUSMarketOpen } from './market-hours'
+import { calculateNextRunAt, type Frequency } from './recurring-utils'
+import { sendToWhooing } from './whooing-webhook'
+import { KST_OFFSET_MS } from './kst-date'
+
+function getAllowedChatIds(): number[] {
+  return (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map(Number)
+    .filter((n) => !isNaN(n))
+}
+
+/**
+ * Cron 작업 mutex + 타임아웃 가드.
+ * - 중복 실행 방지 (isRunning 플래그)
+ * - 타임아웃 시 mutex 강제 해제 (stale lock 방지)
+ */
+function createCronGuard(label: string, timeoutMs: number) {
+  let isRunning = false
+
+  return async (task: () => Promise<void>): Promise<void> => {
+    if (isRunning) {
+      console.warn(`[cron] ${label} 이미 실행 중, 건너뜀`)
+      return
+    }
+    isRunning = true
+
+    const timer = setTimeout(() => {
+      console.error(`[cron] ${label} 타임아웃 경고 (${timeoutMs / 1000}s 초과) — 작업 완료 대기 중`)
+    }, timeoutMs)
+
+    try {
+      await task()
+    } catch (error) {
+      console.error(`[cron] ${label} 실패:`, error)
+    } finally {
+      clearTimeout(timer)
+      isRunning = false
+    }
+  }
+}
+
+/** 현재 시각을 KST 기준으로 반환 (시, 분, 요일) */
+/** KST 기준 분 단위 시간 (cron 내부 전용) */
+function getKSTMinutes(): number {
+  const now = new Date()
+  const kst = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
+  return kst.getHours() * 60 + kst.getMinutes()
+}
+
+/** TA 체크 주기 제어: DB 설정(ta_check_interval_min) 기반 */
+let lastTACheckTime = 0
+
+async function shouldRunTACheck(): Promise<boolean> {
+  const config = await prisma.alertConfig.findUnique({
+    where: { key: 'ta_check_interval_min' },
+  })
+  const intervalMin = parseInt(config?.value ?? '10', 10)
+  const interval = (Number.isFinite(intervalMin) && intervalMin > 0 ? intervalMin : 10) * 60 * 1000
+
+  return Date.now() - lastTACheckTime >= interval
+}
+
+function markTACheckDone(): void {
+  lastTACheckTime = Date.now()
+}
+
+/**
+ * 주가 갱신 스케줄러 등록.
+ * 매 10분마다 실행, 장중이면 갱신, 장외에는 정각(매시 0분)에만 갱신.
+ * 중복 실행 방지는 refreshPrices() 내부 mutex에서 처리.
+ */
+export function schedulePriceUpdates(): void {
+  cron.schedule(
+    '*/10 * * * *',
+    async () => {
+      const kstMinutes = getKSTMinutes()
+      const isMarketHours = isKRMarketOpen() || isUSMarketOpen()
+      const isTopOfHour = kstMinutes % 60 < 10 // 매시 0~9분 구간
+
+      if (isMarketHours || isTopOfHour) {
+        try {
+          const result = await refreshPrices()
+          // 실제 갱신이 발생한 경우에만 알림 체크
+          if (result.success > 0) {
+            const chatIds = getAllowedChatIds()
+            if (chatIds.length > 0) {
+              await checkPriceAlerts(chatIds)
+              // 커스텀 전략 스캔 — 시장 시간 무관 (환율/RSI 등 24h 조건 대비)
+              checkCustomStrategies(chatIds).catch((err) =>
+                console.error('[cron] 커스텀 전략 스캔 실패:', err),
+              )
+              // 장중에만 TA 시그널 체크 (주기 DB 설정 기반)
+              if (isMarketHours) {
+                const shouldRunTA = await shouldRunTACheck()
+                if (shouldRunTA) {
+                  checkTASignals(chatIds)
+                    .then(() => markTACheckDone())
+                    .catch((err) => console.error('[cron] TA 시그널 체크 실패:', err))
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('[cron] Price refresh failed:', error)
+        }
+      }
+    },
+    { timezone: 'Asia/Seoul' }
+  )
+
+  console.log('[cron] 주가 스케줄러 등록 (장중 10분 / 장외 1시간)')
+}
+
+/**
+ * 일일 포트폴리오 스냅샷 스케줄러.
+ * 매일 06:05 KST (월~토) 실행. 미국장 종료 후 최신가 반영.
+ */
+export function scheduleSnapshots(): void {
+  const guard = createCronGuard('스냅샷', 10 * 60 * 1000)
+
+  cron.schedule(
+    '5 6 * * 1-6',
+    () => { void guard(async () => { await takeAllSnapshots() }) },
+    { timezone: 'Asia/Seoul' }
+  )
+
+  console.log('[cron] 스냅샷 스케줄러 등록 (매일 06:05 KST, 월~토)')
+}
+
+/**
+ * Phase 34-A (#419) — 어닝 캘린더 갱신 스케줄러.
+ * 매일 06:00 KST — 스냅샷과 겹치지 않는 5분 앞 슬롯. 미국장 마감 후 신선.
+ * 부팅 후 첫 실행은 다음 06:00 을 기다림 (부팅 즉시 실행하면 rate limit 부담).
+ */
+export function scheduleEarningsScan(): void {
+  const guard = createCronGuard('어닝 스캔', 5 * 60 * 1000)
+
+  async function runOnce(): Promise<void> {
+    await guard(async () => {
+      const { runEarningsScan } = await import('./earnings/cron')
+      const result = await runEarningsScan()
+      console.log(`[cron] 어닝 스캔 완료: attempted=${result.attempted} ok=${result.ok} failed=${result.failed}`)
+    })
+  }
+
+  cron.schedule('0 6 * * *', () => { void runOnce() }, { timezone: 'Asia/Seoul' })
+
+  // 부팅 즉시 초기 시드 — cache 가 비어 있으면 다음 06:00 KST 까지 대기하는 대신 채움.
+  // 신규 배포 후 최대 24h dead window (모든 earnings_within_days 조건 false) 회피
+  // (self-review P1, #419). scheduleKrxSync 와 동일 패턴 (cron.ts scheduleKrxSync 참고).
+  void (async () => {
+    try {
+      const count = await prisma.earningsCache.count()
+      if (count === 0) {
+        console.log('[cron] EarningsCache empty → 초기 시드 실행')
+        await runOnce()
+      }
+    } catch (error) {
+      console.error('[cron] 어닝 초기 시드 실패:', error)
+    }
+  })()
+
+  console.log('[cron] 어닝 스캔 스케줄러 등록 (매일 06:00 KST)')
+}
+
+/**
+ * KRX 종목 리스트 동기화 스케줄러.
+ * 매주 월요일 07:00 KST 실행.
+ */
+export function scheduleKrxSync(): void {
+  const guard = createCronGuard('KRX 동기화', 5 * 60 * 1000)
+
+  async function runSync(): Promise<void> {
+    await guard(async () => {
+      const result = await syncKrxStocks()
+      console.log(
+        `[cron] KRX 종목 동기화 완료: ${result.total}개 (추가 ${result.added}, 수정 ${result.updated}, 삭제 ${result.removed})`
+      )
+    })
+  }
+
+  // 주간 동기화 (매주 월 07:00 KST)
+  cron.schedule('0 7 * * 1', () => { void runSync() }, { timezone: 'Asia/Seoul' })
+
+  // 초기 데이터가 없으면 서버 시작 시 자동 동기화
+  void (async () => {
+    try {
+      const count = await prisma.krxStock.count()
+      if (count === 0) {
+        console.log('[cron] KRX 종목 데이터 없음, 초기 동기화 시작...')
+        await runSync()
+      }
+    } catch (error) {
+      console.error('[cron] KRX 초기 동기화 실패:', error)
+    }
+  })()
+
+  console.log('[cron] KRX 종목 동기화 스케줄러 등록 (매주 월 07:00 KST)')
+}
+
+/**
+ * 반복 거래 자동 실행 스케줄러.
+ * 매일 00:05 KST 실행. isActive=true AND nextRunAt <= now인 항목 처리.
+ */
+export function scheduleRecurring(): void {
+  const guard = createCronGuard('반복거래', 5 * 60 * 1000)
+
+  cron.schedule(
+    '5 9 * * *',
+    () => {
+      void guard(async () => {
+        const now = new Date()
+        const items = await prisma.recurringTransaction.findMany({
+          where: {
+            isActive: true,
+            nextRunAt: { lte: now },
+          },
+        })
+
+        if (items.length === 0) return
+
+        let created = 0
+        for (const item of items) {
+          try {
+            // Transaction 생성 + nextRunAt 갱신을 트랜잭션으로 묶기
+            const nextRun = calculateNextRunAt(
+              item.frequency as Frequency,
+              item.nextRunAt,
+              item.dayOfMonth,
+              item.dayOfWeek,
+              item.monthOfYear,
+            )
+
+            const tx = await prisma.$transaction(async (db) => {
+              const created = await db.transaction.create({
+                data: {
+                  amount: item.amount,
+                  description: item.description,
+                  categoryId: item.categoryId,
+                  transactedAt: item.nextRunAt,
+                },
+              })
+              await db.recurringTransaction.update({
+                where: { id: item.id },
+                data: { nextRunAt: nextRun, lastRunAt: now },
+              })
+              return created
+            })
+
+            // 후잉 웹훅 (트랜잭션 외부, 비차단)
+            try {
+              await sendToWhooing({
+                amount: tx.amount,
+                description: tx.description,
+                categoryId: tx.categoryId,
+                transactedAt: tx.transactedAt,
+              })
+            } catch (err) {
+              console.error('[cron/recurring] 후잉 전송 실패:', err)
+            }
+
+            created++
+          } catch (err) {
+            console.error(`[cron/recurring] 항목 ${item.id} 처리 실패:`, err)
+          }
+        }
+
+        if (created > 0) {
+          console.log(`[cron] 반복 거래 ${created}건 자동 생성 완료`)
+        }
+      })
+    },
+    { timezone: 'Asia/Seoul' }
+  )
+
+  console.log('[cron] 반복 거래 스케줄러 등록 (매일 09:05 KST)')
+}
+
+/**
+ * 스톡옵션 베스팅 상태 자동 전환 스케줄러.
+ * 매일 00:10 KST 실행.
+ * - pending + vestingDate <= today → exercisable
+ * - exercisable + StockOption.expiryDate < today → expired
+ */
+export function scheduleVestingStatusUpdate(): void {
+  const guard = createCronGuard('베스팅 상태', 2 * 60 * 1000)
+
+  cron.schedule(
+    '10 0 * * *',
+    () => {
+      void guard(async () => {
+        // KST 기준 오늘 자정 (23:59:59까지 포함하도록 내일 0시)
+        const kst = new Date(Date.now() + KST_OFFSET_MS)
+        const todayEnd = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + 1))
+
+        // pending → exercisable (vestingDate < 내일 0시 UTC = 오늘까지)
+        const activated = await prisma.stockOptionVesting.updateMany({
+          where: {
+            status: 'pending',
+            vestingDate: { lt: todayEnd },
+          },
+          data: { status: 'exercisable' },
+        })
+
+        // exercisable → expired (만료일 지난 옵션, KST 기준 오늘 시작 이전)
+        const todayStart = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()))
+        const expiredOptions = await prisma.stockOption.findMany({
+          where: { expiryDate: { lt: todayStart } },
+          select: { id: true },
+        })
+        let expiredCount = 0
+        if (expiredOptions.length > 0) {
+          const result = await prisma.stockOptionVesting.updateMany({
+            where: {
+              status: 'exercisable',
+              stockOptionId: { in: expiredOptions.map((o) => o.id) },
+            },
+            data: { status: 'expired' },
+          })
+          expiredCount = result.count
+        }
+
+        if (activated.count > 0 || expiredCount > 0) {
+          console.log(`[cron] 베스팅 상태 전환: ${activated.count}건 행사가능, ${expiredCount}건 만료`)
+        }
+      })
+    },
+    { timezone: 'Asia/Seoul' }
+  )
+
+  console.log('[cron] 베스팅 상태 스케줄러 등록 (매일 00:10 KST)')
+}
