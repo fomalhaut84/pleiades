@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>베스팅 캘린더 · myFinance</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+<style>
+  :root {
+    --bg: #07080c;
+    --bg-raised: #0d0e14;
+    --card: rgba(255, 255, 255, 0.025);
+    --border: rgba(255, 255, 255, 0.06);
+    --border-hover: rgba(255, 255, 255, 0.12);
+    --dim: #6e6e82;
+    --sub: #9494a8;
+    --text: #c8c8d4;
+    --bright: #eeeef2;
+    --sejin: #34d399;
+    --sodam: #60a5fa;
+    --amber: #fbbf24;
+    --surface-dim: rgba(255, 255, 255, 0.04);
+    --surface: rgba(255, 255, 255, 0.06);
+  }
+  html.light {
+    --bg: #f5f5f7;
+    --bg-raised: #ffffff;
+    --card: rgba(0, 0, 0, 0.02);
+    --border: rgba(0, 0, 0, 0.08);
+    --border-hover: rgba(0, 0, 0, 0.15);
+    --dim: #9ca3af;
+    --sub: #6b7280;
+    --text: #374151;
+    --bright: #111827;
+    --sejin: #059669;
+    --sodam: #2563eb;
+    --amber: #b45309;
+    --surface-dim: rgba(0, 0, 0, 0.05);
+    --surface: rgba(0, 0, 0, 0.07);
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Pretendard', -apple-system, system-ui, sans-serif; }
+  .bg-bg-raised { background: var(--bg-raised); }
+  .bg-card { background: var(--card); }
+  .bg-surface-dim { background: var(--surface-dim); }
+  .bg-surface { background: var(--surface); }
+  .border-app { border-color: var(--border); }
+  .border-app-hover { border-color: var(--border-hover); }
+  .text-bright { color: var(--bright); }
+  .text-app { color: var(--text); }
+  .text-sub { color: var(--sub); }
+  .text-dim { color: var(--dim); }
+  .text-sejin { color: var(--sejin); }
+  .text-sodam { color: var(--sodam); }
+  .text-amber { color: var(--amber); }
+  .bg-sejin\/10 { background: color-mix(in srgb, var(--sejin) 12%, transparent); }
+  .bg-sodam\/10 { background: color-mix(in srgb, var(--sodam) 12%, transparent); }
+  .bg-amber\/10 { background: color-mix(in srgb, var(--amber) 14%, transparent); }
+  .bg-sejin\/20 { background: color-mix(in srgb, var(--sejin) 22%, transparent); }
+  .bg-sodam\/20 { background: color-mix(in srgb, var(--sodam) 22%, transparent); }
+  .ring-amber { box-shadow: inset 0 0 0 1.5px var(--amber); }
+  .cal-cell { transition: background 0.15s ease, transform 0.15s ease; }
+  .cal-cell:hover { background: var(--surface); }
+  .cal-cell.other-month { opacity: 0.35; }
+  .cal-cell.today { background: color-mix(in srgb, var(--amber) 10%, transparent); }
+  .event-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .event-bar { padding: 1px 6px; border-radius: 4px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.2px; display: inline-flex; align-items: center; gap: 3px; }
+  .event-bar.rsu { background: color-mix(in srgb, var(--sejin) 18%, transparent); color: var(--sejin); }
+  .event-bar.option { background: color-mix(in srgb, var(--sodam) 18%, transparent); color: var(--sodam); }
+  .event-bar.exercised { opacity: 0.5; }
+  .event-bar.expired { background: var(--surface); color: var(--dim); }
+  .strike { text-decoration: line-through; text-decoration-thickness: 1px; }
+  .nav-btn { padding: 6px 10px; border-radius: 6px; color: var(--sub); border: 1px solid var(--border); }
+  .nav-btn:hover { background: var(--surface); color: var(--bright); }
+  .nav-btn.primary { background: var(--surface); color: var(--bright); }
+  .upcoming-row { transition: background 0.12s ease; }
+  .upcoming-row:hover { background: var(--surface); }
+  .upcoming-row .accent { width: 3px; align-self: stretch; border-radius: 999px; }
+  .scroll-x { scrollbar-width: thin; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- Top bar (mock) -->
+<header class="border-b border-app sticky top-0 backdrop-blur bg-bg-raised/70 z-10">
+  <div class="max-w-[1080px] mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <span class="text-[15px]">📅</span>
+      <h1 class="text-[15px] font-bold text-bright tracking-tight">베스팅 캘린더</h1>
+    </div>
+    <div class="flex items-center gap-2 text-[11px] text-dim">
+      <button id="themeToggle" class="nav-btn text-[11px]">테마</button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-[1080px] mx-auto px-4 sm:px-6 py-5 sm:py-7 flex flex-col gap-6">
+
+  <!-- Summary strip -->
+  <section class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div class="bg-card border border-app rounded-xl px-4 py-3.5 flex flex-col gap-1">
+      <span class="text-[10px] text-dim tracking-[1.2px] uppercase">이번 달 이벤트</span>
+      <span class="text-[20px] font-bold text-bright tabular-nums">3건</span>
+      <span class="text-[11px] text-sub">RSU 2 · 옵션 1</span>
+    </div>
+    <div class="bg-card border border-app rounded-xl px-4 py-3.5 flex flex-col gap-1">
+      <span class="text-[10px] text-dim tracking-[1.2px] uppercase">다가오는 90일</span>
+      <span class="text-[20px] font-bold text-bright tabular-nums">6건</span>
+      <span class="text-[11px] text-sub">9.0K주</span>
+    </div>
+    <div class="bg-card border border-app rounded-xl px-4 py-3.5 flex flex-col gap-1">
+      <span class="text-[10px] text-dim tracking-[1.2px] uppercase">베스팅 완료</span>
+      <span class="text-[20px] font-bold text-sejin tabular-nums">12건</span>
+      <span class="text-[11px] text-sub">YTD</span>
+    </div>
+    <div class="bg-card border border-app rounded-xl px-4 py-3.5 flex flex-col gap-1">
+      <span class="text-[10px] text-dim tracking-[1.2px] uppercase">만료 임박 옵션</span>
+      <span class="text-[20px] font-bold text-amber tabular-nums">1건</span>
+      <span class="text-[11px] text-sub">2027-01-20</span>
+    </div>
+  </section>
+
+  <!-- Calendar -->
+  <section class="bg-card border border-app rounded-2xl overflow-hidden">
+    <!-- Calendar header -->
+    <div class="px-5 py-4 flex items-center justify-between border-b border-app">
+      <div class="flex items-center gap-4">
+        <h2 id="monthLabel" class="text-[18px] font-bold text-bright tracking-tight tabular-nums">2026년 6월</h2>
+        <span class="hidden sm:inline text-[11px] text-dim">KST 기준</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <button id="prevBtn" class="nav-btn text-[12px] font-semibold">← 이전</button>
+        <button id="todayBtn" class="nav-btn primary text-[12px] font-bold">오늘</button>
+        <button id="nextBtn" class="nav-btn text-[12px] font-semibold">다음 →</button>
+      </div>
+    </div>
+
+    <!-- Weekday header -->
+    <div class="grid grid-cols-7 px-2 pt-3 pb-2 text-[10px] font-bold text-dim tracking-[1.2px] uppercase">
+      <div class="px-3 text-red-400/80">SUN</div>
+      <div class="px-3">MON</div>
+      <div class="px-3">TUE</div>
+      <div class="px-3">WED</div>
+      <div class="px-3">THU</div>
+      <div class="px-3">FRI</div>
+      <div class="px-3">SAT</div>
+    </div>
+
+    <!-- Grid -->
+    <div id="calGrid" class="grid grid-cols-7 gap-px bg-app/0 px-2 pb-3"></div>
+
+    <!-- Legend -->
+    <div class="flex flex-wrap items-center gap-3 px-5 py-3 border-t border-app text-[11px] text-sub">
+      <span class="flex items-center gap-1.5"><span class="event-dot" style="background: var(--sejin)"></span> RSU</span>
+      <span class="flex items-center gap-1.5"><span class="event-dot" style="background: var(--sodam)"></span> 스톡옵션</span>
+      <span class="ml-auto flex flex-wrap items-center gap-3 text-dim">
+        <span class="flex items-center gap-1"><span class="event-bar rsu">8 RSU</span> 미베스팅</span>
+        <span class="flex items-center gap-1"><span class="event-bar rsu">✓ 8</span> 베스팅 완료</span>
+        <span class="flex items-center gap-1"><span class="event-bar option exercised">5</span> 행사 완료</span>
+        <span class="flex items-center gap-1"><span class="event-bar expired">5</span> 만료</span>
+      </span>
+    </div>
+  </section>
+
+  <!-- Upcoming list -->
+  <section class="grid grid-cols-1 lg:grid-cols-[1.4fr,1fr] gap-4">
+    <div class="bg-card border border-app rounded-2xl overflow-hidden">
+      <div class="px-5 py-4 flex items-center justify-between border-b border-app">
+        <h3 class="text-[14px] font-bold text-bright">다가오는 90일</h3>
+        <span class="text-[11px] text-sub">6건 · 9.0K주</span>
+      </div>
+      <ul id="upcomingList" class="flex flex-col"></ul>
+    </div>
+
+    <!-- Mobile-priority list / Quick stats -->
+    <div class="flex flex-col gap-4">
+      <div class="bg-card border border-app rounded-2xl px-5 py-4">
+        <h3 class="text-[14px] font-bold text-bright mb-3">계좌별 베스팅 분포</h3>
+        <div class="flex flex-col gap-2.5">
+          <div class="flex items-center justify-between text-[12px]">
+            <span class="flex items-center gap-2"><span class="event-dot" style="background: var(--sejin)"></span> 세진 RSU</span>
+            <span class="text-bright font-semibold tabular-nums">2,400주 / 8회</span>
+          </div>
+          <div class="flex items-center justify-between text-[12px]">
+            <span class="flex items-center gap-2"><span class="event-dot" style="background: var(--sodam)"></span> 세진 옵션</span>
+            <span class="text-bright font-semibold tabular-nums">10,000주 / 3회</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-amber-50 dark:bg-amber-500/5 border border-amber-300 dark:border-amber-500/20 rounded-xl px-4 py-2.5 flex gap-2">
+        <span class="text-amber text-[13px] shrink-0">ⓘ</span>
+        <p class="text-[12px] text-amber dark:text-amber-200/90 leading-relaxed">
+          베스팅 정보는 입력 데이터 기반 예측이며, 실제 행사 가능일은 회사 정책에 따라 달라질 수 있습니다.
+        </p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  // --- Mock 데이터 ---
+  // 오늘: 2026-06-16
+  const TODAY = new Date(2026, 5, 16);
+
+  const EVENTS = [
+    { id: 'rsu_1', type: 'RSU',    date: '2026-06-15', shares: 300,  account: '세진', displayName: 'CompanyX RSU', status: 'vested',      link: '/rsu' },
+    { id: 'opt_1', type: 'OPTION', date: '2026-06-30', shares: 500,  account: '세진', displayName: 'AAPL',           status: 'exercisable', link: '/stock-options', strike: 130 },
+    { id: 'opt_2', type: 'OPTION', date: '2026-06-22', shares: 300,  account: '세진', displayName: 'AAPL',           status: 'pending',     link: '/stock-options', strike: 130 },
+    { id: 'rsu_2', type: 'RSU',    date: '2026-07-15', shares: 300,  account: '세진', displayName: 'CompanyX RSU', status: 'pending',     link: '/rsu' },
+    { id: 'rsu_3', type: 'RSU',    date: '2026-08-15', shares: 300,  account: '세진', displayName: 'CompanyX RSU', status: 'pending',     link: '/rsu' },
+    { id: 'opt_3', type: 'OPTION', date: '2026-08-20', shares: 2500, account: '세진', displayName: 'TSLA',           status: 'pending',     link: '/stock-options', strike: 240 },
+    { id: 'rsu_4', type: 'RSU',    date: '2026-09-15', shares: 300,  account: '세진', displayName: 'CompanyX RSU', status: 'pending',     link: '/rsu' },
+    { id: 'opt_4', type: 'OPTION', date: '2027-01-20', shares: 5000, account: '세진', displayName: 'NFLX (만료 임박)', status: 'pending',  link: '/stock-options', strike: 480 },
+    { id: 'rsu_5', type: 'RSU',    date: '2026-05-15', shares: 300,  account: '세진', displayName: 'CompanyX RSU', status: 'vested',      link: '/rsu' },
+    { id: 'opt_5', type: 'OPTION', date: '2026-03-30', shares: 200,  account: '세진', displayName: 'AAPL',           status: 'exercised',   link: '/stock-options', strike: 130 },
+    { id: 'opt_6', type: 'OPTION', date: '2025-12-15', shares: 500,  account: '세진', displayName: 'AMD',            status: 'expired',     link: '/stock-options', strike: 150 },
+  ];
+
+  // --- 상태 ---
+  let cursor = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1);
+
+  // --- 헬퍼 ---
+  const pad = (n) => String(n).padStart(2, '0');
+  const toKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const isSameMonth = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+  const isSameDay = (a, b) => toKey(a) === toKey(b);
+
+  function buildMonthGrid(year, month) {
+    const first = new Date(year, month, 1);
+    const startDay = first.getDay(); // 0=Sun
+    const start = new Date(year, month, 1 - startDay);
+    const cells = [];
+    for (let i = 0; i < 42; i++) {
+      cells.push(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
+    }
+    return cells;
+  }
+
+  function statusStyle(status) {
+    if (status === 'expired')    return { cls: 'expired',   marker: '✗' };
+    if (status === 'exercised')  return { cls: 'exercised', marker: '✓' };
+    if (status === 'vested')     return { cls: '',          marker: '✓' };
+    if (status === 'exercisable')return { cls: '',          marker: '✓' };
+    return { cls: '', marker: '' };
+  }
+
+  function eventBarHtml(ev) {
+    const cls = ev.type === 'RSU' ? 'rsu' : 'option';
+    const ss = statusStyle(ev.status);
+    const shares = ev.shares >= 1000 ? (ev.shares / 1000).toFixed(1) + 'K' : ev.shares;
+    const label = `${ss.marker ? ss.marker + ' ' : ''}${shares}`;
+    return `<a href="${ev.link}" class="event-bar ${cls} ${ss.cls}" title="${ev.displayName} ${ev.shares}주 (${ev.status})">${label}</a>`;
+  }
+
+  function renderCalendar() {
+    const y = cursor.getFullYear();
+    const m = cursor.getMonth();
+    document.getElementById('monthLabel').textContent = `${y}년 ${m + 1}월`;
+
+    const cells = buildMonthGrid(y, m);
+    const grid = document.getElementById('calGrid');
+    grid.innerHTML = '';
+
+    const byDate = new Map();
+    for (const ev of EVENTS) {
+      if (!byDate.has(ev.date)) byDate.set(ev.date, []);
+      byDate.get(ev.date).push(ev);
+    }
+
+    for (const d of cells) {
+      const key = toKey(d);
+      const isToday = isSameDay(d, TODAY);
+      const otherMonth = !isSameMonth(d, cursor);
+      const events = byDate.get(key) ?? [];
+      const dow = d.getDay();
+      const dayColor = dow === 0 ? 'text-red-400' : (otherMonth ? 'text-dim' : 'text-sub');
+
+      const cell = document.createElement('div');
+      cell.className = `cal-cell rounded-lg px-2.5 py-2 min-h-[88px] sm:min-h-[104px] flex flex-col gap-1.5 ${otherMonth ? 'other-month' : ''} ${isToday ? 'today ring-amber' : ''}`;
+
+      const head = `<div class="flex items-center justify-between">
+          <span class="text-[12px] font-bold ${dayColor} tabular-nums">${d.getDate()}</span>
+          ${events.length > 1 ? `<span class="text-[9px] text-dim tabular-nums">${events.length}</span>` : ''}
+        </div>`;
+      const bars = events.slice(0, 3).map(eventBarHtml).join('');
+      const overflow = events.length > 3 ? `<span class="text-[10px] text-dim">+${events.length - 3}</span>` : '';
+
+      cell.innerHTML = head + `<div class="flex flex-col gap-1 items-start">${bars}${overflow}</div>`;
+      grid.appendChild(cell);
+    }
+  }
+
+  function renderUpcoming() {
+    const ul = document.getElementById('upcomingList');
+    const cutoff = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() + 90);
+    const upcoming = EVENTS
+      .filter(e => {
+        const d = new Date(e.date);
+        return d >= TODAY && d <= cutoff;
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    ul.innerHTML = upcoming.map(ev => {
+      const d = new Date(ev.date);
+      const isRSU = ev.type === 'RSU';
+      const color = isRSU ? 'var(--sejin)' : 'var(--sodam)';
+      const dLabel = `${d.getMonth() + 1}월 ${d.getDate()}일`;
+      const daysAway = Math.round((d - TODAY) / 86400000);
+      const dayLabel = daysAway === 0 ? '오늘' : daysAway === 1 ? '내일' : `D-${daysAway}`;
+      const ss = statusStyle(ev.status);
+      const statusBadge = ev.status === 'exercisable' ? `<span class="event-bar option">행사 가능</span>` :
+                          ev.status === 'expired'     ? `<span class="event-bar expired">만료</span>` :
+                          ev.status === 'vested'      ? `<span class="event-bar rsu">베스팅 완료</span>` : '';
+      const shares = ev.shares.toLocaleString('ko-KR');
+      return `<li>
+        <a href="${ev.link}" class="upcoming-row flex items-stretch gap-3 px-5 py-3 border-b border-app last:border-b-0">
+          <span class="accent" style="background: ${color}"></span>
+          <div class="flex-1 flex items-center gap-4 min-w-0">
+            <div class="flex flex-col w-[88px] shrink-0">
+              <span class="text-[13px] font-bold text-bright tabular-nums">${dLabel}</span>
+              <span class="text-[10px] text-dim tabular-nums tracking-wide">${dayLabel}</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] font-bold ${isRSU ? 'text-sejin' : 'text-sodam'} tracking-[1.2px] uppercase">${isRSU ? 'RSU' : 'OPT'}</span>
+                <span class="text-[13px] font-semibold text-bright truncate">${ev.displayName}</span>
+              </div>
+              <span class="text-[11px] text-sub">${ev.account} · ${shares}주${ev.strike ? ` · 행사가 $${ev.strike}` : ''}</span>
+            </div>
+            ${statusBadge}
+          </div>
+        </a>
+      </li>`;
+    }).join('') || `<li class="px-5 py-8 text-center text-[12px] text-dim">다가오는 베스팅이 없습니다.</li>`;
+  }
+
+  function go(delta) {
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + delta, 1);
+    renderCalendar();
+  }
+
+  document.getElementById('prevBtn').addEventListener('click', () => go(-1));
+  document.getElementById('nextBtn').addEventListener('click', () => go(+1));
+  document.getElementById('todayBtn').addEventListener('click', () => {
+    cursor = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1);
+    renderCalendar();
+  });
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    document.documentElement.classList.toggle('light');
+  });
+
+  renderCalendar();
+  renderUpcoming();
+</script>
+</body>
+</html>

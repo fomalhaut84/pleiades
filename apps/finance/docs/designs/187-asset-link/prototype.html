@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>가계부 자산 연동 디자인 시안 — #187</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<style>
+  :root {
+    --bg: #07080c;
+    --bg-raised: #0d0e14;
+    --card: rgba(255,255,255,0.025);
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.12);
+    --dim: #6e6e82;
+    --sub: #9494a8;
+    --text: #c8c8d4;
+    --bright: #eeeef2;
+    --surface-dim: rgba(255,255,255,0.04);
+    --surface: rgba(255,255,255,0.06);
+    --red: #f87171;
+    --emerald: #34d399;
+    --sodam: #60a5fa;
+    --yellow: #fbbf24;
+    --sodam-dim: rgba(96,165,250,0.15);
+    --sodam-border: rgba(96,165,250,0.25);
+    --red-dim: rgba(248,113,113,0.1);
+    --teal: #2dd4bf;
+    --teal-dim: rgba(45,212,191,0.12);
+    --teal-border: rgba(45,212,191,0.25);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 64px;
+  }
+
+  .proto-section { max-width: 960px; margin: 0 auto; padding: 0 32px 40px; }
+  .proto-label {
+    font-size: 11px; font-weight: 700; color: var(--dim);
+    letter-spacing: 1.5px; text-transform: uppercase;
+    margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  .proto-note {
+    font-size: 11px; color: var(--sub); margin-top: 12px;
+    padding: 8px 12px; background: var(--surface-dim); border-radius: 8px; line-height: 1.6;
+  }
+  .proto-title { text-align: center; padding: 24px 32px 32px; }
+  .proto-title h1 { font-size: 15px; font-weight: 800; color: var(--bright); }
+  .proto-title p { font-size: 12px; color: var(--sub); margin-top: 4px; }
+  .proto-row { display: flex; gap: 32px; }
+  .hint {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--dim); background: var(--surface-dim);
+    padding: 3px 8px; border-radius: 4px; margin-left: 8px;
+    text-transform: none; letter-spacing: 0; font-weight: 500;
+  }
+
+  /* ─── 패널 ─── */
+  .panel-demo {
+    width: 420px; min-width: 420px; height: 720px;
+    background: var(--bg-raised); border: 1px solid var(--border);
+    border-radius: 16px; overflow-y: auto; display: flex; flex-direction: column;
+  }
+  .panel-header {
+    padding: 20px 24px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  }
+  .panel-header h2 { font-size: 15px; font-weight: 700; color: var(--bright); }
+  .panel-close {
+    width: 28px; height: 28px; border-radius: 6px; border: none;
+    background: transparent; color: var(--sub); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .panel-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 18px; flex: 1; }
+
+  .field-label { display: block; font-size: 12px; font-weight: 600; color: var(--sub); margin-bottom: 6px; }
+  .field-input {
+    width: 100%; background: var(--surface-dim); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--bright);
+    font-family: inherit; outline: none; transition: all 0.15s;
+  }
+  .field-input::placeholder { color: var(--dim); }
+  .field-input:focus { background: var(--surface); border-color: var(--border-hover); }
+  .field-select {
+    width: 100%; background: var(--surface-dim); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--bright);
+    font-family: inherit; outline: none; appearance: none; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236e6e82' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 14px center;
+  }
+
+  /* 세그먼트 */
+  .type-segment {
+    display: flex; gap: 2px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 3px;
+  }
+  .type-btn {
+    flex: 1; padding: 8px 0; border-radius: 6px; font-size: 12px; font-weight: 600;
+    color: var(--sub); background: transparent; border: none; cursor: pointer;
+    transition: all 0.15s; text-align: center;
+  }
+  .type-btn:hover { color: var(--text); }
+  .type-btn.active { background: var(--surface); color: var(--bright); }
+  .type-btn.active-expense { background: rgba(248,113,113,0.12); color: var(--red); }
+  .type-btn.active-income { background: rgba(52,211,153,0.12); color: var(--emerald); }
+  .type-btn.active-out { background: var(--sodam-dim); color: var(--sodam); }
+  .type-btn.active-in { background: var(--teal-dim); color: var(--teal); }
+
+  /* 자산 선택 하이라이트 */
+  .asset-field {
+    border: 1px solid var(--sodam-border); border-radius: 10px; padding: 12px;
+    background: rgba(96,165,250,0.04); position: relative;
+  }
+  .asset-field.teal {
+    border-color: var(--teal-border); background: rgba(45,212,191,0.04);
+  }
+  .new-badge {
+    position: absolute; top: -8px; right: 12px;
+    font-size: 9px; font-weight: 800; color: var(--sodam);
+    background: var(--bg-raised); padding: 1px 6px; border-radius: 3px;
+  }
+  .new-badge.teal { color: var(--teal); }
+
+  /* 자산 임팩트 미리보기 */
+  .asset-preview {
+    background: var(--surface-dim); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; margin-top: 8px;
+  }
+  .asset-preview-row {
+    display: flex; align-items: center; gap: 6px; font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .asset-preview-name { color: var(--sub); font-weight: 500; }
+  .asset-preview-current { color: var(--text); }
+  .asset-preview-arrow { color: var(--dim); font-size: 14px; }
+  .asset-preview-new { color: var(--bright); font-weight: 700; }
+  .asset-preview-diff { font-weight: 600; font-size: 11px; margin-left: 4px; }
+  .asset-preview-diff.decrease { color: var(--emerald); }
+  .asset-preview-diff.increase { color: var(--sodam); }
+
+  /* 버튼 */
+  .panel-actions { display: flex; gap: 12px; padding-top: 4px; }
+  .btn-cancel {
+    flex: 1; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    color: var(--sub); border: 1px solid var(--border); background: transparent; cursor: pointer;
+  }
+  .btn-submit {
+    flex: 1; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 700;
+    color: var(--sodam); background: var(--sodam-dim); border: 1px solid var(--sodam-border); cursor: pointer;
+  }
+
+  /* ─── 테이블 ─── */
+  .card-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .card-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .card-header .title { font-size: 13px; font-weight: 700; color: var(--bright); }
+
+  .tx-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .tx-table thead tr { border-bottom: 1px solid var(--border); background: var(--surface-dim); }
+  .tx-table th {
+    padding: 10px 16px; text-align: left; font-size: 11px;
+    font-weight: 600; color: var(--dim); letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .tx-table th.right { text-align: right; }
+  .tx-table tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  .tx-table tbody tr:last-child { border-bottom: none; }
+  .tx-table tbody tr:hover { background: var(--surface-dim); }
+  .tx-table td { padding: 12px 16px; white-space: nowrap; }
+  .tx-table td.right { text-align: right; }
+
+  .transfer-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
+    margin-left: 8px;
+  }
+  .transfer-badge.out {
+    color: var(--sodam); background: var(--sodam-dim);
+  }
+  .transfer-badge.in {
+    color: var(--teal); background: var(--teal-dim);
+  }
+</style>
+</head>
+<body>
+
+<div class="proto-title">
+  <h1>가계부 자산 연동 디자인 시안 — Issue #187</h1>
+  <p>transfer_out/in 유형 + Asset 자동 업데이트 + 후잉 연동</p>
+</div>
+
+<!-- ━━━ Scene 1: 폼 — 소비 모드 vs 출금 모드 ━━━ -->
+<div class="proto-section">
+  <div class="proto-row">
+    <!-- 소비 모드 (기존) -->
+    <div>
+      <div class="proto-label">Scene 1a — 소비 모드 (자산 필드 없음)</div>
+      <div class="panel-demo" style="height: 560px;">
+        <div class="panel-header">
+          <h2>내역 추가</h2>
+          <button class="panel-close">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+          </button>
+        </div>
+        <div class="panel-body">
+          <!-- 유형 선택 (NEW) -->
+          <div>
+            <label class="field-label">유형</label>
+            <div class="type-segment">
+              <button class="type-btn active-expense">소비</button>
+              <button class="type-btn">수입</button>
+              <button class="type-btn">출금</button>
+              <button class="type-btn">입금</button>
+            </div>
+          </div>
+
+          <div>
+            <label class="field-label">금액</label>
+            <input type="text" class="field-input" placeholder="0" value="12,000">
+          </div>
+          <div>
+            <label class="field-label">내용</label>
+            <input type="text" class="field-input" value="점심">
+          </div>
+          <div>
+            <label class="field-label">카테고리</label>
+            <select class="field-select"><option>🍽️ 외식</option></select>
+          </div>
+          <div>
+            <label class="field-label">날짜</label>
+            <input type="date" class="field-input" value="2026-03-23">
+          </div>
+
+          <div class="panel-actions">
+            <button class="btn-cancel">취소</button>
+            <button class="btn-submit">추가</button>
+          </div>
+        </div>
+      </div>
+      <div class="proto-note">
+        <strong>소비/수입:</strong> 기존과 동일, 자산 필드 없음<br>
+        <strong>유형 세그먼트:</strong> 소비=빨강 배경, 수입=초록 배경
+      </div>
+    </div>
+
+    <!-- 출금 모드 (자산 필드 표시) -->
+    <div>
+      <div class="proto-label">Scene 1b — 출금 모드 (자산 필드 + 임팩트 미리보기)</div>
+      <div class="panel-demo">
+        <div class="panel-header">
+          <h2>내역 추가</h2>
+          <button class="panel-close">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+          </button>
+        </div>
+        <div class="panel-body">
+          <!-- 유형: 출금 선택 -->
+          <div>
+            <label class="field-label">유형</label>
+            <div class="type-segment">
+              <button class="type-btn">소비</button>
+              <button class="type-btn">수입</button>
+              <button class="type-btn active-out">출금</button>
+              <button class="type-btn">입금</button>
+            </div>
+          </div>
+
+          <div>
+            <label class="field-label">금액</label>
+            <input type="text" class="field-input" value="450,000">
+          </div>
+          <div>
+            <label class="field-label">내용</label>
+            <input type="text" class="field-input" value="원금상환">
+          </div>
+          <div>
+            <label class="field-label">카테고리</label>
+            <select class="field-select"><option>🏦 보험</option></select>
+          </div>
+
+          <!-- 자산 선택 (NEW — 출금/입금 시만) -->
+          <div class="asset-field">
+            <span class="new-badge">NEW</span>
+            <label class="field-label">연결 자산</label>
+            <select class="field-select">
+              <option>자산 선택</option>
+              <option selected>주택담보대출 [대출] 180,000,000원</option>
+              <option>신한 적금 [적금] 3,600,000원</option>
+              <option>저축성보험 [보험] 2,400,000원</option>
+            </select>
+
+            <!-- 임팩트 미리보기 -->
+            <div class="asset-preview">
+              <div class="asset-preview-row">
+                <span class="asset-preview-name">주택담보대출:</span>
+                <span class="asset-preview-current">180,000,000원</span>
+                <span class="asset-preview-arrow">→</span>
+                <span class="asset-preview-new">179,550,000원</span>
+                <span class="asset-preview-diff decrease">(-450,000)</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label class="field-label">날짜</label>
+            <input type="date" class="field-input" value="2026-03-23">
+          </div>
+
+          <div class="panel-actions">
+            <button class="btn-cancel">취소</button>
+            <button class="btn-submit">추가</button>
+          </div>
+        </div>
+      </div>
+      <div class="proto-note">
+        <strong>출금 선택 시:</strong> "연결 자산" 필드 표시 (파란 테두리 강조)<br>
+        <strong>자산 드롭다운:</strong> 이름 + [카테고리] + 현재 금액<br>
+        <strong>임팩트 미리보기:</strong> 현재 → 변경 후 (차이) 표시<br>
+        <strong>출금:</strong> 자산 감소 (대출 잔액↓), <strong>입금:</strong> 자산 증가 (적금↑)
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ━━━ Scene 1c: 입금 모드 ━━━ -->
+<div class="proto-section">
+  <div class="proto-label">Scene 1c — 입금 모드 (적금 납입 예시)</div>
+  <div style="max-width: 420px;">
+    <!-- 유형: 입금 -->
+    <div style="background: var(--bg-raised); border: 1px solid var(--border); border-radius: 14px; padding: 20px;">
+      <div style="margin-bottom: 14px;">
+        <label class="field-label">유형</label>
+        <div class="type-segment">
+          <button class="type-btn">소비</button>
+          <button class="type-btn">수입</button>
+          <button class="type-btn">출금</button>
+          <button class="type-btn active-in">입금</button>
+        </div>
+      </div>
+
+      <div class="asset-field teal">
+        <span class="new-badge teal">NEW</span>
+        <label class="field-label">연결 자산</label>
+        <select class="field-select">
+          <option selected>신한 적금 [적금] 3,600,000원</option>
+        </select>
+        <div class="asset-preview">
+          <div class="asset-preview-row">
+            <span class="asset-preview-name">신한 적금:</span>
+            <span class="asset-preview-current">3,600,000원</span>
+            <span class="asset-preview-arrow">→</span>
+            <span class="asset-preview-new">3,900,000원</span>
+            <span class="asset-preview-diff increase">(+300,000)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="proto-note" style="max-width: 420px;">
+    <strong>입금 모드:</strong> teal 컬러 강조 (출금과 시각적 구분)<br>
+    <strong>임팩트:</strong> 적금 잔액 증가 → 양수 변화량
+  </div>
+</div>
+
+<!-- ━━━ Scene 2: 테이블 — transfer 뱃지 ━━━ -->
+<div class="proto-section">
+  <div class="proto-label">Scene 2 — 내역 테이블: transfer 유형 뱃지</div>
+
+  <div class="card-wrap">
+    <div class="card-header">
+      <span class="title">최근 가계부 내역</span>
+    </div>
+    <table class="tx-table">
+      <thead>
+        <tr>
+          <th>날짜</th>
+          <th>카테고리</th>
+          <th>내용</th>
+          <th class="right">금액</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- 일반 소비 -->
+        <tr>
+          <td style="color: var(--sub); font-variant-numeric: tabular-nums;">2026.03.23</td>
+          <td style="color: var(--text);">🍽️ 외식</td>
+          <td style="color: var(--bright);">점심</td>
+          <td class="right" style="color: var(--red); font-weight: 600; font-variant-numeric: tabular-nums;">
+            -12,000원
+          </td>
+        </tr>
+        <!-- 출금 → 대출 -->
+        <tr>
+          <td style="color: var(--sub); font-variant-numeric: tabular-nums;">2026.03.23</td>
+          <td style="color: var(--text);">🏦 이자</td>
+          <td style="color: var(--bright);">대출이자</td>
+          <td class="right" style="color: var(--red); font-weight: 600; font-variant-numeric: tabular-nums;">
+            -50,000원
+          </td>
+        </tr>
+        <tr>
+          <td style="color: var(--sub); font-variant-numeric: tabular-nums;">2026.03.23</td>
+          <td style="color: var(--text);">🏦 이자</td>
+          <td style="color: var(--bright);">
+            원금상환
+            <span class="transfer-badge out">출금 → 주택담보대출</span>
+          </td>
+          <td class="right" style="color: var(--red); font-weight: 600; font-variant-numeric: tabular-nums;">
+            -450,000원
+          </td>
+        </tr>
+        <!-- 입금 → 적금 -->
+        <tr>
+          <td style="color: var(--sub); font-variant-numeric: tabular-nums;">2026.03.20</td>
+          <td style="color: var(--text);">🏦 보험</td>
+          <td style="color: var(--bright);">
+            적금납입
+            <span class="transfer-badge in">입금 → 신한적금</span>
+          </td>
+          <td class="right" style="color: var(--red); font-weight: 600; font-variant-numeric: tabular-nums;">
+            -300,000원
+          </td>
+        </tr>
+        <!-- 일반 수입 -->
+        <tr>
+          <td style="color: var(--sub); font-variant-numeric: tabular-nums;">2026.03.15</td>
+          <td style="color: var(--text);">💰 정기수입</td>
+          <td style="color: var(--bright);">3월 급여</td>
+          <td class="right" style="color: var(--emerald); font-weight: 600; font-variant-numeric: tabular-nums;">
+            +5,000,000원
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="proto-note">
+    <strong>일반 소비/수입:</strong> 기존과 동일 (뱃지 없음)<br>
+    <strong>출금:</strong> 내용 옆에 "출금 → 자산명" 파란 뱃지<br>
+    <strong>입금:</strong> 내용 옆에 "입금 → 자산명" teal 뱃지<br>
+    <strong>금액 색상:</strong> 출금/입금 모두 빨강 (지출로 분류), 수입만 초록
+  </div>
+</div>
+
+</body>
+</html>

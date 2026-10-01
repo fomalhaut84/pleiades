@@ -1,0 +1,99 @@
+/**
+ * 모닝 브리핑 생성 + 텔레그램 발송
+ *
+ * AI(askAdvisor)로 보유 종목 전략별 맞춤 브리핑 생성.
+ * 한국장 08:30 KST / 미국장 23:00 KST 자동 발송.
+ */
+
+import { getBot } from '@/bot/index'
+import { askAdvisor, describeAdvisorError } from '@/lib/ai/claude-advisor'
+import { markdownToTelegramHtml } from '@/bot/utils/markdown'
+import { sendHtml } from '@/bot/utils/telegram'
+import { sanitizeError } from '@/bot/utils/error'
+
+type MarketSession = 'KR' | 'US'
+
+function buildBriefingPrompt(session: MarketSession): string {
+  const sessionLabel = session === 'KR' ? '🇰🇷 한국장' : '🇺🇸 미국장'
+
+  return [
+    `${sessionLabel} 모닝 브리핑을 작성해줘.\n`,
+    '다음 단계로 진행해:',
+    '1. get_all_strategies로 전체 종목 전략 확인',
+    '2. get_portfolio(전체)로 현재 보유 현황 확인',
+    session === 'US'
+      ? '3. 미국주(USD) 종목 중 스윙/모멘텀/단타 전략은 get_technical_analysis로 TA 확인'
+      : '3. 한국주(KRW) 종목 중 스윙/모멘텀/단타 전략은 get_technical_analysis로 TA 확인',
+    '4. WebSearch로 보유 종목 관련 최신 뉴스 검색',
+    '',
+    '브리핑 구성:',
+    '- 시장 동향 요약 (주요 지수, 이슈)',
+    '- 장기보유 종목: 간략 (뉴스 요약만, 특이사항 있을 때만)',
+    '- 스윙/모멘텀 종목: TA 기반 매수/매도 타이밍 + 목표가/손절 대비',
+    '- 감시 종목: 점검 기준 대비 현재 상태',
+    '- 오늘 주목 이벤트 (실적, FOMC, 점검일 등)',
+    '',
+    '계좌별로 섹션 분리 (소담/다솜 장기 vs 세진 능동).',
+  ].join('\n')
+}
+
+export async function sendBriefing(
+  chatIds: number[],
+  session: MarketSession
+): Promise<void> {
+  const bot = getBot()
+  const prompt = buildBriefingPrompt(session)
+
+  try {
+    const result = await askAdvisor(prompt, {
+      model: 'sonnet',
+      timeout: 300_000,
+      maxBudgetUsd: 1.0,
+      caller: 'cron:briefing',
+      // #483: 브리핑은 MCP 도구 (get_all_strategies / get_portfolio 등) 사용이
+      // 필수. tools/list 는 성공했으나 tool 을 한 번도 호출하지 않고 "도구 접근
+      // 불가" 안내 텍스트만 리턴하는 케이스를 no_tool_used AdvisorError 로
+      // 재분류 → catch 블록 fallback + monitor alert 동작.
+      expectsTools: true,
+      // #486: no_tool_used 는 재시도로 대부분 해결되는 flaky 현상. 5회 재시도
+      // (총 6회 시도, 90초 backoff, 최대 ~13분) → 15분 예산 안. 사용자 관점
+      // fallback 최소화.
+      retryOnNoToolUsed: 5,
+      // Codex #487 P2: 각 subprocess timeout 300s × 6 + backoff 90s × 5 는
+      // 최악 37.5분. overallTimeoutMs 로 전체 15분 상한 강제.
+      overallTimeoutMs: 900_000,
+    })
+
+    const html = markdownToTelegramHtml(result.response)
+
+    for (const chatId of chatIds) {
+      try {
+        await sendHtml(bot, chatId, html)
+      } catch (error) {
+        console.error(`[briefing] 발송 실패 (chatId: ${chatId}): ${sanitizeError(error)}`)
+      }
+    }
+
+    const label = session === 'KR' ? '한국장' : '미국장'
+    console.log(`[briefing] ${label} 모닝 브리핑 발송 완료`)
+  } catch (error) {
+    console.error(`[briefing] 브리핑 생성 실패: ${sanitizeError(error)}`)
+
+    // Phase 40-B (#469, Codex #478 P2): AdvisorError code 별 fallback (auth/quota/
+    // server 원인 힌트). describeAdvisorError 는 AdvisorError/AdvisorTimeoutError/
+    // Error 모두 받아 code 없는 일반 Error 는 unknown 으로 처리. 이 경우 기존
+    // hint (`/ai 에서 직접 질문해주세요`) 를 붙여 사용자 액션 제시.
+    const label = session === 'KR' ? '🇰🇷 한국장' : '🇺🇸 미국장'
+    const advisorMsg = error instanceof Error ? describeAdvisorError(error) : ''
+    const fallback =
+      `📊 ${label} 모닝 브리핑 생성에 실패했습니다.\n` +
+      `${advisorMsg}\n/ai 에서 직접 질문해주세요.`
+    for (const chatId of chatIds) {
+      try {
+        await sendHtml(bot, chatId, fallback)
+      } catch {
+        // 무시
+      }
+    }
+  }
+}
