@@ -3944,3 +3944,19 @@ fit 1a-3 대상 6 파일 → **4** 커밋 / 저장소 158. fin 1a-4 대상 19 �
 | X10 | 중첩 `CLAUDE.md`·`.claude/` | 시작 시 미로드 · 파일을 읽으면 지연 로드 · skill 은 추적 경로에서만 발견 → 006 ⑧ · I-10 |
 
 **한계([S2] 미측정 절 그대로):** X10 은 모델 자기 보고 · 조건별 1회 · agents 미시험 · GitHub 의 대량 push 키워드 처리 상한과 커밋 참조 타임라인 이벤트는 문서 근거 없음 · 실험 금지 · filter-repo `commit-map` 보존 미측정. filter-repo 버전 고정값은 [S2] 의 `--version` 출력에 [A2] R5 가 pip 버전을 더한 것이다(006 ④).
+
+# 2026-10-01 — M-1 가져오기 실측 (#114 · PR #115)
+
+`tools/import/import_app.sh <fit|fin> first` (#104) 실행 결과. 서비스 영향: https clone 2회(I-13)뿐.
+
+| 항목 | 값 | 명령 |
+|---|---|---|
+| 서비스 dev | fit `a984b856e44b` · fin `55404173bd9c` | 스크립트 출력 · `STATE.json` |
+| 재작성 tip · 커밋 수 | fit `cc6c862b72fa` 375 · fin `f79df0cb04b1` 395 | `git rev-list --count <tip>` |
+| `apps/<app>` 트리 = 서비스 dev 트리 | fit `e4f89d51f508` · fin `abab81fc8239` (스크립트가 fetch 전 대조 · 머지 후 `HEAD:apps/<app>` 동일) | `git rev-parse HEAD:apps/<app>` |
+| 게이트(가져온 이력) | 두 tip **0** · 브랜치 전체는 pleiades 자체 커밋 4개의 `#114` 만 걸린다 | `git log --format=%B <tip> \| python3 tools/import/gate.py` |
+| 도달 객체 디스크 크기 | dev **4.8 MB → 15.7 MB** | `git rev-list --objects <ref> \| cut -d' ' -f1 \| git cat-file --batch-check='%(objectsize:disk)'` 합계 |
+| 태그 | **0**(서비스 태그 유입 없음) | `git tag \| wc -l` |
+| **X14** push protection | **막지 않았다** | `git push` 출력 |
+| **Q65** draft 와 Codex 자동 리뷰 | draft 00:43Z~00:59Z(16분) **리뷰 없음** → Ready 00:59:40Z → 리뷰 01:01:27Z. **Q65 는 미결** — 30분 컷오프 미달 · 다른 PR 은 오픈 수 분 내였으나 봇 동작은 들쭉날쭉했다 | PR 타임라인 `READY_FOR_REVIEW_EVENT` · 리뷰 `submitted_at` |
+| 머지 | merge commit `623351d` · 부모 2 · 가드 C(origin/dev) 두 앱 통과 | `git log -1 --format=%P` · `guards.py guard-c` |

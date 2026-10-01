@@ -4,6 +4,7 @@
 
 **pleiades** — `myFinance` 와 `myFitness` 두 프로젝트를 어디까지 통합할지 검토하고, 결정된 범위를 실행하는 저장소.
 
+**2026-10-01 · M-1 완료 — #114 → PR #115 merge commit `623351d`(부모 2) · `apps/fitness`(fit dev `a984b856e44b` · 375커밋) · `apps/finance`(fin dev `55404173bd9c` · 395커밋) 이력째 가져옴 · 트리 = 서비스 dev · 게이트 0 · 가드 C 통과 · 태그 0 · push protection 무사(X14) · draft 16분 동안 봇 자동 리뷰 없음(Q65 미결 — 30분 컷오프 미달) · Codex P1 1 오탐(근거 답글). 같은 날 #107 → PR #113 `73b335a`(006 정정 4건 · I-10 에 `repos/*` 지연 로드). 서비스 영향 0(https clone 2회). 인계 `docs/handoff/2026-10-01-m1-done.md`. 다음 = M-2(앱별 `npm ci` · 로컬 `pleiades_fin` · 8절 `apps/*` 행 · 착수 전 승인 게이트).**
 **2026-09-30 · #85 완료(PR #86 `8bd0cf9` · `VERSION` 상수 삭제 = #48 I1 · 버전 0.1.0 · 버전 단일 출처 테스트) · 릴리즈 PR #87 닫음 → #88 사용자 결정: 첫 릴리즈는 두 저장소가 모노레포로 온전히 들어오고 Discord 통합 알림이 어느 정도 기능할 때. 1a-3 의 패키지 참조 방식은 신규 미결 Q48(003 §10). 1a-3 선결은 Q45(서버 측정 · 사용자 실행 대기) + Q48.**
 **2026-09-30 · M-0 완료 — #101 → PR #105 `ed5444c`(격리 룰 `.claude/rules/isolation.md` · 하네스 소진) · #102 → PR #106 `3287fe4`(차단 훅 `.claude/settings.json` · Codex 4라운드 → 종료 기준 · 한계 #109) · #103 → PR #108 `7fe5f43`(002~005 정정·소진 블록) · #104 → PR #110 `4b837de`(`tools/import/` · `tools/local/` · `bin/claude` shim). 서비스 영향 0. 인계 `docs/handoff/2026-09-30-m0-done.md`. 다음 = M-1(두 앱 가져오기 · 착수 전 승인 게이트) 또는 #107(006 정정).** 커밋 메시지 치환 형식은 M-1 에서 고정된다(`tools/import/rewrite.py` · `VERSIONS`).
 **2026-09-30 · 방향 전환 — 모노레포 먼저(정본 `docs/specs/006-monorepo-first.md` · #97 · PR #98 `588479d` 머지 · 인계 `docs/handoff/2026-09-30-monorepo-first.md` · 열린 PR 0 · 다음 = M-0).** 원칙: **pleiades 는 서비스 중인 두 서비스에 어떤 목적으로도 영향을 주지 않는다**(서비스 저장소 쓰기 0 · 운영 영향 0 · https 읽기의 traffic 흔적만 허용). 두 서비스 `dev` 를 `git filter-repo` 재작성으로 `apps/{finance,fitness}` 에 이력째 가져오고 pleiades 안에서 정기 수용한다 · 앱별 lock(workspaces 없음) · 로컬 DB `pleiades_fin`·`pleiades_fit`(5432) · 검증 봇. 기존 작업물(`integration/pleiades` · `repos/*` · 이관 이슈)은 **동결** · **1a-3(#95) 보류**(M-5 에서 `apps/fitness` 안으로 재사용). **다음 = M-0**(006 §9 체크리스트 — 상위 문서 정정·격리 룰·차단 훅·`tools/import/`). 아래 문단들의 대상 저장소·worktree·git dep 경로는 M-0 에서 소진 표기된다.
@@ -107,7 +108,7 @@ bin/claude-with fit      # 한 번에 한 저장소 (H-5 · Q30). --resume 도 �
 
 | 파일 | 내용 | 언제 읽나 |
 |---|---|---|
-| `docs/handoff/` 의 최신 파일 | 직전 세션 인계 노트 (현재 `2026-09-30-m0-done.md`. `ls` 로 재확인) | **새 세션 시작 시 먼저** |
+| `docs/handoff/` 의 최신 파일 | 직전 세션 인계 노트 (현재 `2026-10-01-m1-done.md`. `ls` 로 재확인) | **새 세션 시작 시 먼저** |
 | `docs/specs/002-platform-direction.md` | **정본 방향** — 개인 비서 플랫폼, 개정 경로 0~4, 확정된 답 | **방향 판단 시 먼저** |
 | `docs/specs/003-notify-package.md` | **단계 1 상세 설계** — `@pleiades/notify`. 확정된 답 Q15·Q9·Q8·Q11 · **Q47(배포 형태 ALT-d)·Q44(검증 경로 γ+β2)·Q46(검증용 봇 토큰)·Q28 소멸** · **Q25(①`targets`+ADMIN A)·Q26(①`label`)·Q19(방향 C)·Q10(L ① 분할 / P ① 태그-only) — 2026-09-09 확정**, **§4-2 는 재작성된 정본 시그니처 + 2026-09-10 정정 블록(`Content`·`maxLength`·`transport` 맵·`TelegramApi`·`csvEnv` — 1a-1 이 채운 빈칸)(그 아래는 소진 이력)**, 발견 8~15, L3 인터페이스, 1a-0~1a-4 · 1b, 되돌리기 표, **§10-1 의 병행 인스턴스 10조건(정본)**, 미결 **Q45**(서버 https — 1a-3 전) | **단계 1 작업 시.** 002 를 대체하지 않는다 |
 | `docs/specs/004-repo-layout.md` | **배치 정본** — worktree 배치(`repos/*`), 변형 A/B 구분, 감사 정정 3건, 미결 Q23·Q24 (**Q20 답 → 005 · Q21 소멸 · Q22 → 005 Q38**, §8 정정) | **경로·배치 판단 시.** 하네스가 어디를 읽어야 하는지 여기가 정한다 |
