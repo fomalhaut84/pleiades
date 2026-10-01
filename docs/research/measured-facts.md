@@ -3979,3 +3979,22 @@ fit 1a-3 대상 6 파일 → **4** 커밋 / 저장소 158. fin 1a-4 대상 19 �
 명령: 각 칸의 명령 + `/usr/bin/time` 대신 `date +%s` 차 · `du -sh apps/*/{node_modules,.next,dist}` · `psql -d pleiades_fin -tAc "select count(*) from _prisma_migrations where finished_at is not null"`.
 **5432 의 다른 DB(`myfinance`·`myfitness`·`mytangerine`·`ku_weather_dev`) 목록 전후 동일** — 추가는 `pleiades_fin` 하나(`psql -lqt`).
 **의미:** 서비스와 같은 lock 으로 두 앱의 8절 4종이 pleiades 안에서 통과한다(006 M-2 산출 사실). `apps/*` 추적 파일 변경 0.
+
+# 2026-10-01 — M-4 로컬 실행 격리 실측 (#122)
+
+전부 `tools/local/run.sh` 경유(실효 env 검사 통과 · 봇 id 허용 목록 2 · 검증 채팅 id 1). 절차는 `tools/local/README.md`. 서비스 영향 0. 로그는 세션 scratchpad(비보존).
+
+| 항목 | fin | fit |
+|---|---|---|
+| DB | `pleiades_fin`(M-2) | `db.py create fit` → `migrate deploy` **35/35** |
+| 웹 | `next start -p 4610` Ready 253 ms · `/` 307 → `/auth/signin` 200 | `next start -p 4620` Ready 121 ms · `/` 200 (`<title>myFitness`) · 기동만으로 `[cron] Garmin 자동 싱크 등록`(⑭ · `GARMIN_*` 비움) |
+| 봇 | `node dist/bot/standalone.cjs` — 검증 봇 초기화 · webhook 해제 · 크론 6 + 알림 스케줄러 · long polling · **기동 즉시 KRX 공개 종목 동기화 2,626 건 → `pleiades_fin`** · 어닝 시드 0 | 검증 봇 초기화 · 알림 스케줄 5 · long polling |
+| 사용자 확인 | 검증 봇 응답 ✅ | 검증 봇 응답 ✅ |
+| advisor | PATH shim (호출 흔적 0) | `spawn /nonexistent/claude-disabled ENOENT` 1회 — 차단 동작(L-7) |
+| 409 · 서비스 포트(4100/4200/4210/4301) · 서비스 DB 이름 | 로그 0 · 0 · 0 | 로그 0 · 0 · 0 |
+| 경고 | yahoo-finance2 *Requires Node >= 22* (로컬 20.18) · `experimental.instrumentationHook` 무효 키 · *multiple lockfiles* | *multiple lockfiles* |
+
+- **DB 연결:** `pg_stat_activity` 에 `pleiades_fin` 8 · `pleiades_fit` 15 (+ `postgres` 1 = 측정 자신) — 다른 DB 0.
+- **외부 연결:** 기동 중 node ESTABLISHED 원격은 텔레그램 API(`149.154.166.110:443`)뿐(`lsof -nP -iTCP -sTCP:ESTABLISHED`). KRX·Yahoo 는 크론 시점에만 나간다(공개 시세 · 서비스 계정 아님).
+- **노출:** `next start` 가 `*:4610`·`*:4620` 으로 리슨 — 같은 LAN 접근 가능(`lsof -iTCP -sTCP:LISTEN`).
+- **의미:** 두 앱의 웹·봇이 서비스와 격리된 채 로컬에서 기동한다 — **006 첫 목표(U97-4) 달성.**

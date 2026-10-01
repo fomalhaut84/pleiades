@@ -4,6 +4,7 @@
 
 **pleiades** — `myFinance` 와 `myFitness` 두 프로젝트를 어디까지 통합할지 검토하고, 결정된 범위를 실행하는 저장소.
 
+**2026-10-01 · M-4 — #122 · 두 앱 웹(4610·4620)·검증 봇(@starryJejuPleiadesFin_bot·@starryJejuPleiadesFit_bot) 로컬 기동 · 사용자 응답 확인 · 409·서비스 포트·서비스 DB 흔적 0 · advisor 차단 동작 = 006 첫 목표(U97-4) 달성.** 절차 `tools/local/README.md` · 로컬 자원 + `pleiades_fit`(35). 실측 measured-facts *M-4*.
 **2026-10-01 · M-3 — #120 · `.github/workflows/apps-ci.yml`**(앱별 job · 서비스 CI 단계 그대로 · 러너 postgres:16 · secrets 0) · **Q52 확정 = 필수 `apps-fin`·`apps-fit` · `apps-fin-test` 비필수** · **Q57 확정 = `apps/*` 서비스 결함은 고치지 않는다**(006 §7 확정 블록). ruleset 반영은 머지 후 사용자 확인.
 **2026-10-01 · M-2 — #118 · 두 앱 8절 4종 로컬 통과**(fit lint·typecheck·test 433+verify 5·build · fin lint·tsc·test 866·build · 서비스와 같은 lock · `apps/*` 무변경) · 헬퍼 `tools/local/db.py`(pleiades_* 전용 create·drop) · `write_env.py`(루트 템플릿 → `apps/<app>/.env`) · 실행은 `run.sh` 경유(8절 실행 방법 블록). **로컬 격리 자원 유지: `pleiades_fin`(마이그레이션 26) · `apps/*/.env` · `node_modules`·`.next`·`dist`.** 실측 measured-facts *2026-10-01 — M-2*. 서비스 영향 0.
 **2026-10-01 · M-1 완료 — #114 → PR #115 merge commit `623351d`(부모 2) · `apps/fitness`(fit dev `a984b856e44b` · 375커밋) · `apps/finance`(fin dev `55404173bd9c` · 395커밋) 이력째 가져옴 · 트리 = 서비스 dev · 게이트 0 · 가드 C 통과 · 태그 0 · push protection 무사(X14) · draft 16분 동안 봇 자동 리뷰 없음(Q65 미결 — 30분 컷오프 미달) · Codex P1 1 오탐(근거 답글). 같은 날 #107 → PR #113 `73b335a`(006 정정 4건 · I-10 에 `repos/*` 지연 로드). 서비스 영향 0(https clone 2회). 인계 `docs/handoff/2026-10-01-m1-done.md`. 다음 = M-2(앱별 `npm ci` · 로컬 `pleiades_fin` · 8절 `apps/*` 행 · 착수 전 승인 게이트).**
