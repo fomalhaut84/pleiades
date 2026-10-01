@@ -4,7 +4,7 @@
 
 **pleiades** — `myFinance` 와 `myFitness` 두 프로젝트를 어디까지 통합할지 검토하고, 결정된 범위를 실행하는 저장소.
 
-**2026-10-01 · M-4 — #122 · 두 앱 웹(4610·4620)·검증 봇(@starryJejuPleiadesFin_bot·@starryJejuPleiadesFit_bot) 로컬 기동 · 사용자 응답 확인 · 409·서비스 포트·서비스 DB 흔적 0 · advisor 차단 동작 = 006 첫 목표(U97-4) 달성.** 절차 `tools/local/README.md` · 로컬 자원 + `pleiades_fit`(35). 실측 measured-facts *M-4*.
+**2026-10-01 · M-4 — #122 · 두 앱 웹(4610·4620)·검증 봇(@starryJejuPleiadesFin_bot·@starryJejuPleiadesFit_bot) 로컬 기동 · 사용자 응답 확인 · 409·서비스 포트·서비스 DB 흔적 0 · advisor 차단 동작 = 006 첫 목표(U97-4) 달성.** 인계 `docs/handoff/2026-10-01-m4-done.md` · 다음 = M-5(notify · 착수 직전 수용 최신 필수). 절차 `tools/local/README.md` · 로컬 자원 + `pleiades_fit`(35). 실측 measured-facts *M-4*.
 **2026-10-01 · M-3 — #120 · `.github/workflows/apps-ci.yml`**(앱별 job · 서비스 CI 단계 그대로 · 러너 postgres:16 · secrets 0) · **Q52 확정 = 필수 `apps-fin`·`apps-fit` · `apps-fin-test` 비필수** · **Q57 확정 = `apps/*` 서비스 결함은 고치지 않는다**(006 §7 확정 블록). ruleset 반영은 머지 후 사용자 확인.
 **2026-10-01 · M-2 — #118 · 두 앱 8절 4종 로컬 통과**(fit lint·typecheck·test 433+verify 5·build · fin lint·tsc·test 866·build · 서비스와 같은 lock · `apps/*` 무변경) · 헬퍼 `tools/local/db.py`(pleiades_* 전용 create·drop) · `write_env.py`(루트 템플릿 → `apps/<app>/.env`) · 실행은 `run.sh` 경유(8절 실행 방법 블록). **로컬 격리 자원 유지: `pleiades_fin`(마이그레이션 26) · `apps/*/.env` · `node_modules`·`.next`·`dist`.** 실측 measured-facts *2026-10-01 — M-2*. 서비스 영향 0.
 **2026-10-01 · M-1 완료 — #114 → PR #115 merge commit `623351d`(부모 2) · `apps/fitness`(fit dev `a984b856e44b` · 375커밋) · `apps/finance`(fin dev `55404173bd9c` · 395커밋) 이력째 가져옴 · 트리 = 서비스 dev · 게이트 0 · 가드 C 통과 · 태그 0 · push protection 무사(X14) · draft 16분 동안 봇 자동 리뷰 없음(Q65 미결 — 30분 컷오프 미달) · Codex P1 1 오탐(근거 답글). 같은 날 #107 → PR #113 `73b335a`(006 정정 4건 · I-10 에 `repos/*` 지연 로드). 서비스 영향 0(https clone 2회). 인계 `docs/handoff/2026-10-01-m1-done.md`. 다음 = M-2(앱별 `npm ci` · 로컬 `pleiades_fin` · 8절 `apps/*` 행 · 착수 전 승인 게이트).**
@@ -111,7 +111,7 @@ bin/claude-with fit      # 한 번에 한 저장소 (H-5 · Q30). --resume 도 �
 
 | 파일 | 내용 | 언제 읽나 |
 |---|---|---|
-| `docs/handoff/` 의 최신 파일 | 직전 세션 인계 노트 (현재 `2026-10-01-m1-done.md`. `ls` 로 재확인) | **새 세션 시작 시 먼저** |
+| `docs/handoff/` 의 최신 파일 | 직전 세션 인계 노트 (현재 `2026-10-01-m4-done.md`. `ls` 로 재확인) | **새 세션 시작 시 먼저** |
 | `docs/specs/002-platform-direction.md` | **정본 방향** — 개인 비서 플랫폼, 개정 경로 0~4, 확정된 답 | **방향 판단 시 먼저** |
 | `docs/specs/003-notify-package.md` | **단계 1 상세 설계** — `@pleiades/notify`. 확정된 답 Q15·Q9·Q8·Q11 · **Q47(배포 형태 ALT-d)·Q44(검증 경로 γ+β2)·Q46(검증용 봇 토큰)·Q28 소멸** · **Q25(①`targets`+ADMIN A)·Q26(①`label`)·Q19(방향 C)·Q10(L ① 분할 / P ① 태그-only) — 2026-09-09 확정**, **§4-2 는 재작성된 정본 시그니처 + 2026-09-10 정정 블록(`Content`·`maxLength`·`transport` 맵·`TelegramApi`·`csvEnv` — 1a-1 이 채운 빈칸)(그 아래는 소진 이력)**, 발견 8~15, L3 인터페이스, 1a-0~1a-4 · 1b, 되돌리기 표, **§10-1 의 병행 인스턴스 10조건(정본)**, 미결 **Q45**(서버 https — 1a-3 전) | **단계 1 작업 시.** 002 를 대체하지 않는다 |
 | `docs/specs/004-repo-layout.md` | **배치 정본** — worktree 배치(`repos/*`), 변형 A/B 구분, 감사 정정 3건, 미결 Q23·Q24 (**Q20 답 → 005 · Q21 소멸 · Q22 → 005 Q38**, §8 정정) | **경로·배치 판단 시.** 하네스가 어디를 읽어야 하는지 여기가 정한다 |
