@@ -1,0 +1,184 @@
+import prisma from "@/lib/prisma";
+import { formatDateLocal } from "@/lib/format";
+// #365: 서버 로컬 자정 (`setHours(0,0,0,0)`) 대신 KST 자정 instant — 조회 경계가 호스트 TZ 와 무관
+import { daysAgoKST, todayKST, todayKSTString } from "@/lib/garmin/utils";
+import { resolveSpO2Source, resolveSpO2Value } from "@/lib/spo2-source";
+import DashboardClient from "./dashboard-client";
+import { recommendTodayWorkout } from "@/mcp/tools/recommend-today-workout";
+import TodayWorkoutHero from "./components/TodayWorkoutHero";
+import TodayWorkoutHeroEmpty from "./components/TodayWorkoutHeroEmpty";
+import type { RecommendPayload } from "./training-plan/types";
+
+export const dynamic = "force-dynamic";
+
+export default async function DashboardPage() {
+  const today = todayKST(); // PR #478 Codex P2: 남은 로컬 자정 — 일별 행은 KST 자정 instant 키라 findUnique 가 빗나간다
+  const yesterday = daysAgoKST(1);
+  const weekAgo = daysAgoKST(6);
+  const thirtyDaysAgo = daysAgoKST(29);
+
+  const [todaySummary, yesterdaySummary, todaySleep, yesterdaySleep] =
+    await Promise.all([
+      prisma.dailySummary.findUnique({ where: { date: today } }),
+      prisma.dailySummary.findUnique({ where: { date: yesterday } }),
+      prisma.sleepRecord.findUnique({ where: { date: today } }),
+      prisma.sleepRecord.findUnique({ where: { date: yesterday } }),
+    ]);
+
+  const [weeklySteps, weeklyHR] = await Promise.all([
+    prisma.dailySummary.findMany({
+      where: { date: { gte: weekAgo, lte: today } },
+      select: { date: true, steps: true },
+      orderBy: { date: "asc" },
+    }),
+    prisma.heartRateRecord.findMany({
+      where: { date: { gte: weekAgo, lte: today } },
+      select: { date: true, restingHR: true },
+      orderBy: { date: "asc" },
+    }),
+  ]);
+
+  // 30일 추세 데이터
+  const monthlyStats = await prisma.dailySummary.findMany({
+    where: { date: { gte: thirtyDaysAgo, lte: today } },
+    select: {
+      date: true,
+      steps: true,
+      activeCalories: true,
+      avgStress: true,
+      bodyBattery: true,
+      avgSpo2: true,
+      stressHighDuration: true,
+      stressMediumDuration: true,
+      stressLowDuration: true,
+    },
+    orderBy: { date: "asc" },
+  });
+
+  const recentActivities = await prisma.activity.findMany({
+    take: 5,
+    orderBy: { startTime: "desc" },
+    select: {
+      id: true,
+      name: true,
+      activityType: true,
+      startTime: true,
+      duration: true,
+      distance: true,
+      avgPace: true,
+      calories: true,
+    },
+  });
+
+  const todayData = {
+    steps: todaySummary?.steps ?? null,
+    restingHR: todaySummary?.restingHR ?? null,
+    sleepScore: todaySleep?.sleepScore ?? null,
+    bodyBattery: todaySummary?.bodyBattery ?? null,
+    // #341: 수면 SpO2(야간)와 주간 SpO2(활동 중 산발 측정)는 측정 환경이 달라 값의
+    // 의미가 다르다. 폴백을 유지하되 출처를 숨기지 않는다. 판정은 @/lib/spo2-source 단일 소스.
+    spo2: resolveSpO2Value(todaySleep?.avgSpO2, todaySummary?.avgSpo2),
+    spo2Source: resolveSpO2Source(todaySleep?.avgSpO2, todaySummary?.avgSpo2),
+    intakeCalories: todaySummary?.estimatedIntakeCalories ?? null,
+    availableCalories: todaySummary?.availableCalories ?? null,
+    calorieBalance: todaySummary?.calorieBalance ?? null,
+    activeCalories: todaySummary?.activeCalories ?? null,
+  };
+
+  const yesterdayData = {
+    steps: yesterdaySummary?.steps ?? null,
+    restingHR: yesterdaySummary?.restingHR ?? null,
+    sleepScore: yesterdaySleep?.sleepScore ?? null,
+    bodyBattery: yesterdaySummary?.bodyBattery ?? null,
+    spo2: resolveSpO2Value(yesterdaySleep?.avgSpO2, yesterdaySummary?.avgSpo2),
+    spo2Source: resolveSpO2Source(yesterdaySleep?.avgSpO2, yesterdaySummary?.avgSpo2),
+    intakeCalories: yesterdaySummary?.estimatedIntakeCalories ?? null,
+    availableCalories: yesterdaySummary?.availableCalories ?? null,
+    calorieBalance: yesterdaySummary?.calorieBalance ?? null,
+    activeCalories: yesterdaySummary?.activeCalories ?? null,
+  };
+
+  // 오늘 최신 리포트 (KST 기준, daily-report.ts와 동일 방식)
+  const todayDateStr = todayKSTString();
+  const latestReport = await prisma.aIAdvice.findFirst({
+    where: {
+      category: { in: ["morning_report", "evening_report"] },
+      reportDate: todayDateStr,
+    },
+    orderBy: { createdAt: "desc" },
+    select: { category: true, response: true, createdAt: true },
+  });
+
+  // 오늘 workout 추천 (M7-1). 실패 시 hero 를 스킵하고 조용히 진행 (본 대시보드는 필수 기능).
+  let todayWorkout: RecommendPayload | null = null;
+  try {
+    const rec = await recommendTodayWorkout();
+    todayWorkout = JSON.parse(rec.content[0]?.text ?? "{}") as RecommendPayload;
+  } catch (err) {
+    console.error("[dashboard] recommendTodayWorkout 실패:", err);
+  }
+  const hasActivePlan = todayWorkout?.factors?.plan?.hasActivePlan ?? false;
+
+  return (
+    <>
+      {todayWorkout && hasActivePlan ? (
+        <TodayWorkoutHero today={todayWorkout} />
+      ) : (
+        <TodayWorkoutHeroEmpty />
+      )}
+      <DashboardClient
+      today={todayData}
+      yesterday={yesterdayData}
+      latestReport={latestReport ? {
+        category: latestReport.category,
+        response: latestReport.response,
+        createdAt: latestReport.createdAt.toISOString(),
+      } : null}
+      weeklySteps={weeklySteps.map((d) => ({
+        date: formatDateLocal(d.date),
+        value: d.steps,
+      }))}
+      weeklyHR={weeklyHR.map((d) => ({
+        date: formatDateLocal(d.date),
+        value: d.restingHR,
+      }))}
+      recentActivities={recentActivities.map((a) => ({
+        id: a.id,
+        name: a.name,
+        activityType: a.activityType,
+        startTime: a.startTime.toISOString(),
+        duration: a.duration,
+        distance: a.distance,
+        avgPace: a.avgPace,
+        calories: a.calories,
+      }))}
+      monthlySteps={monthlyStats.map((d) => ({
+        date: formatDateLocal(d.date),
+        value: d.steps,
+      }))}
+      monthlyCalories={monthlyStats.map((d) => ({
+        date: formatDateLocal(d.date),
+        value: d.activeCalories,
+      }))}
+      monthlyStress={monthlyStats.map((d) => ({
+        date: formatDateLocal(d.date),
+        value: d.avgStress,
+      }))}
+      monthlyBodyBattery={monthlyStats.map((d) => ({
+        date: formatDateLocal(d.date),
+        value: d.bodyBattery,
+      }))}
+      monthlySpo2={monthlyStats.map((d) => ({
+        date: formatDateLocal(d.date),
+        value: d.avgSpo2,
+      }))}
+      monthlyStressDetail={monthlyStats.map((d) => ({
+        date: formatDateLocal(d.date),
+        high: d.stressHighDuration,
+        medium: d.stressMediumDuration,
+        low: d.stressLowDuration,
+      }))}
+      />
+    </>
+  );
+}

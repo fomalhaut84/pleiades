@@ -1,0 +1,493 @@
+# myFitness 로드맵
+
+# 마일스톤 1 ✅ (2026-04-07 완료)
+
+## Phase 1: Foundation
+
+- [x] 프로젝트 초기화 + PM2 배포 설정
+- [x] DB 스키마 설계 + Prisma 마이그레이션
+- [x] Garmin Connect 연동 + 인증 (토큰 캐싱)
+- [x] Garmin 데이터 싱크 엔진 (365일 히스토리)
+- [x] 수동 싱크 API + 싱크 상태 관리
+
+## Phase 2: Dashboard & Visualization
+
+- [x] 레이아웃 + 네비게이션 (사이드바, 다크테마)
+- [x] 대시보드 홈 (오늘 요약 + 주간 미니차트)
+- [x] 러닝 활동 페이지 (목록, 상세)
+- [x] 수면 페이지 (수면 단계, 점수 추세)
+- [x] 심박/HRV + 체성분 페이지
+
+## Phase 3: 자동 싱크 + 생활 패턴
+
+- [x] Cron 자동 싱크 (3시간마다)
+- [x] 일일 통계 대시보드 (30일 추세)
+- [x] 생활 패턴 분석 페이지 (꾸준함 점수, 수면 규칙성)
+
+## Phase 4: AI Advisor
+
+- [x] MCP 서버 (6개 도구)
+- [x] AI 어드바이저 엔진 (Claude CLI + 세션 유지)
+- [x] AI 채팅 페이지 + 프리셋 5개
+
+## Phase 5: 심화 분석
+
+- [x] 러닝 실력 분석 (HR존, 페이스/VO2max 추세)
+- [x] 트레이닝 로드 (주간 볼륨, 오버트레이닝 위험)
+- [x] 다이어트 관리 (식단 입력, 칼로리 추정)
+
+## Phase 6: 마무리
+
+- [x] PWA, CSV 내보내기, 주간 AI 리포트
+
+---
+
+# 마일스톤 2: 상세 강화 + AI 고도화 + 텔레그램
+
+## M2-1: DB 스키마 확장 + 싱크 보강 ✅
+
+미활용 Garmin 데이터를 DB 컬럼으로 추출.
+
+- [x] Activity: 러닝 다이나믹스, 유산소/무산소 TE, 호흡수, 스플릿
+- [x] SleepRecord: SpO2, 호흡수, 수면 스트레스, 배터리 변화, HRV, 점수 세부
+- [x] DailySummary: SpO2, 스트레스 세부, 호흡수, 배터리 충전/소모
+
+## M2-2: AI 지표 평가 보완 + 모닝/이브닝 리포트 — 우선순위 ★★★
+
+> AI 평가의 시간대 바이어스 해소가 다른 기능의 품질에 직접 영향.
+> 활동/수면 상세의 AI 평가, 텔레그램 봇 리포트 전송 모두 이것에 의존.
+
+- [x] MCP 도구 응답에 시간대 맥락(_context) 추가 (바이어스 방지)
+- [x] 시스템 프롬프트 시간대별 지표 해석 가이드 강화
+- [x] AIAdvice 스키마 reportDate 추가
+- [x] 모닝 리포트 (08:00 KST): 수면/회복/운동추천
+- [x] 이브닝 리포트 (23:00 KST): 하루정리/회복필요성
+- [x] Cron 모닝/이브닝 스케줄
+- [x] Reports API 확장 (type/date 필터, 수동 생성)
+- [x] /reports 페이지 신규 (이력 + 수동 생성)
+- [x] 대시보드 상단 리포트 요약 카드
+- 스펙: `docs/specs/m2-daily-reports.md`
+
+## M2-3: 활동 상세 페이지 강화 — 우선순위 ★★
+
+> M2-1에서 추출한 데이터를 활동 상세에 시각화.
+
+- [x] 러닝 다이나믹스 (케이던스, 보폭, 수직진동, 지면접촉시간)
+- [x] 유산소/무산소 TE, 호흡수 표시
+- [x] AI 평가 버튼
+- [x] rawData backfill 스크립트
+- [ ] km별 스플릿 차트 (활동 상세 API 추가 호출 필요 — 별도 이슈)
+
+## M2-4: 수면 상세 페이지 신규 — 우선순위 ★★
+
+> 개별 수면 기록의 심층 분석.
+
+- [x] `/sleep/[date]` 상세 페이지
+- [x] 수면 요약 + 단계 바 + 배터리 변화량
+- [x] 수면 점수 세부 (총시간/스트레스/깨어남/REM/깊은/얕은)
+- [x] 바이탈 지표 (SpO2, 호흡수, 수면 스트레스, 안정시 심박, HRV)
+- [x] AI 평가
+
+## M2-5: 기존 UI에 신규 지표 노출 — 우선순위 ★
+
+> M2-1 데이터를 기존 페이지에 통합.
+
+- [x] 대시보드: SpO2 카드 + SpO2 추세
+- [x] 일일 통계: 스트레스 세부 분포
+- [x] 심박 페이지: 호흡수 추세
+
+## M2-6: 텔레그램 봇 — 우선순위 ★★★
+
+> 모바일에서 빠른 조회 + 리포트 자동 수신의 핵심 채널.
+> M2-2 리포트 시스템과 연동.
+
+- [x] grammY + 별도 PM2 프로세스 (long polling)
+- [x] 커맨드: /today, /run, /sleep, /weight, /sync, /report, /ai, /reset
+- [x] 자연어: 식단 입력, AI 질문 감지
+- [x] 모닝/이브닝/주간 리포트 자동 전송 (M2-2 의존)
+- [x] 미들웨어 인증 (TELEGRAM_ALLOWED_CHAT_IDS)
+- 스펙: `docs/specs/m2-telegram-bot.md`
+
+## M2-7: km별 스플릿 차트 — 우선순위 ★
+
+> 활동 상세에서 킬로미터별 페이스/HR/케이던스 시각화.
+> 현재 splitSummaries는 구간 요약이라 km별 데이터 별도 조회 필요.
+
+- [x] Garmin 개별 활동 API(getActivity) 조사 — /splits 엔드포인트에서 lapDTOs 제공
+- [x] 활동 상세 접속 시 on-demand 조회 (GET /api/activities/[id]/splits)
+- [x] km별 페이스 바 차트 + 상세 테이블
+- [x] 백로그 코드 리뷰 이슈 P2 2건 + P1 4건 수정
+- 스펙: `docs/specs/backlog-km-splits.md`
+
+## M2-8: 날짜/타임존 정합성 + 리포트 안정화 — 우선순위 ★★★
+
+> 싱크 시 미래 날짜 데이터 + 모닝 리포트 데이터 부정확 문제 해결.
+
+- [x] 자동/수동 싱크 endDate → 오늘(KST), fetcher에서 미래 날짜 가드
+- [x] garmin/utils.ts KST 날짜 유틸 통일 (nowKST, todayKST, yesterdayKST, daysAgoKST)
+- [x] 모닝/이브닝 리포트 전 데이터 싱크 수행
+- [x] 리포트 재생성 기능 (force 옵션, 재생성 버튼, 텔레그램 /report regenerate)
+- [x] body-composition fetcher 미래 instant 가드 (#88, PR #89)
+- [x] utils.*KST 진짜 KST midnight instant + 다운스트림 KST-aware + 리포트 재생성 reportDate 유지 + 텔레그램 미수신 안전망 (#90, PR #91)
+- [x] calorie-balance / sleep / blood-pressure 잔여 KST 정합 (#92, PR #93)
+- 스펙: `docs/specs/m2-8-date-fix.md`, `docs/specs/m2-8-followup-endDate-yesterday.md`, `docs/specs/m2-8-followup-kst-and-reports.md`, `docs/specs/m2-8-followup-tz-cleanup.md`
+
+---
+
+# 마일스톤 4: 체중감량 + 정확한 강도 분석
+
+## 배경
+- 사용자: 칼로리 목표 1890kcal/일, 최대심박 176, LTHR 157, 체중감량 진행 중
+- 현재 문제: 최대심박/LTHR 미저장 → Zone 분석 부정확, 식단 데이터 없음 → 칼로리 밸런스 불가
+
+## M4-1: 최대심박수/LTHR 저장 및 활용 ✅
+
+- [x] UserProfile에 maxHR, lthr, lthrPace 필드 추가
+- [x] 프로필 편집 UI (maxHR, LTHR 입력)
+- [x] Zone 계산 로직 LTHR 기반으로 변경
+- [x] 리포트 프롬프트에 개인 Zone 정보 주입
+- 효과: 모든 리포트 강도 분석 정확화
+- 스펙: `docs/specs/m4-1-maxhr-lthr.md`
+
+## M4-2: 칼로리 밸런스 필드 추가 ✅
+
+- [x] DailySummary에 estimatedIntakeCalories, availableCalories, calorieBalance 추가
+- [x] 계산 로직: 섭취가능 = 목표(1890) + 활성칼로리
+- [x] UserProfile에 targetCalories 필드 추가 (M4-1에서 완료)
+- 효과: 체중감량 진행도 명확화
+- 스펙: `docs/specs/m4-2-calorie-balance.md`
+
+## M4-3: 식단 데이터 연동 (Garmin 경유 조사) ✅
+
+- [x] Garmin Connect API에 식단/영양 데이터 존재 여부 조사
+- [x] MFP 연동 시 Garmin에 데이터 내려오는지 테스트 스크립트
+- [x] 결과: consumedKilocalories=null, includesCalorieConsumedData=false (MFP 미연동)
+- [x] 보너스: netCalorieGoal(1890) 발견 → targetCalories 자동 싱크 구현
+- [ ] 사용자 확인: MFP ↔ Garmin 연동 활성화 후 재조사 (백로그)
+- 스펙: `docs/specs/m4-3-diet-sync.md`
+
+## M4-4: Split/Lap 데이터 MCP 도구화 ✅
+
+- [x] get_activity_splits MCP 도구 추가
+- [x] Lap별 거리, 시간, 페이스, 심박, 케이던스, 강도 타입 반환
+- [x] AI 러닝 분석 시 스플릿 수준 분석 가능
+- [x] Claude allowedTools + get_activities에 ID 노출 (AI 실제 사용 가능)
+- 스펙: `docs/specs/m4-4-splits-mcp.md`
+
+## M4-5: 운동 강도 자동 분류 ✅
+
+- [x] Activity에 zoneDistribution, estimatedZone, intensityScore, intensityLabel 필드 추가
+- [x] LTHR 기반 자동 분류 로직 (실측 LTHR 있을 때 보정)
+- [x] Garmin hrTimeInZone_1~5 (rawData)에서 HR zone 분포 직접 추출
+- [x] 활동 상세 UI + MCP get_activities 응답에 반영
+- 스펙: `docs/specs/m4-5-intensity-classification.md`
+
+## M4-6: 체중감량 진행 대시보드 ✅
+
+- [x] 기존 `/body` 페이지에 통합 확장
+- [x] 체중 7일/14일 이동평균 차트 (달력일 기준)
+- [x] 칼로리 밸런스 일별 바 차트 (결손/잉여)
+- [x] 주간 요약 테이블 (평균 결손, 예상/실제 감량)
+- [x] 주간 러닝 거리 8주 차트 + 목표 진행도 카드
+- [x] UserProfile.targetDate 필드 + 프로필 UI 지원
+- 스펙: `docs/specs/m4-6-weight-loss-dashboard.md`
+
+## M4-7: 체지방률 트래킹 ✅
+
+- [x] BodyComposition.source 필드 ("garmin" | "manual") + CHECK 제약
+- [x] 수동 입력 모달 UI (/body 페이지) + POST /api/body-composition
+- [x] Garmin 싱크 시 manual 레코드 원자적 보호 (updateMany + P2002 catch)
+
+## M4-8: 영양소 상세 분석 — 우선순위 ★ (중간, M4-3 의존)
+
+- [ ] 단백질/탄수화물/지방 일일 추적
+- [ ] 매크로 밸런스 시각화
+- [ ] 근손실 방지 경고 (단백질 부족 시)
+
+## M4-9: AI 리포트 고도화 ✅
+
+- [x] 시스템 프롬프트: 칼로리 밸런스 해석 + 경고 규칙 3종
+- [x] 모닝/이브닝/주간 리포트 프롬프트 고도화 (Zone + 칼로리 통합)
+- [x] MCP get_weight_loss_status 도구 (7일 통합 요약 + 경고 자동 판정)
+
+## M4-10: 활동 상세 페이지 고도화 ✅
+
+- [x] SplitChart: ComposedChart로 확장 (페이스 바 + HR 라인 오버레이)
+- [x] 이전 동일 유형 활동 비교 (페이스/HR 델타 카드 + 테이블)
+- [x] HR Zone 분포 스택바 + 강도 라벨 배지 (M4-5에서 구현)
+
+## M4-11: Garmin 프로필 자동 싱크 + 변경 이력 트래킹 ✅
+
+- [x] UserProfile에 source 필드 추가 (maxHRSource, lthrSource, restingHRBaseSource)
+- [x] heartRateZones + user-settings 양 endpoint 통합 싱크 (러닝 sport 우선)
+- [x] manual 값 보호 (source=manual이면 자동 갱신 차단)
+- [x] zonesRaw 신선도 체크 (stale Garmin zone 방지)
+- [x] MetricChange 모델 + recordMetricChange 헬퍼 (트랜잭션 원자성)
+- [x] MCP get_metric_history 도구 (필드/기간 필터, 변경 이력 조회)
+- [x] 프로필 페이지 source 배지 + lthrPace 표시
+- 효과: 가민 자동 측정값 반영 + 시간 경과별 피트니스 변화 추적
+- 스펙: `docs/specs/garmin-profile-sync.md`
+
+---
+
+### 권장 진행 순서
+
+```
+1. M4-1 (LTHR 저장) — 빠른 승리, 30-45분
+2. M4-2 (칼로리 밸런스 필드) — 30분
+3. M4-3 (식단 연동 조사) — 2-3시간, 복잡도 높음
+4. M4-4 (Split MCP) — 1시간
+5. M4-5 (강도 분류) — 1-2시간
+6. M4-6 (대시보드) — 복잡도 높음
+7. M4-7 ~ M4-10 — 순차 진행
+```
+
+---
+
+# 마일스톤 5: AI 어드바이저 강화 + 리포트 개선 ✅
+
+> 기간: 2026-06-22 ~ 2026-06-23. 누적 데이터에 대한 UX 정합 + AI 출력 품질/비용 최적화.
+> 스펙: `docs/specs/m5-overview.md`
+
+## M5-1: 리포트 페이지 페이지네이션 — 우선순위 ★★★ ✅
+
+- [x] `/api/reports` GET — cursor 복합키(`<createdAt>|<id>`) + limit (default 14, max 50), 응답에 nextCursor
+- [x] `/reports` 페이지 — server component로 SSR 첫 14건 + reports-client.tsx 클라이언트 상호작용
+- [x] "더 보기" 버튼 (cursor state, race condition 가드)
+- [x] 타입 필터 토글 (전체/모닝/이브닝/주간) + filterRef로 generate 중 필터 변경 race 해결
+- [x] isomorphic-dompurify 도입 (SSR initial reports sanitize 안전)
+- 스펙: `docs/specs/m5-1-reports-pagination.md` (#114, PR #115)
+
+## M5-2: MCP 도구 확장 — 우선순위 ★★★ ✅
+
+> AI가 파생 지표를 직접 계산하지 않도록 도구화 → 토큰 절약 + 응답 정확도.
+
+- [x] `get_readiness_score` — bodyBatteryHigh 0-100 + 5단계 강도 추천 + HRV/RHR 7일 평균 deviation + 어제 로드. 스펙: `m5-2-1-readiness-score.md` (#117, PR #118)
+- [x] `get_training_load_trend` — ACWR (acute 7d / chronic 28d) + 4단계 위험 구간 (detraining/sweet_spot/high/very_high). 스펙: `m5-2-2-training-load-trend.md` (#122, PR #123)
+- [x] `get_pace_progression` — 거리 bucket (5k/10k/HM/FM) baseline/latest/best + improvementPct. 스펙: `m5-2-3-pace-progression.md` (#124, PR #125)
+- [x] `get_calendar_summary` — N일 일자별 핵심 지표 한 줄씩 (러닝/수면/RHR/bodyBattery/칼로리 밸런스/걸음수). 스펙: `m5-2-4-calendar-summary.md` (#126, PR #127)
+
+## M5-3: 프롬프트 캐싱 — 우선순위 ★★ ✅
+
+> Claude CLI `--system-prompt` 옵션으로 시스템 프롬프트를 API system param에 분리 → 자동 cache_control 적격.
+
+- [x] Claude CLI 옵션 조사 — `--system-prompt` 가 API system param 분리 + 자동 캐싱 적격 확인
+- [x] 시스템 프롬프트 정적/동적 분리 (BASE+profile vs 현재 시간)
+- [x] claude-advisor.ts: 새 세션 시 `--system-prompt` 사용, resume 시 CLI가 기존 system 유지
+- 효과: cron 1회 내 MCP 도구 5-10번 호출 시 첫 호출 후 cache hit, input token 60-80% 절감 기대
+- 스펙: `docs/specs/m5-3-prompt-caching.md` (#129, PR #130)
+
+## M5-4: 멀티턴 컨텍스트 강화 — 우선순위 ★★ ✅
+
+> 봇/웹/cron 동시 사용 시 단일 sessionId 오염 해소.
+
+- [x] 채널별 sessionId 분리 (web, telegram, cron-morning/evening/weekly) — Map 기반 SessionStore
+- [x] TTL (6h 무활동) + 토큰 한도 (100k 누적) 자동 reset
+- [x] cron 채널 단발 강제 (매 호출 직전 resetSession) — 이전 호출 컨텍스트 오염 차단
+- [x] AI 채팅 페이지 "새 대화 시작" 버튼 — 기존 구현 활용
+- 스펙: `docs/specs/m5-4-multi-turn.md` (#134, PR #135)
+
+---
+
+# 마일스톤 6: AI 깊이 강화 (장기 계획 + 부상 예방 + 레이스 목표)
+
+> 시작: 2026-06-30. M5 의 단기 결정적 도구화를 한 단계 더 — 장기 추세/예측/계획까지.
+> 스펙: `docs/specs/m6-overview.md`
+
+## M6-1: `generate_training_plan` / `get_active_training_plan` MCP 도구 — 우선순위 ★★★ ✅
+
+> 4주 cycle 훈련 계획 결정적 생성 + DB 저장 + 진행 파생.
+
+- [x] 일자별 권장 workout (거리/Zone/유형) — 4주 (Wk1 baseline / Wk2 +10% / Wk3 +20% peak / Wk4 -20% recovery)
+- [x] weeklyFrequency 3~5 옵션 (요일 고정 패턴 + slot 정규화)
+- [x] LTHR pace 기반 zone/pace 배분 (부재 시 pseudoLthr = recentAvg / 1.10)
+- [x] race target 지원: targetDate Wk4 창 내 6일 pre-race 선형 taper (0.6 → 0), race 당일 rest
+- [x] DB 모델 TrainingPlan / TrainingWorkout + advisory lock 동시성 제어
+- [x] 진행 파생: workout ↔ 러닝 activity 매칭 (KST day + 계획 90% 이상 거리)
+- [x] `POST /api/training-plan/generate` 명시적 승인 경로 (advisor 는 read-only 만 사용)
+- 스펙: `docs/specs/m6-1-training-plan.md` (#161, PR #162)
+
+## M6-2: `get_injury_risk_score` MCP 도구 — 우선순위 ★★★ ✅
+
+> HRV 추세 + 누적 부하 + 수면 일관성 + 안정시 HR → 부상/오버트레이닝 위험 점수.
+
+- [x] 4개 요인 각 25% 가중치 (HRV decline / ACWR / sleep instability / RHR rise)
+- [x] 0-100 점수 + 4단계 라벨 (safe/caution/elevated/high) + 권장 조치
+- [x] 기여 요인 top 3 (점수 + detail)
+- [x] 윈도우 오늘 포함 (preSync 후 stale 1일 방지), ACWR M5-2-2 와 정합
+- 스펙: `docs/specs/m6-2-injury-risk.md` (#154, PR #155)
+
+## M6-3: `get_race_prediction` MCP 도구 — 우선순위 ★★ ✅
+
+> 동일 거리 활동 + 트레이닝 트렌드 → race 예상 기록 (Riegel 공식).
+
+- [x] 5K/10K/HM/FM 예측 (best/realistic/conservative 3 시나리오)
+- [x] 신뢰도 점수 (count 기반: high ≥ 5, medium 2-4, low 1)
+- [x] source bucket 자체 우선, 없으면 다른 bucket 중 count 최대 Riegel 환산
+- [x] 러닝 bucket/포맷 유틸 공용화 (`running-buckets.ts`) — pace-progression 과 drift 방지
+- 스펙: `docs/specs/m6-3-race-prediction.md` (#159, PR #160)
+
+## M6-4: `recommend_today_workout` MCP 도구 — 우선순위 ★★ ✅
+
+> readiness + 주간 계획 + 부상 위험 → 오늘 구체적 workout. M6-1~2 의존 통합 도구 (read-only).
+
+- [x] workout 유형 / 거리 / 페이스 범위 (±5%) / Zone
+- [x] 조정 매트릭스 4×5 (injury × readiness) + downgrade ladder (interval→tempo→easy→recovery→rest, long→easy 60%)
+- [x] active plan 오늘 workout base, 없거나 rest 계획이면 fallback (baseline × 0.2 easy Z2)
+- [x] 한국어 rationale (데이터 부재 명시)
+- [x] `computeBaseline` 을 `baseline.ts` 로 공용화 (M6-1/M6-4 drift 방지)
+- 스펙: `docs/specs/m6-4-recommend-today-workout.md` (#163, PR #164)
+
+---
+
+# 마일스톤 15: 히스토리 브라우저 + 기간별 추이 분석 ✅
+
+> 시작: 2026-09-18 · 완료: 2026-09-22 (v2.34.0). 6년치 Garmin 데이터를 연 → 월 → 일로 탐색하고 지표별 주/월/연 추이를 비교. 읽기 전용 UI + 집계 API.
+> 스펙: `docs/specs/m15-overview.md` · 추적 이슈 #392
+
+## M15-1: 집계 기반 — KST 버킷 · 지표 레지스트리 · history summary API — 우선순위 ★★★ ✅
+
+- [x] `src/lib/history/` 버킷 헬퍼 (`startOfMonthKST` / `startOfYearKST`) + 지표별 집계 정책 레지스트리
+- [x] `GET /api/history/summary` (granularity · from/to · metrics) — raw query 없이 JS 집계
+- [x] `/api/activities` · `/api/export` `from/to`
+- [x] 인라인 월 시작 · 중복 `kstDayRange` 정리 (#365 흡수)
+- [x] F12 6년 `year` 요청 1s 이내 — summary 메모리 캐시 (#394) 적용 후 **프로덕션 재측정 (v2.31.0, 2026-09-21, 서버 내부 `127.0.0.1:4200` · 전 지표 14개): 콜드 1.65s → 웜 0.090s · 0.003s · 0.003s** (이전 웜 1.09~1.22s)
+- 이슈: #393 (PR #399 · v2.30.0 · F12 는 v2.31.0 에서 닫힘)
+
+## M15-2: `/history` 연 · 월 · 일간 종합 — 우선순위 ★★★ ✅
+
+- [x] 레벨 공용 네비 (이전/다음 + 점프) · 브레드크럼
+- [x] 연 뷰 (12개월 카드 + 지표 선택 + 연 KPI) · 월 뷰 (값 셀 그리드 + 월 KPI + 일별 스트립)
+- [x] 일간 종합 페이지 8 섹션 (활동 · 수면 · 심박 · 체성분 · 혈압 · 걸음/칼로리 · 식단 · AI 리포트)
+- [x] 초기 지표: 러닝 km · 걸음 · 수면 점수 · 안정시 심박 · 체중
+- [x] summary 메모리 캐시 + 수동 쓰기 무효화 (#393 F12 이월분) · 지표 3건 (러닝 시간 합 · 칼로리 밸런스 · 섭취 칼로리 — 식단 캘린더 B-2 흡수)
+- 이슈: #394 (PR #402 · v2.31.0) · 후속 #403 (프로세스 간 캐시 무효화 — 완료 · DB epoch · `403-cache-epoch.md`) · #405 (하한 > 오늘 방어 — 완료 · `405-408-history-bounds.md`)
+
+## M15-3: `/trends` 추이 분석 — 우선순위 ★★ ✅
+
+- [x] 시계열 (합계 막대 / 평균 선+밴드) · 전년 동기 겹침 · 계절성 · 기간 비교
+- [x] 불완전한 데이터 구분 (결측 · 기록 절반 미만 · 다 채워지지 않은 버킷) · 임의 구간 롤업 (`range-totals`) · 레지스트리 `sparse`
+- 이슈: #395 (PR #407 · v2.32.0 · 배포 후 실데이터 확인 2026-09-21) · 후속 #408 (기록 시작일이 걸린 첫 버킷 — 완료 · `405-408-history-bounds.md`) · `/trends` → `/history` 링크의 지표 유지는 #396 에 편입
+
+## M15-4: 하이라이트 — 우선순위 ★★ ✅
+
+- [x] 개인 기록 패널 · 이벤트 마커 (MetricChange · 플랜 · 레이스) · 포인트 → 일 뷰 링크 · 커버리지 띠
+- [x] `/trends` 판독값 · 포인트의 `/history` 링크에 선택 지표 유지 (`bucketHref` — 릴리즈 PR #409 Codex P2)
+- [x] `Activity.eventType` 컬럼 승격 + rawData 백필
+- 이슈: #396 · PR #412 · **v2.33.0** (2026-09-22) · 프로덕션 백필 완료 (race 14). 후속: #413 (포인트 클릭 접근성) · #414 (과거 활동 재조회 — 완료: cron · /sync 활동 30일 되돌아보기 · 스펙 `414-activity-recheck.md`)
+
+## M15-5: 심화 시각화 — 우선순위 ★ ✅
+
+- [x] 효율 산점도 · HR 존 분포 · 기상 vs 페이스 · 교차 상관 (주간 km → 다음 주 RHR) 4개 선별 → `/insights` (수면 규칙성은 `/lifestyle` 에 이미 있어 제외)
+- 이슈: #397 · PR #417 · **v2.34.0** (2026-09-22). 미선별 후보는 #397 체크리스트 · D8 표. 후속: #419 (레이스 점 연도 색 · 제외 사유 — **v2.39.1** 완료 · RSC 페이로드는 배포 후 실측으로 판단) · #418 (HRR)
+
+**M15 완료 (2026-09-22, v2.30.0 ~ v2.34.0)** — `/history` · `/trends` · `/insights` + 집계 계층 · 하이라이트 · `Activity.eventType`.
+
+# 마일스톤 16: 심박 회복 (HRR) — 활동 상세 + 연도별 추이
+
+> 시작: 2026-09-23. #418 의 스코프 분할 — 활동 1건의 회복 곡선 (M16-1) → 컬럼 승격 · 백필 · `/insights` 패널 (M16-2). API 호출 0.
+
+## M16-1: 러닝 종료 후 심박 회복 (HRR) — 활동 상세 — 우선순위 ★★ ✅
+
+- [x] `src/lib/heart/recovery.ts` 순수 로직 (2분 격자 최근접 샘플 · 보간 없음 · `elapsedDuration` 벽시계 종료 · 자정 앞뒤 날) + vitest 16건
+- [x] 활동 상세 "종료 후 회복" 섹션 — 곡선 −4 … +10 분 · 2분 HRR · 10분 낙차 · 빈 상태 3구분 · "2분 해상도" 표기
+- 이슈: #418 · PR #423 · **v2.35.0** (2026-09-23). 스펙 `docs/specs/418-hr-recovery.md` · 시안 `docs/designs/418-hr-recovery/`. 후속: #425 (`/insights` 연도별 HRR — `Activity.hrr2` 승격 + 백필)
+
+## M16-2: `/insights` 연도별 HRR 추이 — `Activity.hrr2` 승격 + 백필 — 우선순위 ★★ ✅
+
+- [x] `Activity.hrr2` · `hrrDrop10` 컬럼 (수동 SQL) · `syncAll` 후처리 · `backfill:hrr`
+- [x] `/insights` 패널 E "회복이 빨라졌나?" — 연도별 중앙값
+- 이슈: #425 · PR #428 · **v2.36.0** (2026-09-23). 프로덕션 백필 갱신 111 / 2,157 — 심박 시계열이 2026-04-20 이후만 존재 (Garmin 보존 창 · 09-17 백필 덮어쓰기 → **#431** P1). 후속: #429 (캡션 시작일 · `--dry-run` 이어가기 · 중앙값 토글) · #431
+
+## M16-3: 심박 · 수면 재싱크 덮어쓰기 가드 — 우선순위 ★★★ ✅
+
+- [x] `preserve.ts` — update 에서 null 필드 생략 · `isTrimmedResponse` (기존 rawData 의 값 있던 키가 응답에서 사라지면 rawData 유지, 중첩 재귀) · `backfill:history` 보존 창 밖 wellness 기본 중단
+- [x] 패널 E 후속 (#429)
+- 이슈: #431 · #435 · #429 · PR #433 · #436 · **v2.36.1** (2026-09-23). 2026-04 이전 시계열 · HRV 는 복구 불가. 후속: #437 (숫자 문자열 · sleepScoreDetails 보존 — **v2.39.1** 완료 · PR #470 · `fetchers/sleep-payload.ts` 순수 분리). 배포 후 확인 (09-23 15:00 cron 뒤 array 156 · HRV 156 유지) · daily_stats 보존 창 감사 **창 없음** (431 스펙 §4)
+
+# 마일스톤 17: 러닝 상세 AI 평가 확장 + HRR 후속
+
+> 시작: 2026-09-23. 세션 인계 후보 3건 (#440 · #441 · #442) — M16 의 HRR 을 `/trends` 로 넓히고, 활동 상세 AI 평가를 페이지 지표 전체 근거로.
+
+## M17-1: 러닝 상세 AI 평가 — 상세 페이지 지표 전체를 근거로 — 우선순위 ★★★ ✅
+
+- [x] `src/lib/ai/activity-eval/` 순수 조립 (섹션 8개 · km 스플릿 파생값 · rawData 보조 지표 · 요약 모드) + vitest 27건
+- [x] `POST /api/activities/[id]/evaluate` — 서버 조립 · 평가 전용 세션 채널 · Garmin 스플릿 공용 fetch
+- [x] `AiEvalCard` — 근거 칩 · 섹션 헤딩 · 종합 강조 · 분석 중/오류/다시 평가
+- 이슈: #440 · PR #446 · **v2.37.0** (2026-09-23). 스펙 `docs/specs/440-activity-ai-eval.md` · 시안 `docs/designs/440-activity-ai-eval/`. 후속: #444 (이브닝 리포트 · MCP `get_activity_context`) · #448 (Codex P2 3건 — 같은 코스 이전 기록 조회를 매처 안으로 · 제외 집합 · 1km 라벨)
+
+## M17-2: HRR 해상도 조사 (2분 → 1분) — 우선순위 ★ ✅ (소스 없음 · 종료)
+
+- [x] 프로덕션 간격 분포 (2026-09-23): 2026-04 ~ 09 전 월 `gap_60s = 0` · 120초 107,630 · 기타 183 (null 구간) — **2분 격자 확인**
+- [x] 워치 "매초" 설정 실험 (사용자 · 2026-09-25): 설정 다음 날 하루 전체 719 샘플 모두 120초 · 60초 0건 → **소스 없음 · 2분 격자 고정** 결론 기록 (418 · 425 · 441 스펙 §7/§5) · 이슈 종료 (문서 PR)
+- 이슈: #441 · 스펙 `docs/specs/441-hrr-1min-resolution.md`
+
+## M17-4: 월별 그리드 월요일 시작 — 우선순위 ★ ✅
+
+- [x] `month-cells.ts` 정본 (`WEEKDAY_LABELS` · `weekdayIndexMon`) · `MonthGrid` · `HistoryNav` · `MonthlyHeatmap` (로컬 TZ 달력 제거 · #365 잔여)
+- 이슈: #445 · PR #452 · **v2.37.1** (2026-09-24). 스펙 `docs/specs/445-monday-start-grids.md`. 대시보드 주간 차트는 롤링 7일이라 대상 아님
+
+## M17-3: `/trends` HRR 지표 — 우선순위 ★★ ✅
+
+- [x] `metrics.ts` `hrr2` (activity · median 집계 · sparse) · 시작일 캡션 · 개인 기록 "가장 큰 2분 HRR"
+- 이슈: #442 · PR #447 · **v2.37.0** (2026-09-23). 스펙 `docs/specs/442-trends-hrr-metric.md`. 후속: #449 (기간 비교 안내 문구 지표 방향)
+
+## M17-5: 리포트 근거 확장 Phase 1 — 도구 필드 · 활동 컨텍스트 도구 · 프롬프트 — 우선순위 ★★ ✅
+
+- [x] `get_activities` daily 행 `hrr2` · `hrrDrop10` · `zones` · `zonePct` + envelope `runningSummary` (`summarizeRunningWindow` 순수 · 80/20 · HRR 중앙값)
+- [x] `GET /api/activities/[id]/context` + MCP `get_activity_context` (HTTP 경유 · #440 조립 재사용) · allowlist · 시스템 프롬프트 가이드
+- [x] 프롬프트 정본 `report-prompts.ts` — 모닝 혈압 · 운동 추천 / 이브닝 활동 컨텍스트 · 기상 영향 / 주간 이번 주 vs 직전 4주 (endDate) · VO2max/LT · 플랜 준수율 — vitest 회귀
+- [ ] 배포 후 첫 이브닝 · 주간 리포트에서 도구 호출 확인
+- 이슈: #444 · PR #456 · fix PR #458 (릴리즈 PR Codex P2 — `hrrDrop10` 안내 단위) · **v2.38.0** (2026-09-24). 스펙 `docs/specs/444-report-evidence.md`. Phase 2: M17-6 (#455)
+
+## M17-6: 리포트 근거 확장 Phase 2 — 개인 기록 도구 · 강도 분 · 수면 규칙성 · 다이나믹스 추세 — 우선순위 ★★ ✅
+
+- [x] `GET /api/history/records` + MCP `get_personal_records` (웹 API 경유 · `paceMinKm`) · allowlist · 시스템 프롬프트
+- [x] `summarizeDailyWindow` → `get_daily_stats` `totals` (가중 강도 분 moderate + 2×vigorous · 성분 · 층수 — Codex P1: 저장 컬럼은 단순합)
+- [x] `lib/sleep/regularity.ts` (KST · 취침만 자정 접기) → `get_sleep` `regularity` · `/lifestyle` 라벨 임계 공유
+- [x] `runningSummary.dynamics` 중앙값 (보폭 cm 혼재 행 정규화 `lib/fitness/stride.ts` — 활동 평가와 공용)
+- [x] 프롬프트: 이브닝 신기록 · 주간 신기록 · 체지방/근육량 · 강도 분 vs 150 · 규칙성 · 다이나믹스 두 창
+- [x] 배포 후 이브닝 (러닝 있는 날) · 주간 리포트에서 항목 확인 — 사용자 확인 2026-09-28: 정상
+- 이슈: #455 · PR #462 · 스펙 `docs/specs/455-report-evidence-phase2.md`. 같은 릴리즈: #448 (PR #461 · 비교 매처 before · 제외 집합 · 1km 라벨) · #449 (PR #460 · `/trends` 비교 푸터 `betterWhen`)
+
+---
+
+# 유지보수 / 보안
+
+## Dependabot 보안 패치 2026-06 ✅
+
+- [x] next 16.2.4 → 16.2.9 (^16.2.6) — high 7 / med 4 / low 2 알림
+- [x] axios 1.15.1 → 1.17.0 (overrides ^1.16.0) — high 7 / med 1
+- [x] hono 4.12.14 → 4.12.25 (overrides ^4.12.21) — med 6 / low 1
+- [x] qs 6.15.0 → 6.15.2 (overrides ^6.15.2) — med 1
+- 효과: GitHub Dependabot open 알림 29건 → 0건
+- 스펙: `docs/specs/security-dependabot-202606.md` (#99, PR #100)
+
+## npm audit 후속 정합 2026-06 ✅
+
+- [x] postcss devDep ^8 → ^8.5.10 + overrides "$postcss" (next 번들 8.4.31까지 8.5.15 통일)
+- [x] fast-uri 3.1.0 → 3.1.2 (overrides ^3.1.2) — high (mcp-sdk → ajv)
+- [x] ip-address 10.1.0 → 10.2.0 (overrides ^10.1.1) — moderate XSS
+- [x] brace-expansion@5 5.0.5 → 5.0.6 (scoped overrides) — moderate DoS, 1.x 호환 유지
+- 효과: `npm audit` 6건 → 0건
+- 스펙: `docs/specs/security-audit-followup-202606.md` (#103, PR #104)
+
+## Dependabot 2026-06-22 보안 패치 ✅
+
+- [x] form-data overrides ^4.0.6 — high CRLF injection (axios transitive, #49)
+- [x] dompurify ^3.3.3 → ^3.4.11 (direct dep) — #41/42/43/45/46/47/48 7건 해소
+- [x] esbuild devDep ^0.28.0 → ^0.28.1 + overrides "$esbuild" — low Windows dev server (tsx transitive, #39)
+- [x] dompurify #44 dismiss — IN_PLACE 모드 미사용 (tolerable_risk)
+- [x] @babel/core overrides ^7.29.6 — npm audit 후속 (low, eslint transitive)
+- [x] js-yaml overrides ^4.2.0 — npm audit 후속 (moderate, @eslint/eslintrc transitive)
+- 효과: Dependabot open 10건 → 0건, npm audit 0건
+- 스펙: `docs/specs/security-dependabot-202606-2.md` (#110, PR #111)
+
+## 텔레그램 봇 IPv6 ETIMEDOUT 장애 + 토큰 로그 노출 2026-06 ✅
+
+- [x] `src/bot/index.ts` — grammy `client.baseFetchConfig`에 `https.Agent({family:4, keepAlive:true})` + `timeoutSeconds:60` (long-poll 30s 위 안전 마진)
+- [x] `src/bot/notifications/scheduler.ts` — 네트워크 에러 2s/8s/30s 백오프 4회 시도, HTML parse fallback과 분리
+- [x] `src/bot/utils/error.ts` 신규 — `bot<TOKEN>` URL 정규식 마스킹, grammy `HttpError.error`/`cause` 체인 sanitize, grammy timeout/AbortError 분류
+- 배경: 운영 서버 IPv6 라우트 부재 → node-fetch가 AAAA 우선 시도 → ETIMEDOUT. cron 리포트 매일 실패.
+- 스펙: `docs/specs/bot-telegram-ipv6-timeout-202606.md` (#107, PR #108)
+

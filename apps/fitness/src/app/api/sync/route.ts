@@ -1,0 +1,95 @@
+import { NextResponse } from "next/server";
+import { syncAll, type DataType } from "@/lib/garmin/sync";
+import { todayKST, daysAgoKST } from "@/lib/garmin/utils";
+
+const DEFAULT_DAYS = 1;
+
+const VALID_DATA_TYPES: DataType[] = [
+  "daily_stats",
+  "activities",
+  "sleep",
+  "heart_rate",
+  "body_composition",
+  "blood_pressure",
+  "fitness_metrics",
+  "user_profile",
+];
+
+/** "YYYY-MM-DD" 문자열을 KST midnight Date(정확한 UTC instant)로 파싱. 무효하면 null. */
+function parseKSTDate(dateStr: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (!match) return null;
+
+  const [, y, m, d] = match;
+  const date = new Date(`${y}-${m}-${d}T00:00:00+09:00`);
+
+  if (Number.isNaN(date.getTime())) return null;
+
+  // 파싱 결과가 입력과 일치하는지 검증 (2월 30일 등 방지). KST 기준으로 검증.
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const ymdKst = formatter.format(date);
+  if (ymdKst !== `${y}-${m}-${d}`) return null;
+
+  return date;
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json().catch(() => ({}));
+
+    let endDate: Date;
+    if (body.endDate) {
+      const parsed = parseKSTDate(body.endDate);
+      if (!parsed) {
+        return NextResponse.json(
+          { error: `유효하지 않은 날짜: ${body.endDate} (YYYY-MM-DD 형식)` },
+          { status: 400 }
+        );
+      }
+      // Codex P1 (PR #386): 미래 endDate 거부 — #381 단조 증가 이후 커서가 미래로 가면 되돌릴 수 없다.
+      if (parsed.getTime() > todayKST().getTime()) {
+        return NextResponse.json(
+          { error: `endDate 는 오늘(KST) 이후일 수 없습니다: ${body.endDate}` },
+          { status: 400 }
+        );
+      }
+      endDate = parsed;
+    } else {
+      // 수동 싱크: 오늘(KST)까지 (불완전해도 최신 데이터 우선)
+      endDate = todayKST();
+    }
+
+    let startDate: Date;
+    if (body.startDate) {
+      const parsed = parseKSTDate(body.startDate);
+      if (!parsed) {
+        return NextResponse.json(
+          { error: `유효하지 않은 날짜: ${body.startDate} (YYYY-MM-DD 형식)` },
+          { status: 400 }
+        );
+      }
+      startDate = parsed;
+    } else {
+      // KST 기준 (endDate와 동일 기준)
+      startDate = daysAgoKST(DEFAULT_DAYS);
+    }
+
+    const dataTypes = body.dataTypes
+      ? (body.dataTypes as string[]).filter((t): t is DataType =>
+          VALID_DATA_TYPES.includes(t as DataType)
+        )
+      : undefined;
+
+    const results = await syncAll({ startDate, endDate, dataTypes });
+
+    return NextResponse.json({ results });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

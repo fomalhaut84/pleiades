@@ -1,0 +1,225 @@
+name: Security Audit
+
+on:
+  schedule:
+    # 매주 월요일 03:00 UTC (한국시간 12:00)
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  audit:
+    name: Security Vulnerability Scan
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        id: audit
+        continue-on-error: true
+        run: |
+          set +e
+          npm audit --json --audit-level=moderate 2>audit-stderr.log | tee audit-result.json
+          AUDIT_EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+
+          echo "audit_exit_code=$AUDIT_EXIT_CODE" >> $GITHUB_OUTPUT
+          echo "Audit exit code: $AUDIT_EXIT_CODE"
+
+      # Codex P2 (PR #360): audit 실행 실패를 fail-closed 로 처리한다.
+      #   기존에는 `[ ! -f audit-result.json ]` 로만 실패를 감지했는데, tee 는 실행이 실패해도
+      #   파일을 만들기 때문에 이 분기가 사실상 죽은 코드였다. registry 장애 등으로 에러
+      #   페이로드가 오면 `.metadata.vulnerabilities.high // 0` 이 전부 0 을 반환해 워크플로우가
+      #   '취약점 없음' 으로 성공하고 이슈도 만들지 않았다.
+      #   #359 로 Dependabot 자동 보안 PR 을 껐으므로 이 워크플로우가 유일한 탐지 경로다.
+      #   존재 여부가 아니라 **내용**을 검증하고, 판정할 수 없으면 실패시킨다.
+      - name: Parse audit results
+        id: check
+        run: |
+          AUDIT_EXIT_CODE="${{ steps.audit.outputs.audit_exit_code }}"
+
+          fail() {
+            echo "::error::$1"
+            [ -s audit-stderr.log ] && { echo "--- npm audit stderr ---"; cat audit-stderr.log; }
+            [ -s audit-result.json ] && { echo "--- audit-result.json (앞부분) ---"; head -c 1000 audit-result.json; echo; }
+            exit 1
+          }
+
+          [ -s audit-result.json ] \
+            || fail "npm audit 결과가 비어 있습니다 (exit code: $AUDIT_EXIT_CODE)"
+
+          jq -e . audit-result.json >/dev/null 2>&1 \
+            || fail "npm audit 출력이 유효한 JSON 이 아닙니다 (exit code: $AUDIT_EXIT_CODE)"
+
+          jq -e 'has("error")' audit-result.json >/dev/null 2>&1 \
+            && fail "npm audit 이 에러를 반환했습니다: $(jq -rc '.error' audit-result.json)"
+
+          # metadata.vulnerabilities 가 없으면 카운트를 0 으로 읽어 '취약점 없음' 으로 오인한다.
+          jq -e '.metadata.vulnerabilities | objects' audit-result.json >/dev/null 2>&1 \
+            || fail "npm audit 결과에 metadata.vulnerabilities 가 없습니다 (exit code: $AUDIT_EXIT_CODE)"
+
+          CRITICAL=$(jq -r '.metadata.vulnerabilities.critical' audit-result.json)
+          HIGH=$(jq -r '.metadata.vulnerabilities.high' audit-result.json)
+          MODERATE=$(jq -r '.metadata.vulnerabilities.moderate' audit-result.json)
+
+          for v in "$CRITICAL" "$HIGH" "$MODERATE"; do
+            case "$v" in
+              ''|*[!0-9]*) fail "취약점 카운트가 정수가 아닙니다: '$v'" ;;
+            esac
+          done
+
+          TOTAL=$((CRITICAL + HIGH + MODERATE))
+
+          {
+            echo "critical=$CRITICAL"
+            echo "high=$HIGH"
+            echo "moderate=$MODERATE"
+            echo "total=$TOTAL"
+          } >> $GITHUB_OUTPUT
+
+          echo "취약점 요약: Critical=$CRITICAL, High=$HIGH, Moderate=$MODERATE, Total=$TOTAL"
+
+          if [ "$TOTAL" -gt 0 ]; then
+            echo "has_vulnerabilities=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_vulnerabilities=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create issue on vulnerabilities
+        if: steps.check.outputs.has_vulnerabilities == 'true'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const date = new Date().toISOString().split('T')[0];
+            const title = `[Security] npm audit 취약점 발견 - ${date}`;
+
+            const critical = '${{ steps.check.outputs.critical }}';
+            const high = '${{ steps.check.outputs.high }}';
+            const moderate = '${{ steps.check.outputs.moderate }}';
+            const total = '${{ steps.check.outputs.total }}';
+
+            let auditData = '';
+            try {
+              const rawData = fs.readFileSync('audit-result.json', 'utf8');
+              const parsed = JSON.parse(rawData);
+              let vulnerabilities = [];
+
+              if (parsed.vulnerabilities && typeof parsed.vulnerabilities === 'object') {
+                vulnerabilities = Object.entries(parsed.vulnerabilities).map(([pkg, data]) => ({
+                  title: data.name || pkg,
+                  severity: data.severity,
+                  module_name: pkg,
+                  version: data.range || data.via?.[0]?.range || 'N/A',
+                  url: data.via?.[0]?.url || 'N/A'
+                }));
+              }
+
+              const topVulns = vulnerabilities.slice(0, 10);
+              if (topVulns.length > 0) {
+                auditData = topVulns.map(vuln =>
+                  `- **${vuln.title}** (${vuln.severity})\n  - Package: \`${vuln.module_name}@${vuln.version}\`\n  - More info: ${vuln.url}`
+                ).join('\n\n');
+              } else {
+                auditData = '취약점 상세 정보를 파싱할 수 없습니다. 아티팩트를 확인하세요.';
+              }
+            } catch (e) {
+              auditData = `취약점 상세 정보를 파싱할 수 없습니다. 에러: ${e.message}`;
+            }
+
+            const dateStr = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+
+            const body = `## 보안 취약점 자동 검사 결과
+
+            **검사 일시**: ${dateStr}
+            **워크플로우**: ${context.workflow}
+            **브랜치**: ${context.ref}
+
+            ### 취약점 요약
+
+            | 심각도 | 개수 |
+            |--------|------|
+            | Critical | ${critical} |
+            | High | ${high} |
+            | Moderate | ${moderate} |
+            | **Total** | **${total}** |
+
+            ### 발견된 취약점 (상위 10개)
+
+            ${auditData}
+
+            ### 조치 방법
+
+            1. \`npm audit\` 실행하여 전체 취약점 확인
+            2. \`npm audit fix\` 실행
+            3. 수동 업데이트가 필요한 경우 package.json 직접 수정
+            4. 수정 후 테스트 및 빌드 확인
+
+            ---
+            자동 생성된 이슈입니다.`;
+
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'security'
+            });
+
+            const existingIssue = issues.data.find(issue =>
+              issue.title.includes('[Security] npm audit 취약점 발견') &&
+              issue.labels.some(label => label.name === 'automated')
+            );
+
+            if (existingIssue) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `### 새로운 검사 결과 (${date})\n\n${body}`
+              });
+              console.log(`기존 이슈 #${existingIssue.number}에 코멘트 추가됨`);
+            } else {
+              const issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['security', 'automated', 'dependencies']
+              });
+              console.log(`새 이슈 #${issue.data.number} 생성됨`);
+            }
+
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: security-audit-results
+          path: |
+            audit-result.json
+            audit-stderr.log
+          retention-days: 30
+
+      - name: Fail workflow if vulnerabilities found
+        if: steps.check.outputs.has_vulnerabilities == 'true'
+        run: |
+          echo "::error::보안 취약점이 발견되었습니다. 이슈를 확인하고 조치하세요."
+          exit 1

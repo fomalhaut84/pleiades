@@ -1,0 +1,157 @@
+import type { GarminConnect } from "@flow-js/garmin-connect";
+import { Prisma } from "@/generated/prisma/client";
+import prisma from "@/lib/prisma";
+import { computeIntensityFromRawData } from "@/lib/fitness/intensity";
+import { withRateLimit } from "../utils";
+import { parseAndSaveWristTemps } from "@/lib/weather/enrich";
+import { parseRunningDynamics } from "@/lib/garmin/parse-running-dynamics";
+import { parseEventType } from "@/lib/garmin/parse-event-type";
+
+const PAGE_SIZE = 20;
+
+export async function syncActivities(
+  client: GarminConnect,
+  startDate: Date,
+  endDate: Date
+): Promise<number> {
+  let synced = 0;
+  let start = 0;
+  let hasMore = true;
+
+  // M4-5: 강도 분류 시 사용할 실측 LTHR (프로필에서 1회 조회).
+  // 실측값이 없으면 LTHR 기반 보정은 건너뛰고 분포만으로 분류.
+  const profile = await prisma.userProfile.findFirst();
+  const lthr = profile?.lthr ?? null;
+
+  while (hasMore) {
+    const activities = await withRateLimit(() =>
+      client.getActivities(start, PAGE_SIZE)
+    );
+
+    if (activities.length === 0) {
+      hasMore = false;
+      break;
+    }
+
+    for (const a of activities) {
+      // Garmin startTimeLocal은 naïve "YYYY-MM-DD HH:mm:ss" 형식.
+      // 서버 TZ에 의존하지 않도록 KST(+09:00) 명시. startTimeGMT는 (실측상) 동일 형식의
+      // GMT 시각이므로 +00:00 명시.
+      const activityDate = a.startTimeLocal
+        ? new Date(`${a.startTimeLocal.replace(" ", "T")}+09:00`)
+        : new Date(`${a.startTimeGMT.replace(" ", "T")}+00:00`);
+
+      if (activityDate < startDate) {
+        hasMore = false;
+        break;
+      }
+
+      // endDate는 해당 날짜 자정이므로, 하루 끝(+24h)까지 포함
+      const endOfDay = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
+      if (activityDate > endOfDay) {
+        continue;
+      }
+
+      const raw = a as unknown as Record<string, unknown>;
+
+      // #278: 러닝 다이나믹스는 별도 유틸에서 파싱 (backfill 스크립트와 로직 공유).
+      const dyn = parseRunningDynamics(raw);
+
+      const data = {
+        activityType: a.activityType?.typeKey ?? "unknown",
+        // #396: eventType 승격 (race · training · uncategorized …). update 에도 넣어 Garmin 에서 나중에 레이스로 바꿔도 반영.
+        eventType: parseEventType(raw),
+        name: a.activityName ?? "Untitled",
+        startTime: activityDate,
+        duration: Math.round(a.duration ?? 0),
+        distance: a.distance ?? null,
+        calories: a.calories ? Math.round(a.calories) : null,
+        avgHR: a.averageHR ? Math.round(a.averageHR) : null,
+        maxHR: a.maxHR ? Math.round(a.maxHR) : null,
+        avgPace:
+          a.distance && a.duration && a.distance > 0
+            ? a.duration / (a.distance / 1000)
+            : null,
+        avgSpeed: a.averageSpeed ? a.averageSpeed * 3.6 : null,
+        elevationGain: a.elevationGain ?? null,
+        trainingEffect: dyn.trainingEffect,
+        vo2maxEstimate: (raw.vO2MaxValue as number) ?? null,
+        // #278: M2 러닝 다이나믹스 — 실제 Garmin top-level 필드로부터 추출.
+        avgCadence: dyn.avgCadence,
+        avgStrideLength: dyn.avgStrideLength,
+        avgVerticalOscillation: dyn.avgVerticalOscillation,
+        avgGroundContactTime: dyn.avgGroundContactTime,
+        aerobicTE: dyn.aerobicTE,
+        anaerobicTE: dyn.anaerobicTE,
+        // rawData 에 avgRespirationRate 필드 없음 — 별도 endpoint 필요. 후속 이슈로 트래킹.
+        avgRespirationRate: toFloat(raw.avgRespirationRate),
+        lapCount: toInt(raw.lapCount),
+        splitSummaries: a.splitSummaries
+          ? (a.splitSummaries as Prisma.InputJsonValue)
+          : Prisma.DbNull,
+        rawData: raw as Prisma.InputJsonValue,
+      };
+
+      // M4-5: 강도 자동 분류 (hrTimeInZone_1~5 기반).
+      // 분포 추출 실패 시 기존 값을 덮어쓰지 않도록 update/create 동작을 분리.
+      const intensity = computeIntensityFromRawData({
+        rawData: raw,
+        avgHR: data.avgHR,
+        lthr,
+      });
+      const intensityData: Record<string, unknown> = intensity
+        ? {
+            zoneDistribution: intensity.zoneDistribution as unknown as Prisma.InputJsonValue,
+            estimatedZone: intensity.estimatedZone,
+            intensityScore: intensity.intensityScore,
+            intensityLabel: intensity.intensityLabel,
+          }
+        : {};
+      // create 시에만 빈 값 명시 (upsert update에서는 생략하여 기존 값 유지)
+      const intensityDataCreate: Record<string, unknown> = intensity
+        ? intensityData
+        : {
+            zoneDistribution: Prisma.DbNull,
+            estimatedZone: null,
+            intensityScore: null,
+            intensityLabel: null,
+          };
+
+      const saved = await prisma.activity.upsert({
+        where: { garminId: BigInt(a.activityId) },
+        update: { ...data, ...intensityData },
+        create: { garminId: BigInt(a.activityId), ...data, ...intensityDataCreate },
+        select: { id: true },
+      });
+
+      // #269: 손목 온도 파싱만 sync 경로에서 처리 (I/O = DB update, 네트워크 없음).
+      // 외부 기상 fetch 는 backfill 스크립트가 담당 — Codex P1: sync 루프에서 Open-Meteo
+      // 8초 timeout 이 N 활동만큼 누적되면 syncAll 이 정지 (100 활동 = 최대 13분).
+      try {
+        await parseAndSaveWristTemps(saved.id, raw);
+      } catch (err) {
+        console.warn(
+          `[activities] 손목 온도 저장 실패 (activity ${saved.id}): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+
+      synced++;
+    }
+
+    start += PAGE_SIZE;
+  }
+
+  return synced;
+}
+
+function toInt(val: unknown): number | null {
+  if (val === null || val === undefined) return null;
+  const n = Number(val);
+  return isNaN(n) ? null : Math.round(n);
+}
+
+function toFloat(val: unknown): number | null {
+  if (val === null || val === undefined) return null;
+  const n = Number(val);
+  return isNaN(n) ? null : n;
+}
