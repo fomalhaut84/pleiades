@@ -23,6 +23,8 @@ tools/local/run.sh fin -- npm run build && tools/local/run.sh fit -- npm run bui
 
 ## 기동 (M-4)
 
+**네 명령은 모두 끝나지 않는 프로세스다** — 터미널 4개에서 각각 돌리고 **터미널마다 `export` 를 다시 한다**(또는 같은 셸에서 `&` 로 백그라운드 · 로그는 파일로). 위에서부터 그대로 붙이면 첫 줄에서 멈춘다(PR #123 Codex P2).
+
 ```bash
 export PLEIADES_VERIFY_BOT_IDS=<fin 봇 id>,<fit 봇 id> PLEIADES_VERIFY_CHAT_IDS=<검증 채팅 id,…>
 tools/local/run.sh fin -- npm run start -- -p 4610      # 웹 — Next 는 .env 의 PORT 를 쓰지 않는다 → -p 필수
