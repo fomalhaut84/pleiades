@@ -3,7 +3,7 @@
 
 복사 금지 3종(원본 .env · repos/*/.env · .env.example — 서비스 DB·포트를 가리킨다)을 대신한다.
   ① 템플릿은 tools/local/env/<app>.env (apps/* 밖)
-  ② __PGUSER__ = 현재 OS 사용자 · __SECRET__ = 매번 새 난수 · __PIN__ = 6자리 난수
+  ② __PGUSER__ = PGUSER 또는 현재 OS 사용자(db.py 와 같은 역할) · __SECRET__ = 매번 새 난수 · __PIN__ = 6자리 난수
   ③ 이미 있으면 덮어쓰지 않는다 — 지우고 다시 돌린다
   ④ 쓰기 전에 check_env 의 파일 단위 검사(DB · 포트 · 비워야 할 키)를 통과해야 한다. 값은 출력하지 않는다
   ⑤ 권한 0600
@@ -21,6 +21,7 @@ import secrets
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import quote
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -28,6 +29,11 @@ sys.path.insert(0, str(HERE))
 import check_env  # noqa: E402
 
 ROOT = HERE.parents[1]
+
+
+def pg_role(environ: dict[str, str]) -> str:
+    """db.py 와 같은 역할 — libpq 처럼 PGUSER 가 있으면 그것, 없으면 OS 사용자 (PR #119 Codex P2). URL 용으로 인코딩."""
+    return quote(environ.get("PGUSER") or getpass.getuser(), safe="")
 
 
 def render(template: str, *, pguser: str) -> str:
@@ -67,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     if target.exists():
         print(f"write_env: 거부 — {target} 가 이미 있다 (덮어쓰지 않는다 · 다시 만들려면 지우고 돌린다)", file=sys.stderr)
         return 1
-    text = render((HERE / "env" / f"{args.app}.env").read_text(), pguser=getpass.getuser())
+    text = render((HERE / "env" / f"{args.app}.env").read_text(), pguser=pg_role(os.environ))
     found = validate(args.app, text, root)
     if found:
         print(f"write_env: 중단 — 템플릿이 실효 env 검사를 통과하지 못한다 {len(found)}건", file=sys.stderr)

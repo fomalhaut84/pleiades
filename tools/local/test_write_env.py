@@ -62,6 +62,11 @@ class WriteEnvTest(unittest.TestCase):
         self.assertIn("U=me", r1)
         self.assertRegex(r1, r"P=\d{6}\n")
 
+    def test_role_matches_db_helper(self):
+        # 회귀: PR #119 Codex P2 — db.py 는 PGUSER 를 남기므로 URL 역할도 PGUSER 를 따른다
+        self.assertEqual(w.pg_role({"PGUSER": "dev role"}), "dev%20role")
+        self.assertTrue(w.pg_role({}))
+
     def test_refuses_to_overwrite(self):
         target = self.root / "apps" / "finance" / ".env"
         target.write_text("KEEP=1\n")
