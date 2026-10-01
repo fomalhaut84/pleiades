@@ -74,7 +74,11 @@ def main(argv: list[str] | None = None) -> int:
         for p in found:
             print(f"  · {p}", file=sys.stderr)
         return 1
-    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:  # 검사 뒤 생겼거나 dangling symlink (사전 리뷰 info 4)
+        print(f"write_env: 거부 — {target} 가 이미 있다 (덮어쓰지 않는다)", file=sys.stderr)
+        return 1
     with os.fdopen(fd, "w") as f:
         f.write(text)
     print(f"write_env: {target} 작성 (0600 · 값은 출력하지 않는다)")

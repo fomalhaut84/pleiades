@@ -70,6 +70,14 @@ class WriteEnvTest(unittest.TestCase):
         self.assertIn("이미 있다", err)
         self.assertEqual(target.read_text(), "KEEP=1\n")
 
+    def test_dangling_symlink_refused(self):
+        target = self.root / "apps" / "fitness" / ".env"
+        target.symlink_to(self.root / "nowhere")
+        rc, _, err = self.run_main("fit")
+        self.assertEqual(rc, 1)
+        self.assertIn("이미 있다", err)
+        self.assertFalse((self.root / "nowhere").exists())
+
     def test_bad_template_is_rejected(self):
         bad = "DATABASE_URL=postgresql://u@localhost:5432/myfinance\nPORT=4100\n"
         found = w.validate("fin", bad, self.root)

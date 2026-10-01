@@ -91,8 +91,13 @@ class DbTest(unittest.TestCase):
             db.main(["create", "fin", "--confirm", "pleiades_fin"])
 
     def test_pg_target_env_removed(self):
-        env = db.clean_env({"PGHOST": "prod", "PGSERVICE": "svc", "PGPORT": "6543", "PGDATABASE": "myfinance", "PATH": "/x"})
-        self.assertEqual(env, {"PATH": "/x"})
+        env = db.clean_env({"PGHOST": "prod", "PGSERVICE": "svc", "PGPORT": "6543", "PGDATABASE": "myfinance",
+                            "PGSSLMODE": "disable", "PGUSER": "me", "PGPASSFILE": "/p", "PATH": "/x"})
+        self.assertEqual(env, {"PGUSER": "me", "PGPASSFILE": "/p", "PATH": "/x"})
+
+    def test_psqlrc_ignored(self):
+        self.run_main("status", "fin")
+        self.assertTrue(self.calls()[0].startswith("psql -X -h localhost -p 5432 -d postgres"))
 
     def test_psql_failure_stops(self):
         rc, _, err = self.run_main("create", "fin", FAKE_PSQL_FAIL="1")

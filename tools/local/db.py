@@ -24,13 +24,14 @@ import sys
 DB_NAMES = {"fin": "pleiades_fin", "fit": "pleiades_fit"}
 HOST = "localhost"
 PORT = "5432"
-# 연결 대상·자격을 바꾸는 libpq 환경변수 — 명령줄 -h/-p 보다 약하지만 PGSERVICE·PGHOSTADDR 등은 대상을 바꿀 수 있다
-PG_TARGET_ENV = ("PGHOST", "PGHOSTADDR", "PGPORT", "PGDATABASE", "PGSERVICE", "PGSERVICEFILE", "PGSYSCONFDIR", "PGOPTIONS")
+# libpq 환경변수는 자격(PGUSER · PGPASSWORD · PGPASSFILE)만 남기고 PG* 전부 지운다 — 대상·연결 동작을 바꾸는 변수가
+# 새로 생겨도 걸러진다 (allowlist · PR 사전 리뷰 info 2)
+PG_KEEP_ENV = ("PGUSER", "PGPASSWORD", "PGPASSFILE")
 CONN = ["-h", HOST, "-p", PORT]
 
 
 def clean_env(environ: dict[str, str]) -> dict[str, str]:
-    return {k: v for k, v in environ.items() if k not in PG_TARGET_ENV}
+    return {k: v for k, v in environ.items() if not k.startswith("PG") or k in PG_KEEP_ENV}
 
 
 def _run(argv: list[str], env: dict[str, str]) -> subprocess.CompletedProcess:
@@ -39,8 +40,9 @@ def _run(argv: list[str], env: dict[str, str]) -> subprocess.CompletedProcess:
 
 def exists(name: str, env: dict[str, str]) -> bool:
     # name 은 DB_NAMES 의 고정값이다 — 사용자 입력이 SQL 에 들어가지 않는다
+    # -X: ~/.psqlrc 를 읽지 않는다 — \\timing 등이 출력을 바꾸면 존재 판정이 틀린다 (사전 리뷰 info 1)
     sql = f"SELECT 1 FROM pg_database WHERE datname = '{name}'"
-    r = _run(["psql", *CONN, "-d", "postgres", "-tAc", sql], env)
+    r = _run(["psql", "-X", *CONN, "-d", "postgres", "-tAc", sql], env)
     if r.returncode != 0:
         raise RuntimeError(f"psql 실패 (exit {r.returncode}): {r.stderr.strip()}")
     return r.stdout.strip() == "1"
