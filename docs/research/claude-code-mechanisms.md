@@ -126,6 +126,8 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude --add-dir ../other-repo
 
   > **정정 (2026-09-30 · 006 · #103).** `claudeMdExcludes` 는 CLAUDE.md·rules 만 배제하고 **중첩 skill·agent 발견은 막지 못한다** — pleiades 는 보조 수단으로만 쓴다(006 §4-1 ⑤ · I-10). 효과 자체는 미실험(006 U8). 되돌리기: 문구 (**즉시**).
 
+  > **정정 (2026-10-01 · #107 · PR #113 Codex P2).** 위 *"중첩 skill·agent 발견은 막지 못한다"* 는 단정할 근거가 없다 — skill·agent 에 대한 `claudeMdExcludes` 효과는 **미측정**이다(006 U8 · §4-1 2026-10-01 정정 블록). 보조 수단으로만 쓴다는 결론은 그대로다. 되돌리기: 문구 (**즉시**).
+
 - `permissions.deny` 의 `Read(...)` 규칙으로 생성물·vendor 읽기 차단
 - `worktree.sparsePaths` + `symlinkDirectories` — worktree 를 필요한 디렉터리만 체크아웃, `node_modules` 는 심링크
 - 패키지별 `.claude/skills/` 지원. 스킬이 많아지면 description 이 잘리므로 **짧고 키워드 앞쪽 배치**
