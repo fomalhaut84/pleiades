@@ -251,6 +251,8 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 > **정정 (2026-09-30 · 006 · #101 · M-0).** **`repos/*` 두 행은 소진이다** — worktree 는 동결됐고 pleiades 는 그 안에서 명령을 돌리지 않는다(`isolation.md` I-11). 후신은 **`apps/*` 두 행**이고 명령은 서비스 CI 와 같다(006 ㉖ — 단 fin 서비스 CI 에는 테스트 단계가 없다 · 필수 여부는 006 Q52·Q57 → M-3).
 > **공통 선행:** 앱별 `npm ci`(앱별 lock · workspaces 없음 · 006 U97-12). **M-5 이후에는 두 행 모두 루트 `npm ci` 가 먼저다** — `prepare` 가 `packages/notify/dist` 를 만들지 않으면 fit typecheck·test·build 가 연쇄 실패한다(006 ㉒).
 > **DB 는 `pleiades_` 접두 로컬 DB 만** · 실효 env 사전 검사 후(`isolation.md` I-14 · 006 L-1·L-2). 되돌리기: 문구 (**즉시**).
+>
+> **실행 방법 (2026-10-01 · M-2 · #118).** `apps/*` 행의 명령은 전부 **`tools/local/run.sh <fin|fit> -- <명령>`** 으로 돌린다(cwd · 실효 env 검사 · claude shim). 처음 한 번: `python3 tools/local/write_env.py <fin|fit>`(루트 템플릿 → `apps/<app>/.env` · 덮어쓰지 않음) · fin 은 `python3 tools/local/db.py create fin`(삭제는 `db.py drop fin --confirm pleiades_fin`). 첫 통과 실측은 `measured-facts.md` *2026-10-01 — M-2*. 되돌리기: 문구 (**즉시**).
 
 전부 통과해야 다음 단계. 실패 시 수정 후 재실행. **건너뛰기 금지.**
 

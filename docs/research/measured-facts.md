@@ -3960,3 +3960,22 @@ fit 1a-3 대상 6 파일 → **4** 커밋 / 저장소 158. fin 1a-4 대상 19 �
 | **X14** push protection | **막지 않았다** | `git push` 출력 |
 | **Q65** draft 와 Codex 자동 리뷰 | draft 00:43Z~00:59Z(16분) **리뷰 없음** → Ready 00:59:40Z → 리뷰 01:01:27Z. **Q65 는 미결** — 30분 컷오프 미달 · 다른 PR 은 오픈 수 분 내였으나 봇 동작은 들쭉날쭉했다 | PR 타임라인 `READY_FOR_REVIEW_EVENT` · 리뷰 `submitted_at` |
 | 머지 | merge commit `623351d` · 부모 2 · 가드 C(origin/dev) 두 앱 통과 | `git log -1 --format=%P` · `guards.py guard-c` |
+
+# 2026-10-01 — M-2 설치·검증 실측 (#118)
+
+로컬 node 20.18.0 · npm 10.8.2 · postgres 15(5432). 전부 `tools/local/run.sh <app> -- …`(실효 env 검사 · cwd `apps/<app>` · claude shim) 경유 · `.env` 는 `tools/local/write_env.py`(루트 템플릿) · DB 는 `tools/local/db.py`. 서비스 영향 0 · 외부 트래픽은 npm 레지스트리만. 로그는 세션 scratchpad(비보존).
+
+| 항목 | fit (`apps/fitness`) | fin (`apps/finance`) |
+|---|---|---|
+| `npm ci` | 679 패키지 · 9 s · EBADENGINE 경고(`>=20.19` — 로컬만) | 670 패키지 · 10 s · EBADENGINE 경고 5 |
+| `node_modules` | 855 MB | 829 MB |
+| 선행 | `npx prisma generate` 1 s · DB 없음(`pleiades_fit` 은 URL 이름만) | `db.py create fin` → `npx prisma migrate deploy` — 마이그레이션 **26/26** · public 테이블 31 |
+| lint | `npm run lint` **통과** 7 s | `npm run lint` **통과** 5 s |
+| 타입 | `npm run typecheck` **통과** 4 s | `npx tsc --noEmit` **통과** 6 s |
+| 테스트 | `npm run test` **통과** 5 s — vitest 63 파일 · **433** + verify 5종 | `npm run test:run` **통과** 3 s — vitest 50 파일 · **866** |
+| 빌드 | `npm run build` **통과** 12 s (Next 16.3.5 Turbopack) · `.next` 169 MB · `dist` 1.9 MB | `npm run build` **통과** 27 s (Next 15.5.19) · `.next` 352 MB · `dist` 13 MB |
+| 경고(수용) | *multiple lockfiles* → 루트를 pleiades 로 추론(006 §4-3 수용) · Turbopack "Dynamic filesystem access" 4 — `CLAUDE_BIN` spawn 경로 | *multiple lockfiles* 같은 경고 |
+
+명령: 각 칸의 명령 + `/usr/bin/time` 대신 `date +%s` 차 · `du -sh apps/*/{node_modules,.next,dist}` · `psql -d pleiades_fin -tAc "select count(*) from _prisma_migrations where finished_at is not null"`.
+**5432 의 다른 DB(`myfinance`·`myfitness`·`mytangerine`·`ku_weather_dev`) 목록 전후 동일** — 추가는 `pleiades_fin` 하나(`psql -lqt`).
+**의미:** 서비스와 같은 lock 으로 두 앱의 8절 4종이 pleiades 안에서 통과한다(006 M-2 산출 사실). `apps/*` 추적 파일 변경 0.

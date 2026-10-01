@@ -43,7 +43,7 @@ def problems(argv: list[str], *, cwd: str, root: str, home: str) -> list[str]:
     prog = os.path.basename(argv[0])
     if prog not in ALLOWED_PROGRAMS:
         out.append(f"{prog}: run.sh 는 앱 명령({', '.join(sorted(ALLOWED_PROGRAMS))})만 실행한다 — "
-                   "DB 생성·삭제는 pleiades_* 전용 절차로 (L-1)")
+                   "DB 생성·삭제는 tools/local/db.py 로 (L-1 · #118)")
     m = DESTRUCTIVE.search(normalize(argv))
     if m:
         out.append(f"'{m.group(0)}' — 로컬 5432 는 사용자 개발 DB 와 공유다 (L-1 · I-14)")
