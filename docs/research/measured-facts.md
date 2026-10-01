@@ -3958,5 +3958,5 @@ fit 1a-3 대상 6 파일 → **4** 커밋 / 저장소 158. fin 1a-4 대상 19 �
 | 도달 객체 디스크 크기 | dev **4.8 MB → 15.7 MB** | `git rev-list --objects <ref> \| cut -d' ' -f1 \| git cat-file --batch-check='%(objectsize:disk)'` 합계 |
 | 태그 | **0**(서비스 태그 유입 없음) | `git tag \| wc -l` |
 | **X14** push protection | **막지 않았다** | `git push` 출력 |
-| **Q65** draft 와 Codex 자동 리뷰 | draft 00:43Z~00:59Z(16분) **리뷰 없음** → Ready 00:59:40Z → 리뷰 01:01:27Z. 30분 컷오프 미달이라 약한 증거(다른 PR 은 오픈 수 분 내) | PR 타임라인 `READY_FOR_REVIEW_EVENT` · 리뷰 `submitted_at` |
+| **Q65** draft 와 Codex 자동 리뷰 | draft 00:43Z~00:59Z(16분) **리뷰 없음** → Ready 00:59:40Z → 리뷰 01:01:27Z. **Q65 는 미결** — 30분 컷오프 미달 · 다른 PR 은 오픈 수 분 내였으나 봇 동작은 들쭉날쭉했다 | PR 타임라인 `READY_FOR_REVIEW_EVENT` · 리뷰 `submitted_at` |
 | 머지 | merge commit `623351d` · 부모 2 · 가드 C(origin/dev) 두 앱 통과 | `git log -1 --format=%P` · `guards.py guard-c` |
