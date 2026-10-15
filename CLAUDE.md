@@ -4,6 +4,7 @@
 
 **pleiades** — `myFinance` 와 `myFitness` 두 프로젝트를 어디까지 통합할지 검토하고, 결정된 범위를 실행하는 저장소.
 
+**2026-10-15 · M-5a 완료 — #132 → PR #133 `0233497` · `apps/fitness` 아웃바운드 알림(send.ts · 호출 6)을 `@pleiades/notify`(`file:../../packages/notify`)로 교체 · 루트 `npm ci` 가 fit 8절·CI 선행 · 루트 `package-lock.json` 삭제 금지(fit `next build` 전제 · 006 ㉒ C1) · 테스트 453 · 검증 봇 실수신 확인(분할 2청크 · 키보드 마지막 청크).** #95 는 M-5a 로 대체돼 닫힘. 다음 = M-5b(fin · Q27 선결 · 착수 직전 수용 0) 또는 M-6. 같은 날 fit 정기 수용 #129 → PR #130 `4dd2796`(fit#506·fit#509 · 서비스 유래 결함 기록 #131).
 **2026-10-15 · 최종 그림 기록 — #127 · 두 앱은 pleiades 의 도메인 모듈로 내재화되고, 완료 시점에 두 서비스를 내리고 pleiades 만 서비스한다(= 전환 · 006 Q60 정의 · 002 Q2 답 "독립 배포 포기").** M-5·M-6 은 서비스 notify 교체가 아니라 공통 기반(`packages/*`)을 소비하는 모듈화의 첫 단계. 서비스 무영향 원칙은 전환 전까지 절대(006 §0 정정).
 **2026-10-01 · M-4 — #122 · 두 앱 웹(4610·4620)·검증 봇(@starryJejuPleiadesFin_bot·@starryJejuPleiadesFit_bot) 로컬 기동 · 사용자 응답 확인 · 409·서비스 포트·서비스 DB 흔적 0 · advisor 차단 동작 = 006 첫 목표(U97-4) 달성.** 인계 `docs/handoff/2026-10-01-m4-done.md` · 다음 = M-5(notify · 착수 직전 수용 최신 필수). 절차 `tools/local/README.md` · 로컬 자원 + `pleiades_fit`(35). 실측 measured-facts *M-4*.
 **2026-10-01 · M-3 — #120 · `.github/workflows/apps-ci.yml`**(앱별 job · 서비스 CI 단계 그대로 · 러너 postgres:16 · secrets 0) · **Q52 확정 = 필수 `apps-fin`·`apps-fit` · `apps-fin-test` 비필수** · **Q57 확정 = `apps/*` 서비스 결함은 고치지 않는다**(006 §7 확정 블록). ruleset 반영은 머지 후 사용자 확인.
