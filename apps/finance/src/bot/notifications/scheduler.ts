@@ -19,6 +19,10 @@ import { takeNetWorthSnapshot } from './networth-snapshot'
 import { sendQuarterlyReport } from './quarterly-report'
 import { recipients, Route, telegramRecipients } from './notifier'
 
+function hasAllowedRecipients(): boolean {
+  return recipients.targetCount(Route.ALLOWED) > 0 || telegramRecipients(Route.ALLOWED).length > 0
+}
+
 let scheduled = false
 
 export function scheduleNotifications(): void {
@@ -29,11 +33,21 @@ export function scheduleNotifications(): void {
     return
   }
 
-  // Discord 를 골라도 키보드(RSU 확정)·분기 PDF 는 텔레그램으로 간다 — 둘 중 하나라도 수신자가 있으면 등록한다(#143)
-  if (recipients.targetCount(Route.ALLOWED) === 0 && telegramRecipients(Route.ALLOWED).length === 0) {
-    console.log('[notification] ALLOWED 수신자 0 (TELEGRAM_ALLOWED_CHAT_IDS · Discord 웹훅 모두 비어 있음), 알림 스케줄 건너뜀')
-    return
+  // 수신자가 0 이어도 등록은 한다 — 루트 .env(Discord)를 나중에 채우면 재시작 없이 다음 실행부터 반영된다(#143 · PR #144 Codex P2).
+  // 대신 실행마다 확인해 0 이면 건너뛴다(구 동작 "수신자 없으면 아무 작업도 안 함" 보존 — AI 생성·스냅샷 포함).
+  // Discord 를 골라도 키보드(RSU 확정)·분기 PDF 는 텔레그램으로 간다 — 둘 중 하나라도 있으면 실행한다.
+  if (!hasAllowedRecipients()) {
+    console.log('[notification] ALLOWED 수신자 0 (TELEGRAM_ALLOWED_CHAT_IDS · Discord 웹훅 모두 비어 있음) — 스케줄은 등록하고 실행 때마다 건너뜀')
   }
+  const schedule: typeof cron.schedule = (expression, task, options) =>
+    cron.schedule(
+      expression,
+      (async (...args: unknown[]) => {
+        if (!hasAllowedRecipients()) return
+        await (task as (...a: unknown[]) => unknown)(...args)
+      }) as typeof task,
+      options,
+    )
 
   // active_review AlertConfig 키를 배포 직후 즉시 upsert — 첫 클로징/주간 cron 실행
   // 전에 사용자가 PUT /api/alerts/config 로 off 설정 가능하도록 (라우트가 존재하지 않는
@@ -57,7 +71,7 @@ export function scheduleNotifications(): void {
 
   try {
     // 일일 포트폴리오 요약: 매시 정각 체크 → AlertConfig.daily_summary_hour 매칭 시 발송
-    cron.schedule(
+    schedule(
       '0 * * * *',
       async () => {
         try {
@@ -80,7 +94,7 @@ export function scheduleNotifications(): void {
     )
 
     // 분기 점검: 1/4/7/10월 1일 09:00 KST
-    cron.schedule(
+    schedule(
       '0 9 1 1,4,7,10 *',
       async () => {
         try {
@@ -93,7 +107,7 @@ export function scheduleNotifications(): void {
     )
 
     // 분기 리포트 PDF: 1/4/7/10월 7일 10:00 KST (분기 점검 1주 후)
-    cron.schedule(
+    schedule(
       '0 10 7 1,4,7,10 *',
       async () => {
         try {
@@ -106,7 +120,7 @@ export function scheduleNotifications(): void {
     )
 
     // RSU/스톡옵션 리마인더: 매일 09:00 KST (D-7 / D-1 정보성)
-    cron.schedule(
+    schedule(
       '0 9 * * *',
       async () => {
         try {
@@ -120,7 +134,7 @@ export function scheduleNotifications(): void {
 
     // RSU D-day 확정 알림: 매일 15:35 KST (KRX 마감 15:30 + 안전 마진).
     // 종가가 yahoo historical 에 확정된 후이므로 inline keyboard [확정] 한 번 탭으로 처리 가능.
-    cron.schedule(
+    schedule(
       '35 15 * * *',
       async () => {
         try {
@@ -133,7 +147,7 @@ export function scheduleNotifications(): void {
     )
 
     // 월 적립 리마인더: 매월 1일 09:00 KST
-    cron.schedule(
+    schedule(
       '0 9 1 * *',
       async () => {
         try {
@@ -146,7 +160,7 @@ export function scheduleNotifications(): void {
     )
 
     // 순자산 스냅샷: 매월 1일 06:30 KST (스냅샷 후 월적립 리마인더)
-    cron.schedule(
+    schedule(
       '30 6 1 * *',
       async () => {
         try {
@@ -159,7 +173,7 @@ export function scheduleNotifications(): void {
     )
 
     // 월간 리포트: 매일 09:30 KST → monthly_report_day 매칭 시 발송
-    cron.schedule(
+    schedule(
       '30 9 * * *',
       async () => {
         try {
@@ -185,7 +199,7 @@ export function scheduleNotifications(): void {
     )
 
     // 모닝 브리핑: 한국장 08:30 KST (월~금)
-    cron.schedule(
+    schedule(
       '30 8 * * 1-5',
       async () => {
         try {
@@ -198,7 +212,7 @@ export function scheduleNotifications(): void {
     )
 
     // 모닝 브리핑: 미국장 23:00 KST (월~금)
-    cron.schedule(
+    schedule(
       '0 23 * * 1-5',
       async () => {
         try {
@@ -211,7 +225,7 @@ export function scheduleNotifications(): void {
     )
 
     // 한국장 클로징 리뷰: 15:40 KST 월~금 (KRX 마감 15:30 + 마진 10분)
-    cron.schedule(
+    schedule(
       '40 15 * * 1-5',
       async () => {
         try {
@@ -228,7 +242,7 @@ export function scheduleNotifications(): void {
     //  - EDT (3~11월): 05:00 KST 마감 → 07:15 는 135분 마진
     //  - EST (11~3월): 06:00 KST 마감 → 07:15 는 75분 마진 (yahoo daily candle 확정 안전)
     // 화~토인 이유: 월(KST) = 일(EST) → 마감 없음. 화~금 = 미국장 월~목 마감, 토 = 미국장 금 마감.
-    cron.schedule(
+    schedule(
       '15 7 * * 2-6',
       async () => {
         try {
@@ -241,7 +255,7 @@ export function scheduleNotifications(): void {
     )
 
     // 주간 리뷰: 매주 토 09:00 KST — 지난주 회고 + 다음주 캘린더
-    cron.schedule(
+    schedule(
       '0 9 * * 6',
       async () => {
         try {

@@ -71,7 +71,10 @@ const TARGETS = { ALLOWED: routedTargets('ALLOWED'), ADMIN: routedTargets('ADMIN
 /** 호출부 공통 로그 컨텍스트 — 기존 `[notification] …` prefix 보존(003 Q26 ①). */
 export const NOTIFY_CTX: NotifyContext = Object.freeze({ label: 'notification' })
 
-/** 봇 인스턴스로 파사드를 만든다 — 라우트마다 텔레그램 또는 Discord. */
+/**
+ * 봇 인스턴스로 파사드를 만든다 — 라우트마다 텔레그램 또는 Discord. transport 는 인스턴스의 첫 전송 때 정해지므로
+ * **인스턴스를 오래 쥐지 않고 보낼 때마다 만든다**(재시작 없는 채널 전환 · PR #144 Codex P2).
+ */
 export function notifierFor(bot: Bot): Notifier {
   const transportFor = (route: FinRoute) => (): Transport =>
     usesDiscord(route)

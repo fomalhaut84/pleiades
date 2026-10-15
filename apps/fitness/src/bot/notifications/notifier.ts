@@ -52,7 +52,10 @@ function allowedTargets(): string[] {
   return discordWebhooks()[DISCORD_ALIAS] === "" ? [] : [DISCORD_ALIAS];
 }
 
-/** 봇 인스턴스로 파사드를 만든다. 호출부가 이미 `bot` 을 인자로 받으므로 `bot.api` 를 그대로 넘긴다(D-2). */
+/**
+ * 봇 인스턴스로 파사드를 만든다. 호출부가 이미 `bot` 을 인자로 받으므로 `bot.api` 를 그대로 넘긴다(D-2).
+ * transport 는 인스턴스의 첫 전송 때 정해지므로 인스턴스를 오래 쥐지 않고 보낼 때마다 만든다(PR #144 Codex P2).
+ */
 export function notifierFor(bot: Bot): Notifier {
   const transport = (): Transport =>
     allowedUsesDiscord()

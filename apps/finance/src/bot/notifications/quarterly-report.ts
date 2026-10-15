@@ -33,12 +33,13 @@ function getPreviousQuarter(): { year: number; quarter: number } {
 const REPORT_CTX = { label: 'report' } as const
 
 export async function sendQuarterlyReport(): Promise<void> {
+  // notifier 를 PDF 생성(2~3분) 동안 쥐지 않는다 — 그 사이 루트 .env 로 채널을 바꾸면 캐시된 transport 와 대상이 어긋난다
+  // (PR #144 Codex P2). 보낼 때마다 새로 만든다.
   const bot = getBot()
-  const notifier = notifierFor(bot)
   const { year, quarter } = getPreviousQuarter()
 
   // 생성 시작 알림
-  await notifier.notify(
+  await notifierFor(bot).notify(
     Route.ALLOWED,
     htmlContent(`📊 ${h.b(`${year}년 ${quarter}분기 리포트`)} 생성 중... (2~3분 소요)`),
     REPORT_CTX,
@@ -64,7 +65,7 @@ export async function sendQuarterlyReport(): Promise<void> {
   } catch (error) {
     console.error('[report] 분기 리포트 생성 실패:', error)
 
-    await notifier.notify(
+    await notifierFor(bot).notify(
       Route.ALLOWED,
       htmlContent(`⚠️ ${year}년 ${quarter}분기 리포트 생성에 실패했습니다.\n웹에서 수동 생성해주세요.`),
       REPORT_CTX,
