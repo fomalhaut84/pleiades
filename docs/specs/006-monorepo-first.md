@@ -316,6 +316,8 @@ git ls-remote https://github.com/fomalhaut84/myFinance.git refs/heads/dev
 - 1b-2 스키마(003 Q12)를 `apps/*/prisma` 에 넣으면 수용 충돌 + 전환 시 편도 마이그레이션 → Q61.
 - 되돌리기 **즉시**. 멈추면 첫 릴리즈 조건(#88)의 Discord 절반이 pleiades 안에서 충족된다.
 
+> **집행 (2026-10-15 · M-6a · #141 · #143).** **M-6a-1**(#141 → PR #142): `@pleiades/notify` 에 `createDiscordTransport`(웹훅 · target = 채널 별칭 · `maxLength: Infinity` — 003 §4-3 제약 2 · 429·네트워크 재시도 · 멘션 차단 · components 는 명시적 오류) + `htmlToDiscordMarkdown`(텍스트 노드 md escape · 003 §7-1) + `splitDiscordMarkdown`(코드 울타리 닫고 다시 열기 · escape 쌍 보존). **M-6a-2**(#143): 두 앱 `notifier.ts` 에 **라우트별 env 스위치**(사용자 결정) — `NOTIFY_ALLOWED_CHANNEL=discord` → fin `#finance` · fit `#fitness` · fin `NOTIFY_ADMIN_CHANNEL=discord` → `#admin` · 미설정 = 텔레그램(구 동작). **키보드 3곳 · `/브리핑` 응답 · 분기 PDF 는 항상 텔레그램**(Q11 혼합 운영 · `telegramMessageId` 보존). **플랫폼 설정은 pleiades 루트 `.env`**(사용자 결정 — 앱이 늘어도 한 곳): `platformEnv`(패키지)가 프로세스 env → 루트 `.env`(cwd 에서 위로 name=pleiades · `PLEIADES_ENV_FILE`) 순으로 **`NOTIFY_*`·`DISCORD_WEBHOOK_*` 만** 읽는다 — 실행 방식(run.sh · npm run dev · pm2) 무관 · 수정 시각이 바뀌면 다시 읽어 재시작 없이 전환·되돌리기. 앱 `.env` 의 플랫폼 키는 `check_env` 가 차단. 검증 Discord 서버 실수신 확인(`#finance` 서식·분할 · `#fitness`). 서비스 영향 0(Discord 는 서비스 자원이 아니다). 되돌리기: **즉시**(루트 `.env` 키 삭제). 남은 것: M-6b(1b-2 · 인터랙션·첨부 · Q61).
+
 ---
 
 ## 5. 격리 불변식 — pleiades 가 서비스에 닿을 수 있는 모든 경로
