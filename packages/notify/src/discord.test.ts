@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createDiscordTransport, DiscordWebhookError, type FetchLike, type FetchResponseLike } from './discord';
+import { createDiscordTransport, DiscordWebhookError, sendDiscordFile, type FetchLike, type FetchResponseLike } from './discord';
 import { createNotifier } from './notifier';
 import { html, Route } from './types';
 
@@ -30,7 +30,7 @@ function setup(responses: Array<FetchResponseLike | Error>) {
     sleep,
     logger,
   });
-  const bodies = () => fetch.mock.calls.map((c) => JSON.parse(c[1].body) as { content: string; allowed_mentions: unknown });
+  const bodies = () => fetch.mock.calls.map((c) => JSON.parse(c[1].body as string) as { content: string; allowed_mentions: unknown });
   return { transport, fetch, sleep, logger, bodies };
 }
 
@@ -265,5 +265,59 @@ describe('Notifier + DiscordTransport (어댑터 소유 모드)', () => {
     await expect(notifier.notify(Route.ALLOWED, html('<b>a</b>'))).resolves.toMatchObject({ sent: 1, first: { ref: 'd1' } });
     await expect(notifier.notify(Route.ADMIN, html('<b>a</b>'))).resolves.toMatchObject({ sent: 1, first: { ref: '7' } });
     expect(sendMessage).toHaveBeenCalledWith('42', '<b>a</b>', { parse_mode: 'HTML' });
+  });
+});
+
+describe('sendDiscordFile — 웹훅 첨부 (M-6b-1 #147)', () => {
+  const file = { name: '2026-Q3.pdf', data: new Uint8Array([0x25, 0x50, 0x44, 0x46]), contentType: 'application/pdf' };
+
+  it('multipart 로 payload_json + files[0] · 캡션은 escape · 멘션 차단 · content-type 헤더는 비운다', async () => {
+    const fetch = vi.fn<FetchLike>(async () => res(200, { id: 'f1' }));
+    await expect(
+      sendDiscordFile({ webhooks: { finance: URL_FIN }, fetch }, 'finance', file, '📊 *3분기* 리포트 @everyone'),
+    ).resolves.toBe('f1');
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe(`${URL_FIN}?wait=true`);
+    expect(init.headers).toEqual({});
+    const form = init.body as FormData;
+    expect(JSON.parse(String(form.get('payload_json')))).toEqual({
+      content: '📊 \\*3분기\\* 리포트 @everyone',
+      allowed_mentions: { parse: [] },
+      attachments: [{ id: 0, filename: '2026-Q3.pdf' }],
+    });
+    const blob = form.get('files[0]') as File;
+    expect(blob.name).toBe('2026-Q3.pdf');
+    expect(blob.type).toBe('application/pdf');
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(file.data);
+  });
+
+  it('재시도마다 본문을 새로 만든다 — 네트워크 오류 후 성공', async () => {
+    const bodies: unknown[] = [];
+    let n = 0;
+    const fetch = vi.fn<FetchLike>(async (_u, init) => {
+      bodies.push(init.body);
+      if (n++ === 0) throw netErr();
+      return res(200, { id: 'ok' });
+    });
+    await expect(
+      sendDiscordFile({ webhooks: { finance: URL_FIN }, fetch, sleep: async () => {}, logger: { warn: vi.fn(), error: vi.fn() } }, 'finance', file),
+    ).resolves.toBe('ok');
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]).not.toBe(bodies[1]);
+  });
+
+  it('상한을 넘으면 보내지 않고 오류', async () => {
+    const fetch = vi.fn<FetchLike>();
+    await expect(
+      sendDiscordFile({ webhooks: { finance: URL_FIN }, fetch, maxFileBytes: 3 }, 'finance', file),
+    ).rejects.toThrow('상한 초과');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('모르는 별칭 · 4xx 는 URL 없이 실패', async () => {
+    const fetch = vi.fn<FetchLike>(async () => res(413, { message: 'Request entity too large', code: 40005 }));
+    await expect(sendDiscordFile({ webhooks: { finance: URL_FIN }, fetch }, 'nope', file)).rejects.toThrow('(nope)');
+    const err = await sendDiscordFile({ webhooks: { finance: URL_FIN }, fetch }, 'finance', file).catch((e: unknown) => e);
+    expect((err as Error).message).toBe('Discord webhook 응답 413: Request entity too large (code 40005)');
   });
 });

@@ -11,6 +11,7 @@ import {
   notifierFor,
   recipients,
   Route,
+  sendFileIfDiscord,
   telegramRecipients,
 } from '../notifier'
 
@@ -99,5 +100,30 @@ describe('fin notifier — 라우트별 채널', () => {
     expect(sendMessage).toHaveBeenCalledWith('11', 'rsu', { parse_mode: 'HTML', reply_markup: kb })
     expect(fetchMock).not.toHaveBeenCalled()
     expect(telegramRecipients(Route.ALLOWED)).toEqual(['11', '22'])
+  })
+
+  // M-6b-1 (#147) — 분기 PDF 첨부
+  describe('sendFileIfDiscord', () => {
+    const pdf = { name: 'q.pdf', data: new Uint8Array([1, 2, 3]), contentType: 'application/pdf' }
+
+    it("ALLOWED 가 텔레그램이면 'not-discord' — 호출부가 sendDocument", async () => {
+      await expect(sendFileIfDiscord('ALLOWED', pdf, 'c')).resolves.toBe('not-discord')
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it("Discord 면 #finance 웹훅에 multipart 로 'sent'", async () => {
+      vi.stubEnv('NOTIFY_ALLOWED_CHANNEL', 'discord')
+      await expect(sendFileIfDiscord('ALLOWED', pdf, '📊 리포트')).resolves.toBe('sent')
+      expect(fetchMock.mock.calls[0][0]).toBe(`${WEBHOOK_FIN}?wait=true`)
+      const form = fetchMock.mock.calls[0][1].body as unknown as FormData
+      expect((form.get('files[0]') as File).name).toBe('q.pdf')
+    })
+
+    it("Discord 인데 웹훅이 비면 'no-webhook' — 텔레그램으로 우회하지 않는다", async () => {
+      vi.stubEnv('NOTIFY_ALLOWED_CHANNEL', 'discord')
+      vi.stubEnv('DISCORD_WEBHOOK_FINANCE', '')
+      await expect(sendFileIfDiscord('ALLOWED', pdf, 'c')).resolves.toBe('no-webhook')
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
   })
 })

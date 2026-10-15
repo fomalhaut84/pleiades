@@ -9,8 +9,9 @@ import path from 'path'
 import { InputFile } from 'grammy'
 import { getBot } from '@/bot/index'
 import { generateReportPDF } from '@/lib/report/pdf-generator'
+import { sanitizeError } from '@/bot/utils/error'
 import { h } from '@/bot/utils/telegram'
-import { notifierFor, Route, htmlContent, telegramRecipients } from './notifier'
+import { notifierFor, Route, htmlContent, sendFileIfDiscord, telegramRecipients } from './notifier'
 
 const REPORTS_DIR = path.join(process.cwd(), 'reports')
 
@@ -50,12 +51,27 @@ export async function sendQuarterlyReport(): Promise<void> {
     const filePath = path.join(REPORTS_DIR, path.basename(pdfPath))
     const pdfBuffer = await fs.readFile(filePath)
 
-    // 003 §7-4: PDF 첨부는 포트 밖(1b-2) · 텔레그램 API 직접 — Discord 라우팅과 무관하게 텔레그램 수신자 목록.
-    for (const chatId of telegramRecipients(Route.ALLOWED)) {
+    const fileName = path.basename(pdfPath)
+    const caption = `📊 ${year}년 ${quarter}분기 리포트`
+
+    // M-6b-1 (#147): ALLOWED 가 Discord 면 #finance 웹훅에 첨부(003 §7-4 — 포트 밖 헬퍼). 아니면 아래 텔레그램(구 동작).
+    let discord: Awaited<ReturnType<typeof sendFileIfDiscord>> = 'not-discord'
+    try {
+      discord = await sendFileIfDiscord(
+        Route.ALLOWED,
+        { name: fileName, data: new Uint8Array(pdfBuffer), contentType: 'application/pdf' },
+        caption,
+      )
+      if (discord === 'no-webhook') console.warn('[report] Discord 선택 · 웹훅 없음 — PDF 수신자 0')
+    } catch (error) {
+      discord = 'sent' // 시도했다 — 텔레그램으로 우회하지 않는다(채널 선택 존중)
+      console.error(`[report] PDF Discord 발송 실패: ${sanitizeError(error)}`)
+    }
+
+    // 003 §7-4: 텔레그램 API 직접 — Discord 를 고르지 않았을 때만.
+    for (const chatId of discord === 'not-discord' ? telegramRecipients(Route.ALLOWED) : []) {
       try {
-        await bot.api.sendDocument(chatId, new InputFile(pdfBuffer, path.basename(pdfPath)), {
-          caption: `📊 ${year}년 ${quarter}분기 리포트`,
-        })
+        await bot.api.sendDocument(chatId, new InputFile(pdfBuffer, fileName), { caption })
       } catch (error) {
         console.error(`[report] PDF 발송 실패 (chatId: ${chatId}):`, error)
       }

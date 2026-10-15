@@ -27,8 +27,18 @@ export {
   DISCORD_CHANNEL,
   DISCORD_MAX_LENGTH,
   toDiscordContent,
+  sendDiscordFile,
+  DISCORD_DEFAULT_MAX_FILE_BYTES,
 } from './discord';
-export type { DiscordTransportOptions, FetchLike, FetchResponseLike } from './discord';
+export type {
+  DiscordTransportOptions,
+  DiscordFile,
+  SendDiscordFileOptions,
+  FetchLike,
+  FetchResponseLike,
+  FormDataLike,
+  RequestInitLike,
+} from './discord';
 export { htmlToDiscordMarkdown, escapeDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
 export {
   platformEnv,

@@ -21,6 +21,8 @@ import {
   createTelegramTransport,
   csvEnv,
   platformEnv,
+  sendDiscordFile,
+  type DiscordFile,
   type Notifier,
   type NotifyContext,
   type Transport,
@@ -94,6 +96,24 @@ export function interactiveNotifierFor(bot: Bot): Notifier {
     transport: createTelegramTransport({ api: bot.api }),
     targets: { ALLOWED: TELEGRAM_TARGETS.ALLOWED },
   })
+}
+
+/**
+ * 첨부 파일(분기 PDF · 003 §7-4 포트 밖) — 그 라우트가 Discord 면 웹훅에 첨부한다(M-6b-1 #147).
+ *   'not-discord' → 호출부가 텔레그램 `sendDocument` 로 보낸다(구 동작)
+ *   'no-webhook'  → Discord 를 골랐는데 웹훅이 비었다 — 수신자 0(텍스트 알림과 같은 의미 · 텔레그램으로 우회하지 않는다)
+ *   'sent'        → 보냈다(실패는 throw)
+ */
+export async function sendFileIfDiscord(
+  route: FinRoute,
+  file: DiscordFile,
+  caption: string,
+): Promise<'not-discord' | 'no-webhook' | 'sent'> {
+  if (!usesDiscord(route)) return 'not-discord'
+  const alias = DISCORD_ALIAS[route]
+  if (discordWebhooks()[alias] === '') return 'no-webhook'
+  await sendDiscordFile({ webhooks: discordWebhooks }, alias, file, caption)
+  return 'sent'
 }
 
 /** 텔레그램 수신자 목록 — 포트 밖 `sendDocument`(분기 PDF · 003 §7-4)처럼 텔레그램 API 를 직접 부르는 곳. */
