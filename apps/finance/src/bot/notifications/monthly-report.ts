@@ -7,7 +7,7 @@
 import { getBot } from '@/bot/index'
 import { askAdvisor } from '@/lib/ai/claude-advisor'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
-import { sendHtml } from '@/bot/utils/telegram'
+import { notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
 import { sanitizeError } from '@/bot/utils/error'
 
 function getPrevMonth(): { year: number; month: number } {
@@ -22,7 +22,7 @@ function getPrevMonth(): { year: number; month: number } {
   return { year, month }
 }
 
-export async function sendMonthlyReport(chatIds: number[]): Promise<void> {
+export async function sendMonthlyReport(): Promise<void> {
   const bot = getBot()
   const { year, month } = getPrevMonth()
 
@@ -50,13 +50,7 @@ export async function sendMonthlyReport(chatIds: number[]): Promise<void> {
 
     const html = markdownToTelegramHtml(result.response)
 
-    for (const chatId of chatIds) {
-      try {
-        await sendHtml(bot, chatId, html)
-      } catch (error) {
-        console.error(`[notification] 월간 리포트 발송 실패 (chatId: ${chatId}): ${sanitizeError(error)}`)
-      }
-    }
+    await notifierFor(bot).notify(Route.ALLOWED, htmlContent(html), NOTIFY_CTX)
 
     console.log(`[notification] ${year}년 ${month}월 월간 리포트 발송 완료`)
   } catch (error) {
@@ -64,12 +58,6 @@ export async function sendMonthlyReport(chatIds: number[]): Promise<void> {
 
     // AI 실패 시 간단 안내 메시지 발송
     const fallback = `📊 ${year}년 ${month}월 월간 리포트 생성에 실패했습니다.\n웹 AI 분석 페이지에서 직접 조회해주세요.`
-    for (const chatId of chatIds) {
-      try {
-        await sendHtml(bot, chatId, fallback)
-      } catch {
-        // 무시
-      }
-    }
+    await notifierFor(bot).notify(Route.ALLOWED, htmlContent(fallback), NOTIFY_CTX)
   }
 }

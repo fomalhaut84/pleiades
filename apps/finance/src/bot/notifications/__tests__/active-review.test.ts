@@ -16,7 +16,6 @@ vi.mock('@/lib/ai/claude-advisor', () => ({
   askAdvisor: vi.fn(),
   describeAdvisorError: vi.fn(() => ''),
 }))
-vi.mock('@/bot/utils/telegram', () => ({ sendHtml: vi.fn() }))
 
 import { buildClosingPrompt } from '../active-review'
 

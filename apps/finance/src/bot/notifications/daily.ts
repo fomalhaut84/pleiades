@@ -17,10 +17,10 @@ import {
   formatPercent,
   profitEmoji,
 } from '@/bot/utils/formatter'
-import { sendHtml } from '@/bot/utils/telegram'
+import { notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
 import { KST_OFFSET_MS } from '@/lib/kst-date'
 
-export async function sendDailySummary(chatIds: number[]): Promise<void> {
+export async function sendDailySummary(): Promise<void> {
   const bot = getBot()
 
   // 환율 조회
@@ -130,13 +130,7 @@ export async function sendDailySummary(chatIds: number[]): Promise<void> {
 
   const fullMessage = lines.join('\n')
 
-  for (const chatId of chatIds) {
-    try {
-      await sendHtml(bot, chatId, fullMessage)
-    } catch (error) {
-      console.error(`[notification] 일일 요약 발송 실패 (chatId: ${chatId}):`, error)
-    }
-  }
+  await notifierFor(bot).notify(Route.ALLOWED, htmlContent(fullMessage), NOTIFY_CTX)
 
   console.log('[notification] 일일 포트폴리오 요약 발송 완료')
 }

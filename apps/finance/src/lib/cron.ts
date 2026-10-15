@@ -6,19 +6,11 @@ import { prisma } from './prisma'
 import { checkPriceAlerts } from '@/bot/notifications/price-alert'
 import { checkTASignals } from '@/bot/notifications/ta-signal-alert'
 import { checkCustomStrategies } from '@/bot/notifications/custom-strategy-alert'
+import { recipients, Route } from '@/bot/notifications/notifier'
 import { isKRMarketOpen, isUSMarketOpen } from './market-hours'
 import { calculateNextRunAt, type Frequency } from './recurring-utils'
 import { sendToWhooing } from './whooing-webhook'
 import { KST_OFFSET_MS } from './kst-date'
-
-function getAllowedChatIds(): number[] {
-  return (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map(Number)
-    .filter((n) => !isNaN(n))
-}
 
 /**
  * Cron 작업 mutex + 타임아웃 가드.
@@ -93,18 +85,17 @@ export function schedulePriceUpdates(): void {
           const result = await refreshPrices()
           // 실제 갱신이 발생한 경우에만 알림 체크
           if (result.success > 0) {
-            const chatIds = getAllowedChatIds()
-            if (chatIds.length > 0) {
-              await checkPriceAlerts(chatIds)
+            if (recipients.targetCount(Route.ALLOWED) > 0) {
+              await checkPriceAlerts()
               // 커스텀 전략 스캔 — 시장 시간 무관 (환율/RSI 등 24h 조건 대비)
-              checkCustomStrategies(chatIds).catch((err) =>
+              checkCustomStrategies().catch((err) =>
                 console.error('[cron] 커스텀 전략 스캔 실패:', err),
               )
               // 장중에만 TA 시그널 체크 (주기 DB 설정 기반)
               if (isMarketHours) {
                 const shouldRunTA = await shouldRunTACheck()
                 if (shouldRunTA) {
-                  checkTASignals(chatIds)
+                  checkTASignals()
                     .then(() => markTACheckDone())
                     .catch((err) => console.error('[cron] TA 시그널 체크 실패:', err))
                 }

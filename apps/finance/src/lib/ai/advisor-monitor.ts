@@ -13,6 +13,8 @@
  * 허용 (재시작 자체가 관리자 개입이라 리셋 OK).
  */
 
+import { recipients, Route } from '@/bot/notifications/notifier'
+
 /** Advisor 계층에서 던지는 실패 계열 — AdvisorError · AdvisorTimeoutError 등 공통 계약. */
 export interface AdvisorFailure extends Error {
   detail?: string
@@ -84,7 +86,7 @@ function escapeForTelegram(s: string): string {
 /**
  * Monitor factory — dependency 를 명시 주입해 테스트 격리.
  *
- * @param sendAlert 관리자 chat 에 alert 발송하는 함수 (production: telegram sendHtml)
+ * @param sendAlert 관리자 chat 에 alert 발송하는 함수 (production: @pleiades/notify Route.ADMIN)
  * @param options.failThreshold  기본 3
  * @param options.repeatIntervalMs 기본 30분
  * @param options.notifyRecovery  기본 true — 실패 후 첫 성공 시 복구 알림 발송
@@ -196,13 +198,8 @@ let productionMonitor: AdvisorMonitor | null = null
 export function getGlobalAdvisorMonitor(): AdvisorMonitor {
   if (productionMonitor === null) {
     productionMonitor = createAdvisorMonitor(async (message) => {
-      const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '')
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map(Number)
-        .filter((n) => !Number.isNaN(n))
-      if (chatIds.length === 0) {
+      // pleiades#136 (003 Q25 ADMIN A): 수신자 해석은 파사드(Route.ADMIN = TELEGRAM_ADMIN_CHAT_IDS · fin 숫자 규칙).
+      if (recipients.targetCount(Route.ADMIN) === 0) {
         console.warn(
           '[advisor-monitor] TELEGRAM_ADMIN_CHAT_IDS 미설정 → 관리자 alert 발송 스킵. ' +
             '이 env 는 봇 사용자 화이트리스트 (TELEGRAM_ALLOWED_CHAT_IDS) 와 분리 관리해야 함 ' +
@@ -214,18 +211,11 @@ export function getGlobalAdvisorMonitor(): AdvisorMonitor {
       // web 프로세스는 bot 인스턴스 없어서 require 자체를 지연.
       try {
         const { getBot } = await import('@/bot')
-        const { sendHtml } = await import('@/bot/utils/telegram')
-        const bot = getBot()
-        let anySuccess = false
-        for (const chatId of chatIds) {
-          try {
-            await sendHtml(bot, chatId, message)
-            anySuccess = true
-          } catch (err) {
-            console.error(`[advisor-monitor] chat ${chatId} 발송 실패:`, err)
-          }
-        }
-        return anySuccess
+        const { notifierFor, htmlContent } = await import('@/bot/notifications/notifier')
+        const delivery = await notifierFor(getBot()).notify(Route.ADMIN, htmlContent(message), {
+          label: 'advisor-monitor',
+        })
+        return delivery.sent > 0
       } catch (err) {
         console.error('[advisor-monitor] bot 모듈 로드 실패 (web 프로세스에서 호출됨?):', err)
         return false

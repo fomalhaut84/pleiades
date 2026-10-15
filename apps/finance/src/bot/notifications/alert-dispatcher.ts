@@ -8,7 +8,8 @@
  */
 
 import type { Bot } from 'grammy'
-import { sendHtml, escapeHtml } from '@/bot/utils/telegram'
+import { escapeHtml } from '@/bot/utils/telegram'
+import { notifierFor, Route, htmlContent, lastErrorOf } from './notifier'
 import { computeDeliveryStatus, recordAlertHistory, type AlertKind } from './alert-history'
 import { getBot } from '../index'
 import type { AlertHistoryContext } from '@/lib/alert-history/context'
@@ -89,7 +90,7 @@ export interface RedispatchResult {
 }
 
 /**
- * 순수 재발송 — 지정 chatIds 로 sendHtml 호출 후 성공 카운트/에러 반환.
+ * 순수 재발송 — ALLOWED 수신자에게 파사드로 보낸 뒤 성공 카운트/에러 반환(pleiades#136 · 수신자는 env 를 파사드가 읽는다).
  * DB 기록은 caller (route handler) 가 수행 — pure/impure 분리로 테스트 용이.
  */
 /**
@@ -101,14 +102,13 @@ const PRE_ESCAPED_KINDS = new Set<string>(['target_hit', 'stop_loss', 'watch_buy
 
 export async function redispatchAlert(
   row: Pick<RedispatchTargetRow, 'message' | 'kind'>,
-  chatIds: number[],
   bot: Bot = getBot(),
 ): Promise<RedispatchResult> {
   // Codex #462 · #463 P2 (2차): 저장 상태가 kind 별로 mixed —
   //   - PRE_ESCAPED_KINDS: `A &amp; B` (이미 escape 된 상태로 store)
   //   - 그 외: `SOXL < 40` (raw)
   //
-  // sendHtml (parse_mode=HTML) 로 raw 를 그대로 넘기면 parser 오류. 하지만 모든
+  // HTML parse_mode 로 raw 를 그대로 넘기면 parser 오류. 하지만 모든
   // kind 를 decode→escape round-trip 하면 raw 케이스에서 사용자가 literal `&amp;`
   // 를 이름으로 넣었을 때 decoder 가 `&` 로 오해석 → 원본과 다른 문자 렌더.
   //
@@ -117,19 +117,9 @@ export async function redispatchAlert(
   const isPreEscaped = PRE_ESCAPED_KINDS.has(row.kind)
   const normalized = isPreEscaped ? decodeHtmlEntities(row.message) : row.message
   const safeMessage = escapeHtml(normalized)
-  let successCount = 0
-  let lastError: string | undefined
-  for (const chatId of chatIds) {
-    try {
-      await sendHtml(bot, chatId, safeMessage)
-      successCount++
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error)
-      console.error(`[alert-retry] 재발송 실패 (chatId: ${chatId}, alertId: unknown):`, error)
-    }
-  }
-  const status = computeDeliveryStatus(successCount, chatIds.length)
-  return { successCount, totalChats: chatIds.length, status, lastError }
+  const delivery = await notifierFor(bot).notify(Route.ALLOWED, htmlContent(safeMessage), { label: 'alert-retry' })
+  const status = computeDeliveryStatus(delivery.sent, delivery.total)
+  return { successCount: delivery.sent, totalChats: delivery.total, status, lastError: lastErrorOf(delivery) }
 }
 
 /**

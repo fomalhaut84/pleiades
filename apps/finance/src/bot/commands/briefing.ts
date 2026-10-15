@@ -52,7 +52,7 @@ async function handleBriefing(ctx: Context): Promise<void> {
     session = kstHour >= 6 && kstHour < 15 ? 'KR' : 'US'
   }
 
-  sendBriefing([chatId], session).catch((e) =>
+  sendBriefing(session, chatId).catch((e) =>
     console.error('[bot] 브리핑 발송 실패:', e)
   )
 }

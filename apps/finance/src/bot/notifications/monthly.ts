@@ -7,9 +7,10 @@ import { prisma } from '@/lib/prisma'
 import { getBot } from '@/bot/index'
 import { isGiftSource } from '@/lib/tax/gift-tax'
 import { accountEmoji, formatKRWFull } from '@/bot/utils/formatter'
-import { sendHtml, escapeHtml, h } from '@/bot/utils/telegram'
+import { escapeHtml, h } from '@/bot/utils/telegram'
+import { notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
 
-export async function sendMonthlyReminder(chatIds: number[]): Promise<void> {
+export async function sendMonthlyReminder(): Promise<void> {
   const bot = getBot()
 
   const now = new Date()
@@ -62,13 +63,7 @@ export async function sendMonthlyReminder(chatIds: number[]): Promise<void> {
 
   const fullMessage = lines.join('\n')
 
-  for (const chatId of chatIds) {
-    try {
-      await sendHtml(bot, chatId, fullMessage)
-    } catch (error) {
-      console.error(`[notification] 월 적립 리마인더 발송 실패 (chatId: ${chatId}):`, error)
-    }
-  }
+  await notifierFor(bot).notify(Route.ALLOWED, htmlContent(fullMessage), NOTIFY_CTX)
 
   console.log('[notification] 월 적립 리마인더 발송 완료')
 }

@@ -9,7 +9,8 @@ import path from 'path'
 import { InputFile } from 'grammy'
 import { getBot } from '@/bot/index'
 import { generateReportPDF } from '@/lib/report/pdf-generator'
-import { sendHtml, h } from '@/bot/utils/telegram'
+import { h } from '@/bot/utils/telegram'
+import { notifierFor, recipients, Route, htmlContent } from './notifier'
 
 const REPORTS_DIR = path.join(process.cwd(), 'reports')
 
@@ -29,27 +30,27 @@ function getPreviousQuarter(): { year: number; quarter: number } {
   return { year, quarter: 3 }
 }
 
-export async function sendQuarterlyReport(chatIds: number[]): Promise<void> {
+const REPORT_CTX = { label: 'report' } as const
+
+export async function sendQuarterlyReport(): Promise<void> {
   const bot = getBot()
+  const notifier = notifierFor(bot)
   const { year, quarter } = getPreviousQuarter()
 
   // 생성 시작 알림
-  for (const chatId of chatIds) {
-    try {
-      await sendHtml(bot, chatId,
-        `📊 ${h.b(`${year}년 ${quarter}분기 리포트`)} 생성 중... (2~3분 소요)`
-      )
-    } catch {
-      // 무시
-    }
-  }
+  await notifier.notify(
+    Route.ALLOWED,
+    htmlContent(`📊 ${h.b(`${year}년 ${quarter}분기 리포트`)} 생성 중... (2~3분 소요)`),
+    REPORT_CTX,
+  )
 
   try {
     const { pdfPath } = await generateReportPDF(year, quarter)
     const filePath = path.join(REPORTS_DIR, path.basename(pdfPath))
     const pdfBuffer = await fs.readFile(filePath)
 
-    for (const chatId of chatIds) {
+    // 003 §7-4: PDF 첨부는 포트 밖(1b-2) — 목록만 파사드에서 받는다(Q25 ①).
+    for (const chatId of recipients.targets(Route.ALLOWED)) {
       try {
         await bot.api.sendDocument(chatId, new InputFile(pdfBuffer, path.basename(pdfPath)), {
           caption: `📊 ${year}년 ${quarter}분기 리포트`,
@@ -63,14 +64,10 @@ export async function sendQuarterlyReport(chatIds: number[]): Promise<void> {
   } catch (error) {
     console.error('[report] 분기 리포트 생성 실패:', error)
 
-    for (const chatId of chatIds) {
-      try {
-        await sendHtml(bot, chatId,
-          `⚠️ ${year}년 ${quarter}분기 리포트 생성에 실패했습니다.\n웹에서 수동 생성해주세요.`
-        )
-      } catch {
-        // 무시
-      }
-    }
+    await notifier.notify(
+      Route.ALLOWED,
+      htmlContent(`⚠️ ${year}년 ${quarter}분기 리포트 생성에 실패했습니다.\n웹에서 수동 생성해주세요.`),
+      REPORT_CTX,
+    )
   }
 }

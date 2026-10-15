@@ -10,7 +10,7 @@ import { prisma } from '@/lib/prisma'
 import { getBot } from '@/bot/index'
 import { askAdvisor, describeAdvisorError } from '@/lib/ai/claude-advisor'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
-import { sendHtml } from '@/bot/utils/telegram'
+import { notifierFor, Route, htmlContent } from './notifier'
 import { sanitizeError } from '@/bot/utils/error'
 import { formatKstDate } from '@/lib/kst-date'
 
@@ -123,7 +123,6 @@ function buildWeeklyPrompt(): string {
 }
 
 async function sendReview(
-  chatIds: number[],
   label: string,
   prompt: string,
   fallbackHint: string,
@@ -146,13 +145,7 @@ async function sendReview(
 
     const html = markdownToTelegramHtml(result.response)
 
-    for (const chatId of chatIds) {
-      try {
-        await sendHtml(bot, chatId, html)
-      } catch (error) {
-        console.error(`[active-review] ${label} 발송 실패 (chatId: ${chatId}): ${sanitizeError(error)}`)
-      }
-    }
+    await notifierFor(bot).notify(Route.ALLOWED, htmlContent(html), { label: 'active-review' })
 
     console.log(`[active-review] ${label} 발송 완료`)
   } catch (error) {
@@ -163,18 +156,11 @@ async function sendReview(
     const advisorMsg =
       error instanceof Error && ('code' in error) ? describeAdvisorError(error) : ''
     const fallback = `📊 ${label} 리뷰 생성에 실패했습니다.\n${advisorMsg || fallbackHint}`
-    for (const chatId of chatIds) {
-      try {
-        await sendHtml(bot, chatId, fallback)
-      } catch {
-        // 무시
-      }
-    }
+    await notifierFor(bot).notify(Route.ALLOWED, htmlContent(fallback), { label: 'active-review' })
   }
 }
 
 export async function sendClosingReview(
-  chatIds: number[],
   session: MarketSession,
 ): Promise<void> {
   if (!(await isActiveReviewEnabled())) {
@@ -183,20 +169,18 @@ export async function sendClosingReview(
   }
   const label = session === 'KR' ? '🇰🇷 한국장 클로징' : '🇺🇸 미국장 클로징'
   await sendReview(
-    chatIds,
     label,
     buildClosingPrompt(session),
     '/ai 에서 직접 질문해주세요.',
   )
 }
 
-export async function sendWeeklyReview(chatIds: number[]): Promise<void> {
+export async function sendWeeklyReview(): Promise<void> {
   if (!(await isActiveReviewEnabled())) {
     console.log('[active-review] 주간 리뷰 스킵 (active_review=off)')
     return
   }
   await sendReview(
-    chatIds,
     '📅 주간 리뷰',
     buildWeeklyPrompt(),
     '웹 AI 분석 페이지 또는 /ai 명령으로 회고를 확인해주세요.',

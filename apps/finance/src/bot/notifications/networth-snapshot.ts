@@ -12,9 +12,10 @@ import {
   DEFAULT_FX_RATE_USD_KRW,
 } from '@/lib/format'
 import { formatKRWCompact } from '@/bot/utils/formatter'
-import { sendHtml, h } from '@/bot/utils/telegram'
+import { h } from '@/bot/utils/telegram'
+import { notifierFor, recipients, Route, htmlContent } from './notifier'
 
-export async function takeNetWorthSnapshot(chatIds: number[]): Promise<void> {
+export async function takeNetWorthSnapshot(): Promise<void> {
   const bot = getBot()
 
   // 환율
@@ -82,7 +83,7 @@ export async function takeNetWorthSnapshot(chatIds: number[]): Promise<void> {
   console.log(`[networth] 순자산 스냅샷 저장: ${snapshotDate.toISOString().slice(0, 10)} = ${netWorthKRW}`)
 
   // 텔레그램 알림
-  if (chatIds.length > 0) {
+  if (recipients.targetCount(Route.ALLOWED) > 0) {
     const message =
       `📸 ${h.b('순자산 스냅샷 저장 완료')}\n\n` +
       `📈 주식: ${formatKRWCompact(stockValueKRW)}\n` +
@@ -90,12 +91,6 @@ export async function takeNetWorthSnapshot(chatIds: number[]): Promise<void> {
       (liabilityKRW > 0 ? `🏦 부채: -${formatKRWCompact(liabilityKRW)}\n` : '') +
       `\n💰 ${h.b('순자산')}: ${formatKRWCompact(netWorthKRW)}`
 
-    for (const chatId of chatIds) {
-      try {
-        await sendHtml(bot, chatId, message)
-      } catch (error) {
-        console.error(`[networth] 스냅샷 알림 실패 (chatId: ${chatId}):`, error)
-      }
-    }
+    await notifierFor(bot).notify(Route.ALLOWED, htmlContent(message), { label: 'networth' })
   }
 }

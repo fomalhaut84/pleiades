@@ -8,7 +8,7 @@
 import { getBot } from '@/bot/index'
 import { askAdvisor, describeAdvisorError } from '@/lib/ai/claude-advisor'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
-import { sendHtml } from '@/bot/utils/telegram'
+import { notifierFor, notifierForChat, Route, htmlContent } from './notifier'
 import { sanitizeError } from '@/bot/utils/error'
 
 type MarketSession = 'KR' | 'US'
@@ -37,11 +37,15 @@ function buildBriefingPrompt(session: MarketSession): string {
   ].join('\n')
 }
 
+/**
+ * @param chatId 있으면 그 chat 에만(봇 `/브리핑` 명령) · 없으면 ALLOWED 전체(cron).
+ */
 export async function sendBriefing(
-  chatIds: number[],
-  session: MarketSession
+  session: MarketSession,
+  chatId?: number,
 ): Promise<void> {
   const bot = getBot()
+  const notifier = chatId === undefined ? notifierFor(bot) : notifierForChat(bot, chatId)
   const prompt = buildBriefingPrompt(session)
 
   try {
@@ -66,13 +70,7 @@ export async function sendBriefing(
 
     const html = markdownToTelegramHtml(result.response)
 
-    for (const chatId of chatIds) {
-      try {
-        await sendHtml(bot, chatId, html)
-      } catch (error) {
-        console.error(`[briefing] 발송 실패 (chatId: ${chatId}): ${sanitizeError(error)}`)
-      }
-    }
+    await notifier.notify(Route.ALLOWED, htmlContent(html), { label: 'briefing' })
 
     const label = session === 'KR' ? '한국장' : '미국장'
     console.log(`[briefing] ${label} 모닝 브리핑 발송 완료`)
@@ -88,12 +86,6 @@ export async function sendBriefing(
     const fallback =
       `📊 ${label} 모닝 브리핑 생성에 실패했습니다.\n` +
       `${advisorMsg}\n/ai 에서 직접 질문해주세요.`
-    for (const chatId of chatIds) {
-      try {
-        await sendHtml(bot, chatId, fallback)
-      } catch {
-        // 무시
-      }
-    }
+    await notifier.notify(Route.ALLOWED, htmlContent(fallback), { label: 'briefing' })
   }
 }

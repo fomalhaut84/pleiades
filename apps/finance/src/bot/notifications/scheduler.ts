@@ -17,15 +17,7 @@ import { sendMonthlyReport } from './monthly-report'
 import { sendBriefing } from './briefing'
 import { takeNetWorthSnapshot } from './networth-snapshot'
 import { sendQuarterlyReport } from './quarterly-report'
-
-function getAllowedChatIds(): number[] {
-  return (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map(Number)
-    .filter((n) => !isNaN(n))
-}
+import { recipients, Route } from './notifier'
 
 let scheduled = false
 
@@ -37,8 +29,7 @@ export function scheduleNotifications(): void {
     return
   }
 
-  const chatIds = getAllowedChatIds()
-  if (chatIds.length === 0) {
+  if (recipients.targetCount(Route.ALLOWED) === 0) {
     console.log('[notification] TELEGRAM_ALLOWED_CHAT_IDS 미설정, 알림 스케줄 건너뜀')
     return
   }
@@ -78,7 +69,7 @@ export function scheduleNotifications(): void {
           const now = new Date()
           const kstHour = (now.getUTCHours() + 9) % 24
           if (kstHour === hour) {
-            await sendDailySummary(chatIds)
+            await sendDailySummary()
           }
         } catch (error) {
           console.error('[notification] 일일 요약 실패:', error)
@@ -92,7 +83,7 @@ export function scheduleNotifications(): void {
       '0 9 1 1,4,7,10 *',
       async () => {
         try {
-          await sendQuarterlyReminder(chatIds)
+          await sendQuarterlyReminder()
         } catch (error) {
           console.error('[notification] 분기 점검 실패:', error)
         }
@@ -105,7 +96,7 @@ export function scheduleNotifications(): void {
       '0 10 7 1,4,7,10 *',
       async () => {
         try {
-          await sendQuarterlyReport(chatIds)
+          await sendQuarterlyReport()
         } catch (error) {
           console.error('[notification] 분기 리포트 실패:', error)
         }
@@ -118,7 +109,7 @@ export function scheduleNotifications(): void {
       '0 9 * * *',
       async () => {
         try {
-          await sendRSUReminders(chatIds)
+          await sendRSUReminders()
         } catch (error) {
           console.error('[notification] RSU/스톡옵션 리마인더 실패:', error)
         }
@@ -132,7 +123,7 @@ export function scheduleNotifications(): void {
       '35 15 * * *',
       async () => {
         try {
-          await sendRSUVestConfirmations(chatIds)
+          await sendRSUVestConfirmations()
         } catch (error) {
           console.error('[notification] D-day RSU 확정 알림 실패:', error)
         }
@@ -145,7 +136,7 @@ export function scheduleNotifications(): void {
       '0 9 1 * *',
       async () => {
         try {
-          await sendMonthlyReminder(chatIds)
+          await sendMonthlyReminder()
         } catch (error) {
           console.error('[notification] 월 적립 리마인더 실패:', error)
         }
@@ -158,7 +149,7 @@ export function scheduleNotifications(): void {
       '30 6 1 * *',
       async () => {
         try {
-          await takeNetWorthSnapshot(chatIds)
+          await takeNetWorthSnapshot()
         } catch (error) {
           console.error('[notification] 순자산 스냅샷 실패:', error)
         }
@@ -183,7 +174,7 @@ export function scheduleNotifications(): void {
           const daysInMonth = new Date(kst.getFullYear(), kst.getMonth() + 1, 0).getDate()
           const day = Math.min(configDay, daysInMonth)
           if (kst.getDate() === day) {
-            await sendMonthlyReport(chatIds)
+            await sendMonthlyReport()
           }
         } catch (error) {
           console.error('[notification] 월간 리포트 실패:', error)
@@ -197,7 +188,7 @@ export function scheduleNotifications(): void {
       '30 8 * * 1-5',
       async () => {
         try {
-          await sendBriefing(chatIds, 'KR')
+          await sendBriefing('KR')
         } catch (error) {
           console.error('[notification] 한국장 브리핑 실패:', error)
         }
@@ -210,7 +201,7 @@ export function scheduleNotifications(): void {
       '0 23 * * 1-5',
       async () => {
         try {
-          await sendBriefing(chatIds, 'US')
+          await sendBriefing('US')
         } catch (error) {
           console.error('[notification] 미국장 브리핑 실패:', error)
         }
@@ -223,7 +214,7 @@ export function scheduleNotifications(): void {
       '40 15 * * 1-5',
       async () => {
         try {
-          await sendClosingReview(chatIds, 'KR')
+          await sendClosingReview('KR')
         } catch (error) {
           console.error('[notification] 한국장 클로징 리뷰 실패:', error)
         }
@@ -240,7 +231,7 @@ export function scheduleNotifications(): void {
       '15 7 * * 2-6',
       async () => {
         try {
-          await sendClosingReview(chatIds, 'US')
+          await sendClosingReview('US')
         } catch (error) {
           console.error('[notification] 미국장 클로징 리뷰 실패:', error)
         }
@@ -253,7 +244,7 @@ export function scheduleNotifications(): void {
       '0 9 * * 6',
       async () => {
         try {
-          await sendWeeklyReview(chatIds)
+          await sendWeeklyReview()
         } catch (error) {
           console.error('[notification] 주간 리뷰 실패:', error)
         }

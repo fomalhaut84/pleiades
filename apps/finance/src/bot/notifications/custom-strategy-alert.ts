@@ -12,7 +12,8 @@
 
 import { prisma } from '@/lib/prisma'
 import { getBot } from '@/bot/index'
-import { sendHtml, escapeHtml } from '@/bot/utils/telegram'
+import { escapeHtml } from '@/bot/utils/telegram'
+import { notifierFor, recipients, Route, htmlContent, lastErrorOf } from './notifier'
 import { generateTAReport } from '@/lib/ta/engine'
 import type { TAReport } from '@/lib/ta/types'
 import { getEarningsMany } from '@/lib/earnings/cache'
@@ -139,8 +140,8 @@ let scanRunning = false
  * 활성 커스텀 전략을 모두 스캔 → 만족 조건 텔레그램 발송.
  * refreshPrices() 직후 호출.
  */
-export async function checkCustomStrategies(chatIds: number[]): Promise<void> {
-  if (chatIds.length === 0) return
+export async function checkCustomStrategies(): Promise<void> {
+  if (recipients.targetCount(Route.ALLOWED) === 0) return
 
   if (scanRunning) {
     console.warn('[custom-strategy] 이전 스캔 진행 중, 건너뜀')
@@ -148,13 +149,13 @@ export async function checkCustomStrategies(chatIds: number[]): Promise<void> {
   }
   scanRunning = true
   try {
-    await runScan(chatIds)
+    await runScan()
   } finally {
     scanRunning = false
   }
 }
 
-async function runScan(chatIds: number[]): Promise<void> {
+async function runScan(): Promise<void> {
   if (!(await isCustomStrategyAlertsEnabled())) return
 
   // 봇 초기화 실패 시 DB 상태 갱신 전에 fail-fast — "발동 기록만 남고 발송은 안 됨" 방지
@@ -310,21 +311,13 @@ async function runScan(chatIds: number[]): Promise<void> {
 
   // 최소 1개 chatId 에 발송 성공한 뒤에만 DB 상태 갱신 — 실패 시 다음 tick 에서 재시도.
   const message = `🧠 <b>커스텀 전략 발동</b> (${todayKST()})\n\n${alerts.join('\n\n')}`
-  let sentCount = 0
-  let lastError: string | undefined
-  for (const chatId of chatIds) {
-    try {
-      await sendHtml(bot, chatId, message)
-      sentCount++
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error)
-      console.error(`[custom-strategy] 알림 발송 실패 (chatId: ${chatId}):`, error)
-    }
-  }
+  const delivery = await notifierFor(bot).notify(Route.ALLOWED, htmlContent(message), { label: 'custom-strategy' })
+  const sentCount = delivery.sent
+  const lastError = lastErrorOf(delivery)
 
   // Phase 33-A (#416): 발동 이력 저장 (발송 성공 여부와 무관 — 실패도 partial/failed 로 기록).
-  const status = computeDeliveryStatus(sentCount, chatIds.length)
-  await recordAlertHistory(historyEvents, status, chatIds.length, status === 'sent' ? undefined : lastError)
+  const status = computeDeliveryStatus(sentCount, delivery.total)
+  await recordAlertHistory(historyEvents, status, delivery.total, status === 'sent' ? undefined : lastError)
 
   if (sentCount === 0) {
     console.warn('[custom-strategy] 전체 chatId 발송 실패 — DB 상태 갱신 보류 (다음 tick 재시도)')
@@ -344,5 +337,5 @@ async function runScan(chatIds: number[]): Promise<void> {
     })
   }
 
-  console.log(`[custom-strategy] 알림 발송: ${alerts.length}건 → ${sentCount}/${chatIds.length} chats`)
+  console.log(`[custom-strategy] 알림 발송: ${alerts.length}건 → ${sentCount}/${delivery.total} chats`)
 }

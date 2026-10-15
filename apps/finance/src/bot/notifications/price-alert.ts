@@ -9,7 +9,8 @@
 import { prisma } from '@/lib/prisma'
 import { getBot } from '@/bot/index'
 import { formatPercent } from '@/bot/utils/formatter'
-import { sendHtml, escapeHtml } from '@/bot/utils/telegram'
+import { escapeHtml } from '@/bot/utils/telegram'
+import { notifierFor, recipients, Route, htmlContent, lastErrorOf, NOTIFY_CTX } from './notifier'
 import { isMarketOpenFor } from '@/lib/market-hours'
 import {
   computeDeliveryStatus,
@@ -77,8 +78,8 @@ function resetIfNewDay(): void {
  * 주가/환율 변동 알림 체크 + 발송
  * refreshPrices() 직후 호출
  */
-export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
-  if (chatIds.length === 0) return
+export async function checkPriceAlerts(): Promise<void> {
+  if (recipients.targetCount(Route.ALLOWED) === 0) return
 
   resetIfNewDay()
   const today = getTodayKST()
@@ -334,21 +335,13 @@ export async function checkPriceAlerts(chatIds: number[]): Promise<void> {
   const bot = getBot()
   const combined = `⚡ <b>변동 알림</b>\n\n${events.map((e) => e.message).join('\n')}`
 
-  let sendSuccess = 0
-  let lastError: string | undefined
-  for (const chatId of chatIds) {
-    try {
-      await sendHtml(bot, chatId, combined)
-      sendSuccess++
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error)
-      console.error(`[notification] 변동 알림 발송 실패 (chatId: ${chatId}):`, error)
-    }
-  }
+  const delivery = await notifierFor(bot).notify(Route.ALLOWED, htmlContent(combined), NOTIFY_CTX)
+  const sendSuccess = delivery.sent
+  const lastError = lastErrorOf(delivery)
 
   // Phase 33-A (#416): 각 이벤트 이력 저장 (배송 상태 요약)
-  const status = computeDeliveryStatus(sendSuccess, chatIds.length)
-  await recordAlertHistory(events, status, chatIds.length, status === 'sent' ? undefined : lastError)
+  const status = computeDeliveryStatus(sendSuccess, delivery.total)
+  await recordAlertHistory(events, status, delivery.total, status === 'sent' ? undefined : lastError)
 
-  console.log(`[notification] 변동 알림 발송: ${events.length}건 → ${sendSuccess}/${chatIds.length} chats`)
+  console.log(`[notification] 변동 알림 발송: ${events.length}건 → ${sendSuccess}/${delivery.total} chats`)
 }
