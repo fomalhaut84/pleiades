@@ -21,6 +21,8 @@ import {
   createTelegramTransport,
   csvEnv,
   platformEnv,
+  sendDiscordFile,
+  type DiscordFile,
   type Notifier,
   type NotifyContext,
   type Transport,
@@ -94,6 +96,34 @@ export function interactiveNotifierFor(bot: Bot): Notifier {
     transport: createTelegramTransport({ api: bot.api }),
     targets: { ALLOWED: TELEGRAM_TARGETS.ALLOWED },
   })
+}
+
+/**
+ * 첨부 파일(분기 PDF · 003 §7-4 포트 밖) — 그 라우트가 Discord 면 웹훅에 첨부한다(M-6b-1 #147).
+ *   'not-discord' → 호출부가 텔레그램 `sendDocument` 로 보낸다(구 동작)
+ *   'no-webhook'  → Discord 를 골랐는데 웹훅이 비었다 — 수신자 0(텍스트 알림과 같은 의미 · 텔레그램으로 우회하지 않는다)
+ *   'sent'        → 보냈다(실패는 throw)
+ */
+export async function sendFileIfDiscord(
+  route: FinRoute,
+  file: DiscordFile,
+  caption: string,
+): Promise<'not-discord' | 'no-webhook' | 'sent'> {
+  if (!usesDiscord(route)) return 'not-discord'
+  const alias = DISCORD_ALIAS[route]
+  const url = discordWebhooks()[alias] // 한 번 읽어 고정 — 판정과 전송 사이에 .env 가 바뀌어도 어긋나지 않게
+  if (url === '') return 'no-webhook'
+  await sendDiscordFile({ webhooks: { [alias]: url } }, alias, file, caption)
+  return 'sent'
+}
+
+/**
+ * 첨부(분기 PDF)를 받을 수신자 수 — 라우트가 Discord 면 웹훅 유무(0/1), 아니면 텔레그램 수신자 수.
+ * 비싼 생성(AI·PDF) 전에 확인한다 — 스케줄 가드는 텔레그램을 OR 로 보므로 이 작업엔 느슨하다(PR #148 Codex P2).
+ */
+export function fileRecipientCount(route: FinRoute): number {
+  if (!usesDiscord(route)) return TELEGRAM_TARGETS[route]().length
+  return discordWebhooks()[DISCORD_ALIAS[route]] === '' ? 0 : 1
 }
 
 /** 텔레그램 수신자 목록 — 포트 밖 `sendDocument`(분기 PDF · 003 §7-4)처럼 텔레그램 API 를 직접 부르는 곳. */
