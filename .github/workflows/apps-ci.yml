@@ -7,7 +7,8 @@ name: Apps CI
 # - 필수 체크(Q52 · 2026-10-01): apps-fin · apps-fit. apps-fin-test 는 서비스 CI 에 없는 추가분이라 비필수.
 #   job 이름을 바꾸면 dev·main ruleset 의 required_status_checks 도 함께 바꾼다.
 # - apps/* 서비스 결함으로 실패하면 고치지 않는다 (Q57) — 그 체크를 비필수로 내리고 pleiades 이슈에 기록한다.
-# - M-5 이후 fit job 은 루트 npm ci 를 먼저 한다 (006 ㉒) — 지금은 apps/fitness 가 packages/notify 를 참조하지 않는다.
+# - fit job 은 루트 npm ci 를 먼저 한다 (006 ㉒ · M-5a #132) — apps/fitness 가 file:../../packages/notify 를 참조하고
+#   packages/notify/dist 는 루트 prepare 만 만든다. 루트 package-lock.json 은 fit next build 의 workspace root 추론에도 쓰인다(006 ㉒).
 
 on:
   push:
@@ -132,7 +133,13 @@ jobs:
         with:
           node-version: 20.x
           cache: 'npm'
-          cache-dependency-path: apps/fitness/package-lock.json
+          cache-dependency-path: |
+            apps/fitness/package-lock.json
+            package-lock.json
+      # 루트 npm ci → prepare(tsc -p packages/notify) → packages/notify/dist. 없으면 tsc TS2307 (006 ㉒ · #132)
+      - name: Install root (packages/notify)
+        working-directory: .
+        run: npm ci
       - name: Install dependencies
         run: npm ci
       - name: Generate Prisma client

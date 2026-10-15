@@ -97,6 +97,7 @@
 | ⑳ | **서비스 `dev` 는 무보호** — `rules/branches/dev` → `[]` · `branches/dev` → `protected:false`(두 저장소) | [A] N2 |
 | ㉑ | **8절 4종(앱별 lock · 스크래치 모노):** fin lint·tsc·test(**50 파일 866**) 통과 · **build 는 더미 DB 로 rc 1**(prerender 가 Prisma 호출 · 모노레포 무관) · **스키마 적용 DB(migrate 27)면 rc 0** · fit **4/4**(더미 DB · test 63 파일 433 + verify 5). Next build *"multiple lockfiles"* 경고(실패 아님) | [S2] X3 |
 | ㉒ | **`file:../../packages/notify` + 1a-3 src(fit):** lock `link:true` · `npm ci` 심링크 유지 · typecheck·lint·test(**442**)·build **전부 rc 0** · esbuild bot 번들에 인라인. **선행: `packages/notify/dist`** — 루트 `npm ci`(`prepare`)를 빼면 rc 127 → fit typecheck rc 2 · test·build rc 1 | [S2] X3 · [A] N8 |
+| ㉒′ | **정정 (2026-10-15 · #132 재감사 C2).** 테스트 기대값 442 는 낡았다 — 수용 후(fit dev `7d1eb99`) 기준선 **444** → 1a-3 패치 후 **453**(baseline 11 → 이식·신규 20) + verify 5. 그리고 fit `next build` 는 루트 `package-lock.json` 에 의존한다(§4-3 정정) | #132 재감사 |
 | ㉓ | 최근 90일: fit 1a-3 대상 6 파일 → **4 커밋**(전체 158) · fin 1a-4 대상 19 파일 → **17 커밋**(전체 59) | [S2] X7 |
 | ㉔ | 로컬 postgres 15.14 가 **127.0.0.1:5432 · [::1]:5432 리슨** · `.env` 가 원본 fin·fit · worktree fin·fit **4곳 모두 존재**(내용 미열람) · `.env.example`: fin `…@localhost:5432/myfinance` · `PORT=4100` · fit `…:5432/myfitness` · `PORT=4200` · `next dev` 기본 3000 | [S2] X9 · [A] N10 |
 | ㉕ | 셸 env 우선: 두 앱 `prisma.config.ts` · fin `standalone.ts:10`·`mcp/server.ts:4` · fit `scripts/*` 가 `import "dotenv/config"` 로 cwd `.env` — dotenv·`@next/env` 는 기존 `process.env` 를 덮지 않는다(셸 export 가 이긴다) · Next 는 `.env.local`·`.env.development`·`.env.production` 을 `.env` 보다 먼저 · 현재 셸 관련 export 0 · 프로필 `DATABASE_URL` 0 | [A2] R6 |
@@ -233,6 +234,7 @@ git update-ref -d refs/import/fit
 - **fin 스키마 DB 선행:** fin `next build` 는 prerender 가 Prisma 를 부르므로 **스키마가 적용된 DB 가 있어야 통과한다**(㉑ · 데이터 불필요). M-2 에서 로컬 5432 에 **`pleiades_fin`** 을 만들고 `DATABASE_URL=…/pleiades_fin` 으로 `npx prisma migrate deploy` 를 먼저 한다(헬퍼의 실효 env 검사 통과 후 · §4-5 L-2). fit build 는 더미 DB 로 통과한다.
 - **8절 표에 `apps/finance`·`apps/fitness` 행을 추가**한다(명령은 서비스 CI 와 같다). fin 선행: `pleiades_fin` + `npx prisma migrate deploy` · fit 선행: `npx prisma generate`(더미 `DATABASE_URL` 로 충분). **M-5 이후 두 행 모두 선행: 루트 `npm ci`**(㉒).
 - Next build 의 *"multiple lockfiles"* 경고는 받아들인다 — `outputFileTracingRoot` 를 넣으려면 `apps/*/next.config` 를 고쳐야 하고 그것은 수용 충돌 후보다.
+  > **정정 (2026-10-15 · #132 · M-5a 재감사 C1).** 경고를 받아들이는 것은 그대로지만, **M-5a 이후 fit `next build` 는 그 경고가 고른 루트에 의존한다** — Turbopack 이 루트 `package-lock.json` 을 보고 workspace root 를 pleiades 루트로 잡아야 `@pleiades/notify`(심링크 → `packages/notify`)를 해석한다. 루트 lock 을 치우면 `Module not found: Can't resolve '@pleiades/notify'` 2건 · rc 1(스크래치 실측). **루트 `package-lock.json` 삭제 금지** — 지울 일이 생기면(ALT-d 정리 · workspaces 도입) `turbopack.root` 명시를 함께 설계한다(그 파일은 수용 충돌 후보). 되돌리기: 문구 (**즉시**).
 - workspaces 는 **전환 설계(Q60)** 와 함께 다시 연다. 루트 `workspaces` 미도입은 003 §2-1 정정(ALT-d)과 충돌 없다.
 
 ### 4-4. M-3 — CI
@@ -283,6 +285,7 @@ git ls-remote https://github.com/fomalhaut84/myFinance.git refs/heads/dev
 |---|---|
 | lock · overrides | **추가 작업 없음**(L2). M-5 이후 lock 충돌이면 서비스 lock 을 받고(`--theirs`) 앱에서 `npm install` 로 `file:` 1줄을 다시 얹는다 → lock diff 검토 |
 | 소스 충돌 | pleiades 가 `apps/*` 를 고친 파일에서만(M-5 이후 · ㉓). **M-4 까지는 무충돌이어야 한다** — 충돌이 나면 규율 위반 신호다 |
+| **충돌 해결 원칙** (사용자 2026-10-15 · #132) | **비즈니스 로직 → 서비스 쪽(`--theirs`)** · **플랫폼 통합 지점 → pleiades 쪽 유지·재적용**(notify 연결 · `package.json` 의 `file:` 줄 · CI) · **CI 녹색이 머지 조건**(조용한 충돌 — 예: 서비스가 삭제된 `send.ts` 를 새로 import — 은 git 이 아니라 typecheck 가 잡는다). `apps/*` 는 pleiades 브랜치 규칙만 따르고 서비스 `dev`·`main` 과의 갈라짐은 받아들인다 — 전환 때 서비스가 내려가므로(§0 정정) |
 | 하네스 | `apps/finance/.claude/` 는 서비스 판이 그대로 온다(무수정 · U97-9) |
 | 게이트·가드 | **매번.** 새 메시지도 다섯 형식 0. 가드 A·B 실패 시 **중단·사용자 보고**(자동 복구 금지). 가드 C 실패 시 `-s ours` 복구 PR 먼저 |
 | 도구 버전 | `VERSIONS` 와 다르면 가드 B 가 실패한다. git 은 venv 로 고정할 수 없다 → git 드리프트도 가드 B 가 잡는다. **버전을 올리려면 전 이력 재병합(중간) + 이력 중복(편도)** — 올리지 않는 것이 기본 |
