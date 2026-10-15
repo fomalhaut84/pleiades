@@ -169,6 +169,19 @@ class RunSh(Base):
         self.assertNotIn("should-not-run", r.stdout)
 
 
+class PlatformKeys(Base):
+    """플랫폼 키(NOTIFY_* · DISCORD_WEBHOOK_*)는 루트 .env 에만 (#143)."""
+
+    def test_platform_key_in_app_env_is_blocked(self):
+        (self.root / "apps/fitness/.env").write_text('NOTIFY_ALLOWED_CHANNEL="discord"\nDISCORD_WEBHOOK_FITNESS=x\n')
+        self.assertEqual(self.keys("fit", GOOD_FIT) & {"NOTIFY_ALLOWED_CHANNEL", "DISCORD_WEBHOOK_FITNESS"},
+                         {"NOTIFY_ALLOWED_CHANNEL", "DISCORD_WEBHOOK_FITNESS"})
+
+    def test_shell_platform_key_is_allowed(self):
+        # 셸 export(일회성 덮어쓰기)는 막지 않는다 — 앱 .env 파일만 본다
+        self.assertEqual(self.keys("fit", {**GOOD_FIT, "NOTIFY_ALLOWED_CHANNEL": "discord"}), set())
+
+
 class Dotenv(Base):
     def test_shell_wins_over_file(self):
         (self.root / "apps/fitness/.env").write_text(

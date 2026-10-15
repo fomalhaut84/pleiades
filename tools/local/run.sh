@@ -6,7 +6,6 @@
 # 하는 일: cwd = apps/<app> · 감싼 명령 사전 검사(precheck.py — npm/npx/node 만 · 파괴 명령 · 훅 판정기)
 #         · PATH 맨 앞에 pleiades bin/(claude shim) · 셸의 DATABASE_URL·TELEGRAM_BOT_TOKEN 을 지운다(env -u)
 #         → check_env.py 통과 시에만 실행.
-#         · 루트 .env 의 플랫폼 키(NOTIFY_* · DISCORD_WEBHOOK_*)만 앱 프로세스에 넘긴다(platform_env.py · #143)
 # 선택 env: OTHER_TOKEN_ID(다른 앱 봇 id — 없으면 다른 앱 .env 에서 읽는다 · 같은 봇 금지) · PLEIADES_ROOT(테스트용)
 set -euo pipefail
 
@@ -25,11 +24,4 @@ export PATH="$ROOT/bin:$PATH"
 CHECK=(python3 "$HERE/check_env.py" "$APP" --root "$ROOT")
 [[ -n "${OTHER_TOKEN_ID:-}" ]] && CHECK+=(--other-token-id "$OTHER_TOKEN_ID")
 env -u DATABASE_URL -u TELEGRAM_BOT_TOKEN "${CHECK[@]}" >&2
-# 루트 .env 의 플랫폼 키(NOTIFY_* · DISCORD_WEBHOOK_*)만 넘긴다 — 그 밖의 키는 넘기지 않는다 (#143 · platform_env.py)
-# 프로세스 치환은 종료 코드를 잃는다 — 임시 파일로 받아 실패하면 기동하지 않는다 (#143 사전 리뷰 major)
-PLAT=()
-PLAT_OUT=$(mktemp)
-if ! python3 "$HERE/platform_env.py" "$ROOT" >"$PLAT_OUT"; then rm -f "$PLAT_OUT"; die "루트 .env 플랫폼 키를 읽지 못했다 (platform_env.py)"; fi
-while IFS= read -r -d '' kv; do PLAT+=("$kv"); done <"$PLAT_OUT"
-rm -f "$PLAT_OUT"
-exec env -u DATABASE_URL -u TELEGRAM_BOT_TOKEN ${PLAT[@]+"${PLAT[@]}"} "$@"
+exec env -u DATABASE_URL -u TELEGRAM_BOT_TOKEN "$@"

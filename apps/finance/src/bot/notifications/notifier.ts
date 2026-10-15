@@ -7,6 +7,7 @@
  *   ALLOWED → TELEGRAM_ALLOWED_CHAT_IDS · ADMIN → TELEGRAM_ADMIN_CHAT_IDS (003 Q25 ADMIN A)
  *
  * pleiades M-6a-2 (pleiades#143 · 003 §6 1b-1): 라우트별로 Discord 를 고를 수 있다 — 미설정이면 지금과 같다(텔레그램).
+ * 값은 pleiades 루트 `.env`(`platformEnv` · 프로세스 env 우선)에서 읽는다 — 앱 실행 방식(run.sh · npm run dev · pm2)과 무관.
  *   NOTIFY_ALLOWED_CHANNEL=discord → `#finance` (DISCORD_WEBHOOK_FINANCE)
  *   NOTIFY_ADMIN_CHANNEL=discord   → `#admin`   (DISCORD_WEBHOOK_ADMIN)
  * 키보드 메시지(`interactiveNotifierFor`) · `/브리핑` 응답(`notifierForChat`) · 분기 PDF 목록(`telegramRecipients`)은
@@ -19,6 +20,7 @@ import {
   createNotifier,
   createTelegramTransport,
   csvEnv,
+  platformEnv,
   type Notifier,
   type NotifyContext,
   type Transport,
@@ -37,9 +39,9 @@ const TELEGRAM_TARGETS = {
 
 const DISCORD_ALIAS: Readonly<Record<FinRoute, string>> = { ALLOWED: 'finance', ADMIN: 'admin' }
 
-/** 그 라우트를 Discord 로 보내는가 — env 를 호출 시점마다 읽는다. */
+/** 그 라우트를 Discord 로 보내는가 — 호출 시점마다 읽는다(프로세스 env → 루트 `.env`). */
 export function usesDiscord(route: FinRoute): boolean {
-  return (process.env[`NOTIFY_${route}_CHANNEL`] ?? '').trim().toLowerCase() === 'discord'
+  return (platformEnv(`NOTIFY_${route}_CHANNEL`) ?? '').trim().toLowerCase() === 'discord'
 }
 
 /**
@@ -48,7 +50,7 @@ export function usesDiscord(route: FinRoute): boolean {
  */
 const WEBHOOK_RE = /^https:\/\/(?:ptb\.|canary\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/\d+\/[\w-]+(?:\?[\w=&-]*)?$/
 export function webhookEnv(name: string): string {
-  const v = (process.env[name] ?? '').trim()
+  const v = (platformEnv(name) ?? '').trim()
   return WEBHOOK_RE.test(v) ? v : ''
 }
 

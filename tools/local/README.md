@@ -25,11 +25,12 @@ tools/local/run.sh fin -- npm run build && tools/local/run.sh fit -- npm run bui
 
 pleiades 가 소유한 설정(알림 채널 스위치 `NOTIFY_*` · Discord 웹훅 `DISCORD_WEBHOOK_*`)은 **pleiades 루트 `.env`** 에 둔다 — 앱이 늘어도 한 곳에서 관리한다. 템플릿은 `.env.example`(`cp .env.example .env` 후 값 직접 기입 · gitignore).
 
-- `run.sh` 가 그 파일의 **플랫폼 키만** 앱 프로세스에 넘긴다(`platform_env.py`). 그 밖의 키(봇 토큰 · DB URL 등)는 넘기지 않는다 — 앱 고유 설정은 계속 `apps/<app>/.env`.
-- 셸 `export` 가 이기고, 넘긴 값은 앱 `.env` 의 같은 키보다 우선한다(dotenv·Next 는 이미 있는 env 를 덮지 않는다).
-- 그래서 **앱 `.env` 의 `NOTIFY_*`·`DISCORD_WEBHOOK_*` 는 루트에 같은 키가 있으면(빈 값이어도) 무시된다** — 플랫폼 키는 루트에만 둔다.
-- 루트 `.env` 를 해석할 수 없으면(따옴표 짝이 안 맞음 · UTF-8 아님) `run.sh` 가 **기동하지 않는다**.
+- **앱이 직접 읽는다** — `@pleiades/notify` 의 `platformEnv` 가 cwd 에서 위로 `package.json` 의 name 이 `pleiades` 인 곳의 `.env` 를 찾는다. 그래서 `run.sh` · `npm run dev` · `next start` · pm2 어느 쪽으로 띄워도 같다. 디렉터리 구조가 다르면(서버 배포 등) `PLEIADES_ENV_FILE=<경로>` 로 지정한다.
+- **플랫폼 키만 읽는다** — 루트 `.env` 에 다른 키(봇 토큰 · DB URL)가 있어도 앱으로 가지 않는다. 앱 고유 설정은 계속 `apps/<app>/.env`.
+- 우선순위: 프로세스 env(셸 `export` · pm2 `env`) → 루트 `.env`. **플랫폼 키를 앱 `.env` 에 두면 루트 값을 가리므로 `check_env` 가 막는다.**
 - 비워 두면 알림은 텔레그램(지금과 같다). `NOTIFY_ALLOWED_CHANNEL=discord` 면 fin → `#finance` · fit → `#fitness` · fin `NOTIFY_ADMIN_CHANNEL=discord` 면 관리자 알림 → `#admin`. 키보드 메시지·`/브리핑` 응답·분기 PDF 는 항상 텔레그램.
+- 값을 해석할 수 없으면(따옴표 짝 · 닫는 따옴표 뒤 글자) 앱 로그에 `[notify] 루트 .env 값을 해석할 수 없어 무시한다 — <키>` 가 한 번 찍히고 그 키는 없는 것으로 친다. 웹훅 URL 형식이 틀려도 그 채널 수신자는 0 이다 — Discord 에 안 오면 이 둘부터 본다.
+- 앱 테스트(vitest)는 `PLEIADES_ENV_FILE` 을 없는 경로로 고정한다 — 개발 PC 의 루트 `.env` 가 테스트로 새지 않는다.
 - 되돌리기: 루트 `.env` 의 키를 지우거나 비운다(**즉시**).
 
 ## 기동 (M-4)

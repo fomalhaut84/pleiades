@@ -30,6 +30,14 @@ export {
 } from './discord';
 export type { DiscordTransportOptions, FetchLike, FetchResponseLike } from './discord';
 export { htmlToDiscordMarkdown, escapeDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
+export {
+  platformEnv,
+  parsePlatformEnv,
+  parseEnvValue,
+  findPlatformEnvFile,
+  resetPlatformEnvCache,
+  PLATFORM_KEY_RE,
+} from './platform-env';
 
 export { deliverOne, DEFAULT_RETRY_DELAYS_MS } from './deliver';
 export type { DeliveryPolicy } from './deliver';

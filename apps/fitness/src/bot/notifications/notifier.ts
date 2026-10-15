@@ -5,6 +5,7 @@
 //
 // pleiades M-6a-2 (pleiades#143 · 003 §6 1b-1): `NOTIFY_ALLOWED_CHANNEL=discord` 이면 ALLOWED 텍스트 알림을
 // Discord `#fitness` 웹훅(`DISCORD_WEBHOOK_FITNESS`)으로 보낸다. 미설정이면 지금과 같다(텔레그램).
+// 값은 pleiades 루트 `.env`(`platformEnv` · 프로세스 env 우선)에서 읽는다 — 앱 실행 방식과 무관.
 // 키보드(인터랙션) 메시지는 Discord 가 받지 못하므로 `interactiveNotifierFor` 로 항상 텔레그램 — 혼합 운영(Q11).
 
 import type { Bot } from "grammy";
@@ -13,6 +14,7 @@ import {
   createNotifier,
   createTelegramTransport,
   csvEnv,
+  platformEnv,
   type Notifier,
   type NotifyContext,
   type Transport,
@@ -27,9 +29,9 @@ export const BOT_NOTIFY_CTX: NotifyContext = Object.freeze({ label: "bot" });
 const TELEGRAM_ALLOWED = csvEnv("TELEGRAM_ALLOWED_CHAT_IDS");
 const DISCORD_ALIAS = "fitness";
 
-/** ALLOWED 를 Discord 로 보내는가 — env 를 호출 시점마다 읽는다. */
+/** ALLOWED 를 Discord 로 보내는가 — 호출 시점마다 읽는다(프로세스 env → 루트 `.env`). */
 export function allowedUsesDiscord(): boolean {
-  return (process.env.NOTIFY_ALLOWED_CHANNEL ?? "").trim().toLowerCase() === "discord";
+  return (platformEnv("NOTIFY_ALLOWED_CHANNEL") ?? "").trim().toLowerCase() === "discord";
 }
 
 /**
@@ -38,7 +40,7 @@ export function allowedUsesDiscord(): boolean {
  */
 const WEBHOOK_RE = /^https:\/\/(?:ptb\.|canary\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/\d+\/[\w-]+(?:\?[\w=&-]*)?$/;
 export function webhookEnv(name: string): string {
-  const v = (process.env[name] ?? "").trim();
+  const v = (platformEnv(name) ?? "").trim();
   return WEBHOOK_RE.test(v) ? v : "";
 }
 
