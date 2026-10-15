@@ -61,6 +61,9 @@ export const recipients: Pick<Notifier, 'targetCount' | 'targets'> = createNotif
 /**
  * 구 per-chat 루프의 `lastError`(마지막 실패 chat 의 raw `error.message`)를 결과에서 복원한다 — 003 발견 17 · Q19 C(raw 보존).
  * DB `AlertHistory.lastError` 에 그대로 저장되던 값과 같은 형태다.
+ *
+ * 패키지 `Delivery.error` 문서는 DB·API 에 쓰기 전 sanitize 를 요구하지만(봇 토큰 포함 가능), 여기서는 **의도적으로 raw 를
+ * 유지한다** — 구 동작 보존(Q19 C · M-5b 는 동작 변경 최소). sanitize 적용은 후속 pleiades 이슈에서 다룬다.
  */
 export function lastErrorOf(result: BroadcastResult): string | undefined {
   return result.deliveries.filter((d) => !d.ok).at(-1)?.error

@@ -233,7 +233,7 @@ describe('redispatchAlert', () => {
     errSpy.mockRestore()
   })
 
-  it('일부 실패 → status=partial, lastError = 마지막 실패 chat 의 메시지', async () => {
+  it('일부 실패 → status=partial', async () => {
     sendMessage
       .mockResolvedValueOnce({ message_id: 1 })
       .mockRejectedValueOnce(new Error('403'))
@@ -243,6 +243,19 @@ describe('redispatchAlert', () => {
     expect(res.status).toBe('partial')
     expect(res.successCount).toBe(2)
     expect(res.lastError).toBe('403')
+    errSpy.mockRestore()
+  })
+
+  // 회귀: pleiades#136 사전 리뷰 info — 구 루프는 실패마다 lastError 를 덮어써 **마지막** 실패를 남겼다.
+  it('실패가 둘 이상이면 lastError = 마지막 실패 chat 의 메시지', async () => {
+    sendMessage
+      .mockRejectedValueOnce(new Error('A'))
+      .mockResolvedValueOnce({ message_id: 2 })
+      .mockRejectedValueOnce(new Error('B'))
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await redispatchAlert(row, fakeBot)
+    expect(res.status).toBe('partial')
+    expect(res.lastError).toBe('B')
     errSpy.mockRestore()
   })
 
