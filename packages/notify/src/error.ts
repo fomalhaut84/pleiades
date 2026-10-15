@@ -7,8 +7,8 @@
  */
 
 const TOKEN_RE = /bot\d+:[A-Za-z0-9_-]+/g;
-/** Discord 웹훅 URL 의 토큰 부분 (`/api/webhooks/<id>/<token>`) — M-6a #141. */
-const DISCORD_WEBHOOK_RE = /(\/api\/webhooks\/\d+\/)[A-Za-z0-9_-]+/g;
+/** Discord 웹훅 URL 의 토큰 부분 (`/api/[v10/]webhooks/<id>/<token>`) — M-6a #141. */
+const DISCORD_WEBHOOK_RE = /(\/api\/(?:v\d+\/)?webhooks\/\d+\/)[A-Za-z0-9_-]+/g;
 const NETWORK_CODES = new Set([
   'ETIMEDOUT',
   'ECONNRESET',

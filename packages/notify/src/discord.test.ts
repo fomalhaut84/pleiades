@@ -61,7 +61,7 @@ describe('createDiscordTransport', () => {
   it('plain 은 글자 그대로 보이게 escape 한다', async () => {
     const { transport, bodies } = setup([res(200, { id: '1' })]);
     await transport.send('finance', { text: '*x* <b>', format: 'plain' });
-    expect(bodies()[0].content).toBe('\\*x\\* <b>');
+    expect(bodies()[0].content).toBe('\\*x\\* \\<b>');
   });
 
   it('모르는 별칭 · 빈 URL 은 오류 — 메시지에 URL 이 없다', async () => {
@@ -170,6 +170,19 @@ describe('createDiscordTransport', () => {
     expect((err as DiscordWebhookError).status).toBe(404);
     expect((err as Error).message).toBe('Discord webhook 응답 404: Unknown Webhook (code 10015)');
     expect((err as Error).message).not.toContain('secret-token');
+  });
+
+  // 회귀: #141 사전 리뷰 info — 429 본문을 읽은 뒤에도 오류 상세가 남는다(본문 이중 소비 없음)
+  it('429 가 상한을 넘으면 Discord 메시지를 담아 실패한다', async () => {
+    const r429: FetchResponseLike = {
+      ok: false,
+      status: 429,
+      json: async () => ({ message: 'You are being rate limited.', retry_after: 60 }),
+      text: vi.fn(async () => JSON.stringify({ message: 'You are being rate limited.', retry_after: 60 })),
+    };
+    const { transport } = setup([r429]);
+    await expect(transport.send('finance', html('x'))).rejects.toThrow('응답 429: You are being rate limited.');
+    expect(r429.text).toHaveBeenCalledTimes(1);
   });
 
   it('2xx 인데 id 가 없으면 실패', async () => {

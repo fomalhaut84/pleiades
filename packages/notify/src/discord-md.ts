@@ -74,8 +74,9 @@ export function decodeEntities(s: string): string {
 /**
  * 어디서나 서식이 되는 문자 — `\` 는 escape 자체이므로 같은 정규식 한 번에 처리한다.
  * `[` `]` 를 막으면 마스크 링크 `[x](url)` 가 생기지 않으므로 `(` `)` 는 그대로 둔다(한국어 본문에 흔하다).
+ * `<` 는 `<t:…>`·`<#…>`·`<@…>`(타임스탬프·채널·멘션 표기)가 되지 않게 막는다.
  */
-const INLINE_META_RE = /[\\*_~`|[\]]/g;
+const INLINE_META_RE = /[\\*_~`|[\]<]/g;
 /** 줄 머리에서만 서식이 되는 것 — 인용(`>`) · 제목(`#`) · 목록(`-`·`+`) · 번호 목록(`1.`). */
 const LINE_HEAD_RE = /^([ \t]*)([>#+-]|\d+\.)/gm;
 
@@ -105,12 +106,22 @@ function inlineCode(raw: string): string {
   return `${fence}${pad}${raw}${pad}${fence}`;
 }
 
+/** 안쪽 앞뒤 공백은 기호 바깥으로 — `** 제목 **` 은 Discord 가 서식으로 읽지 않는다. */
 function wrap(mark: string, inner: string): string {
-  return inner === '' ? '' : `${mark}${inner}${mark}`;
+  const m = /^(\s*)([\s\S]*?)(\s*)$/.exec(inner);
+  const [lead, core, trail] = m === null ? ['', inner, ''] : [m[1], m[2], m[3]];
+  return core === '' ? inner : `${lead}${mark}${core}${mark}${trail}`;
 }
 
 function render(nodes: Node[]): string {
-  return nodes.map(renderNode).join('');
+  let out = '';
+  for (const n of nodes) {
+    const piece = renderNode(n);
+    // 인용·코드 블록은 줄 머리에서만 블록이 된다 — 앞이 줄 중간이면 줄을 바꾼다
+    const block = n.kind === 'element' && (n.tag === 'blockquote' || n.tag === 'pre');
+    out += block && piece !== '' && out !== '' && !out.endsWith('\n') ? `\n${piece}` : piece;
+  }
+  return out;
 }
 
 function renderNode(n: Node): string {
@@ -177,4 +188,82 @@ function renderQuote(inner: string): string {
 /** 텔레그램 HTML 본문을 Discord 마크다운으로. 결과는 그대로 `content` 로 보낼 수 있다. */
 export function htmlToDiscordMarkdown(html: string): string {
   return render(parse(html));
+}
+
+const FENCE_LINE_RE = /^```[\w+-]*$/;
+/** 청크 끝에서 코드 블록을 닫고 다음 청크에서 다시 여는 데 드는 여유. */
+const FENCE_RESERVE = 4 + 1 + 24;
+
+/**
+ * 변환된 Discord md 를 `max` 자 이하 청크로 나눈다 — `splitMessage` 와 달리 md 구조를 안다(사전 리뷰 major · #141).
+ *   - 코드 블록(```` ``` ````)을 넘는 분할: 청크 끝에서 닫고 다음 청크에서 같은 언어로 다시 연다
+ *   - 한 줄이 너무 길어 자를 때: escape 쌍(`\*`)의 사이 · UTF-16 서로게이트 쌍의 사이를 피하고, 가능하면 공백에서 자른다
+ * 줄을 넘는 인라인 서식(`**…**`)은 렌더러가 만들지 않는다 — 한 줄 안에서만 열고 닫는다. 아주 긴 한 줄 안의 서식은
+ * 공백 우선 절단으로도 갈릴 수 있다(그 경우 양쪽에 기호가 글자로 보인다 · escape 는 풀리지 않는다).
+ */
+export function splitDiscordMarkdown(md: string, max: number): string[] {
+  if (!(max > FENCE_RESERVE * 2)) throw new RangeError(`splitDiscordMarkdown: max 가 너무 작다 (${max})`);
+  if (md.length <= max) return [md];
+  const budget = max - FENCE_RESERVE;
+  const chunks: string[] = [];
+  let cur: string[] = [];
+  let curLen = 0;
+  let fence: string | null = null; // 열린 코드 블록의 여는 줄
+  let onlyReopened = false; // cur 가 다시 연 울타리 줄뿐인가
+
+  const push = (line: string): void => {
+    curLen += (cur.length > 0 ? 1 : 0) + line.length;
+    cur.push(line);
+  };
+  const flush = (): void => {
+    if (cur.length === 0 || onlyReopened) return;
+    chunks.push(fence === null ? cur.join('\n') : `${cur.join('\n')}\n\`\`\``);
+    cur = [];
+    curLen = 0;
+    onlyReopened = false;
+    if (fence !== null) {
+      push(fence);
+      onlyReopened = true;
+    }
+  };
+
+  for (const line of md.split('\n')) {
+    for (const piece of sliceLine(line, budget - (fence === null ? 0 : fence.length + 1))) {
+      if (cur.length > 0 && curLen + 1 + piece.length > budget) flush();
+      push(piece);
+      onlyReopened = false;
+      if (FENCE_LINE_RE.test(piece)) fence = fence === null ? piece : null;
+    }
+  }
+  if (cur.length > 0 && !onlyReopened) chunks.push(cur.join('\n'));
+  return chunks;
+}
+
+/** 한 줄을 `n` 자 이하 조각으로 — 공백 우선 · escape 쌍과 서로게이트 쌍은 가르지 않는다. */
+function sliceLine(line: string, n: number): string[] {
+  if (line.length <= n) return [line];
+  const out: string[] = [];
+  let i = 0;
+  while (line.length - i > n) {
+    let end = i + n;
+    const space = line.lastIndexOf(' ', end - 1);
+    if (space > i + Math.floor(n * 0.8)) end = space + 1;
+    while (end > i + 1 && (endsWithOddBackslashes(line, i, end) || splitsSurrogate(line, end))) end--;
+    out.push(line.slice(i, end));
+    i = end;
+  }
+  out.push(line.slice(i));
+  return out;
+}
+
+function endsWithOddBackslashes(s: string, from: number, end: number): boolean {
+  let k = 0;
+  while (end - 1 - k >= from && s.charCodeAt(end - 1 - k) === 0x5c) k++;
+  return k % 2 === 1;
+}
+
+function splitsSurrogate(s: string, end: number): boolean {
+  const hi = s.charCodeAt(end - 1);
+  const lo = s.charCodeAt(end);
+  return hi >= 0xd800 && hi <= 0xdbff && lo >= 0xdc00 && lo <= 0xdfff;
 }

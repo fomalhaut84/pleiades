@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeEntities, escapeDiscordMarkdown, htmlToDiscordMarkdown } from './discord-md';
+import { decodeEntities, escapeDiscordMarkdown, htmlToDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
 
 describe('escapeDiscordMarkdown — 서식 주입 방지 (003 §7-1 정정 6-A)', () => {
   it('인라인 메타문자 \\ * _ ~ ` | [ ] 를 escape 한다', () => {
@@ -40,7 +40,7 @@ describe('htmlToDiscordMarkdown', () => {
   });
 
   it('텍스트 노드는 엔티티 디코드 후 escape 한다 — escapeHtml 된 사용자 입력', () => {
-    expect(htmlToDiscordMarkdown('🎯 <b>A &amp; B_C</b> (SOXL &lt; 40)')).toBe('🎯 **A & B\\_C** (SOXL < 40)');
+    expect(htmlToDiscordMarkdown('🎯 <b>A &amp; B_C</b> (SOXL &lt; 40)')).toBe('🎯 **A & B\\_C** (SOXL \\< 40)');
   });
 
   it('code 는 escape 하지 않고 디코드만 · 백틱이 있으면 울타리를 늘린다', () => {
@@ -88,11 +88,75 @@ describe('htmlToDiscordMarkdown', () => {
   });
 
   it('태그가 아닌 < 는 텍스트로 남는다', () => {
-    expect(htmlToDiscordMarkdown('3 < 5 그리고 <3')).toBe('3 < 5 그리고 <3');
+    expect(htmlToDiscordMarkdown('3 < 5 그리고 <3')).toBe('3 \\< 5 그리고 \\<3');
   });
 
   it('fin 실사용 형태 — 리포트 머리 + 목록', () => {
     const src = '📊 <b>일일 요약</b>\n\n- 총액: 1,000원\n<i>※ 참고용</i>';
     expect(htmlToDiscordMarkdown(src)).toBe('📊 **일일 요약**\n\n\\- 총액: 1,000원\n*※ 참고용*');
+  });
+
+  // 회귀: #141 사전 리뷰 info — 아래 넷
+  it('< 를 escape 한다 — <t:…> <#…> <@…> 표기가 되지 않는다', () => {
+    expect(htmlToDiscordMarkdown('&lt;t:1700000000:R&gt; &lt;#123&gt; &lt;@456&gt;')).toBe('\\<t:1700000000:R> \\<#123> \\<@456>');
+  });
+
+  it('서식 안쪽의 앞뒤 공백은 기호 바깥으로', () => {
+    expect(htmlToDiscordMarkdown('<b> 제목 </b>끝')).toBe(' **제목** 끝');
+    expect(htmlToDiscordMarkdown('a<b>  </b>b')).toBe('a  b');
+  });
+
+  it('줄 중간에 오는 인용·코드 블록은 줄을 바꿔 시작한다', () => {
+    expect(htmlToDiscordMarkdown('앞<blockquote>q</blockquote>')).toBe('앞\n> q\n');
+    expect(htmlToDiscordMarkdown('앞<pre>c</pre>')).toBe('앞\n```\nc\n```');
+  });
+});
+
+describe('splitDiscordMarkdown — md 를 아는 분할 (#141 사전 리뷰 major)', () => {
+  it('한도 안이면 그대로', () => {
+    expect(splitDiscordMarkdown('짧다', 2000)).toEqual(['짧다']);
+  });
+
+  it('escape 쌍(\\*)을 가르지 않는다 — 1999자 + 사용자 * ', () => {
+    const md = htmlToDiscordMarkdown(`${'a'.repeat(1999)}*`);
+    const chunks = splitDiscordMarkdown(md, 2000);
+    expect(chunks.join('')).toBe(md);
+    for (const c of chunks) {
+      expect(c.length).toBeLessThanOrEqual(2000);
+      expect(c.startsWith('*')).toBe(false); // escape 가 풀린 * 로 시작하지 않는다
+      expect(/(^|[^\\])(\\\\)*\\$/.test(c)).toBe(false); // 짝 없는 \ 로 끝나지 않는다
+    }
+  });
+
+  it('긴 줄은 가능하면 공백에서 자른다', () => {
+    const words = Array.from({ length: 400 }, (_, i) => `w${i}`).join(' ');
+    const chunks = splitDiscordMarkdown(words, 500);
+    expect(chunks.join('')).toBe(words);
+    for (const c of chunks.slice(0, -1)) expect(c.endsWith(' ')).toBe(true);
+  });
+
+  it('서로게이트 쌍을 가르지 않는다', () => {
+    const md = `${'a'.repeat(1970)}${'📈'.repeat(40)}`;
+    for (const c of splitDiscordMarkdown(md, 2000)) {
+      expect(/^[\udc00-\udfff]|[\ud800-\udbff]$/.test(c)).toBe(false);
+    }
+  });
+
+  it('코드 블록을 넘는 분할 — 청크 끝에서 닫고 다음 청크에서 같은 언어로 다시 연다', () => {
+    const body = Array.from({ length: 120 }, (_, i) => `line ${i} ${'x'.repeat(30)}`).join('\n');
+    const md = htmlToDiscordMarkdown(`머리\n<pre><code class="language-ts">${body}</code></pre>\n꼬리`);
+    const chunks = splitDiscordMarkdown(md, 2000);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const c of chunks) {
+      expect(c.length).toBeLessThanOrEqual(2000);
+      const fences = c.split('\n').filter((l) => /^```[\w+-]*$/.test(l)).length;
+      expect(fences % 2).toBe(0); // 청크마다 울타리가 짝이 맞는다
+    }
+    expect(chunks[1].startsWith('```ts\n')).toBe(true);
+    expect(chunks[chunks.length - 1].endsWith('꼬리')).toBe(true);
+  });
+
+  it('max 가 너무 작으면 RangeError', () => {
+    expect(() => splitDiscordMarkdown('x'.repeat(100), 10)).toThrow(RangeError);
   });
 });

@@ -18,6 +18,9 @@ describe('sanitizeMessage', () => {
     expect(sanitizeMessage('POST https://discord.com/api/webhooks/123456/abc_DEF-9?wait=true failed')).toBe(
       'POST https://discord.com/api/webhooks/123456/<REDACTED>?wait=true failed',
     );
+    expect(sanitizeMessage('Failed to parse URL from https://discord.com/api/v10/webhooks/1/tok-EN')).toBe(
+      'Failed to parse URL from https://discord.com/api/v10/webhooks/1/<REDACTED>',
+    );
   });
 });
 

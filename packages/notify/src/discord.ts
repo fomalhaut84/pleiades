@@ -8,10 +8,9 @@
  * **target = 채널 별칭**(예 `finance`). 웹훅 URL 에는 토큰이 들어 있으므로 target·로그·오류 메시지에 URL 을 두지 않는다 —
  * 별칭 → URL 맵은 옵션으로만 받는다.
  */
-import { htmlToDiscordMarkdown, escapeDiscordMarkdown } from './discord-md';
+import { htmlToDiscordMarkdown, escapeDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
 import { getErrorCode, isNetworkError, sanitizeError } from './error';
 import { DEFAULT_RETRY_DELAYS_MS } from './deliver';
-import { splitMessage } from './split';
 import type { Content, Logger, MessageRef, Transport } from './types';
 
 export const DISCORD_CHANNEL = 'discord';
@@ -57,6 +56,10 @@ export class DiscordWebhookError extends Error {
 /** undici `fetch` 의 연결 실패 코드 — 공용 `isNetworkError` 는 grammy·node 코드만 안다. */
 const UNDICI_NETWORK_CODES = new Set(['UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET', 'UND_ERR_HEADERS_TIMEOUT']);
 
+/**
+ * 재시도할 네트워크 오류. 응답 대기 중 끊김(타임아웃·abort)은 Discord 가 이미 받았을 수 있어 중복 전송이 날 수 있다 —
+ * 텔레그램 경로(코어 재시도)와 같은 성질이고, 누락보다 중복이 낫다는 원본 판단(fin `telegram.ts` withRetry 주석)을 따른다.
+ */
 function isRetryableNetworkError(err: unknown): boolean {
   if (isNetworkError(err)) return true;
   const code = getErrorCode(err);
@@ -114,8 +117,9 @@ export function createDiscordTransport(opts: DiscordTransportOptions): Transport
         if (typeof body?.id !== 'string') throw new DiscordWebhookError(res.status, '응답에 메시지 id 가 없다');
         return body.id;
       }
+      const errBody = await readErrorBody(res);
       if (res.status === 429 && rateLimited < 2) {
-        const waitMs = await retryAfterMs(res);
+        const waitMs = retryAfterMs(errBody);
         if (waitMs !== undefined && waitMs <= maxRateLimitWaitMs) {
           rateLimited++;
           attempt--; // 429 는 보내지지 않은 것이라 네트워크 재시도 예산을 쓰지 않는다
@@ -124,7 +128,7 @@ export function createDiscordTransport(opts: DiscordTransportOptions): Transport
           continue;
         }
       }
-      throw new DiscordWebhookError(res.status, await errorDetail(res));
+      throw new DiscordWebhookError(res.status, errorDetail(errBody));
     }
   };
 
@@ -137,7 +141,7 @@ export function createDiscordTransport(opts: DiscordTransportOptions): Transport
         throw new Error('@pleiades/notify: DiscordTransport 는 components(인터랙션)를 지원하지 않는다 — 1b-2');
       }
       const url = webhookFor(target);
-      const chunks = splitMessage(toDiscordContent(content), DISCORD_MAX_LENGTH).filter((c) => c.trim() !== '');
+      const chunks = splitDiscordMarkdown(toDiscordContent(content), DISCORD_MAX_LENGTH).filter((c) => c.trim() !== '');
       if (chunks.length === 0) throw new Error('@pleiades/notify: Discord 로 보낼 본문이 비었다');
       // 청크 k 가 끝내 실패하면 앞 청크는 이미 나갔다 — 그대로 실패로 올린다(코어는 재시도하지 않는다 · Infinity 모드).
       let ref = '';
@@ -147,29 +151,34 @@ export function createDiscordTransport(opts: DiscordTransportOptions): Transport
   };
 }
 
-async function retryAfterMs(res: FetchResponseLike): Promise<number | undefined> {
+/** 오류 응답 본문은 한 번만 읽는다(스트림 이중 소비 방지 · 사전 리뷰 info). */
+interface ErrorBody {
+  raw: string;
+  json: { message?: unknown; code?: unknown; retry_after?: unknown } | undefined;
+}
+
+async function readErrorBody(res: FetchResponseLike): Promise<ErrorBody> {
+  let raw = '';
   try {
-    const body = (await res.json()) as { retry_after?: unknown };
-    const sec = typeof body?.retry_after === 'number' ? body.retry_after : Number.NaN;
-    return Number.isFinite(sec) && sec >= 0 ? Math.ceil(sec * 1000) : undefined;
+    raw = await res.text();
   } catch {
-    return undefined;
+    return { raw: '', json: undefined };
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return { raw, json: typeof parsed === 'object' && parsed !== null ? (parsed as ErrorBody['json']) : undefined };
+  } catch {
+    return { raw, json: undefined };
   }
 }
 
-async function errorDetail(res: FetchResponseLike): Promise<string> {
-  try {
-    const raw = await res.text();
-    try {
-      const parsed = JSON.parse(raw) as { message?: unknown; code?: unknown };
-      if (typeof parsed.message === 'string') {
-        return typeof parsed.code === 'number' ? `${parsed.message} (code ${parsed.code})` : parsed.message;
-      }
-    } catch {
-      // JSON 이 아니면 앞부분만
-    }
-    return raw.slice(0, 200);
-  } catch {
-    return '';
-  }
+function retryAfterMs(body: ErrorBody): number | undefined {
+  const sec = typeof body.json?.retry_after === 'number' ? body.json.retry_after : Number.NaN;
+  return Number.isFinite(sec) && sec >= 0 ? Math.ceil(sec * 1000) : undefined;
+}
+
+function errorDetail(body: ErrorBody): string {
+  const msg = body.json?.message;
+  if (typeof msg === 'string') return typeof body.json?.code === 'number' ? `${msg} (code ${body.json.code})` : msg;
+  return body.raw.slice(0, 200);
 }
