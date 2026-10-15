@@ -222,104 +222,105 @@ async function handleSnooze(adj: Adjustment): Promise<string> {
   return `💤 1시간 뒤 (~${kstStr}) 재알림합니다.`;
 }
 
+/** 버튼 1회 처리 결과 — 채널 중립(텔레그램 answerCallbackQuery · Discord ephemeral 안내 공통). */
+export interface AutoAdjustDecision {
+  /** 누른 사람에게 보여 줄 짧은 안내. */
+  notice: string;
+  /** 버튼을 지울지 — 수락·거절은 지운다(중복 클릭 방지) · 스누즈는 유지(재알림 후 재결정). */
+  removeKeyboard: boolean;
+}
+
+/**
+ * pleiades M-6b-3 (pleiades#151): 텔레그램 콜백 본문을 채널 중립 함수로 꺼냈다 — Discord 버튼(gateway)도 같은 판단을 쓴다.
+ * 동작은 구 `registerAutoAdjustCallback` 본문과 같다(idempotent · TTL · 최종 상태 no-op). 오류는 기록하고 안내로 돌려준다.
+ */
+export async function decideAutoAdjust(data: string): Promise<AutoAdjustDecision> {
+  const keep = (notice: string): AutoAdjustDecision => ({ notice, removeKeyboard: false });
+  const parsed = parseCallbackData(data);
+  if (!parsed) return keep("알 수 없는 요청입니다.");
+  try {
+    const adj = await prisma.workoutAdjustment.findUnique({
+      where: { id: parsed.adjustmentId },
+      select: {
+        id: true,
+        workoutId: true,
+        decision: true,
+        proposedAt: true,
+        proposedType: true,
+        proposedDistanceKm: true,
+        proposedPaceSecPerKm: true,
+        proposedZone: true,
+        proposedIntervalDesc: true,
+        originalType: true,
+        originalDistanceKm: true,
+        originalPaceSecPerKm: true,
+        originalZone: true,
+        originalIntervalDesc: true,
+        originalNotes: true,
+        reason: true,
+      },
+    });
+    if (!adj) return keep("이미 만료된 제안입니다.");
+    // 이미 최종 상태면 no-op. Snooze 는 pending 처럼 재결정 허용.
+    if (
+      adj.decision === "accepted" ||
+      adj.decision === "rejected" ||
+      adj.decision === "expired"
+    ) {
+      return keep(`이미 처리됨: ${adj.decision}`);
+    }
+    // Codex bot PR #250 재리뷰 P2: TTL 체크. cron 이 아직 expired 마킹 못 한 경우에도
+    // callback 에서 accept/snooze 거부. best-effort 로 decision=expired 마킹.
+    if (isTtlExpired(adj.proposedAt)) {
+      try {
+        await prisma.workoutAdjustment.updateMany({
+          where: {
+            id: adj.id,
+            decision: { in: ["pending", "snoozed"] },
+          },
+          data: {
+            decision: "expired",
+            decidedAt: new Date(),
+            snoozeUntil: null,
+          },
+        });
+      } catch (expireErr) {
+        console.warn(
+          `[auto-adjust-callback] TTL expire mark 실패 (무시): ${sanitizeError(expireErr)}`,
+        );
+      }
+      return keep("⏰ 제안 유효 시간이 지났습니다. 계획을 반영하지 않았습니다.");
+    }
+    let notice: string;
+    if (parsed.action === "accept") notice = await handleAccept(adj);
+    else if (parsed.action === "reject") notice = await handleReject(adj);
+    else notice = await handleSnooze(adj);
+    return { notice, removeKeyboard: parsed.action !== "snooze" };
+  } catch (error) {
+    console.error(
+      `[auto-adjust-callback] 처리 실패 adj=${parsed.adjustmentId}: ${sanitizeError(error)}`,
+    );
+    return keep("처리 중 오류가 발생했습니다. 잠시 후 다시 시도하세요.");
+  }
+}
+
 /**
  * grammy bot 에 callback handler 등록. `bot.callbackQuery(/^auto_adjust:/, ...)` 로 매칭.
- * decision 이 이미 결정된 상태면 no-op (idempotent — 중복 클릭 안전).
+ * decision 이 이미 결정된 상태면 no-op (idempotent — 중복 클릭 안전). 판단은 `decideAutoAdjust`.
  */
 export function registerAutoAdjustCallback(bot: Bot): void {
   bot.callbackQuery(new RegExp(`^${CALLBACK_PREFIX}:`), async (ctx) => {
-    const data = ctx.callbackQuery.data ?? "";
-    const parsed = parseCallbackData(data);
-    if (!parsed) {
-      await ctx.answerCallbackQuery({ text: "알 수 없는 요청입니다." });
-      return;
-    }
+    const { notice, removeKeyboard } = await decideAutoAdjust(ctx.callbackQuery.data ?? "");
+    await ctx.answerCallbackQuery({ text: notice });
+    if (!removeKeyboard) return;
     try {
-      const adj = await prisma.workoutAdjustment.findUnique({
-        where: { id: parsed.adjustmentId },
-        select: {
-          id: true,
-          workoutId: true,
-          decision: true,
-          proposedAt: true,
-          proposedType: true,
-          proposedDistanceKm: true,
-          proposedPaceSecPerKm: true,
-          proposedZone: true,
-          proposedIntervalDesc: true,
-          originalType: true,
-          originalDistanceKm: true,
-          originalPaceSecPerKm: true,
-          originalZone: true,
-          originalIntervalDesc: true,
-          originalNotes: true,
-          reason: true,
-        },
-      });
-      if (!adj) {
-        await ctx.answerCallbackQuery({ text: "이미 만료된 제안입니다." });
-        return;
-      }
-      // 이미 최종 상태면 no-op. Snooze 는 pending 처럼 재결정 허용.
-      if (
-        adj.decision === "accepted" ||
-        adj.decision === "rejected" ||
-        adj.decision === "expired"
-      ) {
-        await ctx.answerCallbackQuery({
-          text: `이미 처리됨: ${adj.decision}`,
-        });
-        return;
-      }
-      // Codex bot PR #250 재리뷰 P2: TTL 체크. cron 이 아직 expired 마킹 못 한 경우에도
-      // callback 에서 accept/snooze 거부. best-effort 로 decision=expired 마킹.
-      if (isTtlExpired(adj.proposedAt)) {
-        try {
-          await prisma.workoutAdjustment.updateMany({
-            where: {
-              id: adj.id,
-              decision: { in: ["pending", "snoozed"] },
-            },
-            data: {
-              decision: "expired",
-              decidedAt: new Date(),
-              snoozeUntil: null,
-            },
-          });
-        } catch (expireErr) {
-          console.warn(
-            `[auto-adjust-callback] TTL expire mark 실패 (무시): ${sanitizeError(expireErr)}`,
-          );
-        }
-        await ctx.answerCallbackQuery({
-          text: "⏰ 제안 유효 시간이 지났습니다. 계획을 반영하지 않았습니다.",
-        });
-        return;
-      }
-      let notice: string;
-      if (parsed.action === "accept") notice = await handleAccept(adj);
-      else if (parsed.action === "reject") notice = await handleReject(adj);
-      else notice = await handleSnooze(adj);
-
-      await ctx.answerCallbackQuery({ text: notice });
-      try {
-        // Accept/Reject 시 keyboard 제거 (중복 클릭 방지). Snooze 는 유지 (재알림 후 재결정).
-        if (parsed.action !== "snooze") {
-          await ctx.editMessageReplyMarkup({ reply_markup: undefined });
-        }
-      } catch (editErr) {
-        // 오래된 메시지는 편집 실패 — 무시.
-        console.warn(
-          `[auto-adjust-callback] keyboard 편집 실패 (무시): ${sanitizeError(editErr)}`,
-        );
-      }
-    } catch (error) {
-      console.error(
-        `[auto-adjust-callback] 처리 실패 adj=${parsed.adjustmentId}: ${sanitizeError(error)}`,
+      // Accept/Reject 시 keyboard 제거 (중복 클릭 방지). Snooze 는 유지 (재알림 후 재결정).
+      await ctx.editMessageReplyMarkup({ reply_markup: undefined });
+    } catch (editErr) {
+      // 오래된 메시지는 편집 실패 — 무시.
+      console.warn(
+        `[auto-adjust-callback] keyboard 편집 실패 (무시): ${sanitizeError(editErr)}`,
       );
-      await ctx.answerCallbackQuery({
-        text: "처리 중 오류가 발생했습니다. 잠시 후 다시 시도하세요.",
-      });
     }
   });
 }

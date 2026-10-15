@@ -208,6 +208,17 @@ describe('createDiscordGateway — 버튼 처리', () => {
     });
   });
 
+  it('removeButtons 는 본문 없이 components 만 비운다', async () => {
+    const { bodies } = await click({}, async (ctx) => {
+      await ctx.removeButtons();
+    });
+    expect(bodies()[1]).toEqual({
+      url: 'https://discord.com/api/v10/webhooks/app1/itok/messages/@original',
+      method: 'PATCH',
+      body: { components: [] },
+    });
+  });
+
   it('허용되지 않은 사용자 → 본인에게만 거부 안내 · 핸들러 미호출', async () => {
     const onButton = vi.fn(async () => {});
     const { bodies } = await click({ member: { user: { id: '999' } } }, onButton);

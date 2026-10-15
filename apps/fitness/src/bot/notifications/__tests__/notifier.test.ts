@@ -63,6 +63,7 @@ function errorLogs(): string[] {
 beforeEach(() => {
   // 셸 env 가 baseline 으로 새지 않게 — 기본은 텔레그램 (pleiades#143)
   vi.stubEnv("NOTIFY_ALLOWED_CHANNEL", "");
+  vi.stubEnv("NOTIFY_INTERACTIVE_CHANNEL", "");
   vi.spyOn(console, "log").mockImplementation(() => undefined);
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -389,6 +390,43 @@ describe("호출부 6건 — label 'bot' · first.ref 저장 (신규 · #48 I2)"
       data: { telegramMessageId: "42", telegramChatId: "1" },
     });
     vi.unstubAllGlobals();
+  });
+
+  // M-6b-3 (pleiades#151) — 키보드 메시지 Discord 전환
+  it("NOTIFY_INTERACTIVE_CHANNEL=discord 면 제안이 Discord 봇으로 · 버튼 변환 · Discord id 를 telegramMessageId 에(D-a)", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ id: "d777" }), text: async () => "" }));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("NOTIFY_INTERACTIVE_CHANNEL", "discord");
+    vi.stubEnv("DISCORD_BOT_TOKEN_FITNESS", "fake-token");
+    vi.stubEnv("DISCORD_CHANNEL_ID_FITNESS", "123456789012345678");
+    arrangeProposal();
+    const { bot, sendMessage } = fakeBot(async () => ({ message_id: 42 }));
+    await runAutoAdjustProposal(bot);
+    expect(sendMessage).not.toHaveBeenCalled();
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string; headers: Record<string, string> }];
+    expect(url).toBe("https://discord.com/api/v10/channels/123456789012345678/messages");
+    expect(init.headers.authorization).toBe("Bot fake-token");
+    const body = JSON.parse(init.body) as { components: Array<{ components: Array<{ custom_id: string }> }> };
+    expect(body.components[0].components.map((b) => b.custom_id)).toEqual([
+      "auto_adjust:accept:adj1",
+      "auto_adjust:reject:adj1",
+      "auto_adjust:snooze:adj1",
+    ]);
+    expect(db.workoutAdjustment.update).toHaveBeenCalledWith({
+      where: { id: "adj1" },
+      data: { telegramMessageId: "d777", telegramChatId: "fitness" },
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("Discord 스위치를 켜도 봇 설정이 없으면 수신자 0 — 텔레그램으로 우회하지 않는다", async () => {
+    vi.stubEnv("NOTIFY_INTERACTIVE_CHANNEL", "discord");
+    vi.stubEnv("DISCORD_BOT_TOKEN_FITNESS", "");
+    vi.stubEnv("DISCORD_CHANNEL_ID_FITNESS", "");
+    arrangeProposal();
+    const { bot, sendMessage } = fakeBot(async () => ({ message_id: 42 }));
+    await runAutoAdjustProposal(bot);
+    expect(sendMessage).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ reply_markup: expect.anything() }));
   });
 
   it("auto-adjust-cron 스누즈 재전송 실패가 [bot] 으로 로그한다", async () => {

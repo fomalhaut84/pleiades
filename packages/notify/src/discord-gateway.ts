@@ -54,6 +54,8 @@ export interface DiscordButtonContext {
   edit(html: string, opts?: { keepButtons?: boolean }): Promise<void>;
   /** 누른 사람에게만 보이는 짧은 안내(텔레그램 answerCallbackQuery 토스트·알림 대응). */
   reply(text: string): Promise<void>;
+  /** 본문은 그대로 두고 버튼만 지운다(텔레그램 editMessageReplyMarkup 대응 · M-6b-3). */
+  removeButtons(): Promise<void>;
 }
 
 export interface DiscordGatewayOptions {
@@ -246,6 +248,7 @@ export function createDiscordGateway(opts: DiscordGatewayOptions): DiscordGatewa
             '원본 수정',
           ),
         ),
+      removeButtons: () => call(`${hook}/messages/@original`, 'PATCH', { components: [] }, '버튼 제거'),
       reply: (text) =>
         callText(text, 'plain', (content) =>
           call(hook, 'POST', { content, flags: EPHEMERAL, allowed_mentions: { parse: [] } }, '후속'),
