@@ -21,6 +21,15 @@ tools/local/run.sh fin -- npm run build && tools/local/run.sh fit -- npm run bui
 
 검증 봇(L-4): 사용자가 BotFather 로 **앱마다 다른** 검증 봇을 만들고 토큰·검증 채팅 id 를 `apps/<app>/.env` 에 **직접** 넣는다(채팅·저장소에 토큰을 남기지 않는다). 기동 때 봇 id(토큰 `:` 앞 숫자 · 공개값)와 채팅 id 를 허용 목록으로 넘긴다 — 없으면 `check_env` 가 막는다.
 
+## 플랫폼 설정 — 루트 `.env` (M-6a-2 · #143)
+
+pleiades 가 소유한 설정(알림 채널 스위치 `NOTIFY_*` · Discord 웹훅 `DISCORD_WEBHOOK_*`)은 **pleiades 루트 `.env`** 에 둔다 — 앱이 늘어도 한 곳에서 관리한다. 템플릿은 `.env.example`(`cp .env.example .env` 후 값 직접 기입 · gitignore).
+
+- `run.sh` 가 그 파일의 **플랫폼 키만** 앱 프로세스에 넘긴다(`platform_env.py`). 그 밖의 키(봇 토큰 · DB URL 등)는 넘기지 않는다 — 앱 고유 설정은 계속 `apps/<app>/.env`.
+- 셸 `export` 가 이기고, 넘긴 값은 앱 `.env` 의 같은 키보다 우선한다(dotenv·Next 는 이미 있는 env 를 덮지 않는다).
+- 비워 두면 알림은 텔레그램(지금과 같다). `NOTIFY_ALLOWED_CHANNEL=discord` 면 fin → `#finance` · fit → `#fitness` · fin `NOTIFY_ADMIN_CHANNEL=discord` 면 관리자 알림 → `#admin`. 키보드 메시지·`/브리핑` 응답·분기 PDF 는 항상 텔레그램.
+- 되돌리기: 루트 `.env` 의 키를 지우거나 비운다(**즉시**).
+
 ## 기동 (M-4)
 
 **네 명령은 모두 끝나지 않는 프로세스다** — 터미널 4개에서 각각 돌리고 **터미널마다 `export` 를 다시 한다**(또는 같은 셸에서 `&` 로 백그라운드 · 로그는 파일로). 위에서부터 그대로 붙이면 첫 줄에서 멈춘다(PR #123 Codex P2).
