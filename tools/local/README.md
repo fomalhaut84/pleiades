@@ -29,7 +29,8 @@ pleiades 가 소유한 설정(알림 채널 스위치 `NOTIFY_*` · Discord 웹�
 - `run.sh` 밖(`npm run dev` · pm2)으로 띄우면 `check_env` 가 돌지 않는다 — 앱 `.env` 에 플랫폼 키를 두지 않았는지 스스로 확인한다.
 - **플랫폼 키만 읽는다** — 루트 `.env` 에 다른 키(봇 토큰 · DB URL)가 있어도 앱으로 가지 않는다. 앱 고유 설정은 계속 `apps/<app>/.env`.
 - 우선순위: 프로세스 env(셸 `export` · pm2 `env`) → 루트 `.env`. **플랫폼 키를 앱 `.env` 에 두면 루트 값을 가리므로 `check_env` 가 막는다.**
-- 비워 두면 알림은 텔레그램(지금과 같다). `NOTIFY_ALLOWED_CHANNEL=discord` 면 fin → `#finance` · fit → `#fitness` · fin `NOTIFY_ADMIN_CHANNEL=discord` 면 관리자 알림 → `#admin`. 키보드 메시지·`/브리핑` 응답·분기 PDF 는 항상 텔레그램.
+- 비워 두면 알림은 텔레그램(지금과 같다). `NOTIFY_ALLOWED_CHANNEL=discord` 면 fin → `#finance` · fit → `#fitness`(분기 PDF 포함) · fin `NOTIFY_ADMIN_CHANNEL=discord` 면 관리자 알림 → `#admin`. `/브리핑` 응답은 항상 텔레그램.
+- **버튼(M-6b)**: `NOTIFY_INTERACTIVE_CHANNEL=discord` 면 키보드 메시지를 앱별 Discord 봇(`DISCORD_BOT_TOKEN_<APP>` · `DISCORD_CHANNEL_ID_<APP>`)이 보낸다. 클릭은 그 앱 봇 프로세스의 gateway 가 받고 **`DISCORD_ALLOWED_USER_IDS` 의 사용자가 그 채널에서 누른 것만** 처리한다(비면 전부 거부). 봇 토큰·채널이 있으면 gateway 는 스위치와 무관하게 접속한다. 현재 fit 자동조정만 연결 — fin RSU 는 M-6b-4 전까지 텔레그램. 키 전체는 `.env.example`.
 - 값을 해석할 수 없으면(따옴표 짝 · 닫는 따옴표 뒤 글자) 앱 로그에 `[notify] 루트 .env 값을 해석할 수 없어 무시한다 — <키>` 가 한 번 찍히고 그 키는 없는 것으로 친다. 웹훅 URL 형식이 틀려도 그 채널 수신자는 0 이다 — Discord 에 안 오면 이 둘부터 본다.
 - 앱 테스트(vitest)는 `PLEIADES_ENV_FILE` 을 없는 경로로 고정한다 — 개발 PC 의 루트 `.env` 가 테스트로 새지 않는다.
 - 되돌리기: 루트 `.env` 의 키를 지우거나 비운다(**즉시** — 파일 수정 시각이 바뀌면 실행 중인 웹·봇도 다음 알림부터 다시 읽는다 · 재시작 불필요).

@@ -6,10 +6,12 @@
 // pleiades M-6a-2 (pleiades#143 · 003 §6 1b-1): `NOTIFY_ALLOWED_CHANNEL=discord` 이면 ALLOWED 텍스트 알림을
 // Discord `#fitness` 웹훅(`DISCORD_WEBHOOK_FITNESS`)으로 보낸다. 미설정이면 지금과 같다(텔레그램).
 // 값은 pleiades 루트 `.env`(`platformEnv` · 프로세스 env 우선)에서 읽는다 — 앱 실행 방식과 무관.
-// 키보드(인터랙션) 메시지는 Discord 가 받지 못하므로 `interactiveNotifierFor` 로 항상 텔레그램 — 혼합 운영(Q11).
+// 키보드(인터랙션) 메시지는 `interactiveNotifierFor` — 별도 스위치 `NOTIFY_INTERACTIVE_CHANNEL=discord` 면 Discord 봇(M-6b-3 #151),
+// 아니면 텔레그램(혼합 운영 Q11). 버튼 클릭은 봇 프로세스의 gateway(`discord-interactions.ts`)가 받는다.
 
 import type { Bot } from "grammy";
 import {
+  createDiscordBotTransport,
   createDiscordTransport,
   createNotifier,
   createTelegramTransport,
@@ -65,12 +67,38 @@ export function notifierFor(bot: Bot): Notifier {
 }
 
 /**
- * 키보드가 붙은 메시지 전용 — 항상 텔레그램(`NOTIFY_ALLOWED_CHANNEL` 무시). 결과의 `first.ref` 는 텔레그램 message_id 라
- * `WorkoutAdjustment.telegramMessageId` 에 그대로 저장된다(003 §6-2 · DB 무변경).
+ * 키보드가 붙은 메시지 전용 — 텍스트 스위치(`NOTIFY_ALLOWED_CHANNEL`)는 보지 않고 `NOTIFY_INTERACTIVE_CHANNEL` 만 본다.
+ *   미설정 → 텔레그램: `first.ref` = 텔레그램 message_id · `first.target` = chat id
+ *   discord → fit 봇: `first.ref` = Discord 메시지 id · `first.target` = 별칭 `fitness` · 봇 설정이 없으면 수신자 0
+ * 어느 쪽이든 `WorkoutAdjustment.telegramMessageId`·`telegramChatId` 에 그대로 저장된다(003 §6-2 D-a · 읽기 경로 0 · Q61).
  */
 export function interactiveNotifierFor(bot: Bot): Notifier {
+  if (!interactiveUsesDiscord()) {
+    return createNotifier({
+      transport: createTelegramTransport({ api: bot.api }),
+      targets: { ALLOWED: TELEGRAM_ALLOWED },
+    });
+  }
+  // Discord 봇 — first.ref(Discord 메시지 id)·target(별칭)이 telegramMessageId·ChatId 에 들어간다(003 §6-2 D-a · 읽기 경로 0)
+  const discord = discordBotConfig();
   return createNotifier({
-    transport: createTelegramTransport({ api: bot.api }),
-    targets: { ALLOWED: TELEGRAM_ALLOWED },
+    transport: createDiscordBotTransport({ token: discord.token, channels: { [DISCORD_ALIAS]: discord.channelId } }),
+    targets: { ALLOWED: () => (discord.ready ? [DISCORD_ALIAS] : []) },
   });
+}
+
+/** 키보드 메시지를 Discord 봇으로 보내는가 — 텍스트 스위치(`NOTIFY_ALLOWED_CHANNEL`)와 따로 켜고 끈다(#147 결정). */
+export function interactiveUsesDiscord(): boolean {
+  return (platformEnv("NOTIFY_INTERACTIVE_CHANNEL") ?? "").trim().toLowerCase() === "discord";
+}
+
+/** fit Discord 봇 설정 — 토큰·채널 ID·허용 사용자. `ready` 는 토큰과 채널 ID 형식이 갖춰졌는지. 값은 로그에 쓰지 않는다. */
+export function discordBotConfig(): { token: string; channelId: string; allowedUserIds: string[]; ready: boolean } {
+  const token = (platformEnv("DISCORD_BOT_TOKEN_FITNESS") ?? "").trim();
+  const channelId = (platformEnv("DISCORD_CHANNEL_ID_FITNESS") ?? "").trim();
+  const allowedUserIds = (platformEnv("DISCORD_ALLOWED_USER_IDS") ?? "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter((v) => /^\d{5,25}$/.test(v));
+  return { token, channelId, allowedUserIds, ready: token !== "" && /^\d{5,25}$/.test(channelId) };
 }

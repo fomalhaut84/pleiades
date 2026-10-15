@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { getBot } from "./index";
 import { startBotScheduler } from "./notifications/scheduler";
+import { startDiscordInteractions } from "./notifications/discord-interactions";
 import { sanitizeError } from "./utils/error";
 import { sweepOrphanedJobs, startOrphanSweeper } from "@/lib/report-job";
 import {
@@ -46,6 +47,9 @@ async function main() {
   // 알림 스케줄러 시작
   startBotScheduler(bot);
 
+  // pleiades M-6b-3 (pleiades#151): Discord 버튼 수신(gateway) — 봇 토큰·채널이 있을 때만
+  const discordGateway = startDiscordInteractions();
+
   // Long polling 시작. start()가 반환하는 Promise는 long-poll loop 전체 lifecycle을 감싸고
   // fetchUpdates에서 401/409 등이 발생하면 reject됨. catch 없으면 unhandledRejection → PM2 crash.
   // 명시적 catch로 잡아 로깅 후 깔끔히 종료 → PM2 autorestart가 새 프로세스 시작.
@@ -62,6 +66,7 @@ async function main() {
   // 재시작 시 중복 update 전달이 방지됨.
   const shutdown = async () => {
     console.log("[bot] 종료 중...");
+    discordGateway?.stop();
     try {
       await bot.stop();
     } catch (err) {
