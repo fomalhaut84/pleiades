@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "@pleiades/notify": "file:../../packages/notify",
     "@prisma/client": "^6.19.2",
     "@react-pdf/renderer": "^4.3.2",
     "dompurify": "^3.4.11",
