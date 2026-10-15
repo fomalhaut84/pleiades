@@ -27,6 +27,8 @@ pleiades 가 소유한 설정(알림 채널 스위치 `NOTIFY_*` · Discord 웹�
 
 - `run.sh` 가 그 파일의 **플랫폼 키만** 앱 프로세스에 넘긴다(`platform_env.py`). 그 밖의 키(봇 토큰 · DB URL 등)는 넘기지 않는다 — 앱 고유 설정은 계속 `apps/<app>/.env`.
 - 셸 `export` 가 이기고, 넘긴 값은 앱 `.env` 의 같은 키보다 우선한다(dotenv·Next 는 이미 있는 env 를 덮지 않는다).
+- 그래서 **앱 `.env` 의 `NOTIFY_*`·`DISCORD_WEBHOOK_*` 는 루트에 같은 키가 있으면(빈 값이어도) 무시된다** — 플랫폼 키는 루트에만 둔다.
+- 루트 `.env` 를 해석할 수 없으면(따옴표 짝이 안 맞음 · UTF-8 아님) `run.sh` 가 **기동하지 않는다**.
 - 비워 두면 알림은 텔레그램(지금과 같다). `NOTIFY_ALLOWED_CHANNEL=discord` 면 fin → `#finance` · fit → `#fitness` · fin `NOTIFY_ADMIN_CHANNEL=discord` 면 관리자 알림 → `#admin`. 키보드 메시지·`/브리핑` 응답·분기 PDF 는 항상 텔레그램.
 - 되돌리기: 루트 `.env` 의 키를 지우거나 비운다(**즉시**).
 

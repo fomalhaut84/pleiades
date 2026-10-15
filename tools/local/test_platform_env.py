@@ -50,6 +50,33 @@ class PlatformEnv(unittest.TestCase):
         self.assertEqual(passed, {})
         self.assertEqual(len(ignored), 4)
 
+    # 회귀: #143 사전 리뷰 major — 값 뒤 인라인 주석이 값에 섞이면 Discord 전환이 조용히 무시된다
+    def test_inline_comment_is_not_part_of_value(self):
+        (self.root / ".env").write_text(
+            'NOTIFY_ALLOWED_CHANNEL="discord"   # 주석\n'
+            "NOTIFY_ADMIN_CHANNEL=discord # 주석\n"
+            "DISCORD_WEBHOOK_FINANCE='https://discord.com/api/webhooks/1/t#frag'\n"
+            "DISCORD_WEBHOOK_FITNESS=https://discord.com/api/webhooks/2/t#x\n"
+        )
+        passed, _ = p.platform_env(self.root, {})
+        self.assertEqual(passed["NOTIFY_ALLOWED_CHANNEL"], "discord")
+        self.assertEqual(passed["NOTIFY_ADMIN_CHANNEL"], "discord")
+        self.assertEqual(passed["DISCORD_WEBHOOK_FINANCE"], "https://discord.com/api/webhooks/1/t#frag")
+        self.assertEqual(passed["DISCORD_WEBHOOK_FITNESS"], "https://discord.com/api/webhooks/2/t#x")
+
+    def test_unparsable_platform_value_raises(self):
+        for line in ('NOTIFY_ALLOWED_CHANNEL="discord\n', 'NOTIFY_ALLOWED_CHANNEL="discord" x\n'):
+            with self.subTest(line=line):
+                (self.root / ".env").write_text(line)
+                with self.assertRaises(ValueError):
+                    p.platform_env(self.root, {})
+
+    def test_unparsable_non_platform_value_is_just_ignored(self):
+        (self.root / ".env").write_text('TELEGRAM_BOT_TOKEN="111:x\nNOTIFY_ALLOWED_CHANNEL=discord\n')
+        passed, ignored = p.platform_env(self.root, {})
+        self.assertEqual(passed, {"NOTIFY_ALLOWED_CHANNEL": "discord"})
+        self.assertEqual(ignored, ["TELEGRAM_BOT_TOKEN"])
+
     def test_main_never_prints_values_to_stderr(self):
         (self.root / ".env").write_text("TELEGRAM_BOT_TOKEN=111:topsecret\nNOTIFY_ALLOWED_CHANNEL=discord\n")
         r = subprocess.run([sys.executable, str(HERE / "platform_env.py"), str(self.root)],
@@ -96,6 +123,16 @@ class RunShPlatform(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout.strip(), "discord|https://discord.com/api/webhooks/9/a b|unset")
         self.assertNotIn("leak", r.stderr)
+
+    # 회귀: #143 사전 리뷰 major — platform_env 가 실패하면 기동하지 않는다(프로세스 치환은 종료 코드를 잃는다)
+    def test_broken_root_env_blocks_start(self):
+        for content in (b"NOTIFY_ALLOWED_CHANNEL=\xff\xfe\n", b'NOTIFY_ALLOWED_CHANNEL="discord\n'):
+            with self.subTest(content=content):
+                (self.root / ".env").write_bytes(content)
+                r = self.run_sh("console.log('should-not-run')")
+                self.assertEqual(r.returncode, 1)
+                self.assertNotIn("should-not-run", r.stdout)
+                self.assertIn("run.sh: 중단", r.stderr)
 
     def test_no_root_env_is_fine(self):
         r = self.run_sh("console.log(process.env.NOTIFY_ALLOWED_CHANNEL||'unset')")

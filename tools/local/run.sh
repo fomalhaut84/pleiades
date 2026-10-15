@@ -26,6 +26,10 @@ CHECK=(python3 "$HERE/check_env.py" "$APP" --root "$ROOT")
 [[ -n "${OTHER_TOKEN_ID:-}" ]] && CHECK+=(--other-token-id "$OTHER_TOKEN_ID")
 env -u DATABASE_URL -u TELEGRAM_BOT_TOKEN "${CHECK[@]}" >&2
 # 루트 .env 의 플랫폼 키(NOTIFY_* · DISCORD_WEBHOOK_*)만 넘긴다 — 그 밖의 키는 넘기지 않는다 (#143 · platform_env.py)
+# 프로세스 치환은 종료 코드를 잃는다 — 임시 파일로 받아 실패하면 기동하지 않는다 (#143 사전 리뷰 major)
 PLAT=()
-while IFS= read -r -d '' kv; do PLAT+=("$kv"); done < <(python3 "$HERE/platform_env.py" "$ROOT")
+PLAT_OUT=$(mktemp)
+if ! python3 "$HERE/platform_env.py" "$ROOT" >"$PLAT_OUT"; then rm -f "$PLAT_OUT"; die "루트 .env 플랫폼 키를 읽지 못했다 (platform_env.py)"; fi
+while IFS= read -r -d '' kv; do PLAT+=("$kv"); done <"$PLAT_OUT"
+rm -f "$PLAT_OUT"
 exec env -u DATABASE_URL -u TELEGRAM_BOT_TOKEN ${PLAT[@]+"${PLAT[@]}"} "$@"
