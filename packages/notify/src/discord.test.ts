@@ -142,6 +142,20 @@ describe('createDiscordTransport', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  it('오류 응답(429) 본문 읽기 중 끊겨도 재시도한다 — retry_after 를 잃지 않는다', async () => {
+    const broken: FetchResponseLike = {
+      ok: false,
+      status: 429,
+      json: async () => ({}),
+      text: async () => {
+        throw Object.assign(new TypeError('terminated'), { cause: { code: 'UND_ERR_SOCKET' } });
+      },
+    };
+    const { transport, fetch } = setup([broken, res(429, { retry_after: 0.5 }), res(200, { id: 'ok' })]);
+    await expect(transport.send('finance', html('x'))).resolves.toBe('ok');
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
   it('2xx 본문이 JSON 이 아니면 재시도하지 않고 실패한다', async () => {
     const bad: FetchResponseLike = {
       ok: true,

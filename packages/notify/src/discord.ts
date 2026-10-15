@@ -99,6 +99,7 @@ export function createDiscordTransport(opts: DiscordTransportOptions): Transport
     for (let attempt = 0; ; attempt++) {
       let res: FetchResponseLike;
       let okBody: { id?: unknown } | undefined;
+      let errBody: ErrorBody | undefined;
       try {
         res = await fetchFn(`${url}${url.includes('?') ? '&' : '?'}wait=true`, {
           method: 'POST',
@@ -106,8 +107,9 @@ export function createDiscordTransport(opts: DiscordTransportOptions): Transport
           // 본문의 @everyone · @here · <@id> 가 핑을 만들지 않는다
           body: JSON.stringify({ content: text, allowed_mentions: { parse: [] } }),
         });
-        // 본문 읽기도 같은 재시도 안에 둔다 — 헤더 뒤 소켓이 끊기면(UND_ERR_SOCKET) json() 이 던진다 (PR #142 Codex P2)
+        // 본문 읽기(성공·오류 둘 다)도 같은 재시도 안에 둔다 — 헤더 뒤 소켓이 끊기면(UND_ERR_SOCKET) 던진다 (PR #142 Codex P2)
         if (res.ok) okBody = (await res.json()) as { id?: unknown };
+        else errBody = await readErrorBody(res);
       } catch (err) {
         if (!isRetryableNetworkError(err) || attempt >= maxAttempts - 1) throw err;
         const delay = retryDelaysMs[attempt];
@@ -119,9 +121,9 @@ export function createDiscordTransport(opts: DiscordTransportOptions): Transport
         if (typeof okBody?.id !== 'string') throw new DiscordWebhookError(res.status, '응답에 메시지 id 가 없다');
         return okBody.id;
       }
-      const errBody = await readErrorBody(res);
+      const body = errBody ?? { raw: '', json: undefined };
       if (res.status === 429 && rateLimited < 2) {
-        const waitMs = retryAfterMs(errBody);
+        const waitMs = retryAfterMs(body);
         if (waitMs !== undefined && waitMs <= maxRateLimitWaitMs) {
           rateLimited++;
           attempt--; // 429 는 보내지지 않은 것이라 네트워크 재시도 예산을 쓰지 않는다
@@ -130,7 +132,7 @@ export function createDiscordTransport(opts: DiscordTransportOptions): Transport
           continue;
         }
       }
-      throw new DiscordWebhookError(res.status, errorDetail(errBody));
+      throw new DiscordWebhookError(res.status, errorDetail(body));
     }
   };
 
@@ -163,7 +165,8 @@ async function readErrorBody(res: FetchResponseLike): Promise<ErrorBody> {
   let raw = '';
   try {
     raw = await res.text();
-  } catch {
+  } catch (err) {
+    if (isRetryableNetworkError(err)) throw err; // 끊김은 재시도 루프로 — 429 의 retry_after 를 잃지 않는다
     return { raw: '', json: undefined };
   }
   try {
