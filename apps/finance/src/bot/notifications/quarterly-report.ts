@@ -10,7 +10,7 @@ import { InputFile } from 'grammy'
 import { getBot } from '@/bot/index'
 import { generateReportPDF } from '@/lib/report/pdf-generator'
 import { h } from '@/bot/utils/telegram'
-import { notifierFor, recipients, Route, htmlContent } from './notifier'
+import { notifierFor, Route, htmlContent, telegramRecipients } from './notifier'
 
 const REPORTS_DIR = path.join(process.cwd(), 'reports')
 
@@ -49,8 +49,8 @@ export async function sendQuarterlyReport(): Promise<void> {
     const filePath = path.join(REPORTS_DIR, path.basename(pdfPath))
     const pdfBuffer = await fs.readFile(filePath)
 
-    // 003 §7-4: PDF 첨부는 포트 밖(1b-2) — 목록만 파사드에서 받는다(Q25 ①).
-    for (const chatId of recipients.targets(Route.ALLOWED)) {
+    // 003 §7-4: PDF 첨부는 포트 밖(1b-2) · 텔레그램 API 직접 — Discord 라우팅과 무관하게 텔레그램 수신자 목록.
+    for (const chatId of telegramRecipients(Route.ALLOWED)) {
       try {
         await bot.api.sendDocument(chatId, new InputFile(pdfBuffer, path.basename(pdfPath)), {
           caption: `📊 ${year}년 ${quarter}분기 리포트`,

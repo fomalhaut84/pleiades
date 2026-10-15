@@ -15,7 +15,7 @@ import { prisma } from '@/lib/prisma'
 import { getBot } from '@/bot/index'
 import { formatKRWFull } from '@/bot/utils/formatter'
 import { escapeHtml, h } from '@/bot/utils/telegram'
-import { notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
+import { interactiveNotifierFor, notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
 import { getRsuVestPreview } from '@/lib/rsu-vest-service'
 import { sanitizeError } from '@/bot/utils/error'
 
@@ -176,7 +176,7 @@ export async function sendRSUVestConfirmations(): Promise<void> {
 
     // 003 Q27 흡수(사용자 2026-10-15): 재시도·plain 폴백을 파사드가 소유 — 키보드는 폴백에도 유지된다.
     // 중복 전송 시 버튼을 두 번 눌러도 rsu-vest-service 의 ALREADY_VESTED 가 이중 반영을 막는다.
-    await notifierFor(bot).notify(Route.ALLOWED, htmlContent(msg, keyboard), NOTIFY_CTX)
+    await interactiveNotifierFor(bot).notify(Route.ALLOWED, htmlContent(msg, keyboard), NOTIFY_CTX)
   }
   console.log(`[notification] D-day RSU 확정 알림 발송 완료 (${todayRsus.length}건)`)
 }

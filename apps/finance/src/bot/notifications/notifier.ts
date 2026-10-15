@@ -5,35 +5,85 @@
  * 4096 초과 줄 경계 분할은 패키지 코어가 소유한다. 수신자 env 는 fin 규칙 그대로(`numericOnly` —
  * 비숫자 토큰 탈락 · 숫자 정규화 보존 · `total` = AlertHistory.recipientCount 값이 바뀌지 않는다).
  *   ALLOWED → TELEGRAM_ALLOWED_CHAT_IDS · ADMIN → TELEGRAM_ADMIN_CHAT_IDS (003 Q25 ADMIN A)
+ *
+ * pleiades M-6a-2 (pleiades#143 · 003 §6 1b-1): 라우트별로 Discord 를 고를 수 있다 — 미설정이면 지금과 같다(텔레그램).
+ *   NOTIFY_ALLOWED_CHANNEL=discord → `#finance` (DISCORD_WEBHOOK_FINANCE)
+ *   NOTIFY_ADMIN_CHANNEL=discord   → `#admin`   (DISCORD_WEBHOOK_ADMIN)
+ * 키보드 메시지(`interactiveNotifierFor`) · `/브리핑` 응답(`notifierForChat`) · 분기 PDF 목록(`telegramRecipients`)은
+ * 항상 텔레그램 — Discord 는 인터랙션·첨부를 받지 못한다(1b-2 · 혼합 운영 Q11).
  */
 
 import type { Bot } from 'grammy'
 import {
+  createDiscordTransport,
   createNotifier,
   createTelegramTransport,
   csvEnv,
   type Notifier,
   type NotifyContext,
+  type Transport,
 } from '@pleiades/notify'
 
 export { Route, html as htmlContent } from '@pleiades/notify'
 import type { BroadcastResult } from '@pleiades/notify'
 export type { BroadcastResult }
 
-const TARGETS = {
+type FinRoute = 'ALLOWED' | 'ADMIN'
+
+const TELEGRAM_TARGETS = {
   ALLOWED: csvEnv('TELEGRAM_ALLOWED_CHAT_IDS', { numericOnly: true }),
   ADMIN: csvEnv('TELEGRAM_ADMIN_CHAT_IDS', { numericOnly: true }),
 } as const
 
+const DISCORD_ALIAS: Readonly<Record<FinRoute, string>> = { ALLOWED: 'finance', ADMIN: 'admin' }
+
+/** 그 라우트를 Discord 로 보내는가 — env 를 호출 시점마다 읽는다. */
+export function usesDiscord(route: FinRoute): boolean {
+  return (process.env[`NOTIFY_${route}_CHANNEL`] ?? '').trim().toLowerCase() === 'discord'
+}
+
+const discordWebhooks = (): Record<string, string> => ({
+  finance: (process.env.DISCORD_WEBHOOK_FINANCE ?? '').trim(),
+  admin: (process.env.DISCORD_WEBHOOK_ADMIN ?? '').trim(),
+})
+
+/** Discord 를 골랐는데 웹훅이 비면 수신자 0 — 텔레그램 env 미설정과 같은 의미(가드가 건너뛴다). */
+const routedTargets = (route: FinRoute) => (): string[] => {
+  if (!usesDiscord(route)) return TELEGRAM_TARGETS[route]()
+  const alias = DISCORD_ALIAS[route]
+  return discordWebhooks()[alias] === '' ? [] : [alias]
+}
+
+const TARGETS = { ALLOWED: routedTargets('ALLOWED'), ADMIN: routedTargets('ADMIN') } as const
+
 /** 호출부 공통 로그 컨텍스트 — 기존 `[notification] …` prefix 보존(003 Q26 ①). */
 export const NOTIFY_CTX: NotifyContext = Object.freeze({ label: 'notification' })
 
-/** 봇 인스턴스로 파사드를 만든다. */
+/** 봇 인스턴스로 파사드를 만든다 — 라우트마다 텔레그램 또는 Discord. */
 export function notifierFor(bot: Bot): Notifier {
+  const transportFor = (route: FinRoute) => (): Transport =>
+    usesDiscord(route)
+      ? createDiscordTransport({ webhooks: discordWebhooks })
+      : createTelegramTransport({ api: bot.api })
   return createNotifier({
-    transport: createTelegramTransport({ api: bot.api }),
+    transport: { ALLOWED: transportFor('ALLOWED'), ADMIN: transportFor('ADMIN') },
     targets: TARGETS,
   })
+}
+
+/**
+ * 키보드가 붙은 메시지 전용 — 항상 텔레그램(`NOTIFY_ALLOWED_CHANNEL` 무시 · rsu D-day 확정 버튼).
+ */
+export function interactiveNotifierFor(bot: Bot): Notifier {
+  return createNotifier({
+    transport: createTelegramTransport({ api: bot.api }),
+    targets: { ALLOWED: TELEGRAM_TARGETS.ALLOWED },
+  })
+}
+
+/** 텔레그램 수신자 목록 — 포트 밖 `sendDocument`(분기 PDF · 003 §7-4)처럼 텔레그램 API 를 직접 부르는 곳. */
+export function telegramRecipients(route: FinRoute): string[] {
+  return TELEGRAM_TARGETS[route]()
 }
 
 /**
