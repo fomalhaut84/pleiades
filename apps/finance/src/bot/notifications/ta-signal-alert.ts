@@ -9,7 +9,8 @@ import { prisma } from '@/lib/prisma'
 import { generateTAReport } from '@/lib/ta/engine'
 import { askAdvisor } from '@/lib/ai/claude-advisor'
 import { getBot } from '@/bot/index'
-import { sendHtml, escapeHtml } from '@/bot/utils/telegram'
+import { escapeHtml } from '@/bot/utils/telegram'
+import { notifierFor, recipients, Route, htmlContent, lastErrorOf } from './notifier'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 import { isMarketOpenFor } from '@/lib/market-hours'
 import {
@@ -157,21 +158,21 @@ let isChecking = false
 /**
  * 전략 기반 TA 시그널 체크 + 알림 발송
  */
-export async function checkTASignals(chatIds: number[]): Promise<void> {
+export async function checkTASignals(): Promise<void> {
   if (isChecking) {
     console.log('[ta-signal] 이미 체크 진행 중, 스킵')
     return
   }
   isChecking = true
   try {
-    await doCheckTASignals(chatIds)
+    await doCheckTASignals()
   } finally {
     isChecking = false
   }
 }
 
-async function doCheckTASignals(chatIds: number[]): Promise<void> {
-  if (chatIds.length === 0) return
+async function doCheckTASignals(): Promise<void> {
+  if (recipients.targetCount(Route.ALLOWED) === 0) return
 
   resetIfNewDay()
   const today = getTodayKST()
@@ -328,17 +329,9 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
   const bot = getBot()
   const message = lines.join('\n')
 
-  let sendSuccess = 0
-  let lastError: string | undefined
-  for (const chatId of chatIds) {
-    try {
-      await sendHtml(bot, chatId, message)
-      sendSuccess++
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error)
-      console.error(`[ta-signal] 알림 발송 실패 (chatId: ${chatId}):`, error)
-    }
-  }
+  const delivery = await notifierFor(bot).notify(Route.ALLOWED, htmlContent(message), { label: 'ta-signal' })
+  const sendSuccess = delivery.sent
+  const lastError = lastErrorOf(delivery)
 
   // 발송 성공 시에만 dedupe + AI 쿨다운 기록 (실패 시 다음 주기 재시도).
   // AI 가이드가 붙었던 티커만 쿨다운 기록 → skip 된 티커는 다음 주기 재시도.
@@ -373,8 +366,8 @@ async function doCheckTASignals(chatIds: number[]): Promise<void> {
       }),
     }
   })
-  const status = computeDeliveryStatus(sendSuccess, chatIds.length)
-  await recordAlertHistory(historyEvents, status, chatIds.length, status === 'sent' ? undefined : lastError)
+  const status = computeDeliveryStatus(sendSuccess, delivery.total)
+  await recordAlertHistory(historyEvents, status, delivery.total, status === 'sent' ? undefined : lastError)
 
-  console.log(`[ta-signal] TA 시그널 알림: ${results.length}종목 → ${sendSuccess}/${chatIds.length} chats`)
+  console.log(`[ta-signal] TA 시그널 알림: ${results.length}종목 → ${sendSuccess}/${delivery.total} chats`)
 }

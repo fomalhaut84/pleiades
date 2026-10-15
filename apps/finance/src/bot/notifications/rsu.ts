@@ -14,7 +14,8 @@ import { InlineKeyboard } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { getBot } from '@/bot/index'
 import { formatKRWFull } from '@/bot/utils/formatter'
-import { sendHtml, escapeHtml, h } from '@/bot/utils/telegram'
+import { escapeHtml, h } from '@/bot/utils/telegram'
+import { notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
 import { getRsuVestPreview } from '@/lib/rsu-vest-service'
 import { sanitizeError } from '@/bot/utils/error'
 
@@ -38,7 +39,7 @@ function diffDays(target: Date): number {
  * 09:00 KST cron — D-7 / D-1 정보성 알림.
  * D-day 처리 키보드는 마감 후 sendRSUVestConfirmations 가 발송.
  */
-export async function sendRSUReminders(chatIds: number[]): Promise<void> {
+export async function sendRSUReminders(): Promise<void> {
   const bot = getBot()
   const lines: string[] = []
 
@@ -108,13 +109,7 @@ export async function sendRSUReminders(chatIds: number[]): Promise<void> {
   }
 
   const fullMessage = `🔔 ${h.b('RSU/스톡옵션 리마인더')}\n\n${lines.join('\n\n')}`
-  for (const chatId of chatIds) {
-    try {
-      await sendHtml(bot, chatId, fullMessage)
-    } catch (error) {
-      console.error(`[notification] RSU 리마인더 발송 실패 (chatId: ${chatId}): ${sanitizeError(error)}`)
-    }
-  }
+  await notifierFor(bot).notify(Route.ALLOWED, htmlContent(fullMessage), NOTIFY_CTX)
   console.log('[notification] RSU/스톡옵션 리마인더 발송 완료')
 }
 
@@ -124,7 +119,7 @@ export async function sendRSUReminders(chatIds: number[]): Promise<void> {
  *
  * 사용자는 [✅ 확정] 한 번 탭으로 처리 — 종가는 자동 조회.
  */
-export async function sendRSUVestConfirmations(chatIds: number[]): Promise<void> {
+export async function sendRSUVestConfirmations(): Promise<void> {
   const bot = getBot()
 
   // D-day (KST 기준 오늘)
@@ -179,16 +174,9 @@ export async function sendRSUVestConfirmations(chatIds: number[]): Promise<void>
       .text('✅ 확정', `vest:confirm:${rsu.id}`)
       .text('✖️ 취소', `vest:cancel:${rsu.id}`)
 
-    for (const chatId of chatIds) {
-      try {
-        await bot.api.sendMessage(chatId, msg, {
-          parse_mode: 'HTML',
-          reply_markup: keyboard,
-        })
-      } catch (error) {
-        console.error(`[notification] D-day RSU 알림 발송 실패 (chatId: ${chatId}): ${sanitizeError(error)}`)
-      }
-    }
+    // 003 Q27 흡수(사용자 2026-10-15): 재시도·plain 폴백을 파사드가 소유 — 키보드는 폴백에도 유지된다.
+    // 중복 전송 시 버튼을 두 번 눌러도 rsu-vest-service 의 ALREADY_VESTED 가 이중 반영을 막는다.
+    await notifierFor(bot).notify(Route.ALLOWED, htmlContent(msg, keyboard), NOTIFY_CTX)
   }
   console.log(`[notification] D-day RSU 확정 알림 발송 완료 (${todayRsus.length}건)`)
 }

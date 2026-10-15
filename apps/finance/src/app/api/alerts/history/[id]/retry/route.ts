@@ -19,21 +19,13 @@ import {
   persistRetryHistory,
   RETRY_COOLDOWN_MS,
 } from '@/bot/notifications/alert-dispatcher'
+import { recipients, Route } from '@/bot/notifications/notifier'
 
 interface RouteParams {
   params: Promise<{ id: string }>
 }
 
 export const dynamic = 'force-dynamic'
-
-function getAllowedChatIds(): number[] {
-  return (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map(Number)
-    .filter((n) => !Number.isNaN(n))
-}
 
 export async function POST(_req: NextRequest, { params }: RouteParams) {
   try {
@@ -60,8 +52,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
       return fail(`재발송은 5분에 한 번만 가능합니다. ${remainSec}초 후에 다시 시도하세요.`, 429)
     }
 
-    const chatIds = getAllowedChatIds()
-    if (chatIds.length === 0) {
+    if (recipients.targetCount(Route.ALLOWED) === 0) {
       // 재발송 대상 chat 이 없으면 실패로 취급 (mark 하지 않아 재시도 여지 유지 —
       // 환경변수 재설정 직후 즉시 눌러도 rate limit 걸리지 않도록).
       return fail('발송 대상 chat 이 설정되지 않았습니다.', 500)
@@ -70,7 +61,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     // 실제 시도 직전에 mark — 성공/실패 무관하게 cooldown 시작. 원본 id 로 mark.
     globalRetryLimiter.markAttempt(rootId)
 
-    const result = await redispatchAlert(row, chatIds)
+    const result = await redispatchAlert(row)
     await persistRetryHistory(row, result)
 
     return ok(

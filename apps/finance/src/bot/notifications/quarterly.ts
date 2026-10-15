@@ -16,7 +16,8 @@ import {
   formatKRWFull,
   formatKRWCompact,
 } from '@/bot/utils/formatter'
-import { sendHtml, escapeHtml, h } from '@/bot/utils/telegram'
+import { escapeHtml, h } from '@/bot/utils/telegram'
+import { notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
 
 function getQuarterLabel(month: number): string {
   if (month <= 3) return 'Q1'
@@ -25,7 +26,7 @@ function getQuarterLabel(month: number): string {
   return 'Q4'
 }
 
-export async function sendQuarterlyReminder(chatIds: number[]): Promise<void> {
+export async function sendQuarterlyReminder(): Promise<void> {
   const bot = getBot()
 
   const accounts = await prisma.account.findMany({
@@ -102,13 +103,7 @@ export async function sendQuarterlyReminder(chatIds: number[]): Promise<void> {
 
   const fullMessage = lines.join('\n')
 
-  for (const chatId of chatIds) {
-    try {
-      await sendHtml(bot, chatId, fullMessage)
-    } catch (error) {
-      console.error(`[notification] 분기 점검 발송 실패 (chatId: ${chatId}):`, error)
-    }
-  }
+  await notifierFor(bot).notify(Route.ALLOWED, htmlContent(fullMessage), NOTIFY_CTX)
 
   console.log('[notification] 분기 점검 리마인더 발송 완료')
 }

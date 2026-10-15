@@ -6,7 +6,6 @@
  */
 
 import { Context } from 'grammy'
-import { Bot } from 'grammy'
 import { splitMessage } from './formatter'
 import { isNetworkError, sanitizeError } from './error'
 
@@ -50,28 +49,8 @@ export async function replyHtml(ctx: Context, html: string): Promise<void> {
   }
 }
 
-/**
- * bot.api.sendMessage를 HTML parse_mode로 전송 + fallback
- */
-export async function sendHtml(
-  bot: Bot,
-  chatId: number,
-  html: string
-): Promise<void> {
-  const chunks = splitMessage(html)
-  for (const chunk of chunks) {
-    try {
-      await withRetry(() => bot.api.sendMessage(chatId, chunk, { parse_mode: 'HTML' }))
-    } catch (error) {
-      if (isParseError(error)) {
-        const plain = chunk.replace(/<[^>]+>/g, '')
-        await withRetry(() => bot.api.sendMessage(chatId, plain))
-      } else {
-        throw error
-      }
-    }
-  }
-}
+// 아웃바운드(구 `sendHtml`)는 @pleiades/notify 로 옮겼다 — src/bot/notifications/notifier.ts (pleiades#136).
+// 이 파일에 남는 것은 인바운드 응답(`replyHtml`)과 HTML 헬퍼다.
 
 /**
  * 텔레그램 API의 HTML 파싱 오류 여부 판별 (400 Bad Request)
