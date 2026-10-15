@@ -13,6 +13,12 @@ describe('sanitizeMessage', () => {
   it('토큰이 없으면 원문 그대로', () => {
     expect(sanitizeMessage('plain')).toBe('plain');
   });
+
+  it('Discord 웹훅 URL 의 토큰을 가린다 (M-6a #141)', () => {
+    expect(sanitizeMessage('POST https://discord.com/api/webhooks/123456/abc_DEF-9?wait=true failed')).toBe(
+      'POST https://discord.com/api/webhooks/123456/<REDACTED>?wait=true failed',
+    );
+  });
 });
 
 describe('sanitizeError', () => {
