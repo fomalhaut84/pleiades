@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -112,6 +112,31 @@ describe('platformEnv — 루트 .env 와 프로세스 env', () => {
     expect(String(warn.mock.calls[0][0])).toContain('NOTIFY_ALLOWED_CHANNEL');
     expect(String(warn.mock.calls[0][0])).not.toContain('topsecret');
     warn.mockRestore();
+  });
+
+  // 회귀: #143 사전 리뷰 major — 재시작 없이 되돌리기(키 지우기)·켜기(파일 생성)가 반영된다
+  it('파일을 고치거나 새로 만들면 다음 호출부터 반영된다 (mtime)', () => {
+    const file = join(root, '.env');
+    expect(platformEnv('NOTIFY_ALLOWED_CHANNEL')).toBeUndefined(); // 없던 파일
+    writeFileSync(file, 'NOTIFY_ALLOWED_CHANNEL=discord\n');
+    utimesSync(file, new Date(), new Date(Date.now() + 1000));
+    expect(platformEnv('NOTIFY_ALLOWED_CHANNEL')).toBe('discord'); // 생성 반영
+    writeFileSync(file, '# 되돌림\n');
+    utimesSync(file, new Date(), new Date(Date.now() + 5000));
+    expect(platformEnv('NOTIFY_ALLOWED_CHANNEL')).toBeUndefined(); // 수정 반영
+    rmSync(file);
+    expect(platformEnv('NOTIFY_ALLOWED_CHANNEL')).toBeUndefined(); // 삭제 반영
+  });
+
+  it('BOM 으로 시작하는 파일의 첫 줄도 읽는다', () => {
+    writeFileSync(join(root, '.env'), '\uFEFFNOTIFY_ALLOWED_CHANNEL=discord\n');
+    expect(platformEnv('NOTIFY_ALLOWED_CHANNEL')).toBe('discord');
+  });
+
+  it('깨진 package.json 은 건너뛰고 위로 올라간다', () => {
+    writeFileSync(join(root, 'apps', 'finance', 'package.json'), '{ broken');
+    writeFileSync(join(root, '.env'), 'NOTIFY_ALLOWED_CHANNEL=discord\n');
+    expect(findPlatformEnvFile()).toBe(join(root, '.env'));
   });
 
   it('플랫폼 키가 아닌 이름은 거부한다 — 봇 토큰을 이 경로로 읽지 못한다', () => {

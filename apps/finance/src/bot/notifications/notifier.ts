@@ -39,7 +39,7 @@ const TELEGRAM_TARGETS = {
 
 const DISCORD_ALIAS: Readonly<Record<FinRoute, string>> = { ALLOWED: 'finance', ADMIN: 'admin' }
 
-/** 그 라우트를 Discord 로 보내는가 — 호출 시점마다 읽는다(프로세스 env → 루트 `.env`). */
+/** 그 라우트를 Discord 로 보내는가 — 호출 시점마다 읽는다(프로세스 env → 루트 `.env` · 파일은 수정 시각이 바뀌면 다시 읽는다). */
 export function usesDiscord(route: FinRoute): boolean {
   return (platformEnv(`NOTIFY_${route}_CHANNEL`) ?? '').trim().toLowerCase() === 'discord'
 }

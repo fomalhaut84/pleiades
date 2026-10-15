@@ -29,7 +29,7 @@ export const BOT_NOTIFY_CTX: NotifyContext = Object.freeze({ label: "bot" });
 const TELEGRAM_ALLOWED = csvEnv("TELEGRAM_ALLOWED_CHAT_IDS");
 const DISCORD_ALIAS = "fitness";
 
-/** ALLOWED 를 Discord 로 보내는가 — 호출 시점마다 읽는다(프로세스 env → 루트 `.env`). */
+/** ALLOWED 를 Discord 로 보내는가 — 호출 시점마다 읽는다(프로세스 env → 루트 `.env` · 파일은 수정 시각이 바뀌면 다시 읽는다). */
 export function allowedUsesDiscord(): boolean {
   return (platformEnv("NOTIFY_ALLOWED_CHANNEL") ?? "").trim().toLowerCase() === "discord";
 }
