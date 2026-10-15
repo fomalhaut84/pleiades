@@ -32,7 +32,17 @@ export function allowedUsesDiscord(): boolean {
   return (process.env.NOTIFY_ALLOWED_CHANNEL ?? "").trim().toLowerCase() === "discord";
 }
 
-const discordWebhooks = () => ({ [DISCORD_ALIAS]: (process.env.DISCORD_WEBHOOK_FITNESS ?? "").trim() });
+/**
+ * Discord 웹훅 URL 형식 — 아니면 비운다(수신자 0). 잘못된 값을 그대로 쓰면 undici 오류 메시지에 토큰 담긴 URL 이 실린다
+ * (#143 사전 리뷰 info).
+ */
+const WEBHOOK_RE = /^https:\/\/(?:ptb\.|canary\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/\d+\/[\w-]+(?:\?[\w=&-]*)?$/;
+export function webhookEnv(name: string): string {
+  const v = (process.env[name] ?? "").trim();
+  return WEBHOOK_RE.test(v) ? v : "";
+}
+
+const discordWebhooks = () => ({ [DISCORD_ALIAS]: webhookEnv("DISCORD_WEBHOOK_FITNESS") });
 
 /** Discord 를 골랐는데 웹훅이 비면 수신자 0 — 텔레그램 env 미설정과 같은 의미(가드가 건너뛴다). */
 function allowedTargets(): string[] {

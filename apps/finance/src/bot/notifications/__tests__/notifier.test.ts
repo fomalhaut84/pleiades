@@ -79,6 +79,18 @@ describe('fin notifier — 라우트별 채널', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  // 회귀: #143 사전 리뷰 info — 형식이 틀린 웹훅은 쓰지 않는다(토큰 담긴 URL 이 lastError 로 새지 않게)
+  it('웹훅 형식이 틀리면 수신자 0 — 따옴표·다른 호스트', async () => {
+    vi.stubEnv('NOTIFY_ALLOWED_CHANNEL', 'discord')
+    for (const bad of [`"${WEBHOOK_FIN}"`, 'https://evil.example/api/webhooks/1/t', 'discord.com/api/webhooks/1/t']) {
+      vi.stubEnv('DISCORD_WEBHOOK_FINANCE', bad)
+      expect(recipients.targetCount(Route.ALLOWED)).toBe(0)
+    }
+    vi.stubEnv('DISCORD_WEBHOOK_FINANCE', 'https://discord.com/api/v10/webhooks/1/tok?thread_id=2')
+    expect(recipients.targetCount(Route.ALLOWED)).toBe(1)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('키보드 메시지(interactiveNotifierFor)와 PDF 목록은 Discord 선택과 무관하게 텔레그램', async () => {
     vi.stubEnv('NOTIFY_ALLOWED_CHANNEL', 'discord')
     const kb = { inline_keyboard: [[{ text: 'ok', callback_data: 'c' }]] }

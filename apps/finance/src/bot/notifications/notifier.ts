@@ -42,9 +42,19 @@ export function usesDiscord(route: FinRoute): boolean {
   return (process.env[`NOTIFY_${route}_CHANNEL`] ?? '').trim().toLowerCase() === 'discord'
 }
 
+/**
+ * Discord 웹훅 URL 형식 — 아니면 비운다(수신자 0). 잘못된 값(따옴표·공백 섞임)을 그대로 쓰면 undici 가
+ * `Failed to parse URL from <url>` 로 토큰 담긴 URL 을 오류 메시지에 싣고, 그것이 AlertHistory.lastError 로 간다(#143 사전 리뷰 info).
+ */
+const WEBHOOK_RE = /^https:\/\/(?:ptb\.|canary\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/\d+\/[\w-]+(?:\?[\w=&-]*)?$/
+export function webhookEnv(name: string): string {
+  const v = (process.env[name] ?? '').trim()
+  return WEBHOOK_RE.test(v) ? v : ''
+}
+
 const discordWebhooks = (): Record<string, string> => ({
-  finance: (process.env.DISCORD_WEBHOOK_FINANCE ?? '').trim(),
-  admin: (process.env.DISCORD_WEBHOOK_ADMIN ?? '').trim(),
+  finance: webhookEnv('DISCORD_WEBHOOK_FINANCE'),
+  admin: webhookEnv('DISCORD_WEBHOOK_ADMIN'),
 })
 
 /** Discord 를 골랐는데 웹훅이 비면 수신자 0 — 텔레그램 env 미설정과 같은 의미(가드가 건너뛴다). */

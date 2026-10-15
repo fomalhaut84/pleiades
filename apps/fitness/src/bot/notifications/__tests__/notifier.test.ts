@@ -61,6 +61,8 @@ function errorLogs(): string[] {
 }
 
 beforeEach(() => {
+  // 셸 env 가 baseline 으로 새지 않게 — 기본은 텔레그램 (pleiades#143)
+  vi.stubEnv("NOTIFY_ALLOWED_CHANNEL", "");
   vi.spyOn(console, "log").mockImplementation(() => undefined);
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -371,6 +373,24 @@ describe("호출부 6건 — label 'bot' · first.ref 저장 (신규 · #48 I2)"
     });
   });
 
+  // 회귀: pleiades#143 사전 리뷰 info — Discord 를 켜도 키보드 제안은 텔레그램으로 가고 telegramMessageId 가 텔레그램 값이다
+  it("NOTIFY_ALLOWED_CHANNEL=discord 에서도 auto-adjust 제안은 텔레그램 · telegramMessageId 보존", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("NOTIFY_ALLOWED_CHANNEL", "discord");
+    vi.stubEnv("DISCORD_WEBHOOK_FITNESS", "https://discord.com/api/webhooks/3/fit-token");
+    arrangeProposal();
+    const { bot, sendMessage } = fakeBot(async () => ({ message_id: 42 }));
+    await runAutoAdjustProposal(bot);
+    expect(sendMessage.mock.calls[0][2]).toMatchObject({ reply_markup: expect.anything() });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(db.workoutAdjustment.update).toHaveBeenCalledWith({
+      where: { id: "adj1" },
+      data: { telegramMessageId: "42", telegramChatId: "1" },
+    });
+    vi.unstubAllGlobals();
+  });
+
   it("auto-adjust-cron 스누즈 재전송 실패가 [bot] 으로 로그한다", async () => {
     arrangeSnoozed();
     const { bot, sendMessage } = failingBot();
@@ -446,19 +466,5 @@ describe("notifierFor — NOTIFY_ALLOWED_CHANNEL=discord", () => {
     expect(r).toMatchObject({ sent: 2, total: 2, first: { target: "1", ref: "55" } });
     expect(sendMessage).toHaveBeenCalledTimes(2);
     expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("auto-adjust 제안(키보드)은 Discord 선택 중에도 텔레그램으로 간다", async () => {
-    const { bot, sendMessage } = fakeBot(async () => ({ message_id: 77 }));
-    // 호출부가 interactiveNotifierFor 를 쓰는지 — 소스 고정(Discord 로 가면 버튼과 telegramMessageId 를 잃는다)
-    const { readFileSync } = await import("node:fs");
-    const { join } = await import("node:path");
-    for (const file of ["auto-adjust.ts", "auto-adjust-cron.ts"]) {
-      const src = readFileSync(join(__dirname, "..", file), "utf8");
-      expect(src).toMatch(/interactiveNotifierFor\(bot\)\.notify\(\s*Route\.ALLOWED,\s*html\(message, keyboard\)/);
-      expect(src).not.toMatch(/[^e]notifierFor\(bot\)\.notify\(\s*Route\.ALLOWED,\s*html\(message, keyboard\)/);
-    }
-    void bot;
-    void sendMessage;
   });
 });

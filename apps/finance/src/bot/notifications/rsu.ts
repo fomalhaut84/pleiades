@@ -176,7 +176,11 @@ export async function sendRSUVestConfirmations(): Promise<void> {
 
     // 003 Q27 흡수(사용자 2026-10-15): 재시도·plain 폴백을 파사드가 소유 — 키보드는 폴백에도 유지된다.
     // 중복 전송 시 버튼을 두 번 눌러도 rsu-vest-service 의 ALREADY_VESTED 가 이중 반영을 막는다.
-    await interactiveNotifierFor(bot).notify(Route.ALLOWED, htmlContent(msg, keyboard), NOTIFY_CTX)
+    const r = await interactiveNotifierFor(bot).notify(Route.ALLOWED, htmlContent(msg, keyboard), NOTIFY_CTX)
+    if (r.total === 0) {
+      // 확정 버튼은 텔레그램 전용 — Discord 만 설정하면 이 알림은 갈 곳이 없다(#143)
+      console.warn(`[notification] D-day RSU 확정 알림 수신자 0 — TELEGRAM_ALLOWED_CHAT_IDS 미설정 (${rsu.id})`)
+    }
   }
   console.log(`[notification] D-day RSU 확정 알림 발송 완료 (${todayRsus.length}건)`)
 }

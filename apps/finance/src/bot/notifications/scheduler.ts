@@ -17,7 +17,7 @@ import { sendMonthlyReport } from './monthly-report'
 import { sendBriefing } from './briefing'
 import { takeNetWorthSnapshot } from './networth-snapshot'
 import { sendQuarterlyReport } from './quarterly-report'
-import { recipients, Route } from './notifier'
+import { recipients, Route, telegramRecipients } from './notifier'
 
 let scheduled = false
 
@@ -29,8 +29,9 @@ export function scheduleNotifications(): void {
     return
   }
 
-  if (recipients.targetCount(Route.ALLOWED) === 0) {
-    console.log('[notification] TELEGRAM_ALLOWED_CHAT_IDS 미설정, 알림 스케줄 건너뜀')
+  // Discord 를 골라도 키보드(RSU 확정)·분기 PDF 는 텔레그램으로 간다 — 둘 중 하나라도 수신자가 있으면 등록한다(#143)
+  if (recipients.targetCount(Route.ALLOWED) === 0 && telegramRecipients(Route.ALLOWED).length === 0) {
+    console.log('[notification] ALLOWED 수신자 0 (TELEGRAM_ALLOWED_CHAT_IDS · Discord 웹훅 모두 비어 있음), 알림 스케줄 건너뜀')
     return
   }
 
