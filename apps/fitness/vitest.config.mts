@@ -10,6 +10,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // pleiades#143: 개발자 PC 의 pleiades 루트 .env(Discord 전환)가 테스트로 새지 않게 — platformEnv 는 이 경로만 본다
+    env: { PLEIADES_ENV_FILE: "/nonexistent/pleiades-test.env" },
     include: ["src/**/__tests__/**/*.test.ts"],
     coverage: {
       provider: "v8",

@@ -10,7 +10,7 @@ import { InputFile } from 'grammy'
 import { getBot } from '@/bot/index'
 import { generateReportPDF } from '@/lib/report/pdf-generator'
 import { h } from '@/bot/utils/telegram'
-import { notifierFor, recipients, Route, htmlContent } from './notifier'
+import { notifierFor, Route, htmlContent, telegramRecipients } from './notifier'
 
 const REPORTS_DIR = path.join(process.cwd(), 'reports')
 
@@ -33,12 +33,13 @@ function getPreviousQuarter(): { year: number; quarter: number } {
 const REPORT_CTX = { label: 'report' } as const
 
 export async function sendQuarterlyReport(): Promise<void> {
+  // notifier 를 PDF 생성(2~3분) 동안 쥐지 않는다 — 그 사이 루트 .env 로 채널을 바꾸면 캐시된 transport 와 대상이 어긋난다
+  // (PR #144 Codex P2). 보낼 때마다 새로 만든다.
   const bot = getBot()
-  const notifier = notifierFor(bot)
   const { year, quarter } = getPreviousQuarter()
 
   // 생성 시작 알림
-  await notifier.notify(
+  await notifierFor(bot).notify(
     Route.ALLOWED,
     htmlContent(`📊 ${h.b(`${year}년 ${quarter}분기 리포트`)} 생성 중... (2~3분 소요)`),
     REPORT_CTX,
@@ -49,8 +50,8 @@ export async function sendQuarterlyReport(): Promise<void> {
     const filePath = path.join(REPORTS_DIR, path.basename(pdfPath))
     const pdfBuffer = await fs.readFile(filePath)
 
-    // 003 §7-4: PDF 첨부는 포트 밖(1b-2) — 목록만 파사드에서 받는다(Q25 ①).
-    for (const chatId of recipients.targets(Route.ALLOWED)) {
+    // 003 §7-4: PDF 첨부는 포트 밖(1b-2) · 텔레그램 API 직접 — Discord 라우팅과 무관하게 텔레그램 수신자 목록.
+    for (const chatId of telegramRecipients(Route.ALLOWED)) {
       try {
         await bot.api.sendDocument(chatId, new InputFile(pdfBuffer, path.basename(pdfPath)), {
           caption: `📊 ${year}년 ${quarter}분기 리포트`,
@@ -64,7 +65,7 @@ export async function sendQuarterlyReport(): Promise<void> {
   } catch (error) {
     console.error('[report] 분기 리포트 생성 실패:', error)
 
-    await notifier.notify(
+    await notifierFor(bot).notify(
       Route.ALLOWED,
       htmlContent(`⚠️ ${year}년 ${quarter}분기 리포트 생성에 실패했습니다.\n웹에서 수동 생성해주세요.`),
       REPORT_CTX,

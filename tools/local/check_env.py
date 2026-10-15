@@ -35,6 +35,9 @@ CHAT_KEY = re.compile(r"CHAT_IDS?$|CHAT_ID_", re.IGNORECASE)
 # dotenv 동작을 바꾸는 셸 변수 — prisma.config 의 `dotenv/config` 가 다른 파일을 읽거나 셸 값을 덮게 된다
 DOTENV_CONTROL = ("DOTENV_CONFIG_PATH", "DOTENV_CONFIG_OVERRIDE", "DOTENV_CONFIG_ENCODING", "DOTENV_KEY")
 LINE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
+# 플랫폼 키는 pleiades 루트 .env 에만 — 앱 .env 에 있으면 dotenv 가 process.env 로 올려 루트 값을 가린다
+# (@pleiades/notify platformEnv 는 프로세스 env 를 먼저 본다 · #143)
+PLATFORM_KEY = re.compile(r"^(?:NOTIFY_[A-Z0-9_]+|DISCORD_WEBHOOK_[A-Z0-9_]+)$")
 
 
 @dataclass(frozen=True)
@@ -154,6 +157,8 @@ def problems(app: str, env: dict[str, str], *, cwd: Path, root: Path = ROOT, bot
     out += _check_telegram(app, env, bot_ids, chat_ids, other_token_id)
     out += [Problem(k, "비워야 한다") for k in MUST_BE_EMPTY[app] if env.get(k)]
     out += _check_advisor(app, env, root)
+    out += [Problem(k, "플랫폼 키는 pleiades 루트 .env 에 둔다 — 앱 .env 값이 루트 값을 가린다 (#143)")
+            for k in sorted(parse_dotenv(app_dir / ".env")) if PLATFORM_KEY.match(k)]
     return out
 
 

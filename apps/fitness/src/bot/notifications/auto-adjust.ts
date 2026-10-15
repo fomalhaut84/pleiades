@@ -18,7 +18,7 @@ import {
 } from "@/lib/monitoring/admin-alerts";
 import { sanitizeError } from "../utils/error";
 import { Route, html, type BroadcastResult } from "@pleiades/notify";
-import { BOT_NOTIFY_CTX, notifierFor } from "./notifier";
+import { BOT_NOTIFY_CTX, interactiveNotifierFor, notifierFor } from "./notifier";
 
 /** M13 Phase 2 callback_data prefix. 형식: `auto_adjust:<action>:<adjustmentId>` */
 export const CALLBACK_PREFIX = "auto_adjust";
@@ -393,7 +393,7 @@ export async function runAutoAdjustProposal(bot: Bot): Promise<void> {
     });
 
     const keyboard = buildAutoAdjustKeyboard(adjustment.id);
-    const sendResult: BroadcastResult = await notifierFor(bot).notify(
+    const sendResult: BroadcastResult = await interactiveNotifierFor(bot).notify(
       Route.ALLOWED,
       html(message, keyboard),
       BOT_NOTIFY_CTX,

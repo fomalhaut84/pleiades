@@ -8,7 +8,7 @@ import prisma from "@/lib/prisma";
 import { sanitizeError } from "../utils/error";
 import { buildAutoAdjustKeyboard, escapeHtml, typeKo } from "./auto-adjust";
 import { Route, html } from "@pleiades/notify";
-import { BOT_NOTIFY_CTX, notifierFor } from "./notifier";
+import { BOT_NOTIFY_CTX, interactiveNotifierFor } from "./notifier";
 import { todayKST, ymdKST } from "@/lib/garmin/utils";
 
 const TTL_HOURS = 8;
@@ -76,7 +76,7 @@ async function processSnoozed(
 ): Promise<void> {
   const message = formatSnoozeMessage(adj);
   const keyboard = buildAutoAdjustKeyboard(adj.id);
-  const sendResult = await notifierFor(bot).notify(
+  const sendResult = await interactiveNotifierFor(bot).notify(
     Route.ALLOWED,
     html(message, keyboard),
     BOT_NOTIFY_CTX,

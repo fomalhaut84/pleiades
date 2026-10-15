@@ -2,14 +2,22 @@
 // 구 send.ts(sendToAll / sendToAllWithKeyboard) 를 대체 — 재시도 [2000, 8000, 30000] · HTML→plain 폴백 ·
 // 4096 초과 줄 경계 분할(Q10-L ①) 은 패키지 코어가 소유하고, 키보드 전송도 같은 정책을 탄다(003 §4-1(a)).
 // 수신자는 fit 규칙 그대로 TELEGRAM_ALLOWED_CHAT_IDS (Route.ALLOWED · fit 은 ADMIN 미매핑 — 003 §4-2 Q25 하위 A).
+//
+// pleiades M-6a-2 (pleiades#143 · 003 §6 1b-1): `NOTIFY_ALLOWED_CHANNEL=discord` 이면 ALLOWED 텍스트 알림을
+// Discord `#fitness` 웹훅(`DISCORD_WEBHOOK_FITNESS`)으로 보낸다. 미설정이면 지금과 같다(텔레그램).
+// 값은 pleiades 루트 `.env`(`platformEnv` · 프로세스 env 우선)에서 읽는다 — 앱 실행 방식과 무관.
+// 키보드(인터랙션) 메시지는 Discord 가 받지 못하므로 `interactiveNotifierFor` 로 항상 텔레그램 — 혼합 운영(Q11).
 
 import type { Bot } from "grammy";
 import {
+  createDiscordTransport,
   createNotifier,
   createTelegramTransport,
   csvEnv,
+  platformEnv,
   type Notifier,
   type NotifyContext,
+  type Transport,
 } from "@pleiades/notify";
 
 /**
@@ -18,10 +26,51 @@ import {
  */
 export const BOT_NOTIFY_CTX: NotifyContext = Object.freeze({ label: "bot" });
 
-/** 봇 인스턴스로 파사드를 만든다. 호출부가 이미 `bot` 을 인자로 받으므로 `bot.api` 를 그대로 넘긴다(D-2). */
+const TELEGRAM_ALLOWED = csvEnv("TELEGRAM_ALLOWED_CHAT_IDS");
+const DISCORD_ALIAS = "fitness";
+
+/** ALLOWED 를 Discord 로 보내는가 — 호출 시점마다 읽는다(프로세스 env → 루트 `.env` · 파일은 수정 시각이 바뀌면 다시 읽는다). */
+export function allowedUsesDiscord(): boolean {
+  return (platformEnv("NOTIFY_ALLOWED_CHANNEL") ?? "").trim().toLowerCase() === "discord";
+}
+
+/**
+ * Discord 웹훅 URL 형식 — 아니면 비운다(수신자 0). 잘못된 값을 그대로 쓰면 undici 오류 메시지에 토큰 담긴 URL 이 실린다
+ * (#143 사전 리뷰 info).
+ */
+const WEBHOOK_RE = /^https:\/\/(?:ptb\.|canary\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/\d+\/[\w-]+(?:\?[\w=&-]*)?$/;
+export function webhookEnv(name: string): string {
+  const v = (platformEnv(name) ?? "").trim();
+  return WEBHOOK_RE.test(v) ? v : "";
+}
+
+const discordWebhooks = () => ({ [DISCORD_ALIAS]: webhookEnv("DISCORD_WEBHOOK_FITNESS") });
+
+/** Discord 를 골랐는데 웹훅이 비면 수신자 0 — 텔레그램 env 미설정과 같은 의미(가드가 건너뛴다). */
+function allowedTargets(): string[] {
+  if (!allowedUsesDiscord()) return TELEGRAM_ALLOWED();
+  return discordWebhooks()[DISCORD_ALIAS] === "" ? [] : [DISCORD_ALIAS];
+}
+
+/**
+ * 봇 인스턴스로 파사드를 만든다. 호출부가 이미 `bot` 을 인자로 받으므로 `bot.api` 를 그대로 넘긴다(D-2).
+ * transport 는 인스턴스의 첫 전송 때 정해지므로 인스턴스를 오래 쥐지 않고 보낼 때마다 만든다(PR #144 Codex P2).
+ */
 export function notifierFor(bot: Bot): Notifier {
+  const transport = (): Transport =>
+    allowedUsesDiscord()
+      ? createDiscordTransport({ webhooks: discordWebhooks })
+      : createTelegramTransport({ api: bot.api });
+  return createNotifier({ transport, targets: { ALLOWED: allowedTargets } });
+}
+
+/**
+ * 키보드가 붙은 메시지 전용 — 항상 텔레그램(`NOTIFY_ALLOWED_CHANNEL` 무시). 결과의 `first.ref` 는 텔레그램 message_id 라
+ * `WorkoutAdjustment.telegramMessageId` 에 그대로 저장된다(003 §6-2 · DB 무변경).
+ */
+export function interactiveNotifierFor(bot: Bot): Notifier {
   return createNotifier({
     transport: createTelegramTransport({ api: bot.api }),
-    targets: { ALLOWED: csvEnv("TELEGRAM_ALLOWED_CHAT_IDS") },
+    targets: { ALLOWED: TELEGRAM_ALLOWED },
   });
 }

@@ -5,7 +5,7 @@ import cron from "node-cron";
 import prisma from "@/lib/prisma";
 import { generateMorningReport } from "@/lib/daily-report";
 import { recommendTodayWorkout } from "@/mcp/tools/recommend-today-workout";
-import { BOT_NOTIFY_CTX, notifierFor } from "../notifier";
+import { BOT_NOTIFY_CTX, interactiveNotifierFor, notifierFor } from "../notifier";
 import { startBotScheduler } from "../scheduler";
 import { runAutoAdjustProposal } from "../auto-adjust";
 import { runAutoAdjustMaintenance } from "../auto-adjust-cron";
@@ -61,6 +61,8 @@ function errorLogs(): string[] {
 }
 
 beforeEach(() => {
+  // 셸 env 가 baseline 으로 새지 않게 — 기본은 텔레그램 (pleiades#143)
+  vi.stubEnv("NOTIFY_ALLOWED_CHANNEL", "");
   vi.spyOn(console, "log").mockImplementation(() => undefined);
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -371,6 +373,24 @@ describe("호출부 6건 — label 'bot' · first.ref 저장 (신규 · #48 I2)"
     });
   });
 
+  // 회귀: pleiades#143 사전 리뷰 info — Discord 를 켜도 키보드 제안은 텔레그램으로 가고 telegramMessageId 가 텔레그램 값이다
+  it("NOTIFY_ALLOWED_CHANNEL=discord 에서도 auto-adjust 제안은 텔레그램 · telegramMessageId 보존", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("NOTIFY_ALLOWED_CHANNEL", "discord");
+    vi.stubEnv("DISCORD_WEBHOOK_FITNESS", "https://discord.com/api/webhooks/3/fit-token");
+    arrangeProposal();
+    const { bot, sendMessage } = fakeBot(async () => ({ message_id: 42 }));
+    await runAutoAdjustProposal(bot);
+    expect(sendMessage.mock.calls[0][2]).toMatchObject({ reply_markup: expect.anything() });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(db.workoutAdjustment.update).toHaveBeenCalledWith({
+      where: { id: "adj1" },
+      data: { telegramMessageId: "42", telegramChatId: "1" },
+    });
+    vi.unstubAllGlobals();
+  });
+
   it("auto-adjust-cron 스누즈 재전송 실패가 [bot] 으로 로그한다", async () => {
     arrangeSnoozed();
     const { bot, sendMessage } = failingBot();
@@ -398,5 +418,53 @@ describe("호출부 6건 — label 'bot' · first.ref 저장 (신규 · #48 I2)"
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expectBotLabelOnly(1);
     expect(db.systemAlertState.deleteMany).toHaveBeenCalledTimes(1);
+  });
+});
+
+// pleiades M-6a-2 (pleiades#143) — 라우트별 Discord 전환. env 미설정 = 위 baseline 그대로(텔레그램).
+describe("notifierFor — NOTIFY_ALLOWED_CHANNEL=discord", () => {
+  const WEBHOOK = "https://discord.com/api/webhooks/3/fit-token";
+  const fetchMock = vi.fn<(url: string, init: { body: string }) => Promise<unknown>>(async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ id: "d9" }),
+    text: async () => "",
+  }));
+
+  beforeEach(() => {
+    fetchMock.mockClear();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("TELEGRAM_ALLOWED_CHAT_IDS", "1,2");
+    vi.stubEnv("NOTIFY_ALLOWED_CHANNEL", "discord");
+    vi.stubEnv("DISCORD_WEBHOOK_FITNESS", WEBHOOK);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("텍스트 알림은 #fitness 웹훅 1곳 · md 변환 · 텔레그램 호출 없음", async () => {
+    const { bot, sendMessage } = fakeBot(async () => ({ message_id: 1 }));
+    const r = await send(bot, "<b>리포트</b>");
+    expect(r).toMatchObject({ sent: 1, total: 1, first: { target: "fitness", ref: "d9" } });
+    expect(fetchMock.mock.calls[0][0]).toBe(`${WEBHOOK}?wait=true`);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).content).toBe("**리포트**");
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("웹훅이 비면 수신자 0 — 보내지 않는다", async () => {
+    vi.stubEnv("DISCORD_WEBHOOK_FITNESS", " ");
+    const { bot } = fakeBot(async () => ({ message_id: 1 }));
+    const r = await send(bot, "x");
+    expect(r.total).toBe(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("키보드 메시지(interactiveNotifierFor)는 항상 텔레그램 — first.ref 는 텔레그램 message_id", async () => {
+    const { bot, sendMessage } = fakeBot(async () => ({ message_id: 55 }));
+    const kb = { inline_keyboard: [[{ text: "ok", callback_data: "c" }]] } as unknown as InlineKeyboard;
+    const r = await interactiveNotifierFor(bot).notify(Route.ALLOWED, html("제안", kb), BOT_NOTIFY_CTX);
+    expect(r).toMatchObject({ sent: 2, total: 2, first: { target: "1", ref: "55" } });
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
