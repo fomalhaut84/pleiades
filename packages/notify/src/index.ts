@@ -21,6 +21,15 @@ export { Route, html } from './types';
 export { createNotifier } from './notifier';
 export { createTelegramTransport, TELEGRAM_CHANNEL } from './telegram';
 export type { TelegramApi, TelegramTransportOptions } from './telegram';
+export {
+  createDiscordTransport,
+  DiscordWebhookError,
+  DISCORD_CHANNEL,
+  DISCORD_MAX_LENGTH,
+  toDiscordContent,
+} from './discord';
+export type { DiscordTransportOptions, FetchLike, FetchResponseLike } from './discord';
+export { htmlToDiscordMarkdown, escapeDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
 
 export { deliverOne, DEFAULT_RETRY_DELAYS_MS } from './deliver';
 export type { DeliveryPolicy } from './deliver';
