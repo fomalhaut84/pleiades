@@ -67,8 +67,10 @@ export function notifierFor(bot: Bot): Notifier {
 }
 
 /**
- * 키보드가 붙은 메시지 전용 — 항상 텔레그램(`NOTIFY_ALLOWED_CHANNEL` 무시). 결과의 `first.ref` 는 텔레그램 message_id 라
- * `WorkoutAdjustment.telegramMessageId` 에 그대로 저장된다(003 §6-2 · DB 무변경).
+ * 키보드가 붙은 메시지 전용 — 텍스트 스위치(`NOTIFY_ALLOWED_CHANNEL`)는 보지 않고 `NOTIFY_INTERACTIVE_CHANNEL` 만 본다.
+ *   미설정 → 텔레그램: `first.ref` = 텔레그램 message_id · `first.target` = chat id
+ *   discord → fit 봇: `first.ref` = Discord 메시지 id · `first.target` = 별칭 `fitness` · 봇 설정이 없으면 수신자 0
+ * 어느 쪽이든 `WorkoutAdjustment.telegramMessageId`·`telegramChatId` 에 그대로 저장된다(003 §6-2 D-a · 읽기 경로 0 · Q61).
  */
 export function interactiveNotifierFor(bot: Bot): Notifier {
   if (!interactiveUsesDiscord()) {

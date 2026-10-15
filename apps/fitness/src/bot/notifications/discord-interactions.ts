@@ -14,7 +14,10 @@ export async function handleDiscordButton(ctx: DiscordButtonContext): Promise<vo
     return;
   }
   const { notice, removeKeyboard } = await decideAutoAdjust(ctx.customId);
-  await ctx.reply(notice);
+  // 결정은 이미 반영됐다 — 안내가 실패해도(인터랙션 만료·네트워크) "처리 오류" 로 보이지 않게 여기서 삼키고 버튼 제거는 계속한다
+  await ctx.reply(notice).catch((err: unknown) => {
+    console.warn(`[discord-fit] 안내 전송 실패 (무시): ${err instanceof Error ? err.message : String(err)}`);
+  });
   if (removeKeyboard) {
     // 수락·거절은 버튼을 지운다(중복 클릭 방지) — 오래된 메시지면 실패할 수 있다(텔레그램과 같이 무시)
     await ctx.removeButtons().catch((err: unknown) => {
@@ -29,6 +32,9 @@ export function startDiscordInteractions(): DiscordGateway | undefined {
   if (!cfg.ready) {
     console.log("[discord-fit] 봇 토큰·채널 미설정 — Discord 버튼 수신 안 함(텔레그램 버튼은 그대로)");
     return undefined;
+  }
+  if (cfg.allowedUserIds.length === 0) {
+    console.warn("[discord-fit] DISCORD_ALLOWED_USER_IDS 비어 있음 — 모든 버튼 클릭을 거부한다");
   }
   const gateway = createDiscordGateway({
     token: cfg.token,

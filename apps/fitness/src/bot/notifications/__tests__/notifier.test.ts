@@ -1,5 +1,5 @@
 import type { Bot, InlineKeyboard } from "grammy";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { Route, html } from "@pleiades/notify";
 import cron from "node-cron";
 import prisma from "@/lib/prisma";
@@ -396,6 +396,9 @@ describe("호출부 6건 — label 'bot' · first.ref 저장 (신규 · #48 I2)"
   it("NOTIFY_INTERACTIVE_CHANNEL=discord 면 제안이 Discord 봇으로 · 버튼 변환 · Discord id 를 telegramMessageId 에(D-a)", async () => {
     const fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ id: "d777" }), text: async () => "" }));
     vi.stubGlobal("fetch", fetchMock);
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
     vi.stubEnv("NOTIFY_INTERACTIVE_CHANNEL", "discord");
     vi.stubEnv("DISCORD_BOT_TOKEN_FITNESS", "fake-token");
     vi.stubEnv("DISCORD_CHANNEL_ID_FITNESS", "123456789012345678");
@@ -416,17 +419,30 @@ describe("호출부 6건 — label 'bot' · first.ref 저장 (신규 · #48 I2)"
       where: { id: "adj1" },
       data: { telegramMessageId: "d777", telegramChatId: "fitness" },
     });
-    vi.unstubAllGlobals();
   });
 
-  it("Discord 스위치를 켜도 봇 설정이 없으면 수신자 0 — 텔레그램으로 우회하지 않는다", async () => {
+  it("Discord 스위치를 켜도 봇 설정이 없으면 수신자 0 — 텔레그램·Discord 어디로도 키보드를 보내지 않는다", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
     vi.stubEnv("NOTIFY_INTERACTIVE_CHANNEL", "discord");
     vi.stubEnv("DISCORD_BOT_TOKEN_FITNESS", "");
     vi.stubEnv("DISCORD_CHANNEL_ID_FITNESS", "");
     arrangeProposal();
     const { bot, sendMessage } = fakeBot(async () => ({ message_id: 42 }));
-    await runAutoAdjustProposal(bot);
-    expect(sendMessage).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ reply_markup: expect.anything() }));
+    try {
+      await runAutoAdjustProposal(bot);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(sendMessage).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ reply_markup: expect.anything() }),
+      );
+      expect(db.workoutAdjustment.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ telegramMessageId: expect.anything() }) }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("auto-adjust-cron 스누즈 재전송 실패가 [bot] 으로 로그한다", async () => {

@@ -47,6 +47,17 @@ describe("handleDiscordButton", () => {
     warn.mockRestore();
   });
 
+  // 회귀: #151 사전 리뷰 info — 결정 뒤 안내가 실패해도 버튼 제거는 계속하고 던지지 않는다
+  it("안내 실패에도 버튼 제거는 계속", async () => {
+    vi.mocked(decideAutoAdjust).mockResolvedValue({ notice: "✅", removeKeyboard: true });
+    const c = ctx("auto_adjust:accept:adj1");
+    c.reply.mockRejectedValue(new Error("Unknown interaction"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await expect(handleDiscordButton(c)).resolves.toBeUndefined();
+    expect(c.removeButtons).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
   it("다른 접두사는 판단하지 않고 안내만", async () => {
     const c = ctx("vest:confirm:r1");
     await handleDiscordButton(c);
