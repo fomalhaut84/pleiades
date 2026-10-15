@@ -162,8 +162,9 @@ function renderPre(n: ElementNode): string {
   const only = n.children.length === 1 ? n.children[0] : undefined;
   const lang =
     only?.kind === 'element' && only.tag === 'code' ? /language-([\w+-]+)/.exec(attr(only.attrs, 'class') ?? '')?.[1] : undefined;
-  // 본문의 ``` 는 울타리를 닫는다 — 영폭 공백으로 끊는다
-  const body = textOf(n.children).replace(/```/g, '`​``').replace(/\n+$/, '');
+  // 본문의 연속 백틱 3개는 울타리를 닫는다 — 백틱 2개마다 영폭 공백을 끼워 어디에도 3연속이 남지 않게 한다
+  // (```` 처럼 4개 이상도 — PR #142 Codex P2)
+  const body = textOf(n.children).replace(/``(?=`)/g, '``\u200b').replace(/\n+$/, '');
   return `\`\`\`${lang ?? ''}\n${body}\n\`\`\``;
 }
 

@@ -127,6 +127,35 @@ describe('createDiscordTransport', () => {
     expect(String(logger.warn.mock.calls[0][0])).not.toContain('secret-token');
   });
 
+  // 회귀: PR #142 Codex P2 — 헤더를 받은 뒤 본문 읽기에서 소켓이 끊겨도 재시도 예산을 쓴다
+  it('2xx 본문 읽기 중 네트워크 오류도 재시도한다', async () => {
+    const broken: FetchResponseLike = {
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw Object.assign(new TypeError('terminated'), { cause: { code: 'UND_ERR_SOCKET' } });
+      },
+      text: async () => '',
+    };
+    const { transport, fetch } = setup([broken, res(200, { id: 'ok' })]);
+    await expect(transport.send('finance', html('x'))).resolves.toBe('ok');
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('2xx 본문이 JSON 이 아니면 재시도하지 않고 실패한다', async () => {
+    const bad: FetchResponseLike = {
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError('Unexpected token');
+      },
+      text: async () => 'x',
+    };
+    const { transport, fetch } = setup([bad]);
+    await expect(transport.send('finance', html('x'))).rejects.toThrow('Unexpected token');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('undici 연결 타임아웃 코드도 네트워크 오류로 본다', async () => {
     const undici = Object.assign(new TypeError('fetch failed'), { cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } });
     const { transport, fetch } = setup([undici, res(200, { id: 'ok' })]);

@@ -55,7 +55,12 @@ describe('htmlToDiscordMarkdown', () => {
   });
 
   it('pre 본문의 ``` 는 블록을 닫지 못하게 끊는다', () => {
-    expect(htmlToDiscordMarkdown('<pre>a```b</pre>')).toBe('```\na`​``b\n```');
+    expect(htmlToDiscordMarkdown('<pre>a```b</pre>')).toBe('```\na``\u200b`b\n```');
+    // 회귀: PR #142 Codex P2 — 4개 이상 이어진 백틱에도 3연속이 남지 않는다
+    for (const run of ['````', '``````', '```````']) {
+      const md = htmlToDiscordMarkdown(`<pre>${run}</pre>`);
+      expect(md.slice(4, -4)).not.toContain('```');
+    }
   });
 
   it('링크 — http(s) 만 · 괄호·공백은 인코딩 · 라벨이 비면 URL', () => {

@@ -98,6 +98,7 @@ export function createDiscordTransport(opts: DiscordTransportOptions): Transport
     let rateLimited = 0;
     for (let attempt = 0; ; attempt++) {
       let res: FetchResponseLike;
+      let okBody: { id?: unknown } | undefined;
       try {
         res = await fetchFn(`${url}${url.includes('?') ? '&' : '?'}wait=true`, {
           method: 'POST',
@@ -105,6 +106,8 @@ export function createDiscordTransport(opts: DiscordTransportOptions): Transport
           // 본문의 @everyone · @here · <@id> 가 핑을 만들지 않는다
           body: JSON.stringify({ content: text, allowed_mentions: { parse: [] } }),
         });
+        // 본문 읽기도 같은 재시도 안에 둔다 — 헤더 뒤 소켓이 끊기면(UND_ERR_SOCKET) json() 이 던진다 (PR #142 Codex P2)
+        if (res.ok) okBody = (await res.json()) as { id?: unknown };
       } catch (err) {
         if (!isRetryableNetworkError(err) || attempt >= maxAttempts - 1) throw err;
         const delay = retryDelaysMs[attempt];
@@ -113,9 +116,8 @@ export function createDiscordTransport(opts: DiscordTransportOptions): Transport
         continue;
       }
       if (res.ok) {
-        const body = (await res.json()) as { id?: unknown };
-        if (typeof body?.id !== 'string') throw new DiscordWebhookError(res.status, '응답에 메시지 id 가 없다');
-        return body.id;
+        if (typeof okBody?.id !== 'string') throw new DiscordWebhookError(res.status, '응답에 메시지 id 가 없다');
+        return okBody.id;
       }
       const errBody = await readErrorBody(res);
       if (res.status === 429 && rateLimited < 2) {
