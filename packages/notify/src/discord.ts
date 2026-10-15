@@ -50,11 +50,11 @@ export interface DiscordTransportOptions {
   logger?: Logger;
 }
 
-/** 웹훅 응답 오류. 메시지에 URL 을 담지 않는다. */
+/** 웹훅·REST 응답 오류. 메시지에 URL·토큰을 담지 않는다. `api` 는 메시지 표기(`webhook` · `API`). */
 export class DiscordWebhookError extends Error {
   readonly status: number;
-  constructor(status: number, detail: string) {
-    super(`Discord webhook 응답 ${status}${detail === '' ? '' : `: ${detail}`}`);
+  constructor(status: number, detail: string, api = 'webhook') {
+    super(`Discord ${api} 응답 ${status}${detail === '' ? '' : `: ${detail}`}`);
     this.name = 'DiscordWebhookError';
     this.status = status;
   }
@@ -73,9 +73,9 @@ function isRetryableNetworkError(err: unknown): boolean {
   return code !== undefined && UNDICI_NETWORK_CODES.has(code);
 }
 
-const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+export const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-function defaultFetch(): FetchLike {
+export function defaultFetch(): FetchLike {
   const f = (globalThis as { fetch?: FetchLike }).fetch;
   if (f === undefined) throw new Error('@pleiades/notify: 전역 fetch 가 없다 — DiscordTransportOptions.fetch 를 넘긴다');
   return f;
@@ -178,7 +178,7 @@ export async function sendDiscordFile(
   });
 }
 
-interface PostConfig {
+export interface PostConfig {
   fetch?: FetchLike;
   retryDelaysMs: readonly number[];
   maxRateLimitWaitMs: number;
@@ -193,8 +193,22 @@ function webhookFor(webhooks: DiscordTransportOptions['webhooks'], alias: string
   return url;
 }
 
-/** 웹훅 POST 1건 — 네트워크 재시도 · 429 대기 · 본문 읽기까지 같은 루프. `init` 은 시도마다 새로 만든다(multipart 본문 재사용 방지). */
-async function postWebhook(cfg: PostConfig, url: string, alias: string, init: () => RequestInitLike): Promise<MessageRef> {
+/** 웹훅 POST 1건 — `?wait=true` 를 붙여 메시지 id 를 받는다. */
+function postWebhook(cfg: PostConfig, url: string, alias: string, init: () => RequestInitLike): Promise<MessageRef> {
+  return requestDiscord(cfg, `${url}${url.includes('?') ? '&' : '?'}wait=true`, alias, init, 'webhook');
+}
+
+/**
+ * Discord 요청 1건(웹훅·봇 REST 공용) — 네트워크 재시도 · 429 대기 · 본문 읽기까지 같은 루프. `init` 은 시도마다 새로 만든다
+ * (multipart 본문 재사용 방지). 성공 응답의 `id` 를 돌려준다(없으면 오류 — 메시지 생성 요청 전용).
+ */
+export async function requestDiscord(
+  cfg: PostConfig,
+  url: string,
+  alias: string,
+  init: () => RequestInitLike,
+  api = 'webhook',
+): Promise<MessageRef> {
   const { retryDelaysMs, maxRateLimitWaitMs, sleep, logger } = cfg;
   const fetchFn = cfg.fetch ?? defaultFetch();
   const maxAttempts = retryDelaysMs.length + 1;
@@ -204,7 +218,7 @@ async function postWebhook(cfg: PostConfig, url: string, alias: string, init: ()
     let okBody: { id?: unknown } | undefined;
     let errBody: ErrorBody | undefined;
     try {
-      res = await fetchFn(`${url}${url.includes('?') ? '&' : '?'}wait=true`, init());
+      res = await fetchFn(url, init());
       // 본문 읽기(성공·오류 둘 다)도 같은 재시도 안에 둔다 — 헤더 뒤 소켓이 끊기면(UND_ERR_SOCKET) 던진다 (PR #142 Codex P2)
       if (res.ok) okBody = (await res.json()) as { id?: unknown };
       else errBody = await readErrorBody(res);
@@ -216,7 +230,7 @@ async function postWebhook(cfg: PostConfig, url: string, alias: string, init: ()
       continue;
     }
     if (res.ok) {
-      if (typeof okBody?.id !== 'string') throw new DiscordWebhookError(res.status, '응답에 메시지 id 가 없다');
+      if (typeof okBody?.id !== 'string') throw new DiscordWebhookError(res.status, '응답에 메시지 id 가 없다', api);
       return okBody.id;
     }
     const body = errBody ?? { raw: '', json: undefined };
@@ -230,7 +244,7 @@ async function postWebhook(cfg: PostConfig, url: string, alias: string, init: ()
         continue;
       }
     }
-    throw new DiscordWebhookError(res.status, errorDetail(body));
+    throw new DiscordWebhookError(res.status, errorDetail(body), api);
   }
 }
 

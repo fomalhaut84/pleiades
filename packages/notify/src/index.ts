@@ -41,6 +41,21 @@ export type {
 } from './discord';
 export { htmlToDiscordMarkdown, escapeDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
 export {
+  createDiscordBotTransport,
+  toDiscordComponents,
+  DISCORD_BOT_CHANNEL,
+  DISCORD_API_BASE,
+} from './discord-bot';
+export type { DiscordBotTransportOptions, DiscordActionRow, DiscordButton } from './discord-bot';
+export { createDiscordGateway } from './discord-gateway';
+export type {
+  DiscordGateway,
+  DiscordGatewayOptions,
+  DiscordButtonContext,
+  WebSocketLike,
+  WebSocketFactory,
+} from './discord-gateway';
+export {
   platformEnv,
   parsePlatformEnv,
   parseEnvValue,
