@@ -11,7 +11,7 @@ import { getBot } from '@/bot/index'
 import { generateReportPDF } from '@/lib/report/pdf-generator'
 import { sanitizeError } from '@/bot/utils/error'
 import { h } from '@/bot/utils/telegram'
-import { notifierFor, Route, htmlContent, sendFileIfDiscord, telegramRecipients } from './notifier'
+import { fileRecipientCount, notifierFor, Route, htmlContent, sendFileIfDiscord, telegramRecipients } from './notifier'
 
 const REPORTS_DIR = path.join(process.cwd(), 'reports')
 
@@ -36,6 +36,11 @@ const REPORT_CTX = { label: 'report' } as const
 export async function sendQuarterlyReport(): Promise<void> {
   // notifier 를 PDF 생성(2~3분) 동안 쥐지 않는다 — 그 사이 루트 .env 로 채널을 바꾸면 캐시된 transport 와 대상이 어긋난다
   // (PR #144 Codex P2). 보낼 때마다 새로 만든다.
+  // PDF 를 받을 곳이 없으면 생성(AI·PDF·DB·파일)부터 하지 않는다 (PR #148 Codex P2)
+  if (fileRecipientCount(Route.ALLOWED) === 0) {
+    console.warn('[report] 분기 리포트 수신자 0 (채널 선택 기준) — 생성 건너뜀')
+    return
+  }
   const bot = getBot()
   const { year, quarter } = getPreviousQuarter()
 

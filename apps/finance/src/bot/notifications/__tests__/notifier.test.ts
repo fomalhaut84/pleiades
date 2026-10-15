@@ -11,6 +11,7 @@ import {
   notifierFor,
   recipients,
   Route,
+  fileRecipientCount,
   sendFileIfDiscord,
   telegramRecipients,
 } from '../notifier'
@@ -117,6 +118,15 @@ describe('fin notifier — 라우트별 채널', () => {
       expect(fetchMock.mock.calls[0][0]).toBe(`${WEBHOOK_FIN}?wait=true`)
       const form = fetchMock.mock.calls[0][1].body as unknown as FormData
       expect((form.get('files[0]') as File).name).toBe('q.pdf')
+    })
+
+    // 회귀: PR #148 Codex P2 — 생성 전 수신자 확인은 채널 선택 기준(텔레그램 OR 아님)
+    it('fileRecipientCount — Discord 선택이면 웹훅 유무 · 아니면 텔레그램 수', () => {
+      expect(fileRecipientCount('ALLOWED')).toBe(2)
+      vi.stubEnv('NOTIFY_ALLOWED_CHANNEL', 'discord')
+      expect(fileRecipientCount('ALLOWED')).toBe(1)
+      vi.stubEnv('DISCORD_WEBHOOK_FINANCE', '')
+      expect(fileRecipientCount('ALLOWED')).toBe(0) // 텔레그램 chat 이 남아 있어도 0
     })
 
     it("Discord 인데 웹훅이 비면 'no-webhook' — 텔레그램으로 우회하지 않는다", async () => {
