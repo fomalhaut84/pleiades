@@ -214,7 +214,8 @@ export function createDiscordGateway(opts: DiscordGatewayOptions): DiscordGatewa
     call(`${apiBase}/interactions/${String(i.id)}/${String(i.token)}/callback`, 'POST', body, '응답');
 
   const handleInteraction = async (i: InteractionLike): Promise<void> => {
-    if (i.type !== 3 || typeof i.data?.custom_id !== 'string') return; // 버튼(message component)만
+    // 버튼만 — type 3 은 모든 message component(선택 메뉴 포함)라 component_type 2 까지 본다 (PR #150 Codex P2)
+    if (i.type !== 3 || i.data?.component_type !== 2 || typeof i.data?.custom_id !== 'string') return;
     const userId = String(i.member?.user?.id ?? i.user?.id ?? '');
     const channelId = String(i.channel_id ?? '');
     const allowed = opts.allowedUserIds().includes(userId) && opts.allowedChannelIds().includes(channelId);

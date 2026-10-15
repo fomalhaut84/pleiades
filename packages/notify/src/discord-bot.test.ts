@@ -40,6 +40,9 @@ describe('toDiscordComponents — 텔레그램 inline_keyboard → Discord 버�
     expect(() => toDiscordComponents({ inline_keyboard: [[{ text: '', callback_data: 'c' }]] })).toThrow('버튼 이름');
     expect(() => toDiscordComponents({ inline_keyboard: [[{ text: 'x', url: 'javascript:1' }]] })).toThrow('callback_data');
     expect(() => toDiscordComponents({ foo: 1 })).toThrow('inline_keyboard');
+    // 회귀: PR #150 Codex P2 — 배열이 아닌 행을 조용히 버리지 않는다
+    expect(() => toDiscordComponents({ inline_keyboard: [[{ text: 'a', callback_data: 'a' }], null] })).toThrow('1번째 행');
+    expect(() => toDiscordComponents({ inline_keyboard: [{ text: 'a', callback_data: 'a' }] })).toThrow('0번째 행');
   });
 });
 

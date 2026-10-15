@@ -238,6 +238,18 @@ describe('createDiscordGateway — 버튼 처리', () => {
     expect(bodies()[1].body.content).toBe('처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
   });
 
+  // 회귀: PR #150 Codex P2 — 선택 메뉴(component_type 3)는 type 3 이어도 버튼 핸들러로 가지 않는다
+  it('선택 메뉴 등 버튼이 아닌 component 는 무시', async () => {
+    const onButton = vi.fn(async () => {});
+    const env = setup(onButton);
+    env.gw.start();
+    env.last().serverSends({ op: 0, t: 'INTERACTION_CREATE', s: 2, d: interaction({ data: { custom_id: 'vest:confirm:r1', component_type: 3 } }) });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onButton).not.toHaveBeenCalled();
+    expect(env.fetch).not.toHaveBeenCalled();
+    env.gw.stop();
+  });
+
   it('버튼이 아닌 인터랙션(슬래시 명령 등)은 무시', async () => {
     const env = setup();
     env.gw.start();

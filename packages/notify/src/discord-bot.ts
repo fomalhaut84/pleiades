@@ -52,7 +52,10 @@ interface TelegramButtonLike {
 export function toDiscordComponents(components: unknown): DiscordActionRow[] {
   const rows = (components as { inline_keyboard?: unknown } | null)?.inline_keyboard;
   if (!Array.isArray(rows)) throw new Error('@pleiades/notify: 알 수 없는 components 형태 — 텔레그램 inline_keyboard 만 지원');
-  const nonEmpty = rows.filter((r): r is unknown[] => Array.isArray(r) && r.length > 0);
+  // 빈 행([])만 건너뛴다 — 배열이 아닌 행은 조용히 버리지 않고 오류(버튼을 잃지 않게 · PR #150 Codex P2)
+  const bad = rows.findIndex((r) => !Array.isArray(r));
+  if (bad >= 0) throw new Error(`@pleiades/notify: inline_keyboard 의 ${bad}번째 행이 배열이 아니다`);
+  const nonEmpty = (rows as unknown[][]).filter((r) => r.length > 0);
   if (nonEmpty.length > MAX_ROWS) throw new Error(`@pleiades/notify: Discord 버튼 행은 ${MAX_ROWS}개까지 (${nonEmpty.length})`);
   return nonEmpty.map((row) => {
     if (row.length > MAX_BUTTONS_PER_ROW) {
