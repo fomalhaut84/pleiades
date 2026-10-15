@@ -37,7 +37,10 @@ DOTENV_CONTROL = ("DOTENV_CONFIG_PATH", "DOTENV_CONFIG_OVERRIDE", "DOTENV_CONFIG
 LINE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
 # 플랫폼 키는 pleiades 루트 .env 에만 — 앱 .env 에 있으면 dotenv 가 process.env 로 올려 루트 값을 가린다
 # (@pleiades/notify platformEnv 는 프로세스 env 를 먼저 본다 · #143)
-PLATFORM_KEY = re.compile(r"^(?:NOTIFY_[A-Z0-9_]+|DISCORD_WEBHOOK_[A-Z0-9_]+)$")
+PLATFORM_KEY = re.compile(
+    r"^(?:NOTIFY_[A-Z0-9_]+|DISCORD_WEBHOOK_[A-Z0-9_]+|DISCORD_BOT_TOKEN_[A-Z0-9_]+|DISCORD_CHANNEL_ID_[A-Z0-9_]+"
+    r"|DISCORD_ALLOWED_USER_IDS)$"
+)  # @pleiades/notify platform-env.ts PLATFORM_KEY_RE 와 같아야 한다
 
 
 @dataclass(frozen=True)

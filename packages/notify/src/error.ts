@@ -9,6 +9,8 @@
 const TOKEN_RE = /bot\d+:[A-Za-z0-9_-]+/g;
 /** Discord 웹훅 URL 의 토큰 부분 (`/api/[v10/]webhooks/<id>/<token>`) — M-6a #141. */
 const DISCORD_WEBHOOK_RE = /(\/api\/(?:v\d+\/)?webhooks\/\d+\/)[A-Za-z0-9_-]+/g;
+/** Discord 봇 토큰(`<base64 id>.<ts>.<hmac>`) — M-6b-2 #149. */
+const DISCORD_BOT_TOKEN_RE = /\b[MNO][A-Za-z\d_-]{20,}\.[A-Za-z\d_-]{5,}\.[A-Za-z\d_-]{25,}\b/g;
 const NETWORK_CODES = new Set([
   'ETIMEDOUT',
   'ECONNRESET',
@@ -21,7 +23,10 @@ const NETWORK_CODES = new Set([
 const MAX_DEPTH = 5;
 
 export function sanitizeMessage(msg: string): string {
-  return msg.replace(TOKEN_RE, 'bot<REDACTED>').replace(DISCORD_WEBHOOK_RE, '$1<REDACTED>');
+  return msg
+    .replace(TOKEN_RE, 'bot<REDACTED>')
+    .replace(DISCORD_WEBHOOK_RE, '$1<REDACTED>')
+    .replace(DISCORD_BOT_TOKEN_RE, '<DISCORD_TOKEN_REDACTED>');
 }
 
 /**

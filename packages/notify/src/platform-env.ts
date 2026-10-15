@@ -23,7 +23,9 @@ interface PathLike {
   dirname(p: string): string;
 }
 
-export const PLATFORM_KEY_RE = /^(?:NOTIFY_[A-Z0-9_]+|DISCORD_WEBHOOK_[A-Z0-9_]+)$/;
+/** 플랫폼 키 — 알림 스위치 · 웹훅 · 봇(M-6b-2 #149: 토큰 · 채널 ID · 허용 사용자). 앱 고유 키는 여기에 없다. */
+export const PLATFORM_KEY_RE =
+  /^(?:NOTIFY_[A-Z0-9_]+|DISCORD_WEBHOOK_[A-Z0-9_]+|DISCORD_BOT_TOKEN_[A-Z0-9_]+|DISCORD_CHANNEL_ID_[A-Z0-9_]+|DISCORD_ALLOWED_USER_IDS)$/;
 const LINE_RE = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/;
 const MAX_DEPTH = 12;
 

@@ -29,5 +29,8 @@
   },
   "devDependencies": {
     "typescript": "^5"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
   }
 }
