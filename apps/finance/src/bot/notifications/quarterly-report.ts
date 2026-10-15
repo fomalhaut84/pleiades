@@ -55,7 +55,7 @@ export async function sendQuarterlyReport(): Promise<void> {
     const caption = `📊 ${year}년 ${quarter}분기 리포트`
 
     // M-6b-1 (#147): ALLOWED 가 Discord 면 #finance 웹훅에 첨부(003 §7-4 — 포트 밖 헬퍼). 아니면 아래 텔레그램(구 동작).
-    let discord: Awaited<ReturnType<typeof sendFileIfDiscord>> = 'not-discord'
+    let discord: Awaited<ReturnType<typeof sendFileIfDiscord>> | 'failed' = 'not-discord'
     try {
       discord = await sendFileIfDiscord(
         Route.ALLOWED,
@@ -64,8 +64,13 @@ export async function sendQuarterlyReport(): Promise<void> {
       )
       if (discord === 'no-webhook') console.warn('[report] Discord 선택 · 웹훅 없음 — PDF 수신자 0')
     } catch (error) {
-      discord = 'sent' // 시도했다 — 텔레그램으로 우회하지 않는다(채널 선택 존중)
+      discord = 'failed' // 텔레그램으로 우회하지 않는다(채널 선택 존중) — 같은 채널에 텍스트로 알린다
       console.error(`[report] PDF Discord 발송 실패: ${sanitizeError(error)}`)
+      await notifierFor(bot).notify(
+        Route.ALLOWED,
+        htmlContent(`⚠️ ${year}년 ${quarter}분기 리포트 PDF 첨부에 실패했습니다.\n웹 리포트 페이지에서 받아주세요.`),
+        REPORT_CTX,
+      )
     }
 
     // 003 §7-4: 텔레그램 API 직접 — Discord 를 고르지 않았을 때만.
@@ -77,7 +82,7 @@ export async function sendQuarterlyReport(): Promise<void> {
       }
     }
 
-    console.log(`[report] ${year}년 ${quarter}분기 리포트 발송 완료`)
+    if (discord !== 'failed') console.log(`[report] ${year}년 ${quarter}분기 리포트 발송 완료`)
   } catch (error) {
     console.error('[report] 분기 리포트 생성 실패:', error)
 

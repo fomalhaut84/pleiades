@@ -165,7 +165,8 @@ export async function sendDiscordFile(
   };
   const url = webhookFor(opts.webhooks, alias);
   const payload = JSON.stringify({
-    content: escapeDiscordMarkdown(caption).slice(0, DISCORD_MAX_LENGTH),
+    // escape 뒤 자르면 끝에 반쪽 escape(`\`)가 남을 수 있다 — md 를 아는 분할의 첫 조각 (#147 사전 리뷰 info)
+    content: caption === '' ? '' : splitDiscordMarkdown(escapeDiscordMarkdown(caption), DISCORD_MAX_LENGTH)[0],
     allowed_mentions: { parse: [] },
     attachments: [{ id: 0, filename: file.name }],
   });

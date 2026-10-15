@@ -111,8 +111,9 @@ export async function sendFileIfDiscord(
 ): Promise<'not-discord' | 'no-webhook' | 'sent'> {
   if (!usesDiscord(route)) return 'not-discord'
   const alias = DISCORD_ALIAS[route]
-  if (discordWebhooks()[alias] === '') return 'no-webhook'
-  await sendDiscordFile({ webhooks: discordWebhooks }, alias, file, caption)
+  const url = discordWebhooks()[alias] // 한 번 읽어 고정 — 판정과 전송 사이에 .env 가 바뀌어도 어긋나지 않게
+  if (url === '') return 'no-webhook'
+  await sendDiscordFile({ webhooks: { [alias]: url } }, alias, file, caption)
   return 'sent'
 }
 
