@@ -112,6 +112,15 @@ export function interactiveNotifierFor(bot: Bot): Notifier {
   })
 }
 
+/**
+ * 키보드 메시지 수신자 수(전송 없이) — Discord 봇이면 설정 유무(0/1), 아니면 텔레그램 ALLOWED 수.
+ * 스케줄 가드가 RSU 확정 작업을 건너뛸지 판단할 때 쓴다 — 텍스트 수신자 0 · Discord 버튼만 설정한 경우도 실행돼야 한다(PR #156 Codex P1).
+ */
+export function interactiveRecipientCount(): number {
+  if (!interactiveUsesDiscord()) return TELEGRAM_TARGETS.ALLOWED().length
+  return discordBotConfig().ready ? 1 : 0
+}
+
 /** 키보드 메시지를 Discord 봇으로 보내는가 — 텍스트 스위치와 따로 켜고 끈다(#147 결정). */
 export function interactiveUsesDiscord(): boolean {
   return (platformEnv('NOTIFY_INTERACTIVE_CHANNEL') ?? '').trim().toLowerCase() === 'discord'

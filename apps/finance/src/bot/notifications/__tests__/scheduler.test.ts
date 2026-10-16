@@ -25,18 +25,22 @@ vi.mock('../networth-snapshot', () => ({ takeNetWorthSnapshot: vi.fn() }))
 vi.mock('../quarterly-report', () => ({ sendQuarterlyReport: vi.fn() }))
 
 import cron from 'node-cron'
-import { sendRSUReminders } from '../rsu'
+import { sendRSUReminders, sendRSUVestConfirmations } from '../rsu'
 
 describe('scheduleNotifications — 수신자 확인은 실행 시점에', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.mocked(cron.schedule).mockClear()
     vi.mocked(sendRSUReminders).mockClear()
+    vi.mocked(sendRSUVestConfirmations).mockClear()
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.stubEnv('TELEGRAM_BOT_TOKEN', '1:x')
     vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '')
     vi.stubEnv('NOTIFY_ALLOWED_CHANNEL', '')
     vi.stubEnv('DISCORD_WEBHOOK_FINANCE', '')
+    vi.stubEnv('NOTIFY_INTERACTIVE_CHANNEL', '')
+    vi.stubEnv('DISCORD_BOT_TOKEN_FINANCE', '')
+    vi.stubEnv('DISCORD_CHANNEL_ID_FINANCE', '')
   })
   afterEach(() => {
     vi.unstubAllEnvs()
@@ -73,5 +77,23 @@ describe('scheduleNotifications — 수신자 확인은 실행 시점에', () =>
     vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '11')
     await run()
     expect(sendRSUReminders).toHaveBeenCalledTimes(1)
+  })
+
+  // 회귀: PR #156 Codex P1 — 텍스트 수신자 0 · Discord 버튼만 설정해도 RSU D-day 확정 작업은 실행돼야 한다
+  it('Discord 버튼만 설정 — RSU 확정(15:35)은 실행 · 텍스트 알림(09:00)은 건너뜀', async () => {
+    const { scheduleNotifications } = await import('../scheduler')
+    scheduleNotifications()
+    const calls = vi.mocked(cron.schedule).mock.calls
+    const confirm = calls.find((c) => c[0] === '35 15 * * *')![1] as unknown as () => Promise<void>
+    const reminder = calls.find((c) => c[0] === '0 9 * * *')![1] as unknown as () => Promise<void>
+    await confirm()
+    expect(sendRSUVestConfirmations).not.toHaveBeenCalled()
+    vi.stubEnv('NOTIFY_INTERACTIVE_CHANNEL', 'discord')
+    vi.stubEnv('DISCORD_BOT_TOKEN_FINANCE', 'fake-token')
+    vi.stubEnv('DISCORD_CHANNEL_ID_FINANCE', '123456789012345678')
+    await confirm()
+    expect(sendRSUVestConfirmations).toHaveBeenCalledTimes(1)
+    await reminder()
+    expect(sendRSUReminders).not.toHaveBeenCalled()
   })
 })

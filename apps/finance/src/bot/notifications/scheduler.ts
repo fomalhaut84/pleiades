@@ -17,7 +17,7 @@ import { sendMonthlyReport } from './monthly-report'
 import { sendBriefing } from './briefing'
 import { takeNetWorthSnapshot } from './networth-snapshot'
 import { sendQuarterlyReport } from './quarterly-report'
-import { recipients, Route, telegramRecipients } from './notifier'
+import { interactiveRecipientCount, recipients, Route, telegramRecipients } from './notifier'
 
 function hasAllowedRecipients(): boolean {
   return recipients.targetCount(Route.ALLOWED) > 0 || telegramRecipients(Route.ALLOWED).length > 0
@@ -39,15 +39,18 @@ export function scheduleNotifications(): void {
   if (!hasAllowedRecipients()) {
     console.log('[notification] ALLOWED 수신자 0 (TELEGRAM_ALLOWED_CHAT_IDS · Discord 웹훅 모두 비어 있음) — 스케줄은 등록하고 실행 때마다 건너뜀')
   }
-  const schedule: typeof cron.schedule = (expression, task, options) =>
+  const guarded = (hasRecipients: () => boolean): typeof cron.schedule => (expression, task, options) =>
     cron.schedule(
       expression,
       (async (...args: unknown[]) => {
-        if (!hasAllowedRecipients()) return
+        if (!hasRecipients()) return
         await (task as (...a: unknown[]) => unknown)(...args)
       }) as typeof task,
       options,
     )
+  const schedule = guarded(hasAllowedRecipients)
+  // RSU D-day 확정(키보드)은 NOTIFY_INTERACTIVE_CHANNEL 을 따른다 — 텍스트 수신자 0 · Discord 버튼만 설정해도 실행한다(#155 · PR #156 Codex P1)
+  const scheduleInteractive = guarded(() => hasAllowedRecipients() || interactiveRecipientCount() > 0)
 
   // active_review AlertConfig 키를 배포 직후 즉시 upsert — 첫 클로징/주간 cron 실행
   // 전에 사용자가 PUT /api/alerts/config 로 off 설정 가능하도록 (라우트가 존재하지 않는
@@ -134,7 +137,7 @@ export function scheduleNotifications(): void {
 
     // RSU D-day 확정 알림: 매일 15:35 KST (KRX 마감 15:30 + 안전 마진).
     // 종가가 yahoo historical 에 확정된 후이므로 inline keyboard [확정] 한 번 탭으로 처리 가능.
-    schedule(
+    scheduleInteractive(
       '35 15 * * *',
       async () => {
         try {
