@@ -3998,3 +3998,34 @@ fit 1a-3 대상 6 파일 → **4** 커밋 / 저장소 158. fin 1a-4 대상 19 �
 - **외부 연결:** 기동 중 node ESTABLISHED 원격은 텔레그램 API(`149.154.166.110:443`)뿐(`lsof -nP -iTCP -sTCP:ESTABLISHED`). KRX·Yahoo 는 크론 시점에만 나간다(공개 시세 · 서비스 계정 아님).
 - **노출:** `next start` 가 `*:4610`·`*:4620` 으로 리슨 — 같은 LAN 접근 가능(`lsof -iTCP -sTCP:LISTEN`).
 - **의미:** 두 앱의 웹·봇이 서비스와 격리된 채 로컬에서 기동한다 — **006 첫 목표(U97-4) 달성.**
+
+# 2026-10-16 — 전환 설계 실측 (#163)
+
+대상: pleiades `dev` `0284a22`(#160 수용 후) 의 `apps/*` 추적 파일 + 서비스 원격 https `ls-remote`(I-13). 서버·서비스 DB·`repos/*`·원본 git·`.env` 열람 0 · `deploy/**`·`ecosystem.config.js` 는 읽기만. 상세 표·출처 행은 `_workspace/007/01_surveyor_cutover.md`(이 절은 결론만).
+
+| 항목 | fin | fit | 명령 |
+|---|---|---|---|
+| 배포 트리거 | `release: published` + `workflow_dispatch(tag)` → ssh(`appleboy/ssh-action@v1.2.2` · secrets `DEPLOY_SSH_{HOST,USER,KEY,PORT,FINGERPRINT}` `DEPLOY_PATH`) → `fetch --tags --force` · `checkout -f <tag>` · `deploy/deploy.sh <tag>` | 동일 | `cat -n apps/*/.github/workflows/deploy.yml` |
+| `deploy.sh` 단계 | `npm ci` → `migrate deploy` → `next build`+`build:mcp:staged`+`build:bot` → MCP 사전검증 4299 → `pm2 startOrRestart myfinance-mcp` → health 4210 → `pm2 save` → `startOrReload myfinance` → `startOrRestart myfinance-bot` | `cd /home/nasty68/myFitness`(하드코딩) → `npm ci` → `migrate deploy`+`generate` → `build:staged` → 사전검증 4399 → `myfitness-mcp` → health `MCP_PORT`(4301) → `startOrReload myfitness` → `delete`+`start myfitness-bot` → `pm2 save` | `cat -n apps/*/deploy/deploy.sh` |
+| `ecosystem` cwd | `__dirname` ×3 | **`/home/nasty68/myFitness` ×3** | `cat -n apps/*/ecosystem.config.js` |
+| 루트 `npm ci`(notify dist) 단계 | **없음** | **없음** | 위 |
+| 영속 상태(cwd 안 · gitignored) | `reports/`(DB `pdfPath` = 파일명만) · `logs/` · `backups/` | `.garmin-tokens/` · `.omron-tokens/` · `.runtime/` · `logs/` | `git grep --text -nE "process\.cwd\(\)…" HEAD -- apps/<a>/src` · `.gitignore` |
+| env 키(코드∪템플릿∪리터럴) | 28 | 37 | `git grep --text -ohE "process\.env…"` + `.env.example` + `platformEnv('…')` 리터럴 |
+| 같은 이름 키 | **15**(플랫폼 3 은 의도적 공유) | | `comm -12` |
+| 모델 · 마이그레이션 | 30 · 26(최신 `20260917070947`) | 17 · **36**(최신 `20261015052330_omron_source_body_fields`) | `grep -cE '^model '` · `git ls-tree -d … prisma/migrations/` |
+| 모델명 충돌 · 비테이블 객체 | **0** · 0 | 0 · CHECK 2 | `comm -12` · `grep -oiE 'CREATE (FUNCTION\|TRIGGER\|…)'` |
+| 공유 DB 시 충돌 | **`_prisma_migrations`**(둘 다 기본 테이블·`public`) | | `schema.prisma` datasource |
+| `engines` | 없음 | 없음 | `package.json` |
+| 서비스 태그(수 · 최신) | 27 · **v0.16.5** = `main edf9f234`(경량) | 89 · **v2.41.1** = `main ec7987ce`(경량) | `git ls-remote --tags --refs https://github.com/fomalhaut84/<repo>.git` |
+| 서비스 `dev`(= `apps/*`) | `55404173` ≠ `main` | `0b3ccd4c` ≠ `main` | `git ls-remote <url> refs/heads/main refs/heads/dev` |
+| pleiades 태그 · Release · 배포 job | **0 · 0 · 0** | | `git tag \| wc -l` · `gh release list -R fomalhaut84/pleiades` · `grep -rniE 'deploy\|ssh\|release' .github/` |
+
+**이전 기록과의 차이(정정이 아니라 시점 차):**
+- MF:24 버전 v0.16.4 / v2.27.2 → 최신 태그 **v0.16.5 / v2.41.1**. 두 앱 `package.json` `version` 은 `0.1.0` — 버전은 태그에만 있다.
+- MF:964-986(M4) fit 서버 경로 = `deploy.sh:10` → **fit workflow 도 `secrets.DEPLOY_PATH` 를 쓴다**(`deploy.yml:59,78`) · `ecosystem.config.js:7,23,66` 하드코딩 3곳 추가.
+- MF:3989 fit 마이그레이션 35 → **36**(#160 수용). MF:3976 fit Next 16.3.5 → lock **16.3.8**.
+- MF:29-38 프로세스·포트 6개는 변화 없음(4100·4200·4210·4301 + 사전검증 임시 4299·4399).
+
+**가정을 뒤집는 값:** 배포는 **서비스 저장소 Release 태그**에 묶여 있고 pleiades 엔 태그·배포 경로가 없다 · 현 `deploy.sh` 는 루트 `npm ci` 가 없어 pleiades 트리에서 빌드가 깨진다(006 ㉒) · fit 은 서버 절대경로 하드코딩 4곳 · 서버 작업 디렉터리 안에 외부 계정 토큰·PDF 등 영속 상태가 있다 · 같은 DB 합병은 `_prisma_migrations` 에서 막힌다.
+
+**못 잰 값(서버에서만):** `DEPLOY_PATH` 실경로 · 서버 HEAD/dirty · `pm2 ls`·dump·startup · nginx 실설정·SSL · 서비스 DB 이름·크기·PG 버전 · 백업 cron 실재 · 실 `.env` 키 목록 · node/npm·`claude` 계정 · 영속 디렉터리 크기 · 서버의 pleiades https 접근(Q45) · 서비스 secrets 목록 · 같은 서버 다른 서비스 포트 · 텔레그램 봇 polling 현황 · `main..dev` 차이 커밋 수(스크래치 clone 필요 — 이번 범위 밖). 목록 상세 `_workspace/007/01_surveyor_cutover.md` §8.
