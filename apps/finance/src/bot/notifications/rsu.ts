@@ -7,7 +7,7 @@
  *   inline keyboard ([✅ 확정] [✖️ 취소]) 첨부 → 한 번 탭으로 vest 처리.
  *   → KRX 마감(15:30) + 안전 마진 후라 yahoo historical 종가 확정 시점.
  *
- * callback 처리는 src/bot/commands/vest-confirm.ts.
+ * callback 처리는 src/bot/commands/vest-confirm.ts(텔레그램) · notifications/discord-interactions.ts(Discord · #155).
  */
 
 import { InlineKeyboard } from 'grammy'
@@ -178,8 +178,8 @@ export async function sendRSUVestConfirmations(): Promise<void> {
     // 중복 전송 시 버튼을 두 번 눌러도 rsu-vest-service 의 ALREADY_VESTED 가 이중 반영을 막는다.
     const r = await interactiveNotifierFor(bot).notify(Route.ALLOWED, htmlContent(msg, keyboard), NOTIFY_CTX)
     if (r.total === 0) {
-      // 확정 버튼은 텔레그램 전용 — Discord 만 설정하면 이 알림은 갈 곳이 없다(#143)
-      console.warn(`[notification] D-day RSU 확정 알림 수신자 0 — TELEGRAM_ALLOWED_CHAT_IDS 미설정 (${rsu.id})`)
+      // 버튼 채널은 NOTIFY_INTERACTIVE_CHANNEL — 텔레그램이면 chat id, Discord 면 fin 봇 토큰·채널이 비었다(#155)
+      console.warn(`[notification] D-day RSU 확정 알림 수신자 0 — TELEGRAM_ALLOWED_CHAT_IDS 또는 Discord 봇 설정 미비 (${rsu.id})`)
     }
   }
   console.log(`[notification] D-day RSU 확정 알림 발송 완료 (${todayRsus.length}건)`)
