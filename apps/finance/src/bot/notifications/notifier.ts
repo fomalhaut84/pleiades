@@ -10,12 +10,14 @@
  * 값은 pleiades 루트 `.env`(`platformEnv` · 프로세스 env 우선)에서 읽는다 — 앱 실행 방식(run.sh · npm run dev · pm2)과 무관.
  *   NOTIFY_ALLOWED_CHANNEL=discord → `#finance` (DISCORD_WEBHOOK_FINANCE)
  *   NOTIFY_ADMIN_CHANNEL=discord   → `#admin`   (DISCORD_WEBHOOK_ADMIN)
- * 키보드 메시지(`interactiveNotifierFor`) · `/브리핑` 응답(`notifierForChat`) · 분기 PDF 목록(`telegramRecipients`)은
- * 항상 텔레그램 — Discord 는 인터랙션·첨부를 받지 못한다(1b-2 · 혼합 운영 Q11).
+ * `/브리핑` 응답(`notifierForChat`)은 항상 텔레그램. 분기 PDF 는 `sendFileIfDiscord`(M-6b-1).
+ * 키보드 메시지(`interactiveNotifierFor`)는 별도 스위치 `NOTIFY_INTERACTIVE_CHANNEL=discord` 면 fin Discord 봇(M-6b-4 #155),
+ * 아니면 텔레그램(혼합 운영 Q11). 버튼 클릭은 봇 프로세스의 gateway(`discord-interactions.ts`)가 받는다.
  */
 
 import type { Bot } from 'grammy'
 import {
+  createDiscordBotTransport,
   createDiscordTransport,
   createNotifier,
   createTelegramTransport,
@@ -89,13 +91,52 @@ export function notifierFor(bot: Bot): Notifier {
 }
 
 /**
- * 키보드가 붙은 메시지 전용 — 항상 텔레그램(`NOTIFY_ALLOWED_CHANNEL` 무시 · rsu D-day 확정 버튼).
+ * 키보드가 붙은 메시지 전용(rsu D-day 확정 버튼) — 텍스트 스위치(`NOTIFY_ALLOWED_CHANNEL`)는 보지 않고
+ * `NOTIFY_INTERACTIVE_CHANNEL` 만 본다.
+ *   미설정 → 텔레그램(구 동작)
+ *   discord → fin 봇으로 `#finance` · 키보드는 버튼으로 자동 변환 · 봇 설정이 없으면 수신자 0(텔레그램으로 우회하지 않는다)
+ * fin 은 키보드 메시지의 id 를 저장하지 않는다 — DB 무관(Q61).
  */
 export function interactiveNotifierFor(bot: Bot): Notifier {
+  if (!interactiveUsesDiscord()) {
+    return createNotifier({
+      transport: createTelegramTransport({ api: bot.api }),
+      targets: { ALLOWED: TELEGRAM_TARGETS.ALLOWED },
+    })
+  }
+  const discord = discordBotConfig()
+  const alias = DISCORD_ALIAS.ALLOWED
   return createNotifier({
-    transport: createTelegramTransport({ api: bot.api }),
-    targets: { ALLOWED: TELEGRAM_TARGETS.ALLOWED },
+    transport: createDiscordBotTransport({ token: discord.token, channels: { [alias]: discord.channelId } }),
+    targets: { ALLOWED: () => (discord.ready ? [alias] : []) },
   })
+}
+
+/**
+ * 키보드 메시지 수신자 수(전송 없이) — Discord 봇이면 설정 유무(0/1), 아니면 텔레그램 ALLOWED 수.
+ * 스케줄 가드가 RSU 확정 작업을 건너뛸지 판단할 때 쓴다 — 텍스트 수신자 0 · Discord 버튼만 설정한 경우도 실행돼야 한다(PR #156 Codex P1).
+ */
+export function interactiveRecipientCount(): number {
+  if (!interactiveUsesDiscord()) return TELEGRAM_TARGETS.ALLOWED().length
+  return discordBotConfig().ready ? 1 : 0
+}
+
+/** 키보드 메시지를 Discord 봇으로 보내는가 — 텍스트 스위치와 따로 켜고 끈다(#147 결정). */
+export function interactiveUsesDiscord(): boolean {
+  return (platformEnv('NOTIFY_INTERACTIVE_CHANNEL') ?? '').trim().toLowerCase() === 'discord'
+}
+
+const DISCORD_ID_RE = /^\d{5,25}$/
+
+/** fin Discord 봇 설정 — 토큰·채널 ID·허용 사용자. `ready` 는 토큰과 채널 ID 형식이 갖춰졌는지. 값은 로그에 쓰지 않는다. */
+export function discordBotConfig(): { token: string; channelId: string; allowedUserIds: string[]; ready: boolean } {
+  const token = (platformEnv('DISCORD_BOT_TOKEN_FINANCE') ?? '').trim()
+  const channelId = (platformEnv('DISCORD_CHANNEL_ID_FINANCE') ?? '').trim()
+  const allowedUserIds = (platformEnv('DISCORD_ALLOWED_USER_IDS') ?? '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter((v) => DISCORD_ID_RE.test(v))
+  return { token, channelId, allowedUserIds, ready: token !== '' && DISCORD_ID_RE.test(channelId) }
 }
 
 /**

@@ -11,6 +11,7 @@ import 'dotenv/config'
 import { getBot } from './index'
 import { schedulePriceUpdates, scheduleSnapshots, scheduleKrxSync, scheduleRecurring, scheduleVestingStatusUpdate, scheduleEarningsScan } from '@/lib/cron'
 import { scheduleNotifications } from './notifications/scheduler'
+import { startDiscordInteractions } from './notifications/discord-interactions'
 import { sanitizeError } from './utils/error'
 
 async function main(): Promise<void> {
@@ -35,6 +36,9 @@ async function main(): Promise<void> {
   scheduleNotifications()
   console.log('[bot] cron + 알림 스케줄러 등록 완료')
 
+  // pleiades M-6b-4 (pleiades#155): Discord 버튼 수신(gateway) — 봇 토큰·채널이 있을 때만
+  const discordGateway = startDiscordInteractions()
+
   bot.catch((err) => {
     console.error(`[bot] 에러: ${sanitizeError(err)}`)
   })
@@ -42,6 +46,7 @@ async function main(): Promise<void> {
   // graceful shutdown
   const shutdown = async () => {
     console.log('[bot] 종료 중...')
+    discordGateway?.stop()
     await bot.stop()
     process.exit(0)
   }

@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from 'grammy'
 import {
+  discordBotConfig,
   htmlContent,
   interactiveNotifierFor,
   notifierFor,
@@ -39,6 +40,7 @@ describe('fin notifier — 라우트별 채널', () => {
     vi.stubEnv('DISCORD_WEBHOOK_ADMIN', WEBHOOK_ADMIN)
     vi.stubEnv('NOTIFY_ALLOWED_CHANNEL', '')
     vi.stubEnv('NOTIFY_ADMIN_CHANNEL', '')
+    vi.stubEnv('NOTIFY_INTERACTIVE_CHANNEL', '')
   })
   afterEach(() => {
     vi.unstubAllEnvs()
@@ -101,6 +103,51 @@ describe('fin notifier — 라우트별 채널', () => {
     expect(sendMessage).toHaveBeenCalledWith('11', 'rsu', { parse_mode: 'HTML', reply_markup: kb })
     expect(fetchMock).not.toHaveBeenCalled()
     expect(telegramRecipients(Route.ALLOWED)).toEqual(['11', '22'])
+  })
+
+  // M-6b-4 (#155) — 키보드 메시지 Discord 전환
+  it('NOTIFY_INTERACTIVE_CHANNEL=discord — fin 봇으로 #finance · 버튼 변환 · 텔레그램 호출 없음', async () => {
+    vi.stubEnv('NOTIFY_INTERACTIVE_CHANNEL', 'discord')
+    vi.stubEnv('DISCORD_BOT_TOKEN_FINANCE', 'fake-token')
+    vi.stubEnv('DISCORD_CHANNEL_ID_FINANCE', '123456789012345678')
+    const kb = {
+      inline_keyboard: [[
+        { text: '✅ 확정', callback_data: 'vest:confirm:r1' },
+        { text: '✖️ 취소', callback_data: 'vest:cancel:r1' },
+      ]],
+    }
+    const r = await interactiveNotifierFor(bot).notify(Route.ALLOWED, htmlContent('<b>rsu</b>', kb))
+    expect(r).toMatchObject({ sent: 1, total: 1, first: { target: 'finance', ref: 'd1' } })
+    expect(sendMessage).not.toHaveBeenCalled()
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string; headers: Record<string, string> }]
+    expect(url).toBe('https://discord.com/api/v10/channels/123456789012345678/messages')
+    expect(init.headers.authorization).toBe('Bot fake-token')
+    const body = JSON.parse(init.body) as { content: string; components: Array<{ components: Array<{ custom_id: string }> }> }
+    expect(body.content).toBe('**rsu**')
+    expect(body.components[0].components.map((b) => b.custom_id)).toEqual(['vest:confirm:r1', 'vest:cancel:r1'])
+  })
+
+  it('Discord 스위치를 켜도 봇 설정이 없으면 수신자 0 — 텔레그램으로 우회하지 않는다', async () => {
+    vi.stubEnv('NOTIFY_INTERACTIVE_CHANNEL', 'discord')
+    vi.stubEnv('DISCORD_BOT_TOKEN_FINANCE', '')
+    vi.stubEnv('DISCORD_CHANNEL_ID_FINANCE', 'not-an-id')
+    const kb = { inline_keyboard: [[{ text: 'ok', callback_data: 'c' }]] }
+    const r = await interactiveNotifierFor(bot).notify(Route.ALLOWED, htmlContent('rsu', kb))
+    expect(r).toMatchObject({ sent: 0, total: 0 })
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('discordBotConfig — 허용 사용자는 숫자 ID 만 · ready 는 토큰 + 채널 ID 형식', () => {
+    vi.stubEnv('DISCORD_BOT_TOKEN_FINANCE', ' t ')
+    vi.stubEnv('DISCORD_CHANNEL_ID_FINANCE', '123456789012345678')
+    vi.stubEnv('DISCORD_ALLOWED_USER_IDS', '111111, abc ,222222,')
+    expect(discordBotConfig()).toEqual({
+      token: 't',
+      channelId: '123456789012345678',
+      allowedUserIds: ['111111', '222222'],
+      ready: true,
+    })
   })
 
   // M-6b-1 (#147) — 분기 PDF 첨부
