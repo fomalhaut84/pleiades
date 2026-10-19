@@ -243,7 +243,7 @@ describe('getPrices — 보유종목 전체 분기 갱신 시각 KST (#499)', ()
 })
 
 describe('getPrices — 장 상태 라벨 시장별 분기 (#500)', () => {
-  it('미국 종목의 POST 는 애프터마켓이 진행 중이므로 (시간외)', async () => {
+  it('미국 종목의 POST 는 애프터마켓이 진행 중이므로 현재 시간외', async () => {
     vi.mocked(fetchQuote).mockResolvedValueOnce({
       ticker: 'AAPL',
       displayName: 'Apple Inc.',
@@ -258,11 +258,11 @@ describe('getPrices — 장 상태 라벨 시장별 분기 (#500)', () => {
 
     const text = (await getPrices({ tickers: ['AAPL'] })).content[0].text
 
-    expect(text).toContain('(시간외)')
+    expect(text).toContain('(정규장 종가 · 현재 시간외)')
     expect(text).not.toContain('장 마감 후')
   })
 
-  it('POSTPOST 도 미국 종목이면 (시간외) — raw exchange 코드는 정규화 누락 시 방어층', async () => {
+  it('POSTPOST 도 미국 종목이면 현재 시간외 — raw exchange 코드는 정규화 누락 시 방어층', async () => {
     vi.mocked(fetchQuote).mockResolvedValueOnce({
       ticker: 'AAPL',
       displayName: 'Apple Inc.',
@@ -279,15 +279,15 @@ describe('getPrices — 장 상태 라벨 시장별 분기 (#500)', () => {
 
     const text = (await getPrices({ tickers: ['AAPL'] })).content[0].text
 
-    expect(text).toContain('(시간외)')
+    expect(text).toContain('(정규장 종가 · 현재 시간외)')
   })
 
-  it('한국 종목의 POST 는 마감 후 거래가 없으므로 (장 마감 후)', async () => {
+  it('한국 종목의 POST 는 마감 후 거래가 없으므로 현재 장 마감 후', async () => {
     vi.mocked(fetchQuote).mockResolvedValueOnce(kospiQuote({ marketState: 'POST' }))
 
     const text = (await getPrices({ tickers: ['^KS11'] })).content[0].text
 
-    expect(text).toContain('(장 마감 후)')
+    expect(text).toContain('(정규장 종가 · 현재 장 마감 후)')
     expect(text).not.toContain('시간외')
   })
 
@@ -296,7 +296,7 @@ describe('getPrices — 장 상태 라벨 시장별 분기 (#500)', () => {
 
     const text = (await getPrices({ tickers: ['^KS11'] })).content[0].text
 
-    expect(text).toContain('(장 마감 후)')
+    expect(text).toContain('(정규장 종가 · 현재 장 마감 후)')
   })
 
   it('PRE 계열은 시장과 무관하게 동일 라벨', async () => {
@@ -315,6 +315,45 @@ describe('getPrices — 장 상태 라벨 시장별 분기 (#500)', () => {
 
     const text = (await getPrices({ tickers: ['^KS11', 'AAPL'] })).content[0].text
 
-    expect(text.match(/\(장 시작 전\)/g)).toHaveLength(2)
+    expect(text.match(/\(정규장 종가 · 현재 장 시작 전\)/g)).toHaveLength(2)
+  })
+})
+
+describe('getPrices — 시세 값과 장 상태 분리 (#506 · Codex P2 #505)', () => {
+  const aapl = (marketState: string) => ({
+    ticker: 'AAPL',
+    displayName: 'Apple Inc.',
+    price: 252.82,
+    currency: 'USD',
+    market: 'US',
+    change: 1.1,
+    changePercent: 0.44,
+    marketTime: new Date('2026-09-16T20:00:00Z'),
+    marketState,
+  })
+
+  it.each(['PRE', 'PREPRE', 'POST', 'POSTPOST'])(
+    '%s: 정규장 가격에 시간외 라벨을 직접 붙이지 않는다',
+    async (state) => {
+      vi.mocked(fetchQuote).mockResolvedValueOnce(aapl(state))
+
+      const text = (await getPrices({ tickers: ['AAPL'] })).content[0].text
+
+      expect(text).toMatch(/\(정규장 종가 · 현재 [^)]+\)/)
+      expect(text).not.toMatch(/KST \((시간외|프리마켓|장 시작 전|장 마감 후)\)/)
+    },
+  )
+
+  it('REGULAR 는 값이 곧 현재 장 시세이므로 (장중)', async () => {
+    vi.mocked(fetchQuote).mockResolvedValueOnce(aapl('REGULAR'))
+    const text = (await getPrices({ tickers: ['AAPL'] })).content[0].text
+    expect(text).toContain('KST (장중)')
+    expect(text).not.toContain('정규장 종가')
+  })
+
+  it('CLOSED 는 (마감)', async () => {
+    vi.mocked(fetchQuote).mockResolvedValueOnce(aapl('CLOSED'))
+    const text = (await getPrices({ tickers: ['AAPL'] })).content[0].text
+    expect(text).toContain('KST (마감)')
   })
 })

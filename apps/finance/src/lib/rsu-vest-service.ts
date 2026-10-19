@@ -9,7 +9,7 @@
  * 검증/트랜잭션 로직 한 곳에서만 관리.
  */
 
-import YahooFinance from 'yahoo-finance2'
+import { createYahooFinance } from './yahoo-client'
 import { prisma } from '@/lib/prisma'
 import { recalcHolding, calcTotalKRW } from '@/lib/trade-utils'
 import { KST_OFFSET_MS } from '@/lib/kst-date'
@@ -19,7 +19,7 @@ const RSU_DISPLAY_NAME = '카카오'
 const RSU_MARKET = 'KR'
 const RSU_CURRENCY = 'KRW'
 
-const yahooFinance = new YahooFinance()
+const yahooFinance = createYahooFinance()
 
 export type RsuVestErrorCode =
   | 'NOT_FOUND'

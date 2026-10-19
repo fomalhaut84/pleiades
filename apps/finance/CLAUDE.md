@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Tech Stack
 
-- **Framework**: Next.js 14 (App Router, TypeScript)
+- **Framework**: Next.js 15.5 (App Router, TypeScript)
 - **DB**: PostgreSQL + Prisma ORM
 - **Styling**: Tailwind CSS
 - **Charts**: Recharts
@@ -158,6 +158,7 @@ PM2 ──► myfinance-bot (standalone)        │
 
 ## Phase Status
 
-**완료**: Phase 1~21 (5차 마일스톤까지). 현재 추가 개선 작업 중.
+**완료**: Phase 1~41 (18차 마일스톤, v0.16.0) + 패치 릴리즈 v0.16.x.
+**유지보수 모드 (2026-10-19~)**: 신규 기능 개발 중단. 후속 개발은 `~/workspace/pleiades` (myFinance × myFitness 통합 플랫폼) 에서 진행한다. 이 저장소는 실서비스 운영 + 보안/장애 hotfix 만 받는다.
 **배포**: PostgreSQL + PM2 + Nginx (Ubuntu, finance.starryjeju.net:4100)
 전체 로드맵: `docs/roadmap.md`

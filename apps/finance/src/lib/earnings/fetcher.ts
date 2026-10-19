@@ -4,10 +4,10 @@
  * 무료. 미국주 위주 — 한국 종목은 대부분 미지원 (nextEarningsDate=null 로 그레이스풀).
  */
 
-import YahooFinance from 'yahoo-finance2'
+import { createYahooFinance } from '@/lib/yahoo-client'
 import { isSameOrFutureKstDay } from '@/lib/kst-date'
 
-const yahooFinance = new YahooFinance()
+const yahooFinance = createYahooFinance()
 
 export interface EarningsFetchResult {
   ticker: string

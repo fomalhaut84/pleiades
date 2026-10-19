@@ -418,3 +418,50 @@
 - [ ] **36-A**: 뉴스 API 도입 결정 — 조사 완료 (`docs/specs/435-news-api-decision.md`), 17차에서 결정
 - [ ] **36-B**: NewsCache + fetcher + cron
 - [ ] **36-C**: `news_keyword` 조건
+
+---
+
+# 17차 마일스톤 — 알림/MCP 심화 · 크로스-티커 TA · 모바일 UX (v0.15.0)
+
+> 마스터: `docs/specs/443-milestone-17-master.md`. 뉴스 조건(Phase 36)은 진행하지 않음 — 유지보수 모드 섹션 참조.
+
+## Phase 37: 알림 이력·MCP 로그 심화
+- [x] **37-A** (#444): 알림 상세 모달 + kind 별 컨텍스트
+- [x] **37-B** (#445): 알림 이력 CSV export + 실패 재발송
+- [x] **37-C** (#446): MCP 로그 실시간 tail (SSE)
+- [x] **37-D** (#447): MCP 로그 파일 다운로드 + retention 문서화
+
+## Phase 38: 크로스-티커 TA
+- [x] **38-A** (#448): `cross_ticker` TA 스키마 + evaluator + snapshot 주입
+- [x] **38-B** (#449): parser 프롬프트 v3 + `/strategies` UI
+
+## Phase 39: 모바일 웹 UX
+- [x] **39-A** (#450): 반응형 감사 리포트
+- [x] **39-B** (#451): 우선순위 상위 페이지 개선 (대시보드/거래/가계부)
+- [x] **39-C** (#452): v2 신규 페이지 재감사 (`/alerts/history` · `/admin/mcp-logs`)
+
+---
+
+# 18차 마일스톤 — AI 어드바이저 안정성 + 모바일 UX 잔여 (v0.16.0)
+
+> 마스터: `docs/specs/467-milestone-18-master.md`.
+
+## Phase 40: AI 어드바이저 안정성
+- [x] **40-A** (#468): Claude CLI 인증 만료 감지 + 관리자 alert
+- [x] **40-B** (#469): 봇 fallback 응답 개선 (AdvisorError code 별 분기)
+- [ ] **40-C** (optional): AI 어드바이저 심화 — 스코프 미확정으로 진행하지 않음
+
+## Phase 41: 모바일 UX 잔여
+- [x] **41-A** (#470): Vesting Calendar 모바일 리스트 뷰
+- [x] **41-B** (#471): AI chat 코드블록 모바일 처리
+- [x] **41-C** (#472): FamilyTotalCard 반응형
+
+---
+
+# 유지보수 모드 (2026-10-19~)
+
+> 18차 마일스톤(v0.16.0) + 패치 릴리즈 v0.16.1~v0.16.8 이후 신규 기능 개발 중단.
+> 후속 개발은 pleiades (myFinance × myFitness 통합 플랫폼) 저장소로 이관. 이 저장소는 운영 + 보안/장애 hotfix 만.
+
+- 미완료 항목(34-C, 36-A~C 뉴스 조건, 40-C AI 어드바이저 심화)은 여기서 진행하지 않는다 — pleiades 로드맵에서 재검토
+- 잔여 보안: npm audit `braces <=3.0.3` 전이 7건 (패치 없음 · tailwind 3 / eslint-config-next 경유). 패치 공개 시 `overrides` 로 hotfix
