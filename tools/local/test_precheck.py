@@ -1,4 +1,4 @@
-"""run.sh 가 감싸는 명령의 사전 검사 (#104 · PR #110 Codex P1 ×2 · 006 L-1 · I-3 · I-19).
+"""run.sh 가 감싸는 명령의 사전 검사 (#104 · PR #110 Codex P1 ×2 · 006 L-1 · I-3 · I-19 · #171 로컬 pm2 예외).
 
 실행: python3 -m unittest discover -s tools/local
 """
@@ -45,6 +45,22 @@ class Deny(unittest.TestCase):
         ("bash", "-c", "echo hi"),
         ("createdb", "pleiades_fin"),
         ("env", "npm", "run", "dev"),
+        # #171 로컬 pm2 예외 — run.sh 안에서도 좁은 형태만
+        ("pm2", "ls"),  # 전역 pm2 — run.sh 는 npx 경유만
+        ("npx", "pm2", "startup"),  # launchd 서비스 등록
+        ("npx", "pm2", "deploy", "production"),  # ssh 배포
+        ("npx", "pm2", "link", "a", "b"),  # 원격 모니터링
+        ("npx", "pm2", "install", "pm2-logrotate"),
+        ("npx", "pm2", "pull", "fin-web"),  # 앱 디렉터리에서 git pull
+        ("npx", "pm2", "start", "dist/bot.js"),  # start 는 루트 설정 파일만
+        ("npx", "pm2", "start", "../../apps/finance/ecosystem.config.js"),
+        ("npx", "pm2", "startOrReload", "ecosystem.config.js"),
+        ("npx", "pm2", "start", "/tmp/deploy/pleiades.config.cjs"),  # 이름만 같은 다른 파일
+        ("npx", "pm2", "reload", "ecosystem.config.js"),
+        ("npx", "pm2"),  # 서브커맨드 없음
+        ("npx", "-p", "pm2", "pm2", "ls"),
+        ("npx", "pm2-runtime", "start", "../../deploy/pleiades.config.cjs"),
+        ("npx", "pm2@latest", "ls"),  # 버전은 정확한 값만
     ]
 
     def test_denied(self):
@@ -64,6 +80,21 @@ class Allow(unittest.TestCase):
         ("node", "dist/bot.js"),
         ("npx", "tsc", "--noEmit"),
         ("npx", "prisma", "db", "execute", "--sql", "SELECT 1 -- drop database later"),
+        # #171 로컬 pm2 예외 — 루트 설정 파일 · 전용 데몬(PM2_HOME 은 run.sh 가 고정)
+        ("npx", "pm2", "start", "../../deploy/pleiades.config.cjs"),
+        ("npx", "-y", "pm2@6.0.13", "start", f"{ROOT}/deploy/pleiades.config.cjs", "--only", "fin-web"),
+        ("npx", "pm2", "startOrReload", "../../deploy/pleiades.config.cjs", "--update-env"),
+        ("npx", "pm2", "ls"),
+        ("npx", "pm2", "jlist"),
+        ("npx", "pm2", "describe", "fin-bot"),
+        ("npx", "pm2", "logs", "fin-bot", "--nostream", "--lines", "50"),
+        ("npx", "pm2", "restart", "fin-web"),
+        ("npx", "pm2", "stop", "all"),
+        ("npx", "pm2", "delete", "all"),
+        ("npx", "pm2", "save"),
+        ("npx", "pm2", "resurrect"),
+        ("npx", "pm2", "kill"),
+        ("npx", "pm2", "--version"),
     ]
 
     def test_allowed(self):

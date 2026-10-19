@@ -7,7 +7,7 @@
 |---|---|
 | `db.py` | `pleiades_fin`·`pleiades_fit` 만 create · drop(`--confirm <이름>`) · status (L-1 · I-14) |
 | `env/<app>.env` · `write_env.py` | 루트 템플릿 → `apps/<app>/.env` (덮어쓰지 않음 · 0600) (L-2) |
-| `run.sh` | 앱 명령의 유일한 입구 — cwd · precheck · claude shim PATH · 실효 env 검사(`check_env.py`) |
+| `run.sh` | 앱 명령의 유일한 입구 — cwd · precheck · claude shim PATH · 실효 env 검사(`check_env.py`) · `PM2_HOME` 고정(#171) |
 
 ## 처음 한 번 (M-2 · M-4)
 
@@ -54,3 +54,19 @@ tools/local/run.sh fit -- node dist/bot/standalone.cjs
 - 409 가 나면 같은 토큰이 다른 곳에서 polling 중이다 — **즉시 정지**(서비스 토큰이면 서비스 수신이 끊긴다 · ⑮).
 
 첫 기동 실측: `docs/research/measured-facts.md` *2026-10-01 — M-4*.
+
+## 로컬 pm2 (#171 · 007 Q85 ① — 전환 전 리허설용)
+
+pm2 는 **`run.sh` 안에서만** 쓴다 — 직접 치는 `pm2`·`npx pm2` 는 훅이 I-3 으로 막는다(`isolation.md` I-3 예외).
+
+```bash
+tools/local/run.sh fin -- npx pm2 start ../../deploy/pleiades.config.cjs --only <이름>   # 루트 설정 파일만 (T-1b 에서 생긴다)
+tools/local/run.sh fin -- npx pm2 ls
+tools/local/run.sh fin -- npx pm2 logs <이름> --nostream --lines 50
+tools/local/run.sh fin -- npx pm2 kill                                                   # 데몬 종료 — 리허설 끝
+```
+
+- **데몬은 `<root>/.pm2-local` 하나**(`run.sh` 가 `PM2_HOME` 을 덮어쓴다 · 기본 `~/.pm2` 를 쓰지 않는다 · gitignored). 되돌리기: `npx pm2 kill` → `rm -rf .pm2-local`.
+- 허용 서브커맨드: start 계열(`start`·`startOrReload`·`startOrRestart`·`startOrGracefulReload` — **루트 `deploy/pleiades.config.cjs` 만**) · 관리·조회(`restart`·`reload`·`stop`·`delete`·`ls`·`jlist`·`describe`·`logs`·`save`·`resurrect`·`kill` 등). `startup`·`deploy`·`link`·`install`·`pull` 등은 거부(`precheck.py`).
+- **pm2 앱은 데몬을 처음 띄운 환경을 물려받는다**(007 G-f) — 첫 기동은 반드시 `run.sh` 경유(shim PATH · `env -u`). 기동 뒤 `describe` 로 `claude` 가 shim 인지 확인한다. `describe`·`jlist` 는 프로세스 env 를 출력하므로 결과를 붙여 넣지 않는다.
+- 포트: 설정 파일이 포트 env 누락 시 기동을 거부해야 한다(L-3 · I-12 — T-1b).

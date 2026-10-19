@@ -380,6 +380,8 @@ pleiades 는 측정할 수 없다(I-3). **추정으로 채우지 않는다.** [S
 > 되돌리기: 문구 (**즉시**).
 >
 > **정정 (PR #164 Codex P1 · 2026-10-16).** Q85 ① 은 **지금 규칙으로 실행할 수 없다** — `isolation.md` I-3 이 pm2 를 전부 금지하고 차단 훅이 모든 `pm2` 호출을 I-3 으로 거부한다(`.claude/hooks/isolation_guard.py:475-478` · `precheck.py` 가 `npx` 를 벗겨 같은 판정). §6 은 T-4 까지 I-3 유지다. 따라서 **T-1 에 선행 하위 단계를 둔다: "로컬 pm2 예외"(전용 `PM2_HOME` · `run.sh <app> -- npx pm2` 경유만 · `ecosystem.config.js`(I-19)·서비스 포트(I-12)·서버는 계속 금지)를 `isolation.md` + 훅 + 훅 테스트에 넣는 별도 PR — 격리 완화라 착수 전 사용자 승인.** 승인되지 않으면 Q85 는 **② 만**(위험 수용 · G-c 공백 유지 — T-5c ⑤ 에서 처음 드러난다)으로 내려간다. 되돌리기: 예외 PR revert(**즉시**).
+>
+> **확정 (사용자 2026-10-19 · #171).** 로컬 pm2 예외 **승인** → Q85 **①+②** 유지. 구현은 위 문구와 한 곳이 다르다 — **훅은 바꾸지 않는다**: 훅은 `run.sh` 안쪽 명령을 보지 않고(바깥 `tools/local/run.sh` 만 본다) `precheck.py` 가 훅 판정기를 다시 적용해 pm2 를 거부하던 구조라, 예외는 **`precheck.py` 의 pm2 허용 목록 한 곳**(start 계열은 루트 `deploy/pleiades.config.cjs` 만)과 **`run.sh` 의 `PM2_HOME=<root>/.pm2-local` 고정**으로 충분하다. 직접 치는 `pm2`·`npx pm2` 는 훅이 계속 I-3 으로 막는다. 루트 설정 파일 이름을 `ecosystem.config.*` 로 하지 않는 것은 I-19 판정(`ECOSYSTEM` 정규식)과 섞이지 않게 하려는 것이다 — §4-1 의 "루트 ecosystem" 은 이 파일을 가리킨다. 정본 `isolation.md` I-3 행. 되돌리기: PR revert(**즉시**) · `.pm2-local/` 삭제.
 
 
 번호는 006 Q67 이후 **Q70 부터**.

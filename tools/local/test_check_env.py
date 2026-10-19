@@ -154,6 +154,11 @@ class RunSh(Base):
         r = self.run_sh("node", "-e", "console.log(process.env.DATABASE_URL || 'unset')", DATABASE_URL="postgresql://svc@prod/myfitness")
         self.assertEqual(r.stdout.strip(), "unset", r.stderr)
 
+    def test_pm2_home_is_pinned(self):
+        """#171 — pm2 는 전용 데몬만: 호출자의 PM2_HOME(기본 ~/.pm2 포함)을 무시하고 <root>/.pm2-local 로 고정한다."""
+        r = self.run_sh("node", "-e", "console.log(process.env.PM2_HOME)", PM2_HOME="/Users/someone/.pm2")
+        self.assertEqual(r.stdout.strip(), str(self.root / ".pm2-local"), r.stderr)
+
     def test_destructive_prisma_refused(self):
         for cmd in (["npx", "prisma", "migrate", "reset"], ["npx", "prisma", "migrate", "dev"],
                     ["npx", "prisma", "db", "push", "--force-reset"], ["psql", "-c", "drop database x"],

@@ -5,6 +5,9 @@
   ① 프로그램 허용 목록: 앱 명령(npm · npx · node)만. DB 관리(createdb/dropdb/psql)·셸·배포 스크립트는 run.sh 로 돌리지 않는다
   ② 파괴 명령: SQL 주석·공백·대소문자를 정규화한 뒤 본다 (L-1 · I-14)
   ③ 훅 판정기(.claude/hooks/isolation_guard.check)를 cwd = apps/<app> 로 다시 적용 (I-1 · I-3 · I-11 · I-19 · I-21)
+  ④ 로컬 pm2 예외 (#171 · 007 Q85 ①): `npx [-y] pm2[@x.y.z] <허용 서브커맨드>` 만 ③ 의 I-3 대신 여기서 판정한다 —
+     start 계열은 루트 deploy/pleiades.config.cjs 만 · 다른 인자에 설정 파일 금지. 데몬은 run.sh 가 PM2_HOME 으로 고정한다.
+     직접 치는 `pm2`·`npx pm2` 는 훅이 계속 막는다 — 이 예외는 run.sh 안에서만 있다
 
 사용: python3 precheck.py <root> <cwd> -- <명령…>   → 0 통과 · 1 거부 · 2 사용 오류
 """
@@ -23,6 +26,13 @@ sys.path.insert(0, str(HOOKS))
 import isolation_guard  # noqa: E402
 
 ALLOWED_PROGRAMS = {"npm", "npx", "node"}
+PM2_PACKAGE = re.compile(r"pm2(?:@\d+\.\d+\.\d+)?")
+PM2_CONFIG = "deploy/pleiades.config.cjs"  # 루트 설정 파일 (007 T-1) — apps/*/ecosystem.config.js 는 I-19 로 계속 금지
+PM2_START = {"start", "startOrReload", "startOrRestart", "startOrGracefulReload"}
+PM2_MANAGE = {"restart", "reload", "stop", "delete", "del", "list", "ls", "l", "status", "jlist", "prettylist",
+              "describe", "desc", "info", "show", "env", "logs", "flush", "save", "dump", "resurrect", "kill",
+              "ping", "pid", "id", "--version", "-v"}
+CONFIG_FILE = re.compile(r"\.(?:config\.[cm]?js|json|ya?ml)$")
 DESTRUCTIVE = re.compile(
     r"\bdrop (database|schema)\b|\bdropdb\b|\bmigrate (reset|dev)\b|--force-reset\b|--accept-data-loss\b"
 )
@@ -36,6 +46,36 @@ def normalize(argv: list[str]) -> str:
     return re.sub(r"\s+", " ", text).lower()
 
 
+def _pm2_args(argv: list[str]) -> list[str] | None:
+    """`npx [-y|--yes] pm2[@x.y.z] …` 이면 pm2 뒤 인자 · 아니면 None. 다른 npx 플래그(-p 등)는 예외 대상이 아니다."""
+    if os.path.basename(argv[0]) != "npx":
+        return None
+    i = 1
+    while i < len(argv) and argv[i] in ("-y", "--yes"):
+        i += 1
+    if i < len(argv) and PM2_PACKAGE.fullmatch(argv[i]):
+        return argv[i + 1:]
+    return None
+
+
+def _pm2_problems(args: list[str], *, cwd: str, root: str) -> list[str]:
+    if not args:
+        return ["pm2: 서브커맨드가 없다"]
+    sub, rest = args[0], args[1:]
+    if sub not in PM2_START | PM2_MANAGE:
+        return [f"pm2 {sub}: 로컬 예외 밖 서브커맨드 — 허용은 start 계열·관리·조회뿐 (#171 · I-3)"]
+    config = os.path.normpath(os.path.join(root, PM2_CONFIG))
+    files = [a for a in rest if not a.startswith("-") and CONFIG_FILE.search(a)]
+    if sub in PM2_START:
+        target = next((a for a in rest if not a.startswith("-")), None)
+        if target is None or os.path.normpath(os.path.join(cwd, target)) != config:
+            return [f"pm2 {sub}: 루트 {PM2_CONFIG} 만 기동한다 (#171 · I-19)"]
+        files = files[1:] if files and files[0] == target else files
+    if files:
+        return [f"pm2 {sub}: 설정 파일 인자 {files[0]} — 루트 {PM2_CONFIG} 의 start 계열만 (#171 · I-19)"]
+    return []
+
+
 def problems(argv: list[str], *, cwd: str, root: str, home: str) -> list[str]:
     if not argv:
         return ["실행할 명령이 없다"]
@@ -47,6 +87,9 @@ def problems(argv: list[str], *, cwd: str, root: str, home: str) -> list[str]:
     m = DESTRUCTIVE.search(normalize(argv))
     if m:
         out.append(f"'{m.group(0)}' — 로컬 5432 는 사용자 개발 DB 와 공유다 (L-1 · I-14)")
+    pm2 = _pm2_args(argv)
+    if pm2 is not None:  # ④ — 훅 판정기의 pm2 일괄 거부(I-3) 대신 좁은 허용 목록
+        return out + _pm2_problems(pm2, cwd=cwd, root=root)
     out += [f"{v.rule}: {v.reason}" for v in isolation_guard.check(shlex.join(argv), cwd=cwd, root=root, home=home)]
     return out
 
