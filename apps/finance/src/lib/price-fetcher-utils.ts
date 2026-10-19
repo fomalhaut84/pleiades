@@ -4,6 +4,9 @@
  */
 
 import { normalizeMarket } from './market-hours'
+import { isKoreanIndexTicker } from './ticker-kind'
+// 티커 모양 판별은 ticker-kind 로 이동 (#502 — format.ts 가 market-hours 를 전이 의존하지 않도록). 기존 import 경로 호환.
+export { isIndexTicker, isKoreanIndexTicker } from './ticker-kind'
 export interface TickerMetaValue {
   displayName: string
   market: string
@@ -13,11 +16,6 @@ export interface TickerMetaValue {
    * refresh upsert 시 야후 quote 메타 (exchange/currency/shortName) 로 대체한다.
    */
   placeholder?: boolean
-}
-
-/** 한국 지수 티커 (`^KS11` 코스피, `^KQ11` 코스닥, `^KS200` 등) — 야후 `^KS`/`^KQ` prefix. */
-export function isKoreanIndexTicker(ticker: string): boolean {
-  return /^\^K[SQ]/i.test(ticker.trim())
 }
 
 /**
@@ -90,15 +88,6 @@ export function resolveRefreshMeta(
  */
 export function extractQuoteName(quote: QuoteMetaLike): string | null {
   return quote.shortName?.trim() || quote.longName?.trim() || null
-}
-
-/**
- * 지수 티커 판별 (#499). 야후는 지수를 `^` prefix 로 제공한다 (`^KS11`, `^GSPC` 등).
- * 티커 모양만 판별한다 — 표기 (포인트 vs 통화) 와 캐시 정책 (`fetchQuote` 의
- * `skipCache`) 은 호출자가 결정한다.
- */
-export function isIndexTicker(ticker: string): boolean {
-  return ticker.trim().startsWith('^')
 }
 
 /** 시세 시각으로 받아들일 수 있는 하한 (2000-01-01 UTC). */
