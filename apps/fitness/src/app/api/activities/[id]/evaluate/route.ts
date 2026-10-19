@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { ADVISOR_MODEL, askAdvisor, resetSession } from "@/lib/ai/claude-advisor";
 import { buildEvalContext } from "@/lib/ai/activity-eval/build-context";
 import { loadActivityEvalInput } from "@/lib/ai/activity-eval/load";
+import { resolvePromptTemplate } from "@/lib/prompts/resolve";
 import { ACTIVITY_EVAL_CATEGORY, ACTIVITY_EVAL_CHANNEL } from "@/lib/ai/activity-eval/constants";
 import prisma from "@/lib/prisma";
 
@@ -21,11 +22,15 @@ export async function POST(_request: Request, { params }: Params) {
     if (!input) {
       return NextResponse.json({ error: "활동을 찾을 수 없습니다" }, { status: 404 });
     }
-    const ctx = buildEvalContext(input);
+    // #552: 지시문 = DB 사용 중 버전 (러닝 · 기타 두 키). 데이터 섹션은 빌더가 조립
+    const [full, brief] = await Promise.all([resolvePromptTemplate("activity_eval"), resolvePromptTemplate("activity_eval_brief")]);
+    const ctx = buildEvalContext(input, { full: full.body, brief: brief.body });
 
     // 컨텍스트를 프롬프트에 다 넣으므로 도구 호출을 요구하지 않는다 (minTurns 0 → 재시도 없음)
     resetSession(ACTIVITY_EVAL_CHANNEL);
-    const { result, duration_ms } = await askAdvisor(ctx.prompt, { channel: ACTIVITY_EVAL_CHANNEL, minTurns: 0 });
+    const { result, duration_ms, systemPromptVersionId } = await askAdvisor(ctx.prompt, { channel: ACTIVITY_EVAL_CHANNEL, minTurns: 0 });
+    // #552 M19-2: 실제로 쓴 지시문 버전 (모드별 키 · 치환 폴백이면 null)
+    const promptVersionId = ctx.templateFallback ? null : ctx.mode === "full" ? full.versionId : brief.versionId;
     if (!result || result.trim().length === 0) {
       throw new Error("어드바이저가 빈 응답을 돌려줬습니다");
     }
@@ -33,7 +38,7 @@ export async function POST(_request: Request, { params }: Params) {
     // 이력 저장은 부차적 — 30~90초짜리 평가를 DB 오류로 버리지 않는다 (사전 리뷰 info 4)
     try {
       await prisma.aIAdvice.create({
-        data: { category: ACTIVITY_EVAL_CATEGORY, reportDate: input.activity.ymd, prompt: ctx.prompt, response: result },
+        data: { category: ACTIVITY_EVAL_CATEGORY, reportDate: input.activity.ymd, prompt: ctx.prompt, response: result, systemPromptVersionId, promptVersionId },
       });
     } catch (error) {
       console.error("[activity-eval] AIAdvice 저장 실패 (결과는 반환):", error instanceof Error ? error.message : error);

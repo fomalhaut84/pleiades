@@ -4,6 +4,7 @@ import { startBotScheduler } from "./notifications/scheduler";
 import { startDiscordInteractions } from "./notifications/discord-interactions";
 import { sanitizeError } from "./utils/error";
 import { sweepOrphanedJobs, startOrphanSweeper } from "@/lib/report-job";
+import { ensureDefaults } from "@/lib/prompts/resolve";
 import {
   sweepStalePhotoTempFiles,
   startPhotoTempSweeper,
@@ -43,6 +44,9 @@ async function main() {
     console.error("[report-job] sweep failed:", err);
   });
   startOrphanSweeper();
+
+  // #552 R2: 코드 기본값 → DB 프롬프트 버전 동기화 — 웹과 동시에 돌아도 unique 충돌은 무시된다. 첫 cron 리포트 전에 끝나도록 await
+  await ensureDefaults();
 
   // 알림 스케줄러 시작
   startBotScheduler(bot);

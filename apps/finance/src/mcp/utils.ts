@@ -145,7 +145,8 @@ function marketStateLabel(state: string, market?: string | null): string {
 }
 
 /**
- * 시세 기준 시각 표기 (#499): "09-17 15:30 KST (마감)".
+ * 시세 기준 시각 표기 (#499): "2026-09-17 15:30 KST (마감)".
+ * 시간외/장 시작 전에는 "… KST (정규장 종가 · 현재 시간외)" (#506).
  *
  * `marketTime` 이 없으면 null — 호출 시각을 시세 시각인 양 표기하지 않는다.
  * 연도를 항상 포함한다 — 거래정지/상폐 종목처럼 야후가 유효하지만 오래된
@@ -162,7 +163,25 @@ export function formatMarketStamp(
   const at = formatKstDateTimeFull(marketTime)
   const state = marketState?.trim()
   if (!state) return at
-  return `${at} (${marketStateLabel(state, market)})`
+  return `${at} (${marketStampQualifier(state, market)})`
+}
+
+/** 시세 값이 곧 현재 장의 값인 상태 — 라벨을 그대로 시세 수식어로 쓴다. */
+const LIVE_OR_FINAL_STATES = new Set(['REGULAR', 'CLOSED'])
+
+/**
+ * 시세 기준 시각 괄호 안 수식어 (#506).
+ *
+ * `fetchQuote` 는 장 상태와 무관하게 `regularMarketPrice`·`regularMarketTime` 을 반환한다.
+ * 프리/애프터마켓 (PRE·PREPRE·POST·POSTPOST) 중에 상태 라벨만 붙이면 정규장 종가가
+ * 시간외 시세처럼 읽힌다 (Codex P2 · #505). 그래서 값의 정체 ('정규장 종가') 와 현재 장
+ * 상태를 분리해 표기한다. 장중·마감은 값과 상태가 일치하므로 라벨만.
+ * 미지의 상태는 원문을 현재 장 상태로 노출 (#499 규칙 유지).
+ */
+function marketStampQualifier(state: string, market?: string | null): string {
+  const label = marketStateLabel(state, market)
+  if (LIVE_OR_FINAL_STATES.has(state.toUpperCase())) return label
+  return `정규장 종가 · 현재 ${label}`
 }
 
 /**

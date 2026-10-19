@@ -87,7 +87,7 @@ async function main() {
     { ticker: 'AAPL', displayName: 'AAPL', market: 'US', shares: 11, avgPriceFx: 212.255, currency: 'USD', tradedAt: '2025-01-10' },
     { ticker: 'XAR', displayName: 'XAR', market: 'US', shares: 3, avgPriceFx: 171.445, currency: 'USD', tradedAt: '2025-06-15' },
     { ticker: '446720.KS', displayName: 'SOL 미국배당다우존스', market: 'KR', shares: 120, avgPrice: 12036, currency: 'KRW', tradedAt: '2024-08-01' },
-    { ticker: '472150.KS', displayName: 'SOL 미국배당미국채혼합50', market: 'KR', shares: 72, avgPrice: 10785, currency: 'KRW', tradedAt: '2024-08-01' },
+    { ticker: '490490.KS', displayName: 'SOL 미국배당미국채혼합50', market: 'KR', shares: 72, avgPrice: 10785, currency: 'KRW', tradedAt: '2024-08-01' },
     { ticker: '360750.KS', displayName: 'TIGER 미국S&P500', market: 'KR', shares: 46, avgPrice: 24494, currency: 'KRW', tradedAt: '2024-09-15' },
   ]
 

@@ -5,7 +5,7 @@
  * 종합 시그널을 판정한다.
  */
 
-import YahooFinance from 'yahoo-finance2'
+import { createYahooFinance } from '@/lib/yahoo-client'
 import { RSI, MACD, BollingerBands, SMA, EMA } from 'trading-signals'
 import { findSupportResistance } from './support-resistance'
 import type {
@@ -17,7 +17,7 @@ import type {
   SignalLevel,
 } from './types'
 
-const yf = new YahooFinance()
+const yf = createYahooFinance()
 
 /**
  * 종목의 TA 리포트를 생성한다.

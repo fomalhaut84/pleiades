@@ -25,7 +25,7 @@ yahoo-finance2 npm 패키지로 미국주 + 한국주/ETF + 환율을 일괄 조
 | AAPL, MSFT, NVDA, RKLB, XAR | 그대로 | US |
 | TIGER 미국S&P500 | 360750.KS | KR |
 | SOL 미국배당다우존스 | 446720.KS | KR |
-| SOL 미국배당미국채혼합50 | 472150.KS | KR |
+| SOL 미국배당미국채혼합50 | 490490.KS | KR |
 | 카카오 | 035720.KS | KR |
 | 두산로보틱스 | 454910.KS | KR |
 | 컨텍 | 451760.KQ | KR |

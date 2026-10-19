@@ -260,9 +260,16 @@ model AIAdvice {
   prompt     String
   response   String
   createdAt  DateTime @default(now())
+  // #552 M19-2: 이 결과를 만든 프롬프트 버전. 코드 기본값 폴백 · 연결 이전 행 · AI 아닌 기록은 null
+  systemPromptVersionId String?
+  promptVersionId       String?
+  systemPromptVersion   PromptVersion? @relation("AdviceSystemPrompt", fields: [systemPromptVersionId], references: [id], onDelete: SetNull)
+  promptVersion         PromptVersion? @relation("AdviceTaskPrompt", fields: [promptVersionId], references: [id], onDelete: SetNull)
 
   @@index([category, createdAt])
   @@index([reportDate])
+  @@index([systemPromptVersionId])
+  @@index([promptVersionId])
 }
 
 // M#191: 리포트 생성 비동기 job.
@@ -403,4 +410,106 @@ model SystemAlertState {
   lastAlertAt  DateTime
   lastErrorMsg String?              // 진단용, 200자 이내
   updatedAt    DateTime @updatedAt
+}
+
+// #527 (M18-1): 건강검진 회차. date 는 KST 자정 instant — 하루 한 회차 (결과지 추출 M18-2 의 회차 병합 키).
+model HealthCheckup {
+  id          String          @id @default(cuid())
+  date        DateTime        @unique
+  institution String?
+  kind        String          // "national" | "comprehensive" | "other" (DB CHECK)
+  source      String          @default("manual") // "manual" | "capture" | "pdf" | "photo" (DB CHECK)
+  summary     String?         // 종합 소견
+  findings    Json?           // 섹션 소견 [{ category, text, flag? }]
+  rawData     Json?           // 결과지 추출 원문 (M18-2)
+  results     CheckupResult[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+// #527: 회차별 항목 결과. 원문 (label · valueText · refText) 과 해석값 (itemCode · valueNum · refLow/High) 을 함께 보존.
+model CheckupResult {
+  id          String        @id @default(cuid())
+  checkupId   String
+  checkup     HealthCheckup @relation(fields: [checkupId], references: [id], onDelete: Cascade)
+  itemCode    String        // 카탈로그 code 또는 "custom:<slug>"
+  label       String        // 결과지 원문 항목명
+  category    String
+  valueNum    Float?
+  valueText   String?       // 원문 (수치여도 보존) — valueNum · valueText 둘 다 null 금지 (DB CHECK)
+  unit        String?
+  refText     String?       // 기준범위 원문
+  refLow      Float?
+  refHigh     Float?
+  flag        String?       // "normal" | "caution" | "abnormal" (DB CHECK)
+  flagSource  String?       // "institution" | "computed" (DB CHECK)
+  note        String?       // 항목 설명 · 판독문
+  followUp    String?       // 추적검사 권고 원문
+  followUpDue DateTime?     // KST 자정 instant
+  createdAt   DateTime      @default(now())
+
+  @@unique([checkupId, itemCode])
+  @@index([itemCode])
+  @@index([followUpDue])
+}
+
+// #544 (M18-3): 복약 — 한 행 = 한 복용 기간 (다시 먹으면 새 행). 날짜는 KST 자정 instant.
+// 장기 복용은 endDate null = 복용 중 · 단기 복용은 endDate 필수 (DB CHECK).
+model Medication {
+  id           String    @id @default(cuid())
+  name         String
+  kind         String    // "prescription" | "supplement" (DB CHECK)
+  regimen      String    // "long_term" | "short_term" (DB CHECK)
+  ingredient   String?
+  dose         String?
+  frequency    String?
+  startDate    DateTime
+  endDate      DateTime?
+  purpose      String?
+  prescriber   String?
+  note         String?
+  relatedItems String[]  // 관련 검진 항목 code (카탈로그 또는 "custom:<slug>")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([startDate])
+}
+
+// #552 (M19-1): 웹에서 관리하는 AI 프롬프트 버전. 본문은 불변 — 바뀌는 건 status · activatedAt 뿐 (스펙 S3).
+// 키당 active 1개는 partial unique index · key/status/source 값은 DB CHECK (Prisma 미추적 — migration 참조).
+model PromptVersion {
+  id          String    @id @default(cuid())
+  key         String    // src/lib/prompts/definitions.ts PROMPT_KEYS (DB CHECK)
+  version     Int
+  body        String
+  note        String?   // 변경 메모
+  status      String    // "draft" | "active" | "archived" (DB CHECK)
+  source      String    // "code_default" | "manual" | "ai_suggestion" | "restore" (DB CHECK)
+  basedOnId   String?   // 편집 · 복원 · 제안의 출발 버전 (같은 key)
+  codeHash    String?   // source=code_default 만 — 코드 기본값 본문 sha256 (기본값 갱신 감지 · R2)
+  createdAt   DateTime  @default(now())
+  activatedAt DateTime?
+  systemAdvices AIAdvice[] @relation("AdviceSystemPrompt")
+  taskAdvices   AIAdvice[] @relation("AdviceTaskPrompt")
+  runs          PromptRun[]
+
+  @@unique([key, version])
+  @@index([key, status])
+}
+
+/// #552 M19-3: AI 개선안 · 시험 실행 job. 결과는 AIAdvice 에 남기지 않는다. 실행 중은 전체 1건 (partial unique · Prisma 미추적)
+model PromptRun {
+  id           String        @id @default(cuid())
+  kind         String        // "suggest" | "trial" (DB CHECK)
+  versionId    String        // 개선안 = 출발 (사용 중) 버전 · 시험 = 시험한 초안
+  version      PromptVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  targetKind   String?       // trial 만 — "report" | "activity" (DB CHECK)
+  targetRef    String?       // trial 만 — 리포트 키 (morning_report 등) · 활동 id
+  status       String        // "running" | "done" | "failed" (DB CHECK)
+  response     String?       // trial = 결과 본문 · suggest = 제안 JSON
+  errorMessage String?
+  startedAt    DateTime      @default(now())
+  completedAt  DateTime?
+
+  @@index([versionId, kind])
 }

@@ -57,9 +57,13 @@ const KR_MARKETS = new Set([
   'KR', 'KS', 'KQ', 'KSC', 'KOE', 'KOSPI', 'KOSDAQ', 'KRX',
 ])
 
-/** 미국 시장 식별자 (Seed, Yahoo exchange code 모두 포함) */
+/**
+ * 미국 시장 식별자 (Seed, Yahoo exchange code 모두 포함)
+ * #502: Yahoo raw 코드 `ASE` (NYSE American — IMO 등) · `BTS` (Cboe US — ARKB 등) 실측 추가.
+ * 사람이 읽는 이름 (`AMEX`/`BATS`) 만으로는 raw 코드가 `OTHER` 로 빠져 급등락 알림이 차단됐다.
+ */
 const US_MARKETS = new Set([
-  'US', 'NYQ', 'NGM', 'NMS', 'NCM', 'PCX', 'NYSE', 'NASDAQ', 'AMEX', 'BATS', 'ARCA',
+  'US', 'NYQ', 'NGM', 'NMS', 'NCM', 'PCX', 'ASE', 'BTS', 'NYSE', 'NASDAQ', 'AMEX', 'BATS', 'ARCA',
 ])
 
 /** FX/환율 식별자 */

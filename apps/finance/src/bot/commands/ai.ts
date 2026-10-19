@@ -12,6 +12,7 @@ import { isAiQuestion } from '../utils/ai-trigger'
 import { isTradeMessage } from '../utils/trade-trigger'
 import { markdownToTelegramHtml } from '../utils/markdown'
 import { sanitizeError } from '../utils/error'
+import { buildTickerCheckLines } from '../utils/trade-price-check'
 
 const TYPING_INTERVAL_MS = 5000
 const MIN_AI_TEXT_LENGTH = 3
@@ -312,11 +313,19 @@ async function handleParsedTrade(ctx: Context, response: string): Promise<void> 
     ? Math.round(parsed.price * parsed.shares * (fxRate ?? 0))
     : Math.round(parsed.price * parsed.shares)
 
+  // #510: 이름 → 티커 오매칭을 확인 단계에서 드러내기 위한 검증 라인
+  const tickerCache = await prisma.priceCache.findUnique({
+    where: { ticker },
+    select: { price: true, quoteName: true },
+  })
+  const checkLines = buildTickerCheckLines(parsed.price, currency, tickerCache)
+
   const preview = [
     `${typeLabel} 확인 (AI 파싱)`,
     '',
     `계좌: ${parsed.accountName}`,
     `종목: ${displayName} (${ticker})`,
+    ...checkLines,
     `수량: ${parsed.shares}주`,
     `단가: ${priceStr}`,
     ...(currency === 'USD' && fxRate ? [`환율: ₩${fxRate.toFixed(2)}`] : []),

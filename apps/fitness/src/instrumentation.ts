@@ -33,5 +33,17 @@ export async function register() {
       console.error("[report-job] sweep failed:", err);
     });
     startOrphanSweeper();
+
+    // #552 R2: 코드 기본값 → DB 프롬프트 버전 동기화 (첫 실행 v1 · 릴리즈로 바뀐 기본값 자동 추가). 봇도 별도 호출 (src/bot/standalone.ts).
+    // 실패해도 resolvePrompt 가 코드 기본값으로 폴백하므로 부팅을 막지 않는다 (ensureDefaults 는 throw 하지 않음).
+    const { ensureDefaults } = await import("@/lib/prompts/resolve");
+    void ensureDefaults();
+
+    // #552 M19-3: 개선안 · 시험 실행은 웹 프로세스에서만 돈다 → 부팅 전에 시작된 running 은 재시작으로 끊긴 것
+    const bootedAt = new Date();
+    const { sweepRunsOnBoot } = await import("@/lib/prompts/runs");
+    sweepRunsOnBoot(bootedAt).catch((err) => {
+      console.error("[prompt-run] boot sweep failed:", err);
+    });
   }
 }
