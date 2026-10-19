@@ -168,8 +168,27 @@ class RunSh(Base):
         import shutil
         node = shutil.which("node") or self.skipTest("node 없음")
         path = f"{fake}:{os.path.dirname(node)}:/usr/bin:/bin"
+        # 회귀: PR #172 Codex P1 2회차 — 데몬이 없으면 pm2 를 부르지 않는다(stop·delete 가 검사 안 된 env 로 새 데몬을 띄운다)
+        for sub in ("kill", "stop"):
+            with self.subTest(sub=sub, daemon=False):
+                r = self.run_sh("npx", "pm2", sub, *(["all"] if sub == "stop" else []), PATH=path, GARMIN_EMAIL="me@x.com")
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertNotIn("fake-npx", r.stdout)
+        # 살아 있는 데몬(소켓 + 살아 있는 pid) — 정리는 env 검사 없이 돈다
+        import socket
+        home = self.root / ".pm2-local"
+        home.mkdir()
+        sock = socket.socket(socket.AF_UNIX)
+        sock.bind(str(home / "rpc.sock"))
+        self.addCleanup(sock.close)
+        (home / "pm2.pid").write_text(str(os.getpid()))
         r = self.run_sh("npx", "pm2", "kill", PATH=path, GARMIN_EMAIL="me@x.com")
-        self.assertEqual((r.returncode, r.stdout.strip()), (0, f"fake-npx pm2 kill home={self.root / '.pm2-local'}"), r.stderr)
+        self.assertEqual((r.returncode, r.stdout.strip()), (0, f"fake-npx pm2 kill home={home}"), r.stderr)
+        # 죽은 pid 면 데몬 없음과 같다
+        (home / "pm2.pid").write_text("999999")
+        r = self.run_sh("npx", "pm2", "stop", "all", PATH=path, GARMIN_EMAIL="me@x.com")
+        self.assertNotIn("fake-npx", r.stdout)
+        # 기동·조회는 env 검사가 막는다
         r = self.run_sh("npx", "pm2", "ls", PATH=path, GARMIN_EMAIL="me@x.com")
         self.assertEqual(r.returncode, 1)
         self.assertNotIn("fake-npx", r.stdout)

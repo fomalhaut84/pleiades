@@ -66,7 +66,7 @@ tools/local/run.sh fin -- npx pm2 logs pleiades-fin-web --nostream --lines 50
 tools/local/run.sh fin -- npx pm2 kill                                                   # 데몬 종료 — 리허설 끝
 ```
 
-- **정리(`stop`·`delete`·`kill`)는 기동 env 검사(`check_env`)를 건너뛴다** — 띄우는 것이 없고, 검증 id export 를 잊은 셸에서도 봇을 내릴 수 있어야 한다(PR #172 Codex P2). precheck(허용 목록 · `PM2_HOME` 고정)는 그대로 돈다.
+- **정리(`stop`·`delete`·`kill`)는 기동 env 검사(`check_env`)를 건너뛴다** — 띄우는 것이 없고, 검증 id export 를 잊은 셸에서도 봇을 내릴 수 있어야 한다(PR #172 Codex P2). precheck(허용 목록 · `PM2_HOME` 고정)는 그대로 돈다. **데몬이 살아 있을 때만**(`rpc.sock` + `pm2.pid` 생존) — 없으면 pm2 를 부르지 않는다(`stop`·`delete` 도 데몬을 새로 띄우고 남기며, 그 데몬은 검사 안 된 셸 env 를 물려받는다 · PR #172 Codex P1 2회차).
 - **데몬은 `<root>/.pm2-local` 하나**(`run.sh` 가 `PM2_HOME` 을 덮어쓴다 · 기본 `~/.pm2` 를 쓰지 않는다 · gitignored). 되돌리기: `npx pm2 kill` → `rm -rf .pm2-local`.
 - 허용 형태(`precheck.py` · 인자는 닫힌 집합):
   - start 계열(`start`·`startOrReload`·`startOrRestart`·`startOrGracefulReload`) = **`<루트 deploy/pleiades.config.cjs> --only pleiades-<이 앱>-<역할>[,…] [--update-env]`** — 다른 위치 인자·플래그 없음. `--only` 가 필수인 이유: 루트 설정은 두 앱을 다 띄우는데 `run.sh` 의 `check_env` 는 명령줄의 앱만 검사한다.

@@ -24,6 +24,14 @@ RC=0; python3 "$HERE/precheck.py" "$ROOT" "$PWD" -- "$@" || RC=$?
 [[ $RC -eq 0 || $RC -eq 3 ]] || exit "$RC"   # 3 = pm2 정리(stop·delete·kill) — 띄우는 것이 없으니 env 검사를 건너뛴다 (PR #172 Codex P2)
 export PATH="$ROOT/bin:$PATH"
 export PM2_HOME="$ROOT/.pm2-local"
+if [[ $RC -eq 3 ]]; then
+  # 정리는 살아 있는 데몬에만 — 없으면 pm2 가 이 셸 env 그대로 새 데몬을 띄우고 남긴다 (PR #172 Codex P1 2회차)
+  PID=$(cat "$PM2_HOME/pm2.pid" 2>/dev/null || true)
+  if [[ ! -S "$PM2_HOME/rpc.sock" || ! "$PID" =~ ^[0-9]+$ ]] || ! kill -0 "$PID" 2>/dev/null; then
+    echo "run.sh: pm2 데몬이 없다 ($PM2_HOME) — 정리할 것 없음" >&2
+    exit 0
+  fi
+fi
 CHECK=(python3 "$HERE/check_env.py" "$APP" --root "$ROOT")
 [[ -n "${OTHER_TOKEN_ID:-}" ]] && CHECK+=(--other-token-id "$OTHER_TOKEN_ID")
 [[ $RC -eq 3 ]] || env -u DATABASE_URL -u TELEGRAM_BOT_TOKEN "${CHECK[@]}" >&2
