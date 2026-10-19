@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 // price-fetcher 본체 (Prisma / yahoo top-level 로드) 대신 순수 유틸 모듈에서 직접 import →
 // Prisma generate / DATABASE_URL 없이도 테스트 가능 (Codex #429 P2).
 import {
+  extractQuoteName,
   mergeCrossTickersIntoMeta,
   isIndexTicker,
   isKoreanIndexTicker,
@@ -176,5 +177,19 @@ describe('resolveRefreshMeta (Codex #501 P2)', () => {
       market: 'KR',
       currency: 'KRW',
     })
+  })
+})
+
+describe('extractQuoteName (#510)', () => {
+  it('shortName 우선, 공백 정리', () => {
+    expect(extractQuoteName({ shortName: '  TIGER DIVIDEND COVERED CALL ACT ', longName: 'Mirae' })).toBe(
+      'TIGER DIVIDEND COVERED CALL ACT',
+    )
+  })
+  it('shortName 비면 longName', () => {
+    expect(extractQuoteName({ shortName: ' ', longName: 'Shinhan SOL US Dividend' })).toBe('Shinhan SOL US Dividend')
+  })
+  it('둘 다 없으면 null (라벨로 대체하지 않는다)', () => {
+    expect(extractQuoteName({})).toBeNull()
   })
 })

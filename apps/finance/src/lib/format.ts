@@ -1,4 +1,4 @@
-import { isIndexTicker } from './price-fetcher-utils'
+import { isIndexTicker } from './ticker-kind'
 
 /**
  * 원화 금액 포맷: 1234567 → "1,234,567원"
