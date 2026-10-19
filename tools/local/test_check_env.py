@@ -154,6 +154,28 @@ class RunSh(Base):
         r = self.run_sh("node", "-e", "console.log(process.env.DATABASE_URL || 'unset')", DATABASE_URL="postgresql://svc@prod/myfitness")
         self.assertEqual(r.stdout.strip(), "unset", r.stderr)
 
+    def test_pm2_home_is_pinned(self):
+        """#171 — pm2 는 전용 데몬만: 호출자의 PM2_HOME(기본 ~/.pm2 포함)을 무시하고 <root>/.pm2-local 로 고정한다."""
+        r = self.run_sh("node", "-e", "console.log(process.env.PM2_HOME)", PM2_HOME="/Users/someone/.pm2")
+        self.assertEqual(r.stdout.strip(), str(self.root / ".pm2-local"), r.stderr)
+
+    def test_pm2_always_env_checked(self):
+        """회귀: PR #172 Codex P1 2회차·P2 3회차 — pm2 는 정리(kill·stop)도 env 검사를 거친다(검사 안 된 셸이 새 데몬을 띄우지 않게)."""
+        fake = self.root / "fakebin"
+        fake.mkdir()
+        (fake / "npx").write_text('#!/bin/sh\necho "fake-npx $*"\n')
+        (fake / "npx").chmod(0o755)
+        import shutil
+        node = shutil.which("node") or self.skipTest("node 없음")
+        path = f"{fake}:{os.path.dirname(node)}:/usr/bin:/bin"
+        for argv in (("kill",), ("stop", "pleiades-fit-bot"), ("ls",)):
+            with self.subTest(argv=argv):
+                r = self.run_sh("npx", "pm2", *argv, PATH=path, GARMIN_EMAIL="me@x.com")
+                self.assertEqual(r.returncode, 1)
+                self.assertNotIn("fake-npx", r.stdout)
+        r = self.run_sh("npx", "pm2", "kill", PATH=path)
+        self.assertEqual((r.returncode, r.stdout.strip()), (0, "fake-npx pm2 kill"), r.stderr)
+
     def test_destructive_prisma_refused(self):
         for cmd in (["npx", "prisma", "migrate", "reset"], ["npx", "prisma", "migrate", "dev"],
                     ["npx", "prisma", "db", "push", "--force-reset"], ["psql", "-c", "drop database x"],

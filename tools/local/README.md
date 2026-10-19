@@ -7,7 +7,7 @@
 |---|---|
 | `db.py` | `pleiades_fin`·`pleiades_fit` 만 create · drop(`--confirm <이름>`) · status (L-1 · I-14) |
 | `env/<app>.env` · `write_env.py` | 루트 템플릿 → `apps/<app>/.env` (덮어쓰지 않음 · 0600) (L-2) |
-| `run.sh` | 앱 명령의 유일한 입구 — cwd · precheck · claude shim PATH · 실효 env 검사(`check_env.py`) |
+| `run.sh` | 앱 명령의 유일한 입구 — cwd · precheck · claude shim PATH · 실효 env 검사(`check_env.py`) · `PM2_HOME` 고정(#171) |
 
 ## 처음 한 번 (M-2 · M-4)
 
@@ -54,3 +54,24 @@ tools/local/run.sh fit -- node dist/bot/standalone.cjs
 - 409 가 나면 같은 토큰이 다른 곳에서 polling 중이다 — **즉시 정지**(서비스 토큰이면 서비스 수신이 끊긴다 · ⑮).
 
 첫 기동 실측: `docs/research/measured-facts.md` *2026-10-01 — M-4*.
+
+## 로컬 pm2 (#171 · 007 Q85 ① — 전환 전 리허설용)
+
+pm2 는 **`run.sh` 안에서만** 쓴다 — 직접 치는 `pm2`·`npx pm2` 는 훅이 I-3 으로 막는다(`isolation.md` I-3 예외).
+
+```bash
+tools/local/run.sh fin -- npx pm2 start ../../deploy/pleiades.config.cjs --only pleiades-fin-web   # 루트 설정 파일 + 이 앱 이름만 (T-1b 에서 생긴다)
+tools/local/run.sh fin -- npx pm2 ls
+tools/local/run.sh fin -- npx pm2 logs pleiades-fin-web --nostream --lines 50
+tools/local/run.sh fin -- npx pm2 kill                                                   # 데몬 종료 — 리허설 끝
+```
+
+- **정리(`stop`·`delete`·`kill`)도 `check_env` 를 거친다** — pm2 는 데몬이 없으면 이 셸 env 로 새 데몬을 띄우고 `stop`·`delete` 뒤에도 남긴다. 검사가 실패하면(검증 id export 누락 등) `export` 를 고치고 다시 친다(PR #172 Codex — 검사 생략 경로는 두 라운드 반례 뒤 폐기).
+- **데몬은 `<root>/.pm2-local` 하나**(`run.sh` 가 `PM2_HOME` 을 덮어쓴다 · 기본 `~/.pm2` 를 쓰지 않는다 · gitignored). 되돌리기: `npx pm2 kill` → `rm -rf .pm2-local`.
+- 허용 형태(`precheck.py` · 인자는 닫힌 집합):
+  - start 계열(`start`·`startOrReload`·`startOrRestart`·`startOrGracefulReload`) = **`<루트 deploy/pleiades.config.cjs> --only pleiades-<이 앱>-<역할>[,…] [--update-env]`** — 다른 위치 인자·플래그 없음. `--only` 가 필수인 이유: 루트 설정은 두 앱을 다 띄우는데 `run.sh` 의 `check_env` 는 명령줄의 앱만 검사한다.
+  - 관리·조회(`restart`·`reload`·`stop`·`delete`·`ls`·`jlist`·`describe`·`logs`·`save`·`kill` 등) = 대상은 **그 앱 이름 `pleiades-<이 앱>-<역할>` 만** — `all`·숫자 id·다른 앱은 `check_env` 가 보지 않은 앱을 재기동하므로 금지 · 경로·설정 파일·`-`(stdin)도 금지(pm2 는 `restart`·`reload` 에서도 설정 파일을 부분 문자열로 판정해 읽는다) · `resurrect` 없음 · 플래그는 `--nostream`·`--lines <n>`·`--err`·`--out` 만(`--update-env` 는 앱 범위가 정해진 start 계열에서만 — 관리 명령에 붙이면 이 앱 기준으로 검사한 env 가 다른 앱 프로세스에 들어간다).
+  - `startup`·`deploy`·`link`·`install`·`pull` 등과 `node …/pm2/bin/pm2` 직접 실행은 거부.
+- **pm2 이름 규약 = `pleiades-<fin|fit>-<역할>`**(서비스 `myfinance*`·`myfitness*` 와 겹치지 않는다 · 007 Q77 "새 pm2 이름").
+- **pm2 앱은 데몬을 처음 띄운 환경을 물려받는다**(007 G-f) — 첫 기동은 반드시 `run.sh` 경유(shim PATH · `env -u`). 기동 뒤 `describe` 로 `claude` 가 shim 인지 확인한다. `describe`·`jlist`·`prettylist` 는 프로세스 env(검증 봇·Discord 토큰 포함)를 출력하므로 결과를 붙여 넣지 않는다 — `env` 서브커맨드는 허용하지 않는다.
+- 포트: 설정 파일이 포트 env 누락 시 기동을 거부해야 한다(L-3 · I-12 — T-1b).

@@ -143,6 +143,9 @@ class DenyTable(unittest.TestCase):
         ("npx pm2 start ecosystem.config.js", f"{ROOT}/apps/finance", "I-19"),
         ("npx -y pm2 list", ROOT, "I-3"),
         ("pm2-runtime start x.js", ROOT, "I-3"),
+        # #171 로컬 pm2 예외는 run.sh 안에만 있다 — 직접 치면 PM2_HOME 을 주어도 막힌다
+        ("PM2_HOME=.pm2-local npx pm2 ls", ROOT, "I-3"),
+        ("npx pm2 start deploy/pleiades.config.cjs", ROOT, "I-3"),
         ("sh -s < apps/finance/deploy/deploy.sh", ROOT, "I-19"),
         ("bash < apps/fitness/deploy/deploy.sh", ROOT, "I-19"),
         # 회귀: PR #106 Codex P1 (조건·파이프 경계에서 cwd 추적)
@@ -262,6 +265,8 @@ class AllowTable(unittest.TestCase):
         ("python3 - <<'EOF'\nimport os  # ssh host\nEOF", ROOT),
         ("gh api repos/{owner}/{repo}/pulls", ROOT),  # 자리표시는 cwd 저장소(pleiades)
         ("GH_REPO=fomalhaut84/myFinance gh api repos/{owner}/{repo}/issues", ROOT),  # GET 은 읽기
+        # #171 — run.sh 안쪽은 precheck.py 가 본다(pm2 허용 목록 · test_precheck)
+        ("tools/local/run.sh fin -- npx pm2 ls", ROOT),
     ]
 
     def test_allowed(self):
