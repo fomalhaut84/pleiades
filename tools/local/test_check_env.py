@@ -159,6 +159,21 @@ class RunSh(Base):
         r = self.run_sh("node", "-e", "console.log(process.env.PM2_HOME)", PM2_HOME="/Users/someone/.pm2")
         self.assertEqual(r.stdout.strip(), str(self.root / ".pm2-local"), r.stderr)
 
+    def test_pm2_teardown_skips_env_check(self):
+        """회귀: PR #172 Codex P2 — env 검사가 실패하는 셸에서도 pm2 정리(kill)는 돈다 · 기동·조회는 여전히 막힌다."""
+        fake = self.root / "fakebin"
+        fake.mkdir()
+        (fake / "npx").write_text('#!/bin/sh\necho "fake-npx $* home=$PM2_HOME"\n')
+        (fake / "npx").chmod(0o755)
+        import shutil
+        node = shutil.which("node") or self.skipTest("node 없음")
+        path = f"{fake}:{os.path.dirname(node)}:/usr/bin:/bin"
+        r = self.run_sh("npx", "pm2", "kill", PATH=path, GARMIN_EMAIL="me@x.com")
+        self.assertEqual((r.returncode, r.stdout.strip()), (0, f"fake-npx pm2 kill home={self.root / '.pm2-local'}"), r.stderr)
+        r = self.run_sh("npx", "pm2", "ls", PATH=path, GARMIN_EMAIL="me@x.com")
+        self.assertEqual(r.returncode, 1)
+        self.assertNotIn("fake-npx", r.stdout)
+
     def test_destructive_prisma_refused(self):
         for cmd in (["npx", "prisma", "migrate", "reset"], ["npx", "prisma", "migrate", "dev"],
                     ["npx", "prisma", "db", "push", "--force-reset"], ["psql", "-c", "drop database x"],

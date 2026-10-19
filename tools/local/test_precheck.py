@@ -89,6 +89,10 @@ class Deny(unittest.TestCase):
         # 회귀: #171 재리뷰 info — pm2 CLI 진입점은 bin 만이 아니다 · env 는 프로세스 env 전체를 출력한다
         ("node", "../../node_modules/pm2/lib/binaries/CLI.js", "start", "dist/bot.js"),
         ("npx", "pm2", "env", "0"),
+        # 회귀: PR #172 Codex P1 — 같은 파일을 가리키는 경로 변형(.. · 중복 / · 대소문자)도 pm2 CLI 다
+        ("node", "/x/node_modules/.bin/../pm2/bin/pm2", "startup"),
+        ("node", "../../node_modules//pm2/bin/pm2", "ls"),
+        ("node", "../../NODE_MODULES/PM2/bin/pm2", "startup"),
     ]
 
     def test_denied(self):
@@ -130,6 +134,22 @@ class Allow(unittest.TestCase):
         for argv in self.CASES:
             with self.subTest(argv=argv):
                 self.assertEqual(reasons(*argv), [])
+
+
+class Teardown(unittest.TestCase):
+    """회귀: PR #172 Codex P2 — 정리(stop·delete·kill)는 기동 env 검사 없이도 돌아야 한다 (run.sh 가 check_env 를 건너뛴다)."""
+
+    def test_teardown(self):
+        for argv in (("npx", "pm2", "kill"), ("npx", "pm2", "stop", "all"), ("npx", "-y", "pm2@6.0.13", "delete", "pleiades-fin-bot")):
+            with self.subTest(argv=argv):
+                self.assertTrue(p.is_teardown(list(argv)))
+
+    def test_not_teardown(self):
+        for argv in (("npx", "pm2", "ls"), ("npx", "pm2", "restart", "all"), ("npm", "run", "dev"),
+                     ("npx", "pm2", "start", "../../deploy/pleiades.config.cjs", "--only", "pleiades-fin-web"),
+                     ("npx", "pm2", "delete", "../x.json")):
+            with self.subTest(argv=argv):
+                self.assertFalse(p.is_teardown(list(argv)))
 
 
 if __name__ == "__main__":

@@ -20,10 +20,11 @@ ROOT=${PLEIADES_ROOT:-$(cd "$HERE/../.." && pwd)}
 
 cd "$ROOT/apps/$DIR" || die "$ROOT/apps/$DIR 가 없다 — M-1 전이다"
 # 감싼 명령을 다시 본다 — 훅은 바깥 run.sh 만 본다 (허용 프로그램 · 파괴 명령 정규화 · 훅 판정기 · PR #110 Codex P1)
-python3 "$HERE/precheck.py" "$ROOT" "$PWD" -- "$@"
+RC=0; python3 "$HERE/precheck.py" "$ROOT" "$PWD" -- "$@" || RC=$?
+[[ $RC -eq 0 || $RC -eq 3 ]] || exit "$RC"   # 3 = pm2 정리(stop·delete·kill) — 띄우는 것이 없으니 env 검사를 건너뛴다 (PR #172 Codex P2)
 export PATH="$ROOT/bin:$PATH"
 export PM2_HOME="$ROOT/.pm2-local"
 CHECK=(python3 "$HERE/check_env.py" "$APP" --root "$ROOT")
 [[ -n "${OTHER_TOKEN_ID:-}" ]] && CHECK+=(--other-token-id "$OTHER_TOKEN_ID")
-env -u DATABASE_URL -u TELEGRAM_BOT_TOKEN "${CHECK[@]}" >&2
+[[ $RC -eq 3 ]] || env -u DATABASE_URL -u TELEGRAM_BOT_TOKEN "${CHECK[@]}" >&2
 exec env -u DATABASE_URL -u TELEGRAM_BOT_TOKEN "$@"

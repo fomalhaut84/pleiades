@@ -10,7 +10,7 @@
      플래그는 닫힌 집합만. 데몬은 run.sh 가 PM2_HOME 으로 고정한다.
      직접 치는 `pm2`·`npx pm2` 는 훅이 계속 막는다 — 이 예외는 run.sh 안에서만 있다
 
-사용: python3 precheck.py <root> <cwd> -- <명령…>   → 0 통과 · 1 거부 · 2 사용 오류
+사용: python3 precheck.py <root> <cwd> -- <명령…>   → 0 통과 · 1 거부 · 2 사용 오류 · 3 통과(pm2 정리 — env 검사 생략)
 """
 
 from __future__ import annotations
@@ -39,6 +39,8 @@ PM2_VALUE_FLAGS = {"--lines": re.compile(r"\d+")}             # 값 있음 (star
 PM2_TARGET = re.compile(r"[A-Za-z0-9_-]+")                    # 관리 대상 = 프로세스 이름·id·all — `/` `.` `-` 시작 없음
 PM2_NODE_CLI = re.compile(r"(?:^|/)node_modules/(?:pm2/|\.bin/pm2)")  # 실수 방지 — node 는 원래 무엇이든 실행할 수 있다
 APP_OF_DIR = {"finance": "fin", "fitness": "fit"}
+PM2_TEARDOWN = {"stop", "delete", "del", "kill"}  # 아무것도 띄우지 않는다 — run.sh 가 기동 env 검사를 건너뛴다 (PR #172 Codex P2)
+TEARDOWN_EXIT = 3
 DESTRUCTIVE = re.compile(
     r"\bdrop (database|schema)\b|\bdropdb\b|\bmigrate (reset|dev)\b|--force-reset\b|--accept-data-loss\b"
 )
@@ -62,6 +64,21 @@ def _pm2_args(argv: list[str]) -> list[str] | None:
     if i < len(argv) and PM2_PACKAGE.fullmatch(argv[i]):
         return argv[i + 1:]
     return None
+
+
+def _is_pm2_cli(arg: str, cwd: str) -> bool:
+    """경로 변형(`..` · 중복 `/` · 대소문자 · 심링크)을 접은 뒤 판정한다 (PR #172 Codex P1)."""
+    full = os.path.join(cwd, arg)
+    return any(PM2_NODE_CLI.search(c.lower()) for c in (arg, os.path.normpath(full), os.path.realpath(full)))
+
+
+def is_teardown(argv: list[str]) -> bool:
+    """허용되는 pm2 정리 명령(stop · delete · kill — 대상은 이름·id·all)인가."""
+    pm2 = _pm2_args(argv) if argv else None
+    if not pm2 or pm2[0] not in PM2_TEARDOWN:
+        return False
+    pos, bad = _pm2_flags(pm2[1:], pm2[0])
+    return not bad and all(PM2_TARGET.fullmatch(a) for a in pos)
 
 
 def _pm2_flags(args: list[str], sub: str) -> tuple[list[str], list[str]]:
@@ -133,7 +150,7 @@ def problems(argv: list[str], *, cwd: str, root: str, home: str) -> list[str]:
     m = DESTRUCTIVE.search(normalize(argv))
     if m:
         out.append(f"'{m.group(0)}' — 로컬 5432 는 사용자 개발 DB 와 공유다 (L-1 · I-14)")
-    if prog == "node" and any(PM2_NODE_CLI.search(a) for a in argv[1:]):
+    if prog == "node" and any(_is_pm2_cli(a, cwd) for a in argv[1:]):
         out.append("node 로 pm2 CLI 직접 실행 — run.sh 안 pm2 는 `npx pm2` 만 (#171)")
     pm2 = _pm2_args(argv)
     if pm2 is not None:  # ④ — 훅 판정기의 pm2 일괄 거부(I-3) 대신 좁은 허용 목록
@@ -149,7 +166,7 @@ def main() -> int:
         return 2
     found = problems(args[3:], cwd=args[1], root=args[0], home=os.environ.get("HOME", str(Path.home())))
     if not found:
-        return 0
+        return TEARDOWN_EXIT if is_teardown(args[3:]) else 0
     print("run.sh: 중단 — 감싼 명령이 격리 규칙에 걸린다 (.claude/rules/isolation.md)", file=sys.stderr)
     for r in found:
         print(f"  · {r}", file=sys.stderr)
