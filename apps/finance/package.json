@@ -65,6 +65,7 @@
     "next": {
       "postcss": "^8.5.31"
     },
+    "postcss-selector-parser": "^7.1.6",
     "@react-pdf/font": "4.0.8",
     "@react-pdf/image": "3.1.0",
     "@react-pdf/layout": "4.6.1",
