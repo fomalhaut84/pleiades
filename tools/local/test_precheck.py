@@ -61,6 +61,27 @@ class Deny(unittest.TestCase):
         ("npx", "-p", "pm2", "pm2", "ls"),
         ("npx", "pm2-runtime", "start", "../../deploy/pleiades.config.cjs"),
         ("npx", "pm2@latest", "ls"),  # 버전은 정확한 값만
+        # 회귀: #171 사전 리뷰 critical — start 는 가변 인자라 설정 파일 뒤의 스크립트도 띄운다 (I-19 우회)
+        ("npx", "pm2", "start", "../../deploy/pleiades.config.cjs", "../../apps/finance/deploy/deploy.sh", "--only", "pleiades-fin-web"),
+        ("npx", "pm2", "start", "../../deploy/pleiades.config.cjs", "dist/bot.js", "--only", "pleiades-fin-bot"),
+        ("npx", "pm2", "startOrReload", "../../deploy/pleiades.config.cjs", "foo.cjs", "--only", "pleiades-fin-web"),
+        ("npx", "pm2", "start", "../../deploy/pleiades.config.cjs", "--only", "pleiades-fin-web", "--interpreter", "bash"),
+        ("npx", "pm2", "start", "--only", "../../deploy/pleiades.config.cjs", "x.sh"),
+        # 회귀: #171 사전 리뷰 major 2 — 루트 설정은 두 앱을 다 띄우는데 check_env 는 한 앱만 본다 → --only <이 앱 이름> 필수
+        ("npx", "pm2", "start", "../../deploy/pleiades.config.cjs"),
+        ("npx", "pm2", "start", "../../deploy/pleiades.config.cjs", "--only", "pleiades-fit-web"),
+        ("npx", "pm2", "start", "../../deploy/pleiades.config.cjs", "--only", "pleiades-fin-web,pleiades-fit-bot"),
+        ("npx", "pm2", "start", "../../deploy/pleiades.config.cjs", "--only", "myfinance"),
+        # 회귀: #171 사전 리뷰 major 1 — pm2 는 설정 파일을 부분 문자열로 판정하고 restart·reload 도 설정을 읽는다 · `-` = stdin
+        ("npx", "pm2", "reload", "x.json5"),
+        ("npx", "pm2", "restart", "ecosystem.config.js.bak"),
+        ("npx", "pm2", "restart", "-"),
+        ("npx", "pm2", "restart", "../x"),
+        ("npx", "pm2", "logs", "pleiades-fin-bot", "--lines", "../x.json"),
+        ("npx", "pm2", "describe", "pleiades-fin-bot", "--interpreter", "bash"),
+        # 회귀: #171 사전 리뷰 — node 로 pm2 CLI 를 직접 부르면 허용 목록을 비껴간다
+        ("node", "../../node_modules/pm2/bin/pm2", "start", "dist/bot.js"),
+        ("node", "node_modules/.bin/pm2", "ls"),
     ]
 
     def test_denied(self):
@@ -81,14 +102,15 @@ class Allow(unittest.TestCase):
         ("npx", "tsc", "--noEmit"),
         ("npx", "prisma", "db", "execute", "--sql", "SELECT 1 -- drop database later"),
         # #171 로컬 pm2 예외 — 루트 설정 파일 · 전용 데몬(PM2_HOME 은 run.sh 가 고정)
-        ("npx", "pm2", "start", "../../deploy/pleiades.config.cjs"),
-        ("npx", "-y", "pm2@6.0.13", "start", f"{ROOT}/deploy/pleiades.config.cjs", "--only", "fin-web"),
-        ("npx", "pm2", "startOrReload", "../../deploy/pleiades.config.cjs", "--update-env"),
+        ("npx", "pm2", "start", "../../deploy/pleiades.config.cjs", "--only", "pleiades-fin-web"),
+        ("npx", "-y", "pm2@6.0.13", "start", f"{ROOT}/deploy/pleiades.config.cjs", "--only", "pleiades-fin-web,pleiades-fin-bot"),
+        ("npx", "pm2", "startOrReload", "../../deploy/pleiades.config.cjs", "--only", "pleiades-fin-mcp", "--update-env"),
         ("npx", "pm2", "ls"),
         ("npx", "pm2", "jlist"),
-        ("npx", "pm2", "describe", "fin-bot"),
-        ("npx", "pm2", "logs", "fin-bot", "--nostream", "--lines", "50"),
-        ("npx", "pm2", "restart", "fin-web"),
+        ("npx", "pm2", "describe", "pleiades-fin-bot"),
+        ("npx", "pm2", "logs", "pleiades-fin-bot", "--nostream", "--lines", "50"),
+        ("npx", "pm2", "restart", "pleiades-fin-web", "--update-env"),
+        ("npx", "pm2", "restart", "0"),
         ("npx", "pm2", "stop", "all"),
         ("npx", "pm2", "delete", "all"),
         ("npx", "pm2", "save"),

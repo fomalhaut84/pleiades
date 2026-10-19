@@ -24,7 +24,7 @@
 |---|---|---|---|
 | **I-1** | 서비스 저장소 쓰기 | push · 브랜치 · PR · 이슈 · 코멘트 · 라벨 · 리뷰 · 릴리즈 · graphql mutation **전부 금지.** `gh api` 는 메서드·필드 플래그 없음 또는 `-X GET` 만 · 그 외 `gh` 서브커맨드는 읽기 동사(`view`·`list`·`diff`·`checks`)만 · 출처는 https URL 직접 · **리모트를 등록하지 않는다** | 훅(#102) |
 | **I-2** | GitHub 교차 참조 | pleiades 의 커밋 메시지 · PR · 이슈 · 코멘트에 **소유자 포함 참조(`<owner>/<repo>#N`)·서비스 이슈/PR URL 을 쓰지 않는다** — 서비스 참조는 **`fin#N` · `fit#N`** 만. 가져온 커밋 메시지는 치환 + grep-0 게이트(006 §4-2). 저장소 **파일** 안의 참조는 무해 | 게이트(#104) |
-| **I-3** | 서버 | ssh · pm2 · nginx · 서버 DB · β2 잔여물 **전부 금지.** 정리는 사용자 단독. **예외(#171 · 007 Q85 ① · 사용자 승인 2026-10-19): 로컬 pm2 리허설** — `tools/local/run.sh <app> -- npx pm2 …` 경유만 · 데몬은 `<root>/.pm2-local`(`PM2_HOME` 고정) · start 는 루트 `deploy/pleiades.config.cjs` 만 · 서비스 포트(I-12)·`apps/*/ecosystem.config.js`(I-19)·전역 `pm2`·서버는 계속 금지 | 훅(`ssh` · 직접 `pm2`) · `precheck.py`(run.sh 안 pm2 허용 목록) |
+| **I-3** | 서버 | ssh · pm2 · nginx · 서버 DB · β2 잔여물 **전부 금지.** 정리는 사용자 단독. **예외(#171 · 007 Q85 ① · 사용자 승인 2026-10-19): 로컬 pm2 리허설** — `tools/local/run.sh <app> -- npx pm2 …` 경유만 · 데몬은 `<root>/.pm2-local`(`PM2_HOME` 고정) · start 는 `<루트 deploy/pleiades.config.cjs> --only pleiades-<app>-<역할>` 만 · 관리 대상은 이름·id 만 · 서비스 포트(I-12)·`apps/*/ecosystem.config.js`(I-19)·전역 `pm2`·서버는 계속 금지 | 훅(`ssh` · 직접 `pm2`) · `precheck.py`(run.sh 안 pm2 허용 목록) |
 | **I-4** | 서비스 텔레그램 봇 토큰 | 어떤 `.env`·secret·명령줄에도 두지 않는다 · 로컬 기동은 검증 봇 토큰만(006 L-2·L-4) | 헬퍼(#104) |
 | **I-5** | 텔레그램 수신자 | `ALLOWED/ADMIN_CHAT_IDS` = 검증 채팅만 | — |
 | **I-6** | Garmin 계정 | `GARMIN_*` 비움 · `.garmin-tokens/` 반입 금지 (fit 웹은 기동만으로 싱크 cron 을 건다) | — |
