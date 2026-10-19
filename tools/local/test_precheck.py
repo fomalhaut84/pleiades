@@ -93,6 +93,12 @@ class Deny(unittest.TestCase):
         ("node", "/x/node_modules/.bin/../pm2/bin/pm2", "startup"),
         ("node", "../../node_modules//pm2/bin/pm2", "ls"),
         ("node", "../../NODE_MODULES/PM2/bin/pm2", "startup"),
+        # 회귀: PR #172 Codex P1 3회차 — 관리 대상이 다른 앱·all·id 면 그 앱 env 는 검사되지 않은 채 재기동된다
+        ("npx", "pm2", "restart", "all"),
+        ("npx", "pm2", "restart", "pleiades-fit-bot"),
+        ("npx", "pm2", "reload", "0"),
+        ("npx", "pm2", "stop", "all"),
+        ("npx", "pm2", "resurrect"),
     ]
 
     def test_denied(self):
@@ -121,11 +127,10 @@ class Allow(unittest.TestCase):
         ("npx", "pm2", "describe", "pleiades-fin-bot"),
         ("npx", "pm2", "logs", "pleiades-fin-bot", "--nostream", "--lines", "50"),
         ("npx", "pm2", "restart", "pleiades-fin-web"),
-        ("npx", "pm2", "restart", "0"),
-        ("npx", "pm2", "stop", "all"),
-        ("npx", "pm2", "delete", "all"),
+        ("npx", "pm2", "reload", "pleiades-fin-web", "pleiades-fin-bot"),
+        ("npx", "pm2", "stop", "pleiades-fin-bot"),
+        ("npx", "pm2", "delete", "pleiades-fin-mcp"),
         ("npx", "pm2", "save"),
-        ("npx", "pm2", "resurrect"),
         ("npx", "pm2", "kill"),
         ("npx", "pm2", "--version"),
     ]
@@ -134,22 +139,6 @@ class Allow(unittest.TestCase):
         for argv in self.CASES:
             with self.subTest(argv=argv):
                 self.assertEqual(reasons(*argv), [])
-
-
-class Teardown(unittest.TestCase):
-    """회귀: PR #172 Codex P2 — 정리(stop·delete·kill)는 기동 env 검사 없이도 돌아야 한다 (run.sh 가 check_env 를 건너뛴다)."""
-
-    def test_teardown(self):
-        for argv in (("npx", "pm2", "kill"), ("npx", "pm2", "stop", "all"), ("npx", "-y", "pm2@6.0.13", "delete", "pleiades-fin-bot")):
-            with self.subTest(argv=argv):
-                self.assertTrue(p.is_teardown(list(argv)))
-
-    def test_not_teardown(self):
-        for argv in (("npx", "pm2", "ls"), ("npx", "pm2", "restart", "all"), ("npm", "run", "dev"),
-                     ("npx", "pm2", "start", "../../deploy/pleiades.config.cjs", "--only", "pleiades-fin-web"),
-                     ("npx", "pm2", "delete", "../x.json")):
-            with self.subTest(argv=argv):
-                self.assertFalse(p.is_teardown(list(argv)))
 
 
 if __name__ == "__main__":

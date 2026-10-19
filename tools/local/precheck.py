@@ -6,11 +6,11 @@
   ② 파괴 명령: SQL 주석·공백·대소문자를 정규화한 뒤 본다 (L-1 · I-14)
   ③ 훅 판정기(.claude/hooks/isolation_guard.check)를 cwd = apps/<app> 로 다시 적용 (I-1 · I-3 · I-11 · I-19 · I-21)
   ④ 로컬 pm2 예외 (#171 · 007 Q85 ①): `npx [-y] pm2[@x.y.z] <허용 서브커맨드>` 만 ③ 의 I-3 대신 여기서 판정한다 —
-     start 계열은 `<루트 deploy/pleiades.config.cjs> --only pleiades-<이 앱>-<역할>` 만 · 관리 대상은 이름·id 만 ·
+     start 계열은 `<루트 deploy/pleiades.config.cjs> --only pleiades-<이 앱>-<역할>` 만 · 관리 대상은 이 앱 이름만 ·
      플래그는 닫힌 집합만. 데몬은 run.sh 가 PM2_HOME 으로 고정한다.
      직접 치는 `pm2`·`npx pm2` 는 훅이 계속 막는다 — 이 예외는 run.sh 안에서만 있다
 
-사용: python3 precheck.py <root> <cwd> -- <명령…>   → 0 통과 · 1 거부 · 2 사용 오류 · 3 통과(pm2 정리 — env 검사 생략)
+사용: python3 precheck.py <root> <cwd> -- <명령…>   → 0 통과 · 1 거부 · 2 사용 오류
 """
 
 from __future__ import annotations
@@ -31,16 +31,14 @@ PM2_PACKAGE = re.compile(r"pm2(?:@\d+\.\d+\.\d+)?")
 PM2_CONFIG = "deploy/pleiades.config.cjs"  # 루트 설정 파일 (007 T-1) — apps/*/ecosystem.config.js 는 I-19 로 계속 금지
 PM2_START = {"start", "startOrReload", "startOrRestart", "startOrGracefulReload"}
 PM2_MANAGE = {"restart", "reload", "stop", "delete", "del", "list", "ls", "l", "status", "jlist", "prettylist",
-              "describe", "desc", "info", "show", "logs", "flush", "save", "dump", "resurrect", "kill",
+              "describe", "desc", "info", "show", "logs", "flush", "save", "dump", "kill",
               "ping", "pid", "id", "--version", "-v"}
 # 인자는 닫힌 집합만 — pm2 는 start 가 가변 인자이고 설정 파일을 부분 문자열로 판정하며 `-` 는 stdin 이다 (#171 사전 리뷰)
 PM2_FLAGS = {"--nostream", "--err", "--out"}   # 값 없음 · --update-env 는 start 계열만(앱 범위 --only 와 함께 · #171 재리뷰)
 PM2_VALUE_FLAGS = {"--lines": re.compile(r"\d+")}             # 값 있음 (start 의 --only 는 따로)
-PM2_TARGET = re.compile(r"[A-Za-z0-9_-]+")                    # 관리 대상 = 프로세스 이름·id·all — `/` `.` `-` 시작 없음
 PM2_NODE_CLI = re.compile(r"(?:^|/)node_modules/(?:pm2/|\.bin/pm2)")  # 실수 방지 — node 는 원래 무엇이든 실행할 수 있다
 APP_OF_DIR = {"finance": "fin", "fitness": "fit"}
-PM2_TEARDOWN = {"stop", "delete", "del", "kill"}  # 아무것도 띄우지 않는다 — run.sh 가 기동 env 검사를 건너뛴다 (PR #172 Codex P2)
-TEARDOWN_EXIT = 3
+
 DESTRUCTIVE = re.compile(
     r"\bdrop (database|schema)\b|\bdropdb\b|\bmigrate (reset|dev)\b|--force-reset\b|--accept-data-loss\b"
 )
@@ -70,15 +68,6 @@ def _is_pm2_cli(arg: str, cwd: str) -> bool:
     """경로 변형(`..` · 중복 `/` · 대소문자 · 심링크)을 접은 뒤 판정한다 (PR #172 Codex P1)."""
     full = os.path.join(cwd, arg)
     return any(PM2_NODE_CLI.search(c.lower()) for c in (arg, os.path.normpath(full), os.path.realpath(full)))
-
-
-def is_teardown(argv: list[str]) -> bool:
-    """허용되는 pm2 정리 명령(stop · delete · kill — 대상은 이름·id·all)인가."""
-    pm2 = _pm2_args(argv) if argv else None
-    if not pm2 or pm2[0] not in PM2_TEARDOWN:
-        return False
-    pos, bad = _pm2_flags(pm2[1:], pm2[0])
-    return not bad and all(PM2_TARGET.fullmatch(a) for a in pos)
 
 
 def _pm2_flags(args: list[str], sub: str) -> tuple[list[str], list[str]]:
@@ -133,9 +122,11 @@ def _pm2_problems(args: list[str], *, cwd: str, root: str) -> list[str]:
     if sub not in PM2_MANAGE:
         return [f"pm2 {sub}: 로컬 예외 밖 서브커맨드 — 허용은 start 계열·관리·조회뿐 (#171 · I-3)"]
     pos, out = _pm2_flags(rest, sub)
-    bad = [a for a in pos if not PM2_TARGET.fullmatch(a)]
+    app = APP_OF_DIR.get(os.path.basename(os.path.normpath(cwd)))
+    bad = [a for a in pos if not (app and re.fullmatch(rf"pleiades-{app}-[a-z]+", a))]
     if bad:
-        out.append(f"pm2 {sub}: 대상은 프로세스 이름·id·all 만 ({bad[0]}) — 설정 파일·stdin 금지 (#171 · I-19)")
+        # 이 앱 이름만 — all·id·다른 앱이면 run.sh 가 검사하지 않은 앱이 재기동된다 (PR #172 Codex P1 3회차) · 설정 파일·stdin 도 여기서 막힌다
+        out.append(f"pm2 {sub}: 대상은 pleiades-{app or '<app>'}-<역할> 만 ({bad[0]}) — all·id·다른 앱·설정 파일·stdin 금지 (#171)")
     return out
 
 
@@ -166,7 +157,7 @@ def main() -> int:
         return 2
     found = problems(args[3:], cwd=args[1], root=args[0], home=os.environ.get("HOME", str(Path.home())))
     if not found:
-        return TEARDOWN_EXIT if is_teardown(args[3:]) else 0
+        return 0
     print("run.sh: 중단 — 감싼 명령이 격리 규칙에 걸린다 (.claude/rules/isolation.md)", file=sys.stderr)
     for r in found:
         print(f"  · {r}", file=sys.stderr)

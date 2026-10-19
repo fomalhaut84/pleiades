@@ -159,39 +159,22 @@ class RunSh(Base):
         r = self.run_sh("node", "-e", "console.log(process.env.PM2_HOME)", PM2_HOME="/Users/someone/.pm2")
         self.assertEqual(r.stdout.strip(), str(self.root / ".pm2-local"), r.stderr)
 
-    def test_pm2_teardown_skips_env_check(self):
-        """회귀: PR #172 Codex P2 — env 검사가 실패하는 셸에서도 pm2 정리(kill)는 돈다 · 기동·조회는 여전히 막힌다."""
+    def test_pm2_always_env_checked(self):
+        """회귀: PR #172 Codex P1 2회차·P2 3회차 — pm2 는 정리(kill·stop)도 env 검사를 거친다(검사 안 된 셸이 새 데몬을 띄우지 않게)."""
         fake = self.root / "fakebin"
         fake.mkdir()
-        (fake / "npx").write_text('#!/bin/sh\necho "fake-npx $* home=$PM2_HOME"\n')
+        (fake / "npx").write_text('#!/bin/sh\necho "fake-npx $*"\n')
         (fake / "npx").chmod(0o755)
         import shutil
         node = shutil.which("node") or self.skipTest("node 없음")
         path = f"{fake}:{os.path.dirname(node)}:/usr/bin:/bin"
-        # 회귀: PR #172 Codex P1 2회차 — 데몬이 없으면 pm2 를 부르지 않는다(stop·delete 가 검사 안 된 env 로 새 데몬을 띄운다)
-        for sub in ("kill", "stop"):
-            with self.subTest(sub=sub, daemon=False):
-                r = self.run_sh("npx", "pm2", sub, *(["all"] if sub == "stop" else []), PATH=path, GARMIN_EMAIL="me@x.com")
-                self.assertEqual(r.returncode, 0, r.stderr)
+        for argv in (("kill",), ("stop", "pleiades-fit-bot"), ("ls",)):
+            with self.subTest(argv=argv):
+                r = self.run_sh("npx", "pm2", *argv, PATH=path, GARMIN_EMAIL="me@x.com")
+                self.assertEqual(r.returncode, 1)
                 self.assertNotIn("fake-npx", r.stdout)
-        # 살아 있는 데몬(소켓 + 살아 있는 pid) — 정리는 env 검사 없이 돈다
-        import socket
-        home = self.root / ".pm2-local"
-        home.mkdir()
-        sock = socket.socket(socket.AF_UNIX)
-        sock.bind(str(home / "rpc.sock"))
-        self.addCleanup(sock.close)
-        (home / "pm2.pid").write_text(str(os.getpid()))
-        r = self.run_sh("npx", "pm2", "kill", PATH=path, GARMIN_EMAIL="me@x.com")
-        self.assertEqual((r.returncode, r.stdout.strip()), (0, f"fake-npx pm2 kill home={home}"), r.stderr)
-        # 죽은 pid 면 데몬 없음과 같다
-        (home / "pm2.pid").write_text("999999")
-        r = self.run_sh("npx", "pm2", "stop", "all", PATH=path, GARMIN_EMAIL="me@x.com")
-        self.assertNotIn("fake-npx", r.stdout)
-        # 기동·조회는 env 검사가 막는다
-        r = self.run_sh("npx", "pm2", "ls", PATH=path, GARMIN_EMAIL="me@x.com")
-        self.assertEqual(r.returncode, 1)
-        self.assertNotIn("fake-npx", r.stdout)
+        r = self.run_sh("npx", "pm2", "kill", PATH=path)
+        self.assertEqual((r.returncode, r.stdout.strip()), (0, "fake-npx pm2 kill"), r.stderr)
 
     def test_destructive_prisma_refused(self):
         for cmd in (["npx", "prisma", "migrate", "reset"], ["npx", "prisma", "migrate", "dev"],
