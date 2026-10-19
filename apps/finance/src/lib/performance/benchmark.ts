@@ -1,7 +1,7 @@
-import YahooFinance from 'yahoo-finance2'
+import { createYahooFinance } from '@/lib/yahoo-client'
 import { prisma } from '@/lib/prisma'
 
-const yahooFinance = new YahooFinance()
+const yahooFinance = createYahooFinance()
 
 interface BackfillResult {
   ticker: string

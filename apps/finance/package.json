@@ -74,6 +74,7 @@
     "@react-pdf/stylesheet": "6.2.1",
     "@react-pdf/svg": "1.1.0",
     "@react-pdf/textkit": "6.3.0",
-    "@react-pdf/types": "2.11.1"
+    "@react-pdf/types": "2.11.1",
+    "deepmerge-ts": "^8.0.2"
   }
 }

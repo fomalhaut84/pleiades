@@ -4,7 +4,7 @@
  * OHLCV 히스토리 + TA 지표 → 전략 룰 평가 → 시뮬레이션 실행
  */
 
-import YahooFinance from 'yahoo-finance2'
+import { createYahooFinance } from '@/lib/yahoo-client'
 import { RSI, MACD, BollingerBands, SMA, EMA } from 'trading-signals'
 import type {
   BacktestConfig,
@@ -14,7 +14,7 @@ import type {
   Condition,
 } from './types'
 
-const yf = new YahooFinance()
+const yf = createYahooFinance()
 
 interface DayIndicators {
   close: number

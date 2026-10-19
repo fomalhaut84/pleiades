@@ -1,4 +1,4 @@
-import YahooFinance from 'yahoo-finance2'
+import { createYahooFinance } from './yahoo-client'
 import { prisma } from './prisma'
 import { normalizeMarket } from './market-hours'
 import { collectStrategyRefreshTickers } from './custom-strategy/evaluator'
@@ -10,7 +10,7 @@ import {
 } from './price-fetcher-utils'
 export { mergeCrossTickersIntoMeta } from './price-fetcher-utils'
 
-const yahooFinance = new YahooFinance()
+const yahooFinance = createYahooFinance()
 
 const FX_TICKER = 'USDKRW=X'
 
