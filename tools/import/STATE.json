@@ -11,8 +11,8 @@
     "callback_sha": "7b5564271eee579dbee0a7f430ced63cdab870cd1b4c175974b53b4161d337e7",
     "filter_repo": "a40bce548d2c",
     "git": "git version 2.50.1 (Apple Git-155)",
-    "rewritten_tip": "4f698995acc465dcf68d400993a8d9d78b9fc1cb",
-    "service_dev": "0b3ccd4c33c2ad3dc3ddbda40758f32ed55838f4",
+    "rewritten_tip": "1af062475e457737228a45d7adb04a88b409a3c3",
+    "service_dev": "6f174d2546b53c40b6540fbff675d108aacf84f8",
     "service_repo": "myFitness"
   },
   "version": 1
