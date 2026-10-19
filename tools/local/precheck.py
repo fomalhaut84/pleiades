@@ -31,13 +31,13 @@ PM2_PACKAGE = re.compile(r"pm2(?:@\d+\.\d+\.\d+)?")
 PM2_CONFIG = "deploy/pleiades.config.cjs"  # 루트 설정 파일 (007 T-1) — apps/*/ecosystem.config.js 는 I-19 로 계속 금지
 PM2_START = {"start", "startOrReload", "startOrRestart", "startOrGracefulReload"}
 PM2_MANAGE = {"restart", "reload", "stop", "delete", "del", "list", "ls", "l", "status", "jlist", "prettylist",
-              "describe", "desc", "info", "show", "env", "logs", "flush", "save", "dump", "resurrect", "kill",
+              "describe", "desc", "info", "show", "logs", "flush", "save", "dump", "resurrect", "kill",
               "ping", "pid", "id", "--version", "-v"}
 # 인자는 닫힌 집합만 — pm2 는 start 가 가변 인자이고 설정 파일을 부분 문자열로 판정하며 `-` 는 stdin 이다 (#171 사전 리뷰)
-PM2_FLAGS = {"--update-env", "--nostream", "--err", "--out"}   # 값 없음
+PM2_FLAGS = {"--nostream", "--err", "--out"}   # 값 없음 · --update-env 는 start 계열만(앱 범위 --only 와 함께 · #171 재리뷰)
 PM2_VALUE_FLAGS = {"--lines": re.compile(r"\d+")}             # 값 있음 (start 의 --only 는 따로)
 PM2_TARGET = re.compile(r"[A-Za-z0-9_-]+")                    # 관리 대상 = 프로세스 이름·id·all — `/` `.` `-` 시작 없음
-PM2_NODE_CLI = re.compile(r"(?:^|/)(?:pm2/bin/pm2[^/]*|\.bin/pm2[^/]*)$")
+PM2_NODE_CLI = re.compile(r"(?:^|/)node_modules/(?:pm2/|\.bin/pm2)")  # 실수 방지 — node 는 원래 무엇이든 실행할 수 있다
 APP_OF_DIR = {"finance": "fin", "fitness": "fit"}
 DESTRUCTIVE = re.compile(
     r"\bdrop (database|schema)\b|\bdropdb\b|\bmigrate (reset|dev)\b|--force-reset\b|--accept-data-loss\b"

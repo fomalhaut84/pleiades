@@ -82,6 +82,13 @@ class Deny(unittest.TestCase):
         # 회귀: #171 사전 리뷰 — node 로 pm2 CLI 를 직접 부르면 허용 목록을 비껴간다
         ("node", "../../node_modules/pm2/bin/pm2", "start", "dist/bot.js"),
         ("node", "node_modules/.bin/pm2", "ls"),
+        # 회귀: #171 재리뷰 major — 관리 명령의 --update-env 는 이 앱 기준으로 검사한 env 를 다른 앱 프로세스에 덮어쓴다
+        ("npx", "pm2", "restart", "pleiades-fit-web", "--update-env"),
+        ("npx", "pm2", "restart", "all", "--update-env"),
+        ("npx", "pm2", "reload", "3", "--update-env"),
+        # 회귀: #171 재리뷰 info — pm2 CLI 진입점은 bin 만이 아니다 · env 는 프로세스 env 전체를 출력한다
+        ("node", "../../node_modules/pm2/lib/binaries/CLI.js", "start", "dist/bot.js"),
+        ("npx", "pm2", "env", "0"),
     ]
 
     def test_denied(self):
@@ -109,7 +116,7 @@ class Allow(unittest.TestCase):
         ("npx", "pm2", "jlist"),
         ("npx", "pm2", "describe", "pleiades-fin-bot"),
         ("npx", "pm2", "logs", "pleiades-fin-bot", "--nostream", "--lines", "50"),
-        ("npx", "pm2", "restart", "pleiades-fin-web", "--update-env"),
+        ("npx", "pm2", "restart", "pleiades-fin-web"),
         ("npx", "pm2", "restart", "0"),
         ("npx", "pm2", "stop", "all"),
         ("npx", "pm2", "delete", "all"),
