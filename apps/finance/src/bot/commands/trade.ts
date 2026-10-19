@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { createTrade } from '@/lib/trade-service'
 import { formatKRWFull, formatUSD } from '../utils/formatter'
 import { escapeHtml, h } from '../utils/telegram'
+import { buildTickerCheckLines } from '../utils/trade-price-check'
 
 interface PendingTrade {
   requestedByUserId: number
@@ -34,7 +35,11 @@ function cleanExpired(): void {
   })
 }
 
-function formatTradePreview(type: 'BUY' | 'SELL', pending: PendingTrade): string {
+function formatTradePreview(
+  type: 'BUY' | 'SELL',
+  pending: PendingTrade,
+  checkLines: string[],
+): string {
   const typeLabel = type === 'BUY' ? '📥 매수' : '📤 매도'
   const priceStr = pending.currency === 'USD'
     ? formatUSD(pending.price)
@@ -49,6 +54,7 @@ function formatTradePreview(type: 'BUY' | 'SELL', pending: PendingTrade): string
     '',
     `계좌: ${escapeHtml(pending.accountName)}`,
     `종목: ${escapeHtml(pending.displayName)} (${escapeHtml(pending.ticker)})`,
+    ...checkLines.map(escapeHtml),
     `수량: ${pending.shares}주`,
     `단가: ${priceStr}`,
   ]
@@ -242,7 +248,14 @@ async function handleTrade(ctx: Context, type: 'BUY' | 'SELL'): Promise<void> {
     .text('✅ 확인', `trade:confirm:${tradeId}`)
     .text('❌ 취소', `trade:cancel:${tradeId}`)
 
-  const sent = await ctx.reply(formatTradePreview(type, pending), {
+  // #510: 이름 → 티커 오매칭을 확인 단계에서 드러내기 위한 검증 라인
+  const tickerCache = await prisma.priceCache.findUnique({
+    where: { ticker },
+    select: { price: true, quoteName: true },
+  })
+  const checkLines = buildTickerCheckLines(price, currency, tickerCache)
+
+  const sent = await ctx.reply(formatTradePreview(type, pending, checkLines), {
     parse_mode: 'HTML',
     reply_markup: keyboard,
   })

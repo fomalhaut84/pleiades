@@ -276,7 +276,7 @@ export const TICKER_MAP: Record<string, { displayName: string; market: string; c
   'SOXL':       { displayName: 'SOXL',                  market: 'US', currency: 'USD', active: false },  // 매도 완료
   '360750.KS':  { displayName: 'TIGER 미국S&P500',       market: 'KR', currency: 'KRW' },
   '446720.KS':  { displayName: 'SOL 미국배당다우존스',     market: 'KR', currency: 'KRW' },
-  '472150.KS':  { displayName: 'SOL 미국배당미국채혼합50', market: 'KR', currency: 'KRW' },
+  '490490.KS':  { displayName: 'SOL 미국배당미국채혼합50', market: 'KR', currency: 'KRW' },
   '035720.KS':  { displayName: '카카오',                  market: 'KR', currency: 'KRW' },
   '454910.KS':  { displayName: '두산로보틱스',             market: 'KR', currency: 'KRW' },
   '451760.KQ':  { displayName: '컨텍',                    market: 'KR', currency: 'KRW' },

@@ -85,6 +85,14 @@ export function resolveRefreshMeta(
 }
 
 /**
+ * 시세 소스가 제공하는 실제 종목명 (#510). 사용자 라벨(displayName)과 별도로 저장해
+ * 라벨이 엉뚱한 티커에 붙은 경우(472150.KS ← 'SOL 미국배당미국채혼합50')를 드러내는 데 쓴다.
+ */
+export function extractQuoteName(quote: QuoteMetaLike): string | null {
+  return quote.shortName?.trim() || quote.longName?.trim() || null
+}
+
+/**
  * 지수 티커 판별 (#499). 야후는 지수를 `^` prefix 로 제공한다 (`^KS11`, `^GSPC` 등).
  * 티커 모양만 판별한다 — 표기 (포인트 vs 통화) 와 캐시 정책 (`fetchQuote` 의
  * `skipCache`) 은 호출자가 결정한다.

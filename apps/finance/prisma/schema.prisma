@@ -91,6 +91,7 @@ model Deposit {
 model PriceCache {
   ticker        String   @id
   displayName   String
+  quoteName     String?  // 시세 소스(Yahoo) 실제 종목명 — displayName 은 사용자 라벨 (#510)
   market        String
   price         Float
   currency      String

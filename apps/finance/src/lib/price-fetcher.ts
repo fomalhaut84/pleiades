@@ -2,7 +2,12 @@ import YahooFinance from 'yahoo-finance2'
 import { prisma } from './prisma'
 import { normalizeMarket } from './market-hours'
 import { collectStrategyRefreshTickers } from './custom-strategy/evaluator'
-import { mergeCrossTickersIntoMeta, normalizeMarketTime, resolveRefreshMeta } from './price-fetcher-utils'
+import {
+  extractQuoteName,
+  mergeCrossTickersIntoMeta,
+  normalizeMarketTime,
+  resolveRefreshMeta,
+} from './price-fetcher-utils'
 export { mergeCrossTickersIntoMeta } from './price-fetcher-utils'
 
 const yahooFinance = new YahooFinance()
@@ -86,6 +91,7 @@ export async function fetchQuote(ticker: string, options?: FetchQuoteOptions): P
   // Yahoo의 raw exchange 코드(NCM/NYQ/KSC 등)를 정규화해 저장 — 비교 일관성 보장
   const market = normalizeMarket(quote.exchange ?? '', ticker)
   const displayName = quote.shortName ?? quote.longName ?? ticker
+  const quoteName = extractQuoteName(quote)
   // #499: 시세 기준 시각/장 상태 — 반환값이 언제 기준인지 판별 가능하게 함께 전달
   const marketTime = normalizeMarketTime(quote.regularMarketTime)
   const marketState = typeof quote.marketState === 'string' ? quote.marketState : null
@@ -100,8 +106,9 @@ export async function fetchQuote(ticker: string, options?: FetchQuoteOptions): P
     try {
       await prisma.priceCache.upsert({
         where: { ticker },
-        update: { price, change, changePercent: changePct, market },
-        create: { ticker, displayName, market, currency, price, change, changePercent: changePct },
+        // #510: 이름 없는 quote 가 기존 실제 종목명을 null 로 지우지 않게 있을 때만 갱신
+        update: { price, change, changePercent: changePct, market, ...(quoteName ? { quoteName } : {}) },
+        create: { ticker, displayName, quoteName, market, currency, price, change, changePercent: changePct },
       })
     } catch (error) {
       console.error(`[price-fetcher] 캐시 갱신 실패 (${ticker}):`, error)
@@ -227,6 +234,8 @@ async function doRefreshPrices(): Promise<RefreshResult> {
       // Codex #501 P2: placeholder 메타 (전략 전용 지수 등) 는 quote 메타로 대체.
       // currency 는 update 에도 포함 — 과거 placeholder 로 잘못 생성된 행이 자연 교정되도록.
       const resolved = resolveRefreshMeta(meta, quote, ticker)
+      // #510: 라벨(displayName)은 보유/관심종목 메타로 덮어쓰므로 실제 종목명은 별도 컬럼에 유지
+      const quoteName = extractQuoteName(quote)
       await prisma.priceCache.upsert({
         where: { ticker },
         update: {
@@ -234,12 +243,14 @@ async function doRefreshPrices(): Promise<RefreshResult> {
           change,
           changePercent: changePct,
           displayName: resolved.displayName,
+          ...(quoteName ? { quoteName } : {}),
           market: resolved.market,
           currency: resolved.currency,
         },
         create: {
           ticker,
           displayName: resolved.displayName,
+          quoteName,
           market: resolved.market,
           price,
           currency: resolved.currency,
