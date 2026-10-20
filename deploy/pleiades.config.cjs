@@ -105,7 +105,26 @@ function fitApps(cwd, { PORT, MCP_PORT }, env) {
   ]
 }
 
+// 로컬 리허설(run.sh 가 PM2_HOME 을 <root>/.pm2-local 로 고정 · #171)일 때만 claude shim 을 PATH 맨 앞에 둔다 —
+// pm2 앱은 데몬·CLI 환경을 물려받으므로 L-7(advisor 차단)이 저절로 성립한다고 가정하지 않는다(007 Q85 리허설 조건 · G-f).
+// 서버에서는 이 조건이 거짓이라 PATH 를 건드리지 않는다(실 claude 가 필요하다).
+function sameDir(a, b) {
+  try {
+    return fs.realpathSync(a) === fs.realpathSync(b)
+  } catch {
+    return false // 없는 경로(데몬 첫 기동 전 .pm2-local 등) — 문자열로 비교한다
+  }
+}
+
+function withLocalShim(apps) {
+  const home = process.env.PM2_HOME
+  const local = path.join(ROOT, '.pm2-local')
+  if (!home || (home !== local && !sameDir(home, local))) return apps
+  const PATH = [path.join(ROOT, 'bin'), process.env.PATH].filter(Boolean).join(path.delimiter)
+  return apps.map((a) => ({ ...a, env: { ...a.env, PATH } }))
+}
+
 const app = cwdApp()
 const cwd = path.join(ROOT, 'apps', DIRS[app])
 const env = effectiveEnv(cwd)
-module.exports = { apps: (app === 'fin' ? finApps : fitApps)(cwd, ports(cwd, env), env) }
+module.exports = { apps: withLocalShim((app === 'fin' ? finApps : fitApps)(cwd, ports(cwd, env), env)) }

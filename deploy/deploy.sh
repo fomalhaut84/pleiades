@@ -12,7 +12,7 @@
 # 서비스 deploy.sh 와 다른 점(007 §4-1 표):
 #   - git 조작·작업트리 정리 없음 — 정리 명령은 P-2 상태 심링크를 지운다(4-2 정정 1)
 #   - 루트 npm ci 가 첫 단계 — prepare 가 packages/notify/dist 를 만든다(⑭). 실패 = 배포 실패
-#   - 마이그레이션은 적용하지 않고 status 로 검사만 한다 — 대기·DB 전용 마이그레이션이 있으면 중단(정정 5 · Q74)
+#   - 마이그레이션은 적용하지 않고 검사만 한다 — status(대기) + psql 이름 대조(DB 전용 · status 가 놓친다 · #180). 차이가 있으면 중단(정정 5 · Q74)
 #   - 기동 전 점유 검사 — 옛 서비스 pm2 가 online 이거나 포트를 다른 프로세스가 잡고 있으면 빌드 전에 멈춘다.
 #     같은 포트라 옛 프로세스가 health 에 대신 응답한다(정정 4 의 거울상 · #176 사전 리뷰)
 #   - 웹도 restart — reload 겹침 구간의 고아 prompt_run(#170)을 없앤다. 봇은 delete + start(409 · 옵션 반영)
@@ -122,13 +122,70 @@ confirm_stable() {
 
 check_migrations() {
   echo "+ (apps/$DIR) npx prisma migrate status"
-  [[ $DRY -eq 1 ]] && return 0
+  if [[ $DRY -eq 1 ]]; then echo "+ (apps/$DIR) psql: public._prisma_migrations ↔ prisma/migrations 이름 대조  # 읽기 전용"; return 0; fi
   local out rc=0
   out=$(cd "$APP_DIR" && npx prisma migrate status 2>&1) || rc=$?
   echo "$out"
   # 종료 코드만 믿지 않는다 — 비0 종료 여부는 미확인(007 G-e)
   [[ $rc -eq 0 && "$out" == *"Database schema is up to date"* ]] \
     || die "마이그레이션 차이가 있다 — 이 스크립트는 적용하지 않는다(007 정정 5 · Q74). 사용자 판단"
+  check_migration_names
+}
+
+# migrate status 는 DB 에만 있는 마이그레이션을 보고하지 않는다 — prisma 6.19.3 실측: DB 29 · 디렉터리 28 에서
+# "up to date" · rc 0 (#180 리허설 · 007 G-e). 그래서 _prisma_migrations 이름 집합을 디렉터리와 직접 대조한다(읽기 전용).
+check_migration_names() {
+  echo "+ (apps/$DIR) psql: public._prisma_migrations ↔ prisma/migrations 이름 대조  # 읽기 전용"
+  local db local_names only_db only_local js
+  # node 가 DATABASE_URL(셸 > apps/<dir>/.env)을 libpq env 로 풀어 psql 을 직접 부른다 — 비밀번호를 명령줄에 두지 않는다(ps 노출 · #180 사전 리뷰).
+  # prisma 전용 파라미터(schema 등)는 버리고 libpq 파라미터(sslmode·host 소켓 등)는 env 로 옮긴다. PGOPTIONS 는 지운다(search_path 우회 방지).
+  # heredoc 을 $( ) 안에 두지 않는다 — bash 3.2 는 그 안의 괄호 섞인 본문을 잘못 파싱한다
+  IFS= read -r -d '' js <<'NODE' || true
+const fs = require('fs'), { spawnSync } = require('child_process')
+const fail = (m, code = 1) => { console.error(m); process.exit(code) }
+let v = process.env.DATABASE_URL
+if (!v && fs.existsSync('.env')) v = require('dotenv').parse(fs.readFileSync('.env')).DATABASE_URL
+if (!v) fail('DATABASE_URL 이 없다')
+let u
+try { u = new URL(v) } catch { fail('DATABASE_URL 을 URL 로 읽지 못했다 — 소켓 경로는 host= 파라미터로 둔다') }
+const schema = u.searchParams.get('schema')
+if (schema && schema !== 'public') fail('schema=' + schema + ' 는 지원하지 않는다')
+// 상속된 libpq 변수(PGHOST·PGPORT·PGUSER·PGPASSWORD·PGSSL*·PGSERVICE·PGOPTIONS …)를 전부 지운다 — URL 에 없는 요소가
+// 셸 값으로 채워지면 migrate status 와 다른 클러스터를 읽는다 (PR #181 Codex P1). 접속 정보는 URL 에서만 온다.
+const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('PG')))
+const dec = decodeURIComponent
+if (u.hostname) env.PGHOST = u.hostname.replace(/^\[|\]$/g, '')
+env.PGPORT = u.port || '5432' // prisma 기본값과 같게 — 비워 두면 libpq 기본(소켓 경로 포트)과 어긋날 수 있다
+if (u.username) env.PGUSER = dec(u.username)
+if (u.password) env.PGPASSWORD = dec(u.password)
+env.PGDATABASE = dec(u.pathname.replace(/^\//, ''))
+// prisma 의 URL 파라미터를 libpq env 로 옮긴다. 같은 이름이라도 뜻이 다른 것에 주의 — prisma `sslcert` 는 서버(루트) CA 이고
+// 경로는 스키마 파일(prisma/) 기준이다 → PGSSLROOTCERT (PR #181 Codex P2). prisma 의 클라이언트 인증서는 PKCS12(`sslidentity`)라
+// libpq 로 옮길 수 없다 → 판정 불가로 멈춘다.
+const LIBPQ = { sslmode: 'PGSSLMODE', host: 'PGHOST', port: 'PGPORT', connect_timeout: 'PGCONNECT_TIMEOUT', application_name: 'PGAPPNAME' }
+for (const [k, val] of u.searchParams) if (LIBPQ[k]) env[LIBPQ[k]] = val
+if (u.searchParams.has('sslidentity')) fail('DATABASE_URL 의 sslidentity(PKCS12 클라이언트 인증서)는 psql 로 옮길 수 없다 — 사용자 판단')
+if (u.searchParams.has('sslcert')) env.PGSSLROOTCERT = require('path').resolve('prisma', u.searchParams.get('sslcert'))
+if (!env.PGHOST) fail('DATABASE_URL 에 호스트가 없다 — psql 이 어느 서버를 볼지 정할 수 없다')
+if (!env.PGDATABASE) fail('DATABASE_URL 에 DB 이름이 없다')
+const sql = "select migration_name || case when finished_at is null then ' (unfinished)' else '' end " +
+  'from public._prisma_migrations where rolled_back_at is null order by 1'
+const r = spawnSync('psql', ['-X', '-At', '-v', 'ON_ERROR_STOP=1', '-c', sql], { env, encoding: 'utf8' })
+if (r.error && r.error.code === 'ENOENT') fail('psql 이 없다 — DB 전용 마이그레이션을 판정할 수 없다(migrate status 는 그것을 보지 못한다 · #180)')
+if (r.error || r.status !== 0) fail('public._prisma_migrations 를 읽지 못했다: ' + ((r.stderr || String(r.error)).trim()))
+process.stdout.write(r.stdout)
+NODE
+  db=$(cd "$APP_DIR" && node -e "$js") || die "마이그레이션 이름을 읽지 못했다(위 메시지)"
+  local_names=$(cd "$APP_DIR/prisma/migrations" && find . -mindepth 1 -maxdepth 1 -type d | sed 's#^\./##' | LC_ALL=C sort)
+  db=$(printf '%s\n' "$db" | sed '/^$/d' | LC_ALL=C sort -u)
+  only_db=$(LC_ALL=C comm -23 <(printf '%s\n' "$db") <(printf '%s\n' "$local_names") | sed '/^$/d')
+  only_local=$(LC_ALL=C comm -13 <(printf '%s\n' "$db") <(printf '%s\n' "$local_names") | sed '/^$/d')
+  if [[ -n "$only_db" || -n "$only_local" ]]; then
+    [[ -z "$only_db" ]] || printf 'DB 에만:\n%s\n' "$only_db" >&2
+    [[ -z "$only_local" ]] || printf '디렉터리에만:\n%s\n' "$only_local" >&2
+    die "마이그레이션 이름 집합이 다르다 — 이 스크립트는 적용하지 않는다(007 정정 5 · Q74). 사용자 판단"
+  fi
+  echo "  마이그레이션 $(printf '%s\n' "$local_names" | sed '/^$/d' | wc -l | tr -d ' ')개 일치"
 }
 
 # 3단계는 .next · dist/bot 을 제자리에 덮는다 — 이후 중단은 MCP dist 만 옛 것이다
