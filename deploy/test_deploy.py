@@ -440,36 +440,61 @@ class GitignoreStatePaths(unittest.TestCase):
 
 class EnvTemplates(unittest.TestCase):
     KEY = re.compile(r"^([A-Z_][A-Z0-9_]*)=(.*)$")
+    OPTIONAL = re.compile(r"^# ([A-Z_][A-Z0-9_]*)=")  # 선택 키 — 값을 넣을 때만 주석을 푼다
+    # 코드가 `process.env.X ?? 기본값` — 빈 값('')이면 기본값이 아니라 '' 가 쓰인다(#178 실측)
+    DEFAULT_BEARING = {
+        "finance": {"MCP_CONFIG_PATH", "MYFINANCE_ROOT", "MCP_TRANSPORT", "MCP_LOG_DIR", "MCP_LOG_LEVEL",
+                    "MCP_LOG_RETENTION_DAYS"},
+        "fitness": {"SYNC_CRON", "REPORT_CRON", "MORNING_REPORT_CRON", "EVENING_REPORT_CRON", "AUTO_ADJUST_CRON",
+                    "AUTO_ADJUST_MAINTENANCE_CRON", "MCP_TRANSPORT", "MCP_LOG_DIR", "MCP_LOG_LEVEL",
+                    "MCP_LOG_RETENTION_DAYS", "APP_BASE_URL"},
+    }
 
-    def keys(self, path: Path) -> dict[str, str]:
-        out = {}
+    def parse(self, path: Path) -> tuple[dict[str, str], set[str]]:
+        active, optional = {}, set()
         for line in path.read_text().splitlines():
+            m = self.OPTIONAL.match(line)
+            if m:
+                optional.add(m.group(1))
+                continue
             if not line.strip() or line.lstrip().startswith("#"):
                 continue
             m = self.KEY.match(line)
             self.assertIsNotNone(m, f"{path.name}: {line!r}")
-            out[m.group(1)] = m.group(2)
-        return out
+            active[m.group(1)] = m.group(2)
+        return active, optional
+
+    def example_keys(self, d: str) -> set[str]:
+        return {m.group(1) for line in (REPO / f"apps/{d}/.env.example").read_text().splitlines()
+                if (m := self.KEY.match(line))}
 
     def test_templates_have_no_values(self):
         for d in DIRS.values():
             with self.subTest(app=d):
-                self.assertEqual({k: v for k, v in self.keys(HERE / f"env/{d}.env.template").items() if v}, {})
+                active, _ = self.parse(HERE / f"env/{d}.env.template")
+                self.assertEqual({k: v for k, v in active.items() if v}, {})
 
     def test_templates_cover_app_examples_and_ports(self):
         for d in DIRS.values():
             with self.subTest(app=d):
-                example = self.keys(REPO / f"apps/{d}/.env.example")
-                tpl = self.keys(HERE / f"env/{d}.env.template")
-                self.assertLessEqual(set(example), set(tpl))
-                self.assertLessEqual({"PORT", "MCP_PORT", "DATABASE_URL"}, set(tpl))
+                active, optional = self.parse(HERE / f"env/{d}.env.template")
+                self.assertLessEqual(self.example_keys(d), set(active) | optional)
+                self.assertLessEqual({"PORT", "MCP_PORT", "DATABASE_URL"}, set(active))
+
+    def test_default_bearing_keys_are_commented_out(self):
+        # 회귀: #178 — `KEY=` 로 두면 fit 크론 '' → node-cron 오류(봇 crash-loop) · MCP_TRANSPORT '' 등
+        for d, keys in self.DEFAULT_BEARING.items():
+            with self.subTest(app=d):
+                active, optional = self.parse(HERE / f"env/{d}.env.template")
+                self.assertFalse(keys & set(active), keys & set(active))
+                self.assertLessEqual(keys, optional)
 
     def test_platform_keys_stay_in_root_env(self):
         # 플랫폼 키는 루트 .env 한 곳(PLEIADES_ENV_FILE) — 앱 .env 에 두면 루트 값을 가린다 (#143)
         for d in DIRS.values():
             with self.subTest(app=d):
-                self.assertFalse([k for k in self.keys(HERE / f"env/{d}.env.template")
-                                  if k.startswith(("NOTIFY_", "DISCORD_"))])
+                active, optional = self.parse(HERE / f"env/{d}.env.template")
+                self.assertFalse([k for k in set(active) | optional if k.startswith(("NOTIFY_", "DISCORD_"))])
 
 
 if __name__ == "__main__":
