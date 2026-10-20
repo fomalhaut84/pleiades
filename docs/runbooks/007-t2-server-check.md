@@ -51,8 +51,7 @@ envkeys() {  # .env 의 키 이름과 빈값 여부만 낸다 — 값은 내지 
     k = line; sub(/[[:space:]]*=.*/, "", k)
     v = line; sub(/^[^=]*=[[:space:]]*/, "", v)
     if (v ~ /^["\047]/) { q = substr(v, 1, 1); v = substr(v, 2); i = index(v, q); if (i) v = substr(v, 1, i - 1) }
-    else sub(/#.*/, "", v)  # dotenv: 따옴표 없는 값은 # 부터 주석 (PR #183 Codex P2)
-    gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+    else { sub(/#.*/, "", v); gsub(/^[[:space:]]+|[[:space:]]+$/, "", v) }  # dotenv: 따옴표 없는 값만 # 부터 주석·양끝 공백 제거 — 따옴표 안 공백은 값이다 (PR #183 · #185 Codex P2)
     print k "\t" (v == "" ? "빈값" : "값있음")
   }' "$1" | sort
 }
