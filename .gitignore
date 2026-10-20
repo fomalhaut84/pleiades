@@ -14,3 +14,11 @@ tools/import/.venv/
 /.env
 # 로컬 pm2 전용 데몬 (#171 · run.sh 가 PM2_HOME 으로 고정)
 /.pm2-local/
+# 서버 영속 상태 — 끝 `/` 없음: P-2 심링크(파일로 보인다)도 무시해 트리가 dirty 로 보이지 않게 한다 (007 4-2 정정 1 · #176)
+/apps/finance/reports
+/apps/finance/logs
+/apps/finance/backups
+/apps/fitness/.garmin-tokens
+/apps/fitness/.omron-tokens
+/apps/fitness/.runtime
+/apps/fitness/logs
