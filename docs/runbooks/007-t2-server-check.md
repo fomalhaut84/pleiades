@@ -3,7 +3,7 @@
 **누가:** 사용자가 서버에서 실행한다. Claude 세션은 서버에 닿지 않는다(`isolation.md` I-3).
 **무엇:** 007 §8 의 U1~U13 과 T-1d 가 더한 T-4 확인 항목 3개(`psql` · pm2 의 `.config.cjs` 인식 · `NODE_ENV`). U14 는 감사가 이미 측정했다(007 ⑱).
 **성격:** 전부 **읽기**다. 서비스 프로세스·DB·봇·git 체크아웃 상태를 바꾸는 명령은 없다. 되돌리기: 해당 없음(읽기만).
-**결과:** 아래 [결과 기록 양식](#결과-기록-양식)을 채워 세션에 붙여 주면 Claude 가 `docs/research/measured-facts.md` 에 기록하고 007 의 걸린 결정을 갱신한다(별도 PR).
+**결과:** 명령 출력 원본은 **저장소 밖에만** 둔다. 아래 [공개 기록 양식](#공개-기록-양식)(판정만)을 채워 세션에 주면 Claude 가 그것만 `docs/research/measured-facts.md` 에 기록하고 007 의 걸린 결정을 갱신한다(별도 PR). 정책은 바로 아래 절.
 
 ## 먼저 읽을 것 — 하지 않는 것과 가릴 것
 
@@ -15,22 +15,36 @@
 - `.env` 를 `cat` 하거나 `source` 하기. 아래 명령은 **키 이름과 "빈값/값있음"** 만 낸다.
 - 텔레그램 `getUpdates` — 서비스 봇의 long polling 과 409 로 충돌한다. U13 은 `getWebhookInfo` 만 쓴다.
 
-**붙여 주기 전에 가린다 — pleiades 는 PUBLIC 저장소다.**
+## 공개 기록 정책 — pleiades 는 PUBLIC 저장소다
 
-| 가릴 것 | 예 |
+커밋은 지워도 이력에 남는다. 그래서 **서버 운영 정보는 처음부터 저장소에 들어가지 않게** 두 층으로 나눈다.
+
+| 층 | 무엇 | 어디 | 누가 본다 |
+|---|---|---|---|
+| **원본** | 명령 출력 그대로 — 경로 · 계정 · 도메인 · DB 이름 · crontab 내용 · 포트 바인딩 · `.env` 키 목록 · 프로세스 표 | **저장소 밖**(예: `~/pleiades-private/t2-YYYYMMDD.txt` · 서버 자체). pleiades 작업트리 안(`_workspace/` 포함)에 두지 않는다 — `git add` 한 번이면 공개된다 | 사용자. 세션에 붙이면 Claude 가 판정에만 쓴다(세션 기록은 저장소에 커밋되지 않는다) |
+| **공개 기록** | **판정만** — 있음/없음 · 일치/불일치 · 개수 · 메이저 버전 · 크기 자릿수 | `measured-facts.md` · 007 | 누구나 |
+
+**공개 기록에 쓰지 않는 것**(일치 판정으로 대신한다):
+
+| 항목 | 공개 기록에는 |
 |---|---|
-| 토큰·비밀번호·접속 문자열 | 봇 토큰 · `DATABASE_URL` · API 키 (위 명령은 내지 않지만 손으로 덧붙이지 않는다) |
-| 채팅·사용자 ID | 텔레그램 chat id · Discord id |
-| 도메인·IP·SSH 포트 | nginx `server_name` · 인증서 경로의 도메인 → `<domain>` 으로 |
-| 개인 경로 중 원치 않는 것 | 홈 디렉터리 이름은 이미 공개(fit `ecosystem.config.js`)이므로 그대로 둬도 된다 |
+| 서버 계정 · 홈 · 체크아웃 실경로 | "fit cwd = `ecosystem.config.js` 하드코딩 경로와 일치: 예/아니오" · "fin 경로 확인됨" |
+| 도메인 · IP · SSH 포트 · 인증서 경로 | "MCP 포트 외부 노출 없음: 예/아니오" · "다른 vhost N개" |
+| DB 이름 · 롤 이름 · 정확한 PG 버전 | "두 DB 같은 클러스터: 예/아니오" · PG **메이저** 버전 · 마이그레이션 수 일치 여부 |
+| crontab 내용 · 백업 위치 · 오프사이트 대상 | "옛 경로 백업 항목 있음: 예/아니오(N개)" · "최근 백업 N일 이내: 예/아니오" · "오프사이트: 있음/없음" |
+| `.env` 키 목록 | "템플릿 밖 키 N개 · 빈값 키 N개" — 키 이름은 공개 템플릿(`deploy/env/*`)에 이미 있는 것만 적는다 |
+| 토큰 · 비밀번호 · 접속 문자열 · chat id | 아무것도 — 명령도 내지 않는다 |
+| 정확한 패치 버전(OS · nginx · PG) | 적지 않는다 — node · npm · pm2 는 배포 판단에 필요하므로 버전 그대로 |
+
+**Claude 가 지키는 것:** 원본을 받아도 저장소 파일에 옮기지 않는다 · 기록 PR 은 커밋 전에 diff 를 `/home/` · `@` · IP 패턴 · 도메인 · DB 이름으로 grep 해 0 인지 확인하고 PR 본문에 그 결과를 적는다 · 원본을 스크래치(저장소 밖 세션 임시 디렉터리)에 저장하지 않는다.
 
 ## 0. 준비 — 셸 변수
 
 서비스를 돌리는 계정으로 로그인한 **bash** 에서 시작한다. U1 에서 실제 경로를 확인한 뒤 두 변수를 맞춘다.
 
 ```bash
-FIN_DIR=/home/nasty68/myFinance   # U1 에서 확인 후 수정
-FIT_DIR=/home/nasty68/myFitness   # U1 에서 확인 후 수정
+FIN_DIR=''   # U1 의 pm2 cwd 로 채운다 (비어 있으면 아래 명령이 실패한다)
+FIT_DIR=''   # U1 의 pm2 cwd 로 채운다
 envkeys() {  # .env 의 키 이름과 빈값 여부만 낸다 — 값은 내지 않는다
   awk '/^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ {
     line = $0; sub(/^[[:space:]]*(export[[:space:]]+)?/, "", line)
@@ -61,7 +75,7 @@ systemctl list-unit-files 'pm2*' --no-pager
 systemctl is-enabled "pm2-$(whoami)" 2>&1
 ```
 
-**기대값:** 프로세스 6개 `myfinance` · `myfinance-bot` · `myfinance-mcp` · `myfitness` · `myfitness-bot` · `myfitness-mcp`(007 ⑪ · measured-facts) 가 `online` · fit 세 개의 cwd = `/home/nasty68/myFitness` · fin 세 개의 cwd = fin `DEPLOY_PATH` · `pleiades-*` 이름 0 · dump 파일 있음 · systemd `pm2-<계정>` enabled.
+**기대값:** 프로세스 6개 `myfinance` · `myfinance-bot` · `myfinance-mcp` · `myfitness` · `myfitness-bot` · `myfitness-mcp`(007 ⑪ · measured-facts) 가 `online` · fit 세 개의 cwd = fit `ecosystem.config.js` 의 하드코딩 경로와 같음 · fin 세 개의 cwd = fin `DEPLOY_PATH` · `pleiades-*` 이름 0 · dump 파일 있음 · systemd `pm2-<계정>` enabled.
 **다르면:** 위 6개 외 프로세스가 있으면 이름만 적는다(같은 서버의 다른 서비스 — U12 와 함께 본다).
 
 ## U2 — 옛 체크아웃 HEAD · dirty · 빌드 산출물 (G-a · G-b)
@@ -70,6 +84,7 @@ systemctl is-enabled "pm2-$(whoami)" 2>&1
 |---|---|
 
 ```bash
+: "${FIN_DIR:?U1 의 fin 경로를 채운다}" "${FIT_DIR:?U1 의 fit 경로를 채운다}"
 for d in "$FIN_DIR" "$FIT_DIR"; do
   echo "== $d"
   git -C "$d" --no-optional-locks describe --tags --exact-match HEAD 2>&1
@@ -94,7 +109,7 @@ sudo nginx -T 2>/dev/null | grep -nE '^\s*(server_name|listen|proxy_pass|ssl_cer
 ```
 
 **기대값:** `proxy_pass` 대상이 `127.0.0.1:4100` · `:4200`(웹 두 개)뿐이고 MCP 포트(4210 · 4301)는 외부로 노출되지 않음 · 다른 vhost 가 있으면 그 `proxy_pass` 포트.
-**가릴 것:** `server_name` · 인증서 경로의 도메인.
+**공개 기록에는:** MCP 포트 외부 노출 여부 · 다른 vhost 개수만. `server_name` · 인증서 경로는 원본에만.
 
 ## U5 — 서비스 DB · `psql` (T-4 추가 ①)
 
@@ -111,8 +126,9 @@ sudo -u postgres psql -X -c '\du'
 위 `\l+` 에서 DB 이름을 확인해 두 변수에 넣은 뒤, 적용된 마이그레이션 수와 마지막 이름:
 
 ```bash
-FIN_DB=myfinance   # \l+ 에서 확인 후 수정
-FIT_DB=myfitness   # \l+ 에서 확인 후 수정
+FIN_DB=''   # \l+ 에서 확인해 채운다
+FIT_DB=''
+: "${FIN_DB:?DB 이름을 채운다}" "${FIT_DB:?DB 이름을 채운다}"
 for db in "$FIN_DB" "$FIT_DB"; do
   sudo -u postgres psql -X -At -d "$db" -c "select '$db', count(*), max(migration_name) from public._prisma_migrations where rolled_back_at is null and finished_at is not null"
 done
@@ -237,30 +253,34 @@ done
 
 **기대값:** 둘 다 `webhook=none`(grammy long polling) · `pending` 이 작다 · `last_error=-`.
 
-## 결과 기록 양식
+## 공개 기록 양식
 
-아래를 채워 붙여 준다. 명령 출력을 그대로 붙여도 된다(가릴 것은 가린 뒤).
+**이 양식만** 세션에 주면 된다(원본 출력까지 주면 Claude 가 이 형태로 줄여 쓴다). 칸에 경로 · 이름 · 도메인을 넣지 않는다.
 
 ```text
-U1  계정=        fin 경로=                 fit 경로=
-U2  fin 태그/SHA=           dirty=     산출물(BUILD_ID/bot/mcp)=
-    fit 태그/SHA=           dirty=     산출물(BUILD_ID/bot/mcp/generated)=
-U3  pm2 프로세스(이름 status cwd)=
-    dump=  systemd=  PM2_HOME=
-U4  proxy_pass 포트=          다른 vhost=
-U5  PG 버전=       DB(이름 크기 소유자)=
-    마이그레이션 fin(수 마지막)=          fit=
-    psql=  pg_dump=
-U6  crontab 항목=                      backups 최근 파일=        오프사이트=
-U7  fin .env 키(빈값 표시 포함)=
-    fit .env 키=
-U8  node=  npm=  nvmrc fin/fit=     도구 없음=
-    NODE_ENV=        셸 파일 NODE_ENV=
-    pm2 버전=        '.config.cjs' 줄=
-    디스크 여유=     메모리=     코어=
-U9  영속 디렉터리 크기=                체크아웃 크기=
-U10 ls-remote=   npm=
-U11 secrets 이름=                       deploy workflow 활성=
-U12 포트 리슨(3000 4100 4200 4210 4299 4301 4399)=
-U13 fin webhook/pending=     fit webhook/pending=
+U1  서비스 계정으로 실행: 예/아니오   fit cwd = ecosystem 하드코딩 경로: 예/아니오   fin 경로 확인: 예/아니오
+U2  fin HEAD 에 태그: <태그 또는 없음>  = 서비스 main: 예/아니오  dirty: 없음/<파일 개수> (mcp-config.json 만: 예/아니오)
+    fin 산출물 BUILD_ID/bot/mcp: 있음/없음 ×3
+    fit HEAD 에 태그: <태그 또는 없음>  = 서비스 main: 예/아니오  dirty: 없음/<개수>
+    fit 산출물 BUILD_ID/bot/mcp/generated: 있음/없음 ×4
+U3  서비스 pm2 6개 online: 예/아니오   그 외 프로세스: N개   pleiades-* 0: 예/아니오
+    dump 있음: 예/아니오   systemd pm2 enabled: 예/아니오   PM2_HOME 기본: 예/아니오
+U4  proxy_pass = 4100·4200 만: 예/아니오   MCP 포트 외부 노출 없음: 예/아니오   다른 vhost: N개
+U5  psql: 있음/없음   pg_dump: 있음/없음   PG 메이저: <숫자>   두 DB 같은 클러스터: 예/아니오
+    sudo -u postgres 접속: 됨/안 됨
+    마이그레이션 수 fin: <숫자>   fit: <숫자>   (공개 저장소의 서비스 main 디렉터리 수와 Claude 가 대조)
+    DB 크기 자릿수 fin/fit: <MB/GB 단위 반올림>
+U6  옛 경로 백업 crontab 항목: 있음(N)/없음   최근 백업 N일 이내: 예/아니오   오프사이트: 있음/없음
+U7  fin: 템플릿 밖 키 N · 빈값 키 N (공개 템플릿에 있는 키면 이름)
+    fit: 템플릿 밖 키 N · 빈값 키 N (같음)
+U8  node: <버전>  npm: <버전>  nvmrc fin/fit: <값>   없는 도구: <이름 또는 없음>
+    NODE_ENV: unset/production/<값>   셸 파일에 NODE_ENV: 있음/없음
+    pm2: <버전>   '.config.cjs' 인식: 예/아니오
+    디스크 여유 / 메모리 / 코어: <GB 반올림> / <GB> / <수>
+U9  영속 디렉터리 7개 존재(fin reports logs backups · fit .garmin-tokens .omron-tokens .runtime logs): 각 있음/없음 · 크기 자릿수
+    체크아웃 크기 fin/fit: <GB 반올림>
+U10 ls-remote: 됨/안 됨   npm 레지스트리: <HTTP 코드>
+U11 서비스 deploy workflow 활성 fin/fit: 예/아니오   secrets 가 공개 workflow 가 쓰는 이름과 같음: 예/아니오
+U12 4100·4200·4210·4301 리슨 = 서비스 node: 예/아니오   4299·4399 비어 있음: 예/아니오   3000: 비어 있음/사용 중
+U13 fin webhook: none/set  pending 작음: 예/아니오   fit: 같음
 ```
