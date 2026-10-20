@@ -136,10 +136,11 @@ check_migrations() {
 # "up to date" · rc 0 (#180 리허설 · 007 G-e). 그래서 _prisma_migrations 이름 집합을 디렉터리와 직접 대조한다(읽기 전용).
 check_migration_names() {
   echo "+ (apps/$DIR) psql: public._prisma_migrations ↔ prisma/migrations 이름 대조  # 읽기 전용"
-  local db local_names only_db only_local
+  local db local_names only_db only_local js
   # node 가 DATABASE_URL(셸 > apps/<dir>/.env)을 libpq env 로 풀어 psql 을 직접 부른다 — 비밀번호를 명령줄에 두지 않는다(ps 노출 · #180 사전 리뷰).
   # prisma 전용 파라미터(schema 등)는 버리고 libpq 파라미터(sslmode·host 소켓 등)는 env 로 옮긴다. PGOPTIONS 는 지운다(search_path 우회 방지).
-  db=$(cd "$APP_DIR" && node -e "$(cat <<'NODE'
+  # heredoc 을 $( ) 안에 두지 않는다 — bash 3.2 는 그 안의 괄호 섞인 본문을 잘못 파싱한다
+  IFS= read -r -d '' js <<'NODE' || true
 const fs = require('fs'), { spawnSync } = require('child_process')
 const fail = (m, code = 1) => { console.error(m); process.exit(code) }
 let v = process.env.DATABASE_URL
@@ -149,17 +150,20 @@ let u
 try { u = new URL(v) } catch { fail('DATABASE_URL 을 URL 로 읽지 못했다 — 소켓 경로는 host= 파라미터로 둔다') }
 const schema = u.searchParams.get('schema')
 if (schema && schema !== 'public') fail('schema=' + schema + ' 는 지원하지 않는다')
-const env = { ...process.env }
-delete env.PGOPTIONS
+// 상속된 libpq 변수(PGHOST·PGPORT·PGUSER·PGPASSWORD·PGSSL*·PGSERVICE·PGOPTIONS …)를 전부 지운다 — URL 에 없는 요소가
+// 셸 값으로 채워지면 migrate status 와 다른 클러스터를 읽는다 (PR #181 Codex P1). 접속 정보는 URL 에서만 온다.
+const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('PG')))
 const dec = decodeURIComponent
 if (u.hostname) env.PGHOST = u.hostname.replace(/^\[|\]$/g, '')
-if (u.port) env.PGPORT = u.port
+env.PGPORT = u.port || '5432' // prisma 기본값과 같게 — 비워 두면 libpq 기본(소켓 경로 포트)과 어긋날 수 있다
 if (u.username) env.PGUSER = dec(u.username)
 if (u.password) env.PGPASSWORD = dec(u.password)
 env.PGDATABASE = dec(u.pathname.replace(/^\//, ''))
 const LIBPQ = { sslmode: 'PGSSLMODE', sslrootcert: 'PGSSLROOTCERT', sslcert: 'PGSSLCERT', sslkey: 'PGSSLKEY',
   host: 'PGHOST', port: 'PGPORT', connect_timeout: 'PGCONNECT_TIMEOUT', application_name: 'PGAPPNAME' }
 for (const [k, val] of u.searchParams) if (LIBPQ[k]) env[LIBPQ[k]] = val
+if (!env.PGHOST) fail('DATABASE_URL 에 호스트가 없다 — psql 이 어느 서버를 볼지 정할 수 없다')
+if (!env.PGDATABASE) fail('DATABASE_URL 에 DB 이름이 없다')
 const sql = "select migration_name || case when finished_at is null then ' (unfinished)' else '' end " +
   'from public._prisma_migrations where rolled_back_at is null order by 1'
 const r = spawnSync('psql', ['-X', '-At', '-v', 'ON_ERROR_STOP=1', '-c', sql], { env, encoding: 'utf8' })
@@ -167,7 +171,7 @@ if (r.error && r.error.code === 'ENOENT') fail('psql 이 없다 — DB 전용 �
 if (r.error || r.status !== 0) fail('public._prisma_migrations 를 읽지 못했다: ' + ((r.stderr || String(r.error)).trim()))
 process.stdout.write(r.stdout)
 NODE
-)") || die "마이그레이션 이름을 읽지 못했다(위 메시지)"
+  db=$(cd "$APP_DIR" && node -e "$js") || die "마이그레이션 이름을 읽지 못했다(위 메시지)"
   local_names=$(cd "$APP_DIR/prisma/migrations" && find . -mindepth 1 -maxdepth 1 -type d | sed 's#^\./##' | LC_ALL=C sort)
   db=$(printf '%s\n' "$db" | sed '/^$/d' | LC_ALL=C sort -u)
   only_db=$(LC_ALL=C comm -23 <(printf '%s\n' "$db") <(printf '%s\n' "$local_names") | sed '/^$/d')

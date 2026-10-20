@@ -327,7 +327,8 @@ class ServerPathWithStubs(unittest.TestCase):
         (self.stub / "psql").write_text(
             '#!/bin/sh\n'
             'echo "psql $* · PGDATABASE=$PGDATABASE PGUSER=$PGUSER PGPASSWORD=${PGPASSWORD:+set} '
-            'PGSSLMODE=$PGSSLMODE PGOPTIONS=${PGOPTIONS:-none}" >> "$STUB/log"\n'
+            'PGSSLMODE=$PGSSLMODE PGOPTIONS=${PGOPTIONS:-none} PGHOST=$PGHOST PGPORT=$PGPORT '
+            'PGSERVICE=${PGSERVICE:-none}" >> "$STUB/log"\n'
             '[ -n "$STUB_PSQL_RC" ] && { echo "relation does not exist" >&2; exit "$STUB_PSQL_RC"; }\n'
             'printf "%b" "${STUB_DB_MIGRATIONS-m1\\nm2\\n}"\n')
         (self.stub / "psql").chmod(0o755)
@@ -391,8 +392,24 @@ class ServerPathWithStubs(unittest.TestCase):
         self.assertNotIn("s3cr", line.split(" · ")[0])
         self.assertIn("-X", line)
         self.assertIn("public._prisma_migrations", line)
-        self.assertIn("PGDATABASE=x PGUSER=us@r PGPASSWORD=set PGSSLMODE=require PGOPTIONS=none", line)
+        self.assertIn("PGDATABASE=x PGUSER=us@r PGPASSWORD=set PGSSLMODE=require PGOPTIONS=none PGHOST=127.0.0.1 PGPORT=5432", line)
         self.assertNotIn("schema=", line)
+
+    def test_ambient_libpq_env_does_not_leak(self):
+        # 회귀: PR #181 Codex P1 — URL 에 없는 요소(포트 등)가 셸의 PGPORT·PGHOST·PGUSER·PGPASSWORD 로 채워져 다른 클러스터를 읽었다
+        r, log = self.run_fin(DATABASE_URL="postgresql://u:p@db.local/x",
+                              PGPORT="6543", PGHOST="other", PGUSER="root", PGSSLMODE="disable", PGSERVICE="evil")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        line = next(l for l in log.splitlines() if l.startswith("psql "))
+        self.assertIn("PGUSER=u ", line)
+        self.assertIn("PGSSLMODE= ", line)
+        self.assertIn("PGHOST=db.local PGPORT=5432 PGSERVICE=none", line)
+
+    def test_url_without_host_is_refused(self):
+        r, log = self.run_fin(DATABASE_URL="postgresql:///x", PGHOST="other")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("호스트", r.stderr)
+        self.assertNotIn("next build", log)
 
     def test_database_url_from_dotenv_when_shell_has_none(self):
         dotenv = self.root / "apps/finance/node_modules/dotenv"
