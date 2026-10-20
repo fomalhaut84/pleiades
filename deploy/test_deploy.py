@@ -103,6 +103,26 @@ class Config(unittest.TestCase):
         self.assertEqual(self.apps("fit", {"APP_BASE_URL": "http://127.0.0.1:9"})["pleiades-fit-mcp"]["env"]["APP_BASE_URL"],
                          "http://127.0.0.1:9")
 
+    def test_local_pm2_home_puts_claude_shim_first(self):
+        # 007 Q85 리허설 조건 — run.sh(PM2_HOME=<root>/.pm2-local) 경유일 때만 shim 이 PATH 선두 (#180)
+        home = str((self.root / ".pm2-local").resolve())
+        for app in DIRS:
+            for a in self.apps(app, {"PM2_HOME": home}).values():
+                self.assertEqual(a["env"]["PATH"].split(":")[0], str((self.root / "bin").resolve()))
+
+    def test_local_pm2_home_via_symlink_still_gets_shim(self):
+        # #180 사전 리뷰 info 4 — run.sh 는 논리 경로(pwd)를 쓴다 · 심링크 경유여도 같은 디렉터리면 shim
+        (self.root / ".pm2-local").mkdir()
+        link = Path(tempfile.mkdtemp()) / "alias"
+        link.symlink_to(self.root)
+        apps = self.apps("fin", {"PM2_HOME": str(link / ".pm2-local")})
+        self.assertEqual(apps["pleiades-fin-web"]["env"]["PATH"].split(":")[0], str((self.root / "bin").resolve()))
+
+    def test_server_pm2_home_leaves_path_alone(self):
+        for home in ({}, {"PM2_HOME": "/home/user/.pm2"}):
+            for a in self.apps("fin", home).values():
+                self.assertNotIn("PATH", a["env"])
+
     def test_only_the_cwd_app_is_defined(self):
         # run.sh 의 check_env 는 cwd 앱만 검사한다 — 다른 앱 정의가 섞이면 검사 밖 env 로 뜬다 (#171)
         self.assertTrue(all(n.startswith("pleiades-fin-") for n in self.apps("fin")))
@@ -304,6 +324,16 @@ class ServerPathWithStubs(unittest.TestCase):
                            ("uname", "#!/bin/sh\necho Linux\n"), ("sleep", "#!/bin/sh\nexec /bin/sleep 0.05\n")):
             (self.stub / name).write_text(body)
             (self.stub / name).chmod(0o755)
+        (self.stub / "psql").write_text(
+            '#!/bin/sh\n'
+            'echo "psql $* · PGDATABASE=$PGDATABASE PGUSER=$PGUSER PGPASSWORD=${PGPASSWORD:+set} '
+            'PGSSLMODE=$PGSSLMODE PGOPTIONS=${PGOPTIONS:-none}" >> "$STUB/log"\n'
+            '[ -n "$STUB_PSQL_RC" ] && { echo "relation does not exist" >&2; exit "$STUB_PSQL_RC"; }\n'
+            'printf "%b" "${STUB_DB_MIGRATIONS-m1\\nm2\\n}"\n')
+        (self.stub / "psql").chmod(0o755)
+        for m in ("m1", "m2"):
+            (self.root / "apps/finance/prisma/migrations" / m).mkdir(parents=True)
+        (self.root / "apps/finance/prisma/migrations/migration_lock.toml").write_text("")
         mcp = self.root / "apps/finance/dist/mcp"
         mcp.mkdir(parents=True)
         (mcp / "server.staged.cjs").write_text(
@@ -315,7 +345,8 @@ class ServerPathWithStubs(unittest.TestCase):
 
     def run_fin(self, **env):
         base = {"PATH": f"{self.stub}:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin", "STUB": str(self.stub),
-                "STUB_PREFLIGHT": "4299", "STUB_BIND": "pleiades-fin-mcp=4511,pleiades-fin-web=4510"}
+                "STUB_PREFLIGHT": "4299", "STUB_BIND": "pleiades-fin-mcp=4511,pleiades-fin-web=4510",
+                "DATABASE_URL": "postgresql://u:p@127.0.0.1:5432/x?schema=public"}
         r = deploy(self.root, "fin", env={**base, **env})
         log = (self.stub / "log").read_text() if (self.stub / "log").exists() else ""
         return r, log
@@ -340,6 +371,63 @@ class ServerPathWithStubs(unittest.TestCase):
                 self.assertNotEqual(r.returncode, 0)
                 self.assertNotIn("next build", log)
                 self.assertNotIn("pm2 start", log)
+
+    def test_db_only_or_unfinished_migration_stops_before_build(self):
+        # 회귀: #180 리허설 — prisma 6.19.3 migrate status 는 DB 전용 마이그레이션에 "up to date" · rc 0 (007 G-e)
+        for db in ("m1\\nm2\\nm3\\n", "m1\\n", "m1\\nm2 (unfinished)\\n"):
+            with self.subTest(db=db):
+                (self.stub / "log").unlink(missing_ok=True)
+                r, log = self.run_fin(STUB_DB_MIGRATIONS=db)
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("이름 집합", r.stderr)
+                self.assertNotIn("next build", log)
+
+    def test_psql_gets_credentials_by_env_not_argv(self):
+        # 회귀: #180 사전 리뷰 major 1·2 · info 1·2 — 비밀번호 argv 노출 · 스키마 없는 테이블 · ~/.psqlrc · libpq 파라미터
+        r, log = self.run_fin(DATABASE_URL="postgresql://us%40r:s3cr%2Ft@127.0.0.1:5432/x?schema=public&sslmode=require",
+                              PGOPTIONS="-c search_path=evil")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        line = next(l for l in log.splitlines() if l.startswith("psql "))
+        self.assertNotIn("s3cr", line.split(" · ")[0])
+        self.assertIn("-X", line)
+        self.assertIn("public._prisma_migrations", line)
+        self.assertIn("PGDATABASE=x PGUSER=us@r PGPASSWORD=set PGSSLMODE=require PGOPTIONS=none", line)
+        self.assertNotIn("schema=", line)
+
+    def test_database_url_from_dotenv_when_shell_has_none(self):
+        dotenv = self.root / "apps/finance/node_modules/dotenv"
+        dotenv.mkdir(parents=True)
+        (dotenv / "package.json").write_text('{"name":"dotenv","main":"index.js"}')
+        (dotenv / "index.js").write_text(
+            "exports.parse = (b) => Object.fromEntries(String(b).split('\\n').filter(Boolean).map((l) => l.split(/=(.*)/s).slice(0, 2)))")
+        with (self.root / "apps/finance/.env").open("a") as f:
+            f.write("DATABASE_URL=postgresql://u:p@127.0.0.1:5432/fromdotenv\n")
+        env = {"PATH": f"{self.stub}:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin", "STUB": str(self.stub),
+               "STUB_PREFLIGHT": "4299", "STUB_BIND": "pleiades-fin-mcp=4511,pleiades-fin-web=4510"}
+        r = deploy(self.root, "fin", env=env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("PGDATABASE=fromdotenv", (self.stub / "log").read_text())
+
+    def test_psql_failure_stops(self):
+        r, log = self.run_fin(STUB_PSQL_RC="2")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("relation does not exist", r.stderr)
+        self.assertNotIn("next build", log)
+
+    def test_non_public_schema_is_refused(self):
+        r, log = self.run_fin(DATABASE_URL="postgresql://u:p@127.0.0.1:5432/x?schema=fin")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotIn("next build", log)
+
+    def test_missing_psql_is_refused(self):
+        node_dir = Path(shutil.which("node")).parent
+        if (node_dir / "psql").exists():
+            self.skipTest("node 와 psql 이 같은 디렉터리라 psql 만 뺄 수 없다")
+        (self.stub / "psql").unlink()
+        r, log = self.run_fin(PATH=f"{self.stub}:{node_dir}:/usr/bin:/bin")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("psql", r.stderr)
+        self.assertNotIn("next build", log)
 
     def test_old_service_online_stops_before_anything(self):
         # 회귀: #176 사전 리뷰 major 2 — T-5c ④ 를 빠뜨리면 옛 MCP 가 같은 포트로 health 에 대신 응답한다

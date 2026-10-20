@@ -4225,3 +4225,51 @@ for f in <함수명>; do git grep --text -lF "$f(" HEAD -- apps/finance/src apps
 | (없음) | fin `lib/cron.ts:205` 주석 "00:05" ≠ 코드 09:05 | 서비스 유래 주석 불일치(Q57 — 고치지 않음) |
 
 **못 잰 값:** 서버 `apps/fitness/.env` 의 크론 키 실값(서비스가 기본값을 덮었는지) · fin DB `AlertConfig.daily_summary_hour`·`monthly_report_day` 실값 · 실 RSU 베스팅 일정·자동조정 활성 여부(경로 A13·A14·B5 의 발생 여부) · Next 가 `register()` throw 시 웹 기동을 막는지 · 서버 crontab(U6·U12).
+
+# 2026-10-20 — T-1d 로컬 리허설: M3 · G-e · Q85 ① pm2 판(G-c · G-f) (#180)
+
+사용자 승인(2026-10-20) 후 로컬에서만 실행. 모든 앱 명령은 `tools/local/run.sh <app> --` 경유(검증 봇·채팅 id 는 앱 `.env` 에서 읽어 스크래치 파일로 `PLEIADES_VERIFY_*` 에 넣음 · 값 출력 0). 루트 `npm ci` 만 루트에서 직접. 서비스 포트·서버·서비스 DB·서비스 봇 무접촉. 도구: node v20.18.0 · prisma 6.19.3(두 앱) · pm2 **7.0.4**(`npx -y pm2` · 전역 설치 0).
+
+## M3 — deploy.sh 와 같은 순서, 단계별 rc
+
+| 단계 | fin | fit |
+|---|---|---|
+| 루트 `npm ci` | 0 | (같은 실행) |
+| 앱 `npm ci` | 0 | 0 |
+| `npx prisma migrate status` | 0 · "up to date" | **1** (대기 6) → `migrate deploy` 0 → status 0 |
+| 빌드 | `npx --no-install next build` 0 · `build:mcp:staged` 0 · `build:bot` 0(smoke:bot OK) | `npx prisma generate` 0 · `build:staged` 0 |
+| pre-flight(staged MCP · 임시 포트) | 4698 · health 2s | 4699 · health 2s |
+| `build:mcp:activate` | 0 | 0 |
+
+- `npx --no-install next build`(서버 스크립트 형태)는 `precheck.py` 를 통과한다.
+
+## G-e — `migrate status` 종료 코드
+
+| 상태 | 방법 | rc · 출력 |
+|---|---|---|
+| 일치 | pleiades_fin(29 적용 · 디렉터리 29) | 0 · "Database schema is up to date!" |
+| **대기 6** | pleiades_fit(디렉터리 41 · 미적용 6) | **1** · "Following migrations have not yet been applied:" + 6 이름 |
+| **DB 전용 1** | fin 최신 디렉터리 `20261019100000_drop_quarantined_sol_watchlist` 를 스크래치로 잠시 옮김(DB 쓰기 0 · 즉시 원복 · `git status` 깨끗) | **0 · "28 migrations found … Database schema is up to date!"** — DB 에는 29(`psql … select count(*) … from _prisma_migrations` = 29·29 finished·0 rolled back) |
+
+**결론: prisma 6.19.3 `migrate status` 는 DB 에만 있는 마이그레이션을 보고하지 않는다**(007 G-e 의 우려가 실제다). → `deploy/deploy.sh` 에 `public._prisma_migrations`(rolled_back_at null · 미완료 표지 `(unfinished)`) ↔ `prisma/migrations` 디렉터리 이름 대조를 더했다(psql 읽기 전용 · `-X` · 접속 정보는 node 가 libpq env 로 넘김 — 비밀번호 argv 0 · `PGOPTIONS` 제거 · psql 없으면 중단). 같은 함수를 실행: pleiades_fin 일치 → "29개 일치" rc 0 · DB 전용 1 → `DB 에만: 20261019100000_…` rc 1 · pleiades_fit → "41개 일치" rc 0.
+
+```bash
+# DB 전용 재현 (값 출력 0 · DB 쓰기 0)
+mv apps/finance/prisma/migrations/20261019100000_drop_quarantined_sol_watchlist "$SCRATCH/held"
+tools/local/run.sh fin -- npx prisma migrate status; echo rc=$?
+mv "$SCRATCH/held" apps/finance/prisma/migrations/20261019100000_drop_quarantined_sol_watchlist
+```
+
+## Q85 ① pm2 판 — G-c · G-f
+
+`tools/local/run.sh <app> -- npx -y pm2 startOrRestart ../../deploy/pleiades.config.cjs --only pleiades-<app>-mcp --update-env` → health → web(`startOrRestart`) → bot(`start`) → 20s 뒤 `pm2 jlist` 판정 → `pm2 save`.
+
+| 앱 | MCP health | 웹 응답 | 봇 | `pm2 save` |
+|---|---|---|---|---|
+| fin | 4611 · 2s | 4610 · 2s · HTTP 307 | online · restarts 0 · 크론 6 + 알림 스케줄러 등록 · long polling 시작 · Discord gateway 준비 · 409 0 | 0 · `.pm2-local/dump.pm2` |
+| fit | 4621 · 2s | 4620 · 2s · HTTP 200 · Garmin 싱크 크론 등록(`GARMIN_*` 비어 실행 시 건너뜀) | online · restarts 0 · 알림 스케줄 5 등록 · long polling · Discord gateway 준비 · 409 0 | 0 |
+
+- **pm2 7.0.4 는 `pleiades.config.cjs` 를 설정 파일로 인식한다**(서버 전역 pm2 버전은 미측정 — T-4 확인 항목).
+- **G-f(프로세스 env · 6 프로세스 전부 같음):** `pm_cwd` = `apps/<dir>` · **`PATH[0]` = `<root>/bin`(claude shim)** · `PM2_HOME` = `<root>/.pm2-local` · 프로세스 env 의 `DATABASE_URL`·`TELEGRAM_BOT_TOKEN` **없음**(run.sh `env -u` — 앱은 `.env` 를 dotenv 로 읽는다 · 셸 값 혼입 0) · fit-bot·mcp `MCP_PORT` 4621 · fit-mcp `APP_BASE_URL` = `http://localhost:4620`(#179) · 웹 args `start -p <PORT>`.
+- 판정 스크립트는 `pm2 jlist` 를 받아 판정만 출력(값 출력 0) — 스크래치 `gf.js`.
+- **정리:** 앱별 `pm2 delete pleiades-<app>-{bot,web,mcp}` → `pm2 kill` → `.pm2-local/` 삭제 · 6 포트(4610·4611·4620·4621·4698·4699) 전부 curl rc 7 · pm2 프로세스 0. 기동 시간은 앱당 약 1분(fin 은 장중이라 시세 크론 전에 내렸다).
