@@ -239,7 +239,7 @@ PM2_STUB = r"""#!/usr/bin/env node
 // pm2 흉내 — 상태는 $STUB/state.json · 호출은 $STUB/log
 const fs = require('fs'), path = require('path')
 const dir = process.env.STUB, file = path.join(dir, 'state.json')
-const st = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : { online: {}, restarts: {} }
+const st = { online: {}, restarts: {}, reg: {}, ...(fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : {}) }
 const argv = process.argv.slice(2)
 fs.appendFileSync(path.join(dir, 'log'), 'pm2 ' + argv.join(' ') + '\n')
 const preset = Object.fromEntries((process.env.STUB_PRESET || '').split(',').filter(Boolean).map((p) => p.split('=')))
@@ -249,11 +249,16 @@ if (argv[0] === 'jlist') {
   const names = new Set([...Object.keys(preset), ...Object.keys(st.online)])
   const list = [...names].map((name) => {
     if (flap.includes(name)) st.restarts[name] = (st.restarts[name] || 0) + 1
-    return { name, pm2_env: { status: st.online[name] ? 'online' : preset[name] || 'stopped', restart_time: st.restarts[name] || 0 } }
+    const args = name.endsWith('-web') && st.reg[name] ? ['start', '-p', st.reg[name]] : []
+    return { name, pm2_env: { status: st.online[name] ? 'online' : preset[name] || 'stopped', restart_time: st.restarts[name] || 0, args } }
   })
   process.stdout.write(JSON.stringify(list))
-} else if (['start', 'startOrRestart'].includes(argv[0])) st.online[only] = true
-else if (['stop', 'delete'].includes(argv[0])) delete st.online[argv[1]]
+} else if (['start', 'startOrRestart'].includes(argv[0])) {
+  st.online[only] = true
+  // pm2 는 이미 등록된 앱의 args 를 유지한다(PR #177 Codex P2) — 처음 등록할 때만 새 포트
+  if (only.endsWith('-web') && !st.reg[only]) st.reg[only] = process.env.STUB_WEB_NEW || '4510'
+} else if (argv[0] === 'stop') delete st.online[argv[1]]
+else if (argv[0] === 'delete') { delete st.online[argv[1]]; delete st.reg[argv[1]] }
 fs.writeFileSync(file, JSON.stringify(st))
 """
 
@@ -262,10 +267,11 @@ CURL_STUB = r"""#!/usr/bin/env node
 const fs = require('fs'), path = require('path')
 const dir = process.env.STUB
 const port = process.argv.find((a) => a.startsWith('http://')).split(':')[2].split('/')[0]
-const st = fs.existsSync(path.join(dir, 'state.json')) ? JSON.parse(fs.readFileSync(path.join(dir, 'state.json'))) : { online: {} }
+const st = { online: {}, reg: {}, ...(fs.existsSync(path.join(dir, 'state.json')) ? JSON.parse(fs.readFileSync(path.join(dir, 'state.json'))) : {}) }
 const foreign = (process.env.STUB_FOREIGN || '').split(',')
+if (foreign.includes(port)) process.exit(Number(process.env.STUB_FOREIGN_RC || 0))  // 52 = 빈 응답 · 연결은 됐다
 const bound = (process.env.STUB_BIND || '').split(',').filter(Boolean).map((p) => p.split('='))
-const up = foreign.includes(port) || bound.some(([n, p]) => p === port && st.online[n]) ||
+const up = bound.some(([n, p]) => st.online[n] && (n.endsWith('-web') ? st.reg[n] : p) === port) ||
   (port === process.env.STUB_PREFLIGHT && fs.existsSync(path.join(dir, 'preflight-up')))
 process.exit(up ? 0 : 7)
 """
@@ -347,10 +353,34 @@ class ServerPathWithStubs(unittest.TestCase):
 
     def test_own_online_process_may_hold_its_port(self):
         # 재배포 — 포트를 잡은 것이 online 인 pleiades-fin-* 자신이면 진행한다
-        (self.stub / "state.json").write_text(json.dumps({"online": {"pleiades-fin-mcp": True, "pleiades-fin-web": True},
-                                                          "restarts": {}}))
-        r, _ = self.run_fin()
+        self.seed(web_port="4510")
+        r, log = self.run_fin()
         self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("pm2 delete pleiades-fin-web", log)
+
+    def seed(self, *, web_port: str) -> None:
+        (self.stub / "state.json").write_text(json.dumps({
+            "online": {"pleiades-fin-mcp": True, "pleiades-fin-web": True}, "restarts": {},
+            "reg": {"pleiades-fin-web": web_port}}))
+
+    def test_non_http_listener_counts_as_occupied(self):
+        # 회귀: PR #177 Codex P2 — HTTP 가 아니거나 빈 응답(curl 52)인 리스너를 "비었다" 로 읽었다
+        r, log = self.run_fin(STUB_FOREIGN="4511", STUB_FOREIGN_RC="52")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotIn("npm ci", log)
+
+    def test_web_port_change_recreates_web(self):
+        # 회귀: PR #177 Codex P2 — startOrRestart 는 등록된 args(-p 옛 포트)를 유지한다
+        self.seed(web_port="4500")
+        r, log = self.run_fin()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertLess(log.index("pm2 delete pleiades-fin-web"), log.index("--only pleiades-fin-web"))
+
+    def test_web_not_listening_on_configured_port_fails(self):
+        r, log = self.run_fin(STUB_WEB_NEW="4999")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("pm2 stop pleiades-fin-web", log)
+        self.assertNotIn("pleiades-fin-bot", log)
 
     def test_crash_looping_mcp_is_stopped_and_web_untouched(self):
         r, log = self.run_fin(STUB_FLAP="pleiades-fin-mcp")

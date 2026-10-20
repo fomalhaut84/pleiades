@@ -77,16 +77,18 @@ step() { echo; echo "=== $* ==="; }
 at_root() { echo "+ $*"; [[ $DRY -eq 1 ]] || (cd "$ROOT" && "$@"); }
 at_app() { echo "+ (apps/$DIR) $*"; [[ $DRY -eq 1 ]] || (cd "$APP_DIR" && "$@"); }
 healthy() { curl -sS -f -o /dev/null --max-time 3 "http://127.0.0.1:$1/health" 2>/dev/null; }
-listening() { curl -s -o /dev/null --max-time 3 "http://127.0.0.1:$1/" 2>/dev/null; }  # 연결만 되면 0 (응답 코드 무관)
+# 연결이 거부되지 않으면 누군가 듣는다 — curl 7(연결 실패)만 "비었다". HTTP 가 아닌 리스너·빈 응답(52)·타임아웃(28)도 점유다(PR #177 Codex P2)
+listening() { local rc=0; curl -s -o /dev/null --max-time 3 "http://127.0.0.1:$1/" 2>/dev/null || rc=$?; [[ $rc -ne 7 ]]; }
 
-# pm2 jlist 에서 이름별 "<status> <restart_time>" — 없으면 빈 줄
+# pm2 jlist 에서 이름별 "<status> <restart_time> <args…>" — 없으면 빈 줄
 pm2_state() {
   (cd "$APP_DIR" && pm2 jlist 2>/dev/null) | node -e "
     let s = ''; process.stdin.on('data', (d) => (s += d)).on('end', () => {
       const i = s.indexOf('[')
       const list = i < 0 ? [] : JSON.parse(s.slice(i))
       const p = list.find((x) => x.name === process.argv[1])
-      process.stdout.write(p ? p.pm2_env.status + ' ' + p.pm2_env.restart_time : '')
+      const args = p ? [].concat(p.pm2_env.args || []).join(' ') : ''
+      process.stdout.write(p ? p.pm2_env.status + ' ' + p.pm2_env.restart_time + ' ' + args : '')
     })" "$1"
 }
 
@@ -165,6 +167,15 @@ wait_mcp() {
   die "MCP 가 $MCP_PORT 에서 응답하지 않는다 — pleiades-$APP-mcp 정지 · $BUILT_IN_PLACE"
 }
 
+# pm2 online 만으로는 어느 포트에서 듣는지 모른다 — 설정한 포트가 실제로 열렸는지 본다
+wait_web() {
+  echo "+ 포트 $WEB_PORT 응답 확인  # 20s"
+  [[ $DRY -eq 1 ]] && return 0
+  for _ in $(seq 1 20); do listening "$WEB_PORT" && return 0; sleep 1; done
+  (cd "$APP_DIR" && pm2 stop "pleiades-$APP-web") || true
+  die "pleiades-$APP-web 가 $WEB_PORT 에서 듣지 않는다 — 정지했다 · $BUILT_IN_PLACE"
+}
+
 # ── 단계 ──────────────────────────────────────────────────────────────
 echo "pleiades deploy: $APP · $TAG · web $WEB_PORT · mcp $MCP_PORT · pre-flight $PREFLIGHT_PORT$([[ $DRY -eq 1 ]] && echo ' · DRY-RUN')$([[ $BUILD_ONLY -eq 1 ]] && echo ' · BUILD-ONLY')"
 
@@ -210,8 +221,17 @@ confirm_stable "pleiades-$APP-mcp"
 at_app pm2 save --force  # 이후 단계가 멈춰도 새 MCP 는 resurrect 대상이다
 
 step "5. 웹 · 봇"
+# startOrRestart 는 등록된 args(-p 포트)를 유지한다 — 포트가 바뀌었으면 지우고 새로 등록한다(PR #177 Codex P2)
+echo "+ (apps/$DIR) pm2 delete pleiades-$APP-web  # 등록된 args 가 'start -p $WEB_PORT' 가 아닐 때만"
+if [[ $DRY -eq 0 ]]; then
+  WEB_STATE=$(pm2_state "pleiades-$APP-web")
+  if [[ -n "$WEB_STATE" && "${WEB_STATE#* * }" != "start -p $WEB_PORT" ]]; then
+    (cd "$APP_DIR" && pm2 delete "pleiades-$APP-web")
+  fi
+fi
 at_app pm2 startOrRestart "$CONFIG" --only "pleiades-$APP-web" --update-env
 confirm_stable "pleiades-$APP-web"
+wait_web
 echo "+ (apps/$DIR) pm2 delete pleiades-$APP-bot  # 없으면 무시"
 [[ $DRY -eq 1 ]] || (cd "$APP_DIR" && pm2 delete "pleiades-$APP-bot") || true
 at_app pm2 start "$CONFIG" --only "pleiades-$APP-bot" --update-env
