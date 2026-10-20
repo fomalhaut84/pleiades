@@ -97,6 +97,12 @@ class Config(unittest.TestCase):
         self.assertEqual(apps["pleiades-fit-bot"]["env"]["MCP_PORT"], "4521")
         self.assertEqual(apps["pleiades-fit-mcp"]["env"]["MCP_PORT"], "4521")
 
+    def test_fit_mcp_gets_web_url_from_port(self):
+        # 회귀: PR #179 Codex P2 — MCP 의 웹 API 기본값은 localhost:4200 고정이라 다른 PORT 에서 Garmin 경유 도구가 끊긴다
+        self.assertEqual(self.apps("fit")["pleiades-fit-mcp"]["env"]["APP_BASE_URL"], "http://localhost:4520")
+        self.assertEqual(self.apps("fit", {"APP_BASE_URL": "http://127.0.0.1:9"})["pleiades-fit-mcp"]["env"]["APP_BASE_URL"],
+                         "http://127.0.0.1:9")
+
     def test_only_the_cwd_app_is_defined(self):
         # run.sh 의 check_env 는 cwd 앱만 검사한다 — 다른 앱 정의가 섞이면 검사 밖 env 로 뜬다 (#171)
         self.assertTrue(all(n.startswith("pleiades-fin-") for n in self.apps("fin")))
