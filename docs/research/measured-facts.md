@@ -4029,3 +4029,199 @@ fit 1a-3 대상 6 파일 → **4** 커밋 / 저장소 158. fin 1a-4 대상 19 �
 **가정을 뒤집는 값:** 배포는 **서비스 저장소 Release 태그**에 묶여 있고 pleiades 엔 태그·배포 경로가 없다 · 현 `deploy.sh` 는 루트 `npm ci` 가 없어 pleiades 트리에서 빌드가 깨진다(006 ㉒) · fit 은 서버 절대경로 하드코딩 4곳 · 서버 작업 디렉터리 안에 외부 계정 토큰·PDF 등 영속 상태가 있다 · 같은 DB 합병은 `_prisma_migrations` 에서 막힌다.
 
 **못 잰 값(서버에서만):** `DEPLOY_PATH` 실경로 · 서버 HEAD/dirty · `pm2 ls`·dump·startup · nginx 실설정·SSL · 서비스 DB 이름·크기·PG 버전 · 백업 cron 실재 · 실 `.env` 키 목록 · node/npm·`claude` 계정 · 영속 디렉터리 크기 · 서버의 pleiades https 접근(Q45) · 서비스 secrets 목록 · 같은 서버 다른 서비스 포트 · 텔레그램 봇 polling 현황 · `main..dev` 차이 커밋 수(스크래치 clone 필요 — 이번 범위 밖). 목록 상세 `_workspace/007/01_surveyor_cutover.md` §8.
+
+# 2026-10-20 — 크론 전수(M1) · 알림 경로(G-d) (#178)
+
+대상: pleiades `docs/178-1` = `dev` `2e5272a` 의 `apps/*` 추적 파일(최종 수용 #167 · PR #169 `644972c` 이후 `apps/` 변경 0 — `git log 644972c..HEAD -- apps` 빈 출력) · 루트 `deploy/env/*.env.template`(#177) · `apps/*/node_modules/node-cron`(설치본 판독). **판독만** — `apps/*` 안 실행 0 · 서버·서비스 DB·`.env` 열람 0. 시각은 전부 KST(모든 `cron.schedule` 이 `{ timezone: 'Asia/Seoul' }` 를 넘긴다 — 아래 표의 25건 전부 확인). node-cron fin **4.6.0** · fit **4.2.1**(각 `package-lock.json`).
+
+```bash
+# 주기 작업 후보 전수 (테스트 제외)
+git grep --text -nE "cron\.schedule|schedule\(|setInterval\(|setTimeout\(|node-cron|register\(\)" HEAD -- \
+  apps/finance/src apps/finance/scripts apps/fitness/src apps/fitness/scripts | cut -d: -f2- | grep -vE '__tests__|\.test\.'
+# 부팅 경로
+cat -n apps/{finance,fitness}/src/instrumentation.ts apps/{finance,fitness}/src/bot/standalone.ts
+cat -n apps/finance/src/lib/cron.ts apps/finance/src/bot/notifications/scheduler.ts apps/fitness/src/lib/cron.ts apps/fitness/src/bot/notifications/scheduler.ts
+# 주기 상수
+git grep --text -nE "SESSION_(SWEEP_INTERVAL|IDLE_TTL)_MS|HEARTBEAT_INTERVAL_MS|SWEEP_INTERVAL_MS|LOG_ENABLE_FILE" HEAD -- 'apps/*/src/**/*.ts'
+```
+
+`setTimeout` 결과 중 요청·명령 범위 타이머(타이핑 표시 · fetch abort · 재시도 대기 · UI 토스트 · 크론 가드 타임아웃 경고 · 종료 지연)는 주기 작업이 아니라 뺐다. `setTimeout` 재귀(자기 재예약) 패턴은 **0**. fit `report-job.ts:139` heartbeat(30 s)·`:210` 폴링은 **리포트 작업 1건 실행 중에만** 도는 타이머라 뺐다. 서버 crontab(fin `scripts/backup-db.sh` 주석 예시 `0 3 * * *`)은 코드 밖이라 이 전수에 없다 — 실재는 007 U6.
+
+## 1. 크론 수 (`cron.schedule` 등록 지점)
+
+| 프로세스 | fin | fit |
+|---|---|---|
+| 웹 | **0**(`instrumentation.ts:1-3` 빈 `register()`) | **1**(`lib/cron.ts:25`) |
+| 봇 | **19** = `lib/cron.ts` 6(`:76,123,148,185,210,290`) + `bot/notifications/scheduler.ts` 13(`:77,100,113,126,140,153,166,179,205,218,231,248,261` — `guarded()` 래퍼 `:42-50` 경유) | **5**(`bot/notifications/scheduler.ts:66,78,89,101,108`) — **007 ⑪·M1 의 "5곳" 일치** |
+| MCP | 0 | 0 |
+
+`setInterval` 상주 주기 작업(크론 아님): fin MCP 2 · fit 웹 2 · fit 봇 3 · fit MCP 2 — §3.
+
+## 2. 크론 전수
+
+**fin 봇** (`dist/bot/standalone.cjs` · `standalone.ts:30-36` 이 봇 `init`·`deleteWebhook` 뒤에 등록)
+
+| # | 파일:줄 | 식 | 실제 시각(KST) | 하는 일 | 외부 효과 | 1회 누락 시 | 부팅 즉시 |
+|---|---|---|---|---|---|---|---|
+| f1 | `lib/cron.ts:76` | `*/10 * * * *` | 10분마다 · 실작업은 장중(KR 평일 09:00~15:30 · US 평일 밤 22:30/23:30~익일 05:00/06:00 — `market-hours.ts:19-53`) 또는 매시 :00 틱(`:81`) | 시세 갱신 → 갱신 성공 시 가격·커스텀 전략·(장중) TA 알림 평가 | Yahoo(`yahoo-finance2`) · DB `priceCache` upsert · AlertHistory 쓰기 · 텔레그램 ALLOWED | 다음 틱(≤10분 · 장외 ≤1시간)이 현재값으로 재평가 — 창 동안만 성립했던 조건은 놓칠 수 있다 | 없음 |
+| f2 | `lib/cron.ts:123` | `5 6 * * 1-6` | 월~토 06:05 | 포트폴리오 일일 스냅샷 | Yahoo 없음(캐시 가격) · DB `portfolioSnapshot` upsert | 그날 스냅샷 빠짐 — 자동 재실행 없음. 웹 `POST /api/performance/snapshots`(`route.ts:110-112`)로 수동 보충 가능 | 없음 |
+| f3 | `lib/cron.ts:148` | `0 6 * * *` | 매일 06:00 | 어닝 캘린더 스캔 | Yahoo · DB `earningsCache` | 캐시 하루 묵음 → 다음 06:00 | **있음 — `earningsCache` 0건일 때만**(`:153-163`) |
+| f4 | `lib/cron.ts:185` | `0 7 * * 1` | 월 07:00 | KRX 종목 동기화 | KRX `kind.krx.co.kr` · DB `krxStock` upsert/deleteMany | 다음 주 — 웹 `/api/prices/krx-sync` 수동 가능 | **있음 — `krxStock` 0건일 때만**(`:188-198` · M-4 실측 2,626건) |
+| f5 | `lib/cron.ts:210` | `5 9 * * *` | 매일 09:05 (**주석 `:205` 은 "00:05" — 코드·로그 `:278` 은 09:05**) | 반복 거래 자동 생성 | DB `transaction` create + `recurringTransaction` update · **Whooing 웹훅**(실 가계부) | **따라잡는다** — `nextRunAt <= now`(`:218`) 라 다음 날 실행이 처리(거래일자는 `item.nextRunAt` 그대로 `:242`) · 하루 지연 | 없음 |
+| f6 | `lib/cron.ts:290` | `10 0 * * *` | 매일 00:10 | 스톡옵션 베스팅 상태 전환 | DB `stockOptionVesting` updateMany | **따라잡는다** — 조건이 `vestingDate < 내일 0시`·`expiryDate < 오늘`(누적) | 없음 |
+| n1 | `scheduler.ts:77` | `0 * * * *` | 매시 정각 점검 → `AlertConfig.daily_summary_hour`(기본 **8**, DB 실값 **미확인**) 시에만 발송 | 일일 포트폴리오 요약 | 텔레그램 ALLOWED | **그날 요약 없음**(`kstHour === hour` 일치만 `:89`) | 없음 |
+| n2 | `:100` | `0 9 1 1,4,7,10 *` | 1·4·7·10월 1일 09:00 | 분기 점검 리마인더 | 텔레그램 | 그 분기 리마인더 없음 | 없음 |
+| n3 | `:113` | `0 10 7 1,4,7,10 *` | 1·4·7·10월 7일 10:00 (다음 **2027-01-07**) | 분기 리포트 PDF 생성·발송 | Claude advisor · `reports/` 파일 쓰기 · DB `quarterlyReport` update · 텔레그램 `sendDocument`(또는 Discord 첨부) | 자동 발송 없음 — 생성은 웹 `POST /api/reports`·봇 `/report` 로 가능하나 그 경로는 **요청자에게만** 보낸다 | 없음 |
+| n4 | `:126` | `0 9 * * *` | 매일 09:00 | RSU·스톡옵션 D-7/D-1 리마인더 | 텔레그램 | **그 D-7/D-1 안내 영구 누락**(`daysLeft === 7 \|\| === 1` 일치만 · `rsu.ts:67,95`) | 없음 |
+| n5 | `:140` | `35 15 * * *` | 매일 15:35 | RSU D-day 확정 키보드(`scheduleInteractive`) | 텔레그램(또는 Discord 봇) 키보드 | **그 RSU 의 확정 알림 영구 누락**(오늘 `vestingDate` 만 · `rsu.ts:133-142`) — 웹 `/api/rsu/[id]/vest` 로 수동 처리 가능 | 없음 |
+| n6 | `:153` | `0 9 1 * *` | 매월 1일 09:00 | 월 적립 리마인더 | 텔레그램 | 그달 없음 | 없음 |
+| n7 | `:166` | `30 6 1 * *` | 매월 1일 06:30 | 순자산 스냅샷 + 알림 | DB `netWorthSnapshot` upsert · 텔레그램 | **그달 스냅샷 없음** — 수동 경로 0(`takeNetWorthSnapshot` 호출부 = 스케줄러뿐) | 없음 |
+| n8 | `:179` | `30 9 * * *` | 매일 09:30 점검 → `monthly_report_day`(기본 1, DB 실값 **미확인**) 일치 시 | 월간 리포트 | Claude advisor · 텔레그램 | 그달 없음 | 없음 |
+| n9 | `:205` | `30 8 * * 1-5` | 평일 08:30 | 한국장 모닝 브리핑 | Claude advisor · 텔레그램 | 그날 없음(`/브리핑` 으로 요청자에게는 가능) | 없음 |
+| n10 | `:218` | `0 23 * * 1-5` | 평일 23:00 | 미국장 브리핑 | 같음 | 같음 | 없음 |
+| n11 | `:231` | `40 15 * * 1-5` | 평일 15:40 | 한국장 클로징 리뷰 | Claude advisor · 텔레그램 | 그날 없음 | 없음 |
+| n12 | `:248` | `15 7 * * 2-6` | 화~토 07:15 | 미국장 클로징 리뷰 | 같음 | 그날 없음 | 없음 |
+| n13 | `:261` | `0 9 * * 6` | 토 09:00 | 주간 리뷰 | 같음 | 그 주 없음 | 없음 |
+
+- n1~n13 은 **실행 때마다 ALLOWED 수신자를 확인하고 0 이면 조용히 건너뛴다**(`scheduler.ts:42-53` · n5 는 키보드 수신자 OR) — 전환 직후 `TELEGRAM_ALLOWED_CHAT_IDS` 누락은 에러 없이 전 알림 0 이 된다.
+- fin 봇 **부팅 1회**: f3·f4 조건부 시드 · `AlertConfig` ensure upsert 4(`scheduler.ts:58-73`) · `deleteWebhook`(`standalone.ts:26`) · Discord gateway(`:40`, 설정 있을 때만).
+
+**fit 웹** (`instrumentation.ts` → nodejs 런타임)
+
+| # | 파일:줄 | 식(env 키 · 코드 기본값) | 시각 | 하는 일 | 외부 효과 | 1회 누락 시 | 부팅 즉시 |
+|---|---|---|---|---|---|---|---|
+| w1 | `lib/cron.ts:25` | `SYNC_CRON` ?? `0 6,9,12,15,18,21 * * *`(`:22`) | 06·09·12·15·18·21:00 | Garmin(+OMRON) 싱크 → 날씨 enrich → 음식 kcal 재추정 20건 → stale 칼로리 재계산 | **Garmin·OMRON 계정** · Open-Meteo · Claude CLI(kcal 추정) · DB 다수 | **따라잡는다** — 매 틱 3일 창(`:44`) · kcal·재계산은 큐 잔류분을 다음 틱이 이어받음(`:69,90`) | 없음(싱크는 부팅 즉시 안 돈다) |
+
+fit 웹 **부팅 1회**(`instrumentation.ts`): 사진 임시파일 sweep(`:19`) · 리포트 작업 orphan sweep(`:32` — DB `reportJob` updateMany) · 프롬프트 기본값 동기화(`:40` — DB) · 프롬프트 실행 boot sweep(`:45` — DB).
+
+**fit 봇** (`standalone.ts:52` → `startBotScheduler`)
+
+| # | 파일:줄 | 식(env 키 · 코드 기본값) | 시각 | 하는 일 | 외부 효과 | 1회 누락 시 | 부팅 즉시 |
+|---|---|---|---|---|---|---|---|
+| b1 | `scheduler.ts:66` | `MORNING_REPORT_CRON` ?? `0 8 * * *` | 매일 08:00 | 모닝 리포트 | Garmin·OMRON preSync(`daily-report.ts:24-29`) · Claude advisor · DB `aIAdvice` · 텔레그램 ALLOWED | **그날 크론 발송 없음** — `/report regenerate morning` 은 요청자에게 답장(notifier 경로 아님 · `commands/report.ts:14-22`) | 없음 |
+| b2 | `:78` | `EVENING_REPORT_CRON` ?? `0 23 * * *` | 매일 23:00 | 이브닝 리포트 | 같음 | 같음 | 없음 |
+| b3 | `:89` | `REPORT_CRON` ?? `0 7 * * 1` | 월 07:00 | 주간 리포트 | Garmin preSync(`weekly-report.ts:142`) · Claude · DB · 텔레그램 | 그 주 크론 발송 없음 | 없음 |
+| b4 | `:101` | `AUTO_ADJUST_CRON` ?? `30 6 * * *` | 매일 06:30 | 자동조정 제안(조건부 — 비활성·이미 수락·휴식일·계획 없음·조정 불필요면 skip `auto-adjust.ts:243-310`) | Garmin preSync · DB `workoutAdjustment` create · 키보드 | **그날 제안 없음** — 수동 유발 경로 0(`runAutoAdjustProposal` 호출부 = 스케줄러뿐) | 없음 |
+| b5 | `:108` | `AUTO_ADJUST_MAINTENANCE_CRON` ?? `*/5 * * * *` | 5분마다 | 스누즈 만료 재전송 · 8h/자정 TTL 만료 | DB update · 키보드 재전송 | **따라잡는다** — `snoozeUntil <= now` 조건(`auto-adjust-cron.ts:3-4`) | 없음 |
+
+fit 봇 **부팅 1회**: 사진 sweep(`standalone.ts:22`) · orphan sweep(`:43`) · 프롬프트 기본값 동기화 await(`:49`) · `deleteWebhook`(`:38`) · Discord gateway(`:55`).
+
+> **주의 — 루트 템플릿의 빈 크론 키는 "코드 기본값" 이 아니다.** `deploy/env/fitness.env.template:29-35` 는 6 키를 `KEY=` 로 두고 주석에 *"비우면 코드 기본값"* 이라 적었다. 코드는 6 곳 모두 **`??`**(`lib/cron.ts:22` · `scheduler.ts:65,77,88,100,107`) 라 **빈 문자열은 기본값으로 떨어지지 않는다**(`??` 는 `null`/`undefined` 만). 빈 값이 그대로 `cron.schedule("")` 로 가면, fit node-cron 4.2.1 판독상 `schedule` → `InlineScheduledTask` → `TimeMatcher` 생성자(`time/time-matcher.js:18-21`)가 검증(`validate`) 없이 `convertion/index.js` 의 `interprete("")` 를 부르고 `"".split(' ')` = 1칸이라 `expressions[4] = undefined` → `month-names-conversion.js:10` `undefined.replace` **TypeError 동기 throw**. 결과(판독): **fit 봇 = `startBotScheduler` 에서 throw → `main().catch` → `process.exit(1)`(`standalone.ts:96-98`) → 재시작 반복**(polling 은 시작 전) · **fit 웹 = `startCronJobs` throw 로 `register()` 가 중단 — 그 뒤 orphan sweep·sweeper·프롬프트 동기화·boot sweep 미실행**(Next 가 서버 기동을 막는지는 **미확인**). 전제: 템플릿의 빈 줄이 그대로 `apps/fitness/.env` 에 남고 dotenv 가 `KEY=` 를 `""` 로 싣는다(dotenv 의 일반 동작 · 이 환경에서 실행 확인은 안 했다). 같은 `??` + 템플릿 빈 키 조합은 fin `MCP_PORT`·`MCP_TRANSPORT`·`MCP_LOG_*`·`MYFINANCE_ROOT`·`TELEGRAM_ALLOWED_CHAT_IDS`(auth) 와 fit `DATABASE_URL`·`PORT`(advisor)·`APP_BASE_URL`·`MCP_LOG_*`·`TELEGRAM_ALLOWED_CHAT_IDS` 에도 있다(아래 명령) — 영향은 키마다 다르고 이번 범위에서 판독하지 않았다(**미확인**).
+
+```bash
+for t in finance fitness; do for k in $(grep -oE '^[A-Z_]+=' deploy/env/$t.env.template | tr -d '='); do
+  git grep --text -nE "process\.env\.$k[[:space:]]*\?\?" HEAD -- apps/$t/src deploy/pleiades.config.cjs | cut -d: -f2-3 | grep -v __tests__; done; done
+sed -n 18,21p apps/fitness/node_modules/node-cron/dist/cjs/time/time-matcher.js
+sed -n 8,18p apps/fitness/node_modules/node-cron/dist/cjs/pattern/convertion/month-names-conversion.js
+```
+
+## 3. 10분 이하 주기 작업
+
+| 주기 | 프로세스 | 위치 | 하는 일 | 외부 효과 |
+|---|---|---|---|---|
+| 60 s | fit 봇 | `bot/commands/food-edit-state.ts:166`(모듈 로드 시 · `bot/index.ts` 가 import) | 만료된 음식 수정 대기 항목 정리 | 메모리만 |
+| 5 분 | fit 봇 **b5** | `scheduler.ts:108` | 스누즈 재전송·TTL | DB · 키보드 |
+| 5 분 | fit 웹 · fit 봇 각각 | `lib/nutrition/photo-temp-cleanup.ts:77`(`SWEEP_INTERVAL_MS = 5분` `:15`) | `os.tmpdir()` 의 `mfp-photo-*` 5분 경과분 삭제 | 로컬 파일 |
+| 5 분 | fit 웹 · fit 봇 각각 | `lib/report-job.ts:296`(`SWEEP_INTERVAL_MS = 5분`) | orphan 리포트 작업 → failed | DB `reportJob` updateMany |
+| 5 분 | fin MCP · fit MCP | `mcp/server.ts:1074`(fin) · `:942`(fit) — `SESSION_SWEEP_INTERVAL_MS = 5분`, TTL 30분 | 유휴 MCP 세션 close | 메모리만 |
+| 5 분 | fin MCP · fit MCP | `mcp/logger.ts:114`(fin) · `:112`(fit) — `MCP_LOG_TEE_FILE === '1'` 일 때만(fin 서비스 ecosystem 은 `1` · 007 [S]) | 자정 로그 파일 교체 | 로컬 파일 |
+| 10 분 | fin 봇 **f1** | `lib/cron.ts:76` | 시세·가격/전략/TA 알림 | Yahoo · DB · 텔레그램 |
+
+(1시간: fin **n1** `0 * * * *` — 발송은 설정 시각 1회뿐.)
+
+## 4. 일·주·월 단위 시각표(KST) 와 빈 구간
+
+| 시각 | 매일 | 요일·날짜 한정 |
+|---|---|---|
+| 00:10 | fin f6 베스팅 | |
+| 06:00 | fin f3 어닝 · fit w1 싱크 | |
+| 06:05 | | fin f2 스냅샷(월~토) |
+| 06:30 | fit b4 자동조정 | fin n7 순자산(매월 1일) |
+| 07:00 | | fin f4 KRX(월) · fit b3 주간(월) |
+| 07:15 | | fin n12 미국 클로징(화~토) |
+| 08:00 | fin n1 일일요약(기본) · fit b1 모닝 | |
+| 08:30 | | fin n9 한국 브리핑(평일) |
+| 09:00 | fin n4 RSU 리마인더 · fit w1 | fin n6 월적립(1일) · n2 분기점검(분기 1일) · n13 주간리뷰(토) |
+| 09:05 | fin f5 반복거래 | |
+| 09:30 | fin n8 월간리포트 점검 | |
+| 10:00 | | fin n3 분기 PDF(분기 7일) |
+| 12:00 · 15:00 · 18:00 · 21:00 | fit w1 | |
+| 15:35 | fin n5 RSU D-day 키보드 | |
+| 15:40 | | fin n11 한국 클로징(평일) |
+| 23:00 | fit b2 이브닝 | fin n10 미국 브리핑(평일) |
+
+- **크론 없는 최장 구간(일·주·월 단위 작업 기준): 00:10 → 06:00 = 5시간 50분** (매일 · 두 앱 합산). 그 안에서도 도는 것: fin f1(장외면 매시 :00 틱만) · fin n1 매시 점검(설정 시각이 01~05시가 아니면 no-op · DB 실값 미확인) · fit b5 5분 · §3 sweeper. 앱별: fit 만 보면 23:00 → 06:00 = 7시간.
+- **평일 밤은 미국장이 열려 있다** — 화~토 새벽(~05:00 EDT / ~06:00 EST)과 월~금 22:30/23:30 이후 fin f1 이 10분마다 시세·가격 알림을 돈다. **US DST 는 2026-11-01 에 끝나** 11월 이후 미국장은 23:30~06:00 KST(`market-hours.ts:44-45`).
+- **일요일 00:10~06:00 은 KR·US 장이 모두 닫혀 있고**(`isUSMarketOpen` 일요일 false · 토요일 06:00 이후 false) 요일 한정 크론(f2 월~토 · n9~n12 평일/화~토 · f4·b3 월 · n13 토)이 하나도 없다.
+
+**전환 창 후보(제안):** **일요일 01:00~05:00 KST** — 단 그날이 **매월 1일이 아니고**(n7 06:30 · n6 09:00 · 분기 n2) **1·4·7·10월 7일이 아닐 것**(n3). 이 창에서 놓치는 것은 f1 장외 :00 틱(다음 시각에 회복) · n1 점검(설정 시각이 창 안이 아니면 무해) · b5(따라잡음) · sweeper 뿐이고, 앞뒤의 f6(00:10)·f3/w1(06:00)과 겹치지 않는다. **대가:** 창 직후 "크론 1회 관찰"(T-5c ⑥ · Q78)에서 일요일에 도는 것은 매일 작업(f3 f5 f6 n1 n4 n5 n8 · w1 b1 b2 b4 b5)뿐이라 **평일·월요일·토요일 한정 작업(f2 f4 n9~n13 b3)은 다음 날 이후에야 1회 관찰**된다 — n3(분기 PDF, 다음 2027-01-07)·n2·n6·n7 은 Q78 의 장주기 예외. **피해야 할 시각:** 15:35(n5 — 누락 = 그 RSU 확정 알림 영구 누락) · 09:00(n4 — D-7/D-1 영구 누락) · 06:30 1일(n7 — 수동 경로 0).
+
+## 5. 알림·인터랙티브 경로 (G-d)
+
+라우팅 정본: fin `bot/notifications/notifier.ts`(ALLOWED → `TELEGRAM_ALLOWED_CHAT_IDS` · ADMIN → `TELEGRAM_ADMIN_CHAT_IDS` · 스위치 `NOTIFY_ALLOWED_CHANNEL`/`NOTIFY_ADMIN_CHANNEL`=discord → 웹훅 `DISCORD_WEBHOOK_FINANCE`/`_ADMIN` · 키보드는 `NOTIFY_INTERACTIVE_CHANNEL`=discord → 봇 `DISCORD_BOT_TOKEN_FINANCE`+`DISCORD_CHANNEL_ID_FINANCE`) · fit `bot/notifications/notifier.ts`(ALLOWED 만 · **ADMIN 미매핑** — 관리자 알림도 ALLOWED · 스위치 `NOTIFY_ALLOWED_CHANNEL` → `DISCORD_WEBHOOK_FITNESS` · 키보드 `NOTIFY_INTERACTIVE_CHANNEL` → `DISCORD_BOT_TOKEN_FITNESS`+`DISCORD_CHANNEL_ID_FITNESS`). **전환 첫 배포는 플랫폼 키 비움 → 아래 전부 텔레그램.**
+
+```bash
+git grep --text -nE "(notifierFor|interactiveNotifierFor|notifierForChat)\([^)]*\)\.notify|\.notify\(Route\.|sendFileIfDiscord\(|sendDocument\(|Route\.ADMIN" HEAD -- apps/finance/src | cut -d: -f2- | grep -vE '__tests__|notifier\.ts:'
+git grep --text -nE "(notifierFor|interactiveNotifierFor)\(|\.notify\(Route\." HEAD -- apps/fitness/src | cut -d: -f2- | grep -vE '__tests__|notifier\.ts:'
+for f in <함수명>; do git grep --text -lF "$f(" HEAD -- apps/finance/src apps/fitness/src | grep -v __tests__; done   # 트리거 호출부
+```
+
+**"키보드 3곳" 특정:** fin `rsu.ts:179`(RSU D-day) · fit `auto-adjust.ts:396`(자동조정 제안) · fit `auto-adjust-cron.ts:79`(스누즈 재전송) — `interactiveNotifierFor` 호출부 전수가 이 3곳이다. 봇 명령 답장의 인라인 키보드(fin `commands/ai.ts`·`expense.ts`·`trade.ts` 의 `ctx.reply`)는 인바운드 답장이라 notifier 경로가 아니다(이 목록 밖 · 명령 수 fin+fit `bot.command`/`hears` 59).
+
+**fin (21)**
+
+| # | 경로 | 위치 | 트리거 | 라우트 | 전환 직후 확인 방법 | 기대 결과 | 부작용 |
+|---|---|---|---|---|---|---|---|
+| A1 | 일일 요약 | `daily.ts:133` | n1 | ALLOWED | 설정 시각(기본 08:00) 대기. 앞당기려면 웹 알림 설정에서 `daily_summary_hour` 를 다음 정시로 → **DB 설정 쓰기** · 확인 뒤 원복 | 요약 1통 | 없음(읽기) |
+| A2 | 한국장 브리핑 | `briefing.ts:73,89` | n9 평일 08:30 | ALLOWED | **대기만** | 브리핑 | Claude advisor 호출 |
+| A3 | 미국장 브리핑 | 같음 | n10 평일 23:00 | ALLOWED | 대기만 | 같음 | 같음 |
+| A4 | `/브리핑` | `commands/briefing.ts` → `notifierForChat` | 사용자 명령 | **요청 chat 1곳 · 텔레그램 고정** | **직접 유발 가능** | "생성 중" → 브리핑 | Claude 호출(쿼터) · DB 쓰기 0 |
+| A5 | 한국장 클로징 | `active-review.ts:148,159` | n11 평일 15:40 | ALLOWED | 대기만 | 리뷰 | Claude |
+| A6 | 미국장 클로징 | 같음 | n12 화~토 07:15 | ALLOWED | 대기만 | 같음 | Claude |
+| A7 | 주간 리뷰 | 같음 | n13 토 09:00 | ALLOWED | 대기만 | 같음 | Claude |
+| A8 | 월간 리포트 | `monthly-report.ts:53,61` | n8(설정일 · 기본 1일) | ALLOWED | 대기만(설정일 변경은 DB 설정 쓰기) | 리포트 | Claude |
+| A9 | 월 적립 리마인더 | `monthly.ts:66` | n6 매월 1일 09:00 | ALLOWED | 대기만 | 1통 | 없음 |
+| A10 | 순자산 스냅샷 | `networth-snapshot.ts:94` | n7 매월 1일 06:30 | ALLOWED | 대기만 · **수동 경로 0** | 1통 | DB `netWorthSnapshot` upsert |
+| A11 | 분기 점검 | `quarterly.ts:106` | n2 분기 1일 09:00 | ALLOWED | 대기만(다음 2027-01-01) | 1통 | 없음 |
+| A12 | **분기 PDF** | `quarterly-report.ts:48,74,94`(텍스트) · `:84` `sendDocument` · `:65` `sendFileIfDiscord` | n3 분기 7일 10:00 | ALLOWED(첨부는 텔레그램 `sendDocument` 직접 — ALLOWED 가 discord 면 웹훅 첨부 · M-6b-1) | **대기만(다음 2027-01-07)** — 봇 `/report`·웹 `/api/reports` 는 생성만 같고 요청자 답장 경로 | "생성 중" → PDF | Claude · 파일 쓰기 · DB update |
+| A13 | RSU 리마인더 | `rsu.ts:112` | n4 매일 09:00 · D-7/D-1 있을 때만 | ALLOWED | 대기 + **데이터 조건**(해당 RSU 없으면 0통) | 1통 | 없음 |
+| A14 | **RSU D-day 키보드** | `rsu.ts:179`(`interactiveNotifierFor`) · 수신 `commands/vest-confirm.ts:91-112` · Discord `discord-interactions.ts` | n5 15:35 · 그날 베스팅 RSU 있을 때만 | ALLOWED 텔레그램(또는 Discord 봇) | 대기 + 데이터 조건 | 메시지 + [✅ 확정][✖️ 취소] | **[확정] = 실제 베스팅 반영(Trade·Holding DB 쓰기)** · [취소] = 메시지 편집만(DB 0 · `vest-confirm.ts:87`) |
+| A15 | 가격 알림 | `price-alert.ts:338` | f1 갱신 후 조건 충족 | ALLOWED | 대기 + 조건 | 알림 | AlertHistory 쓰기 |
+| A16 | TA 시그널 | `ta-signal-alert.ts:332` | f1 장중 · 설정 주기 | ALLOWED | 대기 + 조건 | 알림 | AlertHistory · Claude(가이드 on 시) |
+| A17 | 커스텀 전략 | `custom-strategy-alert.ts:314` | f1 | ALLOWED | 대기 + 조건 | 알림 | AlertHistory |
+| A18 | 예산 사용률 | `budget-alert.ts:72` | 봇 지출 기록(`commands/expense.ts` → `checkBudgetUsage`) · 사용률 ≥ `warnPct`(기본 80) | ALLOWED | 실지출 기록이 있어야 — **확인용 유발 비권장** | 경고 | 지출 기록 자체가 DB 쓰기(+Whooing) |
+| A19 | 증여 한도 | `budget-alert.ts:106` | 웹 `POST /api/deposits`(`route.ts:126`) · 19세 미만 계좌 · 80% 초과 | ALLOWED | 실입금 등록이 있어야 — 비권장 | 경고 | 입금 DB 쓰기 |
+| A20 | 알림 재발송 | `alert-dispatcher.ts:120` | 웹 `POST /api/alerts/history/[id]/retry` · **실패 상태 행만**(`route.ts:38`) · 5분 쿨다운 | ALLOWED | 실패 이력이 있을 때만 직접 가능 | 재발송 1통 | AlertHistory 새 행 |
+| A21 | advisor 관리자 alert | `lib/ai/advisor-monitor.ts:215` | advisor **연속 3회 실패**(`:24`) · 30분 재발송 억제(`:27`) · 웹·봇 양쪽 | **ADMIN**(`TELEGRAM_ADMIN_CHAT_IDS` · 0 이면 skip `:202`) | **유발 불가**(장애 조건) — `TELEGRAM_ADMIN_CHAT_IDS` 존재만 확인 | 관리자 알림 | 없음 |
+
+**fit (8)**
+
+| # | 경로 | 위치 | 트리거 | 라우트 | 전환 직후 확인 방법 | 기대 결과 | 부작용 |
+|---|---|---|---|---|---|---|---|
+| B1 | 모닝 리포트 | `scheduler.ts:27`(`runReportCron`) | b1 08:00 | ALLOWED | **대기만**(`/report regenerate morning` 은 답장 경로 — 봇 동작 확인은 되나 notifier 경로 확인은 아님) | 리포트 1통 | Garmin·OMRON preSync · Claude · DB `aIAdvice` |
+| B2 | 이브닝 리포트 | 같음 | b2 23:00 | ALLOWED | 대기만 | 같음 | 같음 |
+| B3 | 주간 리포트 | 같음 | b3 월 07:00 | ALLOWED | 대기만 | 같음 | 같음 |
+| B4 | 리포트 실패 알림 | `scheduler.ts:52` | B1~B3 실패 시 | ALLOWED | 유발 불가(실패 조건) | "❌ … 생성 실패" | — |
+| B5 | **자동조정 제안 키보드** | `auto-adjust.ts:396` · 수신 `auto-adjust-callback.ts`(`decideAutoAdjust` `:237`) · Discord gateway | b4 06:30 · 조정 필요할 때만 | ALLOWED 키보드 | **대기 + 조건 · 수동 유발 경로 0** | [Accept][Reject][Snooze 1h] | 발송 시 DB `workoutAdjustment` create · **어느 버튼이든 DB 쓰기**(Accept = 오늘 `trainingWorkout` 갱신 · Reject = 결정 기록 · Snooze = `snoozeUntil`) |
+| B6 | 자동조정 실패 알림 | `auto-adjust.ts:456` | b4 실패 시 | ALLOWED | 유발 불가 | "❌ Auto-adjust 알림 실패" | — |
+| B7 | **스누즈 재전송 키보드** | `auto-adjust-cron.ts:79` | b5 · 스누즈 만료 건 있을 때 | ALLOWED 키보드 | B5 에서 Snooze 를 누른 뒤 1시간 대기(= 실제 결정 기록) | 재알림 + 키보드 | DB update |
+| B8 | 관리자 알림 | `lib/monitoring/admin-alerts.ts:236` | Garmin/OMRON 인증 실패(`garmin/sync.ts:459` · **`notifyBot` 있는 봇 경로만** — 웹 w1 싱크는 로그만) · Claude 인증 만료/MCP 전송 장애(B1~B3·B5·`/ai`) · 유형별 1시간 제한(`:35`) | **ALLOWED**(fit ADMIN 미매핑) | 유발 불가(장애 조건) | 관리자 문구 | DB `systemAlertState` |
+
+**Discord 인바운드 2**(스위치 켤 때만): fin·fit `bot/notifications/discord-interactions.ts` gateway(`standalone.ts:40`·`:55`) — 첫 배포(키 비움)에서는 미기동.
+
+**집계:** 아웃바운드 경로 **29**(fin 21 · fit 8) · 그중 키보드 3(A14 · B5 · B7) · ADMIN 1(A21). 분류(열거 합 1 + 14 + 14 = 29): **① 부작용 없이 직접 유발 가능 1** — A4 `/브리핑`(Claude 호출 1회) · **② 크론 시각까지 대기 14** — A1 A2 A3 A5 A6 A7 A8 A9 A10 A11 A12 · B1 B2 B3(A1 은 설정 쓰기를 감수하면 앞당길 수 있다 · A10 은 수동 경로 0) · **③ 데이터·장애 조건까지 맞아야 14** — A13 A14 A15 A16 A17 A18 A19 A20 A21 · B4 B5 B6 B7 B8(B5·B7 은 수동 유발 경로 0 · A20 은 실패 이력이 있으면 직접 가능).
+
+## 6. 007 기술과의 대조
+
+| 007 | 실측 | 판정 |
+|---|---|---|
+| ⑪ 정정 8 · M1 "fit 봇 `cron.schedule` 5곳 `:66,78,89,101,108`" | 5 · 같은 줄 | **일치** |
+| ⑪ "크론 위치: fin = 봇" · fin `instrumentation.ts` 빈 `register()` | fin 웹 0 · MCP 0 · 봇 19 | 일치 — **봇 19 = `lib/cron.ts` 6 + 알림 13**(M-4 로그 "크론 6 + 알림 스케줄러" 와 같음) |
+| M1 "fin `*/10`·`0 *`" | f1 `*/10`(장외는 :00 틱만 실작업) · n1 `0 *`(설정 시각 1회만 발송) | 일치 — 둘 다 1회 누락 시 다음 틱이 회복(n1 은 설정 시각이 창 안일 때만 그날 요약 누락) |
+| 4-4 "15:35 RSU 확정 `scheduler.ts:141`" | 식 `'35 15 * * *'` 은 `:141` · 호출 `:140` | 일치 |
+| G-d "키보드 3곳" | fin `rsu.ts:179` · fit `auto-adjust.ts:396` · `auto-adjust-cron.ts:79` | 특정됨 |
+| G-d 목록(ALLOWED · ADMIN · 키보드 3곳 · `/브리핑` · 분기 PDF) | 29 경로 중 직접 유발 1 · ADMIN 은 fin 1곳(A21)뿐 · fit 관리자 알림은 ALLOWED | **목록 보강 필요** — 유발 방법이 "대기"·"조건" 인 경로가 28 |
+| (없음) | `deploy/env/fitness.env.template` 빈 크론 키 + `??` → node-cron TypeError(§2 주의) | **새 위험** — T-5c ① `.env` 작성 규칙에 영향 → **같은 PR(#178)에서 템플릿 정정**: `??` 기본값 선택 키(fin 6 · fit 11)를 `# KEY=` 주석으로 · 테스트 `test_default_bearing_keys_are_commented_out` |
+| (없음) | fin `lib/cron.ts:205` 주석 "00:05" ≠ 코드 09:05 | 서비스 유래 주석 불일치(Q57 — 고치지 않음) |
+
+**못 잰 값:** 서버 `apps/fitness/.env` 의 크론 키 실값(서비스가 기본값을 덮었는지) · fin DB `AlertConfig.daily_summary_hour`·`monthly_report_day` 실값 · 실 RSU 베스팅 일정·자동조정 활성 여부(경로 A13·A14·B5 의 발생 여부) · Next 가 `register()` throw 시 웹 기동을 막는지 · 서버 crontab(U6·U12).

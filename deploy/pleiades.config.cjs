@@ -39,8 +39,11 @@ function parseDotenv(file) {
   return out
 }
 
-function ports(dir) {
-  const env = { ...parseDotenv(path.join(dir, '.env')), ...process.env }
+function effectiveEnv(dir) {
+  return { ...parseDotenv(path.join(dir, '.env')), ...process.env }
+}
+
+function ports(dir, env) {
   const out = {}
   for (const key of ['PORT', 'MCP_PORT']) {
     const value = env[key] ?? ''
@@ -78,8 +81,10 @@ function finApps(cwd, { PORT, MCP_PORT }) {
   ]
 }
 
-function fitApps(cwd, { PORT, MCP_PORT }) {
+function fitApps(cwd, { PORT, MCP_PORT }, env) {
   const base = { NODE_ENV: 'production', TZ: 'Asia/Seoul' }
+  // MCP 는 Garmin 조회를 웹 API 로 위임한다 — 코드 기본값은 4200 고정(mcp/tools/web-api.ts)이라 PORT 에서 만든다 (PR #179 Codex P2)
+  const APP_BASE_URL = env.APP_BASE_URL || `http://localhost:${PORT}`
   return [
     { ...WEB, name: 'pleiades-fit-web', cwd, args: `start -p ${PORT}`, env: { ...base, PORT } },
     {
@@ -95,11 +100,12 @@ function fitApps(cwd, { PORT, MCP_PORT }) {
       name: 'pleiades-fit-mcp',
       cwd,
       script: 'dist/mcp/server.cjs',
-      env: { ...base, MCP_TRANSPORT: 'http', MCP_PORT, MCP_LOG_TEE_FILE: '1' },
+      env: { ...base, MCP_TRANSPORT: 'http', MCP_PORT, MCP_LOG_TEE_FILE: '1', APP_BASE_URL },
     },
   ]
 }
 
 const app = cwdApp()
 const cwd = path.join(ROOT, 'apps', DIRS[app])
-module.exports = { apps: (app === 'fin' ? finApps : fitApps)(cwd, ports(cwd)) }
+const env = effectiveEnv(cwd)
+module.exports = { apps: (app === 'fin' ? finApps : fitApps)(cwd, ports(cwd, env), env) }
