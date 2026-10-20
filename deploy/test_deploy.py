@@ -328,7 +328,7 @@ class ServerPathWithStubs(unittest.TestCase):
             '#!/bin/sh\n'
             'echo "psql $* · PGDATABASE=$PGDATABASE PGUSER=$PGUSER PGPASSWORD=${PGPASSWORD:+set} '
             'PGSSLMODE=$PGSSLMODE PGOPTIONS=${PGOPTIONS:-none} PGHOST=$PGHOST PGPORT=$PGPORT '
-            'PGSERVICE=${PGSERVICE:-none}" >> "$STUB/log"\n'
+            'PGSERVICE=${PGSERVICE:-none} PGSSLROOTCERT=${PGSSLROOTCERT:-none} PGSSLCERT=${PGSSLCERT:-none}" >> "$STUB/log"\n'
             '[ -n "$STUB_PSQL_RC" ] && { echo "relation does not exist" >&2; exit "$STUB_PSQL_RC"; }\n'
             'printf "%b" "${STUB_DB_MIGRATIONS-m1\\nm2\\n}"\n')
         (self.stub / "psql").chmod(0o755)
@@ -404,6 +404,22 @@ class ServerPathWithStubs(unittest.TestCase):
         self.assertIn("PGUSER=u ", line)
         self.assertIn("PGSSLMODE= ", line)
         self.assertIn("PGHOST=db.local PGPORT=5432 PGSERVICE=none", line)
+
+    def test_prisma_sslcert_is_the_root_ca(self):
+        # 회귀: PR #181 Codex P2 — prisma sslcert = 서버 CA(스키마 기준 경로) · libpq sslcert = 클라이언트 인증서
+        r, log = self.run_fin(DATABASE_URL="postgresql://u:p@db/x?sslmode=verify-full&sslcert=../certs/ca.pem")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        line = next(l for l in log.splitlines() if l.startswith("psql "))
+        self.assertIn("PGSSLMODE=verify-full", line)
+        self.assertIn("PGSSLCERT=none", line)
+        # 경로는 스키마 디렉터리(apps/finance/prisma) 기준 — ../certs → apps/finance/certs
+        self.assertTrue(line.split("PGSSLROOTCERT=")[1].split()[0].endswith("/apps/finance/certs/ca.pem"), line)
+
+    def test_prisma_pkcs12_identity_is_refused(self):
+        r, log = self.run_fin(DATABASE_URL="postgresql://u:p@db/x?sslidentity=id.p12&sslpassword=x")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("sslidentity", r.stderr)
+        self.assertNotIn("next build", log)
 
     def test_url_without_host_is_refused(self):
         r, log = self.run_fin(DATABASE_URL="postgresql:///x", PGHOST="other")

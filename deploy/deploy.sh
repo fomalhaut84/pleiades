@@ -159,9 +159,13 @@ env.PGPORT = u.port || '5432' // prisma 기본값과 같게 — 비워 두면 li
 if (u.username) env.PGUSER = dec(u.username)
 if (u.password) env.PGPASSWORD = dec(u.password)
 env.PGDATABASE = dec(u.pathname.replace(/^\//, ''))
-const LIBPQ = { sslmode: 'PGSSLMODE', sslrootcert: 'PGSSLROOTCERT', sslcert: 'PGSSLCERT', sslkey: 'PGSSLKEY',
-  host: 'PGHOST', port: 'PGPORT', connect_timeout: 'PGCONNECT_TIMEOUT', application_name: 'PGAPPNAME' }
+// prisma 의 URL 파라미터를 libpq env 로 옮긴다. 같은 이름이라도 뜻이 다른 것에 주의 — prisma `sslcert` 는 서버(루트) CA 이고
+// 경로는 스키마 파일(prisma/) 기준이다 → PGSSLROOTCERT (PR #181 Codex P2). prisma 의 클라이언트 인증서는 PKCS12(`sslidentity`)라
+// libpq 로 옮길 수 없다 → 판정 불가로 멈춘다.
+const LIBPQ = { sslmode: 'PGSSLMODE', host: 'PGHOST', port: 'PGPORT', connect_timeout: 'PGCONNECT_TIMEOUT', application_name: 'PGAPPNAME' }
 for (const [k, val] of u.searchParams) if (LIBPQ[k]) env[LIBPQ[k]] = val
+if (u.searchParams.has('sslidentity')) fail('DATABASE_URL 의 sslidentity(PKCS12 클라이언트 인증서)는 psql 로 옮길 수 없다 — 사용자 판단')
+if (u.searchParams.has('sslcert')) env.PGSSLROOTCERT = require('path').resolve('prisma', u.searchParams.get('sslcert'))
 if (!env.PGHOST) fail('DATABASE_URL 에 호스트가 없다 — psql 이 어느 서버를 볼지 정할 수 없다')
 if (!env.PGDATABASE) fail('DATABASE_URL 에 DB 이름이 없다')
 const sql = "select migration_name || case when finished_at is null then ' (unfinished)' else '' end " +
