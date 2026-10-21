@@ -4332,3 +4332,25 @@ ls -d apps/<app>/prisma/migrations/*/ | wc -l                                   
 | 2 | 크기 | 체크아웃 fin 1.5 GB · fit 1.4 GB · 디스크 여유 125 GB(전 128 GB) |
 
 - 서버 셸은 **zsh** — 1회차 0-1 의 인자 없는 `unset` 오류 · `| tail` 에 가려진 실패 rc 를 2회차 런북에서 고쳤다.
+
+# 2026-10-21 — T-5 fin 전환 (#215 런북 · 기록 #222)
+
+**사용자가 서버에서 실행**(Claude 무접촉 · I-3). 런북 `docs/runbooks/007-t5-fin-cutover.md`(`70462b6`) · 체크아웃 `~/pleiades-fin` = `v1.0.0`(`e1127ccffe39`). 판정만 적는다(DB 이름 · 경로 · 계정 없음).
+
+| 회차 | 단계 | 판정 |
+|---|---|---|
+| 1 | B 백업 | **실행 안 됨** — `FIN_DB` 빈값으로 `: "${FIN_DB:?}"` 에서 멈춰 아래 명령이 돌지 않았다(디렉터리만 생성) → 런북 보완 |
+| 1 | C1 | 셸 키 0 · platform 600·0 byte · 앱 `.env` 600 · 키 4 · `FIRECRAWL_API_KEY` 0 · `PORT`/`MCP_PORT` 4100/4210 |
+| 1 | C3 기본 실행 | rc 3 · 65 s · exit 3 안내 · 표지 = HEAD |
+| 1 | C4→C5 중단 창 | **약 73 s**(C4 시작 → C5 끝) · `--activate` rc 0 · 20 s |
+| 1 | C6 | `pleiades-fin-{mcp,web,bot}` online · web 307 · mcp `/health` 200 · 봇 로그 409 0 · 사용자 웹·텔레그램 확인 |
+| 1 | C7 | `pm2 startup systemd` → `pm2-<계정>` **enabled**(T-2 U3 의 미설정 해소) |
+| 1 | **R-2 시험**(사용자 의도) | `pleiades-fin-*` 정지·delete → 링크 제거 · 상태 `mv -T` 원위치(실제 디렉터리 확인) → 옛 ecosystem 기동 · `pm2 save` → 옛 fin 3 online — **R-2 절차 동작 확인** |
+| 2 | B 백업 | `pg_dump -Fc` TABLE DATA 31 · 상태 tar 35 항목 · `dump.pm2` 사본 · G-a 산출물 3 있음 · 디렉터리 700(파일은 664 — 런북 보완) |
+| 2 | C3 기본 실행 | rc 3 · 67 s · 표지 = HEAD(1회차 `--activate` 가 표지를 소비해 기본 실행부터 다시) |
+| 2 | C4→C5 중단 창 | **36 s** · `--activate` rc 0 · 20 s |
+| 2 | C6 | `pleiades-fin` 3 online · 옛 `myfinance*` 없음 · web 307 · mcp 200 · 409 0 · 사용자 `/브리핑` · 웹 확인 |
+| 2 | C7 | `enabled`(1회차 설정 유지) · `dump.pm2` 에 새 fin 저장 |
+| — | **C0** 서비스 fin 배포 workflow | **2회차 전환 뒤** 사용자가 비활성(진입 조건이 늦게 충족 — 그 사이 서비스 Release 는 없었다) |
+
+- 마이그레이션 적용 0(이름 대조 일치 · 서버 29 = pleiades 29). P-2′ 상태 이동(fin `reports` · `logs`)은 두 회차 모두 링크 2 · 새 쪽 실제 디렉터리 2 · `git status` 깨끗.

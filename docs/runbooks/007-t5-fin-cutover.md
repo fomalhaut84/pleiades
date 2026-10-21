@@ -6,6 +6,8 @@
 **셸:** bash · zsh. **C 절은 처음부터 끝까지 같은 셸**에서.
 **결과:** 원본 출력은 세션에 주지 않는다(T-2 정책). 맨 아래 [판정 양식](#판정-양식)만.
 
+> **정정 (2026-10-21 · #222 · 1·2회차 서버 실행).** fin 전환 완료(2회차 중단 36 s · `measured-facts.md` *T-5 fin*). 실행에서 드러나 고친 것: **B** — `FIN_DB` 를 비운 채 붙이면 `${FIN_DB:?}` 에서 멈춰 백업이 **조용히 하나도 안 됐다** → 이름을 먼저 채우는 줄을 따로 두고 각 명령이 빈값이면 `!!` 를 내고 건너뛴다 · 백업 파일이 664 → 블록 전체를 `umask 077`(끝에서 원복) + `chmod 600` 확인 · **R-2** — 런북을 끝까지 붙이면 같이 실행된다 → `R2=yes` 를 지정해야만 돈다 · **C0** — 2회차 전환 뒤에야 껐다 → C2 앞에 확인 줄 · **재시도** 절 신설(표지는 `--activate` 가 소비한다).
+
 ## 되돌리기 한눈에
 
 | 어디까지 했나 | 되돌리기 | 등급 |
@@ -34,22 +36,29 @@ ls -d ~/pleiades-fin/apps/finance/{reports,logs} 2>&1 | grep -vc 'No such file' 
 
 `/backup` 아래에 쓸 수 없으면 처음 한 번만 `sudo install -d -m 700 -o "$(id -un)" /backup/pleiades-cutover`.
 
+**먼저 DB 이름을 채운다**(T-2 U5 에서 본 이름 · 공개 기록에는 적지 않는다):
+
 ```bash
-B=/backup/pleiades-cutover/fin-$(date +%Y%m%d-%H%M); ( umask 077 && mkdir -p "$B" ) && echo "$B"
-FIN_DB=''   # T-2 U5 에서 본 fin DB 이름을 채운다
-: "${FIN_DB:?fin DB 이름}"
-# 1) DB — 실패하면 다음 줄 대신: sudo -u postgres pg_dump -Fc -d "$FIN_DB" > "$B/fin.dump"
-pg_dump -Fc -d "$FIN_DB" -f "$B/fin.dump" && pg_restore -l "$B/fin.dump" | grep -c 'TABLE DATA'
+FIN_DB='<fin DB 이름>'; echo "FIN_DB=${FIN_DB}"     # <…> 가 그대로면 다시
+```
+
+```bash
+OLD_UMASK=$(umask); umask 077                      # 블록 전체 — 파일이 처음부터 600(PR #223 Codex P2)
+B=/backup/pleiades-cutover/fin-$(date +%Y%m%d-%H%M); mkdir -p "$B" && echo "$B"
+# 1) DB — 권한 오류면 이 줄 대신: sudo -u postgres pg_dump -Fc -d "$FIN_DB" > "$B/fin.dump"
+case "$FIN_DB" in ''|'<'*) echo '!! FIN_DB 를 채우지 않았다 — DB 백업 안 함' ;; *) pg_dump -Fc -d "$FIN_DB" -f "$B/fin.dump" && pg_restore -l "$B/fin.dump" | grep -c 'TABLE DATA' ;; esac
 # 2) 상태 디렉터리 스냅숏 (fin backups 는 없다 — T-2 U9)
 tar -C ~/myFinance -czf "$B/fin-state.tgz" reports logs && tar -tzf "$B/fin-state.tgz" | wc -l
 # 3) 옛 pm2 목록 사본
 cp ~/.pm2/dump.pm2 "$B/dump.pm2"
+chmod 600 "$B"/*                                   # 이미 600 이어야 한다 — 확인 겸
+umask "$OLD_UMASK"                                 # 셸 umask 원복
 # 4) G-a — R-2 가 다시 띄울 옛 빌드 산출물
 ls -la ~/myFinance/.next/BUILD_ID ~/myFinance/dist/bot/standalone.cjs ~/myFinance/dist/mcp/server.cjs
 ls -la "$B"
 ```
 
-**기대값:** `TABLE DATA` 개수 > 0 · tar 항목 > 0 · 산출물 3 개 있음 · `$B` 에 파일 3 개(700 디렉터리).
+**기대값:** `!!` 줄 없음 · `TABLE DATA` 개수 > 0 · tar 항목 > 0 · 산출물 3 개 있음 · `$B` 에 파일 3 개(디렉터리 700 · 파일 600).
 **산출물이 하나라도 없으면 C 에 들어가지 않는다** — R-2 가 성립하지 않는다(007 T-5b).
 
 ## C. T-5c — 전환
@@ -82,6 +91,8 @@ grep -E '^(PORT|MCP_PORT)=' "$F"                                          # PORT
 ```
 
 ### C2·C3. 기본 실행 — 빌드 · pre-flight · exit 3 (옛 fin 은 계속 돈다)
+
+**C0 를 끄지 않았으면 여기서 멈춘다**(1회차·2회차 모두 C0 없이 들어갔다 — 그 사이 서비스 Release 가 생기면 옛 배포가 같은 포트로 옛 fin 을 띄운다).
 
 의존성 → 마이그레이션 검사(서비스 DB **읽기 전용** — `migrate status` + 이름 대조) → 빌드(fin `next build` prerender 가 서비스 DB 를 읽는다 · 읽기 전용) → MCP pre-flight(임시 포트 4299) → 점유 검사에서 옛 fin online 을 보고 **exit 3**.
 
@@ -166,8 +177,12 @@ pm2 ls | grep pleiades-fin; pm2 logs pleiades-fin-bot --lines 100 --nostream 2>&
 ## R-2 — 옛 fin 으로 되돌리기
 
 C4 이후 언제든. 마이그레이션 0 이라 DB 는 그대로 쓴다. **새 체크아웃을 지우지 않는다** — 상태 실체가 거기 있다(P-2′).
+**`R2=yes` 를 먼저 지정해야 돈다** — 런북을 끝까지 붙이면 이 블록까지 실행된다(2026-10-21 1회차는 의도된 시험이었다). 1회차 실측으로 동작이 확인된 절차다(`measured-facts.md` *T-5 fin*).
+
+되돌리기를 정말 할 때만 **먼저 따로** `R2=yes` 를 친 뒤 아래 블록을 붙인다(블록 안에 두면 통째로 붙일 때 가드가 무의미하다).
 
 ```bash
+if [ "${R2:-}" = yes ]; then
 date '+%H:%M:%S R-2 시작'
 pm2 stop pleiades-fin-bot pleiades-fin-web pleiades-fin-mcp; pm2 delete pleiades-fin-bot pleiades-fin-web pleiades-fin-mcp
 N=~/pleiades-fin/apps/finance
@@ -177,9 +192,19 @@ done
 ls -ld ~/myFinance/reports ~/myFinance/logs                                    # 링크 아님(d)
 cd ~/myFinance && pm2 start ecosystem.config.js && pm2 save --force
 pm2 ls | grep myfinance                                                        # 3 online
+unset R2
+else echo 'R-2 는 R2=yes 를 먼저 지정해야 돈다 — 아무것도 하지 않았다'; fi
 ```
 
 그 뒤 C0 에서 끈 서비스 배포 workflow 를 다시 켠다(필요할 때만). 원인은 판정 양식에 적어 세션에 준다.
+
+## 재시도 — C 를 다시 할 때 (R-2 뒤 · C3~C5 중단 뒤)
+
+- **C1** 의 새 `.env` 는 그대로 쓸 수 있다 — 셸 env 비우기 · `PLEIADES_ENV_FILE` export · `stat`/`grep` 확인만 다시.
+- **C2·C3 기본 실행부터 다시** — 준비 표지는 `--activate` 가 소비한다(없으면 `--activate` 가 거부). 옛 fin 이 다시 돌고 있으면 또 `rc=3` 으로 멈춘다.
+- **C4′** — R-2 가 상태를 옛 자리로 되돌렸으면 새 체크아웃에 `reports`·`logs` 가 없어야 한다(`ls -d … | grep -vc 'No such file'` = 0) · pre-flight 가 만든 `logs` 는 루프가 백업 디렉터리로 비켜 둔다.
+- **C7** 은 한 번 설정하면 남는다 — `systemctl is-enabled` 확인만.
+- **B** 는 시도마다 새 디렉터리로 다시(옛 fin 이 그 사이 썼을 수 있다).
 
 ## 판정 양식
 
@@ -197,5 +222,5 @@ C5 --activate rc <n> · <초>s · 완료 안내: 예/아니오   중단 끝 <HH:
 C6 pleiades-fin 3 online · myfinance 없음 · web <코드> · mcp <코드> · 409 0: 예/아니오
    웹 로그인·계좌: 예/아니오   /브리핑 응답: 예/아니오   어드바이저: 예/아니오/안 씀
 C7 systemd pm2-<계정> enabled: 예/아니오
-R-2 했나: 아니오/예(<이유 한 줄>)
+R-2 했나: 아니오/예(<이유 한 줄>)   C0 를 C2 전에 껐나: 예/아니오
 ```
