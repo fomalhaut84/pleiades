@@ -331,6 +331,24 @@ pleiades 는 측정할 수 없다(I-3). **추정으로 채우지 않는다.** [S
 | U13 | 서비스 봇 2개 webhook/polling 현황 | 4-4 봇 인계 순서 · R-5 |
 | ~~U14~~ | ~~서비스 `main..dev` 차이 커밋 수~~ — **감사가 스크래치 clone 으로 측정(⑱)** · 서버 쪽에 남은 것은 G-b(배포본 = `main`) | Q75 |
 
+> **T-2 결과 (2026-10-21 · #190 · 사용자 서버 실행 · `deploy/t2-check.sh` · 판정은 `measured-facts.md` *2026-10-21 — T-2 서버 확인*).** 걸린 결정이 이렇게 바뀐다:
+>
+> | U | 결과(판정) | 바뀐 것 |
+> |---|---|---|
+> | U1 · U2 | 옛 디렉터리 = 서비스 계정 홈 아래 · fit cwd = ecosystem 하드코딩 일치 · 배포본 = 서비스 `main` 태그(fin `v0.16.8` · fit `v2.46.1`) · dirty 0 · 산출물 실재 | **G-a · G-b 충족**(R-2 의 전제 — T-5b 당일 재확인은 그대로) · Q72 새 체크아웃 경로 이름은 미결(사용자) |
+> | U5 | 적용 마이그레이션 fin 29 · fit 42 = 각 서비스 `main` · PG 18 · 같은 클러스터 | **fin: pleiades 와 차이 0 → R-2(중간) 경로.** **fit: 서비스가 F-1 릴리즈를 이미 했다(`v2.46.1` · 42) → Q75 F-1 충족 · pleiades `apps/fitness`(41) 수용이 T-5a(최종 수용) 전 필수**(안 하면 T-5c 의 `deploy.sh` 이름 대조가 DB 전용 1 로 멈춘다 · #181). T-4 `--build-only` 는 이름 대조를 하지 않으므로 41 로도 돈다(PR #192 Codex P2) — 수용을 T-4 앞에 두면 T-4 가 수용 뒤 코드로 리허설된다는 이점만 있다 |
+> | U6 | **서비스 DB 백업 0**(crontab 없음 · `backups/` 없음 · 오프사이트 없음 — 사용자: 별도 정책 없음 · 필요시 준비) | **정정** — 위 *"fin 은 `scripts/backup-db.sh` 가 있고"* 는 스크립트 파일이 있다는 뜻일 뿐 **등록·실행 0**. **T-5b 의 `pg_dump` 1회(사용자 수동)는 R-3 의 유일한 복원 지점이라 유지한다.** T-8 진입 조건(crontab 옛 경로 항목 0)은 이미 충족 · 정정 7 의 재지정 대상 없음 |
+> | U3 | 서비스 6 online · **cluster 모드**(포트를 pm2 데몬이 잡는다 — `exec_mode` 미지정 + `instances` ≥ 1 + node 인터프리터면 pm2 기본이 `cluster_mode` · pm2 7.0.4 `lib/Common.js:347-353` · 서버 6.0.8 관측 일치. `deploy/pleiades.config.cjs` 도 같은 script · `instances: 1` · `exec_mode` 미지정이라 같다) · **systemd 자동 기동 미설정**(현 서비스도 재부팅 뒤 자동 복귀 경로가 없다) · PM2+ 연결 | **사용자 결정(2026-10-21): 이번 전환에서 자동 기동을 설정한다** → 첫 전환 앱의 T-5c ⑤ 뒤에 `pm2 save` + `pm2 startup systemd`(출력되는 sudo 명령을 사용자가 실행) 1회. PM2+ 에는 새 `pleiades-*` 도 보고된다(참고) |
+> | U7 | 두 서버 `.env` 에 **`MCP_PORT` 없음** · fin 템플릿 밖 키 1 · 빈값 0 | **T-4 서버 준비에서 새 체크아웃 `apps/<dir>/.env`(또는 셸)에 `PORT`·`MCP_PORT` 를 넣는다**(비밀 아님 — `deploy.sh` 는 `--build-only` 분기 전에 `deploy/pleiades.config.cjs` 로 포트를 읽고 없으면 거부한다 · `deploy.sh:58-64` · PR #192 Codex P1) · T-5c ① 은 나머지 실값 · 템플릿 밖 키는 그때 사용자 판단. **옛 `.env` 두 개가 664(같은 서버의 다른 계정이 읽을 수 있다 — 같은 서버에 다른 서비스가 돈다 · U3)** → **새 체크아웃 `.env` 는 T-4 에서 `umask 077` 로 만들고 T-5c ① 실값 주입 전에 `chmod 600` · `stat -c '%a %U' <파일>` 이 `600 <서비스 계정>` 인지 확인**(옛 파일을 복사하면 664 가 따라온다 · PR #192 Codex P1). 옛 `.env` 두 개는 **사용자가 2026-10-21 `chmod 600` 으로 바꿨다**(`stat` = `600 <서비스 계정>` 확인 · 서비스 운영 변경 · 되돌리기 `chmod 664` 즉시) · `deploy.sh` 의 권한 검사는 #193 |
+> | U8 | node 24.12 · npm 11 · pm2 6.0.8(`.config.cjs` 인식) · `psql` 있음 · `NODE_ENV` unset · 도구 누락 0 | T-1d 가 더한 T-4 확인 항목 3 충족 · fit 의존 `>=20.19` 충족 |
+> | U9 | fin `backups` 없음 · 나머지 영속 디렉터리 있음(KB대) | Q73 P-2 심링크 대상에서 fin `backups` 제외 |
+> | U10 | 서버 → pleiades https · npm 200 | T-4 선결(003 Q45) 충족 |
+> | U12 · U4 | 4210·4301 = 127.0.0.1 · 4299·4399 비어 있음 · nginx 는 4100·4200 만 | pre-flight 포트 그대로 · Q77 포트 유지 = nginx 무변경 성립. 4100·4200 이 모든 인터페이스에 리슨하지만 **ufw 기본 deny(incoming) · 허용 22·80·443** 이라 외부 직접 접근 없음 — 새 `pleiades-*` 도 같은 방화벽 안(127.0.0.1 바인딩은 이중 방어 선택지 · 미결 아님) |
+> | U13 | 두 봇 `webhook=none` · `pending=0` | 4-4 봇 인계 = polling 그대로. **서버 node 의 family 자동 선택(시도당 250 ms)이 ~250 ms 연결에서 ETIMEDOUT** → **#191**(T-4 전 · `deploy/pleiades.config.cjs` env) |
+> | U11 | 두 서비스 deploy workflow **활성** · secret 이름 = workflow 가 쓰는 8개 모두 있음 · 그 밖 0 | **옛 배포 경로가 살아 있다** — 서비스 저장소에 Release 하나면 옛 경로가 서버에 배포된다. 4-6 차단(두 deploy workflow 비활성 · 사용자가 서비스 저장소에서) = **T-5c 진입 조건 그대로** · Q70 D-a 라 pleiades 로 옮길 secret 0 |
+>
+> 되돌리기: 문구 (**즉시**).
+
 ---
 
 ## 9. 판단이 바뀐 것
