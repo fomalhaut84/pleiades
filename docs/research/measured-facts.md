@@ -4314,3 +4314,21 @@ git clone -q --no-tags --single-branch -b main --filter=blob:none https://github
 git -C <scratch> ls-tree --name-only main prisma/migrations/ | grep -vc migration_lock   # fin 29 · fit 42
 ls -d apps/<app>/prisma/migrations/*/ | wc -l                                             # pleiades fin 29 · fit 41
 ```
+
+# 2026-10-21 — T-4 서버 build-only 리허설 (#211 · 기록 #213)
+
+**사용자가 서버에서 실행**(Claude 무접촉 · I-3). 런북 `docs/runbooks/007-t4-build-rehearsal.md` — 1회차 `df73ac3` · 2회차 `b2cf072`. 체크아웃 `~/pleiades-fin` · `~/pleiades-fit`(S-a · `v0.2.0` = `ae44d06af623`) · `PLEIADES_ENV_FILE` 빈 파일 600 · 앱 `.env` = `PORT`·`MCP_PORT`(fin 4100/4210 · fit 4200/4301) + 더미 `DATABASE_URL`(127.0.0.1:1) · 600. 판정만 적는다.
+
+| 회차 | 단계 | 판정 |
+|---|---|---|
+| 1 | 3 P-2 심링크(새 → 옛) | fin 2 · fit 4 · `git status` 깨끗 |
+| 1 | 5 fin build-only | 완료 · 23 s(`build:mcp:staged` · `build:bot` · `smoke:bot OK`) |
+| 1 | 5 fit build-only | **실패** — `TurbopackInternalError … Symlink [project]/apps/fitness/.runtime/mcp-config.json is invalid, it points out of the filesystem root`(원인: 웹 번들 코드가 `.runtime`·`.garmin-tokens`·`.omron-tokens` 를 `path.resolve(process.cwd(), …)` 로 참조 → Turbopack 추적 → 루트 밖 링크 거부) → 007 Q73 **P-2′**(#211) |
+| 1 | 6 fin `next build` | `✓ Compiled successfully` → prerender `PrismaClientInitializationError`(더미 DB · 정상) — fin 은 webpack 이라 같은 링크로 통과 |
+| 2 | 3 상태 디렉터리 | 새 체크아웃에 없음(P-2′ — 이동은 T-5c ④′) · `git status` 깨끗 |
+| 2 | 5 build-only | **fin rc 0 · 19 s · fit rc 0 · 56 s** |
+| 2 | 6 fin `next build` | 컴파일 통과 · prerender DB 오류(정상) |
+| 1·2 | 7 서비스 무영향 | 서비스 6 상태·`restart_time` 실행 전후 같음 · `pleiades-*` 0 |
+| 2 | 크기 | 체크아웃 fin 1.5 GB · fit 1.4 GB · 디스크 여유 125 GB(전 128 GB) |
+
+- 서버 셸은 **zsh** — 1회차 0-1 의 인자 없는 `unset` 오류 · `| tail` 에 가려진 실패 rc 를 2회차 런북에서 고쳤다.
