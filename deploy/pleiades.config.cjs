@@ -56,15 +56,18 @@ function ports(dir, env) {
   return out
 }
 
+// 서버 node 의 family 자동 선택은 시도당 250 ms 에서 연결을 끊는다 — 서버의 IPv4 연결이 ~250 ms 이고 IPv6 경로가 없어
+// https·fetch·ws 가 ETIMEDOUT 으로 떨어진다(T-2 U13 · #191). node_args 라 그 프로세스에만 걸린다(자식 claude CLI 등은 제외)
+const NET_ARGS = '--network-family-autoselection-attempt-timeout=2000'
 const COMMON = { instances: 1, autorestart: true, log_date_format: 'YYYY-MM-DD HH:mm:ss' }
-const WEB = { ...COMMON, script: 'node_modules/.bin/next', max_memory_restart: '1024M', node_args: '--max-old-space-size=1024' }
+const WEB = { ...COMMON, script: 'node_modules/.bin/next', max_memory_restart: '1024M', node_args: `--max-old-space-size=1024 ${NET_ARGS}` }
 const LONG_RUNNING = {
   ...COMMON,
   kill_timeout: 15000,
   min_uptime: 30000,
   exp_backoff_restart_delay: 100,
   max_memory_restart: '512M',
-  node_args: '--max-old-space-size=512',
+  node_args: `--max-old-space-size=512 ${NET_ARGS}`,
 }
 
 function finApps(cwd, { PORT, MCP_PORT }) {
