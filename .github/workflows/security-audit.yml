@@ -1,7 +1,9 @@
 name: Security Audit
 
-# myFitness security-audit.yml 을 기준으로 옮겼다 (#90). 차이: lockfile 이 두 개(루트 · packages/notify)라
+# myFitness security-audit.yml 을 기준으로 옮겼다 (#90). 차이: lockfile 이 넷(루트 · packages/notify · 두 앱)이라
 # 각각 audit 하고 합산한다. 판정할 수 없으면 실패시킨다(fail-closed — fit PR #360 Codex P2 교훈).
+# 두 앱: 루트는 workspace 가 아니고 apps/*/.github/workflows 는 저장소 workflow 로 발견되지 않는다 — 여기서 검사하지 않으면
+# 운영 앱 취약점이 어디서도 안 보인다(#204 · PR #203 Codex P1). 앱 취약점은 서비스 유래라 전환 전에는 고치지 않는다(006 Q57).
 
 on:
   schedule:
@@ -15,6 +17,10 @@ on:
       - 'package-lock.json'
       - 'packages/notify/package.json'
       - 'packages/notify/package-lock.json'
+      - 'apps/finance/package.json'
+      - 'apps/finance/package-lock.json'
+      - 'apps/fitness/package.json'
+      - 'apps/fitness/package-lock.json'
 
 # 조회 → 생성이 겹치면 이슈가 중복 생성된다 — 실행을 직렬화한다 (PR #93 Codex P2)
 concurrency:
@@ -40,9 +46,9 @@ jobs:
           node-version: '24.x'
 
       # npm audit 은 lockfile 만 읽는다 — 설치하지 않는다
-      - name: Run npm audit (root · packages/notify)
+      - name: Run npm audit (root · packages/notify · apps)
         run: |
-          for dir in . packages/notify; do
+          for dir in . packages/notify apps/finance apps/fitness; do
             name=$(echo "$dir" | tr './' '__')
             set +e
             (cd "$dir" && npm audit --json --audit-level=moderate) >"audit-$name.json" 2>"audit-$name.stderr.log"
@@ -60,7 +66,7 @@ jobs:
           }
 
           CRITICAL=0; HIGH=0; MODERATE=0
-          for f in audit-_.json audit-packages_notify.json; do
+          for f in audit-_.json audit-packages_notify.json audit-apps_finance.json audit-apps_fitness.json; do
             [ -s "$f" ] || fail "$f: npm audit 결과가 비어 있습니다"
             jq -e . "$f" >/dev/null 2>&1 || fail "$f: 유효한 JSON 이 아닙니다"
             jq -e 'has("error")' "$f" >/dev/null 2>&1 && fail "$f: npm audit 에러 — $(jq -rc '.error' "$f")"
@@ -101,7 +107,8 @@ jobs:
             const date = new Date().toISOString().split('T')[0];
 
             const lines = [];
-            for (const [label, file] of [['루트', 'audit-_.json'], ['packages/notify', 'audit-packages_notify.json']]) {
+            for (const [label, file] of [['루트', 'audit-_.json'], ['packages/notify', 'audit-packages_notify.json'],
+                                         ['apps/finance', 'audit-apps_finance.json'], ['apps/fitness', 'audit-apps_fitness.json']]) {
               try {
                 const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
                 // 심각도 순으로 정렬한 뒤 자른다 — 삽입 순서로 자르면 critical 이 빠질 수 있다 (PR #93 Codex P2)
@@ -135,6 +142,7 @@ jobs:
               '',
               '### 조치',
               '루트는 `npm audit fix`, 패키지는 `npm --prefix packages/notify audit fix` → 8절 검증 4종 → PR.',
+              '`apps/*` 는 서비스 유래 — **전환 전에는 고치지 않는다**(006 Q57 · 수용으로만 바뀐다). 전환 뒤 pleiades 에서 처리한다.',
               '',
               '---',
               '자동 생성된 이슈입니다.',
