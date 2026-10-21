@@ -6,7 +6,7 @@
 **셸:** bash · zsh. **C 절은 처음부터 끝까지 같은 셸**에서.
 **결과:** 원본 출력은 세션에 주지 않는다(T-2 정책). 맨 아래 [판정 양식](#판정-양식)만.
 
-> **정정 (2026-10-21 · #222 · 1·2회차 서버 실행).** fin 전환 완료(2회차 중단 36 s · `measured-facts.md` *T-5 fin*). 실행에서 드러나 고친 것: **B** — `FIN_DB` 를 비운 채 붙이면 `${FIN_DB:?}` 에서 멈춰 백업이 **조용히 하나도 안 됐다** → 이름을 먼저 채우는 줄을 따로 두고 각 명령이 빈값이면 `!!` 를 내고 건너뛴다 · 백업 파일이 664 → 블록 끝에서 `chmod 600` · **R-2** — 런북을 끝까지 붙이면 같이 실행된다 → `R2=yes` 를 지정해야만 돈다 · **C0** — 2회차 전환 뒤에야 껐다 → C2 앞에 확인 줄 · **재시도** 절 신설(표지는 `--activate` 가 소비한다).
+> **정정 (2026-10-21 · #222 · 1·2회차 서버 실행).** fin 전환 완료(2회차 중단 36 s · `measured-facts.md` *T-5 fin*). 실행에서 드러나 고친 것: **B** — `FIN_DB` 를 비운 채 붙이면 `${FIN_DB:?}` 에서 멈춰 백업이 **조용히 하나도 안 됐다** → 이름을 먼저 채우는 줄을 따로 두고 각 명령이 빈값이면 `!!` 를 내고 건너뛴다 · 백업 파일이 664 → 블록 전체를 `umask 077`(끝에서 원복) + `chmod 600` 확인 · **R-2** — 런북을 끝까지 붙이면 같이 실행된다 → `R2=yes` 를 지정해야만 돈다 · **C0** — 2회차 전환 뒤에야 껐다 → C2 앞에 확인 줄 · **재시도** 절 신설(표지는 `--activate` 가 소비한다).
 
 ## 되돌리기 한눈에
 
@@ -43,14 +43,16 @@ FIN_DB='<fin DB 이름>'; echo "FIN_DB=${FIN_DB}"     # <…> 가 그대로면 �
 ```
 
 ```bash
-B=/backup/pleiades-cutover/fin-$(date +%Y%m%d-%H%M); ( umask 077 && mkdir -p "$B" ) && echo "$B"
+OLD_UMASK=$(umask); umask 077                      # 블록 전체 — 파일이 처음부터 600(PR #223 Codex P2)
+B=/backup/pleiades-cutover/fin-$(date +%Y%m%d-%H%M); mkdir -p "$B" && echo "$B"
 # 1) DB — 권한 오류면 이 줄 대신: sudo -u postgres pg_dump -Fc -d "$FIN_DB" > "$B/fin.dump"
 case "$FIN_DB" in ''|'<'*) echo '!! FIN_DB 를 채우지 않았다 — DB 백업 안 함' ;; *) pg_dump -Fc -d "$FIN_DB" -f "$B/fin.dump" && pg_restore -l "$B/fin.dump" | grep -c 'TABLE DATA' ;; esac
 # 2) 상태 디렉터리 스냅숏 (fin backups 는 없다 — T-2 U9)
 tar -C ~/myFinance -czf "$B/fin-state.tgz" reports logs && tar -tzf "$B/fin-state.tgz" | wc -l
 # 3) 옛 pm2 목록 사본
 cp ~/.pm2/dump.pm2 "$B/dump.pm2"
-chmod 600 "$B"/*                                   # umask 는 mkdir 서브셸에만 걸렸다 — 파일도 600
+chmod 600 "$B"/*                                   # 이미 600 이어야 한다 — 확인 겸
+umask "$OLD_UMASK"                                 # 셸 umask 원복
 # 4) G-a — R-2 가 다시 띄울 옛 빌드 산출물
 ls -la ~/myFinance/.next/BUILD_ID ~/myFinance/dist/bot/standalone.cjs ~/myFinance/dist/mcp/server.cjs
 ls -la "$B"
