@@ -20,44 +20,26 @@ description: pleiades 통합 프로젝트의 새 세션 시작 시 인계 상태
 
 ```
 Read: docs/handoff/ 의 가장 최근 파일
-Read: docs/specs/002-platform-direction.md   ← 정본 방향 (목표)
-Read: docs/specs/006-monorepo-first.md        ← 방향 전환 정본 (경로 · 격리) — 002 단계 4·003 배포·004 worktree 를 대체
-Bash: ls docs/handoff/ && git log --oneline -5
+Read: docs/specs/002-platform-direction.md   ← 정본 방향
+Bash: ls docs/handoff/ && git -C ~/workspace/myFinance log --oneline -3 && git -C ~/workspace/myFitness log --oneline -3
 ```
-
-> **정정 (2026-09-30 · 006 · #101).** 옛 Step 1 은 `git -C repos/myF* log` 를 돌렸다. `repos/*` 는 동결됐고 그 안에서 git 명령을 하지 않는다(`.claude/rules/isolation.md` I-11). 되돌리기: 즉시.
 
 `001-integration-master.md` 는 **분석 근거로만 유효하다.** 권고 경로와 단계 0 범위는 002 가 대체했다.
 001 을 읽고 그 전제로 움직이지 않는다.
 
 `docs/research/measured-facts.md` 는 숫자가 실제로 필요할 때만 읽는다. **재측정 전에 반드시 이 파일부터 확인한다.**
 
-### Step 2 — pleiades · 수용 상태 확인
+### Step 2 — 대상 저장소 상태 확인
 
-두 서비스는 이 세션 밖에서 계속 움직인다. pleiades 는 그것을 **https 로 읽기만** 한다(`isolation.md` I-1·I-13).
+두 저장소는 이 세션 밖에서도 움직인다. 인계 노트의 기록과 실제가 다를 수 있다.
 
 ```bash
-cd ~/workspace/pleiades
-git fetch -q origin && git status -sb | head -1
-gh pr list -R fomalhaut84/pleiades --state open
-# I-9 — pleiades Actions secrets 는 0 이어야 한다. 0 이 아니면 브리핑 첫 줄에 적고 사용자에게 보고
-echo "actions secrets: $(gh api repos/fomalhaut84/pleiades/actions/secrets --jq .total_count)"
-# 정기 수용 판정 (006 §4-S · Q54b) — 서비스 dev tip(ls-remote · 읽기) ↔ 마지막 수용 머지 커밋의 Service-Dev 트레일러
-for r in myFinance myFitness; do
-  # --exit-code: ref 가 없으면 2 · 접근 불가면 128 — 빈 SHA 로 판정을 이어가지 않는다 (PR #105 Codex P2)
-  svc=$(git ls-remote --exit-code https://github.com/fomalhaut84/$r.git refs/heads/dev) && svc=${svc%%[[:space:]]*} || svc=
-  if [ -z "$svc" ]; then echo "$r: ls-remote 실패 — 판정 불가 (재시도·우회하지 않고 브리핑에 적는다)"; continue; fi
-  last=$(git log origin/dev --grep "^Service-Repo: $r\$" -1 --format=%B | sed -n 's/^Service-Dev: //p')
-  if [ -z "$last" ]; then echo "$r: 미수용 (M-1 전) · dev ${svc:0:12}"
-  elif [ "$svc" = "$last" ]; then echo "$r: 최신 (${svc:0:12})"
-  else echo "$r: 뒤처짐 — 수용 ${last:0:12} → dev ${svc:0:12}"; fi
+for d in myFinance myFitness; do
+  echo "== $d"; git -C ~/workspace/$d branch --show-current; git -C ~/workspace/$d status -s | head -5
 done
 ```
 
-**뒤처짐이면 브리핑의 후보 액션에 수용을 올린다** — M-5a·M-5b 착수 직전에는 **필수 0** 이다(006 Q54b). 수용 절차는 006 §4-S · `tools/import/`(#104).
-`ls-remote` 가 실패하면(서비스 저장소가 PRIVATE 으로 바뀌었을 수 있다 — 006 §10) **재시도·우회하지 않고** 브리핑에 적는다.
-
-> **정정 (2026-09-30 · 006 · #101 · M-0).** 옛 Step 2 — 체크아웃 4개(`repos/*` worktree 2 + 원본 2)의 브랜치·dirty 확인 · 원본↔worktree 하네스 드리프트 · 서비스 저장소의 `label:pleiades` 이관 이슈 수 · worktree behind · `integration/pleiades` behind dev — 는 **전부 소진**이다. `repos/*`·원본에서는 git 명령을 하지 않고(I-11 · `status` 도 index 를 갱신할 수 있다), 이관 이슈는 동결(#82)이며, 서비스 dev 는 pleiades 안 `apps/*` 로 수용한다(006 §4-S). 옛 명령은 git 이력(이 정정 직전 커밋)에 있다. 되돌리기: 즉시.
+브랜치가 `dev` 가 아니거나 dirty 면 **인계 노트보다 현재 상태를 신뢰한다.**
 
 ### Step 3 — 브리핑 (3문단 이내)
 
@@ -65,10 +47,8 @@ done
 ## pleiades 상태
 
 **단계:** {0~4 중 어디} — {실행 전 / 진행 중 / 완료}
-**M 단계:** M-{0~6} (006 §4) — {진행 중 / 완료}
-**pleiades:** dev {clean/ahead} · 열린 PR {n} · Actions secrets {0}
-**수용:** fin {미수용/최신/뒤처짐} · fit {…}
-**미결:** 006 §7 중 다음 단계를 막는 것 · 002 Q7·Q3 는 전환 이후 (Q2 는 답을 받았다 — 독립 배포 포기 · #127)
+**대상 저장소:** myFinance {branch/clean}, myFitness {branch/clean}
+**미결:** Q7({한 줄}), Q2({한 줄}), Q3({한 줄})
 
 **다음 후보 액션:**
 1. {가장 자연스러운 다음 스텝 — 범위·소요·되돌리기 비용 병기}
@@ -90,8 +70,7 @@ done
 | Q5 도메인 #3 | 일정·캘린더 |
 | Q6 알림 채널 | Discord |
 
-남은 미결은 Q7(DB 경계) · Q3(봇 인바운드 통합). 전부 단계 3 이후 안건이라
-(Q2 독립 배포는 2026-10-15 답을 받았다 — **포기**: 두 앱이 pleiades 모듈로 내재화되면 두 서비스를 내린다 · 006 Q60 · #127)
+남은 미결은 Q7(DB 경계) · Q2(독립 배포) · Q3(봇 인바운드 통합). 전부 단계 3 이후 안건이라
 단계 0~2 는 이 답들 없이도 진행할 수 있다.
 
 ## 원칙

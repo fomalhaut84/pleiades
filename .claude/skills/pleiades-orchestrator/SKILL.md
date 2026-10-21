@@ -8,8 +8,6 @@ description: pleiades 통합 작업 전체를 에이전트 팀으로 조율하�
 pleiades 는 myFinance × myFitness 를 **개인 비서 플랫폼**으로 통합하는 저장소다.
 제품 코드는 아직 없고, 산출물은 결정과 그 근거다. 두 대상 저장소는 실서비스 중이다.
 
-> **정정 (2026-09-30 · 006 · #101).** 제품 코드는 `packages/notify`(1a-1) 가 있다. 두 서비스는 `apps/finance`·`apps/fitness` 로 pleiades 안에 들어온다(006 M-1) — **서비스 저장소 자체에는 쓰지 않는다**(`.claude/rules/isolation.md`). 아래 "대상 저장소" 는 측정·감사 맥락에서 `apps/*`(M-1 전에는 스크래치 읽기 클론)로 읽는다.
-
 ## 실행 모드: 에이전트 팀
 
 네 에이전트가 팀으로 협업한다. 감사가 문서를 되돌리고, 문서가 측정을 요구하는 **양방향 피드백**이
@@ -29,33 +27,23 @@ pleiades 는 myFinance × myFitness 를 **개인 비서 플랫폼**으로 통합
 작업 시작 전 실행 모드를 판별한다.
 
 ```bash
-cd ~/workspace/pleiades && git status -sb | head -1 && ls _workspace/ | tail -5
+ls _workspace/ 2>/dev/null
+ls docs/specs/ docs/handoff/
+git -C ~/workspace/pleiades log --oneline -5
+for d in myFinance myFitness; do
+  echo -n "$d: "; git -C ~/workspace/$d branch --show-current
+  git -C ~/workspace/$d status -s | head -3
+done
 ```
-
-> **정정 (2026-09-30 · 006 · #101 · M-0).** 옛 Phase 0 은 체크아웃 4개(`repos/*` worktree 2 + 원본 2)의 브랜치를 판별했다. `repos/*`·원본에서는 git 명령을 하지 않는다(`.claude/rules/isolation.md` I-11) — 아래 인용부와 "기대값" 표는 **소진**이다. 두 서비스의 상태는 pleiades 안 `apps/*` 와 수용 판정(`pleiades-resume` Step 2)으로 본다. 되돌리기: 즉시.
-
-> **체크아웃이 4개다 (PR #6 Codex 리뷰 P1).** 통합 작업 worktree 2개 + 서비스 유지용 원본 2개.
-> 원본에는 앞선 1a 단계 변경이 들어 있지 않다 — `docs/specs/004-repo-layout.md`.
 
 | 상황 | 모드 |
 |---|---|
 | `_workspace/` 없음 | **초기 실행** — Phase 1 부터 |
 | `_workspace/` 있음 + 부분 수정 요청 | **부분 재실행** — 해당 에이전트만 재호출 |
-| `_workspace/` 있음 + 새 입력 | **새 실행** — `_workspace/` 는 **그대로 두고** 주제 접미사로 새 파일을 만든다 (`{phase}_{agent}_{주제}`) |
+| `_workspace/` 있음 + 새 입력 | **새 실행** — `_workspace/` → `_workspace_prev/` 이동 후 Phase 1 |
 
-**기대값이 체크아웃마다 다르다** (`docs/specs/004-repo-layout.md`):
-
-| 체크아웃 | 기대 브랜치 | 다르면 |
-|---|---|---|
-| `repos/myFinance` · `repos/myFitness` | **`integration/pleiades`** | 이상 — 사용자에게 보고 |
-| `~/workspace/myFinance` | `dev` | 서비스 유지 작업 중일 수 있음 — 사용자에게 확인 |
-| `~/workspace/myFitness` | `main` | 위와 같음 |
-
-dirty 하거나 기대와 다르면 **인계 노트보다 현재 상태를 신뢰한다.** 네 체크아웃 모두
-이 세션 밖에서 움직인다.
-
-> **정정 (PR #6 Codex 리뷰 P2).** 이전 술어는 `dev` 가 아닌 모든 브랜치를 이상으로 봤다.
-> worktree 는 정상 상태가 `integration/pleiades` 이므로 **매번 이상으로 판정**됐다.
+**대상 저장소 브랜치가 `dev` 가 아니거나 dirty 면 인계 노트보다 현재 상태를 신뢰한다.**
+두 저장소는 이 세션 밖에서도 움직인다.
 
 ## Phase 1 — 실측
 
@@ -103,13 +91,11 @@ Phase 2 ↔ 3 은 정정이 0 이 될 때까지 순환한다. 3회를 넘으면 
 
 **실행: `dual-repo-operator`**
 
-> **소진 (2026-09-30 · 006 · #101 · M-0).** `dual-repo-operator` 와 이 Phase 의 대상 저장소 집행은 **소진**이다 — pleiades 는 서비스 저장소·원본·worktree 에 쓰지 않는다(`isolation.md` I-1·I-11). 집행 대상은 pleiades 자신(`apps/*` · `packages/*` · `tools/*` · 문서)이고 `workflow.md` 7절 pleiades 행을 탄다. 남는 것: **격리 경계를 건드리는 집행**(로컬 DB · 봇·웹 기동 · 외부 계정 env)은 1번의 승인 게이트와 2번의 착수 직전 재감사를 거친다. 4번의 "재시작" 은 로컬 프로세스뿐이다(서버·pm2 금지 · I-3). 되돌리기: 즉시.
-
 1. 승인 게이트 5항목 제시 → **명시 승인**
 2. `reversibility-auditor` 에게 **착수 직전 재감사** 요청. 정정 나오면 중단
 3. 한쪽 저장소씩 순차 변경 → 검증 → 커밋
 4. 빌드·재시작·세션 초기화 명령을 사용자에게 전달 (**실행은 사용자가 한다**)
-5. 롤백 절차 문서화(형식은 `dual-repo-change` 5-1 — 머지 전 · 머지 후 revert 브랜치→PR · 원본 도달분) → `decision-writer` 가 pleiades 문서에 반영
+5. 롤백 절차 문서화 → `decision-writer` 가 pleiades 문서에 반영
 
 ## 데이터 전달
 
@@ -119,13 +105,7 @@ Phase 2 ↔ 3 은 정정이 0 이 될 때까지 순환한다. 3회를 넘으면 
 | 태스크 (`TaskCreate`) | 의존 관계·진행 추적 |
 | 메시지 (`SendMessage`) | 감사 정정 통지, 측정 요청 같은 실시간 조율 |
 
-최종 산출물만 `docs/` 로. `_workspace/` 는 **지우지도 옮기지도 않는다** (사후 검증·감사 추적).
-
-> **`_workspace_prev/` 로 옮기지 마라 (PR #6 교차 감사 M10).** `.gitignore` 가 `_workspace_prev/` 를
-> 무시하는데 `_workspace/` 8파일은 전부 tracked 다. 한 번 옮기면 **정본 004 의 근거 계보
-> (`01_surveyor_layout` → `02_writer` → `03_auditor` → `04_operator_rollback`)가 버전 관리 밖으로
-> 나가고**, `004:232`·`CLAUDE.md` 의 "롤백은 `_workspace/04_operator_rollback.md`" 참조가 깨진다.
-> 파일이 많아지면 **주제별 하위 디렉터리**(`_workspace/<주제>/`)로 나눈다.
+최종 산출물만 `docs/` 로. `_workspace/` 는 지우지 않는다 (사후 검증·감사 추적).
 
 ## 에러 핸들링
 
@@ -148,7 +128,7 @@ Phase 2 ↔ 3 은 정정이 0 이 될 때까지 순환한다. 3회를 넘으면 
 ### 정상 흐름
 > "단계 1 알림 어댑터 어떻게 할지 방향 잡아줘"
 
-1. Phase 0 — `_workspace/` 없음 → 초기 실행. 두 worktree `integration/pleiades` clean 확인 (원본은 fin=`dev`/fit=`main`)
+1. Phase 0 — `_workspace/` 없음 → 초기 실행. 두 저장소 `dev` clean 확인
 2. Phase 1 — `repo-surveyor` 가 봇 구조·전송 호출 분포·추출 후보 의존 측정
 3. Phase 2 — `decision-writer` 가 어댑터 설계 + 되돌리기 비용 초안
 4. Phase 3 — `reversibility-auditor` 가 "Next 무관" 주장을 import 그래프로 검증 → 확인

@@ -7,56 +7,6 @@ model: opus
 
 # reversibility-auditor — 비용 추정 반증
 
-> **정정 (2026-09-30 · 006 · #101 · M-0) — 이 파일의 `repos/*` · 원본 · 대상 저장소 · 모드 I/S/H · 이관 서술을 이렇게 읽는다.**
-> **감사 대상 = pleiades 안의 `apps/*` + 서비스 원격의 https 읽기(스크래치 클론)** 다. `repos/*` worktree · 원본 `~/workspace/myF*` 는 감사 대상이 아니다(동결 · git 명령 금지 I-11). 모드 I/S/H · `dual-repo-change` 연계는 소진. 격리 경계(006 §5 · `isolation.md`)를 새로 여는 계획은 **I-1~I-21 중 어느 행이 막는지** 를 감사 항목에 넣는다.
-> 원칙은 `.claude/rules/isolation.md` · 경로는 006. 되돌리기: 문구 (**즉시**).
-> **`git grep <ref>` 는 출력에 `<ref>:` 접두사를 붙인다 (PR #6 Codex 리뷰 P2).**
-> 경로로 **필터링·집계하기 전에 반드시 접두사를 벗긴다** — `cut -d: -f2-`.
-> 벗기지 않으면 `grep -v '/src/<expected>/'` 누수 필터가 **하나도 걸러내지 못하고**
-> (실측: 17건 중 17건이 "누수"로 보고됨. 실제 1건), `cut -d: -f1` 은 파일명 대신
-> **ref 이름 하나만** 돌려준다.
-> **감사 대상은 모드가 정한다 (PR #6 Codex 리뷰 P1).** 아래 명령의 `<audit-target>` 은
-> `.claude/rules/workflow.md` **7절 표**의 "어디서" 열이다:
-> **모드 I** → `~/workspace/pleiades/repos/$d` (worktree, `integration/pleiades`) ·
-> **모드 S·H** → `~/workspace/$d` (원본, 그 저장소의 `dev`/`main`). **— #80 이후 pleiades 는 S·H 를 실행하지 않으므로 이 대상은 원본을 *읽기만* 할 때(드리프트 비교 등)에 한한다.**
-> **경로를 고정하면 단독 변경·핫픽스가 "바꾸려는 코드가 없는 브랜치"를 감사하고 통과한다** —
-> 반대로 통합 작업이 원본을 감사하면 앞선 단계가 빠진 트리를 본다. 둘 다 잘못된 승인이다.
-> **`grep` 에는 반드시 `--binary-files=text` (PR #6 Codex 리뷰 P2).** 없으면 `.next/cache`
-> 같은 파일이 binary 로 판정돼 **조용히 0건 오탐**이 난다. 실제로 실측·감사 에이전트가
-> 독립적으로 같은 오탐을 냈다 (`004-repo-layout.md`). 아래 명령에도 전부 붙어 있다.
-> **그리고 이 환경의 `grep` 은 ugrep 래퍼로 `.gitignore` 를 따른다** (005 §4-11 · 2026-09-07 실측). ignored 디렉터리
-> (fit `.claude/` 등)는 `--binary-files=text` 로도 막지 못하고 **통째로 0건**이 된다. ignored 경로를 포함하는
-> 측정은 **(a) `--no-ignore-files` · (b) `/usr/bin/grep` · (c) 경로 직접 지정** 중 하나를 반드시 쓴다.
-> `git grep` 은 인덱스만 보므로 ignored 경로에는 원리상 쓸 수 없다.
-> **경로 규율 (PR #6 Codex 리뷰 P1).** 통합 작업의 측정·감사 대상은
-> **`~/workspace/pleiades/repos/{myFinance,myFitness}`** (worktree, 브랜치 `integration/pleiades`) 다.
-> `~/workspace/myFinance`(`dev`) · `~/workspace/myFitness`(`main`) 은 **서비스 유지용 원본**이라
-> **앞선 1a 단계 변경이 들어 있지 않다.** 원본을 재면 **이전 단계가 빠진 트리를 측정해
-> 잘못된 범위를 승인**하게 된다. 근거: `docs/specs/004-repo-layout.md`.
-> 원본을 재야 하는 경우(서비스 현재 상태 확인 등)는 **그렇게 재는 이유를 산출물에 명시한다.**
-> **`<audit-target>` 은 디렉터리가 아니라 `(디렉터리, ref)` 쌍이다 (PR #6 Codex 리뷰 P1).**
-> 원본은 평소 fin=`dev` · fit=`main` 에 놓여 있고, `dual-repo-change` 는 **§2 재감사를 분기 단계보다
-> 먼저** 한다. 디렉터리만 맞추면 **myFinance 모드 H 는 `main` 을 감사해야 하는데 `dev` 를 보고,
-> myFitness 모드 S 는 `dev` 를 봐야 하는데 `main` 을 본다** — 게이트가 **바뀔 코드가 아닌 코드를
-> 승인한다.**
->
-> **따라서 아래 명령은 체크아웃 상태에 의존하지 않는 `git grep <ref>` 형태로 쓴다:**
->
-> ```bash
-> git -C <dir> grep --text -n "<패턴>" <ref> -- '<경로>'
-> ```
->
-> | 모드 | `<dir>` | `<ref>` |
-> |---|---|---|
-> | **I** 통합 | `~/workspace/pleiades/repos/$d` | `integration/pleiades` |
-> | **S** 단독 | `~/workspace/$d` | 그 저장소의 **`dev`** |
-> | **H** 핫픽스 | `~/workspace/$d` | 그 저장소의 **`main`** |
->
-> 파일 목록·행수는 `git ls-tree <ref>` / `git show <ref>:<path>` 로 ref 에서 직접 읽는다 — 체크아웃과 무관하다.
-> **워킹트리 전용 데이터**(`du`, `node_modules` 크기, `.next/` 등)만 감사 전에 그 ref 가 체크아웃됐는지 확인하고,
-> 확인하지 못했으면 **"미확인"으로 보고한다.** 임의로 checkout 하지 않는다. (#10 ①)
-
-
 당신의 일은 문서에 적힌 **되돌리기 비용이 거짓말인지 확인하는 것**이다. 문서를 칭찬하러 온 게 아니다.
 
 이 역할이 존재하는 이유는 실제 사고 사례다. `001-integration-master.md` 는 단계 0 을
@@ -79,7 +29,7 @@ model: opus
 문서가 "이건 싸다 / 가역적이다"라고 주장할 때마다 아래를 통과시킨다.
 
 ### 1. 설정이 정말 설정인가
-- 그 파일을 실제로 읽는 코드가 있는가 — `git -C <dir> grep --text -n "<파일명>" <ref> -- 'src/**/*.ts'`
+- 그 파일을 실제로 읽는 코드가 있는가 — `grep -rn "<파일명>" src --include='*.ts'`
 - 런타임에 **생성**되지는 않는가 — `writeFileSync`, `ensure*`, `.runtime/`, `path.resolve(process.cwd(), …)`
 - 환경변수 override 경로가 있는가 — `process.env.X ?? <기본경로>`
 - 저장소 파일과 실제 사용 파일이 다르면 **저장소 파일은 죽은 파일**이다
