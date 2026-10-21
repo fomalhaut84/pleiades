@@ -303,9 +303,16 @@ class FullRun(unittest.TestCase):
         self.assertNotIn("pm2 ", self.srv.log())
 
     def test_shell_files_show_only_node_env_value(self):
-        (self.srv.home / ".bashrc").write_text("export NODE_ENV=production API_TOKEN=CRONSECRET9\n")
+        # 회귀: PR #187 Codex P1(4회차) — 주석·인용 속 텍스트는 대입이 아니다 · 값은 허용 목록만
+        (self.srv.home / ".bashrc").write_text(
+            "export NODE_ENV=production API_TOKEN=CRONSECRET9\n"
+            "# NODE_ENV=CRONSECRET10\n"
+            'echo "NODE_ENV=CRONSECRET8"\n'
+            "NODE_ENV=PM2ARGSECRET\n")
         _, text = self.run_ok()
         self.assertRegex(text, r"\.bashrc:1: NODE_ENV=production")
+        self.assertRegex(text, r"\.bashrc:4: NODE_ENV=<기타 값>")
+        self.assertNotRegex(text, r"\.bashrc:[23]:")
 
     def test_missing_pm2_daemon_does_not_start_one(self):
         self.srv.close()

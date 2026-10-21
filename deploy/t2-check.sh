@@ -73,10 +73,21 @@ crontab_summary() {
     }'
 }
 
-# 셸 초기화 파일에서 NODE_ENV 의 값만 낸다 — 같은 줄의 다른 대입은 싣지 않는다
+# 셸 초기화 파일에서 NODE_ENV 대입의 값만 낸다 — 줄 맨 앞(export 허용) 대입만 · 값은 허용 목록 밖이면 "<기타 값>".
+# 주석·인용 속 "NODE_ENV=…" 텍스트를 값으로 옮기지 않는다 (PR #187 Codex P1 4회차)
 node_env_lines() {
-  grep -nH 'NODE_ENV' "$@" 2>/dev/null \
-    | sed -nE 's/^([^:]+:[0-9]+):.*NODE_ENV[[:space:]]*=[[:space:]]*["'"'"']?([A-Za-z]*).*/\1: NODE_ENV=\2/p'
+  local f
+  for f in "$@"; do
+    [[ -r "$f" ]] || continue
+    awk -v f="$f" '
+      /^[[:space:]]*(export[[:space:]]+)?NODE_ENV=/ {
+        v = $0; sub(/^[[:space:]]*(export[[:space:]]+)?NODE_ENV=/, "", v)
+        if (v ~ /^["\047]/) { q = substr(v, 1, 1); v = substr(v, 2); i = index(v, q); v = i ? substr(v, 1, i - 1) : "?" }
+        else sub(/[[:space:]].*/, "", v)
+        if (v != "" && v !~ /^(production|development|test)$/) v = "<기타 값>"
+        print f ":" NR ": NODE_ENV=" v
+      }' "$f"
+  done
 }
 
 # pm2 jlist 에서 서비스 프로세스는 이름·상태·cwd·실행 파일·포트·재시작, 그 밖은 이름·상태만 — env(토큰·DB 비밀번호)는 내지 않는다.
