@@ -273,11 +273,30 @@ class DeployDryRun(unittest.TestCase):
         self.assertNotIn("migrate status", r.stdout)
         self.assertIn("build:staged", r.stdout)
 
-    def test_full_plan_checks_occupancy_first_and_stability(self):
+    def test_full_plan_checks_occupancy_right_before_activation(self):
+        # 회귀: PR #203 Codex P1 — 점유 검사가 빌드 전이라 T-5c ③(옛 서비스가 도는 동안 빌드)이 불가능했다
         out = deploy(self.root, "fin", "--dry-run").stdout
-        self.assertLess(out.index("점유 검사"), out.index("npm ci"))
+        self.assertLess(out.index("npm ci"), out.index("점유 검사"))
+        self.assertLess(out.index("server.staged.cjs  # health"), out.index("점유 검사"))
+        self.assertLess(out.index("점유 검사"), out.index("build:mcp:activate"))
         for name in ("pleiades-fin-mcp", "pleiades-fin-web", "pleiades-fin-bot"):
             self.assertIn(f"pm2 상태 확인 {name}", out)
+
+    def test_activate_plan_skips_install_and_build(self):
+        r = deploy(self.root, "fin", "--dry-run", "--activate")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        out = r.stdout
+        self.assertNotIn("npm ci", out)
+        self.assertNotIn("next build", out)
+        self.assertNotIn("server.staged.cjs  # health", out)
+        for step in ("산출물 확인", "prisma migrate status", "점유 검사", "build:mcp:activate", "pleiades-fin-bot", "pm2 save"):
+            self.assertIn(step, out)
+        self.assertLess(out.index("prisma migrate status"), out.index("점유 검사"))
+
+    def test_activate_and_build_only_are_exclusive(self):
+        r = deploy(self.root, "fin", "--dry-run", "--activate", "--build-only")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("--activate", r.stderr)
 
     def test_refuses_untagged_head_unless_allowed(self):
         _git(self.root, "tag", "-d", "v0.1.0")
@@ -523,21 +542,110 @@ class ServerPathWithStubs(unittest.TestCase):
         self.assertIn("psql", r.stderr)
         self.assertNotIn("next build", log)
 
-    def test_old_service_online_stops_before_anything(self):
-        # 회귀: #176 사전 리뷰 major 2 — T-5c ④ 를 빠뜨리면 옛 MCP 가 같은 포트로 health 에 대신 응답한다
+    def test_old_service_online_builds_then_pauses_before_activation(self):
+        # 회귀: PR #203 Codex P1 — 007 T-5c ③ 은 옛 서비스가 도는 동안 빌드한다(S-a 새 체크아웃 · pre-flight 는 임시 포트).
+        # 옛 서비스가 online 이면 활성화 직전에 exit 3 으로 멈춘다 — 옛 MCP 가 같은 포트로 health 에 대신 응답하지 않게(#176 major 2)
         r, log = self.run_fin(STUB_PRESET="myfinance-mcp=online")
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("myfinance-mcp", r.stderr)
+        self.assertEqual(r.returncode, 3, r.stderr)
+        self.assertIn("next build", log)
+        self.assertTrue((self.stub / "preflight-up").exists())
+        self.assertNotIn("build:mcp:activate", log)
+        self.assertNotIn("pm2 start", log)
+        self.assertIn("myfinance-mcp", r.stdout + r.stderr)
+        self.assertIn("--activate", r.stdout + r.stderr)
+        self.assertTrue((self.root / "apps/finance/dist/mcp/server.staged.cjs").exists())  # --activate 가 쓴다
+        head = subprocess.run(["git", "-C", str(self.root), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        self.assertEqual((self.root / ".deploy-ready-fin").read_text().strip(), head)  # pre-flight 통과 표지
+
+    def built(self, *, ready=True):
+        (self.root / "apps/finance/.next").mkdir(exist_ok=True)
+        (self.root / "apps/finance/.next/BUILD_ID").write_text("x")
+        (self.root / "apps/finance/dist/bot").mkdir(parents=True, exist_ok=True)
+        (self.root / "apps/finance/dist/bot/standalone.cjs").write_text("bot")
+        if ready:  # 기본 실행이 pre-flight 뒤 남기는 표지 — 지금 HEAD
+            head = subprocess.run(["git", "-C", str(self.root), "rev-parse", "HEAD"], capture_output=True, text=True).stdout
+            (self.root / ".deploy-ready-fin").write_text(head)
+
+    def run_fin_activate(self, **env):
+        base = {"PATH": f"{self.stub}:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin", "STUB": str(self.stub),
+                "STUB_PREFLIGHT": "4299", "STUB_BIND": "pleiades-fin-mcp=4511,pleiades-fin-web=4510",
+                "DATABASE_URL": "postgresql://u:p@127.0.0.1:5432/x?schema=public"}
+        r = deploy(self.root, "fin", "--activate", env={**base, **env})
+        log = (self.stub / "log").read_text() if (self.stub / "log").exists() else ""
+        return r, log
+
+    def test_activate_after_old_service_stopped(self):
+        self.built()
+        r, log = self.run_fin_activate()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse((self.root / ".deploy-ready-fin").exists())  # 소비했다 — 다시 --activate 하려면 다시 준비
         self.assertNotIn("npm ci", log)
+        self.assertNotIn("next build", log)
+        self.assertLess(log.index("npx prisma migrate status"), log.index("npm run build:mcp:activate"))
+        self.assertIn("pleiades-fin-bot", log)
+
+    def test_activate_refuses_while_old_service_online(self):
+        self.built()
+        r, log = self.run_fin_activate(STUB_PRESET="myfinance=online")  # fin 웹의 서비스 이름
+        self.assertEqual(r.returncode, 1, r.stderr)
+        self.assertIn("myfinance", r.stderr)
+        self.assertNotIn("build:mcp:activate", log)
+
+    def test_activate_refuses_without_build_outputs(self):
+        r, log = self.run_fin_activate()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("산출물", r.stderr)
+        self.assertNotIn("prisma migrate status", log)
+
+    def test_activate_refuses_outputs_of_another_head(self):
+        # 회귀: #206 사전 리뷰 major — exit 3 뒤 다른 태그로 checkout 하고 --activate 하면 옛 태그 산출물이 뜬다
+        self.built()
+        _git(self.root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "y")
+        _git(self.root, "tag", "v0.1.1")
+        r, log = self.run_fin_activate()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("HEAD", r.stderr)
+        self.assertNotIn("build:mcp:activate", log)
+
+    def test_activate_refuses_build_only_outputs(self):
+        # 회귀: #206 사전 리뷰 major — T-4 build-only 산출물(pre-flight 없음 · 빈 .env)은 표지가 없다
+        self.built(ready=False)
+        r, log = self.run_fin_activate()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("pre-flight", r.stderr)
+        self.assertNotIn("build:mcp:activate", log)
+
+    def test_activate_refuses_when_only_staged_mcp_missing(self):
+        # pre-flight 실패는 staged 를 지운다 — 나머지가 있어도 거부 (#206 사전 리뷰 info)
+        self.built()
+        (self.root / "apps/finance/dist/mcp/server.staged.cjs").unlink()
+        r, log = self.run_fin_activate()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("server.staged.cjs", r.stderr)
+
+    def test_default_run_clears_stale_ready_marker(self):
+        (self.root / ".deploy-ready-fin").write_text("stale\n")
+        r, log = self.run_fin(STUB_MIGRATE_RC="1")  # 빌드 전에 멈춘다
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse((self.root / ".deploy-ready-fin").exists())
+
+    def test_activate_rechecks_migrations(self):
+        self.built()
+        r, log = self.run_fin_activate(STUB_DB_MIGRATIONS="m1\\nm2\\nm3\\n")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("이름 집합", r.stderr)
+        self.assertNotIn("build:mcp:activate", log)
 
     def test_foreign_listener_on_service_port_stops(self):
         for port in ("4511", "4510"):
             with self.subTest(port=port):
                 (self.stub / "log").unlink(missing_ok=True)
+                (self.stub / "preflight-up").unlink(missing_ok=True)  # 앞 subtest 의 pre-flight 흔적
                 r, log = self.run_fin(STUB_FOREIGN=port)
-                self.assertNotEqual(r.returncode, 0)
+                self.assertEqual(r.returncode, 1)
                 self.assertIn(port, r.stderr)
-                self.assertNotIn("npm ci", log)
+                self.assertNotIn("build:mcp:activate", log)
+                self.assertNotIn("pm2 start", log)
 
     def test_own_online_process_may_hold_its_port(self):
         # 재배포 — 포트를 잡은 것이 online 인 pleiades-fin-* 자신이면 진행한다
@@ -555,7 +663,7 @@ class ServerPathWithStubs(unittest.TestCase):
         # 회귀: PR #177 Codex P2 — HTTP 가 아니거나 빈 응답(curl 52)인 리스너를 "비었다" 로 읽었다
         r, log = self.run_fin(STUB_FOREIGN="4511", STUB_FOREIGN_RC="52")
         self.assertNotEqual(r.returncode, 0)
-        self.assertNotIn("npm ci", log)
+        self.assertNotIn("build:mcp:activate", log)
 
     def test_web_port_change_recreates_web(self):
         # 회귀: PR #177 Codex P2 — startOrRestart 는 등록된 args(-p 옛 포트)를 유지한다

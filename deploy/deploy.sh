@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # deploy.sh — pleiades 체크아웃에서 앱 하나를 빌드·기동한다 (007 §4-1 D-a · T-1b · #176).
 #
-# 사용:  deploy/deploy.sh <fin|fit> [--build-only] [--allow-untagged] [--dry-run]
+# 사용:  deploy/deploy.sh <fin|fit> [--build-only | --activate] [--allow-untagged] [--dry-run]
 #   서버에서 사용자가 먼저 fetch · checkout <vX.Y.Z> 를 하고 이 스크립트를 부른다 — 스크립트는 git 을 바꾸지 않는다.
+#   (기본)            의존성 → 마이그레이션 검사 → 빌드 → MCP pre-flight → 점유 검사 → 활성화. 옛 서비스가 online 이면 점유 검사에서 exit 3
+#   --activate        exit 3 뒤 옛 프로세스를 멈추고 부른다(007 T-5c ⑤) — 산출물 확인 → 마이그레이션 재검사 → 점유 검사 → 활성화
 #   --build-only      T-4 서버 리허설(서비스 DB 없음) — 의존성 · 빌드만. 마이그레이션 검사·pm2 없음 · fin next build 없음
 #   --allow-untagged  HEAD 가 vX.Y.Z 태그가 아니어도 진행(리허설)
 #   --dry-run         가드만 돌리고 실행할 단계를 출력한다 — 로컬(Darwin)에서 허용되는 유일한 모드(I-3)
@@ -13,8 +15,10 @@
 #   - git 조작·작업트리 정리 없음 — 정리 명령은 P-2 상태 심링크를 지운다(4-2 정정 1)
 #   - 루트 npm ci 가 첫 단계 — prepare 가 packages/notify/dist 를 만든다(⑭). 실패 = 배포 실패
 #   - 마이그레이션은 적용하지 않고 검사만 한다 — status(대기) + psql 이름 대조(DB 전용 · status 가 놓친다 · #180). 차이가 있으면 중단(정정 5 · Q74)
-#   - 기동 전 점유 검사 — 옛 서비스 pm2 가 online 이거나 포트를 다른 프로세스가 잡고 있으면 빌드 전에 멈춘다.
-#     같은 포트라 옛 프로세스가 health 에 대신 응답한다(정정 4 의 거울상 · #176 사전 리뷰)
+#   - 활성화 직전 점유 검사 — 옛 서비스 pm2 가 online 이면 빌드·pre-flight 뒤 exit 3(→ 옛 프로세스 정지 → --activate),
+#     다른 프로세스가 포트를 잡고 있으면 중단. 같은 포트라 옛 프로세스가 health 에 대신 응답한다(정정 4 의 거울상 · #176 사전 리뷰).
+#     빌드 전이 아닌 이유: 빌드는 S-a 새 체크아웃이라 옛 서비스와 무관하고, T-5c ③ 은 옛 서비스가 도는 동안 빌드한다 —
+#     빌드 전에 멈추면 설치·빌드 내내 서비스가 내려가고 빌드 실패 시 내려간 채로 남는다(PR #203 Codex P1 · #206)
 #   - 웹도 restart — reload 겹침 구간의 고아 prompt_run(#170)을 없앤다. 봇은 delete + start(409 · 옵션 반영)
 #     startOrRestart 는 이미 등록된 앱의 args(포트)·script 를 바꾸지 않는다 — 포트를 바꾸면 그 앱을 먼저 delete
 #   - fin mcp-config bootstrap 은 이식하지 않는다(4-1 조건 (i)·(ii)) — 대신 MCP_PORT 와 그 파일의 url 포트를 대조한다
@@ -30,19 +34,25 @@ case "$APP" in
   fit) DIR=fitness; DEFAULT_PREFLIGHT=4399; SERVICE_NAMES="myfitness myfitness-bot myfitness-mcp" ;;
   *) usage ;;
 esac
-BUILD_ONLY=0; ALLOW_UNTAGGED=0; DRY=0
+BUILD_ONLY=0; ACTIVATE=0; ALLOW_UNTAGGED=0; DRY=0
 for arg in "$@"; do
   case "$arg" in
     --build-only) BUILD_ONLY=1 ;;
+    --activate) ACTIVATE=1 ;;
     --allow-untagged) ALLOW_UNTAGGED=1 ;;
     --dry-run) DRY=1 ;;
     *) die "모르는 인자 $arg" ;;
   esac
 done
 
+[[ $BUILD_ONLY -eq 0 || $ACTIVATE -eq 0 ]] || die "--build-only 와 --activate 는 같이 쓸 수 없다"
+
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 APP_DIR="$ROOT/apps/$DIR"
 CONFIG="$ROOT/deploy/pleiades.config.cjs"
+# 준비 표지 — 기본 실행이 pre-flight 를 통과하면 HEAD 를 적고 --activate 가 대조·소비한다.
+# 파일만 보면 다른 태그 산출물·build-only 산출물(pre-flight 없음 · 빈 .env)을 활성화한다(#206 사전 리뷰 major)
+READY="$ROOT/.deploy-ready-$APP"
 
 # ── 가드 ──────────────────────────────────────────────────────────────
 [[ "$(uname -s)" != Darwin || $DRY -eq 1 ]] || die "로컬에서는 --dry-run 만 — 로컬 pm2·빌드는 tools/local/run.sh 경유(I-3 · #171)"
@@ -109,14 +119,23 @@ pm2_state() {
     })" "$1"
 }
 
+# 옛 서비스가 online 이면 기본 실행은 여기서 exit 3 으로 멈춘다(빌드·pre-flight 는 끝났다) · --activate 에서는 오류다
 check_occupancy() {
   echo "+ 점유 검사 — 옛 서비스 pm2($SERVICE_NAMES) online 0 · 포트 $WEB_PORT·$MCP_PORT 는 비었거나 pleiades-$APP-* 가 잡고 있다"
   [[ $DRY -eq 1 ]] && return 0
-  local name state
+  local name state online=""
   for name in $SERVICE_NAMES; do
     state=$(pm2_state "$name")
-    [[ "${state%% *}" != online ]] || die "옛 서비스 $name 가 online 이다 — 007 T-5c ④(옛 봇 → 웹 → MCP 정지 · delete)가 먼저"
+    [[ "${state%% *}" != online ]] || online="$online $name"
   done
+  if [[ -n "$online" ]]; then
+    [[ $ACTIVATE -eq 0 ]] || die "옛 서비스(${online# }) 가 아직 online 이다 — 007 T-5c ④(옛 봇 → 웹 → MCP 정지 · delete)가 먼저"
+    echo
+    echo "=== 빌드·pre-flight 완료 · 활성화 전 정지 (exit 3) ==="
+    echo "옛 서비스(${online# }) 가 online 이다 — 새 빌드는 준비됐고 옛 서비스는 그대로 돌고 있다."
+    echo "다음: 007 T-5c ④ 옛 봇 → 웹 → MCP 정지 · delete → deploy/deploy.sh $APP --activate"
+    exit 3
+  fi
   for pair in "web:$WEB_PORT" "mcp:$MCP_PORT"; do
     state=$(pm2_state "pleiades-$APP-${pair%%:*}")
     if [[ "${state%% *}" != online ]] && listening "${pair#*:}"; then
@@ -250,23 +269,40 @@ wait_web() {
   die "pleiades-$APP-web 가 $WEB_PORT 에서 듣지 않는다 — 정지했다 · $BUILT_IN_PLACE"
 }
 
+# --activate 는 기본 실행이 남긴 산출물에서만 돈다 — 빌드하지 않는다
+check_built() {
+  local f missing=""
+  echo "+ 산출물 확인 — .next/BUILD_ID · dist/bot/standalone.cjs · dist/mcp/server.staged.cjs"
+  [[ $DRY -eq 1 ]] && return 0
+  for f in .next/BUILD_ID dist/bot/standalone.cjs dist/mcp/server.staged.cjs; do
+    [[ -s "$APP_DIR/$f" ]] || missing="$missing $f"
+  done
+  [[ -z "$missing" ]] || die "산출물이 없다:$missing — 같은 태그에서 deploy/deploy.sh $APP 를 먼저 끝까지(exit 3) 돌린다. 활성화 도중 실패한 뒤라면(옛 서비스는 이미 정지) 기본 실행이 exit 3 없이 활성화까지 간다"
+  [[ -s "$READY" ]] || die "pre-flight 를 통과한 기본 실행의 표지($READY)가 없다 — --build-only 산출물이거나 준비 전이다. deploy/deploy.sh $APP 를 먼저 돌린다"
+  [[ "$(tr -d '[:space:]' < "$READY")" == "$(git -C "$ROOT" rev-parse HEAD)" ]] \
+    || die "산출물이 지금 HEAD 의 것이 아니다(표지 $(tr -d '[:space:]' < "$READY" | cut -c1-12) · HEAD $(git -C "$ROOT" rev-parse --short=12 HEAD)) — 이 태그에서 deploy/deploy.sh $APP 를 다시 돌린다"
+}
+
 # ── 단계 ──────────────────────────────────────────────────────────────
-echo "pleiades deploy: $APP · $TAG · web $WEB_PORT · mcp $MCP_PORT · pre-flight $PREFLIGHT_PORT$([[ $DRY -eq 1 ]] && echo ' · DRY-RUN')$([[ $BUILD_ONLY -eq 1 ]] && echo ' · BUILD-ONLY')"
+echo "pleiades deploy: $APP · $TAG · web $WEB_PORT · mcp $MCP_PORT · pre-flight $PREFLIGHT_PORT$([[ $DRY -eq 1 ]] && echo ' · DRY-RUN')$([[ $BUILD_ONLY -eq 1 ]] && echo ' · BUILD-ONLY')$([[ $ACTIVATE -eq 1 ]] && echo ' · ACTIVATE')"
 
-if [[ $BUILD_ONLY -eq 0 ]]; then
-  step "0. 점유 검사 (빌드 전)"
-  check_occupancy
+if [[ $ACTIVATE -eq 1 ]]; then
+  step "0. 산출물 확인 (--activate)"
+  check_built
+else
+  echo "+ rm -f $READY  # 옛 준비 표지 — 이 실행이 pre-flight 를 통과해야 다시 생긴다"
+  [[ $DRY -eq 1 ]] || rm -f "$READY"
+  step "1. 의존성 (루트 → 앱)"
+  at_root npm ci
+  at_app npm ci
 fi
-
-step "1. 의존성 (루트 → 앱)"
-at_root npm ci
-at_app npm ci
 
 if [[ $BUILD_ONLY -eq 0 ]]; then
   step "2. 마이그레이션 검사 (적용하지 않는다)"
   check_migrations
 fi
 
+if [[ $ACTIVATE -eq 0 ]]; then
 step "3. 빌드"
 if [[ "$APP" == fin ]]; then
   if [[ $BUILD_ONLY -eq 1 ]]; then
@@ -286,9 +322,18 @@ if [[ $BUILD_ONLY -eq 1 ]]; then
   exit 0
 fi
 
-step "4. MCP — pre-flight → 활성화 → 재기동 → health"
+step "4a. MCP pre-flight (임시 포트 — 옛 서비스와 무관)"
 preflight_mcp
+echo "+ git rev-parse HEAD > $READY  # 준비 표지 — exit 3 은 이 표지와 '빌드·pre-flight 완료' 안내가 함께일 때만 준비 완료다"
+[[ $DRY -eq 1 ]] || git -C "$ROOT" rev-parse HEAD > "$READY"
+fi
+
+step "4b. 점유 검사 (활성화 직전)"
+check_occupancy
+
+step "4c. MCP — 활성화 → 재기동 → health"
 at_app npm run build:mcp:activate
+[[ $DRY -eq 1 ]] || rm -f "$READY"  # staged 를 소비했다 — 표지도 소비
 at_app pm2 startOrRestart "$CONFIG" --only "pleiades-$APP-mcp" --update-env
 wait_mcp
 confirm_stable "pleiades-$APP-mcp"
