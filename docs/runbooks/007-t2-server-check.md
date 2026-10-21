@@ -5,6 +5,25 @@
 **성격:** 전부 **읽기**다. 서비스 프로세스·DB·봇·git 체크아웃 상태를 바꾸는 명령은 없다. 되돌리기: 해당 없음(읽기만).
 **결과:** 명령 출력 원본은 **저장소 밖에만** 둔다. 아래 [공개 기록 양식](#공개-기록-양식)(판정만)을 채워 세션에 주면 Claude 가 그것만 `docs/research/measured-facts.md` 에 기록하고 007 의 걸린 결정을 갱신한다(별도 PR). 정책은 바로 아래 절.
 
+## 한 번에 돌리기 — `deploy/t2-check.sh` (#186)
+
+아래 U1~U13 명령을 그대로 묶은 스크립트다. 서비스 계정으로 서버에서:
+
+```bash
+REF=<커밋 SHA>   # 움직이는 dev 가 아니라 고정 커밋 — 세션이 알려 준 머지 커밋
+f=$(mktemp) && curl -fsSL "https://raw.githubusercontent.com/fomalhaut84/pleiades/$REF/deploy/t2-check.sh" -o "$f"
+bash "$f"        # 경로·DB 를 못 찾으면: --fin-dir DIR --fit-dir DIR --fin-db NAME --fit-db NAME
+rm -f "$f"
+```
+
+- **경로**는 pm2 `myfinance`·`myfitness` 의 cwd, **DB 이름**은 각 `.env` 의 `DATABASE_URL` 에서 이름만 찾는다(0절의 수작업 대체). 못 찾으면 인자로 준다.
+- **원본**은 `~/pleiades-private/t2-<시각>.txt`(권한 600) 와 화면에 같이 나온다. 위치가 git 작업트리 안이거나 파일이 이미 있으면 시작하지 않는다(`--out` 으로 바꾼다).
+- **sudo** 는 처음에 한 번 묻는다. 거절하면 `nginx -T` · `ss -p` · postgres 조회만 건너뛰고 나머지는 돈다.
+- 아래 명령과 다른 점: pm2 데몬이 살아 있지 않으면(소켓 + pid) pm2 를 부르지 않는다(다른 계정이거나 죽은 데몬이면 새 데몬이 뜬다) · `crontab -l` · 셸 초기화 파일 줄의 인라인 비밀(`://u:pw@` · `bot<토큰>` · `Bearer` · `*PASS*=`·`*TOKEN*=`·`*SECRET*=`·`*KEY*=`)을 `***` 로 가린다 · pm2·텔레그램 응답의 해석 실패 메시지에 입력을 싣지 않는다 · U11 은 안내만 낸다(서버 밖).
+- 끝나면 원본 파일 또는 [공개 기록 양식](#공개-기록-양식)을 세션에 준다. 스크립트·원본은 사용자가 지운다.
+
+아래 절들은 스크립트가 무엇을 돌리는지와 **기대값**의 정본이다 — 결과를 읽을 때 쓴다.
+
 ## 먼저 읽을 것 — 하지 않는 것과 가릴 것
 
 **하지 않는다.**
@@ -45,12 +64,16 @@
 ```bash
 FIN_DIR=''   # U1 의 pm2 cwd 로 채운다 (비어 있으면 아래 명령이 실패한다)
 FIT_DIR=''   # U1 의 pm2 cwd 로 채운다
-envkeys() {  # .env 의 키 이름과 빈값 여부만 낸다 — 값은 내지 않는다
-  awk '/^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ {
+envkeys() {  # .env 의 키 이름과 빈값 여부만 낸다 — 값은 내지 않는다 (deploy/t2-check.sh 와 같다)
+  awk 'open != "" { if (index($0, open)) open = ""; next }  # 여러 줄 따옴표 값(PEM 등)의 안쪽 줄은 키가 아니다 (#186)
+  /^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ {
     line = $0; sub(/^[[:space:]]*(export[[:space:]]+)?/, "", line)
     k = line; sub(/[[:space:]]*=.*/, "", k)
     v = line; sub(/^[^=]*=[[:space:]]*/, "", v)
-    if (v ~ /^["\047]/) { q = substr(v, 1, 1); v = substr(v, 2); i = index(v, q); if (i) v = substr(v, 1, i - 1) }
+    if (v ~ /^["\047]/) {
+      q = substr(v, 1, 1); v = substr(v, 2); i = index(v, q)
+      if (i) v = substr(v, 1, i - 1); else { open = q; v = "여러 줄" }
+    }
     else { sub(/#.*/, "", v); gsub(/^[[:space:]]+|[[:space:]]+$/, "", v) }  # dotenv: 따옴표 없는 값만 # 부터 주석·양끝 공백 제거 — 따옴표 안 공백은 값이다 (PR #183 · #185 Codex P2)
     print k "\t" (v == "" ? "빈값" : "값있음")
   }' "$1" | sort
