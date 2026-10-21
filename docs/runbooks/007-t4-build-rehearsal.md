@@ -4,6 +4,9 @@
 **무엇:** 007 T-4 — 앱별 새 체크아웃(S-a)을 만들고 첫 릴리즈 `v0.2.0` 으로 **설치·빌드만** 해 본다. pm2 · 서비스 포트 바인딩 · 서비스 DB · 서비스 봇 · 외부 계정은 **건드리지 않는다**(실값 없음 — 정정 6).
 **결정(사용자 2026-10-21 · #209):** 체크아웃 `~/pleiades-fin` · `~/pleiades-fit`(각각 모노레포 전체 clone — fin 은 `~/pleiades-fin/apps/finance`, fit 은 `~/pleiades-fit/apps/fitness` 에서 돈다) · 플랫폼 설정 `~/pleiades-platform.env`. 기존 `~/pleiades`(dev) 는 배포에 쓰지 않는다.
 **결과:** 원본 출력은 저장소 밖 · 세션에도 주지 않는다(T-2 정책). 맨 아래 [판정 양식](#판정-양식)만 준다.
+**셸:** bash · zsh 둘 다(명령은 둘 다에서 돈다). **0 부터 7 까지 같은 셸**에서.
+
+> **정정 (2026-10-21 · #211 · 1회차 서버 실행).** 1회차는 3단계에서 P-2 심링크(새 체크아웃 → 옛 디렉터리)를 걸었고 **fit build-only 가 Turbopack 오류로 실패**했다(`Symlink … .runtime/mcp-config.json … points out of the filesystem root` — fit 코드가 `.runtime`·`.garmin-tokens`·`.omron-tokens` 를 참조해 Turbopack 이 추적한다). 007 Q73 이 **P-2′(역방향 — 상태 실체는 새 체크아웃 · 옛 경로가 링크 · 이동은 T-5c ④ 뒤)** 로 바뀌어 **T-4 에는 심링크가 없다.** 함께 고친 것: 0-1 zsh 호환(인자 없는 `unset`) · 5단계 종료 코드가 `| tail` 에 가려지던 것 · 실패 로그 명령.
 **되돌리기:** **즉시** — `rm -rf ~/pleiades-fin ~/pleiades-fit ~/pleiades-platform.env`(아래 [정리](#정리)의 주의를 지킨다). 옛 서비스 디렉터리·프로세스는 무접촉.
 
 ## 먼저 — 하지 않는 것
@@ -29,7 +32,7 @@ df -h "$HOME" | tail -1; free -h | sed -n 2p
 ```bash
 KEYS='DATABASE_URL|PORT|MCP_PORT|MCP_TRANSPORT|TELEGRAM_[A-Z_]*|DISCORD_[A-Z_]*|NOTIFY_[A-Z_]*|GARMIN_[A-Z_]*|OMRON_[A-Z_]*|MFDS_[A-Z_]*|WHOOING_[A-Z_]*|CLAUDE_BIN|NODE_ENV|PLEIADES_ENV_FILE'
 env | grep -cE "^($KEYS)=" || true      # 0 이 아니면 아래 unset
-unset $(env | grep -oE "^($KEYS)=" | tr -d =)
+for k in $(env | grep -oE "^($KEYS)=" | tr -d =); do unset "$k"; done   # 없으면 아무것도 안 한다(zsh 의 인자 없는 unset 오류 회피)
 env | grep -cE "^($KEYS)=" || true      # 0
 ```
 
@@ -55,18 +58,14 @@ done
 
 **기대값:** 두 줄 모두 `v0.2.0 ae44d06af623`.
 
-## 3. 상태 심링크 (P-2 · 007 Q73)
+## 3. 상태 디렉터리 없음 확인 (P-2′ · 007 Q73 정정)
 
-새 체크아웃이 옛 서비스 디렉터리의 상태를 같은 파일로 본다. fin `backups` 는 서버에 없어 건너뛴다(T-2 U9).
+상태(fin `reports`·`logs` · fit `.garmin-tokens`·`.omron-tokens`·`.runtime`·`logs`)는 **T-5c ④′ 에서 옛 디렉터리 → 새 체크아웃으로 옮긴다**. T-4 에서는 걸지도 옮기지도 않는다 — 새 체크아웃에 그 경로가 없어야 한다.
 
 ```bash
-for p in reports logs; do ln -s ~/myFinance/$p ~/pleiades-fin/apps/finance/$p; done
-for p in .garmin-tokens .omron-tokens .runtime logs; do ln -s ~/myFitness/$p ~/pleiades-fit/apps/fitness/$p; done
-ls -la ~/pleiades-fin/apps/finance | grep -- '->' ; ls -la ~/pleiades-fit/apps/fitness | grep -- '->'
-git -C ~/pleiades-fin status --porcelain; git -C ~/pleiades-fit status --porcelain   # 출력 없음 — 루트 .gitignore 가 링크를 무시한다(4-2 정정 1)
+ls -d ~/pleiades-fin/apps/finance/{reports,logs} ~/pleiades-fit/apps/fitness/{.garmin-tokens,.omron-tokens,.runtime,logs} 2>&1 | grep -vc 'No such file' || true   # 0
+git -C ~/pleiades-fin status --porcelain; git -C ~/pleiades-fit status --porcelain   # 출력 없음
 ```
-
-**기대값:** 링크 2 + 4 · 두 `status` 출력 없음.
 
 ## 4. 앱 `.env` — 포트와 더미 DB 만 (600)
 
@@ -82,13 +81,23 @@ stat -c '%a %U %n' ~/pleiades-fin/apps/finance/.env ~/pleiades-fit/apps/fitness/
 
 ```bash
 # env -u — 0-1 을 건너뛰었어도 셸 값이 .env 를 가리지 않게 한 번 더
-cd ~/pleiades-fin && env -u DATABASE_URL -u PORT -u MCP_PORT bash deploy/deploy.sh fin --build-only --dry-run && time env -u DATABASE_URL -u PORT -u MCP_PORT bash deploy/deploy.sh fin --build-only 2>&1 | tee /tmp/t4-fin.log | tail -3
-cd ~/pleiades-fit && env -u DATABASE_URL -u PORT -u MCP_PORT bash deploy/deploy.sh fit --build-only --dry-run && time env -u DATABASE_URL -u PORT -u MCP_PORT bash deploy/deploy.sh fit --build-only 2>&1 | tee /tmp/t4-fit.log | tail -3
+# 파이프 없이 로그로 받는다 — `| tail` 은 실패 종료 코드를 가린다(1회차 fit 실패가 그렇게 묻혔다)
+for app in fin fit; do
+  cd ~/pleiades-$app || break
+  env -u DATABASE_URL -u PORT -u MCP_PORT bash deploy/deploy.sh $app --build-only --dry-run > /tmp/t4-$app-plan.log 2>&1 || { echo "$app dry-run rc=$?"; tail -3 /tmp/t4-$app-plan.log; break; }
+  SECONDS=0
+  env -u DATABASE_URL -u PORT -u MCP_PORT bash deploy/deploy.sh $app --build-only > /tmp/t4-$app.log 2>&1
+  echo "$app rc=$? ${SECONDS}s"; tail -2 /tmp/t4-$app.log
+done
 ```
 
-**기대값:** 각각 마지막에 `=== 빌드까지 완료 (--build-only) ===` · `real` 시간.
+**기대값:** `fin rc=0 <초>s` · `fit rc=0 <초>s` · 각 로그 끝 근처에 `=== 빌드까지 완료 (--build-only) ===`(fin 은 그 뒤 `smoke:bot OK` 한 줄).
 fin 은 `build:mcp:staged` · `build:bot` 만 — `next build` 는 서비스 DB 를 읽는 prerender 때문에 건너뛴다(Q84 ①). fit 은 `prisma generate` · `build:staged`(`next build` 포함 · DB 불필요).
-**멈추면:** 마지막 `deploy.sh: 중단 — …` 한 줄이 이유다(태그 · `.env` 권한 · 포트 · `PLEIADES_ENV_FILE` 절대경로). 그 문장을 판정 양식에 적는다(경로·값은 빼고).
+**rc 가 0 이 아니면:** `deploy.sh: 중단 — …` 한 줄이면 그것이 이유다(태그 · `.env` 권한 · 포트 · `PLEIADES_ENV_FILE` 절대경로). 빌드 도구 오류면 아래로 핵심만 뽑아 판정 양식에 붙인다(홈 경로는 `~` 로 바뀐다):
+
+```bash
+grep -n -B3 -A25 'Error' /tmp/t4-<app>.log | sed "s#$HOME#~#g" | head -60
+```
 
 ## 6. fin `next build` — prerender 직전까지 컴파일 확인 (Q84 ①)
 
@@ -111,10 +120,10 @@ rm -f /tmp/t4-before.txt   # 로그(/tmp/t4-*.log)는 판정 뒤 사용자가 �
 
 ## 정리
 
-T-4 체크아웃은 **지우지 않는다** — T-5a 에서 `v1.0.0` 으로 옮겨 T-5c 에 쓴다(007 T-5a). 리허설을 버릴 때만:
+T-4 체크아웃은 **지우지 않는다** — T-5a 에서 `v1.0.0` 으로 옮겨 T-5c 에 쓴다(007 T-5a). **T-5c ④′ 뒤에는 새 체크아웃이 상태의 실체라 지우면 상태가 사라진다**(P-2′ — 그때는 먼저 상태를 옛 디렉터리로 되돌린다 · 007 R-2). 리허설을 버릴 때만(T-4 시점):
 
 ```bash
-rm -rf ~/pleiades-fin ~/pleiades-fit   # 끝에 / 를 붙이지 않는다 — 링크만 지우고 옛 서비스 상태는 남는다
+rm -rf ~/pleiades-fin ~/pleiades-fit   # T-4 에는 상태가 없어 안전하다
 rm -f ~/pleiades-platform.env
 ```
 
@@ -126,10 +135,10 @@ rm -f ~/pleiades-platform.env
 0  셸 관련 키 unset 뒤 0: 예/아니오
 1  platform.env 600: 예/아니오
 2  체크아웃 fin/fit = v0.2.0 ae44d06af623: 예/아니오 ×2
-3  심링크 fin 2 · fit 4: 예/아니오   git status 깨끗: 예/아니오 ×2
+3  새 체크아웃에 상태 디렉터리 없음: 예/아니오   git status 깨끗: 예/아니오 ×2
 4  앱 .env 600: 예/아니오 ×2
-5  fin build-only: 완료/중단(<이유 문장>)   시간: <분>
-   fit build-only: 완료/중단(<이유 문장>)   시간: <분>
+5  fin build-only: rc <n> · <초>s   (rc≠0 이면 이유 문장 또는 grep 발췌)
+   fit build-only: rc <n> · <초>s   (같음)
 6  fin next build: 컴파일 통과 · prerender DB 오류(정상)/컴파일 실패(<첫 줄>)
 7  서비스 6 상태·재시작 변화 없음: 예/아니오   pleiades-* 프로세스 0: 예/아니오
    체크아웃 크기 fin/fit: <GB>   디스크 여유: <GB>
