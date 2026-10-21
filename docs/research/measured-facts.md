@@ -4273,3 +4273,44 @@ mv "$SCRATCH/held" apps/finance/prisma/migrations/20261019100000_drop_quarantine
 - **G-f(프로세스 env · 6 프로세스 전부 같음):** `pm_cwd` = `apps/<dir>` · **`PATH[0]` = `<root>/bin`(claude shim)** · `PM2_HOME` = `<root>/.pm2-local` · 프로세스 env 의 `DATABASE_URL`·`TELEGRAM_BOT_TOKEN` **없음**(run.sh `env -u` — 앱은 `.env` 를 dotenv 로 읽는다 · 셸 값 혼입 0) · fit-bot·mcp `MCP_PORT` 4621 · fit-mcp `APP_BASE_URL` = `http://localhost:4620`(#179) · 웹 args `start -p <PORT>`.
 - 판정 스크립트는 `pm2 jlist` 를 받아 판정만 출력(값 출력 0) — 스크래치 `gf.js`.
 - **정리:** 앱별 `pm2 delete pleiades-<app>-{bot,web,mcp}` → `pm2 kill` → `.pm2-local/` 삭제 · 6 포트(4610·4611·4620·4621·4698·4699) 전부 curl rc 7 · pm2 프로세스 0. 기동 시간은 앱당 약 1분(fin 은 장중이라 시세 크론 전에 내렸다).
+
+# 2026-10-21 — T-2 서버 확인: U1~U13 판정 (#190)
+
+**사용자가 서버에서 실행**(Claude 세션은 서버 무접촉 · I-3). 도구: `deploy/t2-check.sh` @ `215918898deb`(PR #187) · 서비스 계정 bash · sudo 됨. U13 재확인은 같은 파일을 `source` 해 `u13` 을 `NODE_OPTIONS=--network-family-autoselection-attempt-timeout=2000` 으로 다시 실행. **공개 기록 정책(런북)대로 판정만 적는다** — 계정 · 경로 · 도메인 · DB 이름 · crontab · 키 목록 · 프로세스 표 원문은 없다. 서비스 쪽 대조(태그 · `main` · 마이그레이션 수)는 Claude 가 https 읽기(`ls-remote` · 스크래치 `--no-tags --filter=blob:none` clone)로.
+
+| # | 판정 |
+|---|---|
+| U1 | 서비스 계정으로 실행: 예 · fit cwd = fit `ecosystem.config.js` 하드코딩 경로: 예 · fin 경로 확인: 예 |
+| U2 | fin HEAD = 태그 `v0.16.8` = 서비스 `main` tip(`ls-remote` 대조): 예 · dirty 없음 · 산출물 BUILD_ID·bot·mcp 있음 ×3 / fit HEAD = `v2.46.1` = 서비스 `main` tip: 예 · dirty 없음 · 산출물 4 있음(generated 포함) — **G-a 충족(R-2 의 전제)** |
+| U3 | 서비스 pm2 6 online: 예 · 그 외 5(online 2 · stopped 3 — 같은 서버의 다른 서비스) · `pleiades-*` 0 · dump 있음 · `PM2_HOME` 기본 · **systemd `pm2-<계정>` unit 없음(0 listed · not-found)** · 서비스 6 은 전부 **cluster 모드**(`instances: 1` 의 pm2 기본) · pm2 데몬이 **PM2+(app.pm2.io)에 연결**돼 있다 |
+| U4 | 두 서비스 `proxy_pass` = 4100 · 4200 뿐: 예 · MCP 포트(4210·4301) 외부 노출 없음: 예(아래 U12 — 127.0.0.1) · 다른 vhost 8(sites-enabled 기준) |
+| U5 | `psql`·`pg_dump` 있음 · PG 메이저 18 · 두 DB 같은 클러스터 · `sudo -u postgres` 접속 됨 · 적용 마이그레이션 **fin 29**(= 서비스 `main` 29 · 마지막 이름 일치 · **pleiades `apps/finance` 29 와 차이 0**) · **fit 42**(= 서비스 `main` 42 · 마지막 = `20261020010000_running_power_intensity` · **pleiades `apps/fitness` 41 — 1 뒤처짐**) · DB 크기 fin 10 MB대 · fit 50 MB대 |
+| U6 | 계정 crontab **없음** · `/etc/cron.d` 는 시스템 항목뿐(서비스 관련 0) · fin `backups/` **없음** → **서비스 DB 백업 0**(사용자 확인: 별도 백업 정책 없음) · 오프사이트 없음 |
+| U7 | fin `.env` 키 12 · 템플릿(`deploy/env/finance.env.template`) 밖 1 · 빈값 0 · **`MCP_PORT` 없음** / fit 키 14 · 템플릿 밖 0 · 빈값 0 · **`MCP_PORT` 없음** · 두 `.env` 권한 664 |
+| U8 | node v24.12.0 · npm 11.6.2 · `.nvmrc` fin 없음 / fit 24 · 없는 도구 0(`git` `curl` `comm` `lsof` `jq` `psql` `claude`) · `NODE_ENV` unset · 셸 초기화 파일에 `NODE_ENV` 0 · **pm2 6.0.8 · `lib/Common.js` 에 `'.config.cjs': 'js'` 있음(루트 설정 인식)** · 디스크 여유 ~128 GB · 메모리 15 GB · 4 코어 |
+| U9 | fin `reports`·`logs` 있음(KB대) · `backups` 없음 / fit `.garmin-tokens`·`.omron-tokens`·`.runtime`·`logs` 있음(KB대) · 체크아웃 fin ~2 GB(node_modules ~1 GB · .next ~1 GB) · fit ~2 GB |
+| U10 | 서버 → pleiades `ls-remote` 됨(dev = `215918898deb`) · npm 레지스트리 200 |
+| U11 | **미확인**(서버 밖 — 사용자) |
+| U12 | 4100·4200·4210·4301 리슨 = pm2 데몬(cluster 모드라 포트를 데몬이 잡는다) · 4210·4301 은 127.0.0.1 · **4100·4200 은 모든 인터페이스**(`*`) · 4299·4399 비어 있음 · 3000 비어 있음 |
+| U13 | 두 봇 `webhook=none` · `pending=0` · `last_error=-`(재확인) — 첫 실행은 둘 다 **ETIMEDOUT** |
+
+**U13 첫 실행 ETIMEDOUT 의 원인(사용자 재확인):** 서버 node 의 `net.getDefaultAutoSelectFamilyAttemptTimeout()` = **250**(ms) · 서버 → `api.telegram.org` IPv4 연결 시간 ~0.25 s(`curl -w %{time_connect}` · HTTP 302) · IPv6 는 즉시 연결 실패(경로 없음). node 의 family 자동 선택이 시도당 250 ms 에서 IPv4 를 끊고 IPv6 로 넘어가 둘 다 실패한다. 시도 제한을 2000 ms 로 올리면 정상. → pleiades 프로세스도 같은 서버에서 간헐 실패 가능 — **#191**(T-4 전).
+
+명령(서버 · 사용자):
+
+```bash
+REF=215918898deb70015249660fb9aa07beb262eba0
+f=$(mktemp) && curl -fsSL "https://raw.githubusercontent.com/fomalhaut84/pleiades/$REF/deploy/t2-check.sh" -o "$f" && bash "$f"
+node -p "require('net').getDefaultAutoSelectFamilyAttemptTimeout()"
+source "$f"; FIN_DIR=<fin> FIT_DIR=<fit> NODE_OPTIONS=--network-family-autoselection-attempt-timeout=2000 u13
+curl -sS -o /dev/null -w '%{http_code} connect=%{time_connect}\n' https://api.telegram.org/
+```
+
+대조(Claude · https 읽기만):
+
+```bash
+git ls-remote https://github.com/fomalhaut84/<repo>.git refs/heads/main refs/tags/<tag>   # 두 SHA 같음
+git clone -q --no-tags --single-branch -b main --filter=blob:none https://github.com/fomalhaut84/<repo>.git <scratch>
+git -C <scratch> ls-tree --name-only main prisma/migrations/ | grep -vc migration_lock   # fin 29 · fit 42
+ls -d apps/<app>/prisma/migrations/*/ | wc -l                                             # pleiades fin 29 · fit 41
+```
