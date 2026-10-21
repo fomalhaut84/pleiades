@@ -26,7 +26,7 @@ NODE_DIR = str(Path(shutil.which("node") or "/usr/bin/node").parent)
 # 화면·파일 어디에도 나오면 안 되는 값
 SECRETS = ("S3CRETPW", "SECRETVAL123", "PM2SECRET", "QUOTEDSECRET", "MIIBPEMSECRET", "TGSECRET",
            "CRONSECRET1", "CRONSECRET2", "CRONSECRET3", "CRONSECRET4", "CRONSECRET5", "CRONSECRET6",
-           "CRONSECRET7", "CRONSECRET8")
+           "CRONSECRET7", "CRONSECRET8", "CRONSECRET9", "CRONSECRET10", "PM2ARGSECRET")
 
 PM2_STUB = r"""#!/usr/bin/env node
 // pm2 흉내 — 호출은 $STUB/log. jlist 는 pm2_env 에 env(비밀)를 싣는다(실제 pm2 와 같다)
@@ -40,7 +40,9 @@ if (argv[0] === 'jlist') {
   // 경고 줄이 JSON 앞에 붙는다 — "[PM2]" 접두도 있다 (#186 사전 리뷰)
   else process.stdout.write('[PM2][WARN] In-memory PM2 is out-of-date, do:\n>>>> $ pm2 update\n' + JSON.stringify([
     proc('myfinance', process.env.FIN, 'start -p 4100'), proc('myfinance-bot', process.env.FIN, ['bot']),
-    proc('myfitness', process.env.FIT, undefined), proc('other-app', '/srv/other', [])]))
+    proc('myfitness', process.env.FIT, undefined), proc('myfitness-mcp', process.env.FIT, ['--port=4301', '--api-key', 'PM2ARGSECRET']),
+    // 회귀: PR #187 Codex P1 — 서비스 밖 프로세스의 args·경로는 싣지 않는다
+    proc('other-app', '/srv/other', ['--api-key', 'PM2ARGSECRET'])]))
 } else if (argv[0] === 'ls') console.log('│ myfinance │ online │')
 """
 
@@ -70,6 +72,10 @@ echo "API_TOKEN='alpha CRONSECRET5 gamma'"
 echo 'export DB_PASSWORD = CRONSECRET6'
 echo 'X_SECRET="beta CRONSECRET7 more'
 echo 'API_KEY="q CRONSECRET8" /srv/after.sh'
+# 회귀: PR #187 Codex P1(2회차) — 이스케이프 따옴표 · 형식 밖 줄. 마스킹 대신 허용 목록(일정 + 스크립트 경로)
+echo 'API_TOKEN="alpha \" CRONSECRET9 beta"'
+echo 'CRONSECRET10 x y z w /srv/x.sh'
+echo '# 주석 줄'
 """
 
 # https.get 이 토큰 URL 을 담은 오류를 던진다 — U13 이 그 메시지를 싣지 않는지 (#186 사전 리뷰 info)
@@ -116,10 +122,13 @@ class FakeServer:
             self.sock = socket.socket(socket.AF_UNIX)
             self.sock.bind(str(self.pm2_home / "rpc.sock"))
         self.daemon = None
-        if pm2_pid_alive == "reused":  # 회귀: PR #187 Codex P2 — pid 가 재사용돼 살아 있지만 pm2 가 아니다
+        if pm2_pid_alive == "other-home":  # 회귀: PR #187 Codex P2(2회차) — 다른 PM2_HOME 의 데몬이 pid 를 재사용
+            self.daemon = subprocess.Popen(["bash", "-c", 'exec -a "PM2 v5.4.0: God Daemon (/other/.pm2)" sleep 60'])
+            pid = self.daemon.pid
+        elif pm2_pid_alive == "reused":  # 회귀: PR #187 Codex P2 — pid 가 재사용돼 살아 있지만 pm2 가 아니다
             pid = os.getpid()
         elif pm2_pid_alive:  # pm2 데몬의 프로세스 제목 흉내
-            self.daemon = subprocess.Popen(["bash", "-c", 'exec -a "PM2 v5.4.0: God Daemon (/x/.pm2)" sleep 60'])
+            self.daemon = subprocess.Popen(["bash", "-c", f'exec -a "PM2 v5.4.0: God Daemon ({self.pm2_home})" sleep 60'])
             pid = self.daemon.pid
         else:  # 소켓 파일만 남은 죽은 데몬(SIGKILL · OOM) — pm2 를 부르면 새 데몬이 뜬다 (#186 사전 리뷰 major)
             dead = subprocess.Popen(["true"])
@@ -200,8 +209,11 @@ class FullRun(unittest.TestCase):
         self.assertIn("FIN_DB=myfinance_db", text)
         self.assertIn("FIT_DB=myfitness_db", text)
         # pm2 필드 추출 — 문자열 args · 배열 args · args 없음 (PR #183 Codex P1)
-        self.assertIn("start -p 4100", text)
-        self.assertIn("other-app", text)
+        self.assertIn("myfinance\tonline\t", text)
+        self.assertIn("port=4100", text)
+        self.assertIn("port=4301", text)
+        self.assertRegex(text, r"(?m)^other-app\tonline$")
+        self.assertNotIn("/srv/other", text)
 
     def test_reports_env_keys_without_values(self):
         _, text = self.run_ok()
@@ -247,11 +259,13 @@ class FullRun(unittest.TestCase):
         self.assertNotIn("PM2SECRET", r.stdout + r.stderr + text)
         self.assertIn("FIN_DIR 없음", text)
 
-    def test_crontab_is_masked_but_readable(self):
+    def test_crontab_shows_only_schedule_and_script_paths(self):
         _, text = self.run_ok()
-        self.assertIn("backup-db.sh", text)
-        self.assertIn("PGPASSWORD=***", text)
-        self.assertIn("API_KEY=*** /srv/after.sh", text)
+        self.assertIn("0 3 * * *\t/srv/myFinance/scripts/backup-db.sh", text)
+        self.assertIn("env API_TOKEN", text)
+        self.assertIn("env DB_PASSWORD", text)
+        self.assertIn("형식 밖", text)
+        self.assertNotIn("주석 줄", text)
 
     def test_bot_token_never_printed_even_when_request_throws(self):
         self.srv.close()
@@ -280,6 +294,17 @@ class FullRun(unittest.TestCase):
         _, text = self.run_ok()
         self.assertNotIn("pm2 ", self.srv.log())
         self.assertIn("pm2 데몬", text)
+
+    def test_pm2_daemon_of_other_home_is_not_used(self):
+        self.srv.close()
+        self.srv = FakeServer(pm2_pid_alive="other-home")
+        _, text = self.run_ok()
+        self.assertNotIn("pm2 ", self.srv.log())
+
+    def test_shell_files_show_only_node_env_value(self):
+        (self.srv.home / ".bashrc").write_text("export NODE_ENV=production API_TOKEN=CRONSECRET9\n")
+        _, text = self.run_ok()
+        self.assertRegex(text, r"\.bashrc:1: NODE_ENV=production")
 
     def test_missing_pm2_daemon_does_not_start_one(self):
         self.srv.close()

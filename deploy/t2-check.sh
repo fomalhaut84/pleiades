@@ -36,22 +36,38 @@ envkeys() {
   }' "$1" | sort
 }
 
-# 줄 안의 인라인 비밀을 가린다 — crontab · 셸 초기화 파일 줄 (#186 사전 리뷰)
-# 이름에 PASS·TOKEN·SECRET·KEY 가 든 대입은 따옴표 값 전체 · = 앞뒤 공백 · 닫히지 않은 따옴표(줄 끝까지)를 가린다 (PR #187 Codex P1)
-mask() {
-  local kp='[A-Za-z_]*([Pp][Aa][Ss][Ss]|[Tt][Oo][Kk][Ee][Nn]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Kk][Ee][Yy])[A-Za-z_]*'
-  local eq='[[:space:]]*=[[:space:]]*'
-  sed -E \
-    -e 's#(://[^:/@ ]+:)[^@ ]+@#\1***@#g' \
-    -e 's#bot[0-9]+:[A-Za-z0-9_-]+#bot***#g' \
-    -e 's#([Bb]earer )[^ "'"'"']+#\1***#g' \
-    -e "s#(${kp})${eq}\"[^\"]*\"#\\1=***#g" \
-    -e "s#(${kp})${eq}'[^']*'#\\1=***#g" \
-    -e "s#(${kp})${eq}[\"'].*\$#\\1=***#" \
-    -e "s#(${kp})${eq}[^ ]+#\\1=***#g"
+# crontab 은 줄마다 일정 + 스크립트 경로만 낸다 — 나머지(인라인 비밀 가능)는 싣지 않는다.
+# 마스킹은 따옴표·이스케이프·공백 변형마다 새는 길이 있어(PR #187 Codex P1 ×2) 허용 목록으로 바꿨다
+crontab_summary() {
+  awk '
+    /^[[:space:]]*(#|$)/ { next }
+    /^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ {
+      k = $0; sub(/^[[:space:]]*(export[[:space:]]+)?/, "", k); sub(/[[:space:]]*=.*/, "", k); print "env " k; next
+    }
+    {
+      if ($1 ~ /^@(reboot|yearly|annually|monthly|weekly|daily|midnight|hourly)$/) { n = 1 }
+      else {
+        n = 5
+        for (i = 1; i <= 5; i++) if ($i !~ /^[0-9*\/,-]+$/ && $i !~ /^[A-Za-z][A-Za-z][A-Za-z](-[A-Za-z][A-Za-z][A-Za-z])?$/) n = 0
+      }
+      if (n == 0) { print "<형식 밖 줄 — 생략>"; next }
+      sched = $1; for (i = 2; i <= n; i++) sched = sched " " $i
+      paths = ""; rest = $0
+      while (match(rest, /\/[A-Za-z0-9._\/-]+\.(sh|js|cjs|mjs|ts|py)/)) {
+        paths = paths " " substr(rest, RSTART, RLENGTH); rest = substr(rest, RSTART + RLENGTH)
+      }
+      print sched "\t" (paths == "" ? "<스크립트 경로 없음>" : substr(paths, 2))
+    }'
 }
 
-# pm2 jlist 에서 이름·상태·cwd·실행 파일·args·재시작만 — pm2_env 의 env(토큰·DB 비밀번호)는 내지 않는다
+# 셸 초기화 파일에서 NODE_ENV 의 값만 낸다 — 같은 줄의 다른 대입은 싣지 않는다
+node_env_lines() {
+  grep -nH 'NODE_ENV' "$@" 2>/dev/null \
+    | sed -nE 's/^([^:]+:[0-9]+):.*NODE_ENV[[:space:]]*=[[:space:]]*["'"'"']?([A-Za-z]*).*/\1: NODE_ENV=\2/p'
+}
+
+# pm2 jlist 에서 서비스 프로세스는 이름·상태·cwd·실행 파일·포트·재시작, 그 밖은 이름·상태만 — env(토큰·DB 비밀번호)는 내지 않는다.
+# args 는 원문 대신 -p/--port 값만 — 다른 플래그에 비밀이 올 수 있다 (PR #187 Codex P1)
 pm2_fields() {
   node -e '
     let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
@@ -61,7 +77,12 @@ pm2_fields() {
       try { list = JSON.parse(at < 0 ? "" : s.slice(at)) } catch { console.log("pm2 jlist 해석 실패(출력은 싣지 않는다)"); process.exit(1) }
       for (const p of list) {
         const e = p.pm2_env || {}
-        console.log([p.name, e.status, e.pm_cwd, e.pm_exec_path, [].concat(e.args || []).join(" "), "restarts=" + e.restart_time].join("\t"))
+        if (!/^(myfinance|myfitness|pleiades-)/.test(String(p.name))) { console.log([p.name, e.status].join("\t")); continue }
+        const a = [].concat(e.args || []).join(" ").split(/\s+/)
+        const i = a.findIndex((x) => x === "-p" || x === "--port")
+        const eq = a.map((x) => /^--port=(\d+)$/.exec(x)).find(Boolean)
+        const port = i >= 0 && /^\d+$/.test(a[i + 1] || "") ? a[i + 1] : eq ? eq[1] : "-"
+        console.log([p.name, e.status, e.pm_cwd, e.pm_exec_path, "port=" + port, "restarts=" + e.restart_time].join("\t"))
       }
     })'
 }
@@ -89,7 +110,7 @@ section() { echo; echo "======== $1 ========"; "$2" 2>&1; }
 # ── 섹션 (런북 절 순서) ────────────────────────────────────────────────
 u1_u3() {
   whoami; id -un; echo "HOME=$HOME"; echo "PM2_HOME=${PM2_HOME-<unset>}"
-  if [[ $PM2_UP -eq 1 ]]; then pm2 ls; echo; printf '%s\n' "$PM2_TABLE" | mask; else echo "pm2 데몬 없음(${PM2_DIR} 의 소켓·살아 있는 pid) — pm2 를 부르지 않았다. 서비스 계정이 맞는지 확인"; fi
+  if [[ $PM2_UP -eq 1 ]]; then pm2 ls; echo; printf '%s\n' "$PM2_TABLE"; else echo "pm2 데몬 없음(${PM2_DIR} 의 소켓 · 제목이 이 경로인 살아 있는 pid) — pm2 를 부르지 않았다. 서비스 계정·PM2_HOME 을 확인하고 경로는 --fin-dir/--fit-dir 로 준다"; fi
   ls -la "$PM2_DIR/dump.pm2"
   systemctl list-unit-files 'pm2*' --no-pager
   systemctl is-enabled "pm2-$(whoami)"
@@ -128,7 +149,7 @@ u5() {
 }
 
 u6_u12() {
-  crontab -l | mask
+  crontab -l | crontab_summary
   ls /etc/cron.d/
   if [[ -n "$FIN_DIR" ]]; then ls -la "$FIN_DIR/backups" | tail -5; du -sh "$FIN_DIR/backups"; fi
   if [[ $SUDO_OK -eq 1 ]]; then sudo -n ss -ltnp; else echo "(sudo 안 됨 — 프로세스 이름 없이)"; ss -ltn; fi \
@@ -153,7 +174,7 @@ u8() {
   for t in git curl comm lsof jq psql claude; do printf '%s\t%s\n' "$t" "$(command -v "$t" || echo '<없음>')"; done
   claude --version
   echo "NODE_ENV=${NODE_ENV-<unset>}"
-  grep -nH 'NODE_ENV' ~/.bashrc ~/.profile ~/.bash_profile /etc/environment 2>/dev/null | mask
+  node_env_lines ~/.bashrc ~/.profile ~/.bash_profile /etc/environment
   if command -v pm2 >/dev/null; then
     pm2_root=$(dirname "$(dirname "$(readlink -f "$(command -v pm2)")")")
     node -p "require('$pm2_root/package.json').version"
@@ -279,9 +300,9 @@ main() {
   # 소켓 파일은 죽은 데몬(SIGKILL · OOM)에도 남는다 — pid 가 살아 있어야 부른다. 아니면 pm2 가 새 데몬을 띄운다 (#186 사전 리뷰)
   local pm2_pid
   pm2_pid=$(cat "$PM2_DIR/pm2.pid" 2>/dev/null || true)
-  # pid 는 재사용될 수 있다 — 그 프로세스가 pm2 데몬(제목 "PM2 v…: God Daemon")인지도 본다 (PR #187 Codex P2)
+  # pid 는 재사용될 수 있다 — 그 프로세스가 이 PM2_HOME 의 데몬(제목 "PM2 v…: God Daemon (<home>)")인지 본다 (PR #187 Codex P2 ×2)
   if command -v pm2 >/dev/null && [[ -S "$PM2_DIR/rpc.sock" && "$pm2_pid" =~ ^[0-9]+$ ]] \
-    && ps -p "$pm2_pid" -o args= 2>/dev/null | grep -q 'PM2.*God Daemon'; then
+    && ps -p "$pm2_pid" -o args= 2>/dev/null | grep -qF "God Daemon ($PM2_DIR)"; then
     PM2_UP=1
     PM2_TABLE=$(pm2 jlist 2>/dev/null | pm2_fields)
   fi
