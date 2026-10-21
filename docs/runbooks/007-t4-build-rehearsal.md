@@ -22,6 +22,17 @@ pm2 jlist | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{for
 df -h "$HOME" | tail -1; free -h | sed -n 2p
 ```
 
+## 0-1. 셸 env 비우기 (이 셸에서 끝까지 진행한다)
+
+셸 env 는 `.env` 보다 우선한다 — dotenv 는 있는 값을 덮지 않고 `deploy/pleiades.config.cjs` 도 셸을 먼저 본다. 옛 서비스 `.env` 를 source 한 셸이면 더미 대신 **서비스 DB** 로 빌드한다(PR #210 Codex P2). 값은 내지 않고 개수만 본다.
+
+```bash
+KEYS='DATABASE_URL|PORT|MCP_PORT|MCP_TRANSPORT|TELEGRAM_[A-Z_]*|DISCORD_[A-Z_]*|NOTIFY_[A-Z_]*|GARMIN_[A-Z_]*|OMRON_[A-Z_]*|MFDS_[A-Z_]*|WHOOING_[A-Z_]*|CLAUDE_BIN|NODE_ENV|PLEIADES_ENV_FILE'
+env | grep -cE "^($KEYS)=" || true      # 0 이 아니면 아래 unset
+unset $(env | grep -oE "^($KEYS)=" | tr -d =)
+env | grep -cE "^($KEYS)=" || true      # 0
+```
+
 ## 1. 플랫폼 설정 파일 (빈 파일 · 600)
 
 T-4 는 플랫폼 키(Discord · `NOTIFY_*`)를 비운다(정정 6). 파일만 만든다.
@@ -70,8 +81,9 @@ stat -c '%a %U %n' ~/pleiades-fin/apps/finance/.env ~/pleiades-fit/apps/fitness/
 ## 5. build-only
 
 ```bash
-cd ~/pleiades-fin && bash deploy/deploy.sh fin --build-only --dry-run && time bash deploy/deploy.sh fin --build-only 2>&1 | tee /tmp/t4-fin.log | tail -3
-cd ~/pleiades-fit && bash deploy/deploy.sh fit --build-only --dry-run && time bash deploy/deploy.sh fit --build-only 2>&1 | tee /tmp/t4-fit.log | tail -3
+# env -u — 0-1 을 건너뛰었어도 셸 값이 .env 를 가리지 않게 한 번 더
+cd ~/pleiades-fin && env -u DATABASE_URL -u PORT -u MCP_PORT bash deploy/deploy.sh fin --build-only --dry-run && time env -u DATABASE_URL -u PORT -u MCP_PORT bash deploy/deploy.sh fin --build-only 2>&1 | tee /tmp/t4-fin.log | tail -3
+cd ~/pleiades-fit && env -u DATABASE_URL -u PORT -u MCP_PORT bash deploy/deploy.sh fit --build-only --dry-run && time env -u DATABASE_URL -u PORT -u MCP_PORT bash deploy/deploy.sh fit --build-only 2>&1 | tee /tmp/t4-fit.log | tail -3
 ```
 
 **기대값:** 각각 마지막에 `=== 빌드까지 완료 (--build-only) ===` · `real` 시간.
@@ -83,10 +95,10 @@ fin 은 `build:mcp:staged` · `build:bot` 만 — `next build` 는 서비스 DB 
 fin 웹의 컴파일·타입·번들 실패를 T-5c 전에 본다. **prerender 단계에서 실패하는 것이 정상**이다(더미 DB · 127.0.0.1:1 은 연결이 바로 거부된다).
 
 ```bash
-cd ~/pleiades-fin/apps/finance && npx --no-install next build 2>&1 | tee /tmp/t4-fin-next.log | grep -nE 'Compiled|Linting|type|Collecting page data|Generating static pages|Error|ECONNREFUSED|P1001' | head -20
+cd ~/pleiades-fin/apps/finance && env -u DATABASE_URL npx --no-install next build 2>&1 | tee /tmp/t4-fin-next.log | grep -nE 'Compiled|Linting|type|Collecting page data|Generating static pages|Error|ECONNREFUSED|P1001' | head -20
 ```
 
-**판정:** `Compiled successfully`(또는 `✓ Compiled`) 가 나오고, 실패가 **페이지 데이터 수집·정적 생성 단계의 DB 연결 오류**(`P1001` · `ECONNREFUSED` · `Can't reach database server`)면 **통과**. 컴파일·타입·모듈 해석 오류면 **실패** — 그 오류의 첫 줄(파일 경로 없이)을 적는다.
+**판정:** prerender 가 **성공하면 이상이다** — 더미 DB 가 아닌 곳에 붙었다는 뜻이므로 멈추고 0-1 을 다시 본다. `Compiled successfully`(또는 `✓ Compiled`) 가 나오고, 실패가 **페이지 데이터 수집·정적 생성 단계의 DB 연결 오류**(`P1001` · `ECONNREFUSED` · `Can't reach database server`)면 **통과**. 컴파일·타입·모듈 해석 오류면 **실패** — 그 오류의 첫 줄(파일 경로 없이)을 적는다.
 
 ## 7. 서비스 무영향 대조 · 크기
 
@@ -111,6 +123,7 @@ rm -f ~/pleiades-platform.env
 **이 양식만** 세션에 준다. 경로 · 계정 · 값은 넣지 않는다.
 
 ```text
+0  셸 관련 키 unset 뒤 0: 예/아니오
 1  platform.env 600: 예/아니오
 2  체크아웃 fin/fit = v0.2.0 ae44d06af623: 예/아니오 ×2
 3  심링크 fin 2 · fit 4: 예/아니오   git status 깨끗: 예/아니오 ×2
