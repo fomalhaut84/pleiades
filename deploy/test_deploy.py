@@ -123,6 +123,16 @@ class Config(unittest.TestCase):
             for a in self.apps("fin", home).values():
                 self.assertNotIn("PATH", a["env"])
 
+    def test_every_process_raises_family_autoselection_attempt_timeout(self):
+        # #191 — 서버 node 기본 250 ms 가 ~250 ms IPv4 연결(IPv6 경로 없음)을 끊어 ETIMEDOUT(T-2 U13).
+        # node_args 로 그 프로세스만 — 자식(claude CLI 등)으로 번지지 않게 NODE_OPTIONS 는 쓰지 않는다
+        for app in DIRS:
+            for name, a in self.apps(app).items():
+                with self.subTest(name=name):
+                    self.assertIn("--network-family-autoselection-attempt-timeout=2000", a["node_args"].split())
+                    self.assertIn("--max-old-space-size=", a["node_args"])
+                    self.assertNotIn("NODE_OPTIONS", a["env"])
+
     def test_only_the_cwd_app_is_defined(self):
         # run.sh 의 check_env 는 cwd 앱만 검사한다 — 다른 앱 정의가 섞이면 검사 밖 env 로 뜬다 (#171)
         self.assertTrue(all(n.startswith("pleiades-fin-") for n in self.apps("fin")))

@@ -440,6 +440,11 @@ class ScriptText(unittest.TestCase):
         for l in lines:
             self.assertIn("--no-optional-locks", l)
 
+    def test_u13_raises_family_autoselection_attempt_timeout(self):
+        # #191 — 서버 node 기본 250 ms 에서 getWebhookInfo 가 ETIMEDOUT(T-2 U13 첫 실행)
+        u13 = self.TEXT[self.TEXT.index("u13() {"):self.TEXT.index("report() {")]
+        self.assertIn("autoSelectFamilyAttemptTimeout: 2000", u13)
+
     def test_raw_jlist_only_goes_to_field_filter(self):
         # 명령으로 쓰인 줄만 — 메시지 문자열 안의 "pm2 jlist" 는 제외
         calls = [l for l in self.CODE.splitlines() if re.search(r"(^|\$\(|[;&|]\s*)\s*pm2\s+jlist\b", l)]
