@@ -66,8 +66,9 @@ C④~C⑤(중단 창 · 수 분) 동안 도는 크론은 그 회차를 놓친다
 ### C1. `.env` 실값 (옛 fin 은 계속 돈다)
 
 ```bash
-# 셸 env 비우기 — 셸 값이 .env 를 가린다(T-4 0-1 과 같다)
-KEYS='DATABASE_URL|PORT|MCP_PORT|MCP_TRANSPORT|TELEGRAM_[A-Z_]*|DISCORD_[A-Z_]*|NOTIFY_[A-Z_]*|GARMIN_[A-Z_]*|OMRON_[A-Z_]*|MFDS_[A-Z_]*|WHOOING_[A-Z_]*|CLAUDE_BIN|NODE_ENV|PLEIADES_ENV_FILE'
+# 셸 env 비우기 — 셸 값이 .env 를 가리고, pm2 는 셸 env 를 새 프로세스에 넘긴다(PR #219 Codex P2)
+# 옛 fin .env 의 키(AUTH_* · NEXTAUTH_* · BASE_URL · FIRECRAWL_* — T-2 U7)까지 — 옛 .env 를 source 한 셸이면 옮기지 않기로 한 키도 새 프로세스에 들어간다
+KEYS='DATABASE_URL|PORT|MCP_PORT|MCP_TRANSPORT|TELEGRAM_[A-Z_]*|DISCORD_[A-Z_]*|NOTIFY_[A-Z_]*|GARMIN_[A-Z_]*|OMRON_[A-Z_]*|MFDS_[A-Z_]*|WHOOING_[A-Z_]*|CLAUDE_BIN|NODE_ENV|PLEIADES_ENV_FILE|AUTH_[A-Z_]*|NEXTAUTH_[A-Z_]*|BASE_URL|FIRECRAWL_[A-Z_]*'
 for k in $(env | grep -oE "^($KEYS)=" | tr -d =); do unset "$k"; done; env | grep -cE "^($KEYS)=" || true   # 0
 # 플랫폼 설정 — 비어 있다(텔레그램 그대로 · 결정). T-4 에서 만든 파일
 export PLEIADES_ENV_FILE="$HOME/pleiades-platform.env"; stat -c '%a %U' "$PLEIADES_ENV_FILE"; wc -c < "$PLEIADES_ENV_FILE"   # 600 <계정> · 0
