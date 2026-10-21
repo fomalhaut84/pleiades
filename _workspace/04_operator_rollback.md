@@ -44,10 +44,10 @@ git -C ~/workspace/myFitness checkout main && git -C ~/workspace/myFitness branc
 
 ```
 dev
- └─ integration/pleiades            (장기 베이스 · dev 로 PR 은 1a 전체가 끝난 뒤)
-     ├─ integration/pleiades-1a-2   → PR → integration/pleiades
-     ├─ integration/pleiades-1a-3   → PR → integration/pleiades
-     └─ integration/pleiades-1a-4   → PR → integration/pleiades
+ └─ integration/pleiades            (장기 베이스 · **dev 로 머지되지 않음** — #25, 2026-09-07 정정)
+     ├─ integration/feature-pleiades-1a-2   → PR → integration/pleiades   (#25 네이밍)
+     ├─ integration/feature-pleiades-1a-3   → PR → integration/pleiades
+     └─ integration/feature-pleiades-1a-4   → PR → integration/pleiades
 ```
 
 단계 브랜치를 따로 두는 이유는 003 §5-2 의 **단계별 되돌리기 등급을 보존**하기 위해서다.

@@ -4,19 +4,71 @@
 
 **pleiades** — `myFinance` 와 `myFitness` 두 프로젝트를 어디까지 통합할지 검토하고, 결정된 범위를 실행하는 저장소.
 
-**현재 상태: 방향 확정 · 단계 1(1a) 착수 대기.**
+**2026-10-21 · T-1 완료 · T-2 체크리스트·스크립트 · fit 동결 예외 — 10-20: T-1b #176 → PR #177(루트 `deploy/deploy.sh` · `deploy/pleiades.config.cjs` · 상태 경로 · 서버 `.env` 템플릿) · T-1c #178 → PR #179(크론 25 · 알림 경로 29 · `KEY=` 는 빈 문자열) · T-1d #180 → PR #181(로컬 리허설 · `migrate status` 가 DB 전용을 놓쳐 이름 대조 추가 · 릴리즈 전략 정정 — 버전 기준은 제안) · T-2 체크리스트 #182 → PR #183 + #185. 10-21: `deploy/t2-check.sh` #186 → PR #187 `2159188`(U1~U13 한 번에 · Codex 6회 P1 8·P2 5 반영).** **사용자 결정:** fit 은 추가 스펙(fit#570 러닝 파워) 때문에 동결을 예외 해제 → 서비스 dev `35a04d78e532`(마이그레이션 1 · 재동결) — **미수용** · **T-2 원본 출력은 세션에도 주지 않는다**(공개 기록 양식만 · 런북 정정 블록). 인계 `docs/handoff/2026-10-21-t1-done-t2-script.md`. 다음 = **T-2 결과 기록**(사용자 서버 실행 · `REF=2159188…`) · fit 수용(T-5a 전 · T-4 앞이면 수용 뒤 코드로 리허설) · T-3 준비(버전 기준 · Q79).
+**2026-10-19 · 서비스 동결 · 최종 수용 · T-1a — 사용자 결정: myFinance·myFitness 개별 프로젝트 동결(pleiades 진행 위해).** 최종 수용 #167 → PR #169 `644972c`(fin `3685b2ca138c` · fit `6f174d2546b5` · 8절 fin 938 · fit 797). **T-1 = 4 PR 분할** — T-1a 로컬 pm2 격리 예외 #171 → PR #172 `c6b0e25`(사용자 승인 · 훅 무변경 · `tools/local/precheck.py` pm2 허용 목록 · `run.sh` `PM2_HOME=.pm2-local` · start = 루트 `deploy/pleiades.config.cjs --only pleiades-<app>-<역할>` · pm2 이름 `pleiades-<fin|fit>-<역할>` · Codex 4회). 후속 #168(CI Node 24) · #170(fit reload 고아 run). 인계 `docs/handoff/2026-10-19-freeze-sync-pm2-exception.md`. 다음 = **T-1b**(루트 `deploy/` · 설정 파일 · `.gitignore` · 서버 `.env` 템플릿) → T-1c → T-1d.
+**2026-10-16 · 전환 설계 007 — #163 · `docs/specs/007-cutover.md`(실측 → 초안 3회 · 감사 3회 정정 8+5+2 · 사용자 결정으로 diff 대조 마감).** 전환 = 새 배포 경로 만들기(서비스 배포는 서비스 저장소 Release 태그에 묶임 · pleiades 태그·배포 0). **확정(사용자): 권고안 일괄** — 서버 수동 배포(secrets 0) · 단일 `v*` · 앱별 체크아웃 · 상태 심링크 · **기존 서비스 DB 그대로**(Q61 연장) · fit 은 서비스가 dev 를 먼저 릴리즈 · **fin 먼저** · 서비스 배포 경로 차단 = 전환 진입 조건 · Claude 서버 접근 계속 금지. **Q79: 첫 릴리즈 조건 충족 · 단 첫 릴리즈 ≠ 전환 — 서비스 병행 계속.** **Q80: 검증 Discord 서버·봇을 운영으로 승격**(로컬 검증 봇은 새로). 서비스 영향 0. PR #164 `46f198d` · Codex P1: 로컬 pm2 리허설(Q85 ①)은 I-3 훅이 막는다 → **T-1 선행 = 로컬 pm2 격리 예외 PR(사용자 승인 · 미승인 시 Q85 ② 만)**. 인계 `docs/handoff/2026-10-16-m6-done-cutover-design.md`(#165). 다음 = **fit 재수용**(세션 끝 서비스 dev `39ffa15b969a` · health_checkup 마이그레이션) → **T-1**(루트 `deploy/`·pm2 정의 · pleiades 내부).
+**2026-10-16 · M-6 완료 — M-6b-4 #155 → PR #156 `d353b33`(fin RSU vest 버튼 Discord · `decideVest` 분리 · fin 봇 프로세스 gateway · 패키지 무변경 — gateway 의 type 6 지연 응답으로 3초 제한 해소 · Codex P1: 15:35 확정 작업 가드가 버튼 수신자도 본다).** 실수신 확인(없는 RSU id · DB 쓰기 0). 테스트 fin 902. 후속 #157(봇 기동 뒤 Discord 설정 시 재시작 필요 · fin·fit). 기록 #158. 다음 = **fit 정기 수용**(서비스 dev 뒤처짐) → **전환 설계(Q60 · 007)**.
+**2026-10-15 · M-6b-1~3 완료 — #147 → PR #148(분기 PDF Discord 웹훅 첨부 `sendDiscordFile`) · #149 → PR #150(`createDiscordBotTransport` + `createDiscordGateway` · 루트 dependencies `ws`) · #151 → PR #152 `9ae924c`(fit 자동조정 버튼 Discord · `decideAutoAdjust` 분리 · fit 봇 프로세스 gateway).** 결정(#147): gateway · **앱별 비공개 봇 2개** · 버튼 스위치 **`NOTIFY_INTERACTIVE_CHANNEL`** · 허용 = **사용자 ID AND 채널 ID** · DB D-a(Q61). 봇 토큰·채널 ID·허용 사용자는 루트 `.env`(`.env.example`). 실수신 fin·fit 봇 · fit 자동조정. 인계 `docs/handoff/2026-10-15-m6b-fit-buttons.md`(#153). 다음 = **M-6b-4 fin RSU vest 버튼** → M-6 완료 → 전환 설계(Q60).
+**2026-10-15 · M-6a 완료 — Discord 텍스트 알림(003 §6 1b-1) · #141 → PR #142 `a6486dc`(`@pleiades/notify` `createDiscordTransport` 웹훅 · `htmlToDiscordMarkdown`(텍스트 md escape) · `splitDiscordMarkdown`) · #143 → PR #144 `4a201e8`(두 앱 라우트별 스위치 `NOTIFY_ALLOWED_CHANNEL`/`NOTIFY_ADMIN_CHANNEL=discord` · 기본 텔레그램 · 키보드 3곳·`/브리핑`·분기 PDF 는 항상 텔레그램).** **플랫폼 설정 = pleiades 루트 `.env`**(사용자 결정 — 앱이 늘어도 한 곳): `platformEnv` 가 프로세스 env → 루트 `.env`(cwd 에서 위로 name=pleiades · `PLEIADES_ENV_FILE`) 순으로 `NOTIFY_*`·`DISCORD_WEBHOOK_*` 만 읽는다 · 실행 방식(run.sh · npm run dev · pm2) 무관 · 수정 시각이 바뀌면 다시 읽음(재시작 불필요) · 앱 `.env` 의 플랫폼 키는 루트 값을 가리므로 두지 않는다(`check_env` 차단은 **`run.sh` 경유일 때만** — `npm run dev`·pm2 직접 기동은 검사 없음) · 템플릿 `.env.example`. 검증 Discord 서버 실수신 확인. 테스트 패키지 162 · fin 877 · fit 457. 서비스 영향 0. 다음 = M-6b(1b-2 인터랙션·첨부 · 신규 인프라 · Q61) 또는 전환 설계(Q60 · 007) · 미결 #126 #137.
+**2026-10-15 · M-5 완료 — M-5b #136 → PR #138 `ef2b765` · `apps/finance` 아웃바운드 알림(`sendHtml` 20 · 루프 21 · rsu 키보드 · advisor ADMIN)을 `@pleiades/notify` 로 · `notifier.ts`(`notifierFor` · `notifierForChat` · `recipients` · `lastErrorOf`) · Q27 흡수(사용자) · `/브리핑` 요청 chat 단독 보존 · fin webpack 이 `file:` 해석 실측 · 테스트 868 · CI fin 두 job 루트 `npm ci` 선행 · 검증 봇 실수신(RSU 키보드) 확인.** 후속 #137(lastError sanitize). 다음 = M-6(Discord · 1b · 검증 Discord 서버 · 스키마 무변경 Q61).
+**2026-10-15 · M-5a 완료 — #132 → PR #133 `0233497` · `apps/fitness` 아웃바운드 알림(send.ts · 호출 6)을 `@pleiades/notify`(`file:../../packages/notify`)로 교체 · 루트 `npm ci` 가 fit 8절·CI 선행 · 루트 `package-lock.json` 삭제 금지(fit `next build` 전제 · 006 ㉒ C1) · 테스트 453 · 검증 봇 실수신 확인(분할 2청크 · 키보드 마지막 청크).** #95 는 M-5a 로 대체돼 닫힘. 다음 = M-5b(fin · Q27 선결 · 착수 직전 수용 0) 또는 M-6. 같은 날 fit 정기 수용 #129 → PR #130 `4dd2796`(fit#506·fit#509 · 서비스 유래 결함 기록 #131).
+**2026-10-15 · 최종 그림 기록 — #127 · 두 앱은 pleiades 의 도메인 모듈로 내재화되고, 완료 시점에 두 서비스를 내리고 pleiades 만 서비스한다(= 전환 · 006 Q60 정의 · 002 Q2 답 "독립 배포 포기").** M-5·M-6 은 서비스 notify 교체가 아니라 공통 기반(`packages/*`)을 소비하는 모듈화의 첫 단계. 서비스 무영향 원칙은 전환 전까지 절대(006 §0 정정).
+**2026-10-01 · M-4 — #122 · 두 앱 웹(4610·4620)·검증 봇(@starryJejuPleiadesFin_bot·@starryJejuPleiadesFit_bot) 로컬 기동 · 사용자 응답 확인 · 409·서비스 포트·서비스 DB 흔적 0 · advisor 차단 동작 = 006 첫 목표(U97-4) 달성.** 인계 `docs/handoff/2026-10-01-m4-done.md` · 다음 = M-5(notify · 착수 직전 수용 최신 필수). 절차 `tools/local/README.md` · 로컬 자원 + `pleiades_fit`(35). 실측 measured-facts *M-4*.
+**2026-10-01 · M-3 — #120 · `.github/workflows/apps-ci.yml`**(앱별 job · 서비스 CI 단계 그대로 · 러너 postgres:16 · secrets 0) · **Q52 확정 = 필수 `apps-fin`·`apps-fit` · `apps-fin-test` 비필수** · **Q57 확정 = `apps/*` 서비스 결함은 고치지 않는다**(006 §7 확정 블록). ruleset 반영은 머지 후 사용자 확인.
+**2026-10-01 · M-2 — #118 · 두 앱 8절 4종 로컬 통과**(fit lint·typecheck·test 433+verify 5·build · fin lint·tsc·test 866·build · 서비스와 같은 lock · `apps/*` 무변경) · 헬퍼 `tools/local/db.py`(pleiades_* 전용 create·drop) · `write_env.py`(루트 템플릿 → `apps/<app>/.env`) · 실행은 `run.sh` 경유(8절 실행 방법 블록). **로컬 격리 자원 유지: `pleiades_fin`(마이그레이션 26) · `apps/*/.env` · `node_modules`·`.next`·`dist`.** 실측 measured-facts *2026-10-01 — M-2*. 서비스 영향 0.
+**2026-10-01 · M-1 완료 — #114 → PR #115 merge commit `623351d`(부모 2) · `apps/fitness`(fit dev `a984b856e44b` · 375커밋) · `apps/finance`(fin dev `55404173bd9c` · 395커밋) 이력째 가져옴 · 트리 = 서비스 dev · 게이트 0 · 가드 C 통과 · 태그 0 · push protection 무사(X14) · draft 16분 동안 봇 자동 리뷰 없음(Q65 미결 — 30분 컷오프 미달) · Codex P1 1 오탐(근거 답글). 같은 날 #107 → PR #113 `73b335a`(006 정정 4건 · I-10 에 `repos/*` 지연 로드). 서비스 영향 0(https clone 2회). 인계 `docs/handoff/2026-10-01-m1-done.md`. 다음 = M-2(앱별 `npm ci` · 로컬 `pleiades_fin` · 8절 `apps/*` 행 · 착수 전 승인 게이트).**
+**2026-09-30 · #85 완료(PR #86 `8bd0cf9` · `VERSION` 상수 삭제 = #48 I1 · 버전 0.1.0 · 버전 단일 출처 테스트) · 릴리즈 PR #87 닫음 → #88 사용자 결정: 첫 릴리즈는 두 저장소가 모노레포로 온전히 들어오고 Discord 통합 알림이 어느 정도 기능할 때. 1a-3 의 패키지 참조 방식은 신규 미결 Q48(003 §10). 1a-3 선결은 Q45(서버 측정 · 사용자 실행 대기) + Q48.**
+**2026-09-30 · M-0 완료 — #101 → PR #105 `ed5444c`(격리 룰 `.claude/rules/isolation.md` · 하네스 소진) · #102 → PR #106 `3287fe4`(차단 훅 `.claude/settings.json` · Codex 4라운드 → 종료 기준 · 한계 #109) · #103 → PR #108 `7fe5f43`(002~005 정정·소진 블록) · #104 → PR #110 `4b837de`(`tools/import/` · `tools/local/` · `bin/claude` shim). 서비스 영향 0. 인계 `docs/handoff/2026-09-30-m0-done.md`. 다음 = M-1(두 앱 가져오기 · 착수 전 승인 게이트) 또는 #107(006 정정).** 커밋 메시지 치환 형식은 M-1 에서 고정된다(`tools/import/rewrite.py` · `VERSIONS`).
+**2026-09-30 · 방향 전환 — 모노레포 먼저(정본 `docs/specs/006-monorepo-first.md` · #97 · PR #98 `588479d` 머지 · 인계 `docs/handoff/2026-09-30-monorepo-first.md` · 열린 PR 0 · 다음 = M-0).** 원칙: **pleiades 는 서비스 중인 두 서비스에 어떤 목적으로도 영향을 주지 않는다**(서비스 저장소 쓰기 0 · 운영 영향 0 · https 읽기의 traffic 흔적만 허용). 두 서비스 `dev` 를 `git filter-repo` 재작성으로 `apps/{finance,fitness}` 에 이력째 가져오고 pleiades 안에서 정기 수용한다 · 앱별 lock(workspaces 없음) · 로컬 DB `pleiades_fin`·`pleiades_fit`(5432) · 검증 봇. 기존 작업물(`integration/pleiades` · `repos/*` · 이관 이슈)은 **동결** · **1a-3(#95) 보류**(M-5 에서 `apps/fitness` 안으로 재사용). **다음 = M-0**(006 §9 체크리스트 — 상위 문서 정정·격리 룰·차단 훅·`tools/import/`). 아래 문단들의 대상 저장소·worktree·git dep 경로는 M-0 에서 소진 표기된다.
+**2026-09-28 · #70 완료(PR #74 `35c7859` · Codex 4라운드 P1 3·P2 5 — 서비스 `dev` → `integration/pleiades` 정기 동기화 정책 · `workflow.md` 브랜치 전략 표 `dev 수용` 행) + #71 첫 적용(myFinance#505 merge commit `af00fe3` · myFitness#488 **squash** `961b130` → #75 `-s ours` 복구 myFitness#489 `5cf4660` · 둘 다 behind dev 0) + #67 완료(myFinance#508 `c94cbb8` · myFitness#490 `ef00e88` · 미러 myFinance#509 `5540417` · fit 원본 1파일 archive) · 봇 P2 이관 첫 사례 myFinance#506.** 발견: fit `dev` 가 2026-09-18 vitest 독자 도입(1a-2 중복) · 원본 fit `.claude/` 가 worktree 판과 갈라짐(#72) · fit lock 영구 분기(#73) · fit 검증은 `npx prisma generate` 선행 · 로컬 node 20.18 < dev 요구 20.19(Q45 항목). **#73 완료(myFitness#492 squash `a984b85` · 모드 S · 6파일 byte-identical 미러 · fit dev↔integration 하네스 외 차이 0). 그 뒤 사용자 방침 재확인 → #80 미러 폐기(#509·#492 는 마지막 미러로 유지 · myFitness#494 는 닫음 · `claude-with` 는 worktree) · #72 A 완료(myFitness#499 `02707a3` · 드리프트 0 · 원본 유래 봇 지적은 myFitness#500·#497 이관) · **#83 이슈 정책**(이관 이슈는 고치는 저장소에 · 라벨 `pleiades` · 대장 #82 — fit 6 · fin 1 열림). 열린 PR 0. 다음은 1a-3 준비(Q45 · 첫 태그).**
+**2026-09-14 · #61 완료(PR #65 머지 `00544ac` · Codex 8라운드 P1 9·P2 6 → 9-4 스코프 축소: `dual-repo-change` **5-1 롤백 문서 필수 항목** = 상태 판정 표 · 세 시점(머지 전 / 머지 후 revert 브랜치→PR→사용자 머지 / 원본 도달분) · 원칙 4 — 상황별 명령·반례 15건은 `_workspace/61/rollback-checklist.md` 초안 → **#66**) + #62 완료(fin·fit `workflow.md` 8-4 `model` 예시 `gpt-4o` → 로컬 캐시 출처 · myFinance#496 `5467407` · myFitness#375 `3182c1d` · 원본 도달: fit `git archive` + fin 미러 myFinance#497→#498 `36ba209` · 5-1 형식 첫 적용 `_workspace/62/04_operator_rollback.md`) + 후속 **#67**(캐시 경로 `~`→`$HOME` · 3벌 대칭 · 한 줄)** — 실측: codex-cli 지원 모델은 `${CODEX_HOME:-$HOME/.codex}/models_cache.json` 의 `visibility: "list"` slug(`gpt-5.5`·`gpt-5.4`·`gpt-5.4-mini` · 쿼터 소비 없음). 봇은 이번 4 PR 전부 오픈 3분 뒤 자동. **열린 PR 0(인계 #68 제외). 다음은 1a-3 준비(첫 태그 · Q45) — 그 롤백 문서가 #66 둘째 적용 · #67 은 별도 PR(1:1 예외 아님 · PR #69 Codex P2).**
+**2026-09-11 · 1a-2 완료(#58 → myFitness#374 머지 `3818208` · 원본 fit `.claude/` 2파일 동기화 완료) + #51 완료(myFinance#493 머지 `ef43c03` + 원본 `dev` 미러 myFinance#494 → #495 머지 `8ed402c`) + E10(#59 → PR #60 머지 `b4255de` · Codex 4라운드) + 후속 #61(롤백 절차 규칙) · #62(8-4 `model` 예시 · 대칭 변경)** — 사용자 확정 **Q16 승인 · Q17 `src/**/__tests__/` · Q18 devDeps · G-1(1a-3 교체 대상 `send.ts` 직접 baseline 포함) · G-2(머지 후 원본 하네스 동기화 — fit `git archive` · fin #51 은 모드 S 미러 PR)**. 착수 직전 재감사 정정 10(블로커 3: 테스트 대상 `bot/utils`→`send.ts` · 하네스 정정 3곳 · 원본 도달) · U2·U3 해소 · 테스트 45건 · 8절 4종 통과 · `next build` DB 요구 없음(**fit 한정** — fin 은 스키마 DB 필요 · 006 ㉑ · #107). 사전 리뷰 fit 0/0/info 5(3 반영) · fin 0/0/info 2(1 반영). **10절 전부 완료 · 열린 PR 0(인계 #63 제외).** fit `integration/pleiades` 의 `npm run test` = vitest 45 + verify 2(원본 `main` 코드는 여전히 verify 뿐). 되돌리기 즉시(원본 동기화분만 중간). **다음은 1a-3 준비(첫 태그 · Q45) 또는 #61·#62.**
+**2026-09-10 · 1a-1 완료(#47 → PR #49 머지 `c44f5c8`)** — `@pleiades/notify` 포트·코어·`TelegramTransport` + 테스트 93건 + 타입체크 게이트(#32 I1 (b) · 8절 pleiades 타입 칸 = `npm run typecheck && npm run typecheck:test`). 사용자 승인 4건 **D-1 `Content{text,format,components?}` · D-2 `Transport.maxLength`(유한=코어 소유/Infinity=어댑터 소유) · D-3 grammy 무의존 `TelegramApi`(`parse_mode?: string` · 메서드 단축 문법) · D-4 `Route→Transport` 매핑 config**. 003 §4-2 는 **2026-09-10 정정 블록과 함께가 정본**. 같은 날 아티팩트 **v6**(#45·PR #46) → **v8**(#54·PR #55 · 최종 목표 기준 타임라인 + 진척도 절: 기반 7/7 · 실행 단위 3/11) · **#38 실측**(skill 충돌 = 이름 단위 · cwd 승 · 개명 불필요 · PR #50) · **#42 집행**(myFitness#373 · 원본 동기화 완료 · fin 같은 결함 → #51). 후속 #48(1a-3 인계) · #51(fin 8-4). 인계 PR #53 · 아티팩트 PR #55 머지 → **열린 PR 0**. **다음은 1a-2(fit vitest · Q16~Q18) 또는 1a-3 준비(첫 태그 · Q45).** 소비자 0 이므로 1a-1 되돌리기는 여전히 **즉시**.
+**현재 상태: 방향 확정 · 배치·룰 완료 · 하네스 통합(#1) 집행 · **1a-0 완료(#31 → PR #33 머지 2026-09-08)** — 하네스 PR 5개(#19·#20·#22·#24·#26) · myFinance#492 · myFitness#369 전부 머지됨(2026-09-07). **하네스 통합(#1) 집행 완료 2026-09-09** — H-1(#40 → PR #41 `1f2f292` · `pleiades-codex-loop`) · H-3(fit)(#8 → myFitness#372 `2195854` · 10파일 · **원본 `.claude/` 동기화 완료**) · #8 종료. ~~**1a-1 선결 0.**~~ **1a-1 완료(2026-09-10).** 단계 0 미착수 · **열린 PR 0**(#35·#36 은 2026-09-08 머지됨 — `362e6e8`·`2e07093`).**
+**2026-09-09 · 이슈 #37 (1a-1 준비):** 측정 3건(Q41 하네스 이름 전수 · #32 I1 테스트 타입체크 게이트 · Q10·Q19 정적 근거 C-1~C-7) →
+초안 `_workspace/1a-1-prep/02_writer_1a1prep.md` **3회 개정 · 감사 3회(정정 11→10→6 · 마지막 6건은 문안 수준이라 직접 반영)** →
+**사용자 확정 7건 (전부 권고안 채택)** — **Q25 ①`targets(route): string[]`** · **하위 ADMIN A**(실값 · fin 전용 · fit 미매핑) ·
+**Q26 ①`label` 만**(`onError` 없음) × **Q19 C**(포트가 raw 를 담는다 · `deliveries[].error?: string` 유지 · B″ 배제 · `sensitiveLogs` 단서) ·
+**Q10-L ① 분할로 통일**(사용자 승인 · 1a-3) · **Q10-P ① 태그-only**(1a-1 코어 정본) ·
+**Q41 `pleiades-codex-loop`**(판정 기준 **S** · 3층 유니크 40 에 E·S 0 · 기존 `orphan-check` 충돌은 별건 이슈 **#38**) ·
+**#32 I1 (b)** `tsconfig.test.json` + `typecheck:test`(선결: `@types/node ^20` 핀 · `"noEmit": true` 를 파일 안에 고정) →
+**정본 반영 — 산출물 형태 3안**: **003 §4-2 는 답 반영 시그니처로 재작성하고 기존 코드 블록 + 정정 블록 5개는 소진 헤더 아래로 강등**(삭제 없음),
+나머지는 전부 정정 블록 append(003 8곳 · 005 4곳 · `measured-facts` C-7 · `workflow.md` 8절 · 이 문서).
+**1a-1 의 잔여 선결은 #1 잔여 H-1·H-3(fit) 뿐이다** — Q10-L 이 ③(측정 후 결정)이 아니므로 **Q14(실서비스 DB 읽기)는 필요하지 않다**.
+**2026-09-08 · 이슈 #31 (1a-0):** 측정 2건(발송 경로 DB 쓰기 · npm git 의존성 역학) → 초안 `_workspace/1a-0/02_writer_1a0.md` **3회 개정 · 감사 3회(정정 20건)** → **사용자 확정 Q47·Q44·Q46**(Q45 는 1a-3 전 측정) → **정본 정정 반영**(003 5곳 · 004 §8-4 · `workflow.md` 8절 · 이 문서).
+**확정:** 배포 형태 **ALT-d 위임형**(루트 `name:"pleiades"`·`private` + `main`/`types`/`exports`/`files`/`prepare` 가 `packages/notify/dist` 위임 · **`workspaces`·`peerDependencies` 는 1a-0 에 넣지 않는다**) · 의존성 표기 **`git+https://…#<tag>` + `package.json` 직접 편집**(설치 명령은 `github:` 로 정규화한다) · **Q28 소멸**(세 형태 전부 자격 증명 불필요, 실제 전송 https) · 검증 경로 **γ(로컬) + β2(빈 스키마 사본)**.
+2026-09-04 에 **worktree 배치**(004) · **GitHub 발행**(PUBLIC, 기본 `dev`) · **gitflow** · **룰 계승**(`.claude/rules/workflow.md`) 이 끝났고, 측정 2건(#2·#4)으로 **003 이 개정**됐다.
+2026-09-07 에 **Q20 이 답을 받아 하네스 통합의 방향이 확정**됐고, 같은 날 **Q29·Q30·Q32·Q39 도 확정**됐다 —
+**형태 B(복사) · 저장소별 래퍼 스크립트 · fit tracked 화 · W-2(원본 workflow.md 유지)**.
+정본은 `docs/specs/005-harness-integration.md`(초안 4회 개정 · 감사 4회 통과).
+**집행 진행:** H-0 (#20) · H-1b·H-5 (#22) · H-3(fin) (myFinance#492) · H-4 (myFitness#369) **전부 머지** — 대상 저장소 쪽은 `integration/pleiades` 에만 있고 서비스 `dev` 에는 없다(004 Q43) ·
+H-1 은 ~~Q41(산출물 이름)~~ **완료(PR #41 · 2026-09-09)** · H-3(fit)은 ~~H-4 머지 후~~ **완료(myFitness#372 · 2026-09-09 · 봇 5라운드 · 원본 동기화)**. 이슈 분할 초안은 005 §4-14.
+**1a-0 은 완료됐다 (#31 · PR #33) — Q42 는 실측으로 개정됐다(2026-09-08):** ~~6조건~~ → **10조건(정본은 003 §10-1 의 2026-09-08 정정 블록)**. 뒤집힌 셋 — **RO 롤은 검증을 축소하고**(fin 15 중 10 · fit 4 중 1 만 정상 본문 도달) · **cron off 는 env 가 아니며**(플래그 0건, fit sweeper 는 코드 변경) · **fit 웹은 기동만으로 DB 를 쓴다**(부팅 1회 + 5분 주기). 그리고 **텔레그램 격리 축이 빠져 있었다** — 봇을 안 띄워도 **fin 웹 경로 셋**이 전송을 낸다. 검증은 **γ(로컬 `repos/*`) + β2(빈 스키마 사본 `myfinance_int`·`myfitness_int`)**, **서버 작업·β2 승인은 1a-3 과 함께**. **1a-1 부터는 추가로 하네스 통합(#1)이 선결**이고 #1 은 방향만 확정됐다 — 1a-1 이 이미 두 저장소 코드를 흡수한다.
+
+> **단계 0 은 끝나지 않았다.** 002 §4 는 단계 0(통합 어드바이저)을 *"지금, 반나절 → 하루"* 로 두고
+> `002:3` 상태도 *"단계 0 실행"* 이다. 2026-09-03 세션에서 범위만 실측하고 실행은 보류했다.
+> 004 Q23(단계 0 의 MCP 상주 위치)이 **단계 0 착수 전** 미결로 걸려 있다.
+> 단계 1 을 먼저 하기로 한 것이 아니라 **아직 결정되지 않았다.**
 2026-09-03 에 Q1·Q4·Q5·Q6 이 답을 받아 방향이 정해졌고 — **개인 비서 플랫폼** —
 같은 날 Q15·Q9·Q8·Q11 이 답을 받아 **단계 1 의 설계가 확정**됐다:
 **git 의존성 배포 · 1a/1b 분할(1a → 1b) · L3 2층 인터페이스 · 혼합 운영 허용.**
 정본 방향은 `docs/specs/002-platform-direction.md`, 단계 1 상세 설계는 `docs/specs/003-notify-package.md`.
 001 은 분석 근거로 유효하나 권고 경로는 002 가 대체한다.
 
-착수 전 남은 것: **Q10**(fit 절단→분할 · plain 폴백 정본, 1a 착수 전) ·
-미확인 U1(myFitness vitest 의존성 resolve) · 1a-4 청구서 확정을 위한 정적 측정 1건 (003 §9).
+1a 착수 전 남은 것 — **단계별로 무엇이 막는지는 `003` §10-1 의존 지도가 정본이다** (1a-0 은 **완료 — PR #33** · Q47·Q44·Q46 확정 · **Q45(서버 https·node)는 1a-3 착수 전 측정** · 1a-2 는 **#1 + Q16·Q17·Q18** · 1a-1·1a-3·1a-4 는 Q10 외 다수):
+**Q20**(두 저장소 하네스를 pleiades 로 통합, 이슈 #1 — **답을 받았다**: *공통은 pleiades, 특수는 그 저장소*.
+설계·집행 계획은 **005**. **집행 결정도 전부 확정됐고(Q29·Q30·Q32·Q39) 남은 것은 실행뿐이다** — 미결은 Q36·Q38 — **Q41 은 2026-09-09 확정**) ·
+~~**Q10**~~ **확정 2026-09-09 (#37)** — **Q10-L ① 분할(1a-3) · Q10-P ① 태그-only(1a-1 코어)**, 이슈 #3 · 미확인 **U1**(vitest resolve, 이슈 #2 — **해소됨**,
+blocker 는 fit `overrides` 의 `$postcss` 1줄) · **U2**(fit zero-warning 게이트, 1a-2 완료 판정) ·
+1a-4 청구서 확정 측정 (이슈 #4 — **완료**).
+단계 0 착수 전: **Q23**(핵심 전제 3 의 "로컬 HTTP 상주"가 성립하는지 — 004 §6).
 그 뒤 미결: Q12(1b DB) · Q13(fit 관리자 alert) · Q14(실서비스 DB 읽기, 낮음) ·
-Q7(DB 경계) · Q2(독립 배포) · Q3(봇 인바운드 통합).
+Q7(DB 경계) · ~~Q2(독립 배포)~~ **Q2 답 2026-10-15 — 포기(전환 시 · #127)** · Q3(봇 인바운드 통합).
 
 ## 대상 저장소
+
+> **소진 (2026-09-30 · 006 · #101 · M-0) — 이 절 전체(worktree 표 · 원본 사용 구분 · `integration/pleiades` 브랜치 체계 · 정기 동기화 · 하네스 `--add-dir`·`bin/claude-with`) 는 소진이다.**
+> **정본은 `.claude/rules/isolation.md`(격리 불변식 I-1~I-21) 와 006.** pleiades 는 서비스 저장소(원격 · 동결된 `integration/*` 포함) · 원본 `~/workspace/myF*` · worktree `repos/*` 에 **쓰지 않고 그 안에서 git 명령도 하지 않는다.** 두 서비스는 `apps/finance`·`apps/fitness` 로 pleiades 안에 이력째 들어오고(006 M-1 · filter-repo · 스크래치에서만) 서비스 `dev` 는 https 읽기로 정기 수용한다(006 §4-S). `apps/*` 안의 하네스는 pleiades 세션에서 **효력이 없다** — 추적 경로라 파일을 읽으면 지연 로드되지만(006 ⑧) 그 지시를 실행하지 않는다. `bin/claude-with` 는 실행하면 소진 메시지와 함께 종료한다. `repos/` 는 동결 동안 `.gitignore` 에 남는다 — **`apps/` 는 추적되므로 루트 Grep 이 검색한다.** 아래 원문은 이력이다.
 
 **통합 작업 소스는 `repos/` 아래 git worktree 로 있다** (2026-09-04 배치, 상세는 `docs/specs/004-repo-layout.md`).
 저장소는 여전히 각각 하나다 — worktree 는 같은 저장소의 두 번째 작업 디렉터리이므로 **분기가 불가능하다.**
@@ -28,33 +80,54 @@ Q7(DB 경계) · Q2(독립 배포) · Q3(봇 인바운드 통합).
 | 서비스 유지 | `~/workspace/myFinance` (v0.16.4) | `dev` | 원본. 핫픽스·단일 저장소 작업용 |
 | 서비스 유지 | `~/workspace/myFitness` (v2.27.2) | `main` | 원본. 핫픽스·단일 저장소 작업용 |
 
-**이 프로젝트의 작업은 `repos/` 아래에서만 한다.** 원본 두 경로는 이 프로젝트가 끝날 때까지
-**서비스 유지용으로 남긴다** — 필요하면 읽기 전용으로 참고한다.
-단계 작업은 `integration/pleiades-<단계>` 를 따서 PR 로 합친다 (003 §5-2 의 단계별 되돌리기 등급 보존).
-`dev` 로의 PR 은 1a 전체가 끝난 뒤. `main` 직접 변경 금지. 롤백은 `_workspace/04_operator_rollback.md`.
+**이 프로젝트의 통합 작업은 `repos/` 아래에서만 한다.** 원본 두 경로는 이 프로젝트가 끝날 때까지
+**서비스 유지용으로 남긴다** — 통합 작업의 참고용으로는 읽기 전용이다.
+
+> **원본이 금지된 것은 통합 작업뿐이다.** 원본에서 하는 작업은 **두 종류이고 경로가 다르다**:
+> **단독 작업**(pleiades 와 무관한 평시 변경 → 그 저장소의 `dev` 경유)과
+> **서비스 핫픽스**(실서비스 버그 → `main` 경유).
+> **평시 변경을 핫픽스 경로로 보내면 즉시 배포된다** — 섞지 않는다.
+> worktree 를 쓸 수 없는 이유는 그것이 `integration/pleiades` 를 잡고 있어 그 저장소의
+> `dev`/`main` 에서 분기할 수 없고 통합 미완성분이 섞이기 때문이다.
+> 경로는 `.claude/rules/workflow.md` **7절 base 표**. **양쪽 다 사용자 승인 게이트가 적용된다.**
+pleiades 발 변경은 **전부** `integration/<type>-pleiades-<name>` 을 따서 `integration/pleiades` 로 PR 한다 (사용자 결정 2026-09-07 · #25 · `workflow.md` 브랜치 전략). 단계별 되돌리기 등급(003 §5-2)은 브랜치 단위로 보존된다.
+**`integration/pleiades` 는 `dev` 로 머지되지 않는다** — pleiades 가 공식 서비스가 되기 전까지 두 저장소의 pleiades 내부 메인이고, 통합은 모노레포 전환 완료 시점에 한다 (사용자 2026-09-07 · #25). ~~서비스에도 필요한 변경은 단독 작업 경로로 별도 PR.~~ **서비스 미러는 폐기(#80 · 2026-09-28)** — pleiades 발 변경은 무엇이든 서비스 `dev`/`main` 에 닿지 않고, 단독 작업·핫픽스는 그 저장소 단독 세션의 일이다. `main` 직접 변경 금지. 롤백은 `_workspace/04_operator_rollback.md`.
+**반대 방향은 정기 동기화다 — 서비스 `dev` → `integration/pleiades`** (사용자 2026-09-28 · #70). 두 저장소는 서비스 중이라 `dev`·`main` 이 계속 바뀌고, pleiades 는 그것을 지켜보다가 `integration/pleiades` 와 열린 작업 브랜치에 반영한다. 세션 시작(`pleiades-resume` Step 2)에 뒤처진 커밋 수를 재고 0 이 아니면 **대상 저장소 작업 전에** `integration/chore-pleiades-sync-<YYYYMMDD>` 로 머지 PR(**"Create a merge commit" · squash 금지**). 절차·리뷰 범위는 `.claude/rules/workflow.md` 브랜치 전략 표. 첫 적용 #71(2026-09-28 · fin dev 4 · fit dev 77). **fit 원본 `.claude/` 는 `dev` 에서 gitignored 라 이 동기화로 오지 않는다** — 원본이 단독 세션에서 진화해 worktree 판과 갈라졌다(2026-09-28 실측 스킬 6 차이). 원본 하네스는 **읽기 전용** — pleiades 는 어떤 단위로도 원본에 복원·동기화하지 않는다(#80 · PR #81 Codex P1). 원본이 더 새로우면 **원본 → worktree 복사(모드 I PR)** 로만 받는다(#72).
 
 `repos/` 는 pleiades `.gitignore` 에 등재돼 있다. 그 결과 **Grep 은 루트 검색에서 `repos/` 를 건너뛴다** —
 두 저장소를 검색할 때는 **`path` 를 `repos/` 이하로 지정**해야 한다 (Glob·Read 는 영향 없음).
 
-**하네스는 아직 통합되지 않았다.** 하위 디렉터리의 `.claude/skills`·`agents` 는 **로드되지 않으므로**
-(`--add-dir` 로 붙였을 때만 보인다) `repos/*/.claude/` 는 현재 동작하지 않는다.
-두 저장소 하네스(fin 16 tracked + fit 18 ignored)를 pleiades 로 모으는 것이 **002 단계 2** 이고,
-이 배치의 선결 조건이다. 그때까지 저장소별 하네스가 필요하면 `--add-dir` 로 원본을 붙인다:
+**하네스: 공통은 pleiades, 저장소별 특수는 그 저장소** (Q20 확정 2026-09-07 · **정본 `docs/specs/005-harness-integration.md`**).
+**방향·집행 결정 모두 확정됐고 집행은 진행 중이다** — 진행 상태는 상단 상태 문단이 정본, 단계 정의는 005 §4-13. 아래는 요약이다.
+확정: **`orphan-check` 는 복사(원본 유지)** · **저장소별 `--add-dir` 래퍼 스크립트** ·
+**fit `.claude/` tracked 화**(모드 I · base `integration/pleiades` · 이슈 `fomalhaut84/myFitness#368` → PR #369) · **fin·fit `workflow.md` 원본 유지 + #8 부분 갱신**.
+
+- 34파일(fin 16 tracked + fit 18 ignored) 중 pleiades 가 얻는 것은 **복사 1**(`orphan-check` — **H-1b 완료**, `.claude/skills/orphan-check/`) + **신규 작성 1**(Codex 대응 — **`.claude/skills/pleiades-codex-loop/` · H-1 집행 #40 · 2026-09-09**. 이름은 #37 Q41 확정, 판정 기준 S · 기존 `orphan-check` 충돌은 별건 이슈 #38)뿐이고 **나머지는 저장소에 남는다.** fin·fit `rules/workflow.md` 는 **폐기 불가**(단독 작업 절차 35줄이 pleiades 에 없다) — **fin `git rm` 범위는 0** 이다.
+- **저장소에 남은 하네스는 pleiades 세션에서 자동 로드되지 않는다.** 하위 디렉터리의 `.claude/` 는 보이지 않고(004 §3-2), `permissions.additionalDirectories` 는 **툴 권한만** 영속화한다. **`--add-dir` 가 유일한 경로다.**
 
 ```bash
-CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
-  claude --add-dir ~/workspace/myFinance --add-dir ~/workspace/myFitness
+bin/claude-with fin      # = CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 claude --add-dir ~/workspace/pleiades/repos/myFinance   (#80 · worktree)
+bin/claude-with fit      # 한 번에 한 저장소 (H-5 · Q30). --resume 도 이 래퍼로 연다
 ```
 
-주의: `--add-dir` 는 `--resume` 시 복원되지 않는다. 세션을 재개할 때마다 다시 넘겨야 한다.
+- **환경변수를 빼면 skills·agents 만 로드되고 rules·`CLAUDE.md` 는 조용히 빠진다** — 래퍼가 그래서 환경변수를 고정한다. 방향은 대칭이라 대상 저장소 cwd 세션도 `--add-dir` 로 pleiades 하네스를 본다.
+- ~~**대상은 항상 원본**이다 (`repos/*` worktree 아님 — fit `.claude/` 는 worktree 에 없다).~~ **대상은 worktree `repos/<repo>` 다(#80 · 2026-09-28).** fit `.claude/` 는 #369 이후 worktree 에 tracked 다. 세션이 읽는 하네스 = pleiades 가 고치는 사본이라 원본 동기화가 필요 없다. **원본 `~/workspace/myF*` 는 읽기 전용.**
+- 둘 다 붙이면 rule 은 **드롭 없이 여러 벌 공존**하고 agent 는 **마지막 `--add-dir` 이 이겨 나머지가 조용히 사라진다.** **skill 은 이름 단위로 1개만 남고 `cwd` 쪽이 이긴다**(#38 실측 2026-09-10 — `orphan-check` 는 pleiades 세션에서 pleiades 판, fit 세션에서 fit 판 · 개명 불필요). 그래서 한 번에 하나만 붙인다.
+- `--add-dir` 는 `--resume` 시 복원되지 않는다. 세션을 재개할 때마다 다시 넘긴다.
+- **fit 원본 `.claude/` 는 git 이력이 없고 단독 세션에서 독자 진화한다**(원본 `.gitignore` 가 `.claude/`·`CLAUDE.md` 를 ignore · worktree 는 #369 로 tracked). pleiades 는 그것을 **복원·갱신하지 않는다**(#80 · 옛 `git archive … | tar -x` 절차 폐기). 원본이 더 새로우면 **원본 → worktree 복사(모드 I PR)** 로 받는다(#72 · `pleiades-resume` Step 2 가 `diff -rq` 로 감지). 원본이 지워졌으면(#27 유형 · 2026-09-28 #494 도중 재현) fit 단독 세션의 일이다.
 
 ## 문서 지도
 
 | 파일 | 내용 | 언제 읽나 |
 |---|---|---|
-| `docs/handoff/` 의 최신 파일 | 직전 세션 인계 노트 (현재: `2026-09-03-direction-002.md`) | **새 세션 시작 시 먼저** |
+| `docs/handoff/` 의 최신 파일 | 직전 세션 인계 노트 (현재 `2026-10-21-t1-done-t2-script.md`. `ls` 로 재확인) | **새 세션 시작 시 먼저** |
 | `docs/specs/002-platform-direction.md` | **정본 방향** — 개인 비서 플랫폼, 개정 경로 0~4, 확정된 답 | **방향 판단 시 먼저** |
-| `docs/specs/003-notify-package.md` | **단계 1 상세 설계** — `@pleiades/notify`. 확정된 답 Q15·Q9·Q8·Q11, 발견 8~15, L3 인터페이스, 1a-0~1a-4 · 1b, 되돌리기 표, 제외 목록 | **단계 1 작업 시.** 002 를 대체하지 않는다 |
+| `docs/specs/003-notify-package.md` | **단계 1 상세 설계** — `@pleiades/notify`. 확정된 답 Q15·Q9·Q8·Q11 · **Q47(배포 형태 ALT-d)·Q44(검증 경로 γ+β2)·Q46(검증용 봇 토큰)·Q28 소멸** · **Q25(①`targets`+ADMIN A)·Q26(①`label`)·Q19(방향 C)·Q10(L ① 분할 / P ① 태그-only) — 2026-09-09 확정**, **§4-2 는 재작성된 정본 시그니처 + 2026-09-10 정정 블록(`Content`·`maxLength`·`transport` 맵·`TelegramApi`·`csvEnv` — 1a-1 이 채운 빈칸)(그 아래는 소진 이력)**, 발견 8~15, L3 인터페이스, 1a-0~1a-4 · 1b, 되돌리기 표, **§10-1 의 병행 인스턴스 10조건(정본)**, 미결 **Q45**(서버 https — 1a-3 전) | **단계 1 작업 시.** 002 를 대체하지 않는다 |
+| `docs/specs/004-repo-layout.md` | **배치 정본** — worktree 배치(`repos/*`), 변형 A/B 구분, 감사 정정 3건, 미결 Q23·Q24 (**Q20 답 → 005 · Q21 소멸 · Q22 → 005 Q38**, §8 정정) | **경로·배치 판단 시.** 하네스가 어디를 읽어야 하는지 여기가 정한다 |
+| `.claude/rules/isolation.md` | **서비스 격리 불변식 I-1~I-21 (룰 · `workflow.md` 보다 우선)** — 차단 훅(`.claude/hooks/`)은 보조 | **항상** — 서비스·원본·`repos/*`·서버에 닿는 모든 판단 전 |
+| `docs/specs/007-cutover.md` | **전환 설계 정본(2026-10-16)** — 배포 경로 · 서버 배치 · DB · 동결 · 순서 · 격리 해제 범위 · 롤백 R-1~R-8 · 단계 T-0~T-10 · 사용자 확인 U1~U14 · 확정 Q70~Q85 | **전환·첫 릴리즈 작업 시** |
+| `docs/specs/006-monorepo-first.md` | **방향 전환 정본(2026-09-30)** — 모노레포 먼저 · 서비스 무영향 원칙 · 확정 U97-1~12(filter-repo 가져오기 · 정기 수용 · 동결 · 첫 목표 · 원칙 경계 · 검증 봇 · 로컬 DB · M-0 규칙 · M-1 설정 · 가드 C · 앱별 lock) · 단계 M-0~M-6 + 정기 수용 · **격리 불변식 I-1~I-21** · 로컬 격리 L-1~L-9 · 미결 Q52·Q54·Q54b·Q57·Q59~Q61 · §9 = M-0 체크리스트 | **방향·격리 판단 시 먼저.** 002 단계 4·003 배포 경로·004 worktree 를 대체한다 |
+| `docs/specs/005-harness-integration.md` | **하네스 처분 정본** — 37행 파일별 처분 표, 역할 이관, `--add-dir` 운영 규약, #8·#10 처리, 집행 단계 H-0~H-5, 확정 Q29·Q30·Q32·Q39 · **Q41(`pleiades-codex-loop` · 기준 S · 2026-09-09)**, 미결 Q36·Q38 | **하네스가 어디에 있어야 하는지 판단할 때** |
 | `docs/specs/001-integration-master.md` | 축 A/B 분해·옵션·리스크 분석 (권고 경로는 002 가 대체) | 분석 근거가 필요할 때 |
 | `docs/research/measured-facts.md` | 두 저장소 실측 데이터 (2026-09-03) | 숫자가 필요할 때. **재측정 전에 여기부터** |
 | `docs/research/claude-code-mechanisms.md` | Claude Code 기능 조사 (메모리·세션·플러그인·모노레포) | 축 A 작업 시 |
@@ -63,29 +136,43 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
 
 1. **통합은 두 개의 독립 축이다.** 축 A = 하네스·세션(코드 무변경), 축 B = 저장소·런타임. 따로 결정한다.
 2. **되돌리기 비용 순으로 진행한다.** 값싸고 가역적인 것부터. 각 단계는 그 지점에서 멈춰도 손해가 없어야 한다.
-3. **가장 큰 이득은 코드 통합 없이 나온다.** 두 MCP 서버가 이미 로컬 HTTP 로 상주 중이라, `mcp-config.json` 병합만으로 교차 도메인 AI 어드바이저가 된다.
+3. **가장 큰 이득은 코드 통합 없이 나온다.** 두 MCP 서버를 한 세션이 함께 보게 하면 교차 도메인 AI 어드바이저가 된다.
+
+   > **정정 2건 — 이 전제의 원문은 두 번 반증됐다.**
+   > ① *"`mcp-config.json` 병합만으로"* 는 **틀렸다** (002 발견 7). 단계 0 은 설정 토글이 아니라
+   > **실서비스 두 곳의 TS 코드 변경 + 빌드 + `pm2 restart`** 다.
+   > ② *"두 MCP 서버가 이미 **로컬** HTTP 로 상주 중"* 은 현재 측정으로 성립하지 않는다
+   > — 로컬에 pm2 미설치, 4210/4301 리슨 없음 (004 Q23, **단계 0 착수 전 미결**).
+   > 서버를 기술한 것으로 보이나 확인되지 않았다.
+   > 이 저장소의 감사 규율(`reversibility-audit`)이 ①을 자기 존재 이유로 인용한다.
 4. **B2(모노레포)는 목표에 내장된 요구사항이다.** 001 은 "증거가 나오면"이라 했으나,
    목표가 "도메인을 계속 늘리는 플랫폼"으로 확정되면서 바뀌었다. 진입 조건은 **도메인 #3(캘린더)을 붙일 때**,
    그리고 병렬 조건으로 **1a 운영 중 패키지 수정 PR 2개짜리 왕복이 반복적으로 성가실 때** (003 §2-4).
    따라서 공유 패키지는 **처음부터 `packages/notify/`** — 모노레포에서 갖게 될 그 경로에 만든다 (003 §2-1).
+
+   > **정정 (2026-09-30 · 006 U97-4 · #101).** 진입 조건 *"도메인 #3"* 과 병렬 조건(패키지 수정 PR 왕복)은 **소진** — 사용자가 순서를 바꿔 모노레포가 **지금** 이다(두 앱을 먼저 가져오고 notify·Discord 는 그 안에서). 병렬 관측 지표는 관측 전 소진(git dep 소비자가 생기지 않았다). `packages/notify/` 경로 결정은 그대로 유효하다. 전환(cutover)은 범위 밖(006 Q60).
 5. **아웃바운드 알림과 인바운드 봇 명령은 비용이 다르다.** 아웃바운드는 어댑터 교체(초크포인트 1곳),
    인바운드는 재작성(210건). 인바운드를 저장소별로 각각 옮기지 않는다.
 
 ## 작업 규칙
 
+> **정정 (2026-09-30 · 006 · #101).** 아래 첫 두 항목(*"기존 두 저장소에 쓰기 전 사용자 확인"* · *"통합 작업은 `repos/` worktree 에서"*)과 워크플로우 요약의 **이관 이슈 · 대칭 변경 예외**는 소진이다 — **서비스 저장소에는 사용자 확인을 받아도 쓰지 않는다**(`.claude/rules/isolation.md` · 이 룰이 `workflow.md` 보다 우선). 새 발견은 pleiades 이슈에만 · 서비스 참조는 비링크 `fin#N`·`fit#N`. 격리 경계를 건드리는 작업(로컬 DB · 봇·웹 기동 · 외부 계정 env)만 착수 전 사용자 확인을 받는다.
+
 - **기존 두 저장소에 쓰기 전 반드시 사용자 확인.** 둘 다 실서비스 중이다 (PM2 + Nginx, finance:4100 / fitness:4200).
-- **작업은 `repos/` 아래 worktree 에서, 브랜치는 `integration/pleiades`.** 원본 `~/workspace/myF*` 는 서비스 유지용이므로 쓰기 금지 (위 표 참조).
+- **통합 작업은 `repos/` 아래 worktree 에서, 브랜치는 `integration/pleiades`.** 원본 `~/workspace/myF*` 에는 **통합 작업을 쓰지 않는다** — 서비스 핫픽스·단일 저장소 작업 전용이다 (위 표 참조).
 - **절대경로 측정에는 반드시 `grep --binary-files=text`.** 없으면 `.next/cache` 같은 파일이 binary 로 판정돼 조용히 0건 오탐이 난다 (004).
+  **그리고 ignored 경로에는 `--no-ignore-files` 또는 `/usr/bin/grep`.** 이 환경의 `grep` 은 ugrep 래퍼로 `.gitignore` 를 따라 fit `.claude/` 같은 디렉터리를 통째로 건너뛴다 (005 §4-11).
 - 새 옵션·단계를 제안할 때는 **되돌리기 비용을 항상 함께 적는다.** 이 저장소 문서의 일관된 형식이다.
 - 실측값은 추정하지 않는다. `docs/research/measured-facts.md` 에 없으면 직접 측정하고 그 파일에 측정 명령과 함께 추가한다.
 - 문서는 한국어. 코드·변수명·경로는 영어.
-- **브랜치 전략은 gitflow.** `main`(정본) → `dev`(개발) → `<type>/<issue>-<n>`(작업).
-  **작업 브랜치는 `dev` 에서 분기하고 `dev` 로 PR.** `main` 직접 push 금지. `main` 은 `dev` 에서만 받는다
-- **모든 작업은 GitHub 이슈와 PR 이 1:1 로 매칭된다.** 이슈 없이 작업 브랜치를 만들지 않는다.
-  PR 본문에 `Closes #<issue>` 를 넣어 자동으로 닫히게 한다
-- 커밋: conventional commits — `<type>(<scope>): <desc> (#<issue>)`.
-  원격 `origin` = `git@github.com:fomalhaut84/pleiades.git` (**PUBLIC**)
-- **PR 머지는 사용자가 직접 한다.** 로컬 merge / `main` 직접 push 금지 — 두 대상 저장소와 같은 규칙
+- **문서·하네스 변경도 리뷰가 필요하다** — 9-0 표는 그것을 *"실행 코드 아님"* 으로 self-review 에 두는데,
+  이 저장소에서 룰은 **에이전트가 실행하는 절차서**이고 스펙은 **청구서의 근거**다. 신설 예정: 이슈 #17
+- **개발 워크플로우 정본은 `.claude/rules/workflow.md`** — 브랜치·릴리즈·11단계·코드 리뷰 기준.
+  두 대상 저장소의 룰을 계승했다 (#5). **여기에 중복해 적지 않는다.** 요약만:
+  `main`(정본) → `dev`(개발·기본 브랜치) → `<type>/<issue>-<n>` → dev 로 PR.
+  **이관 이슈는 고치는 저장소에**(라벨 `pleiades` · `[pleiades]` 접두 · 출처 줄 · 대장 #82 · #83) · pleiades 이슈엔 `fin`/`fit` 라벨.
+  이슈와 PR 은 **1:1** (예외 3개: **양쪽 저장소 대칭 변경**(이슈 1·PR 2, 둘 다 머지돼야 종료) · hotfix dev 백포트 · 릴리즈 PR). 커밋 `<type>(<scope>): <desc> (#<issue>)`. **머지는 사용자가 직접**
+- 원격 `origin` = `git@github.com:fomalhaut84/pleiades.git` (**PUBLIC**)
 - 아티팩트 소스는 `docs/artifacts/integration-artifact.html`. 발행 전 `action:"read"` 로 현재 버전 확인 필수
 
 ## 하네스: pleiades 통합
@@ -99,6 +186,20 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
 | 날짜 | 변경 내용 | 대상 | 사유 |
 |------|----------|------|------|
 | 2026-09-03 | 초기 구성 — 에이전트 4 + 스킬 6(오케스트레이터 포함) | 전체 | - |
+| 2026-09-04 | `.claude/rules/workflow.md` 신설 · worktree 배치 반영 · **Codex 20라운드 + 교차 정합성 감사 1회로 78건 정정** | 룰 1 · 스킬 7 · 에이전트 4 · CLAUDE.md | 두 저장소 룰 계승 (#5, PR #6) · 004 배치 |
+| 2026-09-07 | **005 발행** (초안 4회 개정 · 감사 4회 · 정정 10→8→7→0) · 004 정정 append(Q20·Q21·Q22·§3-2) · 하네스 절 교체 | 스펙 2 · CLAUDE.md | Q20 답 (#1). 이 시점에는 하네스 무변경 (집행은 같은 날 PR #20·#22 에서 시작) |
+| 2026-09-07 | **Q29·Q30·Q32·Q39 확정** → 005 §2·§4-13 갱신 · **집행 이슈 분할 초안(§4-14) 신설** | 스펙 1 · CLAUDE.md | 사용자 결정 |
+| 2026-09-09 | **`workflow.md` 8절 pleiades 행 타입 칸에 한 구 추가** (#32 I1 (b) 도입 시 `typecheck:test` 를 이 칸에 더한다 — **명령은 1a-1 에서 생긴다**) | 룰 1 | #37 사용자 결정 |
+| 2026-09-09 | **H-1 집행 — 스킬 `pleiades-codex-loop` 신규 작성** (fin `codex-response-patterns` 91줄 + fit `codex-review-loop` 113줄 입력 · 척도는 봇 네이티브 `P0` 최고로 통일 · 카탈로그는 pleiades 자체 Codex 정정 이력 14패턴) | 스킬 1 (총 9) | 005 §4-13 H-1 · #40 |
+| 2026-09-09 | `bin/claude-with:12` stale 주석 정정(fit `.claude/` 는 worktree 에 **있다**(#369 tracked) — 로드가 안 되는 이유는 중첩) · H-3(fit) 완료로 fit 원본 하네스가 pleiades·fin 과 같은 척도·게이트 | 스크립트 주석 1 | #43 인계 |
+| 2026-09-08 | **`workflow.md` 8절 pleiades 행 확정** (lint 미해당 · `typecheck`/`test`/`build` + `npm --prefix packages/notify install` 선행 조건) | 룰 1 | 1a-0 (#31) 이 루트 `package.json` 을 신설 |
+| 2026-09-10 | **`workflow.md` 8절 pleiades 타입 칸에 `typecheck:test` 추가** (#32 I1 (b) 이행 · `tsconfig.test.json`) | 룰 1 | 1a-1 (#47) |
+| 2026-09-10 | 하네스 절에 **skill 충돌 규칙**(이름 단위 · cwd 승) 1줄 — N18 에 셋째 규칙 | CLAUDE.md | #38 실측 (PR #50) |
+| 2026-09-14 | **`dual-repo-change` 5-1 롤백 문서 필수 항목 신설** — 상태 판정 표 + 세 시점(머지 전 · 머지 후 revert 브랜치→PR→사용자 머지 · 원본 도달분) + 원칙 4. **상황별 명령은 `_workspace/61/rollback-checklist.md` 초안(#66 확정)으로 분리**(PR #65 Codex 7라운드 P1 9·P2 5 → 9-4 스코프 축소 · 사용자 결정) · 승인 게이트 롤백 칸·체크리스트 · `dual-repo-operator` 4번·집행 후 4번 · `pleiades-orchestrator` Phase 5 · `_workspace/harness/04_operator_rollback.md` 정정 블록 · `.gitignore` `_workspace/**/backup/` | 스킬 2 · 에이전트 1 · 롤백 문서 1 · 초안 1 | #61 (PR #60 Codex 4라운드 교훈) |
+| 2026-09-28 | **서비스 `dev` → `integration/pleiades` 정기 동기화 정책 신설** — `workflow.md` 브랜치 전략 표 `dev 수용` 행 + 동기화 PR 리뷰 범위(충돌 해결분) · `pleiades-resume` Step 2 behind-dev 측정 · `dual-repo-change` 모드 I 선결 · 004 정정 블록 · 대상 저장소 절 1문단. 첫 적용 #71(fin dev 4 · fit dev 77 · 충돌 fin 1 · fit 3) | 룰 1 · 스킬 2 · 스펙 1 · CLAUDE.md | #70 (사용자 결정 2026-09-28 — fit dev 가 vitest 를 독자 도입해 1a-2 와 중복) |
+| 2026-09-28 | **서비스 미러 폐기 · 원본 읽기 전용 · `claude-with` 대상을 worktree 로** — `workflow.md` 브랜치 전략·7절·긴급 수정 절 정정 · `dual-repo-change` 모드 S·H "pleiades 미실행" · `pleiades-resume` Step 2 원본 복원 절차 → 드리프트 감지 · 004 Q43·005 §4-7 정정 · `bin/claude-with` | 룰 1 · 스킬 2 · 스펙 2 · 스크립트 1 · CLAUDE.md | #80 (사용자 방침 재확인 2026-09-28 — #494 Codex 4라운드가 계기) |
+| 2026-09-28 | **이슈 관리 정책** — `workflow.md` 5절 이관 이슈 규약(라벨 `pleiades`·접두·출처 줄·대장 #82) · `pleiades-codex-loop` Step 3 "저작하지 않은 내용" 행 · `pleiades-resume` label:pleiades 카운트 · `pleiades-handoff` 대장 갱신 · pleiades 라벨 `fin`·`fit` | 룰 1 · 스킬 3 · CLAUDE.md | #83 (사용자 2026-09-28 — 오늘 서비스 저장소에 이관 이슈 7건이 생기며) |
+| 2026-09-30 | **M-0 B1b — 격리 불변식 룰 신설 · 대상 저장소 경로 소진** — `.claude/rules/isolation.md`(006 §5 I-1~I-21 · 첫 줄 `apps/*` 하네스 효력 없음) · `workflow.md` 브랜치 전략·5·7·8(`apps/*` 행)·9-0(`apps/**` 행)·10절·릴리즈(`--tags` 금지)·고유 규율 정정 · `dual-repo-change`·`dual-repo-operator` 소진 · `pleiades-resume` Step 2 → 수용 판정(`ls-remote` ↔ `Service-Dev`) + secrets 0 · `pleiades-handoff` 서비스 영향 기록 · 스킬 5·에이전트 2 정정 블록 · `bin/claude-with` 소진(exit 1) · `.gitignore` 주석 | 룰 2 · 스킬 8 · 에이전트 3 · 스크립트 1 · CLAUDE.md | #101 (006 §9-2 · 사용자 2026-09-30 — 4분할 · 새 파일 · exit 1) |
 
 ## 상속하는 컨벤션
 
@@ -110,6 +211,9 @@ CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 \
 - catch 블록에서 `error.message` 원문 노출 금지 — 한국어 정적 메시지
 - 날짜 ISO 8601, 금액은 currency 필드 동반
 - 브랜치: `main`(실서비스) → `dev` → `feat/<issue>-<n>`. PR 머지는 사용자가 직접
+  — **단 이건 두 저장소의 단독 작업(핫픽스 등) 컨벤션이다.** pleiades 통합 작업의 base 는
+  **`integration/pleiades`** 이고 `dev` 로 직행하지 않는다 (위 표 · `.claude/rules/workflow.md` 7절)
+  — **정정 (2026-09-30 · 006):** `integration/pleiades` 경로는 소진. `apps/*` 를 바꾸는 작업도 pleiades 브랜치(`<type>/<issue>-<n>` → pleiades `dev`)를 탄다. 위 컨벤션은 `apps/*` 코드 안에서 그대로 따른다
 
 ## 이름
 

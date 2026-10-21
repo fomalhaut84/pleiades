@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>myFinance — 가족 자산관리 디자인 프로토타입</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07080c;
+    --bg-raised: #0d0e14;
+    --card: rgba(255,255,255,0.025);
+    --card-hover: rgba(255,255,255,0.045);
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.12);
+    --dim: #6e6e82;
+    --sub: #9494a8;
+    --text: #c8c8d4;
+    --bright: #eeeef2;
+    --sejin: #34d399;
+    --sodam: #60a5fa;
+    --dasom: #fb923c;
+    --red: #f87171;
+    --purple: #a78bfa;
+    --amber: #fbbf24;
+    --sidebar-w: 220px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* === SIDEBAR (Desktop) === */
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    width: var(--sidebar-w);
+    height: 100vh;
+    background: var(--bg-raised);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    z-index: 100;
+    padding: 0;
+  }
+
+  .sidebar-logo {
+    padding: 28px 24px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-logo h1 {
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--bright);
+    letter-spacing: -0.5px;
+  }
+
+  .sidebar-logo span {
+    font-size: 11px;
+    color: var(--sub);
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+    display: block;
+  }
+
+  .sidebar-nav {
+    flex: 1;
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .sidebar-section {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 16px 12px 8px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-decoration: none;
+    color: var(--sub);
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid transparent;
+  }
+
+  .nav-item:hover {
+    background: rgba(255,255,255,0.03);
+    color: var(--text);
+  }
+
+  .nav-item.active {
+    background: rgba(255,255,255,0.05);
+    color: var(--bright);
+    font-weight: 600;
+    border-color: var(--border);
+  }
+
+  .nav-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .nav-icon {
+    font-size: 15px;
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  /* === MAIN === */
+  .main {
+    margin-left: var(--sidebar-w);
+    min-height: 100vh;
+  }
+
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    padding: 20px 32px;
+    background: rgba(7,8,12,0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .header-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--bright);
+  }
+
+  .header-sub {
+    font-size: 12px;
+    color: var(--sub);
+    margin-top: 2px;
+  }
+
+  .header-badge {
+    font-size: 11px;
+    color: var(--sub);
+    background: rgba(255,255,255,0.04);
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+
+  .content {
+    padding: 28px 32px 60px;
+    max-width: 960px;
+  }
+
+  /* === CARDS === */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s ease;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--glow-color, transparent), transparent);
+    opacity: 0.6;
+  }
+
+  .card-clickable {
+    cursor: pointer;
+  }
+
+  .card-clickable:hover {
+    background: var(--card-hover);
+    border-color: var(--border-hover);
+    transform: translateY(-1px);
+  }
+
+  /* === FAMILY TOTAL === */
+  .family-total {
+    --glow-color: var(--purple);
+    margin-bottom: 24px;
+    box-shadow: 0 0 60px rgba(167,139,250,0.04);
+  }
+
+  .family-total-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+  }
+
+  .family-label {
+    font-size: 11px;
+    color: var(--sub);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  .family-amount {
+    font-size: 32px;
+    font-weight: 900;
+    color: var(--bright);
+    letter-spacing: -1px;
+    margin-top: 6px;
+  }
+
+  .family-amount .unit {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--sub);
+    margin-left: 2px;
+  }
+
+  /* === ACCOUNT CARDS GRID === */
+  .accounts-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  .account-card {
+    --glow-color: var(--account-color);
+    padding: 20px;
+  }
+
+  .account-card:hover {
+    box-shadow: 0 0 30px color-mix(in srgb, var(--account-color) 8%, transparent);
+  }
+
+  .account-name {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--bright);
+    margin-bottom: 2px;
+  }
+
+  .account-strategy {
+    font-size: 12px;
+    color: var(--sub);
+    margin-bottom: 14px;
+  }
+
+  .account-amount {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 4px;
+  }
+
+  .account-meta {
+    font-size: 12px;
+    color: var(--dim);
+  }
+
+  .account-indicator {
+    display: inline-block;
+    width: 28px;
+    height: 3px;
+    border-radius: 2px;
+    margin-bottom: 14px;
+  }
+
+  /* === ACCOUNT DETAIL === */
+  .detail-header {
+    margin-bottom: 28px;
+  }
+
+  .detail-header .back-link {
+    font-size: 13px;
+    color: var(--sub);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 16px;
+    transition: color 0.15s;
+  }
+
+  .detail-header .back-link:hover {
+    color: var(--bright);
+  }
+
+  .detail-name {
+    font-size: 24px;
+    font-weight: 900;
+    color: var(--bright);
+    letter-spacing: -0.5px;
+  }
+
+  .detail-info {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+  }
+
+  .detail-tag {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 4px;
+    letter-spacing: 0.3px;
+  }
+
+  .detail-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    text-align: center;
+    padding: 16px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: var(--sub);
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--bright);
+    letter-spacing: -0.5px;
+  }
+
+  .stat-sub {
+    font-size: 12px;
+    color: var(--sub);
+    margin-top: 3px;
+  }
+
+  /* === TABLE === */
+  .holdings-section {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+
+  .table-card {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .table-header-bar {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .table-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--bright);
+  }
+
+  .table-count {
+    font-size: 12px;
+    color: var(--sub);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th {
+    padding: 10px 20px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--sub);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+  }
+
+  th.right { text-align: right; }
+
+  td {
+    padding: 12px 20px;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(255,255,255,0.025);
+  }
+
+  td.right { text-align: right; }
+
+  tr:last-child td { border-bottom: none; }
+
+  tr:hover td {
+    background: rgba(255,255,255,0.015);
+  }
+
+  .ticker-name {
+    font-weight: 700;
+    color: var(--bright);
+  }
+
+  .market-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.3px;
+  }
+
+  .market-us {
+    color: var(--sodam);
+    background: rgba(96,165,250,0.1);
+  }
+
+  .market-kr {
+    color: var(--amber);
+    background: rgba(251,191,36,0.1);
+  }
+
+  .amount-krw {
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .amount-usd {
+    font-size: 11px;
+    color: var(--sub);
+  }
+
+  /* === PIE CHART AREA === */
+  .chart-card {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: visible;
+  }
+
+  .chart-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--bright);
+    margin-bottom: 20px;
+    align-self: flex-start;
+  }
+
+  .pie-container {
+    position: relative;
+    width: 180px;
+    height: 180px;
+    margin-bottom: 20px;
+  }
+
+  .pie-svg {
+    width: 180px;
+    height: 180px;
+    transform: rotate(-90deg);
+    overflow: visible;
+  }
+
+  .pie-center {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+  }
+
+  .pie-center-label {
+    font-size: 11px;
+    color: var(--sub);
+    letter-spacing: 0.5px;
+  }
+
+  .pie-center-value {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--bright);
+    letter-spacing: -0.5px;
+  }
+
+  .legend {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+  }
+
+  .legend-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .legend-name {
+    color: var(--text);
+  }
+
+  .legend-pct {
+    font-weight: 700;
+    color: var(--sub);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* === MOBILE BOTTOM TAB === */
+  .bottom-tab {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--bg-raised);
+    border-top: 1px solid var(--border);
+    z-index: 100;
+    padding: 8px 0 env(safe-area-inset-bottom, 8px);
+  }
+
+  .bottom-tab-inner {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+  }
+
+  .tab-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+  }
+
+  .tab-item .tab-icon {
+    font-size: 18px;
+  }
+
+  .tab-item .tab-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--dim);
+  }
+
+  .tab-item.active .tab-label {
+    color: var(--bright);
+  }
+
+  /* === VIEWS === */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* === RESPONSIVE === */
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .bottom-tab { display: block; }
+    .main { margin-left: 0; }
+    .content { padding: 20px 16px 100px; }
+    .header { padding: 16px; }
+    .accounts-grid { grid-template-columns: 1fr; }
+    .holdings-section { grid-template-columns: 1fr; }
+    .detail-stats { grid-template-columns: repeat(2, 1fr); }
+    .family-amount { font-size: 26px; }
+  }
+
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .accounts-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* === HiDPI / Retina optimization === */
+  @media (-webkit-min-device-pixel-ratio: 1.5), (min-resolution: 144dpi) {
+    :root {
+      --base-font-bump: 1px;
+    }
+    body { font-size: 15px; }
+    .sidebar-logo span { font-size: 12px; }
+    .sidebar-section { font-size: 11px; }
+    .nav-item { font-size: 14px; }
+    .header-title { font-size: 16px; }
+    .header-sub { font-size: 13px; }
+    .header-badge { font-size: 12px; }
+    .family-label { font-size: 12px; }
+    .account-strategy { font-size: 13px; }
+    .account-meta { font-size: 13px; }
+    .stat-label { font-size: 13px; }
+    .stat-sub { font-size: 13px; }
+    th { font-size: 13px; }
+    td { font-size: 14px; }
+    .table-count { font-size: 13px; }
+    .market-badge { font-size: 12px; }
+    .amount-usd { font-size: 12px; }
+    .legend-item { font-size: 12px; }
+    .pie-center-label { font-size: 12px; }
+    .tab-item .tab-label { font-size: 12px; }
+  }
+
+  /* === ANIMATION === */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-in {
+    animation: fadeIn 0.4s ease forwards;
+  }
+
+  .animate-in:nth-child(1) { animation-delay: 0s; }
+  .animate-in:nth-child(2) { animation-delay: 0.06s; }
+  .animate-in:nth-child(3) { animation-delay: 0.12s; }
+  .animate-in:nth-child(4) { animation-delay: 0.18s; }
+</style>
+</head>
+<body>
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <h1>myFinance</h1>
+    <span>가족 자산관리</span>
+  </div>
+  <nav class="sidebar-nav">
+    <a class="nav-item active" onclick="showView('dashboard')">
+      <span class="nav-icon">📊</span>
+      대시보드
+    </a>
+
+    <div class="sidebar-section">계좌</div>
+    <a class="nav-item" onclick="showView('detail-sejin')">
+      <span class="nav-dot" style="background: var(--sejin)"></span>
+      세진
+    </a>
+    <a class="nav-item" onclick="showView('detail-sodam')">
+      <span class="nav-dot" style="background: var(--sodam)"></span>
+      소담 <span style="font-size:12px; color:var(--sub); margin-left:auto">9세</span>
+    </a>
+    <a class="nav-item" onclick="showView('detail-dasom')">
+      <span class="nav-dot" style="background: var(--dasom)"></span>
+      다솜 <span style="font-size:12px; color:var(--sub); margin-left:auto">5세</span>
+    </a>
+  </nav>
+</aside>
+
+<!-- ===== BOTTOM TAB (Mobile) ===== -->
+<div class="bottom-tab">
+  <div class="bottom-tab-inner">
+    <a class="tab-item active" onclick="showView('dashboard')">
+      <span class="tab-icon">📊</span>
+      <span class="tab-label">대시보드</span>
+    </a>
+    <a class="tab-item" onclick="showView('detail-sejin')">
+      <span class="tab-icon" style="color:var(--sejin)">●</span>
+      <span class="tab-label">세진</span>
+    </a>
+    <a class="tab-item" onclick="showView('detail-sodam')">
+      <span class="tab-icon" style="color:var(--sodam)">●</span>
+      <span class="tab-label">소담</span>
+    </a>
+    <a class="tab-item" onclick="showView('detail-dasom')">
+      <span class="tab-icon" style="color:var(--dasom)">●</span>
+      <span class="tab-label">다솜</span>
+    </a>
+  </div>
+</div>
+
+<!-- ===== MAIN ===== -->
+<main class="main">
+
+  <!-- ====== DASHBOARD VIEW ====== -->
+  <div class="view active" id="view-dashboard">
+    <div class="header">
+      <div>
+        <div class="header-title">대시보드</div>
+        <div class="header-sub">가족 포트폴리오 현황</div>
+      </div>
+      <div class="header-badge">Phase 1 · 매입 데이터 기준</div>
+    </div>
+    <div class="content">
+
+      <!-- Family Total -->
+      <div class="card family-total animate-in">
+        <div class="family-total-header">
+          <div>
+            <div class="family-label">Family Total</div>
+            <div class="family-amount">₩23,945,498<span class="unit">원</span></div>
+          </div>
+          <div style="text-align: right">
+            <div style="font-size: 12px; color: var(--sub)">3개 계좌 · 17종목</div>
+            <div style="font-size: 12px; color: var(--sub); margin-top: 3px">매입금 기준 합산</div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border-radius: 8px; overflow: hidden;">
+          <div style="background: var(--bg); padding: 12px; text-align: center">
+            <div style="font-size: 12px; color: var(--sub); letter-spacing: 0.5px">세진</div>
+            <div style="font-size: 16px; font-weight: 800; color: var(--sejin); margin-top: 4px">₩7,147,098</div>
+          </div>
+          <div style="background: var(--bg); padding: 12px; text-align: center">
+            <div style="font-size: 12px; color: var(--sub); letter-spacing: 0.5px">소담</div>
+            <div style="font-size: 16px; font-weight: 800; color: var(--sodam); margin-top: 4px">₩11,213,200</div>
+          </div>
+          <div style="background: var(--bg); padding: 12px; text-align: center">
+            <div style="font-size: 12px; color: var(--sub); letter-spacing: 0.5px">다솜</div>
+            <div style="font-size: 16px; font-weight: 800; color: var(--dasom); margin-top: 4px">₩5,585,200</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Account Cards -->
+      <div class="accounts-grid">
+
+        <!-- 세진 -->
+        <div class="card account-card card-clickable animate-in" style="--account-color: var(--sejin)" onclick="showView('detail-sejin')">
+          <div class="account-indicator" style="background: var(--sejin)"></div>
+          <div class="account-name">세진</div>
+          <div class="account-strategy">혼합전략 · 인덱스 확대 + 종목별 태그</div>
+          <div class="account-amount" style="color: var(--sejin)">₩7,147,098</div>
+          <div class="account-meta">7종목 · US 4 · KR 3</div>
+        </div>
+
+        <!-- 소담 -->
+        <div class="card account-card card-clickable animate-in" style="--account-color: var(--sodam)" onclick="showView('detail-sodam')">
+          <div class="account-indicator" style="background: var(--sodam)"></div>
+          <div class="account-name">소담 <span style="font-size: 11px; font-weight: 500; color: var(--sub)">9세</span></div>
+          <div class="account-strategy">균형형 · 10년+ · 배당 ETF 중심</div>
+          <div class="account-amount" style="color: var(--sodam)">₩11,213,200</div>
+          <div class="account-meta">5종목 · US 2 · KR 3</div>
+        </div>
+
+        <!-- 다솜 -->
+        <div class="card account-card card-clickable animate-in" style="--account-color: var(--dasom)" onclick="showView('detail-dasom')">
+          <div class="account-indicator" style="background: var(--dasom)"></div>
+          <div class="account-name">다솜 <span style="font-size: 11px; font-weight: 500; color: var(--sub)">5세</span></div>
+          <div class="account-strategy">성장형 · 15년+ · S&P500 + 개별 성장주</div>
+          <div class="account-amount" style="color: var(--dasom)">₩5,585,200</div>
+          <div class="account-meta">5종목 · US 3 · KR 2</div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ====== SEJIN DETAIL VIEW ====== -->
+  <div class="view" id="view-detail-sejin">
+    <div class="header">
+      <div>
+        <div class="header-title">세진 포트폴리오</div>
+        <div class="header-sub">혼합전략 · 인덱스 확대</div>
+      </div>
+    </div>
+    <div class="content">
+      <div class="detail-header">
+        <a class="back-link" onclick="showView('dashboard')">← 대시보드</a>
+        <div class="detail-name" style="color: var(--sejin)">세진</div>
+        <div class="detail-info">
+          <span class="detail-tag" style="color: var(--sejin); background: rgba(52,211,153,0.1)">혼합전략</span>
+          <span class="detail-tag" style="color: var(--sub); background: rgba(255,255,255,0.04)">7종목</span>
+        </div>
+      </div>
+
+      <div class="detail-stats">
+        <div class="card stat-card">
+          <div class="stat-label">총 매입금</div>
+          <div class="stat-value" style="color: var(--sejin)">₩7,147,098</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-label">미국주 비중</div>
+          <div class="stat-value">81.2%</div>
+          <div class="stat-sub">4종목</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-label">한국주 비중</div>
+          <div class="stat-value">18.8%</div>
+          <div class="stat-sub">3종목</div>
+        </div>
+      </div>
+
+      <div class="holdings-section">
+        <div class="card table-card">
+          <div class="table-header-bar">
+            <div class="table-title">보유종목</div>
+            <div class="table-count">7개</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>종목</th>
+                <th>시장</th>
+                <th class="right">수량</th>
+                <th class="right">평균단가</th>
+                <th class="right">매입금</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="ticker-name">MSFT</span></td>
+                <td><span class="market-badge market-us">US</span></td>
+                <td class="right">4주</td>
+                <td class="right">
+                  <div class="amount-usd">$319.61</div>
+                </td>
+                <td class="right"><span class="amount-krw">1,853,744원</span></td>
+              </tr>
+              <tr>
+                <td><span class="ticker-name">NVDA</span></td>
+                <td><span class="market-badge market-us">US</span></td>
+                <td class="right">10주</td>
+                <td class="right">
+                  <div class="amount-usd">$120.52</div>
+                </td>
+                <td class="right"><span class="amount-krw">1,747,510원</span></td>
+              </tr>
+              <tr>
+                <td><span class="ticker-name">AAPL</span></td>
+                <td><span class="market-badge market-us">US</span></td>
+                <td class="right">6주</td>
+                <td class="right">
+                  <div class="amount-usd">$105.80</div>
+                </td>
+                <td class="right"><span class="amount-krw">920,418원</span></td>
+              </tr>
+              <tr>
+                <td><span class="ticker-name">컨텍</span></td>
+                <td><span class="market-badge market-kr">KR</span></td>
+                <td class="right">12주</td>
+                <td class="right">
+                  <div class="amount-krw">22,500원</div>
+                </td>
+                <td class="right"><span class="amount-krw">270,000원</span></td>
+              </tr>
+              <tr>
+                <td><span class="ticker-name">RKLB</span></td>
+                <td><span class="market-badge market-us">US</span></td>
+                <td class="right">16주</td>
+                <td class="right">
+                  <div class="amount-usd">$6.05</div>
+                </td>
+                <td class="right"><span class="amount-krw">140,368원</span></td>
+              </tr>
+              <tr>
+                <td><span class="ticker-name">두산로보틱스</span></td>
+                <td><span class="market-badge market-kr">KR</span></td>
+                <td class="right">2주</td>
+                <td class="right">
+                  <div class="amount-krw">26,000원</div>
+                </td>
+                <td class="right"><span class="amount-krw">52,000원</span></td>
+              </tr>
+              <tr>
+                <td><span class="ticker-name">카카오</span></td>
+                <td><span class="market-badge market-kr">KR</span></td>
+                <td class="right">1주</td>
+                <td class="right">
+                  <div class="amount-krw">45,000원</div>
+                </td>
+                <td class="right"><span class="amount-krw">45,000원</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card chart-card">
+          <div class="chart-title">매입비중</div>
+          <div class="pie-container">
+            <svg class="pie-svg" viewBox="-4 -4 128 128">
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#60a5fa" stroke-width="20"
+                stroke-dasharray="81.7 245.0" stroke-dashoffset="0" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#a78bfa" stroke-width="20"
+                stroke-dasharray="68.5 258.2" stroke-dashoffset="-81.7" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#34d399" stroke-width="20"
+                stroke-dasharray="36.1 290.6" stroke-dashoffset="-150.2" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#fbbf24" stroke-width="20"
+                stroke-dasharray="10.6 316.1" stroke-dashoffset="-186.3" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#f87171" stroke-width="20"
+                stroke-dasharray="5.5 321.2" stroke-dashoffset="-196.9" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#7a7a8e" stroke-width="20"
+                stroke-dasharray="3.8 322.9" stroke-dashoffset="-202.4" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#4a4a5a" stroke-width="20"
+                stroke-dasharray="2.5 324.2" stroke-dashoffset="-206.2" />
+              <circle cx="60" cy="60" r="46" fill="var(--bg)" />
+            </svg>
+            <div class="pie-center">
+              <div class="pie-center-label">총 매입</div>
+              <div class="pie-center-value">715만</div>
+            </div>
+          </div>
+          <div class="legend">
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#60a5fa"></div><span class="legend-name">MSFT</span></div><span class="legend-pct">25.9%</span></div>
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#a78bfa"></div><span class="legend-name">NVDA</span></div><span class="legend-pct">24.4%</span></div>
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#34d399"></div><span class="legend-name">AAPL</span></div><span class="legend-pct">12.9%</span></div>
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#fbbf24"></div><span class="legend-name">컨텍</span></div><span class="legend-pct">3.8%</span></div>
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#f87171"></div><span class="legend-name">RKLB</span></div><span class="legend-pct">2.0%</span></div>
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#7a7a8e"></div><span class="legend-name">두산로보틱스</span></div><span class="legend-pct">0.7%</span></div>
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#4a4a5a"></div><span class="legend-name">카카오</span></div><span class="legend-pct">0.6%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== SODAM DETAIL VIEW ====== -->
+  <div class="view" id="view-detail-sodam">
+    <div class="header">
+      <div>
+        <div class="header-title">소담 포트폴리오</div>
+        <div class="header-sub">균형형 · 10년+</div>
+      </div>
+    </div>
+    <div class="content">
+      <div class="detail-header">
+        <a class="back-link" onclick="showView('dashboard')">← 대시보드</a>
+        <div class="detail-name" style="color: var(--sodam)">소담 <span style="font-size: 16px; color: var(--sub)">9세</span></div>
+        <div class="detail-info">
+          <span class="detail-tag" style="color: var(--sodam); background: rgba(96,165,250,0.1)">균형형</span>
+          <span class="detail-tag" style="color: var(--sub); background: rgba(255,255,255,0.04)">10년+</span>
+          <span class="detail-tag" style="color: var(--sub); background: rgba(255,255,255,0.04)">5종목</span>
+        </div>
+      </div>
+
+      <div class="detail-stats">
+        <div class="card stat-card">
+          <div class="stat-label">총 매입금</div>
+          <div class="stat-value" style="color: var(--sodam)">₩11,213,200</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-label">증여 누적</div>
+          <div class="stat-value">₩7,400,000</div>
+          <div class="stat-sub">비과세 한도 37%</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-label">투자 기간</div>
+          <div class="stat-value">10년+</div>
+          <div class="stat-sub">목표: 19세 (2036)</div>
+        </div>
+      </div>
+
+      <div class="holdings-section">
+        <div class="card table-card">
+          <div class="table-header-bar">
+            <div class="table-title">보유종목</div>
+            <div class="table-count">5개</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>종목</th>
+                <th>시장</th>
+                <th class="right">수량</th>
+                <th class="right">평균단가</th>
+                <th class="right">매입금</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="ticker-name">AAPL</span></td>
+                <td><span class="market-badge market-us">US</span></td>
+                <td class="right">11주</td>
+                <td class="right"><div class="amount-usd">$212.26</div></td>
+                <td class="right"><span class="amount-krw">3,385,470원</span></td>
+              </tr>
+              <tr>
+                <td><span class="ticker-name">SOL 미국배당다우존스</span></td>
+                <td><span class="market-badge market-kr">KR</span></td>
+                <td class="right">120주</td>
+                <td class="right"><div class="amount-krw">12,036원</div></td>
+                <td class="right"><span class="amount-krw">1,444,320원</span></td>
+              </tr>
+              <tr>
+                <td><span class="ticker-name">TIGER 미국S&P500</span></td>
+                <td><span class="market-badge market-kr">KR</span></td>
+                <td class="right">46주</td>
+                <td class="right"><div class="amount-krw">24,494원</div></td>
+                <td class="right"><span class="amount-krw">1,126,724원</span></td>
+              </tr>
+              <tr>
+                <td><span class="ticker-name">SOL 미국배당미국채혼합50</span></td>
+                <td><span class="market-badge market-kr">KR</span></td>
+                <td class="right">72주</td>
+                <td class="right"><div class="amount-krw">10,785원</div></td>
+                <td class="right"><span class="amount-krw">776,520원</span></td>
+              </tr>
+              <tr>
+                <td><span class="ticker-name">XAR</span></td>
+                <td><span class="market-badge market-us">US</span></td>
+                <td class="right">3주</td>
+                <td class="right"><div class="amount-usd">$171.45</div></td>
+                <td class="right"><span class="amount-krw">745,793원</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card chart-card">
+          <div class="chart-title">매입비중</div>
+          <div class="pie-container">
+            <svg class="pie-svg" viewBox="-4 -4 128 128">
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#60a5fa" stroke-width="20"
+                stroke-dasharray="98.5 228.2" stroke-dashoffset="0" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#34d399" stroke-width="20"
+                stroke-dasharray="42.1 284.6" stroke-dashoffset="-98.5" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#fbbf24" stroke-width="20"
+                stroke-dasharray="32.8 293.9" stroke-dashoffset="-140.6" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#a78bfa" stroke-width="20"
+                stroke-dasharray="22.6 304.1" stroke-dashoffset="-173.4" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#fb923c" stroke-width="20"
+                stroke-dasharray="21.7 305.0" stroke-dashoffset="-196.0" />
+              <circle cx="60" cy="60" r="46" fill="var(--bg)" />
+            </svg>
+            <div class="pie-center">
+              <div class="pie-center-label">총 매입</div>
+              <div class="pie-center-value">1,121만</div>
+            </div>
+          </div>
+          <div class="legend">
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#60a5fa"></div><span class="legend-name">AAPL</span></div><span class="legend-pct">30.2%</span></div>
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#34d399"></div><span class="legend-name">SOL 배당다우</span></div><span class="legend-pct">12.9%</span></div>
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#fbbf24"></div><span class="legend-name">TIGER S&P500</span></div><span class="legend-pct">10.0%</span></div>
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#a78bfa"></div><span class="legend-name">SOL 혼합50</span></div><span class="legend-pct">6.9%</span></div>
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#fb923c"></div><span class="legend-name">XAR</span></div><span class="legend-pct">6.7%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== DASOM DETAIL VIEW ====== -->
+  <div class="view" id="view-detail-dasom">
+    <div class="header">
+      <div>
+        <div class="header-title">다솜 포트폴리오</div>
+        <div class="header-sub">성장형 · 15년+</div>
+      </div>
+    </div>
+    <div class="content">
+      <div class="detail-header">
+        <a class="back-link" onclick="showView('dashboard')">← 대시보드</a>
+        <div class="detail-name" style="color: var(--dasom)">다솜 <span style="font-size: 16px; color: var(--sub)">5세</span></div>
+        <div class="detail-info">
+          <span class="detail-tag" style="color: var(--dasom); background: rgba(251,146,60,0.1)">성장형</span>
+          <span class="detail-tag" style="color: var(--sub); background: rgba(255,255,255,0.04)">15년+</span>
+          <span class="detail-tag" style="color: var(--sub); background: rgba(255,255,255,0.04)">5종목</span>
+        </div>
+      </div>
+
+      <div class="detail-stats">
+        <div class="card stat-card">
+          <div class="stat-label">총 매입금</div>
+          <div class="stat-value" style="color: var(--dasom)">₩5,585,200</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-label">증여 누적</div>
+          <div class="stat-value">₩2,780,000</div>
+          <div class="stat-sub">비과세 한도 14%</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-label">투자 기간</div>
+          <div class="stat-value">15년+</div>
+          <div class="stat-sub">목표: 20세 (2041)</div>
+        </div>
+      </div>
+
+      <div class="holdings-section">
+        <div class="card table-card">
+          <div class="table-header-bar">
+            <div class="table-title">보유종목</div>
+            <div class="table-count">5개</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>종목</th>
+                <th>시장</th>
+                <th class="right">수량</th>
+                <th class="right">평균단가</th>
+                <th class="right">매입금</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="ticker-name">AAPL</span></td>
+                <td><span class="market-badge market-us">US</span></td>
+                <td class="right">3주</td>
+                <td class="right"><div class="amount-usd">$225.80</div></td>
+                <td class="right"><span class="amount-krw">982,230원</span></td>
+              </tr>
+              <tr>
+                <td><span class="ticker-name">TIGER 미국S&P500</span></td>
+                <td><span class="market-badge market-kr">KR</span></td>
+                <td class="right">36주</td>
+                <td class="right"><div class="amount-krw">24,290원</div></td>
+                <td class="right"><span class="amount-krw">874,440원</span></td>
+              </tr>
+              <tr>
+                <td><span class="ticker-name">XAR</span></td>
+                <td><span class="market-badge market-us">US</span></td>
+                <td class="right">2주</td>
+                <td class="right"><div class="amount-usd">$171.50</div></td>
+                <td class="right"><span class="amount-krw">497,350원</span></td>
+              </tr>
+              <tr>
+                <td><span class="ticker-name">SOL 미국배당다우존스</span></td>
+                <td><span class="market-badge market-kr">KR</span></td>
+                <td class="right">18주</td>
+                <td class="right"><div class="amount-krw">13,485원</div></td>
+                <td class="right"><span class="amount-krw">242,730원</span></td>
+              </tr>
+              <tr>
+                <td><span class="ticker-name">RKLB</span></td>
+                <td><span class="market-badge market-us">US</span></td>
+                <td class="right">5주</td>
+                <td class="right"><div class="amount-usd">$28.60</div></td>
+                <td class="right"><span class="amount-krw">207,350원</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card chart-card">
+          <div class="chart-title">매입비중</div>
+          <div class="pie-container">
+            <svg class="pie-svg" viewBox="-4 -4 128 128">
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#60a5fa" stroke-width="20"
+                stroke-dasharray="57.4 269.3" stroke-dashoffset="0" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#fbbf24" stroke-width="20"
+                stroke-dasharray="51.1 275.6" stroke-dashoffset="-57.4" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#a78bfa" stroke-width="20"
+                stroke-dasharray="29.1 297.6" stroke-dashoffset="-108.5" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#34d399" stroke-width="20"
+                stroke-dasharray="14.2 312.5" stroke-dashoffset="-137.6" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#fb923c" stroke-width="20"
+                stroke-dasharray="12.1 314.6" stroke-dashoffset="-151.8" />
+              <circle cx="60" cy="60" r="46" fill="var(--bg)" />
+            </svg>
+            <div class="pie-center">
+              <div class="pie-center-label">총 매입</div>
+              <div class="pie-center-value">559만</div>
+            </div>
+          </div>
+          <div class="legend">
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#60a5fa"></div><span class="legend-name">AAPL</span></div><span class="legend-pct">17.6%</span></div>
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#fbbf24"></div><span class="legend-name">TIGER S&P500</span></div><span class="legend-pct">15.7%</span></div>
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#a78bfa"></div><span class="legend-name">XAR</span></div><span class="legend-pct">8.9%</span></div>
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#34d399"></div><span class="legend-name">SOL 배당다우</span></div><span class="legend-pct">4.3%</span></div>
+            <div class="legend-item"><div class="legend-left"><div class="legend-dot" style="background:#fb923c"></div><span class="legend-name">RKLB</span></div><span class="legend-pct">3.7%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+function showView(viewId) {
+  // Hide all views
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  // Show target
+  const target = document.getElementById('view-' + viewId);
+  if (target) target.classList.add('active');
+
+  // Update sidebar active
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navItems = document.querySelectorAll('.nav-item');
+  if (viewId === 'dashboard') navItems[0]?.classList.add('active');
+  else if (viewId === 'detail-sejin') navItems[1]?.classList.add('active');
+  else if (viewId === 'detail-sodam') navItems[2]?.classList.add('active');
+  else if (viewId === 'detail-dasom') navItems[3]?.classList.add('active');
+
+  // Update bottom tab active
+  document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+  const tabItems = document.querySelectorAll('.tab-item');
+  if (viewId === 'dashboard') tabItems[0]?.classList.add('active');
+  else if (viewId === 'detail-sejin') tabItems[1]?.classList.add('active');
+  else if (viewId === 'detail-sodam') tabItems[2]?.classList.add('active');
+  else if (viewId === 'detail-dasom') tabItems[3]?.classList.add('active');
+
+  // Scroll to top
+  window.scrollTo(0, 0);
+}
+</script>
+</body>
+</html>

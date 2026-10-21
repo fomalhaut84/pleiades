@@ -5,6 +5,44 @@ description: myFinance·myFitness 두 저장소를 실측하고 docs/research/me
 
 # repo-measure — 실측과 기록
 
+> **정정 (2026-09-30 · 006 · #101 · M-0) — 이 파일의 `repos/*` · 원본 · 대상 저장소 · 모드 I/S/H · 이관 서술을 이렇게 읽는다.**
+> **측정 대상은 pleiades 안의 `apps/*`** 다(M-1 이후). M-1 전이나 서비스 현재 상태(최신 `dev`)가 필요하면 **pleiades 밖 스크래치에 https 로 읽기 클론**(`--no-tags` · 리모트 제거)해 잰다 — 산출물에 클론 SHA 를 적는다. `repos/*` worktree · 원본 `~/workspace/myF*` 는 **측정 대상이 아니다**(동결 · git 명령 금지 I-11). 모드 I/S/H 구분은 소진. `grep` binary-safe·ignore 주의는 그대로 유효하다 — `apps/` 는 **추적**되므로 루트 Grep 이 `apps/` 를 검색한다.
+> 원칙은 `.claude/rules/isolation.md` · 경로는 006. 되돌리기: 문구 (**즉시**).
+> **`git grep <ref>` 는 출력에 `<ref>:` 접두사를 붙인다 (PR #6 Codex 리뷰 P2).**
+> 경로로 **필터링·집계하기 전에 반드시 접두사를 벗긴다** — `cut -d: -f2-`.
+> 벗기지 않으면 `grep -v '/src/<expected>/'` 누수 필터가 **하나도 걸러내지 못하고**
+> (실측: 17건 중 17건이 "누수"로 보고됨. 실제 1건), `cut -d: -f1` 은 파일명 대신
+> **ref 이름 하나만** 돌려준다.
+> **측정 대상도 모드가 정한다 (PR #6 Codex 리뷰 P1 파생).** 아래 명령의 `<target>` 은
+> `.claude/rules/workflow.md` **7절 표**의 "어디서" 열이다:
+> **통합 작업(모드 I)** → `~/workspace/pleiades/repos/$d` (worktree) ·
+> **단독 작업·핫픽스(모드 S·H)** → `~/workspace/$d` (원본). **— #80 이후 pleiades 는 S·H 를 실행하지 않으므로 이 대상은 원본을 *읽기만* 할 때(드리프트 비교 등)에 한한다.**
+> **통합 로드맵을 위한 측정은 거의 항상 모드 I 다** — 원본에는 앞선 1a 단계 변경이 없다.
+> 원본을 재야 하면 **그 이유를 산출물에 명시한다.**
+> **`<target>` 도 `(디렉터리, ref)` 쌍이다 (PR #6 Codex 리뷰 P2).** 원본은 평소 fin=`dev` · fit=`main`
+> 이라, 디렉터리만 고르면 **모드 S(myFitness)는 `dev` 대신 `main` 을, 모드 H(myFinance)는 `main` 대신
+> `dev` 를** 측정한다. ref 를 읽을 수 있는 패턴은 전부 `git grep --text <ref>` / `git show <ref>:<path>`
+> 형태로 쓴다. 파일 수·LOC 는 `git ls-tree <ref>` / `git show <ref>:<path>` 로 ref 에서 직접 읽는다 — 체크아웃과 무관하다.
+> **워킹트리 전용 데이터**(`du`, `node_modules` 크기, `.next/` 등)만 ref 를 지정할 수 없으므로 그때만
+> 그 ref 가 체크아웃돼 있는지 확인하고, 확인하지 못하면 "미확인"으로 기록한다. 임의 checkout 금지. (#10 ①)
+> **`grep` 에는 반드시 `--binary-files=text` (PR #6 Codex 리뷰 P2).** 없으면 `.next/cache`
+> 같은 파일이 binary 로 판정돼 **조용히 0건 오탐**이 난다. 실제로 실측·감사 에이전트가
+> 독립적으로 같은 오탐을 냈다 (`004-repo-layout.md`). 아래 명령에도 전부 붙어 있다.
+> **그리고 이 환경의 `grep` 은 ugrep 래퍼로 `.gitignore` 를 따른다** (005 §4-11 · 2026-09-07 실측). ignored 디렉터리
+> (fit `.claude/` 등)는 `--binary-files=text` 로도 막지 못하고 **통째로 0건**이 된다. ignored 경로를 포함하는
+> 측정은 **(a) `--no-ignore-files` · (b) `/usr/bin/grep` · (c) 경로 직접 지정** 중 하나를 반드시 쓴다.
+> `git grep` 은 인덱스만 보므로 ignored 경로에는 원리상 쓸 수 없다.
+> **열거와 합계가 함께 있으면 합계를 신뢰하지 말고 열거를 센다** (005 R1 · #11 유형 재발 방지). 요약 숫자에는
+> 열거의 출처(파일 · 절 · 행 범위)를 붙인다. **대장(숫자 표)에 없는 숫자를 본문에 새로 만들지 않는다.**
+> 같은 숫자를 문서 안에서 두 번 적지 않는다.
+> **경로 규율 (PR #6 Codex 리뷰 P1).** 통합 작업의 측정·감사 대상은
+> **`~/workspace/pleiades/repos/{myFinance,myFitness}`** (worktree, 브랜치 `integration/pleiades`) 다.
+> `~/workspace/myFinance`(`dev`) · `~/workspace/myFitness`(`main`) 은 **서비스 유지용 원본**이라
+> **앞선 1a 단계 변경이 들어 있지 않다.** 원본을 재면 **이전 단계가 빠진 트리를 측정해
+> 잘못된 범위를 승인**하게 된다. 근거: `docs/specs/004-repo-layout.md`.
+> 원본을 재야 하는 경우(서비스 현재 상태 확인 등)는 **그렇게 재는 이유를 산출물에 명시한다.**
+
+
 pleiades 의 제1규율: **실측값은 추정하지 않는다.** 이 스킬은 그 규율의 실행 절차다.
 
 추정이 로드맵을 뒤집은 사례가 두 번 있었다. 숫자를 지어내는 것보다 "못 쟀다"고 쓰는 것이 항상 낫다.
@@ -14,7 +52,7 @@ pleiades 의 제1규율: **실측값은 추정하지 않는다.** 이 스킬은 
 ### 1. 먼저 기존 기록을 읽는다
 
 ```bash
-grep -n "<주제 키워드>" docs/research/measured-facts.md
+grep -n --binary-files=text "<주제 키워드>" docs/research/measured-facts.md
 ```
 
 이미 있으면 **재측정하지 않는다.** 단 아래는 예외다:
@@ -63,38 +101,64 @@ done
 
 ### 규모
 ```bash
-find ~/workspace/$d/src -type f \( -name '*.ts' -o -name '*.tsx' \) | wc -l
-find ~/workspace/$d/src/<area> -name '*.ts' -exec cat {} + | wc -l
+# ref 기반(ls-tree/show) — 체크아웃 무관 (#10 ①). 단 ref 가 없으면 ls-tree 가 실패해도 뒤의 wc 가 0 을 낸다
+# → 먼저 ref 실재를 확인하고, 실패면 "미확인"으로 기록한다 (PR #20 Codex P1 2회차)
+# 게이트는 독립 명령이 아니라 if/else 로 파이프를 감싼다 — 독립이면 echo 가 성공하고 뒤 파이프가 0 을 낸다 (PR #20 Codex P1 3회차)
+# pipefail 은 쓰지 않는다 — grep 무매치(1)·diff 차이(1)가 실패로 읽히고 git grep 파이프까지 전부 감싸야 한다 (PR #22 Codex P2 2건).
+# 대신 실패할 수 있는 입력(ref · 파일)은 위/아래의 명시적 게이트가 막고, diff 는 PIPESTATUS 로 오류(2)만 골라낸다.
+if git -C <dir> rev-parse --verify --quiet "<ref>^{commit}" >/dev/null; then
+  git -C <dir> ls-tree -r --name-only <ref> -- src | grep -E '\.tsx?$' | wc -l
+  git -C <dir> ls-tree -r --name-only <ref> -- src/<area> | grep '\.ts$' \
+    | while read f; do git -C <dir> show "<ref>:$f"; done | wc -l
+else
+  echo "미확인 — <dir> 에 <ref> 없음"   # 값을 기록하지 않는다
+fi
 ```
 
 ### 결합도 — 무엇이 무엇에 묶여 있나
 ```bash
 # 참조 파일 수 (분모와 함께)
-grep -rlE "from ['\"]<pkg>" ~/workspace/$d/src --include='*.ts' | wc -l
+git -C <dir> grep --text -lE "from ['\"]<pkg>" <ref> -- 'src/**/*.ts' | wc -l
 # 예상 경계 밖 누수
-grep -rlE "<pattern>" ~/workspace/$d/src --include='*.ts' | grep -v '/src/<expected>/'
+git -C <dir> grep --text -lE "<pattern>" <ref> -- 'src/**/*.ts' \
+  | cut -d: -f2- | grep -v --binary-files=text '^src/<expected>/'      # ← 접두사 제거 필수
 # 호출 지점이 한 곳인가 흩어져 있나
-grep -rn "<call>" ~/workspace/$d/src --include='*.ts' | cut -d: -f1 | sort | uniq -c | sort -rn
+git -C <dir> grep --text -n "<call>" <ref> -- 'src/**/*.ts' \
+  | cut -d: -f2 | sort | uniq -c | sort -rn                            # ← f1 은 ref 이름이다
 ```
 
 호출이 한 파일에 모이면 **초크포인트**(교체 가능), 흩어져 있으면 **재작성**이다. 비용이 자릿수로 다르다.
 
 ### 드리프트 — 같은 이름 파일이 얼마나 갈라졌나
 ```bash
-diff ~/workspace/myFinance/src/<path> ~/workspace/myFitness/src/<path> | wc -l
+# 양쪽 피연산자 모두 모드가 정한다 (헤더의 <dir>/<ref> 표 참조).
+# 체크아웃 상태에 의존하지 않도록 ref 에서 직접 꺼낸다 — 파일시스템 diff 는 쓰지 않는다.
+# 임시파일 없이 프로세스 치환 — 병렬 측정이 서로 덮어쓰지 않고 pleiades 밖에 쓰지 않는다 (#10 ②)
+# 단, 프로세스 치환 안의 git show 실패는 파이프 상태에 반영되지 않는다 — ref/path 가 없으면 wc 가 0 을 내고
+# "동일"로 오기록된다 (PR #20 Codex P1 · 재현 _workspace/harness/regress_pr20_p1.sh). 두 피연산자를 먼저 확인한다.
+# 게이트와 diff 를 && 로 묶는다 — 게이트가 독립 명령이면 echo 가 성공하고 diff 가 그대로 실행돼 0 이 남는다 (PR #20 Codex P1 2회차)
+if git -C <dir:fin> cat-file -e "<ref:fin>:src/<path>" \
+   && git -C <dir:fit> cat-file -e "<ref:fit>:src/<path>"; then
+  diff <(git -C <dir:fin> show <ref:fin>:src/<path>) \
+       <(git -C <dir:fit> show <ref:fit>:src/<path>) | wc -l; ds=${PIPESTATUS[0]}
+  # diff 상태 0·1 은 정상(동일·차이), 2 는 오류(입력 못 읽음 등) — 오류면 값을 기록하지 않는다 (PR #22 Codex P2)
+  [[ $ds -le 1 ]] || echo "미확인 — diff 오류(상태 $ds)"
+else
+  echo "미확인 — ref/path 없음 (fin <ref:fin> · fit <ref:fit> · src/<path>)"   # 드리프트 값을 기록하지 않는다
+fi
 ```
 
 ### 추출 가능성 — 후보가 정말 무의존인가
 ```bash
-grep -nE "^import" <file>              # 전부 읽는다. 형제 파일까지 따라간다
-grep -rn "from ['\"]next" ~/workspace/$d/src/<dir>/ | wc -l
-grep -rn "from ['\"]@/lib" ~/workspace/$d/src/<dir>/ | wc -l
+git -C <dir> grep --text -nE "^import" <ref> -- '<후보 파일 경로>'   # 전부 읽는다. 형제 파일까지 따라간다
+git -C <dir> grep --text -n "from ['\"]next" <ref> -- 'src/<하위경로>/' | wc -l
+git -C <dir> grep --text -n "from ['\"]@/lib" <ref> -- 'src/<하위경로>/' | wc -l
 ```
 
 ### 설정 출처 — 그 파일이 진짜 읽히나
 ```bash
-grep -rn "<파일명>" ~/workspace/$d/src --include='*.ts'
-grep -rn "writeFileSync\|\.runtime/\|process.cwd()" ~/workspace/$d/src/<dir>/*.ts
+git -C <dir> grep --text -n "<파일명>" <ref> -- 'src/**/*.ts'
+git -C <dir> grep --text -n "writeFileSync\|\.runtime/\|process.cwd()" <ref> -- 'src/<하위경로>/'*.ts
 ```
 
 런타임 생성본이 있으면 **저장소 파일은 죽은 파일**이다. 이 확인은 `reversibility-audit` 과 겹치며, 겹치는 것이 맞다.

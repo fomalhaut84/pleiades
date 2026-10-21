@@ -1,0 +1,339 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import prisma from "@/lib/prisma";
+// #480: date-only 입력은 서버 로컬 자정이 아니라 KST 자정 (읽기 `formatDateLocal` = KST 와 같은 규칙)
+import { parseDateOnlyKST } from "@/lib/date-input";
+import { resolveMaxHR } from "@/lib/fitness/zones";
+import { recalculateAllCalorieBalances } from "@/lib/fitness/calorie-balance";
+import { bumpHistoryCacheVersion } from "@/lib/history/cache";
+import { fillMissingPowerIntensity } from "@/lib/fitness/power-intensity-fill";
+import { INTENSITY_BASIS_SETTINGS } from "@/lib/fitness/intensity";
+import { THRESHOLD_POWER_MAX, THRESHOLD_POWER_MIN } from "@/lib/fitness/power-zones";
+import {
+  recordMetricChange,
+  type MetricField,
+} from "@/lib/fitness/profile-history";
+
+/** "YYYY-MM-DD" 형식이면서 실제 달력상 유효한 날짜인지 검증 */
+const birthDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD 형식")
+  .refine((s) => {
+    const [y, m, d] = s.split("-").map(Number);
+    const date = new Date(Date.UTC(y, m - 1, d));
+    return (
+      date.getUTCFullYear() === y &&
+      date.getUTCMonth() === m - 1 &&
+      date.getUTCDate() === d
+    );
+  }, "유효하지 않은 날짜")
+  .nullable()
+  .optional();
+
+const PATCH_SCHEMA = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  birthDate: birthDateSchema,
+  height: z.number().positive().max(300).nullable().optional(),
+  targetWeight: z.number().positive().max(500).nullable().optional(),
+  targetDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD 형식")
+    .refine((s) => {
+      const [y, m, d] = s.split("-").map(Number);
+      const date = new Date(Date.UTC(y, m - 1, d));
+      return (
+        date.getUTCFullYear() === y &&
+        date.getUTCMonth() === m - 1 &&
+        date.getUTCDate() === d
+      );
+    }, "유효하지 않은 날짜")
+    .nullable()
+    .optional(),
+  restingHRBase: z.number().int().min(20).max(150).nullable().optional(),
+  maxHR: z.number().int().min(100).max(220).nullable().optional(),
+  lthr: z.number().int().min(80).max(220).nullable().optional(),
+  lthrPace: z.number().positive().max(1200).nullable().optional(), // sec/km
+  targetCalories: z.number().int().min(500).max(5000).nullable().optional(),
+  // M12 (#223): 평상 개인 목표
+  targetAvgPace: z.number().positive().max(1200).nullable().optional(), // sec/km
+  targetWeeklyKm: z.number().positive().max(500).nullable().optional(),
+  targetVO2max: z.number().positive().max(90).nullable().optional(),
+  personalGoalNote: z.string().trim().max(500).nullable().optional(),
+  // M13 Phase 1 (#243): auto-adjust 사전 알림 토글.
+  autoAdjustEnabled: z.boolean().optional(),
+  // #570: 러닝 역치파워 (W) · 강도 평가 기준 (읽을 때 고르는 기준 — 저장된 강도 값은 바뀌지 않는다)
+  thresholdPower: z.number().int().min(THRESHOLD_POWER_MIN).max(THRESHOLD_POWER_MAX).nullable().optional(),
+  intensityBasis: z.enum(INTENSITY_BASIS_SETTINGS).optional(),
+  // #505: 수동 보호(source = manual) 해제 — source 만 "garmin" 으로, 값은 다음 싱크가 갱신.
+  revertToGarmin: z.array(z.enum(["maxHR", "lthr", "thresholdPower"])).max(3).optional(),
+});
+
+const DEFAULT_NAME = "사용자";
+
+/**
+ * 싱글톤 UserProfile 조회 또는 생성.
+ * `singleton` unique 제약으로 동시 요청 시에도 중복 row 생성 불가.
+ */
+async function getOrCreateProfile() {
+  return prisma.userProfile.upsert({
+    where: { singleton: true },
+    update: {},
+    create: { singleton: true, name: DEFAULT_NAME },
+  });
+}
+
+export async function GET() {
+  try {
+    const profile = await getOrCreateProfile();
+    return NextResponse.json({ profile });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const parsed = PATCH_SCHEMA.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "유효하지 않은 입력", issues: parsed.error.issues },
+        { status: 400 }
+      );
+    }
+
+    const data = parsed.data;
+
+    // 싱글톤 보장: 없으면 생성, 있으면 그대로 (update/create는 아래에서 결정)
+    const existing = await getOrCreateProfile();
+
+    // 업데이트 후 예상 상태로 LTHR ≤ maxHR 검증.
+    // maxHR 미설정 시 resolveMaxHR fallback(220-age 또는 190)과도 비교.
+    const nextMaxHR =
+      data.maxHR !== undefined ? data.maxHR : existing.maxHR;
+    const nextLthr =
+      data.lthr !== undefined ? data.lthr : existing.lthr;
+    const nextBirthDate =
+      data.birthDate !== undefined
+        ? data.birthDate
+          ? parseDateOnlyKST(data.birthDate)
+          : null
+        : existing.birthDate;
+    if (nextLthr !== null) {
+      const compareMaxHR =
+        nextMaxHR ??
+        resolveMaxHR({ maxHR: null, birthDate: nextBirthDate ?? undefined });
+      if (nextLthr > compareMaxHR) {
+        return NextResponse.json(
+          {
+            error: `LTHR(${nextLthr})은 최대심박수(${compareMaxHR}${
+              nextMaxHR === null ? " — 추정값" : ""
+            })보다 작아야 합니다`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // #505: 되돌리기와 같은 요청에서 그 필드 값을 바꾸면 어느 쪽이 의도인지 모호 → 거절.
+    const revert = new Set(data.revertToGarmin ?? []);
+    const maxHRChanged = data.maxHR !== undefined && data.maxHR !== existing.maxHR;
+    const lthrPairChanged =
+      (data.lthr !== undefined && data.lthr !== existing.lthr) ||
+      (data.lthrPace !== undefined && data.lthrPace !== existing.lthrPace);
+    const thresholdPowerChanged =
+      data.thresholdPower !== undefined && data.thresholdPower !== existing.thresholdPower;
+    if (
+      (revert.has("maxHR") && maxHRChanged) ||
+      (revert.has("lthr") && lthrPairChanged) ||
+      (revert.has("thresholdPower") && thresholdPowerChanged)
+    ) {
+      return NextResponse.json(
+        { error: "Garmin 자동으로 되돌리는 항목의 값은 같은 요청에서 바꿀 수 없습니다" },
+        { status: 400 }
+      );
+    }
+
+    const updatePayload: Record<string, unknown> = {};
+    if (data.name !== undefined) updatePayload.name = data.name;
+    if (data.birthDate !== undefined)
+      updatePayload.birthDate = data.birthDate
+        ? parseDateOnlyKST(data.birthDate)
+        : null;
+    if (data.height !== undefined) updatePayload.height = data.height;
+    if (data.targetWeight !== undefined)
+      updatePayload.targetWeight = data.targetWeight;
+    if (data.targetDate !== undefined)
+      updatePayload.targetDate = data.targetDate
+        ? parseDateOnlyKST(data.targetDate)
+        : null;
+    if (data.restingHRBase !== undefined) {
+      updatePayload.restingHRBase = data.restingHRBase;
+      if (data.restingHRBase !== existing.restingHRBase) {
+        updatePayload.restingHRBaseSource =
+          data.restingHRBase === null ? null : "manual";
+      }
+    }
+    if (data.maxHR !== undefined) {
+      updatePayload.maxHR = data.maxHR;
+      // source는 값이 실제로 변경됐을 때만 갱신 (form 전송이 unchanged field도 포함하므로
+      // 매 저장마다 source가 manual로 뒤집히는 것 방지)
+      if (data.maxHR !== existing.maxHR) {
+        updatePayload.maxHRSource = data.maxHR === null ? null : "manual";
+      }
+    }
+    if (data.lthr !== undefined) updatePayload.lthr = data.lthr;
+    if (data.lthrPace !== undefined) updatePayload.lthrPace = data.lthrPace;
+    // #570: 역치파워 — maxHR 과 같은 규칙 (실제로 바뀔 때만 source 갱신)
+    if (data.thresholdPower !== undefined) {
+      updatePayload.thresholdPower = data.thresholdPower;
+      if (thresholdPowerChanged) {
+        updatePayload.thresholdPowerSource = data.thresholdPower === null ? null : "manual";
+      }
+    }
+    if (data.intensityBasis !== undefined) updatePayload.intensityBasis = data.intensityBasis;
+
+    // LTHR / LTHR pace는 한 쌍으로 측정 → lthrSource를 둘의 next state 기반으로 결정
+    {
+      const nextLthr = data.lthr !== undefined ? data.lthr : existing.lthr;
+      const nextLthrPace =
+        data.lthrPace !== undefined ? data.lthrPace : existing.lthrPace;
+      const lthrChanged =
+        data.lthr !== undefined && data.lthr !== existing.lthr;
+      const paceChanged =
+        data.lthrPace !== undefined && data.lthrPace !== existing.lthrPace;
+
+      if (lthrChanged || paceChanged) {
+        if (nextLthr === null && nextLthrPace === null) {
+          // 둘 다 비워짐 → source 초기화 (다음 sync에서 자동 설정 OK)
+          updatePayload.lthrSource = null;
+        } else if (
+          (lthrChanged && data.lthr !== null) ||
+          (paceChanged && data.lthrPace !== null)
+        ) {
+          // 한쪽이라도 수동으로 값 설정/변경됨 → manual 보호
+          updatePayload.lthrSource = "manual";
+        }
+        // 한쪽만 비워졌고 다른 쪽이 남아있으면 source 유지 (현재 보호 상태 보존)
+      }
+    }
+    // #505: 값 변경 판정 뒤에 적용 — 위 충돌 검사로 같은 필드의 manual 지정과 겹치지 않는다.
+    if (revert.has("maxHR")) updatePayload.maxHRSource = "garmin";
+    if (revert.has("lthr")) updatePayload.lthrSource = "garmin";
+    if (revert.has("thresholdPower")) updatePayload.thresholdPowerSource = "garmin";
+    if (data.targetCalories !== undefined)
+      updatePayload.targetCalories = data.targetCalories;
+    // M12 (#223): 개인 목표 필드 update passthrough (변경 이력 tracking 대상 아님).
+    if (data.targetAvgPace !== undefined)
+      updatePayload.targetAvgPace = data.targetAvgPace;
+    if (data.targetWeeklyKm !== undefined)
+      updatePayload.targetWeeklyKm = data.targetWeeklyKm;
+    if (data.targetVO2max !== undefined)
+      updatePayload.targetVO2max = data.targetVO2max;
+    if (data.personalGoalNote !== undefined) {
+      // 빈 문자열은 null 로 정규화 (프론트 empty input 처리).
+      updatePayload.personalGoalNote =
+        data.personalGoalNote === "" ? null : data.personalGoalNote;
+    }
+    // M13 Phase 1 (#243): autoAdjust 토글 passthrough.
+    if (data.autoAdjustEnabled !== undefined)
+      updatePayload.autoAdjustEnabled = data.autoAdjustEnabled;
+
+    // 변경 이력 기록 대상 필드 수집 (#85)
+    const trackedFields: Array<{ field: MetricField; old: number | null; new: number | null }> = [];
+    if (data.maxHR !== undefined && data.maxHR !== existing.maxHR) {
+      trackedFields.push({ field: "maxHR", old: existing.maxHR, new: data.maxHR });
+    }
+    if (data.lthr !== undefined && data.lthr !== existing.lthr) {
+      trackedFields.push({ field: "lthr", old: existing.lthr, new: data.lthr });
+    }
+    if (data.lthrPace !== undefined && data.lthrPace !== existing.lthrPace) {
+      trackedFields.push({ field: "lthrPace", old: existing.lthrPace, new: data.lthrPace });
+    }
+    if (thresholdPowerChanged) {
+      trackedFields.push({
+        field: "thresholdPower",
+        old: existing.thresholdPower,
+        new: data.thresholdPower ?? null,
+      });
+    }
+    if (
+      data.restingHRBase !== undefined &&
+      data.restingHRBase !== existing.restingHRBase
+    ) {
+      trackedFields.push({
+        field: "restingHRBase",
+        old: existing.restingHRBase,
+        new: data.restingHRBase,
+      });
+    }
+
+    // UserProfile update + MetricChange 기록을 단일 트랜잭션으로 원자화.
+    // history 실패 시 profile 변경도 롤백되어 다음 요청에서 delta가 다시 감지됨.
+    const profile = await prisma.$transaction(async (tx) => {
+      const updated = await tx.userProfile.update({
+        where: { id: existing.id },
+        data: updatePayload,
+      });
+      for (const t of trackedFields) {
+        await recordMetricChange(
+          {
+            field: t.field,
+            oldValue: t.old,
+            newValue: t.new,
+            source: "manual",
+            reason: "user_edit",
+          },
+          tx
+        );
+      }
+      return updated;
+    });
+
+    // #570: 역치파워가 생기면 (수동 입력) 비어 있는 과거 러닝의 파워 기준 값을 바로 채운다 — 다음 싱크 (06:00) 까지
+    // 파워 기준이 심박으로 조용히 대체되지 않게 (PR #573 Codex P2). 채운 행만 대상이라 반복해도 안전 · 실패는 다음 싱크가 채운다.
+    if (thresholdPowerChanged && data.thresholdPower !== null) {
+      try {
+        const { filled } = await fillMissingPowerIntensity();
+        if (filled > 0) bumpHistoryCacheVersion();
+      } catch (err) {
+        console.error(
+          "[profile] 역치파워 저장 후 파워 기준 강도 채우기 실패 (다음 싱크에서 재시도):",
+          err instanceof Error ? err.message : String(err)
+        );
+      }
+    }
+
+    // #570: 강도 기준이 바뀌면 인사이트 캐시 (존 분포) 를 새 기준으로 — 저장된 강도 값은 그대로, 읽는 쪽만 바뀐다
+    if (data.intensityBasis !== undefined && data.intensityBasis !== existing.intensityBasis) {
+      bumpHistoryCacheVersion();
+    }
+
+    // M4-2: targetCalories 변경 시 모든 DailySummary의 칼로리 밸런스 재계산.
+    // 히스토리가 수백 건이면 수 초 이상 걸릴 수 있으므로 fire-and-forget으로 백그라운드 실행.
+    // (Node 런타임에서 프로세스가 계속 살아있으므로 완료 보장, 실패해도 다음 싱크/수동 재계산으로 복구)
+    const targetCaloriesChanged =
+      data.targetCalories !== undefined &&
+      data.targetCalories !== existing.targetCalories;
+    if (targetCaloriesChanged) {
+      recalculateAllCalorieBalances()
+        .then(({ processed, failed }) => {
+          console.log(
+            `[profile] targetCalories 변경 → 백그라운드 재계산: ${processed}건 성공, ${failed}건 실패`
+          );
+        })
+        .catch((err) => {
+          console.error(
+            "[profile] 프로필 변경 후 칼로리 재계산 실패:",
+            err instanceof Error ? err.message : String(err)
+          );
+        });
+    }
+
+    return NextResponse.json({ profile });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

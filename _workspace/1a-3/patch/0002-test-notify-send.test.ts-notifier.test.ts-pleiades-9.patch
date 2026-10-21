@@ -1,0 +1,25 @@
+From caf327acaabfed58fdf82e4671c6729c6a060519 Mon Sep 17 00:00:00 2001
+From: "Sagan.ahn" <starryjeju@gmail.com>
+Date: Wed, 30 Sep 2026 12:37:06 +0900
+Subject: [PATCH 2/3] =?UTF-8?q?test(notify):=20send.test.ts=20=E2=86=92=20?=
+ =?UTF-8?q?notifier.test.ts=20=EC=9D=B4=EB=A6=84=EB=A7=8C=20=EB=B3=80?=
+ =?UTF-8?q?=EA=B2=BD=20(pleiades#95)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+1a-2 baseline 11건의 이력을 다음 커밋의 이식본으로 잇기 위한 순수 rename (내용 무변경).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../notifications/__tests__/{send.test.ts => notifier.test.ts}    | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+ rename src/bot/notifications/__tests__/{send.test.ts => notifier.test.ts} (100%)
+
+diff --git a/src/bot/notifications/__tests__/send.test.ts b/src/bot/notifications/__tests__/notifier.test.ts
+similarity index 100%
+rename from src/bot/notifications/__tests__/send.test.ts
+rename to src/bot/notifications/__tests__/notifier.test.ts
+-- 
+2.50.1 (Apple Git-155)
+

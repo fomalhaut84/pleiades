@@ -1,0 +1,396 @@
+'use client'
+
+import React, { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import CategoryEditPanel from './CategoryEditPanel'
+import CategoryDeleteModal from './CategoryDeleteModal'
+import IconButton from '@/components/ui/IconButton'
+
+export interface CategoryRow {
+  id: string
+  slug: string
+  name: string
+  type: string
+  icon: string | null
+  keywords: string[]
+  sortOrder: number
+  groupId: string | null
+  group: { id: string; name: string; icon: string | null } | null
+  _count: { transactions: number; budgets: number }
+}
+
+type CategoryTab = 'expense' | 'income' | 'transfer'
+
+interface CategoryTableProps {
+  categories: CategoryRow[]
+  activeTab: CategoryTab
+  onTabChange: (tab: CategoryTab) => void
+}
+
+function ArrowUpIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M8 13V3M4 7l4-4 4 4" />
+    </svg>
+  )
+}
+
+function ArrowDownIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M8 3v10M4 9l4 4 4-4" />
+    </svg>
+  )
+}
+
+function CategoryRowDesktop({
+  c, isFirst, isLast, isReordering, onMoveUp, onMoveDown, onEdit, onDelete,
+}: {
+  c: CategoryRow
+  isFirst: boolean
+  isLast: boolean
+  isReordering: boolean
+  onMoveUp: () => void
+  onMoveDown: () => void
+  onEdit: (c: CategoryRow) => void
+  onDelete: (c: CategoryRow) => void
+}) {
+  return (
+    <tr className="hover:bg-card">
+      <td className="pl-4 px-3 py-3 text-[13px] text-dim border-b border-border text-center tabular-nums">
+        {c.sortOrder}
+      </td>
+      <td className="px-3 py-3 text-[16px] border-b border-border">
+        {c.icon ?? '-'}
+      </td>
+      <td className="px-3 py-3 text-[13px] font-semibold text-bright border-b border-border">
+        {c.name}
+      </td>
+      <td className="px-3 py-3 border-b border-border">
+        <div className="flex flex-wrap gap-1">
+          {c.keywords.length > 0 ? (
+            c.keywords.map((k, idx) => (
+              <span key={`${k}-${idx}`} className="px-1.5 py-0.5 rounded bg-surface-dim text-[11px] text-dim">{k}</span>
+            ))
+          ) : (
+            <span className="text-[12px] text-dim">-</span>
+          )}
+        </div>
+      </td>
+      <td className="px-3 py-3 text-[13px] text-muted border-b border-border text-center tabular-nums">
+        {c._count.transactions}
+      </td>
+      <td className="pr-4 px-3 py-3 border-b border-border">
+        <div className="flex items-center gap-1">
+          <IconButton onClick={onMoveUp} disabled={isFirst || isReordering} title="위로">
+            <ArrowUpIcon />
+          </IconButton>
+          <IconButton onClick={onMoveDown} disabled={isLast || isReordering} title="아래로">
+            <ArrowDownIcon />
+          </IconButton>
+          <IconButton onClick={() => onEdit(c)} title="수정">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" /></svg>
+          </IconButton>
+          <IconButton variant="danger" onClick={() => onDelete(c)} title="삭제">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 011.334-1.334h2.666a1.333 1.333 0 011.334 1.334V4m2 0v9.333a1.333 1.333 0 01-1.334 1.334H4.667a1.333 1.333 0 01-1.334-1.334V4h9.334z" /></svg>
+          </IconButton>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+interface GroupedCategories {
+  groupId: string | null
+  groupName: string
+  groupIcon: string | null
+  categories: CategoryRow[]
+}
+
+function groupCategories(cats: CategoryRow[]): GroupedCategories[] {
+  const groups = new Map<string | null, GroupedCategories>()
+  for (const c of cats) {
+    const gId = c.groupId
+    if (!groups.has(gId)) {
+      groups.set(gId, {
+        groupId: gId,
+        groupName: c.group?.name ?? '미분류',
+        groupIcon: c.group?.icon ?? null,
+        categories: [],
+      })
+    }
+    groups.get(gId)!.categories.push(c)
+  }
+  const result = Array.from(groups.values())
+  result.sort((a, b) => {
+    if (a.groupId === null) return 1
+    if (b.groupId === null) return -1
+    return a.groupName.localeCompare(b.groupName)
+  })
+  return result
+}
+
+export default function CategoryTable({ categories, activeTab, onTabChange }: CategoryTableProps) {
+  const router = useRouter()
+  const [editItem, setEditItem] = useState<CategoryRow | null>(null)
+  const [deleteItem, setDeleteItem] = useState<CategoryRow | null>(null)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string | null>>(new Set())
+  const [reordering, setReordering] = useState(false)
+
+  const filtered = categories.filter((c) => c.type === activeTab)
+  const grouped = activeTab === 'expense' ? groupCategories(filtered) : null
+
+  const toggleGroup = (gId: string | null) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(gId)) next.delete(gId)
+      else next.add(gId)
+      return next
+    })
+  }
+
+  async function handleReorder(categoryId: string, direction: 'up' | 'down') {
+    if (reordering) return
+    setReordering(true)
+
+    try {
+      // expense: 그룹 내 이동, income: 플랫 리스트 이동
+      let list: CategoryRow[]
+      if (grouped) {
+        const group = grouped.find((g) => g.categories.some((c) => c.id === categoryId))
+        list = group?.categories ?? []
+      } else {
+        list = filtered
+      }
+
+      const idx = list.findIndex((c) => c.id === categoryId)
+      if (idx < 0) return
+
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+      if (swapIdx < 0 || swapIdx >= list.length) return
+
+      // 그룹/리스트 내 정규화 후 스왑 (sortOrder 중복/경계값 안전)
+      const normalized = list.map((c, i) => ({ id: c.id, sortOrder: i }))
+      const tmp = normalized[idx].sortOrder
+      normalized[idx] = { ...normalized[idx], sortOrder: normalized[swapIdx].sortOrder }
+      normalized[swapIdx] = { ...normalized[swapIdx], sortOrder: tmp }
+
+      const items = normalized
+
+      const res = await fetch('/api/categories/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error ?? '정렬 변경 실패')
+      }
+
+      router.refresh()
+    } catch (error) {
+      console.error('카테고리 정렬 실패:', error)
+    } finally {
+      setReordering(false)
+    }
+  }
+
+  return (
+    <>
+      {/* Tab */}
+      <div className="flex gap-1 mb-4">
+        {([['expense', '소비'], ['income', '수입'], ['transfer', '이체']] as const).map(([value, label]) => (
+          <button
+            key={value}
+            onClick={() => onTabChange(value)}
+            className={`px-4 py-2 rounded-lg text-[13px] font-semibold border transition-all ${
+              activeTab === value
+                ? 'bg-surface text-bright border-border-hover'
+                : 'border-transparent text-sub hover:bg-surface-dim'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="relative overflow-hidden rounded-[14px] border border-border bg-card">
+        <div className="px-5 py-3.5 border-b border-border flex justify-between items-center">
+          <div className="text-[13px] font-bold text-bright">
+            {activeTab === 'expense' ? '소비' : activeTab === 'income' ? '수입' : '이체'} 카테고리
+          </div>
+          <div className="text-[12px] text-sub">{filtered.length}개</div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="p-12 text-center text-[14px] text-sub">
+            카테고리가 없습니다
+          </div>
+        ) : (
+          <>
+            {/* Desktop table */}
+            <div className="overflow-x-auto hidden sm:block">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>
+                    {['순서', '아이콘', '이름', '키워드', '거래 수', ''].map((col, i) => (
+                      <th
+                        key={i}
+                        className={`px-3 py-2.5 text-[11px] font-semibold text-sub tracking-wide uppercase border-b border-border bg-card ${
+                          i === 0 || i === 4 ? 'text-center' : 'text-left'
+                        } ${i === 0 ? 'pl-4 w-16' : ''} ${i === 5 ? 'pr-4 w-56' : ''}`}
+                      >
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {grouped ? grouped.map((g) => {
+                    const isCollapsed = collapsedGroups.has(g.groupId)
+                    return (
+                      <React.Fragment key={g.groupId ?? '_ungrouped'}>
+                        <tr
+                          className="cursor-pointer hover:bg-white/[0.02]"
+                          onClick={() => toggleGroup(g.groupId)}
+                        >
+                          <td colSpan={6} className="px-4 py-2.5 border-b border-border bg-white/[0.018]">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] text-dim transition-transform ${isCollapsed ? '-rotate-90' : ''}`}>
+                                ▾
+                              </span>
+                              <span className="text-[12px] font-bold text-bright">
+                                {g.groupIcon ? `${g.groupIcon} ` : ''}{g.groupName}
+                              </span>
+                              <span className="text-[10px] font-semibold text-sub bg-surface px-2 py-0.5 rounded">
+                                {g.categories.length}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                        {!isCollapsed && g.categories.map((c, idx) => (
+                          <CategoryRowDesktop
+                            key={c.id}
+                            c={c}
+                            isFirst={idx === 0}
+                            isLast={idx === g.categories.length - 1}
+                            isReordering={reordering}
+                            onMoveUp={() => handleReorder(c.id, 'up')}
+                            onMoveDown={() => handleReorder(c.id, 'down')}
+                            onEdit={setEditItem}
+                            onDelete={setDeleteItem}
+                          />
+                        ))}
+                      </React.Fragment>
+                    )
+                  }) : filtered.map((c, idx) => (
+                    <CategoryRowDesktop
+                      key={c.id}
+                      c={c}
+                      isFirst={idx === 0}
+                      isLast={idx === filtered.length - 1}
+                      isReordering={reordering}
+                      onMoveUp={() => handleReorder(c.id, 'up')}
+                      onMoveDown={() => handleReorder(c.id, 'down')}
+                      onEdit={setEditItem}
+                      onDelete={setDeleteItem}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile card view */}
+            <div className="sm:hidden divide-y divide-border">
+              {(() => {
+                const renderCard = (c: CategoryRow, isFirst: boolean, isLast: boolean) => (
+                  <div key={c.id} className="px-4 py-3.5 hover:bg-card">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[16px]">{c.icon ?? '📦'}</span>
+                        <span className="text-[13px] font-bold text-bright">{c.name}</span>
+                        {c._count.transactions > 0 && (
+                          <span className="text-[11px] text-dim px-1.5 py-0.5 rounded bg-surface-dim">
+                            {c._count.transactions}건
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <IconButton
+                          onClick={() => handleReorder(c.id, 'up')}
+                          disabled={isFirst || reordering}
+                          title="위로"
+                        >
+                          <ArrowUpIcon size={12} />
+                        </IconButton>
+                        <IconButton
+                          onClick={() => handleReorder(c.id, 'down')}
+                          disabled={isLast || reordering}
+                          title="아래로"
+                        >
+                          <ArrowDownIcon size={12} />
+                        </IconButton>
+                        <IconButton onClick={() => setEditItem(c)} title="수정">
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" />
+                          </svg>
+                        </IconButton>
+                        <IconButton variant="danger" onClick={() => setDeleteItem(c)} title="삭제">
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 011.334-1.334h2.666a1.333 1.333 0 011.334 1.334V4m2 0v9.333a1.333 1.333 0 01-1.334 1.334H4.667a1.333 1.333 0 01-1.334-1.334V4h9.334z" />
+                          </svg>
+                        </IconButton>
+                      </div>
+                    </div>
+                    {c.keywords.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {c.keywords.map((k) => (
+                          <span
+                            key={k}
+                            className="px-1.5 py-0.5 rounded bg-surface-dim text-[11px] text-dim"
+                          >
+                            {k}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+
+                if (grouped) {
+                  return grouped.map((g) => (
+                    <React.Fragment key={g.groupId ?? '_ungrouped'}>
+                      <div className="px-4 py-2.5 bg-white/[0.018]">
+                        <span className="text-[12px] font-bold text-bright">
+                          {g.groupIcon ? `${g.groupIcon} ` : ''}{g.groupName}
+                        </span>
+                        <span className="ml-2 text-[10px] font-semibold text-sub bg-surface px-2 py-0.5 rounded">
+                          {g.categories.length}
+                        </span>
+                      </div>
+                      {g.categories.map((c, idx) =>
+                        renderCard(c, idx === 0, idx === g.categories.length - 1)
+                      )}
+                    </React.Fragment>
+                  ))
+                }
+
+                return filtered.map((c, idx) =>
+                  renderCard(c, idx === 0, idx === filtered.length - 1)
+                )
+              })()}
+            </div>
+          </>
+        )}
+      </div>
+
+      {editItem && (
+        <CategoryEditPanel category={editItem} onClose={() => setEditItem(null)} />
+      )}
+      {deleteItem && (
+        <CategoryDeleteModal category={deleteItem} onClose={() => setDeleteItem(null)} />
+      )}
+    </>
+  )
+}

@@ -1,0 +1,191 @@
+import type { Prisma, PrismaClient } from "@/generated/prisma/client";
+import { bumpHistoryCacheVersion } from "@/lib/history/cache";
+import defaultPrisma from "@/lib/prisma";
+import { ymdKST } from "@/lib/garmin/utils";
+
+/** Serializable 트랜잭션 재시도 상수 */
+const MAX_RETRY = 3;
+const RETRY_DELAY_MS = 50;
+
+/**
+ * reference Date에서 다음 3가지 시각값을 산출:
+ *
+ * 1. `summaryKey` — DailySummary 조회용 key. KST midnight UTC instant.
+ *    sync 파이프라인의 `utils.startOfDay`(KST-aware) 결과와 정합. 서버 TZ 무관.
+ * 2. `kstDayStart` / `kstDayEnd` — FoodLog.date(실제 UTC instant) 집계용 경계.
+ *    진짜 KST 00:00 UTC instant(= Date.UTC(Y,M,D) - 9h)로 서버 TZ와 무관하게 정확.
+ */
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+function kstDayBoundary(referenceDate: Date): {
+  summaryKey: Date;
+  kstDayStart: Date;
+  kstDayEnd: Date;
+} {
+  // KST 기준 YYYY-MM-DD에서 KST midnight UTC instant 생성
+  const ymd = ymdKST(referenceDate);
+  const summaryKey = new Date(`${ymd}T00:00:00+09:00`);
+
+  // FoodLog 집계 경계: 진짜 KST 00:00 UTC instant (summaryKey와 동일 instant이지만 명시 산출 유지)
+  const [y, m, d] = ymd.split("-").map(Number);
+  const kstMidnightUTCms = Date.UTC(y, m - 1, d) - KST_OFFSET_MS;
+  const kstDayStart = new Date(kstMidnightUTCms);
+  const kstDayEnd = new Date(kstMidnightUTCms + 24 * 60 * 60 * 1000);
+
+  return { summaryKey, kstDayStart, kstDayEnd };
+}
+
+type TxClient = Prisma.TransactionClient;
+
+/**
+ * 특정 날짜의 칼로리 밸런스를 재계산하여 DailySummary에 저장.
+ *
+ * 계산식:
+ *   availableCalories = targetCalories(프로필) + activeCalories(Garmin)
+ *   estimatedIntakeCalories = SUM(FoodLog.estimatedKcal) for the KST day
+ *   calorieBalance = intake - available  (음수 = 결손/감량, 양수 = 잉여)
+ *
+ * 동시성 보호:
+ *   - Serializable 트랜잭션으로 aggregate-then-update 간 race(lost update) 차단.
+ *   - 직렬화 충돌(P2034) 시 자동 재시도 (최대 MAX_RETRY 회).
+ *   - 호출자가 이미 트랜잭션에 있으면 `tx`로 동일 트랜잭션 내 실행.
+ *
+ * @param client — 사용할 PrismaClient. 봇 등 별도 client가 있는 프로세스에서 전달.
+ */
+export async function recalculateCalorieBalance(
+  referenceDate: Date,
+  tx?: TxClient,
+  client?: PrismaClient
+): Promise<void> {
+  if (tx) {
+    await doRecalc(referenceDate, tx);
+    return;
+  }
+  const db = client ?? defaultPrisma;
+  await withSerializableRetry(db, (innerTx) =>
+    doRecalc(referenceDate, innerTx)
+  );
+}
+
+/** Serializable 트랜잭션 + 직렬화 충돌(P2034) 자동 재시도 */
+async function withSerializableRetry(
+  db: PrismaClient,
+  fn: (tx: TxClient) => Promise<void>
+): Promise<void> {
+  for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+    try {
+      await (db as unknown as typeof defaultPrisma).$transaction(
+        async (tx) => fn(tx),
+        { isolationLevel: "Serializable" }
+      );
+      return;
+    } catch (err) {
+      const isSerializationFailure =
+        err instanceof Error && err.message.includes("P2034");
+      if (!isSerializationFailure || attempt === MAX_RETRY) throw err;
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * attempt));
+    }
+  }
+}
+
+async function doRecalc(referenceDate: Date, tx: TxClient): Promise<void> {
+  const { summaryKey, kstDayStart, kstDayEnd } = kstDayBoundary(referenceDate);
+
+  const [summary, profile, intakeAgg, unestimatedCount] = await Promise.all([
+    tx.dailySummary.findUnique({ where: { date: summaryKey } }),
+    tx.userProfile.findFirst(),
+    // estimatedKcal이 있는 로그만 집계.
+    tx.foodLog.aggregate({
+      where: {
+        date: { gte: kstDayStart, lt: kstDayEnd },
+        estimatedKcal: { not: null },
+      },
+      _sum: { estimatedKcal: true },
+      _count: { _all: true },
+    }),
+    // Codex P2 (#283): 미추정 (kcal null) 로그가 하나라도 있으면 그날 intake 는 부분 합계 →
+    // 대시보드/리포트가 하루 완전 합계로 오해할 수 있음. 이 경우 intake/balance 를 null 로 두어
+    // 추정 완료 (backfill 성공) 전까지 misleading value 를 publish 하지 않도록.
+    tx.foodLog.count({
+      where: {
+        date: { gte: kstDayStart, lt: kstDayEnd },
+        estimatedKcal: null,
+      },
+    }),
+  ]);
+
+  if (!summary) return; // Garmin 싱크 전이면 skip
+
+  const target = profile?.targetCalories ?? null;
+  const active = summary.activeCalories ?? null;
+  const availableCalories =
+    target !== null && active !== null ? target + active : null;
+
+  // kcal이 집계된 로그가 하나도 없으면 intake = null (0 kcal로 표시하지 않음).
+  // 미추정 log 가 있어도 부분 합계 = misleading → null.
+  const hasCountedLogs = intakeAgg._count._all > 0;
+  const hasUnestimated = unestimatedCount > 0;
+  const estimatedIntakeCalories = hasUnestimated
+    ? null
+    : hasCountedLogs
+      ? (intakeAgg._sum.estimatedKcal ?? 0)
+      : null;
+
+  const calorieBalance =
+    estimatedIntakeCalories !== null && availableCalories !== null
+      ? estimatedIntakeCalories - availableCalories
+      : null;
+
+  await tx.dailySummary.update({
+    where: { id: summary.id },
+    data: {
+      availableCalories,
+      estimatedIntakeCalories,
+      calorieBalance,
+    },
+  });
+}
+
+/**
+ * 모든 DailySummary의 칼로리 밸런스를 재계산.
+ * UserProfile.targetCalories 변경 등 전역 파라미터가 바뀌었을 때 호출.
+ * 각 날짜별로 독립 트랜잭션으로 실행하여 부분 실패 시 전체 중단되지 않음.
+ */
+export async function recalculateAllCalorieBalances(
+  client?: PrismaClient
+): Promise<{
+  processed: number;
+  failed: number;
+}> {
+  const db = client ?? defaultPrisma;
+  const summaries = await db.dailySummary.findMany({
+    select: { date: true },
+    orderBy: { date: "desc" },
+  });
+
+  let processed = 0;
+  let failed = 0;
+  try {
+    for (const s of summaries) {
+      try {
+        await recalculateCalorieBalance(s.date, undefined, db);
+        processed++;
+      } catch (err) {
+        failed++;
+        console.error(
+          // #364: KST 자정 instant 를 UTC 로 찍으면 로그 날짜가 하루 앞으로 밀린다.
+          // 장애 때 실제로 읽는 것은 이 실패 로그다 (cron.ts:70 성공 로그의 쌍둥이).
+          "[calorie-balance] 재계산 실패",
+          ymdKST(s.date),
+          err instanceof Error ? err.message : String(err)
+        );
+      }
+    }
+  } finally {
+    // #394: 호출자 (프로필 PATCH · daily-summary fetcher) 가 전부 await 하지 않는 백그라운드로 돌린다. 호출 시점이나
+    // lastSyncAt 갱신 시점에 히스토리 캐시 키가 바뀌면 **재계산 중간** 값이 새 키로 캐시돼 TTL 동안 남으므로,
+    // 순차 재계산이 끝난 여기서 버전을 올린다 (PR #402 Codex P2 1 · 3회차). 일부 실패해도 성공분은 반영돼야 한다.
+    bumpHistoryCacheVersion();
+  }
+  return { processed, failed };
+}

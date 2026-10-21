@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>알림 설정 · myFinance</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+<style>
+  :root {
+    --bg: #07080c;
+    --bg-raised: #0d0e14;
+    --card: rgba(255, 255, 255, 0.025);
+    --border: rgba(255, 255, 255, 0.06);
+    --border-hover: rgba(255, 255, 255, 0.12);
+    --dim: #6e6e82;
+    --sub: #9494a8;
+    --text: #c8c8d4;
+    --bright: #eeeef2;
+    --sejin: #34d399;
+    --sodam: #60a5fa;
+    --dasom: #fb923c;
+    --amber: #fbbf24;
+    --red: #ef4444;
+    --surface-dim: rgba(255, 255, 255, 0.04);
+    --surface: rgba(255, 255, 255, 0.06);
+    --surface-hover: rgba(255, 255, 255, 0.1);
+  }
+  html.light {
+    --bg: #f5f5f7;
+    --bg-raised: #ffffff;
+    --card: rgba(0, 0, 0, 0.02);
+    --border: rgba(0, 0, 0, 0.08);
+    --border-hover: rgba(0, 0, 0, 0.15);
+    --dim: #9ca3af;
+    --sub: #6b7280;
+    --text: #374151;
+    --bright: #111827;
+    --sejin: #059669;
+    --sodam: #2563eb;
+    --dasom: #ea580c;
+    --amber: #b45309;
+    --red: #dc2626;
+    --surface-dim: rgba(0, 0, 0, 0.05);
+    --surface: rgba(0, 0, 0, 0.07);
+    --surface-hover: rgba(0, 0, 0, 0.09);
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Pretendard', -apple-system, system-ui, sans-serif; }
+  .bg-bg-raised { background: var(--bg-raised); }
+  .bg-card { background: var(--card); }
+  .bg-surface-dim { background: var(--surface-dim); }
+  .bg-surface { background: var(--surface); }
+  .text-bright { color: var(--bright); }
+  .text-sub { color: var(--sub); }
+  .text-dim { color: var(--dim); }
+  .text-app { color: var(--text); }
+  .text-sejin { color: var(--sejin); }
+  .text-sodam { color: var(--sodam); }
+  .text-dasom { color: var(--dasom); }
+  .text-amber { color: var(--amber); }
+  .text-red { color: var(--red); }
+
+  .section-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .section-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: var(--surface-dim); border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; transition: background 0.15s; }
+  .section-header:hover { background: var(--surface); }
+  .section-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .section-icon.price { background: color-mix(in srgb, var(--sejin) 15%, transparent); color: var(--sejin); }
+  .section-icon.expense { background: color-mix(in srgb, var(--dasom) 15%, transparent); color: var(--dasom); }
+  .section-icon.schedule { background: color-mix(in srgb, var(--sodam) 15%, transparent); color: var(--sodam); }
+  .section-icon.ai { background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--amber); }
+  .chevron { transition: transform 0.2s ease; color: var(--sub); }
+  .section-header[data-open="false"] .chevron { transform: rotate(-90deg); }
+
+  .key-row { display: flex; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+  .key-row:last-child { border-bottom: none; }
+  .key-row:hover { background: var(--surface-dim); }
+  .key-info { flex: 1; min-width: 0; }
+  .key-label { font-size: 13px; font-weight: 600; color: var(--bright); }
+  .key-code { font-size: 11px; color: var(--dim); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .key-desc { font-size: 11px; color: var(--sub); margin-top: 2px; }
+
+  .value-badge { font-size: 15px; font-weight: 700; color: var(--bright); font-variant-numeric: tabular-nums; }
+  .unit { font-size: 11px; color: var(--sub); margin-left: 2px; }
+
+  .toggle { position: relative; width: 40px; height: 22px; background: var(--surface); border-radius: 999px; cursor: pointer; transition: background 0.2s; border: 1px solid var(--border); }
+  .toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: var(--sub); border-radius: 50%; transition: all 0.2s; }
+  .toggle.on { background: color-mix(in srgb, var(--sejin) 30%, transparent); border-color: color-mix(in srgb, var(--sejin) 40%, transparent); }
+  .toggle.on::after { left: 20px; background: var(--sejin); }
+
+  .btn { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; transition: all 0.15s; border: 1px solid transparent; }
+  .btn-secondary { background: var(--surface-dim); color: var(--sub); border-color: var(--border); }
+  .btn-secondary:hover { background: var(--surface); color: var(--bright); }
+  .btn-primary { background: var(--bright); color: var(--bg); }
+  .btn-primary:hover { transform: translateY(-1px); }
+  .input { background: var(--surface-dim); border: 1px solid var(--border); border-radius: 6px; color: var(--bright); padding: 6px 10px; font-size: 13px; font-weight: 600; width: 80px; text-align: right; font-variant-numeric: tabular-nums; }
+  .input:focus { outline: none; border-color: var(--sejin); }
+
+  .link-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; background: var(--surface); color: var(--sub); font-size: 10px; font-weight: 600; border: 1px solid var(--border); text-decoration: none; }
+  .link-badge:hover { color: var(--bright); background: var(--surface-hover); }
+
+  .tab { padding: 10px; border-radius: 8px; text-align: center; font-size: 13px; font-weight: 600; transition: all 0.15s; color: var(--sub); }
+  .tab.active { background: var(--surface); color: var(--bright); }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  .summary-strip { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px; }
+  @media (min-width: 768px) { .summary-strip { grid-template-columns: repeat(4, 1fr); } }
+  .summary-card { padding: 14px 16px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+  .summary-num { font-size: 22px; font-weight: 800; color: var(--bright); }
+  .summary-label { font-size: 11px; color: var(--sub); margin-top: 2px; letter-spacing: 0.2px; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="sticky top-0 z-20 bg-bg-raised border-b border-border">
+  <div class="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-sodam/20 flex items-center justify-center text-sodam text-lg">⚙️</div>
+      <div>
+        <h1 class="text-bright font-bold text-lg">설정</h1>
+        <p class="text-sub text-xs">계정, 알림, 근로소득, 외부 연동 관리</p>
+      </div>
+    </div>
+    <button class="btn btn-secondary" onclick="toggleTheme()">🌙</button>
+  </div>
+</header>
+
+<main class="max-w-4xl mx-auto px-6 py-6 space-y-6">
+
+  <!-- Top tab (기존 유지) -->
+  <div class="grid grid-cols-4 gap-1 bg-card border border-border rounded-[10px] p-1">
+    <div class="tab">계좌</div>
+    <div class="tab active">알림</div>
+    <div class="tab">근로소득</div>
+    <div class="tab">후잉 연동</div>
+  </div>
+
+  <!-- Summary strip -->
+  <div class="summary-strip">
+    <div class="summary-card">
+      <div class="summary-num">10</div>
+      <div class="summary-label">전체 알림 설정</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-num text-sejin">3</div>
+      <div class="summary-label">활성 (on)</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-num text-dim">0</div>
+      <div class="summary-label">비활성 (off)</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-num text-sodam">4</div>
+      <div class="summary-label">카테고리</div>
+    </div>
+  </div>
+
+  <!-- Section 1: 가격/환율 -->
+  <section class="section-card">
+    <div class="section-header" data-open="true" onclick="toggleSection(this)">
+      <div class="section-icon price">📉</div>
+      <div class="flex-1">
+        <div class="text-bright font-bold text-sm">가격 / 환율 알림</div>
+        <div class="text-sub text-xs mt-0.5">종목 급등락 및 원/달러 환율 변동 임계값 <span class="text-dim">· 3개 키</span></div>
+      </div>
+      <span class="chevron">▾</span>
+    </div>
+    <div>
+      <div class="key-row">
+        <div class="key-info">
+          <div class="key-label">급락 알림 (%)</div>
+          <div class="key-code">price_drop_pct</div>
+          <div class="key-desc">일일 변동률이 이 값 이하이면 텔레그램 급락 알림</div>
+        </div>
+        <span class="value-badge">-5<span class="unit">%</span></span>
+        <button class="btn btn-secondary">수정</button>
+      </div>
+      <div class="key-row">
+        <div class="key-info">
+          <div class="key-label">급등 알림 (%)</div>
+          <div class="key-code">price_surge_pct</div>
+          <div class="key-desc">일일 변동률이 이 값 이상이면 텔레그램 급등 알림</div>
+        </div>
+        <span class="value-badge">5<span class="unit">%</span></span>
+        <button class="btn btn-secondary">수정</button>
+      </div>
+      <div class="key-row">
+        <div class="key-info">
+          <div class="key-label">환율 변동 알림 (원)</div>
+          <div class="key-code">fx_change_krw</div>
+          <div class="key-desc">원/달러 하루 변동폭이 이 값 이상이면 알림</div>
+        </div>
+        <span class="value-badge">50<span class="unit">원</span></span>
+        <button class="btn btn-secondary">수정</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 2: 가계부 -->
+  <section class="section-card">
+    <div class="section-header" data-open="true" onclick="toggleSection(this)">
+      <div class="section-icon expense">💸</div>
+      <div class="flex-1">
+        <div class="text-bright font-bold text-sm">
+          가계부
+          <a class="link-badge ml-2" href="/budgets">예산 페이지 →</a>
+        </div>
+        <div class="text-sub text-xs mt-0.5">예산 초과 경고 임계값 <span class="text-dim">· 1개 키</span></div>
+      </div>
+      <span class="chevron">▾</span>
+    </div>
+    <div>
+      <div class="key-row">
+        <div class="key-info">
+          <div class="key-label">예산 경고 (%)</div>
+          <div class="key-code">budget_warn_pct</div>
+          <div class="key-desc">카테고리별 월 예산 사용률이 이 값을 초과하면 경고</div>
+        </div>
+        <span class="value-badge">80<span class="unit">%</span></span>
+        <button class="btn btn-secondary">수정</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 3: 스케줄 -->
+  <section class="section-card">
+    <div class="section-header" data-open="true" onclick="toggleSection(this)">
+      <div class="section-icon schedule">🕰️</div>
+      <div class="flex-1">
+        <div class="text-bright font-bold text-sm">발송 스케줄</div>
+        <div class="text-sub text-xs mt-0.5">자동 발송 시각/주기 <span class="text-dim">· 2개 키</span></div>
+      </div>
+      <span class="chevron">▾</span>
+    </div>
+    <div>
+      <div class="key-row">
+        <div class="key-info">
+          <div class="key-label">일일 요약 시각</div>
+          <div class="key-code">daily_summary_hour</div>
+          <div class="key-desc">매일 이 시각(KST)에 포트폴리오 요약 발송 (0~23)</div>
+        </div>
+        <span class="value-badge">8<span class="unit">시</span></span>
+        <button class="btn btn-secondary">수정</button>
+      </div>
+      <div class="key-row">
+        <div class="key-info">
+          <div class="key-label">월간 리포트 발송일</div>
+          <div class="key-code">monthly_report_day</div>
+          <div class="key-desc">매월 이 날짜(KST 자정)에 월간 리포트 발송 (1~28)</div>
+        </div>
+        <span class="value-badge">1<span class="unit">일</span></span>
+        <button class="btn btn-secondary">수정</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 4: AI & 전략 -->
+  <section class="section-card">
+    <div class="section-header" data-open="true" onclick="toggleSection(this)">
+      <div class="section-icon ai">🧠</div>
+      <div class="flex-1">
+        <div class="text-bright font-bold text-sm">
+          AI & 전략 알림
+          <a class="link-badge ml-2" href="/strategies">전략 페이지 →</a>
+        </div>
+        <div class="text-sub text-xs mt-0.5">기술적 분석 · 능동 AI 리뷰 · 커스텀 전략 <span class="text-dim">· 4개 키</span></div>
+      </div>
+      <span class="chevron">▾</span>
+    </div>
+    <div>
+      <div class="key-row">
+        <div class="key-info">
+          <div class="key-label">TA 모니터링 주기 (분)</div>
+          <div class="key-code">ta_check_interval_min</div>
+          <div class="key-desc">TA 시그널 스캔 최소 간격 (기본 10분)</div>
+        </div>
+        <span class="value-badge">10<span class="unit">분</span></span>
+        <button class="btn btn-secondary">수정</button>
+      </div>
+      <div class="key-row">
+        <div class="key-info">
+          <div class="key-label">TA 시그널 AI 가이드</div>
+          <div class="key-code">ta_ai_guide</div>
+          <div class="key-desc">TA 시그널 알림에 AI 짧은 조언 첨부 (티커별 6h 쿨다운)</div>
+        </div>
+        <div class="toggle on"></div>
+      </div>
+      <div class="key-row">
+        <div class="key-info">
+          <div class="key-label">능동 AI 리뷰</div>
+          <div class="key-code">active_review</div>
+          <div class="key-desc">KR 15:40 / US 07:15 클로징 리뷰 + 주간 리뷰 자동 발송</div>
+        </div>
+        <div class="toggle on"></div>
+      </div>
+      <div class="key-row">
+        <div class="key-info">
+          <div class="key-label">커스텀 전략 알림</div>
+          <div class="key-code">custom_strategy_alerts</div>
+          <div class="key-desc">/strategies 등록 조건 발동 시 텔레그램 알림</div>
+        </div>
+        <div class="toggle on"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Disclaimer -->
+  <p class="text-center text-dim text-xs pt-4">알림 임계값 변경은 다음 주기부터 반영됩니다.</p>
+</main>
+
+<script>
+  function toggleTheme() { document.documentElement.classList.toggle('light') }
+  function toggleSection(el) {
+    const isOpen = el.dataset.open === 'true'
+    el.dataset.open = isOpen ? 'false' : 'true'
+    const body = el.nextElementSibling
+    body.style.display = isOpen ? 'none' : ''
+  }
+</script>
+
+</body>
+</html>

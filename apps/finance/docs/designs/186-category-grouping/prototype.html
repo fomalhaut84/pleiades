@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>카테고리 그루핑 디자인 시안 — #186</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<style>
+  :root {
+    --bg: #07080c;
+    --bg-raised: #0d0e14;
+    --card: rgba(255,255,255,0.025);
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.12);
+    --dim: #6e6e82;
+    --sub: #9494a8;
+    --text: #c8c8d4;
+    --bright: #eeeef2;
+    --sejin: #34d399;
+    --sodam: #60a5fa;
+    --dasom: #fb923c;
+    --surface-dim: rgba(255,255,255,0.04);
+    --surface: rgba(255,255,255,0.06);
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --emerald: #34d399;
+    --sodam-dim: rgba(96,165,250,0.15);
+    --sodam-border: rgba(96,165,250,0.25);
+    --red-dim: rgba(248,113,113,0.1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 64px;
+  }
+
+  .proto-section { max-width: 960px; margin: 0 auto; padding: 0 32px 40px; }
+  .proto-label {
+    font-size: 11px; font-weight: 700; color: var(--dim);
+    letter-spacing: 1.5px; text-transform: uppercase;
+    margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  .proto-note {
+    font-size: 11px; color: var(--sub); margin-top: 12px;
+    padding: 8px 12px; background: var(--surface-dim); border-radius: 8px; line-height: 1.6;
+  }
+  .proto-title { text-align: center; padding: 24px 32px 32px; }
+  .proto-title h1 { font-size: 15px; font-weight: 800; color: var(--bright); }
+  .proto-title p { font-size: 12px; color: var(--sub); margin-top: 4px; }
+  .proto-row { display: flex; gap: 32px; }
+  .hint {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--dim); background: var(--surface-dim);
+    padding: 3px 8px; border-radius: 4px; margin-left: 8px;
+    text-transform: none; letter-spacing: 0; font-weight: 500;
+  }
+
+  /* ─── 공통 UI ─── */
+  .card-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .card-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .card-header .title { font-size: 13px; font-weight: 700; color: var(--bright); }
+  .card-header .count { font-size: 11px; color: var(--sub); }
+
+  .btn-sodam {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: 8px;
+    background: var(--sodam-dim); color: var(--sodam);
+    font-size: 12px; font-weight: 600;
+    border: 1px solid var(--sodam-border); cursor: pointer; transition: all 0.15s;
+  }
+  .btn-sodam:hover { background: rgba(96,165,250,0.25); }
+
+  .action-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 6px; border: none;
+    background: transparent; color: var(--dim); cursor: pointer; transition: all 0.15s;
+  }
+  .action-btn:hover { background: var(--surface); color: var(--text); }
+  .action-btn.delete:hover { background: var(--red-dim); color: var(--red); }
+  .action-btn svg { width: 13px; height: 13px; }
+
+  .tab-bar { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tab-btn {
+    padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    border: 1px solid transparent; background: transparent;
+    color: var(--sub); cursor: pointer; transition: all 0.15s;
+  }
+  .tab-btn:hover { background: var(--surface-dim); }
+  .tab-btn.active { background: var(--surface); color: var(--bright); border-color: var(--border-hover); }
+
+  .field-label { display: block; font-size: 12px; font-weight: 600; color: var(--sub); margin-bottom: 6px; }
+  .field-input {
+    width: 100%; background: var(--surface-dim); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--bright);
+    font-family: inherit; outline: none; transition: all 0.15s;
+  }
+  .field-input:focus { background: var(--surface); border-color: var(--border-hover); }
+  .field-input::placeholder { color: var(--dim); }
+
+  .field-select {
+    width: 100%; background: var(--surface-dim); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--bright);
+    font-family: inherit; outline: none; appearance: none; cursor: pointer; transition: all 0.15s;
+    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236e6e82' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 14px center;
+  }
+  .field-select:focus { background-color: var(--surface); border-color: var(--border-hover); }
+
+  /* ─── Scene 1: 그룹별 카테고리 테이블 ─── */
+  .group-header-row {
+    display: grid; grid-template-columns: 1fr auto;
+    align-items: center; padding: 10px 20px;
+    background: rgba(255,255,255,0.018);
+    border-bottom: 1px solid var(--border); cursor: pointer; user-select: none;
+  }
+  .group-header-row:hover { background: rgba(255,255,255,0.03); }
+  .group-name {
+    font-size: 12px; font-weight: 700; color: var(--bright);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .group-arrow { font-size: 10px; color: var(--dim); transition: transform 0.2s; }
+  .group-arrow.collapsed { transform: rotate(-90deg); }
+  .group-badge {
+    font-size: 10px; font-weight: 600; color: var(--sub);
+    background: var(--surface); padding: 2px 8px; border-radius: 4px;
+  }
+
+  .cat-row {
+    display: grid; grid-template-columns: 36px 1fr 1fr 60px 40px;
+    align-items: center; gap: 8px; padding: 10px 20px 10px 44px;
+    border-bottom: 1px solid var(--border); transition: background 0.1s;
+  }
+  .cat-row:hover { background: var(--surface-dim); }
+  .cat-icon { font-size: 16px; text-align: center; }
+  .cat-name { font-size: 12px; color: var(--bright); font-weight: 500; }
+  .cat-keywords { font-size: 11px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cat-count { font-size: 11px; color: var(--sub); text-align: right; font-variant-numeric: tabular-nums; }
+  .cat-actions { display: flex; gap: 2px; justify-content: center; }
+
+  /* ─── Scene 3: 그룹 관리 카드 그리드 ─── */
+  .group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .group-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px; display: flex; flex-direction: column; gap: 8px;
+    transition: border-color 0.15s;
+  }
+  .group-card:hover { border-color: var(--border-hover); }
+  .group-card-top { display: flex; align-items: center; justify-content: space-between; }
+  .group-card-name { font-size: 13px; font-weight: 600; color: var(--bright); display: flex; align-items: center; gap: 6px; }
+  .group-card-count { font-size: 11px; color: var(--sub); }
+  .group-card-actions { display: flex; gap: 2px; }
+
+  /* ─── Scene 4: 그룹 폼 ─── */
+  .group-form-inline {
+    background: var(--surface-dim); border: 1px solid var(--border-hover);
+    border-radius: 10px; padding: 16px; display: flex; align-items: flex-end; gap: 12px;
+  }
+  .group-form-inline .field { display: flex; flex-direction: column; gap: 4px; }
+
+  /* ─── Scene 5: 그룹별 예산 ─── */
+  .budget-group-row {
+    display: grid; grid-template-columns: 160px 1fr 100px 100px 40px;
+    align-items: center; gap: 12px; padding: 14px 20px;
+    border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s;
+  }
+  .budget-group-row:hover { background: var(--surface-dim); }
+  .budget-group-name { font-size: 13px; font-weight: 600; color: var(--bright); display: flex; align-items: center; gap: 8px; }
+  .budget-group-expand { font-size: 10px; color: var(--dim); transition: transform 0.2s; }
+
+  .budget-sub-row {
+    display: grid; grid-template-columns: 160px 1fr 100px 100px 40px;
+    align-items: center; gap: 12px; padding: 10px 20px 10px 44px;
+    border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.01);
+  }
+  .budget-sub-name { font-size: 12px; color: var(--text); font-weight: 400; }
+
+  .progress-bar { height: 6px; background: var(--surface-dim); border-radius: 3px; overflow: hidden; }
+  .progress-bar .fill { height: 100%; border-radius: 3px; }
+  .progress-info { display: flex; justify-content: space-between; font-size: 11px; color: var(--sub); font-variant-numeric: tabular-nums; margin-top: 3px; }
+
+  .budget-amount {
+    font-size: 12px; font-weight: 600; text-align: right;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .budget-amount.spent { color: var(--red); }
+  .budget-amount.remaining { color: var(--emerald); }
+  .budget-amount.over { color: var(--red); }
+  .budget-amount.warn { color: var(--yellow); }
+
+  /* ─── Scene 6: 파이차트 토글 ─── */
+  .view-toggle {
+    display: inline-flex; gap: 2px; background: var(--card);
+    border: 1px solid var(--border); border-radius: 8px; padding: 3px;
+  }
+  .view-toggle-btn {
+    padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    color: var(--sub); background: transparent; border: none; cursor: pointer; transition: all 0.15s;
+  }
+  .view-toggle-btn:hover { color: var(--text); }
+  .view-toggle-btn.active { background: var(--surface); color: var(--bright); }
+
+  .pie-legend { display: flex; flex-direction: column; gap: 8px; }
+  .pie-legend-item { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+  .pie-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .pie-name { color: var(--text); flex: 1; }
+  .pie-pct { color: var(--bright); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pie-amount { color: var(--sub); font-variant-numeric: tabular-nums; }
+
+  .pie-circle-wrap { position: relative; width: 180px; height: 180px; }
+  .pie-circle-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .pie-center {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .pie-center .total { font-size: 16px; font-weight: 800; color: var(--bright); }
+  .pie-center .label { font-size: 10px; color: var(--dim); margin-top: 2px; }
+
+  /* ─── 슬라이드 패널 (Scene 2) ─── */
+  .panel-demo {
+    width: 420px; min-width: 420px; height: 640px;
+    background: var(--bg-raised); border: 1px solid var(--border);
+    border-radius: 16px; overflow-y: auto; display: flex; flex-direction: column;
+  }
+  .panel-header {
+    padding: 20px 24px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  }
+  .panel-header h2 { font-size: 15px; font-weight: 700; color: var(--bright); }
+  .panel-close {
+    width: 28px; height: 28px; border-radius: 6px; border: none;
+    background: transparent; color: var(--sub); cursor: pointer; transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .panel-close:hover { background: var(--surface); color: var(--bright); }
+  .panel-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 18px; flex: 1; }
+  .panel-actions { display: flex; gap: 12px; padding-top: 4px; }
+  .btn-cancel {
+    flex: 1; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    color: var(--sub); border: 1px solid var(--border); background: transparent; cursor: pointer;
+  }
+  .btn-submit {
+    flex: 1; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 700;
+    color: var(--sodam); background: var(--sodam-dim); border: 1px solid var(--sodam-border); cursor: pointer;
+  }
+
+  .new-field-highlight {
+    position: relative;
+    border: 1px solid rgba(96,165,250,0.3);
+    border-radius: 10px;
+    padding: 12px;
+    background: rgba(96,165,250,0.04);
+  }
+  .new-badge {
+    position: absolute; top: -8px; right: 12px;
+    font-size: 9px; font-weight: 800; color: var(--sodam);
+    background: var(--bg-raised); padding: 1px 6px; border-radius: 3px;
+    letter-spacing: 0.5px;
+  }
+</style>
+</head>
+<body>
+
+<div class="proto-title">
+  <h1>카테고리 그루핑 디자인 시안 — Issue #186</h1>
+  <p>CategoryGroup 모델 + 그룹별 카테고리 관리 + 예산/분석 확장</p>
+</div>
+
+<!-- ━━━ Scene 1: 그룹별 카테고리 테이블 ━━━ -->
+<div class="proto-section">
+  <div class="proto-label">Scene 1 — 카테고리 테이블 (그룹별 표시)</div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active">소비</button>
+    <button class="tab-btn">수입</button>
+  </div>
+
+  <div class="card-wrap">
+    <div class="card-header">
+      <span class="title">소비 카테고리</span>
+      <span class="count">41개 (10개 그룹)</span>
+    </div>
+
+    <!-- 생활비 그룹 -->
+    <div class="group-header-row">
+      <div class="group-name">
+        <span class="group-arrow">▾</span>
+        <span>🛒 생활비</span>
+        <span class="group-badge">9개</span>
+      </div>
+    </div>
+    <div class="cat-row">
+      <span class="cat-icon">🥬</span>
+      <span class="cat-name">식료품</span>
+      <span class="cat-keywords">마트, 장보기, 식재료</span>
+      <span class="cat-count">28건</span>
+      <div class="cat-actions">
+        <button class="action-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+      </div>
+    </div>
+    <div class="cat-row">
+      <span class="cat-icon">🍽️</span>
+      <span class="cat-name">외식</span>
+      <span class="cat-keywords">식당, 레스토랑, 배달</span>
+      <span class="cat-count">15건</span>
+      <div class="cat-actions">
+        <button class="action-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+      </div>
+    </div>
+    <div class="cat-row">
+      <span class="cat-icon">🧴</span>
+      <span class="cat-name">생활용품</span>
+      <span class="cat-keywords">세제, 휴지, 생필품</span>
+      <span class="cat-count">8건</span>
+      <div class="cat-actions">
+        <button class="action-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+      </div>
+    </div>
+    <div class="cat-row" style="border-bottom: none;">
+      <span class="cat-icon">☕</span>
+      <span class="cat-name">커피_음료</span>
+      <span class="cat-keywords">카페, 스타벅스, 음료</span>
+      <span class="cat-count">42건</span>
+      <div class="cat-actions">
+        <button class="action-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+      </div>
+    </div>
+
+    <!-- 공과금 그룹 -->
+    <div class="group-header-row">
+      <div class="group-name">
+        <span class="group-arrow">▾</span>
+        <span>💡 공과금</span>
+        <span class="group-badge">4개</span>
+      </div>
+    </div>
+    <div class="cat-row">
+      <span class="cat-icon">⚡</span>
+      <span class="cat-name">전기요금</span>
+      <span class="cat-keywords">전기, 한전</span>
+      <span class="cat-count">3건</span>
+      <div class="cat-actions">
+        <button class="action-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+      </div>
+    </div>
+    <div class="cat-row">
+      <span class="cat-icon">🔥</span>
+      <span class="cat-name">가스요금</span>
+      <span class="cat-keywords">가스, 도시가스</span>
+      <span class="cat-count">3건</span>
+      <div class="cat-actions">
+        <button class="action-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+      </div>
+    </div>
+    <div class="cat-row" style="border-bottom: none;">
+      <span class="cat-icon">📱</span>
+      <span class="cat-name">통신비</span>
+      <span class="cat-keywords">휴대폰, 인터넷</span>
+      <span class="cat-count">3건</span>
+      <div class="cat-actions">
+        <button class="action-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+      </div>
+    </div>
+
+    <!-- 교통 그룹 (접힘) -->
+    <div class="group-header-row">
+      <div class="group-name">
+        <span class="group-arrow collapsed">▾</span>
+        <span>🚗 교통</span>
+        <span class="group-badge">5개</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="proto-note">
+    <strong>그룹 헤더:</strong> 미세하게 다른 배경 + 아이콘 + 이름 + 카테고리 수 뱃지<br>
+    <strong>접기/펼치기:</strong> ▾ 화살표 회전, 카테고리 행 숨김<br>
+    <strong>들여쓰기:</strong> 카테고리 행은 padding-left: 44px (그룹 하위임을 시각 표현)<br>
+    <strong>수입 탭:</strong> 정기수입, 비정기수입 — 그룹 없이 플랫 표시
+  </div>
+</div>
+
+<!-- ━━━ Scene 2: 카테고리 편집 패널 + 그룹 select ━━━ -->
+<div class="proto-section">
+  <div class="proto-row">
+    <div>
+      <div class="proto-label">Scene 2 — 카테고리 편집 패널 (그룹 select 추가)</div>
+      <div class="panel-demo">
+        <div class="panel-header">
+          <h2>카테고리 수정</h2>
+          <button class="panel-close">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+          </button>
+        </div>
+        <div class="panel-body">
+          <div>
+            <label class="field-label">슬러그</label>
+            <div style="font-size: 13px; color: var(--dim); padding: 10px 14px; background: var(--surface-dim); border-radius: 8px; border: 1px solid var(--border);">식료품</div>
+          </div>
+
+          <div>
+            <label class="field-label">이름</label>
+            <input class="field-input" value="식료품" />
+          </div>
+
+          <div>
+            <label class="field-label">유형</label>
+            <div style="display: flex; gap: 8px;">
+              <button class="tab-btn active" style="padding: 6px 14px; font-size: 12px;">소비</button>
+              <button class="tab-btn" style="padding: 6px 14px; font-size: 12px; opacity: 0.4;">수입</button>
+            </div>
+          </div>
+
+          <!-- NEW: 그룹 select -->
+          <div class="new-field-highlight">
+            <span class="new-badge">NEW</span>
+            <label class="field-label">그룹</label>
+            <select class="field-select">
+              <option>미분류</option>
+              <option selected>🛒 생활비</option>
+              <option>💡 공과금</option>
+              <option>🚗 교통</option>
+              <option>🎓 교육</option>
+              <option>🏠 주거</option>
+              <option>🏥 의료/건강</option>
+              <option>🏦 금융</option>
+              <option>📱 앱결제</option>
+              <option>🎭 여가</option>
+              <option>📦 기타</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="field-label">아이콘 (이모지)</label>
+            <input class="field-input" value="🥬" style="width: 80px;" />
+          </div>
+
+          <div>
+            <label class="field-label">키워드 (쉼표로 구분)</label>
+            <input class="field-input" value="마트, 장보기, 식재료" />
+          </div>
+
+          <div>
+            <label class="field-label">정렬 순서</label>
+            <input class="field-input" value="1" type="number" style="width: 96px;" />
+          </div>
+
+          <div class="panel-actions">
+            <button class="btn-cancel">취소</button>
+            <button class="btn-submit">수정</button>
+          </div>
+        </div>
+      </div>
+      <div class="proto-note">
+        <strong>신규 필드:</strong> "그룹" select 드롭다운 (파란 테두리로 강조)<br>
+        <strong>옵션:</strong> 미분류 + 10개 그룹 (아이콘 포함)<br>
+        <strong>수입 카테고리:</strong> 그룹 필드 숨김 또는 비활성화
+      </div>
+    </div>
+
+    <!-- Scene 3 & 4: 그룹 관리 -->
+    <div style="flex: 1;">
+      <div class="proto-label">Scene 3 — 그룹 관리</div>
+      <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 13px; font-weight: 700; color: var(--bright);">카테고리 그룹</span>
+        <button class="btn-sodam">+ 그룹 추가</button>
+      </div>
+      <div class="group-grid">
+        <div class="group-card">
+          <div class="group-card-top">
+            <span class="group-card-name">🛒 생활비</span>
+            <div class="group-card-actions">
+              <button class="action-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+              <button class="action-btn delete" style="opacity: 0.3; cursor: not-allowed;"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/></svg></button>
+            </div>
+          </div>
+          <span class="group-card-count">9개 카테고리</span>
+        </div>
+        <div class="group-card">
+          <div class="group-card-top">
+            <span class="group-card-name">💡 공과금</span>
+            <div class="group-card-actions">
+              <button class="action-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+              <button class="action-btn delete" style="opacity: 0.3;"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/></svg></button>
+            </div>
+          </div>
+          <span class="group-card-count">4개 카테고리</span>
+        </div>
+        <div class="group-card">
+          <div class="group-card-top">
+            <span class="group-card-name">🚗 교통</span>
+            <div class="group-card-actions">
+              <button class="action-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+              <button class="action-btn delete" style="opacity: 0.3;"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/></svg></button>
+            </div>
+          </div>
+          <span class="group-card-count">5개 카테고리</span>
+        </div>
+        <div class="group-card">
+          <div class="group-card-top">
+            <span class="group-card-name">🎓 교육</span>
+            <div class="group-card-actions">
+              <button class="action-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+              <button class="action-btn delete" style="opacity: 0.3;"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/></svg></button>
+            </div>
+          </div>
+          <span class="group-card-count">4개 카테고리</span>
+        </div>
+        <div class="group-card">
+          <div class="group-card-top">
+            <span class="group-card-name">🏠 주거</span>
+            <div class="group-card-actions">
+              <button class="action-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+              <button class="action-btn delete" style="opacity: 0.3;"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/></svg></button>
+            </div>
+          </div>
+          <span class="group-card-count">2개 카테고리</span>
+        </div>
+      </div>
+
+      <!-- Scene 4: 그룹 추가 폼 -->
+      <div class="proto-label" style="margin-top: 24px;">Scene 4 — 그룹 추가/수정 인라인 폼</div>
+      <div class="group-form-inline">
+        <div class="field" style="flex: 1;">
+          <label class="field-label">이름</label>
+          <input class="field-input" placeholder="그룹 이름" />
+        </div>
+        <div class="field" style="width: 80px;">
+          <label class="field-label">아이콘</label>
+          <input class="field-input" placeholder="🏷️" style="text-align: center;" />
+        </div>
+        <div class="field" style="width: 80px;">
+          <label class="field-label">정렬</label>
+          <input class="field-input" value="0" type="number" />
+        </div>
+        <button class="btn-sodam" style="height: 38px;">추가</button>
+        <button class="btn-cancel" style="height: 38px; flex: none; padding: 0 14px;">취소</button>
+      </div>
+      <div class="proto-note">
+        <strong>그룹 카드:</strong> 아이콘 + 이름 + 카테고리 수 + 수정/삭제 아이콘<br>
+        <strong>삭제 비활성:</strong> 카테고리가 있는 그룹은 삭제 불가 (opacity 0.3)<br>
+        <strong>추가 폼:</strong> 인라인 (카드 그리드 아래에 표시)
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ━━━ Scene 5: 예산 페이지 — 그룹별 예산 ━━━ -->
+<div class="proto-section">
+  <div class="proto-label">Scene 5 — 예산 페이지: 그룹별 예산 (접기/펼치기)</div>
+
+  <div class="card-wrap">
+    <div class="card-header">
+      <span class="title">그룹별 예산</span>
+      <span class="count">3개 그룹</span>
+    </div>
+
+    <!-- 생활비: 78% (yellow), 펼침 -->
+    <div class="budget-group-row">
+      <div class="budget-group-name">
+        <span class="budget-group-expand">▾</span>
+        🛒 생활비
+      </div>
+      <div>
+        <div class="progress-bar"><div class="fill" style="width: 78%; background: var(--yellow);"></div></div>
+        <div class="progress-info"><span>예산 800,000원</span><span style="color: var(--yellow);">78%</span></div>
+      </div>
+      <span class="budget-amount spent">620,000원</span>
+      <span class="budget-amount warn">180,000원</span>
+      <div class="cat-actions">
+        <button class="action-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+      </div>
+    </div>
+    <!-- 하위 카테고리 (펼침) -->
+    <div class="budget-sub-row">
+      <span class="budget-sub-name" style="padding-left: 24px;">🥬 식료품</span>
+      <div>
+        <div class="progress-bar"><div class="fill" style="width: 64%; background: var(--emerald);"></div></div>
+        <div class="progress-info"><span>320,000원</span><span>64%</span></div>
+      </div>
+      <span class="budget-amount spent">320,000원</span>
+      <span class="budget-amount remaining">180,000원</span>
+      <div></div>
+    </div>
+    <div class="budget-sub-row">
+      <span class="budget-sub-name" style="padding-left: 24px;">🍽️ 외식</span>
+      <div>
+        <div class="progress-bar"><div class="fill" style="width: 75%; background: var(--yellow);"></div></div>
+        <div class="progress-info"><span>150,000원</span><span style="color: var(--yellow);">75%</span></div>
+      </div>
+      <span class="budget-amount spent">150,000원</span>
+      <span class="budget-amount warn">50,000원</span>
+      <div></div>
+    </div>
+    <div class="budget-sub-row">
+      <span class="budget-sub-name" style="padding-left: 24px;">☕ 커피_음료</span>
+      <div>
+        <div class="progress-bar"><div class="fill" style="width: 100%; background: var(--red);"></div></div>
+        <div class="progress-info"><span>100,000원</span><span style="color: var(--red);">150% 초과</span></div>
+      </div>
+      <span class="budget-amount spent">150,000원</span>
+      <span class="budget-amount over">-50,000원</span>
+      <div></div>
+    </div>
+
+    <!-- 공과금: 70% (green) -->
+    <div class="budget-group-row">
+      <div class="budget-group-name">
+        <span class="budget-group-expand" style="transform: rotate(-90deg);">▾</span>
+        💡 공과금
+      </div>
+      <div>
+        <div class="progress-bar"><div class="fill" style="width: 70%; background: var(--emerald);"></div></div>
+        <div class="progress-info"><span>예산 300,000원</span><span>70%</span></div>
+      </div>
+      <span class="budget-amount spent">210,000원</span>
+      <span class="budget-amount remaining">90,000원</span>
+      <div class="cat-actions">
+        <button class="action-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+      </div>
+    </div>
+
+    <!-- 교통: 92% (yellow) -->
+    <div class="budget-group-row" style="border-bottom: none;">
+      <div class="budget-group-name">
+        <span class="budget-group-expand" style="transform: rotate(-90deg);">▾</span>
+        🚗 교통
+      </div>
+      <div>
+        <div class="progress-bar"><div class="fill" style="width: 92%; background: var(--yellow);"></div></div>
+        <div class="progress-info"><span>예산 200,000원</span><span style="color: var(--yellow);">92%</span></div>
+      </div>
+      <span class="budget-amount spent">185,000원</span>
+      <span class="budget-amount warn">15,000원</span>
+      <div class="cat-actions">
+        <button class="action-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2M2 11l-0.5 3.5 3.5-0.5 8.5-8.5-3-3L2 11z"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="proto-note">
+    <strong>그룹 행:</strong> 클릭하면 하위 카테고리별 소비 내역 펼침/접힘<br>
+    <strong>그룹 예산:</strong> 그룹 단위로 독립 설정 가능 (Budget.groupId)<br>
+    <strong>카테고리 행:</strong> 그룹 내 개별 카테고리 소비 분배 표시 (읽기 전용)<br>
+    <strong>색상 규칙:</strong> 기존과 동일 (&lt;70% 초록, 70~100% 노랑, &gt;100% 빨강)
+  </div>
+</div>
+
+<!-- ━━━ Scene 6: 가계부 페이지 — 그룹별 파이차트 ━━━ -->
+<div class="proto-section">
+  <div class="proto-label">Scene 6 — 가계부 페이지: 그룹별 파이차트 토글</div>
+
+  <div class="card-wrap" style="padding: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+      <span style="font-size: 13px; font-weight: 700; color: var(--bright);">소비 비율</span>
+      <div class="view-toggle">
+        <button class="view-toggle-btn">카테고리별</button>
+        <button class="view-toggle-btn active">그룹별</button>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 32px;">
+      <!-- 파이차트 (CSS로 간략 표현) -->
+      <div class="pie-circle-wrap">
+        <svg viewBox="0 0 36 36">
+          <circle cx="18" cy="18" r="14" fill="none" stroke="var(--surface-dim)" stroke-width="4"/>
+          <circle cx="18" cy="18" r="14" fill="none" stroke="#f87171" stroke-width="4" stroke-dasharray="39.6 48.4" stroke-dashoffset="0"/>
+          <circle cx="18" cy="18" r="14" fill="none" stroke="#fbbf24" stroke-width="4" stroke-dasharray="13.2 74.8" stroke-dashoffset="-39.6"/>
+          <circle cx="18" cy="18" r="14" fill="none" stroke="#60a5fa" stroke-width="4" stroke-dasharray="10.56 77.44" stroke-dashoffset="-52.8"/>
+          <circle cx="18" cy="18" r="14" fill="none" stroke="#34d399" stroke-width="4" stroke-dasharray="8.8 79.2" stroke-dashoffset="-63.36"/>
+          <circle cx="18" cy="18" r="14" fill="none" stroke="#a78bfa" stroke-width="4" stroke-dasharray="7.04 80.96" stroke-dashoffset="-72.16"/>
+          <circle cx="18" cy="18" r="14" fill="none" stroke="#94a3b8" stroke-width="4" stroke-dasharray="8.8 79.2" stroke-dashoffset="-79.2"/>
+        </svg>
+        <div class="pie-center">
+          <span class="total">1,245,800</span>
+          <span class="label">총 소비</span>
+        </div>
+      </div>
+
+      <!-- 범례 -->
+      <div class="pie-legend" style="flex: 1;">
+        <div class="pie-legend-item">
+          <span class="pie-dot" style="background: #f87171;"></span>
+          <span class="pie-name">🛒 생활비</span>
+          <span class="pie-pct">45%</span>
+          <span class="pie-amount">560,610원</span>
+        </div>
+        <div class="pie-legend-item">
+          <span class="pie-dot" style="background: #fbbf24;"></span>
+          <span class="pie-name">💡 공과금</span>
+          <span class="pie-pct">15%</span>
+          <span class="pie-amount">186,870원</span>
+        </div>
+        <div class="pie-legend-item">
+          <span class="pie-dot" style="background: #60a5fa;"></span>
+          <span class="pie-name">🚗 교통</span>
+          <span class="pie-pct">12%</span>
+          <span class="pie-amount">149,496원</span>
+        </div>
+        <div class="pie-legend-item">
+          <span class="pie-dot" style="background: #34d399;"></span>
+          <span class="pie-name">🎓 교육</span>
+          <span class="pie-pct">10%</span>
+          <span class="pie-amount">124,580원</span>
+        </div>
+        <div class="pie-legend-item">
+          <span class="pie-dot" style="background: #a78bfa;"></span>
+          <span class="pie-name">🏥 의료/건강</span>
+          <span class="pie-pct">8%</span>
+          <span class="pie-amount">99,664원</span>
+        </div>
+        <div class="pie-legend-item">
+          <span class="pie-dot" style="background: #94a3b8;"></span>
+          <span class="pie-name">기타 5개 그룹</span>
+          <span class="pie-pct">10%</span>
+          <span class="pie-amount">124,580원</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="proto-note">
+    <strong>토글:</strong> "카테고리별" | "그룹별" 뷰 전환<br>
+    <strong>카테고리별:</strong> 기존 CategoryPieChart 그대로 (개별 카테고리)<br>
+    <strong>그룹별:</strong> 카테고리를 그룹으로 합산하여 파이차트 + 범례<br>
+    <strong>범례:</strong> 그룹 아이콘 + 이름 + 비율 + 금액
+  </div>
+</div>
+
+</body>
+</html>

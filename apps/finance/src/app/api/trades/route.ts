@@ -1,0 +1,124 @@
+import { NextRequest } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { validateTradeInput } from '@/lib/trade-utils'
+import { createTrade } from '@/lib/trade-service'
+import { businessErrorResponse } from '@/lib/api-errors'
+import { paginationSchema, dateRangeSchema } from '@/lib/zod-schemas'
+import { zodErrorsToValidation } from '@/lib/zod-utils'
+import { ok, fail, paginated } from '@/lib/api-response'
+
+export const dynamic = 'force-dynamic'
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = request.nextUrl
+
+    const paginationResult = paginationSchema.safeParse({
+      limit: searchParams.get('limit'),
+      offset: searchParams.get('offset'),
+    })
+    if (!paginationResult.success) {
+      const errs = zodErrorsToValidation(paginationResult.error)
+      return fail(errs[0].message, 400)
+    }
+    const { limit, offset } = paginationResult.data
+
+    const dateResult = dateRangeSchema.safeParse({
+      from: searchParams.get('from'),
+      to: searchParams.get('to'),
+    })
+    if (!dateResult.success) {
+      const errs = zodErrorsToValidation(dateResult.error)
+      return fail(errs[0].message, 400)
+    }
+    const { from, to } = dateResult.data
+
+    const accountId = searchParams.get('accountId')
+    const ticker = searchParams.get('ticker')
+    const type = searchParams.get('type')
+
+    const where: Record<string, unknown> = {}
+    if (accountId) where.accountId = accountId
+    if (ticker) where.ticker = ticker
+    if (type && ['BUY', 'SELL'].includes(type)) where.type = type
+    if (from || to) {
+      where.tradedAt = {}
+      if (from) (where.tradedAt as Record<string, unknown>).gte = new Date(Date.parse(from))
+      if (to) {
+        // to 날짜의 다음날 00:00 미만으로 설정하여 해당 날짜 장중 거래 포함
+        const nextDay = new Date(Date.parse(to))
+        nextDay.setUTCDate(nextDay.getUTCDate() + 1)
+        ;(where.tradedAt as Record<string, unknown>).lt = nextDay
+      }
+      if (Object.keys(where.tradedAt as object).length === 0) delete where.tradedAt
+    }
+
+    const [trades, total] = await Promise.all([
+      prisma.trade.findMany({
+        where,
+        orderBy: [{ tradedAt: 'desc' }, { createdAt: 'desc' }],
+        take: limit,
+        skip: offset,
+        include: { account: { select: { name: true } } },
+      }),
+      prisma.trade.count({ where }),
+    ])
+
+    return paginated(trades, total, limit, offset)
+  } catch (error) {
+    console.error('GET /api/trades error:', error)
+    return fail('거래 내역을 불러올 수 없습니다.', 500)
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    // ticker / displayName 사전 정규화 — validation/storage 모두 동일 값 사용.
+    // displayName 누락 시 normalized ticker로 fallback (import 경로와 동일 거동).
+    const normalizedTicker = typeof body.ticker === 'string'
+      ? body.ticker.trim().toUpperCase()
+      : ''
+    const rawDisplayName = typeof body.displayName === 'string' ? body.displayName.trim() : ''
+    const normalizedDisplayName = rawDisplayName || normalizedTicker
+    const errors = validateTradeInput({
+      ...body,
+      ticker: normalizedTicker,
+      displayName: normalizedDisplayName,
+    })
+    if (errors.length > 0) {
+      return fail(errors[0].message, 400)
+    }
+
+    const { accountId, market, type, shares, price, currency, fxRate, note, tradedAt } = body
+    const ticker = normalizedTicker
+    const displayName = normalizedDisplayName
+
+    // 계좌 존재 확인
+    const account = await prisma.account.findUnique({ where: { id: accountId } })
+    if (!account) {
+      return fail('계좌를 찾을 수 없습니다.', 404)
+    }
+
+    const result = await createTrade({
+      accountId,
+      ticker,
+      displayName,
+      market,
+      type,
+      shares,
+      price,
+      currency,
+      fxRate,
+      note,
+      tradedAt: new Date(tradedAt),
+    })
+
+    return ok(result, { status: 201 })
+  } catch (error) {
+    const businessResponse = businessErrorResponse(error)
+    if (businessResponse) return businessResponse
+    console.error('POST /api/trades error:', error)
+    return fail('거래 기록에 실패했습니다.', 500)
+  }
+}

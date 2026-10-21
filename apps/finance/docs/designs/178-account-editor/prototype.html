@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>계좌 관리 + 설정 페이지 디자인 시안 — #178</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<style>
+  :root {
+    --bg: #07080c;
+    --bg-raised: #0d0e14;
+    --card: rgba(255,255,255,0.025);
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.12);
+    --dim: #6e6e82;
+    --sub: #9494a8;
+    --text: #c8c8d4;
+    --bright: #eeeef2;
+    --surface-dim: rgba(255,255,255,0.04);
+    --surface: rgba(255,255,255,0.06);
+    --sejin: #34d399;
+    --sodam: #60a5fa;
+    --dasom: #fb923c;
+    --sodam-dim: rgba(96,165,250,0.15);
+    --sodam-border: rgba(96,165,250,0.25);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 64px;
+  }
+
+  .proto-section { max-width: 800px; margin: 0 auto; padding: 0 32px 40px; }
+  .proto-label {
+    font-size: 11px; font-weight: 700; color: var(--dim);
+    letter-spacing: 1.5px; text-transform: uppercase;
+    margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  .proto-note {
+    font-size: 11px; color: var(--sub); margin-top: 12px;
+    padding: 8px 12px; background: var(--surface-dim); border-radius: 8px; line-height: 1.6;
+  }
+  .proto-title { text-align: center; padding: 24px 32px 32px; }
+  .proto-title h1 { font-size: 15px; font-weight: 800; color: var(--bright); }
+  .proto-title p { font-size: 12px; color: var(--sub); margin-top: 4px; }
+  .hint {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--dim); background: var(--surface-dim);
+    padding: 3px 8px; border-radius: 4px; margin-left: 8px;
+    text-transform: none; letter-spacing: 0; font-weight: 500;
+  }
+
+  /* ─── 설정 페이지 ─── */
+  .page-header h1 { font-size: 20px; font-weight: 800; color: var(--bright); margin-bottom: 20px; }
+
+  .settings-tabs {
+    display: flex; gap: 2px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 3px; margin-bottom: 24px;
+  }
+  .settings-tab {
+    flex: 1; padding: 9px 0; border-radius: 8px; font-size: 13px; font-weight: 600;
+    color: var(--sub); background: transparent; border: none; cursor: pointer;
+    transition: all 0.15s; text-align: center;
+  }
+  .settings-tab:hover { color: var(--text); }
+  .settings-tab.active { background: var(--surface); color: var(--bright); }
+
+  /* ─── 계좌 카드 ─── */
+  .account-cards { display: flex; flex-direction: column; gap: 12px; }
+
+  .account-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden; transition: border-color 0.15s;
+  }
+  .account-card:hover { border-color: var(--border-hover); }
+
+  .account-card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  .account-name {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 15px; font-weight: 700;
+  }
+  .account-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  .btn-edit {
+    font-size: 12px; font-weight: 600; color: var(--sub);
+    background: var(--surface-dim); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 12px; cursor: pointer; transition: all 0.15s;
+  }
+  .btn-edit:hover { background: var(--surface); color: var(--bright); }
+
+  .account-card-body { padding: 16px 20px; }
+
+  .field-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 0;
+  }
+  .field-row + .field-row { border-top: 1px solid rgba(255,255,255,0.02); }
+  .field-key { font-size: 12px; color: var(--dim); font-weight: 500; }
+  .field-val { font-size: 13px; color: var(--bright); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .field-val.empty { color: var(--dim); font-style: italic; }
+
+  /* ─── 편집 모드 ─── */
+  .account-card.editing { border-color: var(--sodam-border); }
+  .account-card.editing .account-card-header { border-bottom-color: var(--sodam-border); }
+
+  .edit-form { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+
+  .edit-field { display: flex; align-items: center; gap: 12px; }
+  .edit-label {
+    width: 80px; flex-shrink: 0;
+    font-size: 12px; font-weight: 600; color: var(--sub);
+  }
+  .edit-input {
+    flex: 1; background: var(--surface-dim); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--bright);
+    font-family: inherit; outline: none; transition: all 0.15s;
+  }
+  .edit-input:focus { background: var(--surface); border-color: var(--border-hover); }
+  .edit-input::placeholder { color: var(--dim); }
+  .edit-suffix { font-size: 12px; color: var(--dim); margin-left: -4px; }
+
+  .edit-actions {
+    display: flex; gap: 10px; justify-content: flex-end; padding-top: 4px;
+  }
+  .btn-save {
+    padding: 7px 20px; border-radius: 8px; font-size: 12px; font-weight: 700;
+    color: var(--sodam); background: var(--sodam-dim); border: 1px solid var(--sodam-border);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .btn-save:hover { background: rgba(96,165,250,0.25); }
+  .btn-cancel {
+    padding: 7px 16px; border-radius: 8px; font-size: 12px; font-weight: 600;
+    color: var(--sub); border: 1px solid var(--border); background: transparent;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .btn-cancel:hover { background: var(--surface-dim); }
+</style>
+</head>
+<body>
+
+<div class="proto-title">
+  <h1>계좌 관리 + 설정 페이지 디자인 시안 — Issue #178</h1>
+  <p>/settings 페이지 탭 구조 + 계좌별 인라인 편집</p>
+</div>
+
+<!-- ━━━ Scene 1 & 2: 설정 페이지 + 읽기 모드 ━━━ -->
+<div class="proto-section">
+  <div class="proto-label">Scene 1 & 2 — 설정 페이지 + 계좌 카드 (읽기 모드)</div>
+
+  <div class="page-header">
+    <h1>설정</h1>
+  </div>
+
+  <div class="settings-tabs">
+    <button class="settings-tab active">계좌</button>
+    <button class="settings-tab">알림</button>
+    <button class="settings-tab">근로소득</button>
+    <button class="settings-tab">후잉 연동</button>
+  </div>
+
+  <div class="account-cards">
+    <!-- 세진 -->
+    <div class="account-card">
+      <div class="account-card-header">
+        <div class="account-name">
+          <span class="account-dot" style="background: var(--sejin);"></span>
+          <span style="color: var(--sejin);">세진</span>
+        </div>
+        <button class="btn-edit">수정</button>
+      </div>
+      <div class="account-card-body">
+        <div class="field-row">
+          <span class="field-key">전략</span>
+          <span class="field-val">혼합전략</span>
+        </div>
+        <div class="field-row">
+          <span class="field-key">투자 기간</span>
+          <span class="field-val empty">미설정</span>
+        </div>
+        <div class="field-row">
+          <span class="field-key">벤치마크</span>
+          <span class="field-val">SPY</span>
+        </div>
+        <div class="field-row">
+          <span class="field-key">나이</span>
+          <span class="field-val empty">미설정</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 소담 -->
+    <div class="account-card">
+      <div class="account-card-header">
+        <div class="account-name">
+          <span class="account-dot" style="background: var(--sodam);"></span>
+          <span style="color: var(--sodam);">소담</span>
+        </div>
+        <button class="btn-edit">수정</button>
+      </div>
+      <div class="account-card-body">
+        <div class="field-row">
+          <span class="field-key">전략</span>
+          <span class="field-val">균형형</span>
+        </div>
+        <div class="field-row">
+          <span class="field-key">투자 기간</span>
+          <span class="field-val">10년</span>
+        </div>
+        <div class="field-row">
+          <span class="field-key">벤치마크</span>
+          <span class="field-val">SCHD</span>
+        </div>
+        <div class="field-row">
+          <span class="field-key">나이</span>
+          <span class="field-val">9세</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 다솜 -->
+    <div class="account-card">
+      <div class="account-card-header">
+        <div class="account-name">
+          <span class="account-dot" style="background: var(--dasom);"></span>
+          <span style="color: var(--dasom);">다솜</span>
+        </div>
+        <button class="btn-edit">수정</button>
+      </div>
+      <div class="account-card-body">
+        <div class="field-row">
+          <span class="field-key">전략</span>
+          <span class="field-val">성장형</span>
+        </div>
+        <div class="field-row">
+          <span class="field-key">투자 기간</span>
+          <span class="field-val">15년</span>
+        </div>
+        <div class="field-row">
+          <span class="field-key">벤치마크</span>
+          <span class="field-val">QQQ</span>
+        </div>
+        <div class="field-row">
+          <span class="field-key">나이</span>
+          <span class="field-val">5세</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="proto-note">
+    <strong>설정 페이지:</strong> /settings 경로, 탭 구조 (17-E에서 나머지 탭 구현)<br>
+    <strong>계좌 탭:</strong> 3개 계좌 카드, 컬러 도트 + 이름 + 수정 버튼<br>
+    <strong>읽기 모드:</strong> label:value 쌍, 미설정은 회색 이탤릭
+  </div>
+</div>
+
+<!-- ━━━ Scene 3: 편집 모드 ━━━ -->
+<div class="proto-section">
+  <div class="proto-label">Scene 3 — 계좌 카드 편집 모드 <span class="hint">소담 카드 수정 중</span></div>
+
+  <div class="account-cards">
+    <!-- 세진: 읽기 모드 -->
+    <div class="account-card">
+      <div class="account-card-header">
+        <div class="account-name">
+          <span class="account-dot" style="background: var(--sejin);"></span>
+          <span style="color: var(--sejin);">세진</span>
+        </div>
+        <button class="btn-edit">수정</button>
+      </div>
+      <div class="account-card-body">
+        <div class="field-row">
+          <span class="field-key">전략</span>
+          <span class="field-val">혼합전략</span>
+        </div>
+        <div class="field-row">
+          <span class="field-key">벤치마크</span>
+          <span class="field-val">SPY</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 소담: 편집 모드 -->
+    <div class="account-card editing">
+      <div class="account-card-header">
+        <div class="account-name">
+          <span class="account-dot" style="background: var(--sodam);"></span>
+          <span style="color: var(--sodam);">소담</span>
+          <span style="font-size: 11px; color: var(--sodam); font-weight: 500; opacity: 0.7;">수정 중</span>
+        </div>
+      </div>
+      <div class="edit-form">
+        <div class="edit-field">
+          <label class="edit-label">이름</label>
+          <input class="edit-input" value="소담" />
+        </div>
+        <div class="edit-field">
+          <label class="edit-label">전략</label>
+          <input class="edit-input" value="균형형" />
+        </div>
+        <div class="edit-field">
+          <label class="edit-label">투자 기간</label>
+          <input class="edit-input" type="number" value="10" style="width: 80px; flex: none;" />
+          <span class="edit-suffix">년</span>
+        </div>
+        <div class="edit-field">
+          <label class="edit-label">벤치마크</label>
+          <input class="edit-input" value="SCHD" placeholder="SPY, QQQ 등" />
+        </div>
+        <div class="edit-field">
+          <label class="edit-label">나이</label>
+          <input class="edit-input" type="number" value="9" style="width: 80px; flex: none;" />
+          <span class="edit-suffix">세</span>
+        </div>
+        <div class="edit-actions">
+          <button class="btn-cancel">취소</button>
+          <button class="btn-save">저장</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 다솜: 읽기 모드 (축약) -->
+    <div class="account-card">
+      <div class="account-card-header">
+        <div class="account-name">
+          <span class="account-dot" style="background: var(--dasom);"></span>
+          <span style="color: var(--dasom);">다솜</span>
+        </div>
+        <button class="btn-edit">수정</button>
+      </div>
+      <div class="account-card-body">
+        <div class="field-row">
+          <span class="field-key">전략</span>
+          <span class="field-val">성장형</span>
+        </div>
+        <div class="field-row">
+          <span class="field-key">벤치마크</span>
+          <span class="field-val">QQQ</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="proto-note">
+    <strong>편집 모드:</strong> 카드 테두리 sodam 색상, "수정 중" 표시<br>
+    <strong>인라인 편집:</strong> 슬라이드 패널 대신 카드 내부에서 바로 수정<br>
+    <strong>저장:</strong> PATCH /api/accounts/[id] 호출<br>
+    <strong>나이:</strong> 미설정 시 빈 값, 교육 뷰 연결에 사용
+  </div>
+</div>
+
+</body>
+</html>

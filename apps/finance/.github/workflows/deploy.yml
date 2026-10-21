@@ -1,0 +1,263 @@
+name: Deploy on Release
+
+# 운영 배포 자동화 — GitHub Release publish 시 운영 서버에서 deploy.sh 실행.
+# 매 릴리즈마다 사용자가 ssh + git pull + npm run build + pm2 restart 수동 진행
+# 누락 → 코드/dist 불일치 → 운영 장애 위험. myFitness #137 패턴 그대로 이식.
+# 스펙: docs/specs/366-deploy-automation.md
+# 트리거: release.published (자동), workflow_dispatch (수동 재실행, inputs.tag 필요).
+
+on:
+  release:
+    types: [published]
+  # 진단/수동 재실행 트리거 — GitHub release event 가 어떤 이유로 발동 안 했을 때
+  # Actions UI 의 "Run workflow" 로 수동 실행. tag 입력 (예: v0.8.3) 지정.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to deploy (예: v0.8.3)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# 동일 릴리즈/재시도가 겹치면 동일 worktree(node_modules/dist/pm2)에서 deploy.sh 가
+# 동시 실행되어 빌드 손상/PM2 race 위험. 직렬화로 차단. 진행 중 새 release publish 시
+# 새 deploy는 큐잉되어 이전 완료 후 시작.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: SSH Deploy
+    runs-on: ubuntu-latest
+    # 정식 릴리즈(prerelease/draft 아님) 만 운영 배포.
+    # draft 는 publish 이벤트 자체가 안 뜨지만 명시적 가드.
+    # workflow_dispatch 는 항상 통과 (운영자가 의도적으로 트리거).
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.release.prerelease && !github.event.release.draft) }}
+    steps:
+      # Fingerprint secret 누락/typo 시 ssh-action 이 빈 문자열로 진행 → InsecureIgnoreHostKey
+      # default → MITM 재개. 사전 검증으로 차단.
+      - name: Preflight — require host fingerprint
+        env:
+          DEPLOY_SSH_FINGERPRINT: ${{ secrets.DEPLOY_SSH_FINGERPRINT }}
+        run: |
+          if [[ -z "$DEPLOY_SSH_FINGERPRINT" ]]; then
+            echo "ERROR: DEPLOY_SSH_FINGERPRINT secret is empty. SSH MITM 위험 → 배포 중단." >&2
+            echo "운영자: 스펙 docs/specs/366-deploy-automation.md §3.3 의 ssh-keygen -lf 명령으로 추출 후 GitHub Secrets 등록." >&2
+            exit 1
+          fi
+          echo "Fingerprint secret present (length=${#DEPLOY_SSH_FINGERPRINT})"
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          # release event 면 release.tag_name, workflow_dispatch 면 inputs.tag.
+          # 직접 script에 expand 시 shell injection 위험 → env var + 형식 검증.
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT }}
+          # SSH host fingerprint 검증 — 미설정 시 InsecureIgnoreHostKey() default → MITM 위험.
+          # secret 등록 방법은 스펙 §3.3 참조 (ssh-keyscan + ssh-keygen -lf).
+          fingerprint: ${{ secrets.DEPLOY_SSH_FINGERPRINT }}
+          envs: RELEASE_TAG,DEPLOY_PATH
+          # 30분 timeout (npm ci + build + pm2 restart 충분)
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+            # 태그 형식 검증 (semver: vMAJOR.MINOR.PATCH[-suffix])
+            if ! [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
+              echo "ERROR: Invalid tag format: $RELEASE_TAG" >&2
+              exit 1
+            fi
+            cd "$DEPLOY_PATH"
+
+            # Bootstrap: 서버 working tree 의 deploy.sh 는 이전 태그 버전. 배포 흐름 자체가
+            # 바뀌었다면 (v0.12.0 MCP HTTP 승격 등) checkout 후 NEW deploy.sh 를 실행해야 함.
+            # git checkout 이 mcp-config.json 을 target 내용으로 바꿈 → running web/bot 이
+            # 즉시 참조 → 서비스 다운 위험. Target transport (HTTP vs stdio) 별 분기:
+            #   - HTTP target (v0.12.0+): checkout 전 backup → checkout 후 restore →
+            #     deploy.sh 자체 backup/restore/swap 흐름 정상 동작
+            #   - stdio target (rollback): target 의 stdio config 를 유지 (restore X).
+            #     old deploy.sh 는 myfinance-mcp 앱을 모르므로 workflow 가 대신 정리하되,
+            #     정리 시점은 deploy.sh 성공 이후 (Codex P1 #4642785947 — 실패 시 fallback 유지).
+            MCP_CFG=src/lib/ai/mcp-config.json
+            MCP_CFG_BOOTSTRAP=""
+            if [ -f "$MCP_CFG" ]; then
+              MCP_CFG_BOOTSTRAP=$(mktemp -t mcp-config.bootstrap.XXXXXX.json)
+              cp "$MCP_CFG" "$MCP_CFG_BOOTSTRAP"
+            fi
+
+            git fetch origin --tags --force
+            git checkout -f "$RELEASE_TAG"
+
+            # Target transport 감지 (checkout 후의 tracked mcp-config 기준)
+            IS_STDIO_TARGET=0
+            if ! grep -q '"url"' "$MCP_CFG" 2>/dev/null; then
+              IS_STDIO_TARGET=1
+            fi
+
+            # 어느 target 이든 checkout 이 mcp-config 를 target 내용으로 바꾼 상태.
+            # 배포 중 continuity 를 위해 이전 (bootstrap) config 로 즉시 restore.
+            #   - HTTP target: 이전 HTTP config 유지 → deploy.sh 자체 swap 이 최종 반영
+            #   - stdio target (rollback): 이전 HTTP config 유지 → myfinance-mcp 가 살아있는
+            #     동안 web/bot 은 HTTP 로 fallback (claude-advisor.ts 는 매 호출마다
+            #     mcp-config.json 재로드 → 실패 시 old deploy.sh 는 backup/trap 없음).
+            #     stdio target 내용은 별도 파일에 보존 후 deploy.sh 성공 시 최종 swap.
+            # Codex P1 (#4642785947 후속): rollback 실패 시 partially-updated node_modules
+            # 에서 stdio spawn 실패 가능 → HTTP config 유지가 living fallback.
+            MCP_CFG_TARGET_STDIO=""
+            if [ "$IS_STDIO_TARGET" = "1" ]; then
+              MCP_CFG_TARGET_STDIO=$(mktemp -t mcp-config.target-stdio.XXXXXX.json)
+              cp "$MCP_CFG" "$MCP_CFG_TARGET_STDIO"
+            fi
+            if [ -n "$MCP_CFG_BOOTSTRAP" ] && [ -f "$MCP_CFG_BOOTSTRAP" ]; then
+              cp "$MCP_CFG_BOOTSTRAP" "$MCP_CFG"
+            fi
+
+            # 배포 중/후 이 스크립트가 실패로 abort 되어도 tmp 파일이 남지 않도록 정리.
+            # bootstrap 은 이미 in-place restore 되어 있어 별도 config 복원 조치는 불필요.
+            trap 'rm -f "${MCP_CFG_TARGET_STDIO:-}" "${MCP_CFG_BOOTSTRAP:-}" 2>/dev/null || true' EXIT
+
+            ./deploy/deploy.sh "$RELEASE_TAG"
+
+            # stdio rollback 성공 확정 후 target 의 stdio config 로 swap + myfinance-mcp 정리.
+            # deploy.sh 실패 시 이 블록 미도달 → mcp-config 는 HTTP 유지 + myfinance-mcp 유지 → 운영자 확인.
+            # swap 자체가 실패해도 stdio 미완료 상태 (HTTP + myfinance-mcp) 로 안전하게 남도록
+            # 명시적 if-check + set -e abort 회피 (미래 코드 추가 시 부작용 차단).
+            if [ "$IS_STDIO_TARGET" = "1" ]; then
+              SWAP_OK=0
+              if [ -n "$MCP_CFG_TARGET_STDIO" ] && [ -f "$MCP_CFG_TARGET_STDIO" ]; then
+                if cp "$MCP_CFG_TARGET_STDIO" "$MCP_CFG"; then
+                  SWAP_OK=1
+                else
+                  echo "WARN: stdio config swap 실패 — HTTP config 유지, myfinance-mcp 도 유지."
+                fi
+              else
+                echo "WARN: MCP_CFG_TARGET_STDIO 파일 부재 — HTTP config 유지, myfinance-mcp 도 유지."
+              fi
+              if [ "$SWAP_OK" = "1" ]; then
+                if command -v pm2 >/dev/null 2>&1 && pm2 describe myfinance-mcp >/dev/null 2>&1; then
+                  pm2 delete myfinance-mcp || true
+                  pm2 save --force || true
+                fi
+              fi
+            fi
+
+            # trap 이 tmp 파일 정리 담당 — 여기서 별도 rm 은 불필요.
+
+      # 배포 결과 텔레그램 알림 — myfinance-bot 인프라 재활용. raw curl 로 third-party action 의존 X.
+      # 토큰은 GitHub Actions가 자동 마스킹. 성공/실패 모두 알림 (무알림이 더 위험).
+      #
+      # #489: 이전 구현 (head -c 800 bytes-based truncate + --data-urlencode) 은 한글/
+      # 이모지의 UTF-8 바이트 경계 중간에서 잘려 invalid sequence → Telegram 400
+      # "text must be encoded in UTF-8" → workflow status = failure → 배포 성공 케이스
+      # 도 사용자에게 "실패" 알림 오탐. 개선:
+      #   - codepoint 기반 truncate (python3, multibyte-safe)
+      #   - jq 로 JSON body 조립 (UTF-8 escape 자동, --data-urlencode 대체)
+      #   - success step 에 continue-on-error: true — 알림 실패가 배포 결과에 영향 X
+      #     (실서비스는 이미 배포 성공. 오탐 방지 defensive layer)
+      - name: Notify Telegram (success)
+        if: success()
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # release event 는 body 를 payload 에 담고 있음. workflow_dispatch 는 없음 → gh 로 폴백.
+          RELEASE_BODY: ${{ github.event.release.body }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+            echo "::warning::TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID secret 미설정 — 알림 skip"
+            exit 0
+          fi
+
+          # 릴리스 본문 확보 — release event 면 payload, 아니면 gh 로 조회.
+          notes_raw="${RELEASE_BODY:-}"
+          if [[ -z "$notes_raw" ]]; then
+            notes_raw=$(gh release view "$RELEASE_TAG" --repo "$GH_REPO" --json body -q .body 2>/dev/null || true)
+          fi
+
+          # 마크다운 노이즈 제거 (bold/헤더/백틱). #489: HTML escape 은 jq 가 payload
+          # 조립 시 처리하므로 제거 (여기서 이중 escape 하면 <b> 태그도 &lt;b&gt; 됨).
+          # 태그는 jq --arg 로 안전하게 attach.
+          processed=$(printf '%s' "$notes_raw" \
+            | sed -E -e 's/\\([`/])/\1/g' -e 's/\*\*//g' -e 's/^#+ //' -e 's/`//g')
+
+          # #489: bytes-based truncate → codepoint 기반. 한글/이모지 중간을 자르면
+          # invalid UTF-8 sequence 로 Telegram 400. python3 은 ubuntu-latest 기본.
+          # one-liner 로 YAML indent / shell 인용 걱정 회피.
+          notes=$(printf '%s' "$processed" | python3 -c 'import sys; s=sys.stdin.read(); sys.stdout.write(s[:800] + ("…" if len(s) > 800 else ""))')
+
+          # HTML escape — Telegram parse_mode=HTML 이 요구. 태그 (<b>...</b>) 를
+          # 직접 삽입하는 부분은 escape 대상 아니라 아래 template 조립 후에는 하지 않음.
+          notes_escaped=$(printf '%s' "$notes" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+
+          # printf 로 literal newline 처리. escaped notes 는 HTML entity 만 남고 태그는 우리 template 만.
+          if [[ -n "$notes_escaped" ]]; then
+            text=$(printf '✅ <b>myFinance Deploy %s</b> 성공\n서버: production\n\n<b>변경 내역</b>\n%s\n\n워크플로우: %s' "$RELEASE_TAG" "$notes_escaped" "$RUN_URL")
+          else
+            text=$(printf '✅ <b>myFinance Deploy %s</b> 성공\n서버: production\n워크플로우: %s' "$RELEASE_TAG" "$RUN_URL")
+          fi
+
+          # #489: --data-urlencode 대신 jq 로 JSON body — UTF-8 escape / 특수문자
+          # / 개행 모두 안전 처리. jq 는 ubuntu-latest 기본 설치.
+          payload=$(jq -cn \
+            --arg chat_id "$TELEGRAM_CHAT_ID" \
+            --arg text "$text" \
+            '{chat_id: $chat_id, parse_mode: "HTML", text: $text}')
+
+          # 성공 응답 body (sent message + chat metadata) 는 chat 정보 노출 위험 → /tmp 로 격리.
+          # 실패 (HTTP 4xx/5xx) 시에만 body 출력 + step fail (--fail-with-body).
+          body=$(mktemp)
+          if ! curl -sS --fail-with-body -o "$body" -X POST \
+            -H "Content-Type: application/json" \
+            --data "$payload" \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"; then
+            echo "::error::Telegram sendMessage failed"
+            cat "$body" >&2
+            rm -f "$body"
+            exit 1
+          fi
+          rm -f "$body"
+
+      - name: Notify Telegram (failure)
+        if: failure()
+        # #489: 실패 알림은 배포가 이미 실패한 상태라 continue-on-error 없음 —
+        # 알림도 실패하면 workflow status 유지 (사용자가 GitHub UI 로 반드시 확인).
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+            echo "::warning::TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID secret 미설정 — 알림 skip"
+            exit 0
+          fi
+          text=$(printf '❌ <b>myFinance Deploy %s</b> 실패\n워크플로우 로그: %s' "${RELEASE_TAG:-unknown}" "$RUN_URL")
+          # #489: success step 과 동일 jq JSON body 방식 (UTF-8 안전 + 일관성).
+          payload=$(jq -cn \
+            --arg chat_id "$TELEGRAM_CHAT_ID" \
+            --arg text "$text" \
+            '{chat_id: $chat_id, parse_mode: "HTML", text: $text}')
+          # 실패 알림 자체가 또 실패해도 가시화. 성공 body 는 chat 정보 노출 위험 → /tmp 격리.
+          body=$(mktemp)
+          if ! curl -sS --fail-with-body -o "$body" -X POST \
+            -H "Content-Type: application/json" \
+            --data "$payload" \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"; then
+            echo "::error::Telegram failure notification itself failed"
+            cat "$body" >&2
+            rm -f "$body"
+            exit 1
+          fi
+          rm -f "$body"

@@ -1,0 +1,451 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import WeeklyActivitySummary from "@/components/lifestyle/WeeklyActivitySummary";
+import MonthlyHeatmap from "@/components/lifestyle/MonthlyHeatmap";
+import ConsistencyScore from "@/components/lifestyle/ConsistencyScore";
+import SleepRegularity from "@/components/lifestyle/SleepRegularity";
+import FoodPhotoUpload from "@/components/lifestyle/FoodPhotoUpload";
+
+interface WeekSummary {
+  count: number;
+  totalDistance: number;
+  totalDuration: number;
+  restDays: number;
+}
+
+interface SleepEntry {
+  date: string;
+  sleepStartHour: number;
+  wakeUpHour: number;
+}
+
+interface FoodLogEntry {
+  id: string;
+  description: string;
+  mealType: string | null;
+  estimatedKcal: number | null;
+  timeIso: string;
+  // #309 Codex P2 (PR #313 12회차): kcal editor snapshot 매칭용 row revision (ISO).
+  updatedAt: string;
+}
+
+interface LifestyleClientProps {
+  thisWeek: WeekSummary;
+  lastWeek: WeekSummary;
+  monthlyActiveDates: string[];
+  year: number;
+  month: number;
+  consistencyActiveDays: number;
+  sleepEntries: SleepEntry[];
+  todayFoodLogs: FoodLogEntry[];
+  /** #330: `?date=` 로 조회 중인 날짜 (YYYY-MM-DD). 오늘이면 todayYmd 과 동일. */
+  selectedYmd: string;
+  isToday: boolean;
+}
+
+export default function LifestyleClient({
+  thisWeek,
+  lastWeek,
+  monthlyActiveDates,
+  year,
+  month,
+  consistencyActiveDays,
+  sleepEntries,
+  todayFoodLogs,
+  selectedYmd,
+  isToday,
+}: LifestyleClientProps) {
+  return (
+    <div>
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold mb-1">생활 패턴</h1>
+        <p className="text-dim text-sm">운동 꾸준함 · 수면 규칙성 분석</p>
+      </div>
+
+      {/* 이번 주 vs 지난 주 */}
+      <div className="mb-6">
+        <WeeklyActivitySummary thisWeek={thisWeek} lastWeek={lastWeek} />
+      </div>
+
+      {/* 꾸준함 + 수면 규칙성 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+        <ConsistencyScore activeDays={consistencyActiveDays} totalDays={28} />
+        <SleepRegularity entries={sleepEntries} />
+      </div>
+
+      {/* 월간 히트맵 */}
+      <MonthlyHeatmap
+        year={year}
+        month={month}
+        activeDates={new Set(monthlyActiveDates)}
+      />
+
+      {/* #283: 오늘 음식 로그 */}
+      <div className="mt-6">
+        <TodayFoodSection logs={todayFoodLogs} selectedYmd={selectedYmd} isToday={isToday} />
+      </div>
+    </div>
+  );
+}
+
+const MEAL_LABEL: Record<string, string> = {
+  breakfast: "아침",
+  lunch: "점심",
+  dinner: "저녁",
+  snack: "간식",
+};
+
+function TodayFoodSection({
+  logs,
+  selectedYmd,
+  isToday,
+}: {
+  logs: FoodLogEntry[];
+  selectedYmd: string;
+  isToday: boolean;
+}) {
+  const totalKcal = logs.reduce((s, l) => s + (l.estimatedKcal ?? 0), 0);
+  const hasEstimate = logs.some((l) => l.estimatedKcal !== null);
+  // Codex P2 (#283): null 항목이 있으면 총합을 완전한 하루 총량으로 오해할 수 있음.
+  // "총" 대신 "부분 합계" + "N개 추정 대기" 라벨 표시.
+  const missingCount = logs.filter((l) => l.estimatedKcal === null).length;
+  const isPartial = missingCount > 0;
+  const heading = isToday ? "오늘 음식" : `${selectedYmd} 음식`;
+  const emptyText = isToday
+    ? '오늘 기록된 음식이 없습니다.'
+    : `${selectedYmd}에 기록된 음식이 없습니다.`;
+  return (
+    <div>
+      <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
+        <h2 className="text-lg font-semibold">
+          {heading}
+          <span className="text-[11px] text-dim font-normal ml-2">
+            (AI 자동 kcal 추정)
+          </span>
+        </h2>
+        <div className="flex items-center gap-3">
+          {hasEstimate && (
+            <span className="text-[13px] font-[family-name:var(--font-geist-mono)]">
+              {isPartial ? "부분 합계" : "총"} {totalKcal.toLocaleString("ko-KR")}
+              <span className="text-dim ml-1">kcal</span>
+              {isPartial && (
+                <span className="text-dim ml-2 text-[11px]">
+                  ({missingCount}개 추정 대기)
+                </span>
+              )}
+            </span>
+          )}
+          {/* #309: 사진 등록 버튼 (Vision 자동 추정). #330 Codex P1: 오늘일 때만 노출.
+              과거 조회 시 렌더하면 /api/food 가 date 파라미터 없어 new Date() 로 오늘에
+              저장 → silent 데이터 오염. 지금 촬영한 사진을 과거 날짜에 붙이는 UX 도 모호. */}
+          {isToday && <FoodPhotoUpload />}
+        </div>
+      </div>
+      <div className="bg-card border border-border rounded-xl p-5">
+        {logs.length === 0 ? (
+          <div className="text-[13px] text-dim text-center py-6">
+            {emptyText}
+            {isToday && (
+              <>
+                <br />
+                텔레그램에서 &quot;점심 김치찌개 밥&quot; 입력 or 위 <b>📷 사진 등록</b> 버튼으로 자동 기록.
+              </>
+            )}
+          </div>
+        ) : (
+          <ul className="divide-y divide-border/50">
+            {logs.map((log) => (
+              <FoodRow key={log.id} log={log} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FoodRow({ log }: { log: FoodLogEntry }) {
+  const router = useRouter();
+  const [editingKcal, setEditingKcal] = useState(false);
+  // #309: description 정정 인라인 편집.
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [descInput, setDescInput] = useState(log.description);
+  const [kcalInput, setKcalInput] = useState(
+    log.estimatedKcal !== null ? String(log.estimatedKcal) : "",
+  );
+  // Codex P2 (PR #313 10/12회차): kcal editor 를 열 때 시점의 row revision (updatedAt) 을
+  // 캡처. saveKcal 이 이 snapshot 을 expectedRevision 으로 전송 → server 가 저장 직전 실제
+  // updatedAt 과 비교. editor 열려있는 동안 다른 writer (bot desc edit, backfill 등) 가 row
+  // 를 update 하면 snapshot 은 낡은 값 → server 가 mismatch 로 409 → stale kcal 이 새 row
+  // 에 잘못 저장되는 회귀 차단 (monotonic revision 이라 A→B→A restore 도 안전).
+  const [kcalRevSnapshot, setKcalRevSnapshot] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Codex P2 (릴리즈 PR #313 4-9회차): stale draft 회귀는 client-side guard 로 완벽 판정이
+  // 어려움 (bot 이 desc 를 A→B→A 로 restore 등 값 비교만으론 fresh 여부 구분 불가).
+  // 최종 해결: server-side snapshot 매칭. client 는 kcal PATCH 시 draft 를 뽑은 시점의
+  // description (log.description) 을 expectedDescription 으로 함께 전송. server
+  // (applyKcalCorrection) 가 저장 직전 fetch 로 실제 description 과 비교, mismatch 이면 409
+  // (description-mismatch) 반환 → client 는 새로고침 안내. client-side guard 는 불필요.
+
+
+  async function saveDesc() {
+    if (saving) return;
+    const trimmed = descInput.trim();
+    if (trimmed.length === 0) {
+      setError("설명은 비워둘 수 없습니다");
+      return;
+    }
+    if (trimmed.length > 500) {
+      setError("설명은 500자 이내여야 합니다");
+      return;
+    }
+    if (trimmed === log.description) {
+      // no-op — 편집 종료.
+      setEditingDesc(false);
+      setError(null);
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/food/${log.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ description: trimmed }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? `요청 실패 (${res.status})`);
+      }
+      setEditingDesc(false);
+      // Codex P2 (릴리즈 PR #311): description PATCH 는 서버에서 estimatedKcal 을 null 로
+      // 리셋 (backfill 재추정 대기). router.refresh() 후 log.estimatedKcal 이 null 이지만
+      // client component state 는 보존되어 kcalInput 이 이전 kcal 유지 → 이후 kcal 편집
+      // 열면 stale 값 노출 · 저장 시 새 description 에 옛 kcal 적용됨. 초기화 필수.
+      // Codex P2 (릴리즈 PR #313): kcal editor 가 열려있었다면 in-progress 값이 blank 로
+      // silently discarded → 사용자 혼란. editor 자체를 닫아 상태 변경을 명시.
+      setEditingKcal(false);
+      setKcalInput("");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveKcal() {
+    if (saving) return;
+    const trimmed = kcalInput.trim();
+    let n: number | null;
+    if (trimmed === "") {
+      n = null;
+    } else {
+      // Codex P2: parseInt('650.5') = 650 처럼 잘라먹지 않도록 전체 문자열이 정수여야 통과.
+      if (!/^\d+$/.test(trimmed)) {
+        setError("0~10000 사이 정수여야 합니다");
+        return;
+      }
+      n = Number(trimmed);
+      if (!Number.isInteger(n) || n < 0 || n > 10000) {
+        setError("0~10000 사이 정수여야 합니다");
+        return;
+      }
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      // Codex P2 (PR #313 9/10/12회차): editor open 시점의 row revision snapshot 을 전송.
+      // log.updatedAt (latest) 을 그대로 쓰면 editor 열려있는 동안 refresh 로 row 가 바뀐
+      // 경우 새 rev = expected 로 server 가 accept → stale kcalInput 이 새 row 에 잘못 저장.
+      // snapshot 이 없는 경우 (초기 mount) 만 log.updatedAt fallback.
+      const res = await fetch(`/api/food/${log.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          estimatedKcal: n,
+          expectedRevision: kcalRevSnapshot ?? log.updatedAt,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? `요청 실패 (${res.status})`);
+      }
+      setEditingKcal(false);
+      setKcalRevSnapshot(null);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteRow() {
+    if (saving) return;
+    if (!confirm(`"${log.description}" 삭제할까요?`)) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/food/${log.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? `요청 실패 (${res.status})`);
+      }
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setSaving(false);
+    }
+  }
+
+  const label = log.mealType ? MEAL_LABEL[log.mealType] ?? log.mealType : "기타";
+  // Codex P2 (#283): 섹션 자체가 KST 기준으로 선택되므로 시각도 KST 로 고정.
+  // UTC 서버 SSR / 다른 TZ 브라우저 hydration mismatch 방지.
+  const time = new Date(log.timeIso).toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Seoul",
+  });
+
+  return (
+    <li className="py-3 flex items-start gap-3 text-[13px]">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className="text-[11px] text-dim">
+            {time} · {label}
+          </span>
+        </div>
+        {editingDesc ? (
+          <div className="flex items-center gap-2 mt-1">
+            <input
+              type="text"
+              value={descInput}
+              onChange={(e) => setDescInput(e.target.value)}
+              placeholder="예: 치킨 샐러드 · 감자튀김"
+              className="flex-1 bg-surface border border-muted rounded px-2 py-1 text-[13px] text-bright"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={saveDesc}
+              disabled={saving}
+              className="text-[11px] text-accent border border-accent/40 rounded px-2 py-1 hover:bg-accent/10 disabled:opacity-50"
+            >
+              저장
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingDesc(false);
+                setDescInput(log.description);
+                setError(null);
+              }}
+              className="text-[11px] text-dim border border-border rounded px-2 py-1"
+            >
+              취소
+            </button>
+          </div>
+        ) : (
+          <div className="text-bright break-words">{log.description}</div>
+        )}
+        {editingDesc && (
+          <div className="text-[11px] text-dim mt-1">
+            설명 변경 시 kcal/매크로가 자동 재추정됩니다.
+          </div>
+        )}
+        {error && <div className="text-[11px] text-red-400 mt-1">{error}</div>}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {editingKcal ? (
+          <>
+            <input
+              type="text"
+              value={kcalInput}
+              onChange={(e) => setKcalInput(e.target.value)}
+              placeholder="kcal"
+              className="w-20 bg-surface border border-border rounded px-2 py-1 text-[13px] text-right font-[family-name:var(--font-geist-mono)]"
+            />
+            <button
+              type="button"
+              onClick={saveKcal}
+              disabled={saving}
+              className="text-[11px] text-accent border border-accent/40 rounded px-2 py-1 hover:bg-accent/10 disabled:opacity-50"
+            >
+              저장
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingKcal(false);
+                setKcalInput(log.estimatedKcal !== null ? String(log.estimatedKcal) : "");
+                setKcalRevSnapshot(null);
+                setError(null);
+              }}
+              className="text-[11px] text-dim border border-border rounded px-2 py-1"
+            >
+              취소
+            </button>
+          </>
+        ) : (
+          <>
+            <span className="font-[family-name:var(--font-geist-mono)] tabular-nums">
+              {log.estimatedKcal !== null
+                ? log.estimatedKcal.toLocaleString("ko-KR")
+                : "—"}
+              <span className="text-dim ml-1 text-[11px]">kcal</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                // Codex P2 (릴리즈 PR #313): kcal editor 열 때 항상 최신 log.estimatedKcal
+                // 로 draft 재초기화. description edit 이후 kcalInput 이 "" 로 리셋됐지만
+                // backfill 이 새 kcal 을 채워둔 상태에서 editor 를 blank 로 열면 저장 시
+                // PATCH { estimatedKcal: null } → 새로 추정된 값 파괴 회귀.
+                // 10/12회차: editor 오픈 시점의 row revision (updatedAt) 도 snapshot →
+                // saveKcal 이 이 값을 expectedRevision 으로 전송. editor 열려있는 동안
+                // 다른 writer 로 row 가 바뀌면 snapshot 은 낡음 → server 가 409 로 stale
+                // kcal 저장 차단.
+                setKcalInput(
+                  log.estimatedKcal !== null ? String(log.estimatedKcal) : "",
+                );
+                setKcalRevSnapshot(log.updatedAt);
+                setError(null);
+                setEditingKcal(true);
+              }}
+              className="text-[11px] text-dim hover:text-bright underline"
+              title="kcal 편집"
+            >
+              편집
+            </button>
+            {/* #309: description 정정 버튼. */}
+            <button
+              type="button"
+              onClick={() => {
+                setEditingDesc(true);
+                setDescInput(log.description);
+                setError(null);
+              }}
+              className="text-[11px] text-dim hover:text-bright"
+              title="설명 편집"
+            >
+              📝
+            </button>
+            <button
+              type="button"
+              onClick={deleteRow}
+              disabled={saving}
+              className="text-[11px] text-red-400/70 hover:text-red-400 disabled:opacity-50"
+              title="삭제"
+            >
+              ×
+            </button>
+          </>
+        )}
+      </div>
+    </li>
+  );
+}
