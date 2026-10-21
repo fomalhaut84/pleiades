@@ -4290,8 +4290,8 @@ mv "$SCRATCH/held" apps/finance/prisma/migrations/20261019100000_drop_quarantine
 | U8 | node v24.12.0 · npm 11.6.2 · `.nvmrc` fin 없음 / fit 24 · 없는 도구 0(`git` `curl` `comm` `lsof` `jq` `psql` `claude`) · `NODE_ENV` unset · 셸 초기화 파일에 `NODE_ENV` 0 · **pm2 6.0.8 · `lib/Common.js` 에 `'.config.cjs': 'js'` 있음(루트 설정 인식)** · 디스크 여유 ~128 GB · 메모리 15 GB · 4 코어 |
 | U9 | fin `reports`·`logs` 있음(KB대) · `backups` 없음 / fit `.garmin-tokens`·`.omron-tokens`·`.runtime`·`logs` 있음(KB대) · 체크아웃 fin ~2 GB(node_modules ~1 GB · .next ~1 GB) · fit ~2 GB |
 | U10 | 서버 → pleiades `ls-remote` 됨(dev = `215918898deb`) · npm 레지스트리 200 |
-| U11 | **미확인**(서버 밖 — 사용자) |
-| U12 | 4100·4200·4210·4301 리슨 = pm2 데몬(cluster 모드라 포트를 데몬이 잡는다) · 4210·4301 은 127.0.0.1 · **4100·4200 은 모든 인터페이스**(`*`) · 4299·4399 비어 있음 · 3000 비어 있음 |
+| U11 | (서버 밖 · 사용자 GitHub 확인) 두 서비스 deploy workflow **활성** · Actions secret 이름 = workflow 가 쓰는 8개(`DEPLOY_PATH` · `DEPLOY_SSH_{FINGERPRINT,HOST,KEY,PORT,USER}` · `TELEGRAM_BOT_TOKEN` · `TELEGRAM_CHAT_ID` — `apps/*/.github/workflows/*.yml` 에서 추출) 모두 있음 · 그 밖 0 |
+| U12 | 4100·4200·4210·4301 리슨 = pm2 데몬(cluster 모드라 포트를 데몬이 잡는다) · 4210·4301 은 127.0.0.1 · **4100·4200 은 모든 인터페이스**(`*`) — 단 **ufw active · `Default: deny (incoming)` · 허용 22·80·443 뿐**이라 외부에서 직접 닿지 않는다(nginx 443 경유만) · 4299·4399 비어 있음 · 3000 비어 있음 |
 | U13 | 두 봇 `webhook=none` · `pending=0` · `last_error=-`(재확인) — 첫 실행은 둘 다 **ETIMEDOUT** |
 
 **U13 첫 실행 ETIMEDOUT 의 원인(사용자 재확인):** 서버 node 의 `net.getDefaultAutoSelectFamilyAttemptTimeout()` = **250**(ms) · 서버 → `api.telegram.org` IPv4 연결 시간 ~0.25 s(`curl -w %{time_connect}` · HTTP 302) · IPv6 는 즉시 연결 실패(경로 없음). node 의 family 자동 선택이 시도당 250 ms 에서 IPv4 를 끊고 IPv6 로 넘어가 둘 다 실패한다. 시도 제한을 2000 ms 로 올리면 정상. → pleiades 프로세스도 같은 서버에서 간헐 실패 가능 — **#191**(T-4 전).

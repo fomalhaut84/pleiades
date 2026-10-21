@@ -343,9 +343,9 @@ pleiades 는 측정할 수 없다(I-3). **추정으로 채우지 않는다.** [S
 > | U8 | node 24.12 · npm 11 · pm2 6.0.8(`.config.cjs` 인식) · `psql` 있음 · `NODE_ENV` unset · 도구 누락 0 | T-1d 가 더한 T-4 확인 항목 3 충족 · fit 의존 `>=20.19` 충족 |
 > | U9 | fin `backups` 없음 · 나머지 영속 디렉터리 있음(KB대) | Q73 P-2 심링크 대상에서 fin `backups` 제외 |
 > | U10 | 서버 → pleiades https · npm 200 | T-4 선결(003 Q45) 충족 |
-> | U12 · U4 | 4210·4301 = 127.0.0.1 · 4299·4399 비어 있음 · nginx 는 4100·4200 만 | pre-flight 포트 그대로 · Q77 포트 유지 = nginx 무변경 성립. 4100·4200 이 모든 인터페이스에 리슨(기존 상태 · 전환 범위 밖) |
+> | U12 · U4 | 4210·4301 = 127.0.0.1 · 4299·4399 비어 있음 · nginx 는 4100·4200 만 | pre-flight 포트 그대로 · Q77 포트 유지 = nginx 무변경 성립. 4100·4200 이 모든 인터페이스에 리슨하지만 **ufw 기본 deny(incoming) · 허용 22·80·443** 이라 외부 직접 접근 없음 — 새 `pleiades-*` 도 같은 방화벽 안(127.0.0.1 바인딩은 이중 방어 선택지 · 미결 아님) |
 > | U13 | 두 봇 `webhook=none` · `pending=0` | 4-4 봇 인계 = polling 그대로. **서버 node 의 family 자동 선택(시도당 250 ms)이 ~250 ms 연결에서 ETIMEDOUT** → **#191**(T-4 전 · `deploy/pleiades.config.cjs` env) |
-> | U11 | **미확인**(서버 밖) | 4-6 서비스 배포 경로 차단 = T-5c 진입 조건 그대로 |
+> | U11 | 두 서비스 deploy workflow **활성** · secret 이름 = workflow 가 쓰는 8개 모두 있음 · 그 밖 0 | **옛 배포 경로가 살아 있다** — 서비스 저장소에 Release 하나면 옛 경로가 서버에 배포된다. 4-6 차단(두 deploy workflow 비활성 · 사용자가 서비스 저장소에서) = **T-5c 진입 조건 그대로** · Q70 D-a 라 pleiades 로 옮길 secret 0 |
 >
 > 되돌리기: 문구 (**즉시**).
 
