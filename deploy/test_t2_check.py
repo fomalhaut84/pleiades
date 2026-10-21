@@ -79,6 +79,8 @@ echo '# 주석 줄'
 # 회귀: PR #187 Codex P2(5회차) — 변수·상대 접두를 자르지 않는다 · cd 대상도 경로다
 echo '30 4 * * * $HOME/myFitness/scripts/sync.sh'
 echo '45 4 * * * cd /srv/myFitness && ./scripts/rel.sh > /dev/null 2>&1'
+# 회귀: PR #187 Codex P2(6회차) — 요일·월 이름 목록·범위
+echo '0 3 * jan-mar MON,WED /old/path/scripts/backup-db.sh'
 """
 
 # https.get 이 토큰 URL 을 담은 오류를 던진다 — U13 이 그 메시지를 싣지 않는지 (#186 사전 리뷰 info)
@@ -99,7 +101,7 @@ def _git(root: Path, *args: str) -> None:
 class FakeServer:
     """서비스 계정 홈 흉내 — 서비스 체크아웃 2(git · 태그 · .env 비밀) · pm2 소켓 · 명령 스텁."""
 
-    def __init__(self, *, pm2_socket=True, pm2_pid_alive=True, tg_token=False, db="ok"):
+    def __init__(self, *, pm2_socket=True, pm2_listen=True, pm2_pid_alive=True, tg_token=False, db="ok"):
         self.tmp = tempfile.TemporaryDirectory()
         self.home = Path(self.tmp.name).resolve()
         self.fin = self.home / "myFinance"
@@ -125,6 +127,8 @@ class FakeServer:
         if pm2_socket:
             self.sock = socket.socket(socket.AF_UNIX)
             self.sock.bind(str(self.pm2_home / "rpc.sock"))
+            if pm2_listen:  # 회귀: PR #187 Codex P2(6회차) — 연결되지 않는 소켓이면 pm2 가 새 데몬을 띄운다
+                self.sock.listen()
         self.daemon = None
         if pm2_pid_alive == "other-home":  # 회귀: PR #187 Codex P2(2회차) — 다른 PM2_HOME 의 데몬이 pid 를 재사용
             self.daemon = subprocess.Popen(["bash", "-c", 'exec -a "PM2 v5.4.0: God Daemon (/other/.pm2)" sleep 60'])
@@ -272,6 +276,7 @@ class FullRun(unittest.TestCase):
         self.assertNotIn("주석 줄", text)
         self.assertIn("30 4 * * *\t$HOME/myFitness/scripts/sync.sh", text)
         self.assertIn("45 4 * * *\t/srv/myFitness ./scripts/rel.sh /dev/null", text)
+        self.assertIn("0 3 * jan-mar MON,WED\t/old/path/scripts/backup-db.sh", text)
 
     def test_bot_token_never_printed_even_when_request_throws(self):
         self.srv.close()
@@ -290,6 +295,13 @@ class FullRun(unittest.TestCase):
     def test_stale_pm2_socket_does_not_start_daemon(self):
         self.srv.close()
         self.srv = FakeServer(pm2_pid_alive=False)
+        _, text = self.run_ok()
+        self.assertNotIn("pm2 ", self.srv.log())
+        self.assertIn("pm2 데몬", text)
+
+    def test_unresponsive_pm2_socket_does_not_start_daemon(self):
+        self.srv.close()
+        self.srv = FakeServer(pm2_listen=False)
         _, text = self.run_ok()
         self.assertNotIn("pm2 ", self.srv.log())
         self.assertIn("pm2 데몬", text)

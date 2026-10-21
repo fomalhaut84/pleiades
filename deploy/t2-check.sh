@@ -63,7 +63,11 @@ crontab_summary() {
       if ($1 ~ /^@(reboot|yearly|annually|monthly|weekly|daily|midnight|hourly)$/) { n = 1 }
       else {
         n = 5
-        for (i = 1; i <= 5; i++) if ($i !~ /^[0-9*\/,-]+$/ && $i !~ /^[A-Za-z][A-Za-z][A-Za-z](-[A-Za-z][A-Za-z][A-Za-z])?$/) n = 0
+        # 필드 = , - / 로 나눈 조각이 전부 숫자 · * · 세 글자 이름(MON · jan) — 이름 목록·범위 허용 (PR #187 Codex P2 6회차)
+        for (i = 1; i <= 5; i++) {
+          c = split($i, part, /[,\/-]/)
+          for (j = 1; j <= c; j++) if (part[j] !~ /^([0-9]+|\*|[A-Za-z][A-Za-z][A-Za-z])$/) n = 0
+        }
       }
       if (n == 0) { print "<형식 밖 줄 — 생략>"; next }
       sched = $1; for (i = 2; i <= n; i++) sched = sched " " $i
@@ -120,6 +124,15 @@ db_name() {
   node -e "$DOTENV_JS"'
     try { process.stdout.write(decodeURIComponent(new URL(readEnv(process.argv[1]).DATABASE_URL).pathname.replace(/^\//, ""))) }
     catch { process.exit(1) }
+  ' "$1" 2>/dev/null
+}
+
+# pm2 클라이언트는 RPC 연결이 안 되면 새 데몬을 띄운다 — 소켓에 먼저 직접 붙어 본다 (PR #187 Codex P2 6회차)
+rpc_answers() {
+  node -e '
+    const s = require("net").connect(process.argv[1])
+    const t = setTimeout(() => { s.destroy(); process.exit(1) }, 2000)
+    s.on("connect", () => { clearTimeout(t); s.end(); process.exit(0) }).on("error", () => process.exit(1))
   ' "$1" 2>/dev/null
 }
 
@@ -324,7 +337,8 @@ main() {
   pm2_pid=$(cat "$PM2_DIR/pm2.pid" 2>/dev/null || true)
   # pid 는 재사용될 수 있다 — 그 프로세스가 이 PM2_HOME 의 데몬(제목 "PM2 v…: God Daemon (<home>)")인지 본다 (PR #187 Codex P2 ×2)
   if command -v pm2 >/dev/null && [[ -S "$PM2_DIR/rpc.sock" && "$pm2_pid" =~ ^[0-9]+$ ]] \
-    && ps -p "$pm2_pid" -o args= 2>/dev/null | grep -qF "God Daemon ($PM2_DIR)"; then
+    && ps -p "$pm2_pid" -o args= 2>/dev/null | grep -qF "God Daemon ($PM2_DIR)" \
+    && rpc_answers "$PM2_DIR/rpc.sock"; then
     PM2_UP=1
     PM2_TABLE=$(pm2 jlist 2>/dev/null | pm2_fields)
   fi
