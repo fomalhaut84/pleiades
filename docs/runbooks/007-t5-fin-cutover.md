@@ -105,12 +105,12 @@ ss -ltn | grep -cE ':(4100|4210)\b' || true          # 0
 
 ### C4′. 상태 이동 (P-2′ · 007 Q73)
 
-상태 실체를 새 체크아웃으로 옮기고 옛 경로에 링크를 남긴다. pre-flight 가 새 쪽에 `logs` 를 먼저 만들었을 수 있다 → 비켜 둔다.
+상태 실체를 새 체크아웃으로 옮기고 옛 경로에 링크를 남긴다. pre-flight 가 새 쪽에 `logs` 를 먼저 만들었을 수 있다 → **작업트리 밖(백업 디렉터리)으로** 비켜 둔다(안에 두면 `.gitignore` 밖이라 `git status` 가 dirty — PR #216 Codex P2).
 
 ```bash
 N=~/pleiades-fin/apps/finance
 for p in reports logs; do
-  [ -e "$N/$p" ] && mv "$N/$p" "$N/$p.preflight-$(date +%s)"
+  [ -e "$N/$p" ] && mv "$N/$p" "/backup/pleiades-cutover/fin-preflight-$p-$(date +%s)"
   mv -T ~/myFinance/$p "$N/$p" && ln -s "$N/$p" ~/myFinance/$p
 done
 ls -la ~/myFinance | grep -E ' (reports|logs) ->'      # 링크 2
