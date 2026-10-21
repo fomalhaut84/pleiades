@@ -254,7 +254,8 @@ u13() {
       try { token = readEnv(dir + "/.env").TELEGRAM_BOT_TOKEN || "" } catch { console.log(dir, ".env 읽기 실패"); process.exit(0) }
       if (!token) { console.log(dir, "TELEGRAM_BOT_TOKEN 없음"); process.exit(0) }
       try {
-        https.get("https://api.telegram.org/bot" + token + "/getWebhookInfo", (res) => {
+        // 서버 node 기본 시도 제한 250 ms 는 ~250 ms 연결을 끊는다(#191)
+        https.get("https://api.telegram.org/bot" + token + "/getWebhookInfo", { autoSelectFamilyAttemptTimeout: 2000 }, (res) => {
           let s = ""; res.on("data", (c) => (s += c)).on("end", () => {
             let j
             try { j = JSON.parse(s) } catch { console.log(dir, "응답 해석 실패 HTTP", res.statusCode); return }
