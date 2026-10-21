@@ -76,6 +76,9 @@ echo 'API_KEY="q CRONSECRET8" /srv/after.sh'
 echo 'API_TOKEN="alpha \" CRONSECRET9 beta"'
 echo 'CRONSECRET10 x y z w /srv/x.sh'
 echo '# 주석 줄'
+# 회귀: PR #187 Codex P2(5회차) — 변수·상대 접두를 자르지 않는다 · cd 대상도 경로다
+echo '30 4 * * * $HOME/myFitness/scripts/sync.sh'
+echo '45 4 * * * cd /srv/myFitness && ./scripts/rel.sh > /dev/null 2>&1'
 """
 
 # https.get 이 토큰 URL 을 담은 오류를 던진다 — U13 이 그 메시지를 싣지 않는지 (#186 사전 리뷰 info)
@@ -267,6 +270,8 @@ class FullRun(unittest.TestCase):
         self.assertIn("env DB_PASSWORD", text)
         self.assertIn("형식 밖", text)
         self.assertNotIn("주석 줄", text)
+        self.assertIn("30 4 * * *\t$HOME/myFitness/scripts/sync.sh", text)
+        self.assertIn("45 4 * * *\t/srv/myFitness ./scripts/rel.sh /dev/null", text)
 
     def test_bot_token_never_printed_even_when_request_throws(self):
         self.srv.close()
@@ -301,6 +306,15 @@ class FullRun(unittest.TestCase):
         self.srv = FakeServer(pm2_pid_alive="other-home")
         _, text = self.run_ok()
         self.assertNotIn("pm2 ", self.srv.log())
+
+    def test_ambient_node_env_value_is_allowlisted(self):
+        # 회귀: PR #187 Codex P1(5회차) — 실행 셸에서 물려받은 값도 같은 허용 목록
+        r, text = self.run_ok(NODE_ENV="PM2ARGSECRET")
+        self.assertIn("NODE_ENV=<기타 값>", text)
+        for p in self.srv.outputs():
+            p.unlink()
+        _, text = self.run_ok(NODE_ENV="production")
+        self.assertIn("NODE_ENV=production", text)
 
     def test_shell_files_show_only_node_env_value(self):
         # 회귀: PR #187 Codex P1(4회차) — 주석·인용 속 텍스트는 대입이 아니다 · 값은 허용 목록만

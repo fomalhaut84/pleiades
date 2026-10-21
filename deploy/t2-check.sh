@@ -49,7 +49,8 @@ envkeys() {
   ' "$1"
 }
 
-# crontab 은 줄마다 일정 + 스크립트 경로만 낸다 — 나머지(인라인 비밀 가능)는 싣지 않는다.
+# crontab 은 줄마다 일정 + 경로 토큰만 낸다 — 나머지(인라인 비밀 가능)는 싣지 않는다.
+# 경로 토큰 = 문자·숫자·._/- 만으로 된 / 시작 토큰, 접두 $VAR · ${VAR} · ~ · . · .. 는 그대로(자르면 다른 경로가 된다 · PR #187 Codex P2 5회차)
 # 마스킹은 따옴표·이스케이프·공백 변형마다 새는 길이 있어(PR #187 Codex P1 ×2) 허용 목록으로 바꿨다
 crontab_summary() {
   awk '
@@ -65,11 +66,13 @@ crontab_summary() {
       }
       if (n == 0) { print "<형식 밖 줄 — 생략>"; next }
       sched = $1; for (i = 2; i <= n; i++) sched = sched " " $i
-      paths = ""; rest = $0
-      while (match(rest, /\/[A-Za-z0-9._\/-]+\.(sh|js|cjs|mjs|ts|py)/)) {
-        paths = paths " " substr(rest, RSTART, RLENGTH); rest = substr(rest, RSTART + RLENGTH)
+      line = $0; gsub(/["\047;&|<>()`]/, " ", line); m = split(line, tok, /[[:space:]]+/)
+      paths = ""
+      for (i = 1; i <= m; i++) {
+        t = tok[i]
+        if (t ~ /^(\$[A-Za-z_][A-Za-z0-9_]*|\$\{[A-Za-z_][A-Za-z0-9_]*\}|~|\.|\.\.)?\/[A-Za-z0-9._\/-]*$/) paths = paths " " t
       }
-      print sched "\t" (paths == "" ? "<스크립트 경로 없음>" : substr(paths, 2))
+      print sched "\t" (paths == "" ? "<경로 없음>" : substr(paths, 2))
     }'
 }
 
@@ -191,7 +194,11 @@ u8() {
   ls "$HOME/.nvm/versions/node"
   for t in git curl comm lsof jq psql claude; do printf '%s\t%s\n' "$t" "$(command -v "$t" || echo '<없음>')"; done
   claude --version
-  echo "NODE_ENV=${NODE_ENV-<unset>}"
+  # 물려받은 값도 셸 파일과 같은 허용 목록 (PR #187 Codex P1 5회차)
+  case "${NODE_ENV-<unset>}" in
+    production|development|test|''|'<unset>') echo "NODE_ENV=${NODE_ENV-<unset>}" ;;
+    *) echo "NODE_ENV=<기타 값>" ;;
+  esac
   node_env_lines ~/.bashrc ~/.profile ~/.bash_profile /etc/environment
   if command -v pm2 >/dev/null; then
     pm2_root=$(dirname "$(dirname "$(readlink -f "$(command -v pm2)")")")
