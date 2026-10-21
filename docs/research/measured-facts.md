@@ -4286,7 +4286,7 @@ mv "$SCRATCH/held" apps/finance/prisma/migrations/20261019100000_drop_quarantine
 | U4 | 두 서비스 `proxy_pass` = 4100 · 4200 뿐: 예 · MCP 포트(4210·4301) 외부 노출 없음: 예(아래 U12 — 127.0.0.1) · 다른 vhost 8(sites-enabled 기준) |
 | U5 | `psql`·`pg_dump` 있음 · PG 메이저 18 · 두 DB 같은 클러스터 · `sudo -u postgres` 접속 됨 · 적용 마이그레이션 **fin 29**(= 서비스 `main` 29 · 마지막 이름 일치 · **pleiades `apps/finance` 29 와 차이 0**) · **fit 42**(= 서비스 `main` 42 · 마지막 = `20261020010000_running_power_intensity` · **pleiades `apps/fitness` 41 — 1 뒤처짐**) · DB 크기 fin 10 MB대 · fit 50 MB대 |
 | U6 | 계정 crontab **없음** · `/etc/cron.d` 는 시스템 항목뿐(서비스 관련 0) · fin `backups/` **없음** → **서비스 DB 백업 0**(사용자 확인: 별도 백업 정책 없음) · 오프사이트 없음 |
-| U7 | fin `.env` 키 12 · 템플릿(`deploy/env/finance.env.template`) 밖 1 · 빈값 0 · **`MCP_PORT` 없음** / fit 키 14 · 템플릿 밖 0 · 빈값 0 · **`MCP_PORT` 없음** · 두 `.env` 권한 664 |
+| U7 | fin `.env` 키 12 · 템플릿(`deploy/env/finance.env.template`) 밖 1 · 빈값 0 · **`MCP_PORT` 없음** / fit 키 14 · 템플릿 밖 0 · 빈값 0 · **`MCP_PORT` 없음** · 두 `.env` 권한 664 → **사용자가 같은 날 600 으로 변경**(`stat -c '%a %U'` = `600 <서비스 계정>`) |
 | U8 | node v24.12.0 · npm 11.6.2 · `.nvmrc` fin 없음 / fit 24 · 없는 도구 0(`git` `curl` `comm` `lsof` `jq` `psql` `claude`) · `NODE_ENV` unset · 셸 초기화 파일에 `NODE_ENV` 0 · **pm2 6.0.8 · `lib/Common.js` 에 `'.config.cjs': 'js'` 있음(루트 설정 인식)** · 디스크 여유 ~128 GB · 메모리 15 GB · 4 코어 |
 | U9 | fin `reports`·`logs` 있음(KB대) · `backups` 없음 / fit `.garmin-tokens`·`.omron-tokens`·`.runtime`·`logs` 있음(KB대) · 체크아웃 fin ~2 GB(node_modules ~1 GB · .next ~1 GB) · fit ~2 GB |
 | U10 | 서버 → pleiades `ls-remote` 됨(dev = `215918898deb`) · npm 레지스트리 200 |
