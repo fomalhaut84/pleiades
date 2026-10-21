@@ -77,8 +77,9 @@ dev ──┬──┬──┬────────merge──────�
 > (예외는 이후 **3개**가 됐다 — 5절 표 참조: 대칭 변경 · hotfix 백포트 · 릴리즈.)
 
 ```bash
+V=v<X.Y.Z>   # 버전 기준은 아래 확정 블록(#199) — 첫 릴리즈 v0.2.0 · 첫 전환 v1.0.0. 예시 번호를 그대로 쓰지 않는다
 # 1. dev → main PR 생성 (Claude)
-gh pr create --base main --head dev --title "Release v1.0.0" --body "..."
+gh pr create --base main --head dev --title "Release $V" --body "..."
 
 # 2. 봇 리뷰 게이트 — 9-3·9-4 를 그대로 거친다. 봇 P0/P1 = 0 이 될 때까지 머지하지 않는다.
 #    수정이 필요하면 dev 에 반영 → @codex review → 9-6 으로 PR body 갱신
@@ -88,9 +89,9 @@ gh pr create --base main --head dev --title "Release v1.0.0" --body "..."
 
 # 4. 머지 확인 후 태그 (Claude)
 git checkout main && git pull
-git tag v1.0.0
-git push origin v1.0.0          # --tags 금지 — 로컬에 서비스 태그가 섞여 있으면 원격에 올라간다 (isolation.md I-16)
-gh release create v1.0.0 --title "v1.0.0" --notes "릴리즈 노트"
+git tag "$V"
+git push origin "$V"            # --tags 금지 — 로컬에 서비스 태그가 섞여 있으면 원격에 올라간다 (isolation.md I-16)
+gh release create "$V" --title "$V" --notes "릴리즈 노트"   # 노트에 앱별 변경 + "서버 조치" 칸(확정 블록)
 ```
 
 > **릴리즈도 봇 게이트를 거친다 (PR #6 Codex 리뷰 P1).** 봇은 `gh pr create` **뒤에**
@@ -119,6 +120,7 @@ gh release create v1.0.0 --title "v1.0.0" --notes "릴리즈 노트"
 > - **major = 서버와의 약속이 깨지는 릴리즈** — 서버 `.env` 필수 키 추가·개명 · pm2 이름·포트 변경 · 체크아웃·상태 경로(P-2) 구조 변경처럼 `deploy.sh` 가 스스로 하지도 미리 알리지도 못하는 것.
 > - **minor = 기능 추가 + 마이그레이션.** 마이그레이션은 major 가 아니다 — 잦아서(fit 42) 신호가 무너지고, `deploy.sh` 가 미적용 마이그레이션에 빌드 전 스스로 멈추므로 놓칠 수 없다. 대신 **릴리즈 노트의 "서버 조치" 칸을 필수**로 채운다(없으면 "없음").
 > - **patch = 버그 수정.**
+> - 위 명령 블록은 `V=v<X.Y.Z>` 로 매개변수화했다 — 예시 `v1.0.0` 이 박혀 있어 그대로 따르면 첫 전환용 번호를 첫 릴리즈에 써 버렸다(PR #200 Codex P1).
 > - **첫 번호:** 첫 릴리즈(T-3 · 전환 아님 · 서버 배포 없음) = **`v0.2.0`** · **첫 전환 릴리즈 = `v1.0.0`**(pleiades 가 서비스가 되는 릴리즈 — 새 체크아웃·서버 `.env` 등 수동 조치가 따르므로 major 정의와도 맞다).
 > - 위 제안 블록의 *"major = 배포 때 서버 쪽 수동 조치가 필요한 릴리즈(… 마이그레이션 …)"* 는 이 블록으로 대체한다. 되돌리기: 문구 (**즉시**) · 태그는 공개 뒤 사실상 되돌리지 않는다.
 
