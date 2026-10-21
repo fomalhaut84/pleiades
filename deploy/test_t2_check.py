@@ -25,7 +25,8 @@ NODE_DIR = str(Path(shutil.which("node") or "/usr/bin/node").parent)
 
 # 화면·파일 어디에도 나오면 안 되는 값
 SECRETS = ("S3CRETPW", "SECRETVAL123", "PM2SECRET", "QUOTEDSECRET", "MIIBPEMSECRET", "TGSECRET",
-           "CRONSECRET1", "CRONSECRET2", "CRONSECRET3", "CRONSECRET4")
+           "CRONSECRET1", "CRONSECRET2", "CRONSECRET3", "CRONSECRET4", "CRONSECRET5", "CRONSECRET6",
+           "CRONSECRET7", "CRONSECRET8")
 
 PM2_STUB = r"""#!/usr/bin/env node
 // pm2 흉내 — 호출은 $STUB/log. jlist 는 pm2_env 에 env(비밀)를 싣는다(실제 pm2 와 같다)
@@ -64,6 +65,11 @@ echo '0 3 * * * PGPASSWORD=CRONSECRET1 /srv/myFinance/scripts/backup-db.sh'
 echo '* * * * * curl -s https://api.telegram.org/bot123456:CRONSECRET2/sendMessage'
 echo '0 1 * * * pg_dump postgresql://svc:CRONSECRET3@localhost/db > /dev/null'
 echo '0 2 * * * curl -H "Authorization: Bearer CRONSECRET4" https://x'
+# 회귀: PR #187 Codex P1 — 따옴표 값 전체 · = 앞뒤 공백 · 닫히지 않은 따옴표
+echo "API_TOKEN='alpha CRONSECRET5 gamma'"
+echo 'export DB_PASSWORD = CRONSECRET6'
+echo 'X_SECRET="beta CRONSECRET7 more'
+echo 'API_KEY="q CRONSECRET8" /srv/after.sh'
 """
 
 # https.get 이 토큰 URL 을 담은 오류를 던진다 — U13 이 그 메시지를 싣지 않는지 (#186 사전 리뷰 info)
@@ -109,8 +115,12 @@ class FakeServer:
         if pm2_socket:
             self.sock = socket.socket(socket.AF_UNIX)
             self.sock.bind(str(self.pm2_home / "rpc.sock"))
-        if pm2_pid_alive:
+        self.daemon = None
+        if pm2_pid_alive == "reused":  # 회귀: PR #187 Codex P2 — pid 가 재사용돼 살아 있지만 pm2 가 아니다
             pid = os.getpid()
+        elif pm2_pid_alive:  # pm2 데몬의 프로세스 제목 흉내
+            self.daemon = subprocess.Popen(["bash", "-c", 'exec -a "PM2 v5.4.0: God Daemon (/x/.pm2)" sleep 60'])
+            pid = self.daemon.pid
         else:  # 소켓 파일만 남은 죽은 데몬(SIGKILL · OOM) — pm2 를 부르면 새 데몬이 뜬다 (#186 사전 리뷰 major)
             dead = subprocess.Popen(["true"])
             dead.wait()
@@ -143,6 +153,9 @@ class FakeServer:
         return sorted(d.glob("t2-*.txt")) if d.exists() else []
 
     def close(self):
+        if self.daemon:
+            self.daemon.kill()
+            self.daemon.wait()
         if self.sock:
             self.sock.close()
         self.tmp.cleanup()
@@ -238,6 +251,7 @@ class FullRun(unittest.TestCase):
         _, text = self.run_ok()
         self.assertIn("backup-db.sh", text)
         self.assertIn("PGPASSWORD=***", text)
+        self.assertIn("API_KEY=*** /srv/after.sh", text)
 
     def test_bot_token_never_printed_even_when_request_throws(self):
         self.srv.close()
@@ -256,6 +270,13 @@ class FullRun(unittest.TestCase):
     def test_stale_pm2_socket_does_not_start_daemon(self):
         self.srv.close()
         self.srv = FakeServer(pm2_pid_alive=False)
+        _, text = self.run_ok()
+        self.assertNotIn("pm2 ", self.srv.log())
+        self.assertIn("pm2 데몬", text)
+
+    def test_reused_pm2_pid_does_not_start_daemon(self):
+        self.srv.close()
+        self.srv = FakeServer(pm2_pid_alive="reused")
         _, text = self.run_ok()
         self.assertNotIn("pm2 ", self.srv.log())
         self.assertIn("pm2 데몬", text)

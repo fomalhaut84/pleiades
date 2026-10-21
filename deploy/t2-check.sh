@@ -37,12 +37,18 @@ envkeys() {
 }
 
 # 줄 안의 인라인 비밀을 가린다 — crontab · 셸 초기화 파일 줄 (#186 사전 리뷰)
+# 이름에 PASS·TOKEN·SECRET·KEY 가 든 대입은 따옴표 값 전체 · = 앞뒤 공백 · 닫히지 않은 따옴표(줄 끝까지)를 가린다 (PR #187 Codex P1)
 mask() {
+  local kp='[A-Za-z_]*([Pp][Aa][Ss][Ss]|[Tt][Oo][Kk][Ee][Nn]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Kk][Ee][Yy])[A-Za-z_]*'
+  local eq='[[:space:]]*=[[:space:]]*'
   sed -E \
     -e 's#(://[^:/@ ]+:)[^@ ]+@#\1***@#g' \
     -e 's#bot[0-9]+:[A-Za-z0-9_-]+#bot***#g' \
     -e 's#([Bb]earer )[^ "'"'"']+#\1***#g' \
-    -e 's#(([A-Za-z_]*([Pp][Aa][Ss][Ss]|[Tt][Oo][Kk][Ee][Nn]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Kk][Ee][Yy])[A-Za-z_]*)=)[^ ]+#\1***#g'
+    -e "s#(${kp})${eq}\"[^\"]*\"#\\1=***#g" \
+    -e "s#(${kp})${eq}'[^']*'#\\1=***#g" \
+    -e "s#(${kp})${eq}[\"'].*\$#\\1=***#" \
+    -e "s#(${kp})${eq}[^ ]+#\\1=***#g"
 }
 
 # pm2 jlist 에서 이름·상태·cwd·실행 파일·args·재시작만 — pm2_env 의 env(토큰·DB 비밀번호)는 내지 않는다
@@ -273,7 +279,9 @@ main() {
   # 소켓 파일은 죽은 데몬(SIGKILL · OOM)에도 남는다 — pid 가 살아 있어야 부른다. 아니면 pm2 가 새 데몬을 띄운다 (#186 사전 리뷰)
   local pm2_pid
   pm2_pid=$(cat "$PM2_DIR/pm2.pid" 2>/dev/null || true)
-  if command -v pm2 >/dev/null && [[ -S "$PM2_DIR/rpc.sock" && "$pm2_pid" =~ ^[0-9]+$ ]] && kill -0 "$pm2_pid" 2>/dev/null; then
+  # pid 는 재사용될 수 있다 — 그 프로세스가 pm2 데몬(제목 "PM2 v…: God Daemon")인지도 본다 (PR #187 Codex P2)
+  if command -v pm2 >/dev/null && [[ -S "$PM2_DIR/rpc.sock" && "$pm2_pid" =~ ^[0-9]+$ ]] \
+    && ps -p "$pm2_pid" -o args= 2>/dev/null | grep -q 'PM2.*God Daemon'; then
     PM2_UP=1
     PM2_TABLE=$(pm2 jlist 2>/dev/null | pm2_fields)
   fi
