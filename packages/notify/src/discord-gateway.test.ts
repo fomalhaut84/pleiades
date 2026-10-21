@@ -69,8 +69,31 @@ const interaction = (over: Record<string, unknown> = {}) => ({
 });
 
 describe('createDiscordGateway — 연결 수명주기', () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  // 첫 heartbeat 지연은 interval × Math.random() 이다 — 고정하지 않으면 지연 0 근처(~0.1%)에서
+  // 둘째 tick 이 ACK 전에 돌아 좀비 판정 · 재연결로 테스트가 흔들린다 (#226 · PR #225 CI)
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('첫 heartbeat 지연이 0 이어도 ACK 를 받으면 같은 연결로 계속 친다', () => {
+    // 회귀: #226 — 지연 0 경계. 실제 ACK 는 다음 tick 전에 온다
+    vi.mocked(Math.random).mockReturnValue(0);
+    const { gw, last, sockets } = setup();
+    gw.start();
+    last().serverSends({ op: 10, d: { heartbeat_interval: 1000 } });
+    vi.advanceTimersByTime(0);
+    expect(last().sent.filter((p) => p.op === 1)).toHaveLength(1);
+    last().serverSends({ op: 11 });
+    vi.advanceTimersByTime(1000);
+    expect(sockets).toHaveLength(1);
+    expect(last().sent.filter((p) => p.op === 1)).toHaveLength(2);
+    gw.stop();
+  });
 
   it('HELLO → IDENTIFY(intents 0) · heartbeat 주기 · ACK', () => {
     const { gw, last } = setup();
