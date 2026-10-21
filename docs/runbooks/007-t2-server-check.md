@@ -3,7 +3,27 @@
 **누가:** 사용자가 서버에서 실행한다. Claude 세션은 서버에 닿지 않는다(`isolation.md` I-3).
 **무엇:** 007 §8 의 U1~U13 과 T-1d 가 더한 T-4 확인 항목 3개(`psql` · pm2 의 `.config.cjs` 인식 · `NODE_ENV`). U14 는 감사가 이미 측정했다(007 ⑱).
 **성격:** 전부 **읽기**다. 서비스 프로세스·DB·봇·git 체크아웃 상태를 바꾸는 명령은 없다. 되돌리기: 해당 없음(읽기만).
-**결과:** 명령 출력 원본은 **저장소 밖에만** 둔다. 아래 [공개 기록 양식](#공개-기록-양식)(판정만)을 채워 세션에 주면 Claude 가 그것만 `docs/research/measured-facts.md` 에 기록하고 007 의 걸린 결정을 갱신한다(별도 PR). 정책은 바로 아래 절.
+**결과:** 명령 출력 원본은 **저장소 밖에만** 두고 **세션에도 주지 않는다**(PR #187 · 사용자 2026-10-21). 아래 [공개 기록 양식](#공개-기록-양식)(판정만)을 채워 세션에 주면 Claude 가 그것만 `docs/research/measured-facts.md` 에 기록하고 007 의 걸린 결정을 갱신한다(별도 PR). 정책은 바로 아래 절.
+
+## 한 번에 돌리기 — `deploy/t2-check.sh` (#186)
+
+아래 U1~U13 명령을 그대로 묶은 스크립트다. 서비스 계정으로 서버에서:
+
+```bash
+REF=<커밋 SHA>   # 움직이는 dev 가 아니라 고정 커밋 — 세션이 알려 준 머지 커밋
+f=$(mktemp) && curl -fsSL "https://raw.githubusercontent.com/fomalhaut84/pleiades/$REF/deploy/t2-check.sh" -o "$f"
+bash "$f"        # 경로·DB 를 못 찾으면: --fin-dir DIR --fit-dir DIR --fin-db NAME --fit-db NAME
+# 다 끝나면 rm -f "$f" (아래 절 명령을 손으로 돌릴 때 0절이 이 파일을 source 한다)
+```
+
+- **경로**는 pm2 `myfinance`·`myfitness` 의 cwd, **DB 이름**은 각 `.env` 의 `DATABASE_URL` 에서 이름만 찾는다(0절의 수작업 대체). 못 찾으면 인자로 준다.
+- **원본**은 `~/pleiades-private/t2-<시각>.txt`(권한 600) 와 화면에 같이 나온다. 위치가 git 작업트리 안이거나 파일이 이미 있으면 시작하지 않는다(`--out` 으로 바꾼다).
+- **sudo** 는 처음에 한 번 묻는다. 거절하면 `nginx -T` · `ss -p` · postgres 조회만 건너뛰고 나머지는 돈다.
+- 아래 명령과 다른 점: pm2 데몬이 살아 있지 않으면(소켓 + 제목이 이 `PM2_HOME` 인 pid) pm2 를 부르지 않는다(다른 계정이거나 죽은 데몬이면 새 데몬이 뜬다) · **원문 대신 필요한 것만 낸다** — pm2 는 서비스 프로세스만 cwd·실행 파일·포트(args 원문 아님), 그 밖은 이름·상태만 · `crontab -l` 은 줄마다 일정 + 스크립트 경로(대입 줄은 키 이름, 형식 밖 줄은 생략) · 셸 초기화 파일은 `NODE_ENV` 값만 (인라인 비밀 마스킹은 따옴표·이스케이프 변형마다 새서 허용 목록으로 바꿨다 · PR #187 Codex P1 ×2) · pm2·텔레그램 응답의 해석 실패 메시지에 입력을 싣지 않는다 · U11 은 안내만 낸다(서버 밖).
+- 끝나면 화면(또는 원본 파일)을 보고 [공개 기록 양식](#공개-기록-양식)을 채워 **양식만** 세션에 준다 — 원본 파일은 주지 않는다. 스크립트·원본은 사용자가 지운다.
+- 스크립트의 걸러 내기(키 이름만 · 허용 목록 · 해석 실패 메시지 무입력)는 **실수 방지**다 — 서버 출력에서 비밀을 완전히 걸러 낸다는 보증이 아니다. 그래서 원본은 사용자 눈에만 둔다.
+
+아래 절들은 스크립트가 무엇을 돌리는지와 **기대값**의 정본이다 — 결과를 읽을 때 쓴다.
 
 ## 먼저 읽을 것 — 하지 않는 것과 가릴 것
 
@@ -21,7 +41,7 @@
 
 | 층 | 무엇 | 어디 | 누가 본다 |
 |---|---|---|---|
-| **원본** | 명령 출력 그대로 — 경로 · 계정 · 도메인 · DB 이름 · crontab 내용 · 포트 바인딩 · `.env` 키 목록 · 프로세스 표 | **저장소 밖**(예: `~/pleiades-private/t2-YYYYMMDD.txt` · 서버 자체). pleiades 작업트리 안(`_workspace/` 포함)에 두지 않는다 — `git add` 한 번이면 공개된다 | 사용자. 세션에 붙이면 Claude 가 판정에만 쓴다(세션 기록은 저장소에 커밋되지 않는다) |
+| **원본** | 명령 출력 그대로 — 경로 · 계정 · 도메인 · DB 이름 · crontab 내용 · 포트 바인딩 · `.env` 키 목록 · 프로세스 표 | **저장소 밖**(예: `~/pleiades-private/t2-YYYYMMDD.txt` · 서버 자체). pleiades 작업트리 안(`_workspace/` 포함)에 두지 않는다 — `git add` 한 번이면 공개된다 | **사용자만.** 세션에 붙이지 않는다 — 판정은 사용자가 양식으로 옮긴다 |
 | **공개 기록** | **판정만** — 있음/없음 · 일치/불일치 · 개수 · 메이저 버전 · 크기 자릿수 | `measured-facts.md` · 007 | 누구나 |
 
 **공개 기록에 쓰지 않는 것**(일치 판정으로 대신한다):
@@ -36,7 +56,9 @@
 | 토큰 · 비밀번호 · 접속 문자열 · chat id | 아무것도 — 명령도 내지 않는다 |
 | 정확한 패치 버전(OS · nginx · PG) | 적지 않는다 — node · npm · pm2 는 배포 판단에 필요하므로 버전 그대로 |
 
-**Claude 가 지키는 것:** 원본을 받아도 저장소 파일에 옮기지 않는다 · 기록 PR 은 커밋 전에 diff 를 `/home/` · `@` · IP 패턴 · 도메인 · DB 이름으로 grep 해 0 인지 확인하고 PR 본문에 그 결과를 적는다 · 원본을 스크래치(저장소 밖 세션 임시 디렉터리)에 저장하지 않는다.
+> **정정 (2026-10-21 · PR #187 · 사용자).** 이전 판은 *"원본을 세션에 붙이면 Claude 가 판정에만 쓴다"* 였다. 스크립트로 묶자 서버 출력 전체가 비밀 차단 경계가 됐고, Codex 가 5라운드 연속 그 경계의 새 구멍(여러 줄 값 · 따옴표 · 이스케이프 · pm2 args · 셸 변수)을 찾았다 — 걸러 내기 규칙은 반례가 끝나지 않는다. **원본 공유를 없애 경계를 사용자 화면으로 옮긴다.** 되돌리기: 문구 (**즉시**).
+
+**Claude 가 지키는 것:** 원본을 받지 않는다(실수로 붙여지면 판정에만 쓰고 저장소 파일에 옮기지 않는다) · 기록 PR 은 커밋 전에 diff 를 `/home/` · `@` · IP 패턴 · 도메인 · DB 이름으로 grep 해 0 인지 확인하고 PR 본문에 그 결과를 적는다 · 원본을 스크래치(저장소 밖 세션 임시 디렉터리)에 저장하지 않는다.
 
 ## 0. 준비 — 셸 변수
 
@@ -45,17 +67,10 @@
 ```bash
 FIN_DIR=''   # U1 의 pm2 cwd 로 채운다 (비어 있으면 아래 명령이 실패한다)
 FIT_DIR=''   # U1 의 pm2 cwd 로 채운다
-envkeys() {  # .env 의 키 이름과 빈값 여부만 낸다 — 값은 내지 않는다
-  awk '/^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ {
-    line = $0; sub(/^[[:space:]]*(export[[:space:]]+)?/, "", line)
-    k = line; sub(/[[:space:]]*=.*/, "", k)
-    v = line; sub(/^[^=]*=[[:space:]]*/, "", v)
-    if (v ~ /^["\047]/) { q = substr(v, 1, 1); v = substr(v, 2); i = index(v, q); if (i) v = substr(v, 1, i - 1) }
-    else { sub(/#.*/, "", v); gsub(/^[[:space:]]+|[[:space:]]+$/, "", v) }  # dotenv: 따옴표 없는 값만 # 부터 주석·양끝 공백 제거 — 따옴표 안 공백은 값이다 (PR #183 · #185 Codex P2)
-    print k "\t" (v == "" ? "빈값" : "값있음")
-  }' "$1" | sort
-}
+source "$f"  # 위 "한 번에 돌리기" 로 받은 t2-check.sh — 함수(envkeys · u13 등)만 정의하고 실행하지 않는다
 ```
+
+`.env` 를 읽는 명령(U7 `envkeys` · U13)은 **스크립트의 함수를 쓴다** — 앱과 같은 dotenv 규칙으로 읽어야 여러 줄 값·이스케이프 따옴표·인라인 주석에서 값 조각이 키로 새지 않는다(PR #187 Codex 3회차 · 이전 판의 awk 는 폐기).
 
 ## U1 · U3 — 계정 · 실경로 · pm2
 
@@ -232,33 +247,14 @@ GitHub 웹(각 서비스 저장소 → Settings → Secrets and variables → Ac
 `getWebhookInfo` 는 polling 을 방해하지 않는다. 토큰은 node 가 `.env` 에서 직접 읽어 요청에만 쓴다 — 셸 변수·명령줄·화면에 나오지 않는다.
 
 ```bash
-for d in "$FIN_DIR" "$FIT_DIR"; do
-  node -e '
-    const fs = require("fs"), https = require("https");
-    const dir = process.argv[1];
-    let token = "";
-    for (const raw of fs.readFileSync(dir + "/.env", "utf8").split(/\r?\n/)) {
-      const m = raw.match(/^\s*(?:export\s+)?TELEGRAM_BOT_TOKEN\s*=\s*(.*?)\s*$/);
-      if (m) token = m[1].replace(/^(["\x27])(.*)\1$/, "$2");
-    }
-    if (!token) { console.log(dir, "TELEGRAM_BOT_TOKEN 없음"); process.exit(0); }
-    https.get("https://api.telegram.org/bot" + token + "/getWebhookInfo", (res) => {
-      let s = ""; res.on("data", (c) => (s += c)).on("end", () => {
-        const j = JSON.parse(s);
-        if (!j.ok) { console.log(dir, "응답 실패", j.error_code, j.description); return; }
-        const r = j.result;
-        console.log(dir, "webhook=" + (r.url ? "set" : "none"), "pending=" + r.pending_update_count, "last_error=" + (r.last_error_message || "-"));
-      });
-    }).on("error", (e) => console.log(dir, "요청 실패", e.code));
-  ' "$d"
-done
+u13   # source 한 t2-check.sh 의 함수 — 토큰은 node 가 .env 에서 직접 읽어 요청에만 쓴다
 ```
 
 **기대값:** 둘 다 `webhook=none`(grammy long polling) · `pending` 이 작다 · `last_error=-`.
 
 ## 공개 기록 양식
 
-**이 양식만** 세션에 주면 된다(원본 출력까지 주면 Claude 가 이 형태로 줄여 쓴다). 칸에 경로 · 이름 · 도메인을 넣지 않는다.
+**이 양식만** 세션에 준다 — 원본 출력은 주지 않는다. 칸에 경로 · 이름 · 도메인을 넣지 않는다. 판정이 애매한 칸은 "애매 — <무엇이 보였는지 일반 표현>" 으로 적으면 Claude 가 추가 확인 명령을 낸다.
 
 ```text
 U1  서비스 계정으로 실행: 예/아니오   fit cwd = ecosystem 하드코딩 경로: 예/아니오   fin 경로 확인: 예/아니오
