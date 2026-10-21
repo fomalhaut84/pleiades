@@ -40,6 +40,7 @@ class FakeRoot:
             d.mkdir(parents=True)
             if ports is not None:
                 (d / ".env").write_text("".join(f"{k}={v}\n" for k, v in ports.items()))
+                (d / ".env").chmod(0o600)  # 서버와 같게 — 다른 계정이 읽으면 deploy.sh 가 멈춘다 (#193)
         cfg = self.root / "apps/finance/src/lib/ai"
         cfg.mkdir(parents=True)
         (cfg / "mcp-config.json").write_text(json.dumps(
@@ -189,6 +190,56 @@ class DeployDryRun(unittest.TestCase):
         self.assertNotIn("startOrReload", out)  # #170 — 웹도 restart
         self.assertLess(out.index("pleiades-fin-mcp"), out.index("pleiades-fin-web"))
         self.assertLess(out.index("pleiades-fin-web"), out.index("pleiades-fin-bot"))
+
+    def test_refuses_app_env_readable_by_other_accounts(self):
+        # #193 — 옛 서비스 .env 가 664 였다(T-2 U7). 같은 서버에 다른 계정·서비스가 돈다(U3)
+        env = self.root / "apps/finance/.env"
+        for mode in (0o644, 0o640, 0o604, 0o660):
+            with self.subTest(mode=oct(mode)):
+                env.chmod(mode)
+                r = deploy(self.root, "fin", "--dry-run")
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("chmod 600", r.stderr)
+                self.assertNotIn("npm ci", r.stdout)
+
+    def test_accepts_owner_only_env_and_symlink_to_it(self):
+        env = self.root / "apps/finance/.env"
+        for mode in (0o600, 0o400):
+            with self.subTest(mode=oct(mode)):
+                env.chmod(mode)
+                self.assertEqual(deploy(self.root, "fin", "--dry-run").returncode, 0)
+        env.chmod(0o600)
+        real = self.root / "real.env"
+        env.rename(real)
+        env.symlink_to(real)  # 링크 자체 권한(777)이 아니라 대상 권한을 본다
+        self.assertEqual(deploy(self.root, "fin", "--dry-run").returncode, 0)
+        real.chmod(0o644)  # 대상이 열려 있으면 링크여도 거부 (#193 사전 리뷰 info)
+        r = deploy(self.root, "fin", "--dry-run")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("chmod 600", r.stderr)
+        # 소유자 불일치 분기는 root 없이 만들 수 없어 테스트하지 않는다
+
+    def test_refuses_platform_env_readable_by_other_accounts(self):
+        shared = self.root / "shared.env"
+        shared.write_text("NOTIFY_ALLOWED_CHANNEL=telegram\n")
+        shared.chmod(0o644)
+        r = deploy(self.root, "fin", "--dry-run", env={"PLEIADES_ENV_FILE": str(shared)})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("shared.env", r.stderr)
+        shared.chmod(0o600)
+        self.assertEqual(deploy(self.root, "fin", "--dry-run", env={"PLEIADES_ENV_FILE": str(shared)}).returncode, 0)
+        # 상대경로는 node(앱 cwd = apps/<dir>)와 이 스크립트(호출 cwd)가 다른 파일을 본다 — 공백만 있는 값도 같다 (#193 사전 리뷰 major)
+        for bad in ("shared.env", "../shared.env", "  "):
+            with self.subTest(bad=bad):
+                r = deploy(self.root, "fin", "--dry-run", env={"PLEIADES_ENV_FILE": bad})
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("절대경로", r.stderr)
+        root_env = self.root / ".env"  # PLEIADES_ENV_FILE 이 없으면 루트 .env 가 플랫폼 설정이다(#143)
+        root_env.write_text("NOTIFY_ALLOWED_CHANNEL=telegram\n")
+        root_env.chmod(0o664)
+        r = deploy(self.root, "fin", "--dry-run")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("chmod 600", r.stderr)
 
     def test_fit_plan(self):
         r = deploy(self.root, "fit", "--dry-run")

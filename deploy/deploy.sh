@@ -49,6 +49,23 @@ CONFIG="$ROOT/deploy/pleiades.config.cjs"
 [[ "$(node -p "require('$ROOT/package.json').name" 2>/dev/null)" == pleiades ]] || die "$ROOT 는 pleiades 체크아웃이 아니다"
 [[ -d "$APP_DIR" ]] || die "apps/$DIR 가 없다"
 
+# 비밀이 든 .env 는 서비스 계정만 읽어야 한다 — 옛 서비스 .env 는 664 였고 같은 서버에 다른 계정·서비스가 돈다(007 T-2 U3·U7 · #193).
+# 심링크는 대상 권한을 본다(-L). 앱 .env 와 플랫폼 설정(PLEIADES_ENV_FILE · 없으면 루트 .env · #143) 둘 다
+env_private() {
+  local f=$1 mode uid
+  [[ -e "$f" ]] || return 0
+  mode=$(stat -L -c %a "$f" 2>/dev/null || stat -L -f %Lp "$f")
+  uid=$(stat -L -c %u "$f" 2>/dev/null || stat -L -f %u "$f")
+  # 결과를 검증한다 — 빈 값은 산술에서 0 이 돼 통과하고, GNU 에서 BSD 꼴로 넘어가면 파일시스템 정보가 나온다 (#193 사전 리뷰)
+  [[ "$mode" =~ ^[0-7]{3,4}$ && "$uid" =~ ^[0-9]+$ ]] || die "$f 의 권한·소유자를 읽지 못했다"
+  (( (8#$mode & 8#077) == 0 )) || die "$f 권한이 $mode — 다른 계정이 읽거나 쓸 수 있다. chmod 600 \"$f\" 후 다시 부른다"
+  [[ "$uid" == "$(id -u)" ]] || die "$f 소유자 uid $uid — 이 스크립트를 부르는 계정(uid $(id -u))이어야 한다"
+}
+# 앱(cwd = apps/<dir>)은 상대 PLEIADES_ENV_FILE 을 자기 cwd 기준으로 푼다 — 여기서 같은 파일을 보장할 수 없으니 절대경로만 받는다 (#193 사전 리뷰 major)
+[[ -z "${PLEIADES_ENV_FILE:-}" || "$PLEIADES_ENV_FILE" == /* ]] || die "PLEIADES_ENV_FILE 는 절대경로여야 한다(현재 '$PLEIADES_ENV_FILE')"
+env_private "$APP_DIR/.env"
+env_private "${PLEIADES_ENV_FILE:-$ROOT/.env}"
+
 TAG=$(git -C "$ROOT" tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
 if [[ -z "$TAG" ]]; then
   [[ $ALLOW_UNTAGGED -eq 1 ]] || die "HEAD 가 vX.Y.Z 태그가 아니다 — 서버에서 checkout <태그> 후 부른다(리허설은 --allow-untagged)"
