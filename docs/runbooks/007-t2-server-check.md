@@ -49,7 +49,9 @@ envkeys() {  # .env 의 키 이름과 빈값 여부만 낸다 — 값은 내지 
   awk '/^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ {
     line = $0; sub(/^[[:space:]]*(export[[:space:]]+)?/, "", line)
     k = line; sub(/[[:space:]]*=.*/, "", k)
-    v = line; sub(/^[^=]*=/, "", v); gsub(/^[[:space:]"\047]+|[[:space:]"\047]+$/, "", v)
+    v = line; sub(/^[^=]*=[[:space:]]*/, "", v)
+    if (v ~ /^["\047]/) { q = substr(v, 1, 1); v = substr(v, 2); i = index(v, q); if (i) v = substr(v, 1, i - 1) }
+    else { sub(/#.*/, "", v); gsub(/^[[:space:]]+|[[:space:]]+$/, "", v) }  # dotenv: 따옴표 없는 값만 # 부터 주석·양끝 공백 제거 — 따옴표 안 공백은 값이다 (PR #183 · #185 Codex P2)
     print k "\t" (v == "" ? "빈값" : "값있음")
   }' "$1" | sort
 }
@@ -67,7 +69,7 @@ pm2 jlist | node -e '
   let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
     for (const p of JSON.parse(s)) {
       const e = p.pm2_env || {};
-      console.log([p.name, e.status, e.pm_cwd, e.pm_exec_path, (e.args || []).join(" "), "restarts=" + e.restart_time].join("\t"));
+      console.log([p.name, e.status, e.pm_cwd, e.pm_exec_path, [].concat(e.args || []).join(" "), "restarts=" + e.restart_time].join("\t"));
     }
   })'
 ls -la "${PM2_HOME:-$HOME/.pm2}/dump.pm2"
@@ -195,7 +197,8 @@ df -h "$HOME"; free -h; nproc
 
 ```bash
 du -sh "$FIN_DIR"/{reports,logs,backups} "$FIT_DIR"/{.garmin-tokens,.omron-tokens,.runtime,logs} 2>&1
-du -sh "$FIN_DIR" "$FIT_DIR" "$FIN_DIR/node_modules" "$FIT_DIR/node_modules" "$FIN_DIR/.next" "$FIT_DIR/.next" 2>&1
+# 한 번에 넘기면 GNU du 가 부모에서 센 하위 경로를 출력에서 뺀다 — 하나씩 (PR #183 Codex P2)
+for p in "$FIN_DIR" "$FIT_DIR" "$FIN_DIR/node_modules" "$FIT_DIR/node_modules" "$FIN_DIR/.next" "$FIT_DIR/.next"; do du -sh "$p" 2>&1; done
 ```
 
 **기대값:** 7개 경로 각각 존재 여부와 크기. 없는 것은 없다고 적는다(그러면 `.gitignore` 상태 경로 중 그 항목은 심링크 대상이 아니다).
