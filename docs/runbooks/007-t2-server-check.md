@@ -13,7 +13,7 @@
 REF=<커밋 SHA>   # 움직이는 dev 가 아니라 고정 커밋 — 세션이 알려 준 머지 커밋
 f=$(mktemp) && curl -fsSL "https://raw.githubusercontent.com/fomalhaut84/pleiades/$REF/deploy/t2-check.sh" -o "$f"
 bash "$f"        # 경로·DB 를 못 찾으면: --fin-dir DIR --fit-dir DIR --fin-db NAME --fit-db NAME
-rm -f "$f"
+# 다 끝나면 rm -f "$f" (아래 절 명령을 손으로 돌릴 때 0절이 이 파일을 source 한다)
 ```
 
 - **경로**는 pm2 `myfinance`·`myfitness` 의 cwd, **DB 이름**은 각 `.env` 의 `DATABASE_URL` 에서 이름만 찾는다(0절의 수작업 대체). 못 찾으면 인자로 준다.
@@ -64,21 +64,10 @@ rm -f "$f"
 ```bash
 FIN_DIR=''   # U1 의 pm2 cwd 로 채운다 (비어 있으면 아래 명령이 실패한다)
 FIT_DIR=''   # U1 의 pm2 cwd 로 채운다
-envkeys() {  # .env 의 키 이름과 빈값 여부만 낸다 — 값은 내지 않는다 (deploy/t2-check.sh 와 같다)
-  awk 'open != "" { if (index($0, open)) open = ""; next }  # 여러 줄 따옴표 값(PEM 등)의 안쪽 줄은 키가 아니다 (#186)
-  /^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ {
-    line = $0; sub(/^[[:space:]]*(export[[:space:]]+)?/, "", line)
-    k = line; sub(/[[:space:]]*=.*/, "", k)
-    v = line; sub(/^[^=]*=[[:space:]]*/, "", v)
-    if (v ~ /^["\047]/) {
-      q = substr(v, 1, 1); v = substr(v, 2); i = index(v, q)
-      if (i) v = substr(v, 1, i - 1); else { open = q; v = "여러 줄" }
-    }
-    else { sub(/#.*/, "", v); gsub(/^[[:space:]]+|[[:space:]]+$/, "", v) }  # dotenv: 따옴표 없는 값만 # 부터 주석·양끝 공백 제거 — 따옴표 안 공백은 값이다 (PR #183 · #185 Codex P2)
-    print k "\t" (v == "" ? "빈값" : "값있음")
-  }' "$1" | sort
-}
+source "$f"  # 위 "한 번에 돌리기" 로 받은 t2-check.sh — 함수(envkeys · u13 등)만 정의하고 실행하지 않는다
 ```
+
+`.env` 를 읽는 명령(U7 `envkeys` · U13)은 **스크립트의 함수를 쓴다** — 앱과 같은 dotenv 규칙으로 읽어야 여러 줄 값·이스케이프 따옴표·인라인 주석에서 값 조각이 키로 새지 않는다(PR #187 Codex 3회차 · 이전 판의 awk 는 폐기).
 
 ## U1 · U3 — 계정 · 실경로 · pm2
 
@@ -255,26 +244,7 @@ GitHub 웹(각 서비스 저장소 → Settings → Secrets and variables → Ac
 `getWebhookInfo` 는 polling 을 방해하지 않는다. 토큰은 node 가 `.env` 에서 직접 읽어 요청에만 쓴다 — 셸 변수·명령줄·화면에 나오지 않는다.
 
 ```bash
-for d in "$FIN_DIR" "$FIT_DIR"; do
-  node -e '
-    const fs = require("fs"), https = require("https");
-    const dir = process.argv[1];
-    let token = "";
-    for (const raw of fs.readFileSync(dir + "/.env", "utf8").split(/\r?\n/)) {
-      const m = raw.match(/^\s*(?:export\s+)?TELEGRAM_BOT_TOKEN\s*=\s*(.*?)\s*$/);
-      if (m) token = m[1].replace(/^(["\x27])(.*)\1$/, "$2");
-    }
-    if (!token) { console.log(dir, "TELEGRAM_BOT_TOKEN 없음"); process.exit(0); }
-    https.get("https://api.telegram.org/bot" + token + "/getWebhookInfo", (res) => {
-      let s = ""; res.on("data", (c) => (s += c)).on("end", () => {
-        const j = JSON.parse(s);
-        if (!j.ok) { console.log(dir, "응답 실패", j.error_code, j.description); return; }
-        const r = j.result;
-        console.log(dir, "webhook=" + (r.url ? "set" : "none"), "pending=" + r.pending_update_count, "last_error=" + (r.last_error_message || "-"));
-      });
-    }).on("error", (e) => console.log(dir, "요청 실패", e.code));
-  ' "$d"
-done
+u13   # source 한 t2-check.sh 의 함수 — 토큰은 node 가 .env 에서 직접 읽어 요청에만 쓴다
 ```
 
 **기대값:** 둘 다 `webhook=none`(grammy long polling) · `pending` 이 작다 · `last_error=-`.

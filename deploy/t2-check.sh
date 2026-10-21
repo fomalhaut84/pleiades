@@ -13,27 +13,40 @@
 #   - pm2 데몬 소켓이 없으면 pm2 를 부르지 않는다 — 다른 계정이면 pm2 ls 가 그 계정에 새 데몬을 띄운다
 #   - sudo(nginx -T · ss -p · postgres)는 처음에 한 번 묻는다 — 안 되면 그 명령만 건너뛰고 적는다
 #   - 해석 실패 메시지에 입력을 싣지 않는다 — node 의 JSON 오류는 입력 일부(pm2 env)를 그대로 보인다
-set -uo pipefail
+# source 하면 함수만 정의한다 — 셸 옵션도 바꾸지 않는다(set 은 main 안)
 
 die() { echo "t2-check.sh: 중단 — $*" >&2; exit 1; }
 usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 DB_NAME_RE='^[A-Za-z0-9_-]+$'  # psql -d 와 SQL 문자열에 들어간다 — 따옴표·공백 없는 이름만
 
-# .env 의 키 이름과 빈값 여부만 낸다 — 값은 내지 않는다 (런북 0절과 같다 · PR #183 · #185 Codex P2)
-# 여러 줄 따옴표 값(PEM 등)은 닫는 따옴표까지 건너뛴다 — 안쪽 줄이 KEY= 꼴이면 비밀 조각이 키 이름으로 나온다 (#186 사전 리뷰)
+# .env 해석은 앱과 같은 규칙이어야 한다 — 손으로 짠 해석은 여러 줄 값·이스케이프 따옴표·인라인 주석에서 값 조각을
+# 키로 내거나 값을 놓쳤다(#186 사전 리뷰 · PR #187 Codex P1·P2 3회차). Next(@next/env)·Prisma 가 쓰는 dotenv 의 parse 를 옮겼다(apps/* 의 dotenv 17.4.2 와 같은 입력에 같은 결과 · 2026-10-21 대조).
+# node 의 util.parseEnv 는 쓰지 않는다 — 이스케이프 따옴표에서 값을 닫아 다음 줄을 키로 낸다(실측 node 20.18)
+DOTENV_JS='
+const LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*\x27(?:\\\x27|[^\x27])*\x27|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg
+function parseDotenv(src) {
+  const obj = {}
+  const lines = String(src).replace(/\r\n?/mg, "\n")
+  let m
+  while ((m = LINE.exec(lines)) != null) {
+    let v = (m[2] || "").trim()
+    const q = v[0]
+    v = v.replace(/^([\x27"`])([\s\S]*)\1$/mg, "$2")
+    if (q === "\"") v = v.replace(/\\n/g, "\n").replace(/\\r/g, "\r")
+    obj[m[1]] = v
+  }
+  return obj
+}
+const readEnv = (f) => parseDotenv(require("fs").readFileSync(f, "utf8"))
+'
+
+# .env 의 키 이름과 빈값 여부만 낸다 — 값은 내지 않는다. 읽기 실패에도 경로만 적는다
 envkeys() {
-  awk 'open != "" { if (index($0, open)) open = ""; next }
-  /^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ {
-    line = $0; sub(/^[[:space:]]*(export[[:space:]]+)?/, "", line)
-    k = line; sub(/[[:space:]]*=.*/, "", k)
-    v = line; sub(/^[^=]*=[[:space:]]*/, "", v)
-    if (v ~ /^["\047]/) {
-      q = substr(v, 1, 1); v = substr(v, 2); i = index(v, q)
-      if (i) v = substr(v, 1, i - 1); else { open = q; v = "여러 줄" }
-    }
-    else { sub(/#.*/, "", v); gsub(/^[[:space:]]+|[[:space:]]+$/, "", v) }
-    print k "\t" (v == "" ? "빈값" : "값있음")
-  }' "$1" | sort
+  node -e "$DOTENV_JS"'
+    let env
+    try { env = readEnv(process.argv[1]) } catch { console.log(process.argv[1], "읽기 실패"); process.exit(0) }
+    for (const k of Object.keys(env).sort()) console.log(k + "\t" + (env[k] === "" ? "빈값" : "값있음"))
+  ' "$1"
 }
 
 # crontab 은 줄마다 일정 + 스크립트 경로만 낸다 — 나머지(인라인 비밀 가능)는 싣지 않는다.
@@ -89,15 +102,9 @@ pm2_fields() {
 
 # .env 의 DATABASE_URL 에서 DB 이름만 — 접속 문자열은 내지 않는다
 db_name() {
-  node -e '
-    try {
-      let url = ""
-      for (const raw of require("fs").readFileSync(process.argv[1], "utf8").split(/\r?\n/)) {
-        const m = raw.match(/^\s*(?:export\s+)?DATABASE_URL\s*=\s*(.*?)\s*$/)
-        if (m) url = m[1].replace(/^(["\x27])(.*)\1$/, "$2")
-      }
-      process.stdout.write(decodeURIComponent(new URL(url).pathname.replace(/^\//, "")))
-    } catch { process.exit(1) }
+  node -e "$DOTENV_JS"'
+    try { process.stdout.write(decodeURIComponent(new URL(readEnv(process.argv[1]).DATABASE_URL).pathname.replace(/^\//, ""))) }
+    catch { process.exit(1) }
   ' "$1" 2>/dev/null
 }
 
@@ -208,16 +215,11 @@ u13() {
   for d in "$FIN_DIR" "$FIT_DIR"; do
     [[ -n "$d" ]] || continue
     # getWebhookInfo 는 polling 을 방해하지 않는다(getUpdates 는 409). 토큰은 node 안에서만 쓴다 — 오류에도 URL 을 싣지 않는다
-    node -e '
-      const fs = require("fs"), https = require("https")
+    node -e "$DOTENV_JS"'
+      const https = require("https")
       const dir = process.argv[1]
       let token = ""
-      try {
-        for (const raw of fs.readFileSync(dir + "/.env", "utf8").split(/\r?\n/)) {
-          const m = raw.match(/^\s*(?:export\s+)?TELEGRAM_BOT_TOKEN\s*=\s*(.*?)\s*$/)
-          if (m) token = m[1].replace(/^(["\x27])(.*)\1$/, "$2")
-        }
-      } catch { console.log(dir, ".env 읽기 실패"); process.exit(0) }
+      try { token = readEnv(dir + "/.env").TELEGRAM_BOT_TOKEN || "" } catch { console.log(dir, ".env 읽기 실패"); process.exit(0) }
       if (!token) { console.log(dir, "TELEGRAM_BOT_TOKEN 없음"); process.exit(0) }
       try {
         https.get("https://api.telegram.org/bot" + token + "/getWebhookInfo", (res) => {
@@ -256,6 +258,7 @@ report() {
 }
 
 main() {
+  set -uo pipefail
   FIN_DIR=; FIT_DIR=; FIN_DB=; FIT_DB=; OUT=
   FIN_DIR_FROM=없음; FIT_DIR_FROM=없음
   while [[ $# -gt 0 ]]; do

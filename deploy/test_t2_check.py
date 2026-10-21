@@ -26,7 +26,7 @@ NODE_DIR = str(Path(shutil.which("node") or "/usr/bin/node").parent)
 # 화면·파일 어디에도 나오면 안 되는 값
 SECRETS = ("S3CRETPW", "SECRETVAL123", "PM2SECRET", "QUOTEDSECRET", "MIIBPEMSECRET", "TGSECRET",
            "CRONSECRET1", "CRONSECRET2", "CRONSECRET3", "CRONSECRET4", "CRONSECRET5", "CRONSECRET6",
-           "CRONSECRET7", "CRONSECRET8", "CRONSECRET9", "CRONSECRET10", "PM2ARGSECRET")
+           "CRONSECRET7", "CRONSECRET8", "CRONSECRET9", "CRONSECRET10", "PM2ARGSECRET", "ESCSECRET")
 
 PM2_STUB = r"""#!/usr/bin/env node
 // pm2 흉내 — 호출은 $STUB/log. jlist 는 pm2_env 에 env(비밀)를 싣는다(실제 pm2 와 같다)
@@ -105,12 +105,13 @@ class FakeServer:
             d.mkdir()
             name = name if db == "ok" else "bad%20name"
             (d / ".env").write_text(
-                f'DATABASE_URL="postgresql://svc:S3CRETPW@localhost:5432/{name}?schema=public"\n'
+                # 회귀: PR #187 Codex P2(3회차) — 따옴표 값 뒤 인라인 주석
+                f'DATABASE_URL="postgresql://svc:S3CRETPW@localhost:5432/{name}?schema=public" # production\n'
                 "API_KEY=SECRETVAL123 # 설명\n"
                 "EMPTY=\n"
                 'QUOTED=" QUOTEDSECRET "\n'
                 'PEM="-----BEGIN KEY-----\nMIIBPEMSECRET=\n-----END KEY-----"\n'
-                + ("TELEGRAM_BOT_TOKEN=123:TGSECRET\n" if tg_token else ""))
+                + ("TELEGRAM_BOT_TOKEN=123:TGSECRET # bot\n" if tg_token else ""))
             (d / ".nvmrc").write_text("24\n")
             _git(d, "init", "-q")
             _git(d, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x")
@@ -369,16 +370,19 @@ class EnvKeys(unittest.TestCase):
             # 여러 줄 따옴표 값의 안쪽 줄은 키처럼 보여도 키가 아니다 (#186 사전 리뷰 critical)
             f.write_text("A=SECRETVAL123\nB=\nC= # blank\nD=\"a#b\"\nexport E='q # w'\nF=\" \" # intentional\n"
                          "G=\"\" # c\n# H=commented\n  I = spaced \n"
-                         "P=\"-----BEGIN\nMIIBPEMSECRET=\nend-----\"\nQ='line1\nX1=SECRETVAL123\n'\nR=after\n")
+                         "P=\"-----BEGIN\nMIIBPEMSECRET=\nend-----\"\nQ='line1\nX1=SECRETVAL123\n'\nR=after\n"
+                         # 회귀: PR #187 Codex P1(3회차) — 여러 줄 값 안의 이스케이프 따옴표
+                         "S=\"alpha \\\" x\nY2=ESCSECRET=\ntail\"\nT=last\n")
             r = subprocess.run(["bash", "-c", f'source "{SCRIPT}"; envkeys "$1"', "_", str(f)],
                                capture_output=True, text=True, env={"PATH": BASE_PATH})
             self.assertEqual(r.returncode, 0, r.stderr)
             got = dict(l.split("\t") for l in r.stdout.splitlines())
             self.assertEqual(got, {"A": "값있음", "B": "빈값", "C": "빈값", "D": "값있음", "E": "값있음",
                                    "F": "값있음", "G": "빈값", "I": "값있음", "P": "값있음", "Q": "값있음",
-                                   "R": "값있음"})
+                                   "R": "값있음", "S": "값있음", "T": "값있음"})
             self.assertNotIn("SECRETVAL123", r.stdout)
             self.assertNotIn("MIIB", r.stdout)
+            self.assertNotIn("ESCSECRET", r.stdout)
 
 
 class ScriptText(unittest.TestCase):
