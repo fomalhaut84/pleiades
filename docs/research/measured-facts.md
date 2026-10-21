@@ -4282,7 +4282,7 @@ mv "$SCRATCH/held" apps/finance/prisma/migrations/20261019100000_drop_quarantine
 |---|---|
 | U1 | 서비스 계정으로 실행: 예 · fit cwd = fit `ecosystem.config.js` 하드코딩 경로: 예 · fin 경로 확인: 예 |
 | U2 | fin HEAD = 태그 `v0.16.8` = 서비스 `main` tip(`ls-remote` 대조): 예 · dirty 없음 · 산출물 BUILD_ID·bot·mcp 있음 ×3 / fit HEAD = `v2.46.1` = 서비스 `main` tip: 예 · dirty 없음 · 산출물 4 있음(generated 포함) — **G-a 충족(R-2 의 전제)** |
-| U3 | 서비스 pm2 6 online: 예 · 그 외 5(online 2 · stopped 3 — 같은 서버의 다른 서비스) · `pleiades-*` 0 · dump 있음 · `PM2_HOME` 기본 · **systemd `pm2-<계정>` unit 없음(0 listed · not-found)** · 서비스 6 은 전부 **cluster 모드**(`instances: 1` 의 pm2 기본) · pm2 데몬이 **PM2+(app.pm2.io)에 연결**돼 있다 |
+| U3 | 서비스 pm2 6 online: 예 · 그 외 5(online 2 · stopped 3 — 같은 서버의 다른 서비스) · `pleiades-*` 0 · dump 있음 · `PM2_HOME` 기본 · **systemd `pm2-<계정>` unit 없음(0 listed · not-found)** · 서비스 6 은 전부 **cluster 모드**(`exec_mode` 미지정 + `instances: 1` + node 인터프리터 → pm2 기본 `cluster_mode` · pm2 7.0.4 `lib/Common.js:347-353`) · pm2 데몬이 **PM2+(app.pm2.io)에 연결**돼 있다 |
 | U4 | 두 서비스 `proxy_pass` = 4100 · 4200 뿐: 예 · MCP 포트(4210·4301) 외부 노출 없음: 예(아래 U12 — 127.0.0.1) · 다른 vhost 8(sites-enabled 기준) |
 | U5 | `psql`·`pg_dump` 있음 · PG 메이저 18 · 두 DB 같은 클러스터 · `sudo -u postgres` 접속 됨 · 적용 마이그레이션 **fin 29**(= 서비스 `main` 29 · 마지막 이름 일치 · **pleiades `apps/finance` 29 와 차이 0**) · **fit 42**(= 서비스 `main` 42 · 마지막 = `20261020010000_running_power_intensity` · **pleiades `apps/fitness` 41 — 1 뒤처짐**) · DB 크기 fin 10 MB대 · fit 50 MB대 |
 | U6 | 계정 crontab **없음** · `/etc/cron.d` 는 시스템 항목뿐(서비스 관련 0) · fin `backups/` **없음** → **서비스 DB 백업 0**(사용자 확인: 별도 백업 정책 없음) · 오프사이트 없음 |
