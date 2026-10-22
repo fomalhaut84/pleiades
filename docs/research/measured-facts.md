@@ -4354,3 +4354,24 @@ ls -d apps/<app>/prisma/migrations/*/ | wc -l                                   
 | — | **C0** 서비스 fin 배포 workflow | **2회차 전환 뒤** 사용자가 비활성(진입 조건이 늦게 충족 — 그 사이 서비스 Release 는 없었다) |
 
 - 마이그레이션 적용 0(이름 대조 일치 · 서버 29 = pleiades 29). P-2′ 상태 이동(fin `reports` · `logs`)은 두 회차 모두 링크 2 · 새 쪽 실제 디렉터리 2 · `git status` 깨끗.
+
+# 2026-10-22 — T-9 fit 전환 (#230 런북 · #233 병행 · 기록 #235)
+
+**사용자가 서버에서 실행**(Claude 무접촉 · I-3). 런북 `docs/runbooks/007-t9-fit-cutover.md`(`1b5ede7`) · 체크아웃 `~/pleiades-fit` = `v1.0.0`(`e1127ccffe39` — fin 과 같은 태그). fin T-6 관찰과 병행(#233). 판정만 적는다(DB 이름 · 경로 · 계정 없음).
+
+| 단계 | 판정 |
+|---|---|
+| A-1(Claude · https 읽기) | 서비스 fit `main` `aa93346`(`v2.46.1`) · `dev` `35a04d78e532` = 마지막 수용 · `prisma/migrations` 트리 `main` = `dev` = `apps/fitness`(42) · `v1.0.0..dev` 런타임 차이 = 테스트 1 → `v1.0.0` |
+| A | 체크아웃 `v1.0.0` · 깨끗 · 상태 디렉터리 0 |
+| B 백업 | `pg_dump -Fc` TABLE DATA 23 · 상태 tar 23 항목 · `dump.pm2` 사본 · 디렉터리 700 · 파일 600 · G-a 산출물 4 있음 |
+| C0 서비스 fit 배포 workflow | 사용자가 비활성 — 전환 뒤 확인 보고(2026-10-22 · 그 사이 서비스 Release 없음: 최신 태그 `v2.46.1` 그대로) |
+| C1 | 옛 fit cwd = 옛 디렉터리 ×3 · 셸 키 0 · platform 600·0 byte · 앱 `.env` 600 · 필수 키 5 · 빈 값 0 · T-4 더미 DB 0 · `PORT`/`MCP_PORT` 4200/4301 |
+| C3 기본 실행 | rc 3 · **326 s**(`npm ci` · `prisma generate` · `next build` 포함 — fin 65 s) · 표지 = HEAD |
+| C4→C5 중단 창 | **37 s**(12:16:43 → 12:17:20 KST · 웹 싱크 12:00 과 15:00 사이) · `--activate` rc 0 · 23 s |
+| C4′ 상태 이동(P-2′) | 옛 경로 링크 4 · 새 쪽 실제 디렉터리 4(`.garmin-tokens` `.omron-tokens` `.runtime` `logs`) · `git status` 깨끗 · pre-flight 가 만든 상태 디렉터리 없음 |
+| C6 | `pleiades-fit-{mcp,web,bot}` online · 재시작 0 · web 200 · mcp `/health` 200 · 봇 로그 409 0 · 기동 직후 web·bot error 로그 `error\|fail` 0 · 사용자 웹·텔레그램 확인 |
+| C7 | `pm2 save` · `pm2-<계정>` enabled(T-5 설정 유지) |
+| R-2 | 안 함 |
+
+- 마이그레이션 적용 0(`deploy.sh` 이름 대조 통과 · 서버 42 = pleiades 42).
+- 옛 fit 웹·MCP 의 pm2 재시작 누계가 정지 직전 100 단위였다(웹 113 · MCP 73 · 봇 0) — 옛 서비스 이력이라 원인은 보지 않는다. 새 프로세스의 재시작 수는 T-6 관찰 항목.
