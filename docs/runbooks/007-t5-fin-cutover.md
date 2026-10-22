@@ -195,7 +195,8 @@ pm2 ls | grep pleiades-fin; pm2 logs pleiades-fin-bot --lines 100 --nostream 2>&
 ```bash
 L=$(pm2 logs pleiades-fin-bot --lines 5000 --nostream 2>&1)
 printf '%s\n' "$L" | grep -E '\[cron' | grep -E '완료|전환' | tail -20      # f3 · f4 · f5 · f6 성공 줄(시각 포함)
-printf '%s\n' "$L" | grep -E '\[(cron|notification)' | grep -cE '실패|타임아웃|failed'   # 0 이 정상
+printf '%s\n' "$L" | grep -E '\[(cron|notification)' | grep -cE '실패|타임아웃|refresh failed'   # 0 이 정상 — 맨 'failed' 는 어닝 요약 'failed=0' 까지 센다(PR #229 Codex P2)
+printf '%s\n' "$L" | grep -oE '어닝 스캔 완료: .*failed=[0-9]+' | tail -3                       # 어닝 요약의 failed=N 은 따로 본다(0 이 정상)
 pm2 ls | grep pleiades-fin                                                  # 3 online · 재시작 횟수(↺)가 전환 직후와 같은가
 ```
 
