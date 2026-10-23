@@ -368,6 +368,9 @@ async function askAdvisorOnce(
         // ignore
       }
 
+      // #255: 드리프트는 성공·실패 무관하게 먼저 본다 — 모델 교체는 실패로 먼저 드러나기 쉽다
+      if (parsed) warnModelDrift("askAdvisor", parsed, ADVISOR_MODEL);
+
       if (code !== 0) {
         // Claude CLI 실패 — stdout JSON 에서 진단 정보 추출.
         if (parsed) {
@@ -404,7 +407,6 @@ async function askAdvisorOnce(
       }
 
       if (parsed) {
-        warnModelDrift("askAdvisor", parsed, ADVISOR_MODEL);
         // 세션 ID + 누적 입력 토큰 저장 (채널별)
         if (parsed.session_id) {
           const inputTokens =

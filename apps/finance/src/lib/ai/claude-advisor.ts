@@ -2,7 +2,7 @@ import { spawn } from 'child_process'
 import path from 'path'
 import { SYSTEM_PROMPT } from './system-prompt'
 import { getGlobalAdvisorMonitor } from './advisor-monitor'
-import { detectModelDrift, pinnedModelEnv, resolveModelId, type ModelTier } from './models'
+import { detectModelDrift, modelDriftWarning, pinnedModelEnv, resolveModelId, type ModelTier } from './models'
 
 /** 모델 등급. 실제 모델 ID 는 `./models` 의 고정값 (#255) */
 export type AdvisorModel = ModelTier
@@ -769,7 +769,7 @@ async function runAdvisorOnce(
     // 호출 횟수를 정확히 카운트 (expectsTools 검증에 사용).
     '--output-format', 'stream-json',
     '--verbose',
-    '--model', modelId,
+    '--model', shellEscape(modelId),
   ]
 
   if (sessionId) {
@@ -854,6 +854,10 @@ async function runAdvisorOnce(
       const parsedStream = parseClaudeStreamJson(stdout)
       const output = parsedStream.finalResult
       const toolCalls = parsedStream.toolCalls
+
+      // #255: 드리프트는 성공·실패 무관하게 먼저 본다 — 모델 교체는 실패로 먼저 드러나기 쉽다
+      const driftWarning = output ? modelDriftWarning(options.caller ?? 'unknown', output.modelUsage, modelId) : null
+      if (driftWarning) console.warn(driftWarning)
 
       // Codex PR #487 P1 (2차): subprocess 가 result event 를 발행했다면 실
       // 지출 cost 를 담아 error 를 throw. retry loop 이 이걸 costSpent 에 누적
@@ -945,7 +949,7 @@ async function runAdvisorOnce(
         }
       }
 
-      // #255: 실제 쓴 모델 기록 + 고정값과 다르면 경고 (CLI 업데이트로 인한 조용한 교체 감지)
+      // #255: 실제 쓴 모델 기록 (드리프트 경고는 파싱 직후에 이미 냈다)
       const drift = detectModelDrift(output.modelUsage, modelId)
       const usedModels = drift ? drift.used.join(',') : 'unknown'
       const cost = typeof output.total_cost_usd === 'number' ? output.total_cost_usd.toFixed(4) : '?'
@@ -953,12 +957,6 @@ async function runAdvisorOnce(
         `[advisor] ok caller=${options.caller ?? 'unknown'} model=${modelId} used=${usedModels} ` +
           `cost=$${cost} turns=${numTurns} tools=${toolCalls.length}`,
       )
-      if (drift?.drift) {
-        console.warn(
-          `[advisor] 모델 드리프트 caller=${options.caller ?? 'unknown'} expected=${modelId} ` +
-            `used=${usedModels} unexpected=${drift.unexpected.join(',') || '-'}`,
-        )
-      }
 
       resolve({
         response: output.result,

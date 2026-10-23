@@ -38,6 +38,7 @@ pleiades 이슈 하나: 후보 모델 ID · 바꿀 등급(또는 호출부) · �
 | fin | 한국장·미국장 클로징 리뷰 | `src/bot/notifications/active-review.ts` |
 | fin | TA 가이드(haiku) | `src/bot/notifications/ta-signal-alert.ts` 의 가이드 프롬프트 |
 | fin | 커스텀 전략 파서 · `/ai` 자유 질문 1건 | `src/lib/custom-strategy/parser.ts` · 봇 `/ai` |
+| fin | 자연어 거래·가계부 파싱(haiku · `intent: 'parse'`) | `src/bot/commands/ai.ts` · `src/bot/commands/expense.ts` |
 | fit | 어드바이저 질문 · 영양 추정(텍스트) · 검진 추출 | `src/lib/ai/claude-advisor.ts` · `src/lib/nutrition/*` · `src/lib/checkup/import/extract.ts` |
 
 공통 플래그는 각 호출부의 인자 그대로(`--tools` · `--allowedTools` · `--permission-mode` · `--strict-mcp-config` · MCP 설정). **자식 env 의 두 키도 후보 ID 로** 맞춘다 — 안 그러면 보조 모델은 현행으로 남는다. `DISABLE_AUTOUPDATER=1` 을 붙여 비교 도중 CLI 가 바뀌지 않게 한다.

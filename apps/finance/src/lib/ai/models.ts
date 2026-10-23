@@ -30,6 +30,8 @@ export function pinnedModelEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.Pr
     ...base,
     ANTHROPIC_DEFAULT_HAIKU_MODEL: PINNED_MODELS.haiku,
     ANTHROPIC_DEFAULT_SONNET_MODEL: PINNED_MODELS.sonnet,
+    // 구 이름의 보조 모델 키 — 부모 env 에 남아 있으면 보조 모델이 고정 목록 밖으로 나간다
+    ANTHROPIC_SMALL_FAST_MODEL: PINNED_MODELS.haiku,
   }
 }
 
@@ -55,4 +57,17 @@ export function detectModelDrift(modelUsage: unknown, expectedId: string): Model
   const unexpected = used.filter((id) => !pinned.has(id))
   const missingExpected = !used.includes(expectedId)
   return { used, unexpected, missingExpected, drift: missingExpected || unexpected.length > 0 }
+}
+
+/**
+ * 드리프트면 경고 문구, 아니면 null. 성공·실패 경로 모두에서 부른다 — 모델 교체는
+ * 도구 미호출·is_error 같은 실패로 먼저 드러나기 쉽다 (#255 사전 리뷰 major).
+ */
+export function modelDriftWarning(caller: string, modelUsage: unknown, expectedId: string): string | null {
+  const drift = detectModelDrift(modelUsage, expectedId)
+  if (!drift?.drift) return null
+  return (
+    `[advisor] 모델 드리프트 caller=${caller} expected=${expectedId} ` +
+    `used=${drift.used.join(',')} unexpected=${drift.unexpected.join(',') || '-'}`
+  )
 }

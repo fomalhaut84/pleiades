@@ -22,6 +22,7 @@ describe("claudeSpawnEnv", () => {
     expect(env.PATH).toBe("/bin");
     expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe(PINNED_CLAUDE_MODELS.haiku);
     expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe(PINNED_CLAUDE_MODELS.sonnet);
+    expect(env.ANTHROPIC_SMALL_FAST_MODEL).toBe(PINNED_CLAUDE_MODELS.haiku);
   });
 });
 
@@ -99,5 +100,15 @@ describe("Claude CLI 호출이 고정 모델을 쓴다", () => {
       )
       .map(({ file }) => file);
     expect(missing).toEqual([]);
+  });
+});
+
+// 회귀: #255 사전 리뷰 major — 어드바이저가 성공 분기에서만 경고하면 모델 교체가 실패로 드러날 때 감지하지 못한다
+describe("어드바이저 드리프트 경고 위치", () => {
+  it("종료 코드 판정보다 앞에서 경고한다", () => {
+    const src = readFileSync(path.resolve(__dirname, "../claude-advisor.ts"), "utf8");
+    const warnAt = src.indexOf("warnModelDrift(");
+    expect(warnAt).toBeGreaterThan(0);
+    expect(warnAt).toBeLessThan(src.indexOf("if (code !== 0)"));
   });
 });

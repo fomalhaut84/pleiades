@@ -24,6 +24,8 @@ export function claudeSpawnEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.Pr
     ...base,
     ANTHROPIC_DEFAULT_HAIKU_MODEL: PINNED_CLAUDE_MODELS.haiku,
     ANTHROPIC_DEFAULT_SONNET_MODEL: PINNED_CLAUDE_MODELS.sonnet,
+    // 구 이름의 보조 모델 키 — 부모 env 에 남아 있으면 보조 모델이 고정 목록 밖으로 나간다
+    ANTHROPIC_SMALL_FAST_MODEL: PINNED_CLAUDE_MODELS.haiku,
   };
 }
 
