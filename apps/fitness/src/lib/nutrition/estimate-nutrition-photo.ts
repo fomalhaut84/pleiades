@@ -7,6 +7,7 @@
 import { spawn } from "child_process";
 import { parseNutritionResponse, type NutritionEstimate } from "./estimate-nutrition";
 import { CLAUDE_CLI_ISOLATION_ARGS } from "@/lib/ai/cli-isolation";
+import { claudeModelId, claudeSpawnEnv, warnModelDrift } from "@/lib/ai/models";
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 // Vision 은 텍스트 estimator (18s) 보다 느림. 45s 여유 마진.
@@ -102,7 +103,8 @@ export async function estimateNutritionFromPhoto(
     "--output-format",
     "json",
     "--model",
-    "sonnet",
+    // #255: 별칭이 아닌 고정 ID — CLI 업데이트로 모델이 조용히 바뀌지 않게
+    claudeModelId("sonnet"),
     "--max-turns",
     "1",
     "--tools",
@@ -115,6 +117,7 @@ export async function estimateNutritionFromPhoto(
     const child = spawnFn(CLAUDE_BIN, args, {
       timeout: timeoutMs,
       cwd: process.cwd(),
+      env: claudeSpawnEnv(),
       stdio: ["pipe", "pipe", "pipe"],
     });
     child.stdin.end();
@@ -146,6 +149,7 @@ export async function estimateNutritionFromPhoto(
         );
         return resolve(null);
       }
+      warnModelDrift("nutrition-photo", outer, "sonnet");
       if (outer.is_error) {
         console.warn(`[nutrition-photo] CLI is_error subtype=${outer.subtype ?? "?"}`);
         return resolve(null);

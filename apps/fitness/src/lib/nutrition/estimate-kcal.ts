@@ -5,6 +5,7 @@
 
 import { spawn } from "child_process";
 import { CLAUDE_CLI_ISOLATION_ARGS } from "@/lib/ai/cli-isolation";
+import { claudeModelId, claudeSpawnEnv, warnModelDrift } from "@/lib/ai/models";
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -178,7 +179,8 @@ export async function estimateKcalFromText(
     "--output-format",
     "json",
     "--model",
-    "sonnet",
+    // #255: 별칭이 아닌 고정 ID — CLI 업데이트로 모델이 조용히 바뀌지 않게
+    claudeModelId("sonnet"),
     "--max-turns",
     "1",
     // MCP 도구 필요 없음. --tools "" 로 built-in 도 차단.
@@ -192,6 +194,7 @@ export async function estimateKcalFromText(
     const child = spawnFn(CLAUDE_BIN, args, {
       timeout: timeoutMs,
       cwd: process.cwd(),
+      env: claudeSpawnEnv(),
       stdio: ["pipe", "pipe", "pipe"],
     });
     // Codex/사전 리뷰 P1-1: stdin 을 닫아야 CLI 가 EOF 확인 후 처리. 없으면 매 호출 15s
@@ -225,6 +228,7 @@ export async function estimateKcalFromText(
         );
         return resolve(null);
       }
+      warnModelDrift("kcal", outer, "sonnet");
       if (outer.is_error) {
         console.warn(`[kcal] CLI is_error subtype=${outer.subtype ?? "?"}`);
         return resolve(null);

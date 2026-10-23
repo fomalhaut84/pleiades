@@ -9,6 +9,7 @@ import { startRun } from "./runs";
 import { SUGGEST_RESULT_LIMIT, SUGGEST_TIMEOUT_MS, buildSuggestPrompt, parseSuggestion, type SuggestSample } from "./suggest-prompt";
 import { PromptActionError } from "./versions";
 import { CLAUDE_CLI_ISOLATION_ARGS } from "@/lib/ai/cli-isolation";
+import { claudeModelId, claudeSpawnEnv, warnModelDrift } from "@/lib/ai/models";
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 
@@ -57,9 +58,9 @@ export interface SuggestCliOptions {
 /** 1회성 호출 → 응답 본문. 실패는 사용자에게 보여 줄 문구로 throw (응답 원문은 로그에 남기지 않는다) */
 export function runSuggestCli(prompt: string, opts: SuggestCliOptions = {}): Promise<string> {
   const spawnFn = opts.spawnImpl ?? spawn;
-  const args = ["-p", prompt, "--output-format", "json", "--model", "sonnet", "--max-turns", "1", "--tools", "", ...CLAUDE_CLI_ISOLATION_ARGS];
+  const args = ["-p", prompt, "--output-format", "json", "--model", claudeModelId("sonnet"), "--max-turns", "1", "--tools", "", ...CLAUDE_CLI_ISOLATION_ARGS];
   return new Promise<string>((resolve, reject) => {
-    const child = spawnFn(CLAUDE_BIN, args, { timeout: opts.timeoutMs ?? SUGGEST_TIMEOUT_MS, cwd: process.cwd(), stdio: ["pipe", "pipe", "ignore"] });
+    const child = spawnFn(CLAUDE_BIN, args, { timeout: opts.timeoutMs ?? SUGGEST_TIMEOUT_MS, cwd: process.cwd(), env: claudeSpawnEnv(), stdio: ["pipe", "pipe", "ignore"] });
     child.stdin?.end();
     let stdout = "";
     child.stdout?.on("data", (d: Buffer) => {
@@ -75,6 +76,7 @@ export function runSuggestCli(prompt: string, opts: SuggestCliOptions = {}): Pro
       } catch {
         return reject(new Error("Claude CLI 출력을 읽지 못했습니다"));
       }
+      warnModelDrift("prompt-suggest", outer, "sonnet");
       if (outer.is_error) return reject(new Error(cliFailureMessage(stdout, code)));
       resolve(outer.result ?? "");
     });

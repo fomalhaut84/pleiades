@@ -2,8 +2,10 @@ import { spawn } from 'child_process'
 import path from 'path'
 import { SYSTEM_PROMPT } from './system-prompt'
 import { getGlobalAdvisorMonitor } from './advisor-monitor'
+import { detectModelDrift, pinnedModelEnv, resolveModelId, type ModelTier } from './models'
 
-export type AdvisorModel = 'haiku' | 'sonnet'
+/** 모델 등급. 실제 모델 ID 는 `./models` 의 고정값 (#255) */
+export type AdvisorModel = ModelTier
 
 /**
  * 호출 의도 — 모델 자동 선택 근거 (Phase 35-A / #433).
@@ -555,6 +557,8 @@ interface ClaudeJsonOutput {
   // classify 시 이 필드도 참조해야 auth/quota 분류 가능.
   api_error_status?: number | string
   errors?: unknown
+  /** #255 — 실제 쓴 모델 ID → 사용량. CLI 보조 모델도 포함 */
+  modelUsage?: Record<string, unknown>
   /**
    * #483 — Claude 대화 turn 수. tool 사용 시 최소 2 (assistant → tool_use →
    * assistant), 미사용 시 1. `expectsTools: true` caller 는 이 값으로 도구
@@ -749,6 +753,8 @@ async function runAdvisorOnce(
   } = options
   // Phase 35-A (#433): intent → model 폴백 매핑. 명시 model 우선.
   const model = pickModel(options.model, options.intent)
+  // #255: 별칭은 CLI 버전에 따라 모델이 바뀐다 — 고정 ID 로 넘긴다
+  const modelId = resolveModelId(model)
 
   const projectRoot = process.env.MYFINANCE_ROOT ?? process.cwd()
   const mcpConfigPath = process.env.MCP_CONFIG_PATH
@@ -763,7 +769,7 @@ async function runAdvisorOnce(
     // 호출 횟수를 정확히 카운트 (expectsTools 검증에 사용).
     '--output-format', 'stream-json',
     '--verbose',
-    '--model', model,
+    '--model', modelId,
   ]
 
   if (sessionId) {
@@ -813,7 +819,8 @@ async function runAdvisorOnce(
 
     const child = spawn('sh', ['-c', cmd], {
       cwd: projectRoot,
-      env: { ...process.env },
+      // #255: CLI 내부 보조 호출(WebSearch 요약 등)의 별칭도 고정 ID 로
+      env: pinnedModelEnv(),
       stdio: ['ignore', 'pipe', 'pipe'],
     })
 
@@ -936,6 +943,21 @@ async function runAdvisorOnce(
           reject(new AdvisorError(message, detail, code, observedCost))
           return
         }
+      }
+
+      // #255: 실제 쓴 모델 기록 + 고정값과 다르면 경고 (CLI 업데이트로 인한 조용한 교체 감지)
+      const drift = detectModelDrift(output.modelUsage, modelId)
+      const usedModels = drift ? drift.used.join(',') : 'unknown'
+      const cost = typeof output.total_cost_usd === 'number' ? output.total_cost_usd.toFixed(4) : '?'
+      console.log(
+        `[advisor] ok caller=${options.caller ?? 'unknown'} model=${modelId} used=${usedModels} ` +
+          `cost=$${cost} turns=${numTurns} tools=${toolCalls.length}`,
+      )
+      if (drift?.drift) {
+        console.warn(
+          `[advisor] 모델 드리프트 caller=${options.caller ?? 'unknown'} expected=${modelId} ` +
+            `used=${usedModels} unexpected=${drift.unexpected.join(',') || '-'}`,
+        )
       }
 
       resolve({
