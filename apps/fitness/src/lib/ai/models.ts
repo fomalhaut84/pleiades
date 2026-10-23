@@ -62,3 +62,17 @@ export function warnModelDrift(tag: string, cliOutput: unknown, tier: ClaudeMode
     );
   }
 }
+
+/**
+ * CLI stdout(JSON)으로 드리프트를 본다 — 종료 코드·is_error 판정보다 **앞에서** 부른다.
+ * 모델 교체는 실패로 먼저 드러나기 쉽다 (#258 Codex P2). 파싱 실패는 조용히 넘긴다(판정 불가).
+ */
+export function warnModelDriftFromStdout(tag: string, stdout: string, tier: ClaudeModelTier): void {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return;
+  }
+  warnModelDrift(tag, parsed, tier);
+}

@@ -8,7 +8,7 @@
 
 import { spawn } from "child_process";
 import { CLAUDE_CLI_ISOLATION_ARGS } from "@/lib/ai/cli-isolation";
-import { claudeModelId, claudeSpawnEnv, warnModelDrift } from "@/lib/ai/models";
+import { claudeModelId, claudeSpawnEnv, warnModelDriftFromStdout } from "@/lib/ai/models";
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 const DEFAULT_TIMEOUT_MS = 18_000; // 매크로 추가로 응답 길이 증가, 여유 마진.
@@ -278,6 +278,8 @@ export async function estimateNutritionFromText(
       resolve(null);
     });
     child.on("close", (code: number | null) => {
+      // #255: 종료 코드·is_error 판정 전에 — 실패로 드러나는 모델 교체도 경고한다 (#258 Codex P2)
+      warnModelDriftFromStdout("nutrition", stdout, "sonnet");
       if (code !== 0) {
         console.warn(
           `[nutrition] CLI exit code=${code}: ${stderr.slice(0, 200) || "(no stderr)"}`,
@@ -293,7 +295,6 @@ export async function estimateNutritionFromText(
         );
         return resolve(null);
       }
-      warnModelDrift("nutrition", outer, "sonnet");
       if (outer.is_error) {
         console.warn(`[nutrition] CLI is_error subtype=${outer.subtype ?? "?"}`);
         return resolve(null);

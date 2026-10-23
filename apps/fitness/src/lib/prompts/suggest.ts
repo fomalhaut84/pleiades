@@ -9,7 +9,7 @@ import { startRun } from "./runs";
 import { SUGGEST_RESULT_LIMIT, SUGGEST_TIMEOUT_MS, buildSuggestPrompt, parseSuggestion, type SuggestSample } from "./suggest-prompt";
 import { PromptActionError } from "./versions";
 import { CLAUDE_CLI_ISOLATION_ARGS } from "@/lib/ai/cli-isolation";
-import { claudeModelId, claudeSpawnEnv, warnModelDrift } from "@/lib/ai/models";
+import { claudeModelId, claudeSpawnEnv, warnModelDriftFromStdout } from "@/lib/ai/models";
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 
@@ -68,6 +68,8 @@ export function runSuggestCli(prompt: string, opts: SuggestCliOptions = {}): Pro
     });
     child.on("error", (err: Error) => reject(new Error(`Claude CLI 를 실행하지 못했습니다: ${err.message}`)));
     child.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
+      // #255: 종료 코드·is_error 판정 전에 — 실패로 드러나는 모델 교체도 경고한다 (#258 Codex P2)
+      warnModelDriftFromStdout("prompt-suggest", stdout, "sonnet");
       if (signal === "SIGTERM") return reject(new Error("시간 초과 — 3분 안에 개선안을 받지 못했습니다"));
       if (code !== 0) return reject(new Error(cliFailureMessage(stdout, code)));
       let outer: CliResult;
@@ -76,7 +78,6 @@ export function runSuggestCli(prompt: string, opts: SuggestCliOptions = {}): Pro
       } catch {
         return reject(new Error("Claude CLI 출력을 읽지 못했습니다"));
       }
-      warnModelDrift("prompt-suggest", outer, "sonnet");
       if (outer.is_error) return reject(new Error(cliFailureMessage(stdout, code)));
       resolve(outer.result ?? "");
     });
