@@ -6,6 +6,7 @@ import { resolvePromptTemplate } from "@/lib/prompts/resolve";
 import { ADVISOR_ALLOWED_TOOLS } from "./advisor-tools";
 import * as SessionStore from "./session-store";
 import { CLAUDE_CLI_ISOLATION_ARGS } from "./cli-isolation";
+import { claudeModelId, claudeSpawnEnv, warnModelDrift } from "./models";
 
 const RUNTIME_CONFIG_DIR = path.resolve(process.cwd(), ".runtime");
 const RUNTIME_MCP_CONFIG = path.resolve(RUNTIME_CONFIG_DIR, "mcp-config.json");
@@ -31,7 +32,7 @@ const MCP_SERVER_PATH = path.resolve(process.cwd(), "dist/mcp/server.cjs");
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 
 const TIMEOUT_MS = 180_000;
-/** #440: 클라이언트 표시용 (활동 평가 카드 메타). 아래 `--model` 인자와 같은 값 */
+/** #440: 클라이언트 표시용 (활동 평가 카드 메타) — 모델 등급. `--model` 에는 이 등급의 고정 ID 를 넘긴다 (#255) */
 export const ADVISOR_MODEL = "sonnet";
 const DEFAULT_CHANNEL = "default";
 
@@ -283,7 +284,7 @@ async function askAdvisorOnce(
     "--model",
     // #197: Haiku 는 system prompt 를 무시하고 tool 호출 없이 답변하거나 (turns=1)
     // 응답 본문에 tool_use JSON 을 텍스트로 노출하는 사례 다수. Sonnet 으로 upgrade.
-    ADVISOR_MODEL,
+    claudeModelId(ADVISOR_MODEL),
     "--max-turns",
     // 근본 fix (issue #179) 이후에도 여유 필요 시 재조정. 10 → 15 로 완화해
     // 정상 세션이 tool 호출 횟수 초과로 실패하는 경우를 방지.
@@ -326,6 +327,7 @@ async function askAdvisorOnce(
     const child = spawn(CLAUDE_BIN, args, {
       timeout: TIMEOUT_MS,
       cwd: process.cwd(),
+      env: claudeSpawnEnv(),
       stdio: ["pipe", "pipe", "pipe"],
     });
 
@@ -365,6 +367,9 @@ async function askAdvisorOnce(
       } catch {
         // ignore
       }
+
+      // #255: 드리프트는 성공·실패 무관하게 먼저 본다 — 모델 교체는 실패로 먼저 드러나기 쉽다
+      if (parsed) warnModelDrift("askAdvisor", parsed, ADVISOR_MODEL);
 
       if (code !== 0) {
         // Claude CLI 실패 — stdout JSON 에서 진단 정보 추출.
