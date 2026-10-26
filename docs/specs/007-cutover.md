@@ -124,6 +124,8 @@ C-5 의 조건은 M-1(두 앱 가져오기)·M-6(Discord) 완료로 **충족됐�
 | **D-b** pleiades Actions → ssh | 서비스와 같은 형태의 `deploy.yml` 을 **pleiades 루트**에 신설 · `release: published` 트리거 · `DEPLOY_*` secrets 를 pleiades 에 등록 | **즉시**(workflow 삭제 · secrets 삭제) — 단 secret 이 한 번 등록되면 PUBLIC 저장소의 workflow 수정 권한자가 서버 ssh 키를 쓰는 경로가 생긴다 | **I-9 해제가 전제**(§6). 그 해제는 이 문서가 아니라 Q70 의 사용자 결정 |
 | D-c 단일 릴리즈 = 두 앱 동시 배포 | 태그 하나가 두 앱을 함께 빌드·재기동 | 즉시(경로 자체) · **앱별 롤백 불가**(같은 체크아웃) | 순차 전환(4-7)과 맞지 않는다. 두 앱 전환이 끝난 뒤의 수렴 후보 |
 
+> **정정 (2026-10-26 · 사용자 · #242) — D-b 채택(전환 뒤).** 전환기 D-a(서버 수동)로 두 앱 전환과 제자리 재배포 2회(`v1.0.1` 손 런북 · `v1.0.2` `release-inplace.sh`)를 마친 뒤 **D-b 로 간다**: `.github/workflows/deploy.yml`(`release: published` · 저장소 코드 checkout 없음 · secrets 는 environment `production` 허용 목록만) → ssh → 서버 forced command `deploy/ssh-deploy.sh`(`deploy vX.Y.Z` 하나만) → fin → fit `deploy/release-inplace.sh --yes`. 결정: **승인 없음**(Release 발행 = 배포 의지) · **forced command 키** · **Claude 가 발행**(사용자 릴리즈 PR 머지가 의지 · 옛 fin·fit 과 같은 정책) · 서버 ssh 는 GitHub 러너에서 받을 수 있다(옛 서비스도 같은 방식). 위 D-b 행의 위험(*"workflow 수정 권한자가 서버 ssh 키를 쓰는 경로"*)은 ① 키가 forced command 라 배포 스크립트만 돈다 ② secrets 가 environment 에만 있고 대상이 태그 `v*` 로 제한된다 ③ 쓰기 권한자는 사용자뿐 으로 줄인다. I-9 는 허용 목록으로 · I-3 에 Release 발행 예외(`isolation.md`) · 서버 조치가 필요한 릴리즈는 draft 로(`workflow.md` 릴리즈 절). 설정 절차는 `docs/runbooks/release-inplace.md` *자동 배포*. 되돌리기: workflow 삭제 · environment secrets 삭제 · authorized_keys 줄 삭제(**즉시**).
+
 **새 경로가 현 `deploy.sh` 와 달라야 하는 것(전부 pleiades 루트 신설 파일로 해결 · `apps/*` 무수정 — Q57·수용 충돌 회피):**
 
 | 항목 | 현 상태 | 새 경로 | 근거 |

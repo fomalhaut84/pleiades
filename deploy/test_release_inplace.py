@@ -468,6 +468,81 @@ class ReleaseInplace(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertEqual(self.srv.head(), "v1.0.1")
 
+    # 회귀: #242 보안 리뷰 major · PR #291 Codex P2 — 두 배포가 겹치지 않는다 · 넘겨받기 경합 없이
+    def test_flock_lock_blocks_a_concurrent_deploy(self):
+        # flock(1) 흉내 — 물려받은 fd 에 fcntl.flock(LOCK_EX|LOCK_NB). 진짜 flock 처럼 락은 부모가 연 파일 설명에 남는다
+        import time
+        flock = self.srv.stub / "flock"
+        flock.write_text("#!/usr/bin/env python3\nimport fcntl, sys\n"
+                         "try:\n    fcntl.flock(int(sys.argv[2]), fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+                         "except OSError:\n    sys.exit(1)\n")
+        flock.chmod(0o755)
+        self.srv.release("v1.0.1")
+        first = subprocess.Popen(["bash", str(self.srv.root / "deploy" / "release-inplace.sh"), "fin", "v1.0.1", "--yes"],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=self.srv.env(STUB_SLEEP="4"))
+        for _ in range(100):
+            if "deploy fin\n" in self.srv.calls():
+                break
+            time.sleep(0.1)
+        r = self.srv.run("fin", "v1.0.1", "--yes")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("다른 배포", r.stdout)
+        out, _ = first.communicate(timeout=60)
+        self.assertEqual(first.returncode, 0, out)
+        # 끝나면 커널이 푼다 — 다음 배포는 잡는다(같은 태그라 할 일 없음으로 끝난다)
+        r = self.srv.run("fin", "v1.0.1", "--yes")
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_mkdir_fallback_never_takes_over(self):
+        # flock 이 없을 때(macOS)의 mkdir 락은 남은 락을 넘겨받지 않는다 — 지우는 경합(PR #291 Codex P2)을 만들지 않는다
+        self.srv.release("v1.0.1")
+        lock = self.srv.tmp / "private" / "deploy.lock.d"
+        lock.mkdir(parents=True)
+        # 회귀: PR #294 Codex P2 — flock 이 있는 Linux 에서도 폴백을 탄다
+        mk = {"PLEIADES_LOCK": "mkdir"}
+        self.assertStoppedBeforeChange(self.srv.run("fin", "v1.0.1", "--yes", **mk), "다른 배포")
+        (lock / "pid").write_text("999999")   # 죽은 pid 여도
+        self.assertStoppedBeforeChange(self.srv.run("fin", "v1.0.1", "--yes", **mk), "다른 배포")
+        (lock / "pid").unlink()
+        lock.rmdir()
+        r = self.srv.run("fin", "v1.0.1", "--yes", **mk)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse(lock.exists(), "끝나면 락을 푼다")
+
+    # 회귀: PR #294 Codex P2 — 정상 배포된 태그의 재시도·R-8 이 실패하면 "이미 배포됨" 으로 덮지 않는다
+    def test_failed_redeploy_of_good_tag_is_not_already_deployed(self):
+        self.srv.release("v1.0.1")
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes").returncode, 0)
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes", "--retry", STUB_DEPLOY_RC="1").returncode, 4)
+        r = self.srv.run("fin", "v1.0.1", "--yes")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("끝나지 않은 시도 v1.0.1", r.stdout)
+        self.assertNotIn("이미 v1.0.1 배포됨", r.stdout)
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes", "--retry").returncode, 0)
+        self.assertIn("이미 v1.0.1 배포됨", self.srv.run("fin", "v1.0.1", "--yes").stdout)
+
+    def test_build_free_failure_clears_pending(self):
+        # 빌드 전 실패는 P 로 되돌린다 — 끝나지 않은 시도가 남지 않는다
+        self.srv.release("v1.0.1")
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes", STUB_PLAN_RC="2").returncode, 1)
+        self.assertFalse((self.srv.tmp / "private" / "inplace-fin-pending").exists())
+
+    def test_dry_run_takes_no_lock(self):
+        self.srv.release("v1.0.1")
+        lock = self.srv.tmp / "private" / "deploy.lock.d"
+        lock.mkdir(parents=True)
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--dry-run").returncode, 0)
+
+    # 회귀: #242 보안 리뷰 major — 손으로 먼저 배포한 태그를 Actions 가 다시 받으면 실패가 아니라 할 일 없음
+    def test_already_deployed_tag_is_a_noop(self):
+        self.srv.release("v1.0.1")
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes").returncode, 0)
+        before = self.srv.calls().count("deploy fin\n")
+        r = self.srv.run("fin", "v1.0.1", "--yes")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("이미 v1.0.1 배포됨", r.stdout)
+        self.assertEqual(self.srv.calls().count("deploy fin\n"), before)
+
     def test_private_dir_inside_checkout_is_refused(self):
         self.srv.release("v1.0.1")
         r = self.srv.run("fin", "v1.0.1", "--yes", PLEIADES_PRIVATE_DIR=str(self.srv.root / "logs-here"))
