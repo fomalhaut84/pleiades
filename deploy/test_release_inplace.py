@@ -312,7 +312,7 @@ class ReleaseInplace(unittest.TestCase):
         self.assertEqual(r.returncode, 4)
         self.assertIn("기본 실행 rc 1", r.stdout)
         self.assertIn("빌드 실패", r.stdout)
-        self.assertIn("R-8: deploy/release-inplace.sh fin v1.0.0", r.stdout)
+        self.assertIn("R-8: release-inplace.sh fin v1.0.0", r.stdout)
         self.assertNotIn("/home/svc", r.stdout)  # deploy.sh 중단 문구의 다른 계정 홈도 ~ 로
         self.assertNotIn(str(self.srv.home), r.stdout)
 
@@ -327,7 +327,7 @@ class ReleaseInplace(unittest.TestCase):
         r = self.srv.run("fin", "v1.0.1", "--yes", STUB_MCP_CODE="502")
         self.assertEqual(r.returncode, 4)
         self.assertIn("mcp 502", r.stdout)
-        self.assertIn("R-8: deploy/release-inplace.sh fin v1.0.0", r.stdout)
+        self.assertIn("R-8: release-inplace.sh fin v1.0.0", r.stdout)
 
     def test_c5_counts_409(self):
         # 회귀: M4 — 재기동 뒤 getUpdates 충돌만 센다(옛 409 줄 · 금액 14090 은 0)
@@ -414,6 +414,49 @@ class ReleaseInplace(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertNotIn("SELFCHANGED", r.stdout + r.stderr)
         self.assertIn("결과: 통과", r.stdout)
+
+    # 회귀: PR #283 Codex P2 — C4·C5 실패 뒤 HEAD 는 이미 V 라 같은 태그 재시도가 "이미 V" 로 막혔다
+    def test_retry_same_tag_after_failed_deploy(self):
+        self.srv.release("v1.0.1")
+        r = self.srv.run("fin", "v1.0.1", "--yes", STUB_DEPLOY_RC="1")
+        self.assertEqual(r.returncode, 4)
+        self.assertIn("재시도: release-inplace.sh fin v1.0.1 --retry", r.stdout)
+        r = self.srv.run("fin", "v1.0.1", "--yes")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("--retry", r.stdout)
+        before = self.srv.calls().count("deploy fin\n")
+        r = self.srv.run("fin", "v1.0.1", "--yes", "--retry")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("재시도 — HEAD 이미 v1.0.1", r.stdout)
+        self.assertEqual(self.srv.calls().count("deploy fin\n"), before + 1)
+
+    def test_failed_rollback_can_be_retried_and_points_to_last_ok(self):
+        self.srv.release("v1.0.1")
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes").returncode, 0)
+        r = self.srv.run("fin", "v1.0.0", "--yes", STUB_DEPLOY_RC="1")   # R-8 이 일시 실패
+        self.assertEqual(r.returncode, 4)
+        self.assertIn("재시도: release-inplace.sh fin v1.0.0 --retry", r.stdout)
+        r = self.srv.run("fin", "v1.0.0", "--yes", "--retry")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("마지막 통과 v1.0.1", r.stdout)
+
+    def test_retry_requires_head_at_the_tag(self):
+        self.srv.release("v1.0.1")
+        r = self.srv.run("fin", "v1.0.1", "--yes", "--retry")
+        self.assertEqual(r.returncode, 1)
+        self.assertEqual(self.srv.head(), "v1.0.0")
+
+    # 회귀: PR #283 Codex P2 — 첫 배포는 체크아웃에 이 스크립트가 없다 → 새 태그에서 꺼낸 판을 밖에서 --checkout
+    def test_bootstrap_runs_from_outside_the_checkout(self):
+        self.srv.release("v1.0.1")
+        git(self.srv.root, "fetch", "-q", "--no-tags", "origin", "tag", "v1.0.1")
+        outside = self.srv.tmp / "private-bin"
+        outside.mkdir()
+        (outside / "release-inplace.sh").write_text(git(self.srv.root, "show", "v1.0.1:deploy/release-inplace.sh") + "\n")
+        r = subprocess.run(["bash", str(outside / "release-inplace.sh"), "fin", "v1.0.1", "--yes", "--checkout", str(self.srv.root)],
+                           capture_output=True, text=True, env=self.srv.env(), timeout=60)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.srv.head(), "v1.0.1")
 
     def test_private_dir_inside_checkout_is_refused(self):
         self.srv.release("v1.0.1")

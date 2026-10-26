@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # release-inplace.sh — 도는 체크아웃에 새 태그를 제자리 배포하고 판정 양식만 출력한다 (#278 · 런북 docs/runbooks/release-inplace.md A~C5).
 #
-# 사용:  deploy/release-inplace.sh <fin|fit> <vX.Y.Z> [--yes] [--dry-run]
+# 사용:  deploy/release-inplace.sh <fin|fit> <vX.Y.Z> [--yes] [--dry-run] [--retry] [--checkout DIR]
 #   그 앱의 체크아웃(~/pleiades-<app>) 안의 이 스크립트를 서비스 계정으로 부른다 — 로컬(Darwin)은 --dry-run 만(I-3).
 #   --yes       checkout·배포 전 확인을 묻지 않는다(Actions · #242)
+#   --retry     HEAD 가 이미 <vX.Y.Z> 일 때 같은 태그로 다시 배포한다(C4·C5 실패 뒤 · 실패한 R-8 뒤)
+#   --checkout  체크아웃 위치(기본 = 이 스크립트의 상위) — 체크아웃에 아직 이 스크립트가 없는 첫 배포용(런북 부트스트랩)
 #   --dry-run   A(태그 대조)·C1 검사까지만 — 서비스·체크아웃은 그대로(원본 로그 파일을 만들고 새 태그를 fetch 할 뿐 · 백업 없음)
 #   되돌리기(R-8)는 직전 태그로 같은 명령 — 마이그레이션 0 이면 같은 경로다.
 #
@@ -19,12 +21,16 @@ PLEIADES_KEYS='DATABASE_URL|PORT|MCP_PORT|MCP_TRANSPORT|TELEGRAM_[A-Z_]*|DISCORD
 TAG_RE='^v[0-9]+\.[0-9]+\.[0-9]+$'
 PROBE_INTERVAL=2
 
-usage() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 # 프로브 정리 — 정상 끝 · stop · 신호(Ctrl-C · ssh 끊김 · SIGTERM) 어디서든(#278 사전 리뷰 M1 — 비대화형 bash 의 백그라운드는 SIGINT 를 무시한다)
 kill_probe() { [[ -z "${PROBE_PID:-}" ]] || kill "$PROBE_PID" 2>/dev/null || true; PROBE_PID=; }
 # A 의 diff — 실패를 0 으로 세지 않는다(M3 · 편도 게이트가 열린 채 통과)
 # $(…) 안에서 stop 을 부르면 양식이 변수로 빨려 든다 — 실패는 부르는 쪽에서 stop
 diff_list() { git -C "$ROOT" diff --name-only "$P" "$V" -- "$@" 2>>"$LOG"; }
+# 실패 뒤 복구 안내 — 같은 태그 재시도가 먼저(일시 실패) · 직전 정상 태그로 R-8 이 다음
+recovery() { printf '재시도: release-inplace.sh %s %s --retry · 또는 R-8: release-inplace.sh %s %s%s' "$APP" "$V" "$APP" "$BACK" "$(r8_flag)"; }
+# R-8 대상이 지금 HEAD 와 같으면(재시도 중) 그 명령에도 --retry 가 필요하다
+r8_flag() { [[ "$BACK" == "$(git -C "$ROOT" describe --tags --exact-match HEAD 2>/dev/null)" ]] && printf ' --retry'; }
 count_lines() { [[ -z "$1" ]] && echo 0 || printf '%s\n' "$1" | wc -l | tr -d ' '; }
 # $HOME 과 다른 계정 홈(/home/<계정> · /Users/<계정>)을 ~ 로 — deploy.sh 중단 문구에 경로가 실린다
 redact() { sed -E "s#$HOME#~#g; s#/(home|Users)/[^/[:space:]]+#~#g"; }
@@ -90,8 +96,10 @@ count_409() {  # <app> <T0>
 # 빌드 전 실패 — 직전 태그로 checkout 만 되돌린다(재기동 없음 · M6). 못 되돌리면 4
 revert_checkout() {  # <이유>
   kill_probe
+  # 재시도면 되돌릴 checkout 이 없다(이미 V) — 서비스는 앞 실패 상태 그대로다
+  [[ $RETRY -eq 0 ]] || stop 4 "$1 (재시도 · 빌드 전 — 서비스는 앞 실패 상태 그대로) → $(recovery)"
   if git -C "$ROOT" checkout -q "$P" >>"$LOG" 2>&1 && [[ "$(git -C "$ROOT" describe --tags --exact-match HEAD 2>/dev/null)" == "$P" ]]; then
-    stop 1 "$1 → $P 로 checkout 되돌림(빌드 전 · 재기동 없음 · 서비스는 그대로 $P)"
+    stop 1 "$1 → $P 로 checkout 되돌림(빌드 전 · 재기동 없음)"
   fi
   stop 4 "$1 → 되돌리기 실패: git -C ~/pleiades-$APP checkout -q $P (빌드 전 · 재기동 불필요)"
 }
@@ -100,18 +108,26 @@ main() {
   set -uo pipefail
   [[ $# -ge 2 ]] || usage
   APP=$1; V=$2; shift 2
-  YES=0; DRY=0
-  for arg in "$@"; do
-    case "$arg" in
+  YES=0; DRY=0; RETRY=0; CHECKOUT=
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
       --yes) YES=1 ;;
       --dry-run) DRY=1 ;;
+      --retry) RETRY=1 ;;
+      --checkout) [[ $# -ge 2 ]] || usage; CHECKOUT=$2; shift ;;
       *) usage ;;
     esac
+    shift
   done
   case "$APP" in fin) DIR=finance ;; fit) DIR=fitness ;; *) usage ;; esac
   [[ "$V" =~ $TAG_RE ]] || usage
 
-  ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+  # PR #283 Codex P2: 첫 배포는 체크아웃에 이 스크립트가 없다 — 새 태그에서 꺼낸 판을 밖에서 부르고 --checkout 으로 가리킨다
+  if [[ -n "$CHECKOUT" ]]; then
+    ROOT=$(cd "$CHECKOUT" 2>/dev/null && pwd -P) || { echo "release-inplace.sh: --checkout $CHECKOUT 가 없다" >&2; exit 2; }
+  else
+    ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+  fi
   CONFIG="$ROOT/deploy/pleiades.config.cjs"
   DEPLOY_SH=$ROOT/deploy/deploy.sh
   # 테스트만 스텁으로 바꾼다 — 운영 env 에 남은 값이 배포 명령을 바꾸지 않게(#278 사전 리뷰 I7)
@@ -137,8 +153,18 @@ main() {
   P=$(git -C "$ROOT" describe --tags --exact-match HEAD 2>/dev/null) || stop 1 "A — HEAD 가 태그가 아니다(직전 배포 상태가 아니다)"
   [[ "$P" =~ $TAG_RE ]] || stop 1 "A — HEAD 태그 $P 가 vX.Y.Z 가 아니다"
   [[ -z "$(git -C "$ROOT" status --porcelain)" ]] || stop 1 "A — 체크아웃이 깨끗하지 않다(git status)"
-  [[ "$P" != "$V" ]] || stop 1 "A — 이미 $V 다"
-  form "   P $P → V $V"
+  # PR #283 Codex P2: C4·C5 실패 뒤 HEAD 는 이미 V 다 — 배포 완료와 checkout 만 된 상태를 가른다(--retry)
+  LAST_OK_FILE="$PRIVATE/inplace-$APP-last-ok"
+  LAST_OK=$(cat "$LAST_OK_FILE" 2>/dev/null || true)
+  if [[ "$P" == "$V" ]]; then
+    [[ $RETRY -eq 1 ]] || stop 1 "A — HEAD 가 이미 $V 다(앞 배포가 실패했으면 --retry · 마지막 통과 ${LAST_OK:-기록 없음})"
+    form "   재시도 — HEAD 이미 $V · 마지막 통과 ${LAST_OK:-기록 없음}"
+  else
+    [[ $RETRY -eq 0 ]] || stop 1 "A — --retry 는 HEAD 가 이미 $V 일 때만"
+    form "   P $P → V $V"
+  fi
+  # R-8 은 "직전에 정상이던 태그" — 재시도면 P 가 곧 V 라 마지막 통과 기록을 쓴다
+  if [[ $RETRY -eq 1 ]]; then BACK=${LAST_OK:-<마지막 정상 태그>}; else BACK=$P; fi
   if ! git -C "$ROOT" rev-parse -q --verify "refs/tags/$V" >/dev/null; then
     git -C "$ROOT" fetch -q --no-tags origin tag "$V" >>"$LOG" 2>&1 || stop 1 "A — 태그 $V 를 받지 못했다"
   fi
@@ -203,7 +229,7 @@ main() {
   fi
 
   # ── C2. checkout ────────────────────────────────────────────────────
-  git -C "$ROOT" checkout -q "$V" >>"$LOG" 2>&1 || revert_checkout "C2 — checkout 실패"
+  [[ $RETRY -eq 1 ]] || git -C "$ROOT" checkout -q "$V" >>"$LOG" 2>&1 || revert_checkout "C2 — checkout 실패"
   local now_tag
   now_tag=$(git -C "$ROOT" describe --tags --exact-match HEAD 2>/dev/null)
   [[ "$now_tag" == "$V" && -z "$(git -C "$ROOT" status --porcelain)" ]] || revert_checkout "C2 — checkout 뒤 $V · 깨끗이 아니다"
@@ -245,7 +271,7 @@ main() {
     local why
     why=$(grep -E '^deploy\.sh: 중단 — ' "$run_log" | tail -1)   # 한 줄 — 자르지 않는다(바이트 자르기는 한글을 깬다 · I8)
     [[ $rc -eq 3 ]] && stop 3 "C4 — exit 3: 옛 서비스가 online 이다(있으면 안 된다)"
-    stop 4 "C4 — ${why:-deploy.sh rc $rc} → R-8: deploy/release-inplace.sh $APP $P"
+    stop 4 "C4 — ${why:-deploy.sh rc $rc} → $(recovery)"
   fi
 
   # ── C5. 확인 ────────────────────────────────────────────────────────
@@ -269,7 +295,8 @@ main() {
   form "   online ${procs[1]:-0}/3 · mcp $mcp_code · 409 $conflict · 재기동 same $n_same · DIFF/MISSING $n_bad"
   form "   사람 확인: 웹 화면 · 텔레그램 $([[ $APP == fin ]] && echo '현황' || echo '/today') — 예/아니오 를 덧붙인다"
   [[ "${procs[1]:-0}" == 3 && "$mcp_code" == 200 && "$conflict" == 0 && "$n_bad" == 0 ]] \
-    || stop 4 "C5 — 확인 실패(위 줄) → R-8: deploy/release-inplace.sh $APP $P"
+    || stop 4 "C5 — 확인 실패(위 줄) → $(recovery)"
+  (umask 077; printf '%s\n' "$V" > "$LAST_OK_FILE") 2>>"$LOG" || true
   emit_form "통과"
 }
 
