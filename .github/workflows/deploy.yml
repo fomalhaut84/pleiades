@@ -1,0 +1,60 @@
+name: Deploy
+
+# Release 발행 → 서버 제자리 재배포 (#242 · 007 D-b · 사용자 2026-10-26: 승인 없음 · Release 발행 = 배포 의지).
+# 러너는 저장소 코드를 checkout 하지 않는다 — ssh 로 "deploy <tag>" 한 줄만 보내고, 서버의 forced command
+# (deploy/ssh-deploy.sh)가 fin → fit 순서로 deploy/release-inplace.sh 를 돌린다. 마이그레이션이 든 태그는 그 스크립트가
+# 바꾸기 전에 멈춘다(rc 1) — 이 job 이 실패로 끝나고 사람이 런북대로 한다.
+# 이 저장소는 PUBLIC — Actions 로그는 누구나 본다. 서버가 돌려주는 것은 판정 양식뿐이고 접속 정보는 secrets(마스킹)에만 있다.
+# secrets 는 environment "production" 에만(I-9 허용 목록): DEPLOY_SSH_KEY · DEPLOY_HOST · DEPLOY_USER · DEPLOY_KNOWN_HOSTS · DEPLOY_PORT(선택).
+# environment 의 배포 대상은 태그 v* 로 제한한다(GitHub 설정 · 사용자).
+
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ !github.event.release.prerelease && !github.event.release.draft }}
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 40
+
+    steps:
+      - name: Validate tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "태그 형식이 vX.Y.Z 가 아니다: $TAG"; exit 1; }
+
+      - name: Deploy over ssh (fin → fit)
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          set -o pipefail
+          for v in KEY HOST SSH_USER KNOWN_HOSTS; do [[ -n "${!v}" ]] || { echo "secret 없음: $v"; exit 1; }; done
+          install -m 700 -d ~/.ssh
+          (umask 077; printf '%s\n' "$KEY" > ~/.ssh/deploy; printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts)
+          rc=0
+          ssh -q -T -i ~/.ssh/deploy -p "${PORT:-22}" \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            "$SSH_USER@$HOST" "deploy $TAG" 2>&1 | tee forms.txt || rc=$?
+          {
+            echo "## 배포 $TAG — rc $rc"
+            echo '```text'
+            cat forms.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          rm -f ~/.ssh/deploy
+          exit "$rc"

@@ -40,8 +40,12 @@ Bash: ls docs/handoff/ && git log --oneline -5
 cd ~/workspace/pleiades
 git fetch -q origin && git status -sb | head -1
 gh pr list -R fomalhaut84/pleiades --state open
-# I-9 — pleiades Actions secrets 는 0 이어야 한다. 0 이 아니면 브리핑 첫 줄에 적고 사용자에게 보고
-echo "actions secrets: $(gh api repos/fomalhaut84/pleiades/actions/secrets --jq .total_count)"
+# I-9(#242 개정) — 저장소 수준 secrets 0 · environment production 은 허용 목록(DEPLOY_SSH_KEY·HOST·USER·KNOWN_HOSTS·PORT)만.
+# 어긋나면 브리핑 첫 줄에 적고 사용자에게 보고(이름만 본다 — 값은 API 로도 읽을 수 없다)
+echo "actions secrets(저장소): $(gh api repos/fomalhaut84/pleiades/actions/secrets --jq .total_count)"
+env_names=$(gh api repos/fomalhaut84/pleiades/environments/production/secrets --jq '.secrets[].name' 2>/dev/null | sort | paste -sd' ' -)
+extra=$(printf '%s\n' $env_names | grep -vxE 'DEPLOY_(SSH_KEY|HOST|USER|KNOWN_HOSTS|PORT)' | paste -sd' ' -)
+echo "production secrets: ${env_names:-없음}${extra:+ · 허용 목록 밖: $extra}"
 # 정기 수용 판정 (006 §4-S · Q54b) — 서비스 dev tip(ls-remote · 읽기) ↔ 마지막 수용 머지 커밋의 Service-Dev 트레일러
 for r in myFinance myFitness; do
   # --exit-code: ref 가 없으면 2 · 접근 불가면 128 — 빈 SHA 로 판정을 이어가지 않는다 (PR #105 Codex P2)
@@ -66,7 +70,7 @@ done
 
 **단계:** {0~4 중 어디} — {실행 전 / 진행 중 / 완료}
 **M 단계:** M-{0~6} (006 §4) — {진행 중 / 완료}
-**pleiades:** dev {clean/ahead} · 열린 PR {n} · Actions secrets {0}
+**pleiades:** dev {clean/ahead} · 열린 PR {n} · Actions secrets 저장소 {0} · production {허용 목록 안/밖}
 **수용:** fin {미수용/최신/뒤처짐} · fit {…}
 **미결:** 006 §7 중 다음 단계를 막는 것 · 002 Q7·Q3 는 전환 이후 (Q2 는 답을 받았다 — 독립 배포 포기 · #127)
 
