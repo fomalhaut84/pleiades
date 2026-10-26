@@ -468,27 +468,48 @@ class ReleaseInplace(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertEqual(self.srv.head(), "v1.0.1")
 
-    # 회귀: #242 보안 리뷰 major — 두 배포(Actions 재실행 · 취소 뒤 남은 서버 실행 · 손 실행)가 겹치지 않는다
-    def test_live_lock_stops_and_stale_lock_is_taken_over(self):
+    # 회귀: #242 보안 리뷰 major · PR #291 Codex P2 — 두 배포가 겹치지 않는다 · 넘겨받기 경합 없이
+    def test_flock_lock_blocks_a_concurrent_deploy(self):
+        # flock(1) 흉내 — 물려받은 fd 에 fcntl.flock(LOCK_EX|LOCK_NB). 진짜 flock 처럼 락은 부모가 연 파일 설명에 남는다
+        import time
+        flock = self.srv.stub / "flock"
+        flock.write_text("#!/usr/bin/env python3\nimport fcntl, sys\n"
+                         "try:\n    fcntl.flock(int(sys.argv[2]), fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+                         "except OSError:\n    sys.exit(1)\n")
+        flock.chmod(0o755)
         self.srv.release("v1.0.1")
-        lock = self.srv.tmp / "private" / "deploy.lock"
+        first = subprocess.Popen(["bash", str(self.srv.root / "deploy" / "release-inplace.sh"), "fin", "v1.0.1", "--yes"],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=self.srv.env(STUB_SLEEP="4"))
+        for _ in range(100):
+            if "deploy fin\n" in self.srv.calls():
+                break
+            time.sleep(0.1)
+        r = self.srv.run("fin", "v1.0.1", "--yes")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("다른 배포", r.stdout)
+        out, _ = first.communicate(timeout=60)
+        self.assertEqual(first.returncode, 0, out)
+        # 끝나면 커널이 푼다 — 다음 배포는 잡는다(같은 태그라 할 일 없음으로 끝난다)
+        r = self.srv.run("fin", "v1.0.1", "--yes")
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_mkdir_fallback_never_takes_over(self):
+        # flock 이 없을 때(macOS)의 mkdir 락은 남은 락을 넘겨받지 않는다 — 지우는 경합(PR #291 Codex P2)을 만들지 않는다
+        self.srv.release("v1.0.1")
+        lock = self.srv.tmp / "private" / "deploy.lock.d"
         lock.mkdir(parents=True)
-        holder = subprocess.Popen(["sleep", "30"])
-        try:
-            (lock / "pid").write_text(str(holder.pid))
-            self.assertStoppedBeforeChange(self.srv.run("fin", "v1.0.1", "--yes"), "다른 배포")
-        finally:
-            holder.kill()
-            holder.wait()
-        r = self.srv.run("fin", "v1.0.1", "--yes")   # 죽은 pid 의 락은 넘겨받는다
+        self.assertStoppedBeforeChange(self.srv.run("fin", "v1.0.1", "--yes"), "다른 배포")
+        (lock / "pid").write_text("999999")   # 죽은 pid 여도
+        self.assertStoppedBeforeChange(self.srv.run("fin", "v1.0.1", "--yes"), "다른 배포")
+        lock.rmdir() if not any(lock.iterdir()) else [f.unlink() for f in lock.iterdir()] and lock.rmdir()
+        r = self.srv.run("fin", "v1.0.1", "--yes")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertFalse(lock.exists(), "끝나면 락을 푼다")
 
     def test_dry_run_takes_no_lock(self):
         self.srv.release("v1.0.1")
-        lock = self.srv.tmp / "private" / "deploy.lock"
+        lock = self.srv.tmp / "private" / "deploy.lock.d"
         lock.mkdir(parents=True)
-        (lock / "pid").write_text(str(os.getpid()))
         self.assertEqual(self.srv.run("fin", "v1.0.1", "--dry-run").returncode, 0)
 
     # 회귀: #242 보안 리뷰 major — 손으로 먼저 배포한 태그를 Actions 가 다시 받으면 실패가 아니라 할 일 없음
