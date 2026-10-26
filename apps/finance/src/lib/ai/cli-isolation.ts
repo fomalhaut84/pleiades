@@ -29,6 +29,12 @@ export function monorepoExcludeArgs(
     return []
   }
   if (name !== PLEIADES_ROOT_NAME) return []
-  const claudeMdExcludes = [path.join(root, 'CLAUDE.md'), path.join(root, '.claude', 'rules', '**')]
+  // 루트 메모리 파일 전부 — 지금은 CLAUDE.md·rules 만 있지만 나머지 둘이 생겨도 다시 붙지 않게 (#247 사전 리뷰 info)
+  const claudeMdExcludes = [
+    path.join(root, 'CLAUDE.md'),
+    path.join(root, 'CLAUDE.local.md'),
+    path.join(root, '.claude', 'CLAUDE.md'),
+    path.join(root, '.claude', 'rules', '**'),
+  ]
   return ['--settings', JSON.stringify({ claudeMdExcludes })]
 }

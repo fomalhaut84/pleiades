@@ -17,7 +17,12 @@ describe('monorepoExcludeArgs', () => {
     const args = monorepoExcludeArgs('/srv/pleiades-fin/apps/finance', pkg('pleiades'))
     expect(args[0]).toBe('--settings')
     expect(JSON.parse(args[1])).toEqual({
-      claudeMdExcludes: ['/srv/pleiades-fin/CLAUDE.md', '/srv/pleiades-fin/.claude/rules/**'],
+      claudeMdExcludes: [
+        '/srv/pleiades-fin/CLAUDE.md',
+        '/srv/pleiades-fin/CLAUDE.local.md',
+        '/srv/pleiades-fin/.claude/CLAUDE.md',
+        '/srv/pleiades-fin/.claude/rules/**',
+      ],
     })
   })
 

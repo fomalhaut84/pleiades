@@ -44,7 +44,12 @@ describe("monorepoExcludeArgs", () => {
     const args = monorepoExcludeArgs("/srv/pleiades-fit/apps/fitness", pkg("pleiades"));
     expect(args[0]).toBe("--settings");
     expect(JSON.parse(args[1])).toEqual({
-      claudeMdExcludes: ["/srv/pleiades-fit/CLAUDE.md", "/srv/pleiades-fit/.claude/rules/**"],
+      claudeMdExcludes: [
+        "/srv/pleiades-fit/CLAUDE.md",
+        "/srv/pleiades-fit/CLAUDE.local.md",
+        "/srv/pleiades-fit/.claude/CLAUDE.md",
+        "/srv/pleiades-fit/.claude/rules/**",
+      ],
     });
   });
 
