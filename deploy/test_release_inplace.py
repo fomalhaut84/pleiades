@@ -33,14 +33,14 @@ fs.appendFileSync(path.join(process.env.STUB, 'log'), 'pm2 ' + argv.join(' ') + 
 if (argv[0] === 'jlist') {
   const cwd = (a) => process.env.STUB_CWD || (process.env.ROOT_DIR + '/apps/' + (a === 'fin' ? 'finance' : 'fitness'))
   const list = []
+  if (process.env.STUB_JLIST === 'garbage') { process.stdout.write('[PM2][WARN] x\n[{"name": broken'); process.exit(0) }
   for (const a of ['fin', 'fit']) for (const r of ['mcp', 'web', 'bot']) {
     const name = `pleiades-${a}-${r}`
+    if (process.env.STUB_MISSING === name) continue
     const v = process.env.STUB_ENV === 'diff' && name === 'pleiades-fit-bot' ? '/elsewhere' : process.env.HOME + '/pleiades-platform.env'
     list.push({ name, pid: 424242, pm2_env: { status: process.env.STUB_STATUS || 'online', pm_cwd: cwd(a), PLEIADES_ENV_FILE: v } })
   }
   process.stdout.write('[PM2][WARN] noise\n' + JSON.stringify(list))
-} else if (argv[0] === 'logs') {
-  console.log(process.env.STUB_409 ? '409 Conflict: terminated by other getUpdates' : 'bot ok')
 }
 """
 
@@ -55,9 +55,20 @@ esac
 # deploy.sh 흉내 — 호출 기록 · 창 안 오류 로그 2줄(경고 1) · 비밀 한 줄(화면에 나오면 안 된다)
 DEPLOY_STUB = """#!/bin/bash
 echo "deploy $*" >> "$STUB/log"
-[[ " $* " == *" --dry-run "* ]] && { echo "plan"; exit 0; }
+# 진짜 deploy.sh 처럼 dry-run 도 완료 줄을 찍는다 — 같은 로그에서 찾으면 늘 참(#278 사전 리뷰 M2)
+if [[ " $* " == *" --dry-run "* ]]; then
+  echo "=== 완료: $1 · $(git describe --tags --exact-match HEAD) ==="
+  exit "${STUB_PLAN_RC:-0}"
+fi
 ts=$(date '+%F %T')
 mkdir -p "$HOME/.pm2/logs"
+# 회귀: M4 — 금액 같은 숫자 409 는 세지 않는다 · 재기동 전(옛) 409 줄도
+echo "2020-01-01 00:00:00: 409 Conflict: terminated by other getUpdates" >> "$HOME/.pm2/logs/pleiades-fin-bot-out-109.log"
+echo "$ts: 매수 14090원 · id 4091" >> "$HOME/.pm2/logs/pleiades-fin-bot-out-114.log"
+[[ -n "${STUB_409:-}" ]] && echo "$ts: GrammyError: Call to 'getUpdates' failed! (409: Conflict: terminated by other getUpdates request)" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-114.log"
+# 회귀: I10 — 실행 중인 스크립트를 같은 inode 에 덮어쓴다(truncate + write). 보호가 없으면 bash 가 새 내용을 읽는다
+[[ -n "${STUB_SELF_OVERWRITE:-}" ]] && printf '%s\n' '#!/usr/bin/env bash' "$(printf '# pad%.0s\n' $(seq 4000))" 'echo SELFCHANGED; exit 99' > "$ROOT_DIR/deploy/release-inplace.sh"
+[[ -n "${STUB_SLEEP:-}" ]] && sleep "$STUB_SLEEP"
 echo "$ts: ⚠ Warning: Next.js inferred your workspace root" >> "$HOME/.pm2/logs/pleiades-fin-web-error-108.log"
 echo "$ts: TypeError: boom" >> "$HOME/.pm2/logs/pleiades-fin-web-error-114.log"
 echo "DATABASE_URL=postgresql://svc:DEPLOYSECRET@localhost/db"
@@ -87,7 +98,9 @@ class Server:
         plat.chmod(0o600)
         self.stub = tmp / "stub"
         self.stub.mkdir()
-        for name, body in {"pm2": PM2_STUB, "curl": CURL_STUB, "uname": "#!/bin/sh\necho Linux\n", "deploy.sh": DEPLOY_STUB}.items():
+        git_stub = f'#!/bin/bash\n[[ -n "$STUB_DIFF_FAIL" && " $* " == *" diff "* ]] && exit 128\nexec {shutil.which("git")} "$@"\n'
+        for name, body in {"pm2": PM2_STUB, "curl": CURL_STUB, "uname": "#!/bin/sh\necho Linux\n", "deploy.sh": DEPLOY_STUB,
+                           "git": git_stub}.items():
             p = self.stub / name
             p.write_text(body)
             p.chmod(0o755)
@@ -141,7 +154,7 @@ class Server:
         return {"PATH": f"{self.stub}:{NODE_DIR}:{BASE_PATH}", "HOME": str(self.home), "STUB": str(self.stub),
                 "ROOT_DIR": str(self.root.resolve()), "PLEIADES_DEPLOY_SH": str(self.stub / "deploy.sh"),
                 "PLEIADES_PRIVATE_DIR": str(self.tmp / "private"), "PLEIADES_BACKUP_DIR": str(self.tmp / "backup"),
-                "DATABASE_URL": "postgresql://shell:SHELLSECRET@x/db", **extra}
+                "DATABASE_URL": "postgresql://shell:SHELLSECRET@x/db", "PLEIADES_TEST": "1", **extra}
 
     def run(self, *args: str, stdin: str = "", **extra: str) -> subprocess.CompletedProcess:
         return subprocess.run(["bash", str(self.root / "deploy" / "release-inplace.sh"), *args], input=stdin,
@@ -317,10 +330,74 @@ class ReleaseInplace(unittest.TestCase):
         self.assertIn("R-8: deploy/release-inplace.sh fin v1.0.0", r.stdout)
 
     def test_c5_counts_409(self):
+        # 회귀: M4 — 재기동 뒤 getUpdates 충돌만 센다(옛 409 줄 · 금액 14090 은 0)
         self.srv.release("v1.0.1")
+        r = self.srv.run("fin", "v1.0.1", "--yes")
+        self.assertIn("409 0", r.stdout)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        git(self.srv.root, "checkout", "-q", "v1.0.0")
         r = self.srv.run("fin", "v1.0.1", "--yes", STUB_409="1")
         self.assertEqual(r.returncode, 4)
         self.assertIn("409 1", r.stdout)
+
+    def test_done_line_comes_from_the_real_run_only(self):
+        # 회귀: M2 — dry-run 의 완료 줄로 "완료 안내: 예" 가 되면 안 된다
+        self.srv.release("v1.0.1")
+        r = self.srv.run("fin", "v1.0.1", "--yes", STUB_DEPLOY_RC="1")
+        self.assertIn("완료 안내: 아니오", r.stdout)
+
+    def test_plan_failure_reverts_checkout(self):
+        # 회귀: M6 — 빌드 전 실패는 직전 태그로 checkout 만 되돌리고 1
+        self.srv.release("v1.0.1")
+        r = self.srv.run("fin", "v1.0.1", "--yes", STUB_PLAN_RC="2")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("v1.0.0 로 checkout 되돌림", r.stdout)
+        self.assertEqual(self.srv.head(), "v1.0.0")
+
+    def test_git_diff_failure_does_not_pass_the_gate(self):
+        # 회귀: M3 — diff 실패를 "마이그레이션 0" 으로 세지 않는다
+        self.srv.release("v1.0.1")
+        r = self.srv.run("fin", "v1.0.1", "--yes", STUB_DIFF_FAIL="1")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("git diff 실패", r.stdout)
+        self.assertNotIn("마이그레이션 0", r.stdout)
+        self.assertEqual(self.srv.head(), "v1.0.0")
+
+    def test_rollback_after_partial_failure_is_not_blocked(self):
+        # 회귀: M5 — deploy.sh 가 봇을 delete 한 뒤 실패해 2 개만 남아도 R-8 은 돈다
+        self.srv.release("v1.0.1")
+        r = self.srv.run("fin", "v1.0.1", "--yes", STUB_MISSING="pleiades-fin-bot")
+        self.assertIn("pleiades-fin 프로세스 2/3", r.stdout)
+        self.assertNotIn("다른 체크아웃", r.stdout)
+
+    def test_unparseable_pm2_stops_before_change(self):
+        self.srv.release("v1.0.1")
+        self.assertStoppedBeforeChange(self.srv.run("fin", "v1.0.1", "--yes", STUB_JLIST="garbage"), "PLEIADES_ENV_FILE")
+
+    def test_overwriting_the_running_script_in_place_does_not_change_the_run(self):
+        # 회귀: I10 — 같은 inode 덮어쓰기(새 inode 인 git checkout 보다 엄격하다)
+        self.srv.release("v1.0.1")
+        r = self.srv.run("fin", "v1.0.1", "--yes", STUB_SELF_OVERWRITE="1")
+        self.assertNotIn("SELFCHANGED", r.stdout + r.stderr)
+        self.assertNotEqual(r.returncode, 99)
+
+    def test_signal_does_not_leave_the_probe_running(self):
+        # 회귀: M1 — SIGTERM 으로 끝나도 프로브(curl 루프)가 남지 않는다
+        import signal
+        import time
+        self.srv.release("v1.0.1")
+        p = subprocess.Popen(["bash", str(self.srv.root / "deploy" / "release-inplace.sh"), "fin", "v1.0.1", "--yes"],
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=self.srv.env(STUB_SLEEP="3"))
+        for _ in range(100):
+            if "deploy fin\n" in self.srv.calls():
+                break
+            time.sleep(0.1)
+        p.send_signal(signal.SIGTERM)
+        p.communicate(timeout=30)
+        time.sleep(0.5)
+        n = self.srv.calls().count("curl ")
+        time.sleep(4.5)
+        self.assertEqual(self.srv.calls().count("curl "), n, "프로브가 계속 돈다")
 
     def test_rollback_is_the_same_command_with_previous_tag(self):
         self.srv.release("v1.0.1")
