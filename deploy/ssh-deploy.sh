@@ -30,19 +30,38 @@ main() {
   local base=${PLEIADES_CHECKOUT_BASE:-$HOME}
   [[ "${PLEIADES_TEST:-}" == 1 ]] || base=$HOME   # 테스트만 위치를 바꾼다
 
-  local app rc
+  local app rc out
+  out=$(mktemp)
   for app in fin fit; do
     echo "## $app"
     # stderr 까지 공개 로그로 간다 — 홈 경로를 ~ 로(release-inplace 의 stdout 은 이미 가린다 · #242 보안 리뷰 info)
     bash "$base/pleiades-$app/deploy/release-inplace.sh" "$app" "$tag" --yes </dev/null 2>&1 \
-      | sed -E "s#$HOME#~#g; s#/(home|Users)/[^/[:space:]]+#~#g"
+      | sed -E "s#$HOME#~#g; s#/(home|Users)/[^/[:space:]]+#~#g" | tee "$out"
     rc=${PIPESTATUS[0]}
+    notify "$base" "$app" "$tag" "$rc" "$out"
     if [[ $rc -ne 0 ]]; then
       [[ $app == fin ]] && echo "fit 은 하지 않았다 — fin 이 통과하지 않았다(rc $rc)"
+      rm -f "$out"
       return "$rc"
     fi
   done
+  rm -f "$out"
   return 0
+}
+
+# 앱마다 끝난 뒤 그 앱의 봇으로 관리자에게(#304 · 옛 fin·fit 의 배포 완료 메시지). 알림 실패는 배포 결과를 바꾸지 않는다.
+# 요약은 판정 양식에서만 뽑는다(결과 줄 · 소요 · 프로브) — 이미 홈 경로를 가린 출력이다
+notify() {  # <base> <app> <tag> <rc> <양식 파일>
+  local script="$1/pleiades-$2/deploy/notify-deploy.cjs" status summary secs probe
+  [[ -f "$script" ]] || { echo "notify-deploy: 이 체크아웃에 알림 스크립트가 없다 — 건너뜀"; return 0; }
+  secs=$(grep -oE '기본 실행 rc [0-9]+ · [0-9]+s' "$5" | grep -oE '[0-9]+s$' | tail -1)
+  probe=$(grep -oE '프로브 오류 응답 [0-9]+' "$5" | tail -1)
+  if [[ $4 -eq 0 ]]; then
+    status=ok; summary="${secs:+소요 $secs}${probe:+ · $probe}"
+  else
+    status=fail; summary="rc $4 · $(grep -E '^결과: ' "$5" | tail -1 | sed 's/^결과: //')"
+  fi
+  node "$script" "$2" "$status" "$3" "$summary" </dev/null 2>&1 | sed -E "s#$HOME#~#g; s#/(home|Users)/[^/[:space:]]+#~#g" || true
 }
 
 [[ "${BASH_SOURCE[0]}" != "$0" ]] || { main "$@"; exit $?; }

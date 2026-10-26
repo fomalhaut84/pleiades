@@ -1,0 +1,141 @@
+"""deploy/notify-deploy.cjs · ssh-deploy.sh 알림 연결 — 자동 배포 완료·중단 알림 (#304).
+
+실행: python3 -m unittest discover -s deploy
+텔레그램에는 보내지 않는다(PLEIADES_TEST=1 NOTIFY_DRY_RUN=1). 핵심 계약: 토큰·채팅 ID 를 출력하지 않는다 ·
+fin = 관리자 경로 · fit = ALLOWED · 설정이 비면 보내지 않고 0 · ssh-deploy 는 앱마다 결과를 넘긴다.
+"""
+
+import os
+import shutil
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+NOTIFY = HERE / "notify-deploy.cjs"
+SSH_DEPLOY = HERE / "ssh-deploy.sh"
+BASE_PATH = "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"
+NODE_DIR = str(Path(shutil.which("node") or "/usr/bin/node").parent)
+DOTENV = HERE.parent / "apps" / "finance" / "node_modules" / "dotenv"
+
+
+@unittest.skipUnless(DOTENV.exists(), "apps/finance 의존성 없음(npm ci 먼저)")
+class NotifyDeploy(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        (self.root / "deploy").mkdir()
+        shutil.copy(NOTIFY, self.root / "deploy" / "notify-deploy.cjs")
+        for d in ("finance", "fitness"):
+            nm = self.root / "apps" / d / "node_modules"
+            nm.mkdir(parents=True)
+            (nm / "dotenv").symlink_to(DOTENV)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def env_file(self, d: str, text: str) -> None:
+        (self.root / "apps" / d / ".env").write_text(text)
+
+    def run_notify(self, *args: str, dry: bool = True) -> subprocess.CompletedProcess:
+        env = {"PATH": f"{NODE_DIR}:{BASE_PATH}", "PLEIADES_TEST": "1"}
+        if dry:
+            env["NOTIFY_DRY_RUN"] = "1"
+        return subprocess.run(["node", str(self.root / "deploy" / "notify-deploy.cjs"), *args],
+                              capture_output=True, text=True, env=env, timeout=30)
+
+    def test_fin_goes_to_admin_route_and_hides_secrets(self):
+        self.env_file("finance", 'TELEGRAM_BOT_TOKEN="123:SECRETTOKEN"\nTELEGRAM_ALLOWED_CHAT_IDS=111,222\nTELEGRAM_ADMIN_CHAT_IDS=999\n')
+        r = self.run_notify("fin", "ok", "v1.0.5", "소요 129s · 프로브 오류 응답 0")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("수신자 1", r.stdout)
+        self.assertIn("✅ <b>fin v1.0.5 배포 완료</b>", r.stdout)
+        self.assertIn("소요 129s", r.stdout)
+        self.assertIn("https://github.com/fomalhaut84/pleiades/releases/tag/v1.0.5", r.stdout)
+        for secret in ("SECRETTOKEN", "999", "111"):
+            self.assertNotIn(secret, r.stdout + r.stderr)
+
+    def test_fit_uses_allowed_route(self):
+        self.env_file("fitness", 'TELEGRAM_BOT_TOKEN=1:X\nTELEGRAM_ALLOWED_CHAT_IDS=" 555 , 666 "\n')
+        r = self.run_notify("fit", "fail", "v1.0.5", "rc 4 · 중단 — C5 <확인 실패>")
+        self.assertIn("수신자 2", r.stdout)
+        self.assertIn("⚠️ <b>fit v1.0.5 배포 중단</b>", r.stdout)
+        self.assertIn("&lt;확인 실패&gt;", r.stdout)   # HTML 이스케이프
+        self.assertIn("Actions 실행 요약", r.stdout)
+
+    def test_missing_config_does_not_fail_the_deploy(self):
+        self.env_file("finance", "TELEGRAM_BOT_TOKEN=1:X\nTELEGRAM_ADMIN_CHAT_IDS=\n")
+        r = self.run_notify("fin", "ok", "v1.0.5", "x")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("수신자(TELEGRAM_ADMIN_CHAT_IDS)가 비어 있다", r.stdout)
+        r = self.run_notify("fit", "ok", "v1.0.5", "x")   # .env 없음
+        self.assertEqual(r.returncode, 0)
+        self.assertIn(".env 를 읽지 못했다", r.stdout)
+
+    def test_bad_arguments_send_nothing(self):
+        self.env_file("finance", "TELEGRAM_BOT_TOKEN=1:X\nTELEGRAM_ADMIN_CHAT_IDS=9\n")
+        for args in (("xxx", "ok", "v1.0.5"), ("fin", "maybe", "v1.0.5"), ("fin", "ok", "1.0.5"), ("fin", "ok", "v1.0.5; rm")):
+            r = self.run_notify(*args)
+            self.assertEqual(r.returncode, 0)
+            self.assertIn("보내지 않았다", r.stdout)
+
+    def test_real_send_failure_hides_token(self):
+        # 실제 전송 경로 — 접속이 실패해도 토큰이 담긴 URL 을 내지 않고 0 으로 끝난다(네트워크 없이 · 잘못된 프록시로 실패시킨다)
+        self.env_file("finance", "TELEGRAM_BOT_TOKEN=1:SECRETTOKEN\nTELEGRAM_ADMIN_CHAT_IDS=9\n")
+        env = {"PATH": f"{NODE_DIR}:{BASE_PATH}", "NODE_OPTIONS": "--require=" + str(self.root / "nofetch.cjs")}
+        (self.root / "nofetch.cjs").write_text("globalThis.fetch = async (u) => { throw new TypeError('fetch failed ' + u) }\n")
+        r = subprocess.run(["node", str(self.root / "deploy" / "notify-deploy.cjs"), "fin", "ok", "v1.0.5", "x"],
+                           capture_output=True, text=True, env=env, timeout=30)
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("보냄 0/1 · 실패 TypeError", r.stdout)
+        self.assertNotIn("SECRETTOKEN", r.stdout + r.stderr)
+
+
+class SshDeployNotifies(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = Path(self._tmp.name)
+        self.log = self.base / "calls"
+        self.log.write_text("")
+        for app in ("fin", "fit"):
+            d = self.base / f"pleiades-{app}" / "deploy"
+            d.mkdir(parents=True)
+            (d / "release-inplace.sh").write_text(
+                '#!/bin/bash\necho "C4 plan rc 0 · 기본 실행 rc ${STUB_RC:-0} · 77s · 완료 안내: 예"\n'
+                'echo "C5 프로브 오류 응답 0 · 창 안 오류 줄 web 1(경고 1)"\n'
+                '[[ ${STUB_RC:-0} -eq 0 ]] && echo "결과: 통과" || echo "결과: 중단 — C4 — 빌드 실패 (/home/svc/x)"\nexit ${STUB_RC:-0}\n')
+            (d / "notify-deploy.cjs").write_text("require('fs').appendFileSync(process.env.STUB_LOG, process.argv.slice(2).join('|') + '\\n')\n")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def run_cmd(self, **extra: str) -> subprocess.CompletedProcess:
+        env = {"PATH": f"{NODE_DIR}:{BASE_PATH}", "HOME": str(self.base), "PLEIADES_TEST": "1",
+               "PLEIADES_CHECKOUT_BASE": str(self.base), "STUB_LOG": str(self.log), "SSH_ORIGINAL_COMMAND": "deploy v1.0.5", **extra}
+        return subprocess.run(["bash", str(SSH_DEPLOY)], capture_output=True, text=True, env=env, timeout=30)
+
+    def test_each_app_notifies_with_summary(self):
+        r = self.run_cmd()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.log.read_text().splitlines(),
+                         ["fin|ok|v1.0.5|소요 77s · 프로브 오류 응답 0", "fit|ok|v1.0.5|소요 77s · 프로브 오류 응답 0"])
+
+    def test_fin_failure_notifies_once_with_redacted_result(self):
+        r = self.run_cmd(STUB_RC="4")
+        self.assertEqual(r.returncode, 4)
+        lines = self.log.read_text().splitlines()
+        self.assertEqual(len(lines), 1)
+        self.assertTrue(lines[0].startswith("fin|fail|v1.0.5|rc 4 · 중단 — C4 — 빌드 실패"), lines[0])
+        self.assertNotIn("/home/svc", lines[0])
+
+    def test_missing_notify_script_is_skipped(self):
+        for app in ("fin", "fit"):
+            (self.base / f"pleiades-{app}" / "deploy" / "notify-deploy.cjs").unlink()
+        r = self.run_cmd()
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("알림 스크립트가 없다 — 건너뜀", r.stdout)
+
+
+if __name__ == "__main__":
+    unittest.main()
