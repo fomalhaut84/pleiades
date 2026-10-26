@@ -228,6 +228,13 @@ main() {
     [[ "$ans" == y || "$ans" == Y ]] || stop 1 "사용자 취소 — 바꾸지 않았다"
   fi
 
+  # 첫 배포(기록 없음)면 checkout 전에 직전 태그를 R-8 대상으로 남긴다 — C1 이 P 가 이 체크아웃에서 돌고 있음을 확인했다.
+  # 없으면 첫 배포가 실패하고 --retry 도 실패할 때 R-8 안내가 "<마지막 정상 태그>" 가 된다(PR #286 Codex P2)
+  if [[ $RETRY -eq 0 && -z "$LAST_OK" ]]; then
+    (umask 077; printf '%s\n' "$P" > "$LAST_OK_FILE") 2>>"$LOG" || stop 1 "C2 전 — R-8 대상 기록 실패"
+    LAST_OK=$P
+  fi
+
   # ── C2. checkout ────────────────────────────────────────────────────
   [[ $RETRY -eq 1 ]] || git -C "$ROOT" checkout -q "$V" >>"$LOG" 2>&1 || revert_checkout "C2 — checkout 실패"
   local now_tag

@@ -440,6 +440,16 @@ class ReleaseInplace(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("마지막 통과 v1.0.1", r.stdout)
 
+    # 회귀: PR #286 Codex P2 — 첫 배포가 실패하고 재시도도 실패해도 R-8 은 직전 태그를 가리킨다
+    def test_first_deploy_failure_keeps_previous_tag_for_r8(self):
+        self.srv.release("v1.0.1")
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes", STUB_DEPLOY_RC="1").returncode, 4)
+        r = self.srv.run("fin", "v1.0.1", "--yes", "--retry", STUB_DEPLOY_RC="1")
+        self.assertEqual(r.returncode, 4)
+        self.assertIn("R-8: release-inplace.sh fin v1.0.0", r.stdout)
+        self.assertNotIn("<마지막 정상 태그>", r.stdout)
+        self.assertIn("마지막 통과 v1.0.0", r.stdout)
+
     def test_retry_requires_head_at_the_tag(self):
         self.srv.release("v1.0.1")
         r = self.srv.run("fin", "v1.0.1", "--yes", "--retry")
