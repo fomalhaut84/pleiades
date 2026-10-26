@@ -498,13 +498,34 @@ class ReleaseInplace(unittest.TestCase):
         self.srv.release("v1.0.1")
         lock = self.srv.tmp / "private" / "deploy.lock.d"
         lock.mkdir(parents=True)
-        self.assertStoppedBeforeChange(self.srv.run("fin", "v1.0.1", "--yes"), "다른 배포")
+        # 회귀: PR #294 Codex P2 — flock 이 있는 Linux 에서도 폴백을 탄다
+        mk = {"PLEIADES_LOCK": "mkdir"}
+        self.assertStoppedBeforeChange(self.srv.run("fin", "v1.0.1", "--yes", **mk), "다른 배포")
         (lock / "pid").write_text("999999")   # 죽은 pid 여도
-        self.assertStoppedBeforeChange(self.srv.run("fin", "v1.0.1", "--yes"), "다른 배포")
-        lock.rmdir() if not any(lock.iterdir()) else [f.unlink() for f in lock.iterdir()] and lock.rmdir()
-        r = self.srv.run("fin", "v1.0.1", "--yes")
+        self.assertStoppedBeforeChange(self.srv.run("fin", "v1.0.1", "--yes", **mk), "다른 배포")
+        (lock / "pid").unlink()
+        lock.rmdir()
+        r = self.srv.run("fin", "v1.0.1", "--yes", **mk)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertFalse(lock.exists(), "끝나면 락을 푼다")
+
+    # 회귀: PR #294 Codex P2 — 정상 배포된 태그의 재시도·R-8 이 실패하면 "이미 배포됨" 으로 덮지 않는다
+    def test_failed_redeploy_of_good_tag_is_not_already_deployed(self):
+        self.srv.release("v1.0.1")
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes").returncode, 0)
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes", "--retry", STUB_DEPLOY_RC="1").returncode, 4)
+        r = self.srv.run("fin", "v1.0.1", "--yes")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("끝나지 않은 시도 v1.0.1", r.stdout)
+        self.assertNotIn("이미 v1.0.1 배포됨", r.stdout)
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes", "--retry").returncode, 0)
+        self.assertIn("이미 v1.0.1 배포됨", self.srv.run("fin", "v1.0.1", "--yes").stdout)
+
+    def test_build_free_failure_clears_pending(self):
+        # 빌드 전 실패는 P 로 되돌린다 — 끝나지 않은 시도가 남지 않는다
+        self.srv.release("v1.0.1")
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes", STUB_PLAN_RC="2").returncode, 1)
+        self.assertFalse((self.srv.tmp / "private" / "inplace-fin-pending").exists())
 
     def test_dry_run_takes_no_lock(self):
         self.srv.release("v1.0.1")

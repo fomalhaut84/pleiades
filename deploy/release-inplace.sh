@@ -32,7 +32,8 @@ kill_probe() { [[ -z "${PROBE_PID:-}" ]] || kill "$PROBE_PID" 2>/dev/null || tru
 LOCK_DIR=
 take_lock() {
   local file=$1
-  if command -v flock >/dev/null; then
+  # 테스트만 mkdir 폴백을 고른다 — flock 이 있는 Linux 에서도 폴백 동작을 시험할 수 있게(PR #294 Codex P2)
+  if [[ "${PLEIADES_TEST:-}" != 1 || "${PLEIADES_LOCK:-}" != mkdir ]] && command -v flock >/dev/null; then
     exec 9>>"$file"
     flock -n 9
     return
@@ -118,6 +119,7 @@ revert_checkout() {  # <이유>
   # 재시도면 되돌릴 checkout 이 없다(이미 V) — 서비스는 앞 실패 상태 그대로다
   [[ $RETRY -eq 0 ]] || stop 4 "$1 (재시도 · 빌드 전 — 서비스는 앞 실패 상태 그대로) → $(recovery)"
   if git -C "$ROOT" checkout -q "$P" >>"$LOG" 2>&1 && [[ "$(git -C "$ROOT" describe --tags --exact-match HEAD 2>/dev/null)" == "$P" ]]; then
+    rm -f "$PENDING_FILE"   # 빌드 전이라 P 그대로다 — 끝나지 않은 시도가 없다
     stop 1 "$1 → $P 로 checkout 되돌림(빌드 전 · 재기동 없음)"
   fi
   stop 4 "$1 → 되돌리기 실패: git -C ~/pleiades-$APP checkout -q $P (빌드 전 · 재기동 불필요)"
@@ -178,14 +180,18 @@ main() {
   # PR #283 Codex P2: C4·C5 실패 뒤 HEAD 는 이미 V 다 — 배포 완료와 checkout 만 된 상태를 가른다(--retry)
   LAST_OK_FILE="$PRIVATE/inplace-$APP-last-ok"
   LAST_OK=$(cat "$LAST_OK_FILE" 2>/dev/null || true)
-  if [[ "$P" == "$V" && $RETRY -eq 0 && "$LAST_OK" == "$V" ]]; then
+  # 진행 중 표지 — C2 전에 쓰고 C5 통과 때 지운다. 남아 있으면 마지막 시도가 끝나지 않았다(PR #294 Codex P2:
+  # 정상 배포된 태그를 --retry·R-8 로 다시 하다 실패해도 last-ok 는 그 태그라 "이미 배포됨" 으로 덮였다)
+  PENDING_FILE="$PRIVATE/inplace-$APP-pending"
+  PENDING=$(cat "$PENDING_FILE" 2>/dev/null || true)
+  if [[ "$P" == "$V" && $RETRY -eq 0 && "$LAST_OK" == "$V" && "$PENDING" != "$V" ]]; then
     # 이미 끝난 배포 — Actions 가 손 배포 뒤 다시 와도 실패로 남지 않게(#242 보안 리뷰 major · 할 일 없음)
     form "   이미 $V 배포됨(마지막 통과 = $V) — 할 일 없음"
     emit_form "통과 — 이미 배포됨"
     exit 0
   fi
   if [[ "$P" == "$V" ]]; then
-    [[ $RETRY -eq 1 ]] || stop 1 "A — HEAD 가 이미 $V 다(앞 배포가 실패했으면 --retry · 마지막 통과 ${LAST_OK:-기록 없음})"
+    [[ $RETRY -eq 1 ]] || stop 1 "A — HEAD 가 이미 $V 다(앞 배포가 실패했으면 --retry · 마지막 통과 ${LAST_OK:-기록 없음}${PENDING:+ · 끝나지 않은 시도 $PENDING})"
     form "   재시도 — HEAD 이미 $V · 마지막 통과 ${LAST_OK:-기록 없음}"
   else
     [[ $RETRY -eq 0 ]] || stop 1 "A — --retry 는 HEAD 가 이미 $V 일 때만"
@@ -263,6 +269,8 @@ main() {
     LAST_OK=$P
   fi
 
+  (umask 077; printf '%s\n' "$V" > "$PENDING_FILE") 2>>"$LOG" || stop 1 "C2 전 — 진행 중 표지 기록 실패"
+
   # ── C2. checkout ────────────────────────────────────────────────────
   [[ $RETRY -eq 1 ]] || git -C "$ROOT" checkout -q "$V" >>"$LOG" 2>&1 || revert_checkout "C2 — checkout 실패"
   local now_tag
@@ -330,6 +338,7 @@ main() {
   [[ "${procs[1]:-0}" == 3 && "$mcp_code" == 200 && "$conflict" == 0 && "$n_bad" == 0 ]] \
     || stop 4 "C5 — 확인 실패(위 줄) → $(recovery)"
   (umask 077; printf '%s\n' "$V" > "$LAST_OK_FILE") 2>>"$LOG" || true
+  rm -f "$PENDING_FILE"
   emit_form "통과"
 }
 
