@@ -527,6 +527,18 @@ class ReleaseInplace(unittest.TestCase):
         self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes", STUB_PLAN_RC="2").returncode, 1)
         self.assertFalse((self.srv.tmp / "private" / "inplace-fin-pending").exists())
 
+    # 회귀: PR #296 Codex P2 — 빌드 전 되돌림이 앞 시도의 실패 표지를 지워 "이미 배포됨" 이 됐다
+    def test_build_free_revert_restores_previous_pending(self):
+        self.srv.release("v1.0.1")
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes").returncode, 0)
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes", "--retry", STUB_DEPLOY_RC="1").returncode, 4)
+        self.srv.release("v1.0.2")
+        self.assertEqual(self.srv.run("fin", "v1.0.2", "--yes", STUB_PLAN_RC="2").returncode, 1)
+        self.assertEqual(self.srv.head(), "v1.0.1")
+        r = self.srv.run("fin", "v1.0.1", "--yes")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("끝나지 않은 시도 v1.0.1", r.stdout)
+
     def test_dry_run_takes_no_lock(self):
         self.srv.release("v1.0.1")
         lock = self.srv.tmp / "private" / "deploy.lock.d"
