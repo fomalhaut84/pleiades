@@ -17,6 +17,32 @@ V=v1.0.2
 ~/pleiades-fit/deploy/release-inplace.sh fit "$V"
 ```
 
+## 자동 배포 (#242 · Release 발행 = 배포)
+
+설정을 마친 뒤로는 **Release 가 발행되면** `.github/workflows/deploy.yml` 이 서버에 `deploy <tag>` 를 보내고, forced command `deploy/ssh-deploy.sh` 가 fin → fit 순서로 `release-inplace.sh <app> <tag> --yes` 를 돌린다(fin 이 통과하지 않으면 fit 은 하지 않는다). 판정 양식은 그 Actions 실행의 **요약(Summary)** 에 남는다 — 실패면 양식의 "재시도:"·"R-8:" 줄을 서버에서 손으로 실행한다. 서버 조치가 필요한 릴리즈는 Claude 가 draft 로 만들고 사용자가 서버 조치 뒤 Publish 한다(`workflow.md` 릴리즈 절).
+
+**한 번만 하는 설정(사용자)** — `ssh-deploy.sh` 가 서버 fin 체크아웃에 있어야 하므로 **이 파일이 든 태그를 먼저 손으로 배포한 뒤**(아래 스크립트 실행) 한다. 그 전의 Release 발행은 workflow 가 "secret 없음" 으로 곧바로 실패한다 — 정상이다.
+
+```bash
+# 1) 서버 — 배포 전용 키(비밀번호 없음 · 저장소 밖 · umask 는 서브셸에서만)
+(umask 077; ssh-keygen -q -t ed25519 -N '' -C pleiades-deploy -f ~/pleiades-private/deploy_key)
+# 2) 서버 — authorized_keys 에 forced command 줄(restrict = 포워딩·pty 전부 끔)
+printf 'restrict,command="%s/pleiades-fin/deploy/ssh-deploy.sh" %s\n' "$HOME" "$(cat ~/pleiades-private/deploy_key.pub)" >> ~/.ssh/authorized_keys
+# 3) 서버 — 거부 확인(키를 지우기 전에 · 기대: rc 2 · "받는 명령은 'deploy vX.Y.Z' 하나다")
+ssh -i ~/pleiades-private/deploy_key -p <포트> localhost bash; echo "rc=$?"
+# 4) 로컬(Mac) — 서버 호스트 키(DEPLOY_HOST 와 똑같은 이름·포트로 · 22 가 아니면 [호스트]:포트 형식으로 나온다)
+ssh-keyscan -t ed25519 -p <포트> <호스트> > /tmp/pleiades_known_hosts
+ssh-keygen -lf /tmp/pleiades_known_hosts      # 지문을 서버의 `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` 와 대조(처음 받는 값을 믿지 않는다)
+```
+
+5) **GitHub** — Settings → Environments → `production`(없으면 New) → *Deployment branches and tags* = **Selected branches and tags** · **Add rule → Tag → `v*`** 하나만(브랜치 규칙은 두지 않는다 — 이 규칙이 키를 지킨다 · `pleiades-resume` 이 매 세션 점검) → *Environment secrets* 에 `DEPLOY_SSH_KEY`(= 서버 `deploy_key` 내용) · `DEPLOY_HOST` · `DEPLOY_USER` · `DEPLOY_KNOWN_HOSTS`(= 4 의 파일 내용) · `DEPLOY_PORT`(22 가 아니면). **저장소 수준 secrets 는 0 그대로**(I-9). Claude 는 secrets 를 만들지도 읽지도 않는다.
+6) 서버 — `rm ~/pleiades-private/deploy_key`(개인 키는 GitHub 에만 · 공개 키는 authorized_keys 에 남는다). 실제 배포 확인은 다음 Release.
+
+- **두 배포가 겹치지 않는다** — `release-inplace.sh` 가 `~/pleiades-private/deploy.lock` 에 flock 을 잡는다(손 실행 포함 · 프로세스가 끝나면 커널이 푼다 · 지우지 않는다).
+- **R-8 로 #242 이전 태그(`v1.0.2` 이하)에 가면** fin 체크아웃에서 `ssh-deploy.sh` 가 사라진다 — 그동안 자동 배포는 실패로 닫힌다(안전 쪽). 다시 #242 이후 태그를 손으로 배포하면 돌아온다.
+- 마이그레이션 릴리즈는 prerelease 로 발행돼 건너뛴다 · 서버 조치 릴리즈는 draft → 조치 뒤 Publish(`workflow.md` 릴리즈 절).
+
+되돌리기: authorized_keys 의 `pleiades-deploy` 줄 삭제 · environment secrets 삭제 · workflow 삭제(**즉시**). 끄기만 하려면 Actions 에서 workflow Disable.
 > **결과 (2026-10-26 · #289) — `v1.0.2` 를 스크립트로 첫 배포(부트스트랩) 완료.** fin rc 0 · 135 s · 프로브 오류 응답 1(웹 재기동 ≈2 s) → fit rc 0 · 75 s · 0 · 두 앱 C5 통과 · 사람 확인 예 · R-8 없음. 세션에는 판정 양식만. 판정 표 `measured-facts.md` *2026-10-26 — v1.0.2*. 이제 서버 체크아웃에 스크립트가 있으므로 다음부터는 체크아웃 안 판. 되돌리기: 문구 (**즉시**).
 
 **첫 배포 — 부트스트랩(`v1.0.1` → `v1.0.2` 한 번만).** 지금 서버 체크아웃(`v1.0.1`)에는 이 스크립트가 없다 — 새 태그에서 꺼낸 판을 체크아웃 **밖**에서 부르고 `--checkout` 으로 가리킨다. 태그 fetch 는 ref 만 만들어 체크아웃은 깨끗하다(PR #283 Codex P2).
