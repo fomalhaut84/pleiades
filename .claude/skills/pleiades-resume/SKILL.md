@@ -46,7 +46,8 @@ echo "actions secrets(저장소): $(gh api repos/fomalhaut84/pleiades/actions/se
 # environment 가 없으면(설정 전) 404 — API 실패와 "없음" 을 가른다
 if env_json=$(gh api repos/fomalhaut84/pleiades/environments/production 2>/dev/null); then
   env_names=$(gh api repos/fomalhaut84/pleiades/environments/production/secrets --jq '.secrets[].name' | sort | paste -sd' ' -) || env_names="조회 실패"
-  extra=$(printf '%s\n' $env_names | grep -vxE 'DEPLOY_(SSH_KEY|HOST|USER|KNOWN_HOSTS|PORT)' | paste -sd' ' -)
+  # 이름을 한 줄씩 — zsh 는 따옴표 없는 변수를 나누지 않는다(2026-10-26 첫 점검에서 4 개가 한 줄로 묶여 오탐)
+  extra=$(printf '%s' "$env_names" | tr ' ' '\n' | grep -v '^$' | grep -vxE 'DEPLOY_(SSH_KEY|HOST|USER|KNOWN_HOSTS|PORT)' | paste -sd' ' -)
   # 배포 대상 규칙 — 정확히 태그 v* 하나여야 한다(I-9 · 이 규칙이 키를 지킨다)
   custom=$(printf '%s' "$env_json" | jq -r '.deployment_branch_policy.custom_branch_policies // false')
   rules=$(gh api repos/fomalhaut84/pleiades/environments/production/deployment-branch-policies --jq '[.branch_policies[]|"\(.type // "branch"):\(.name)"]|join(",")' 2>/dev/null || echo 조회실패)
