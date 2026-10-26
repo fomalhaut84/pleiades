@@ -33,6 +33,15 @@ describe('kstSearchMonths', () => {
     expect(kstSearchMonths(NOW, 7)).toEqual(['2026년 10월', '2026년 11월'])
   })
 
+  // 회귀: PR #282 Codex P2 — 2월을 사이에 둔 30일(1/30~3/1 KST)에서 2월이 빠졌다
+  it('사이 달까지 모두 — 2월 경계', () => {
+    expect(kstSearchMonths(new Date('2027-02-28T15:30:00Z'), 30)).toEqual(['2027년 1월', '2027년 2월', '2027년 3월'])
+  })
+
+  it('연말을 넘는다', () => {
+    expect(kstSearchMonths(new Date('2027-01-01T00:00:00Z'), 30)).toEqual(['2026년 12월', '2027년 1월'])
+  })
+
   it('한 달 안이면 한 달', () => {
     expect(kstSearchMonths(new Date('2026-10-26T03:00:00Z'), 7)).toEqual(['2026년 10월'])
   })

@@ -33,9 +33,18 @@ export function kstYearMonth(now: Date): string {
  * 질의에 이번 달만 넣으면 월초에 지난달 기사가 안 잡힌다 (#279 사전 리뷰 major — 11-01 의 30일 = 10월).
  */
 export function kstSearchMonths(now: Date, days: number): string[] {
-  const from = kstYearMonth(new Date(now.getTime() - days * DAY_MS))
-  const to = kstYearMonth(now)
-  return from === to ? [to] : [from, to]
+  // PR #282 Codex P2: 끝 두 달만이면 3월 1일의 30일(1/30~3/1)에서 2월이 빠진다 — 사이 달을 모두 센다
+  const toKst = new Date(now.getTime() + KST_OFFSET_MS)
+  const fromKst = new Date(now.getTime() - days * DAY_MS + KST_OFFSET_MS)
+  const months: string[] = []
+  let y = fromKst.getUTCFullYear()
+  let m = fromKst.getUTCMonth()
+  while (y < toKst.getUTCFullYear() || (y === toKst.getUTCFullYear() && m <= toKst.getUTCMonth())) {
+    months.push(`${y}년 ${m + 1}월`)
+    m += 1
+    if (m === 12) { m = 0; y += 1 }
+  }
+  return months
 }
 
 export interface NewsRuleOptions {
