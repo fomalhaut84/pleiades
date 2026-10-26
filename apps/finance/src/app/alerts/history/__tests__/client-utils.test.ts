@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { periodFromISO, formatFiredAt, stripHtml, messageForDisplay } from '../client-utils'
+import { periodFromISO, formatFiredAt, stripHtml, messageForDisplay, computeSuccessRate } from '../client-utils'
 
 describe('periodFromISO', () => {
   it('N일 전 시각을 ISO 8601 로 반환 (now 주입)', () => {
@@ -66,3 +66,20 @@ describe('messageForDisplay', () => {
     }
   })
 })
+
+// 회귀: pleiades#269 사전 리뷰 major — recorded(ai_failure) 행이 성공률 분모에 들어가면 발송 성공률이 낮게 보인다
+describe('computeSuccessRate', () => {
+  it('recorded 는 분모에서 뺀다 — recorded 1 + sent 1 = 100%', () => {
+    expect(computeSuccessRate(2, { sent: 1, partial: 0, recorded: 1 })).toBe(100)
+  })
+
+  it('partial 은 0.5', () => {
+    expect(computeSuccessRate(4, { sent: 2, partial: 2 })).toBe(75)
+  })
+
+  it('발송 대상이 없으면 null (전부 recorded 이거나 0건)', () => {
+    expect(computeSuccessRate(0, { sent: 0, partial: 0 })).toBeNull()
+    expect(computeSuccessRate(3, { sent: 0, partial: 0, recorded: 3 })).toBeNull()
+  })
+})
+

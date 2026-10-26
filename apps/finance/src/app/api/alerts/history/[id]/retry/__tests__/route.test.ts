@@ -72,6 +72,28 @@ describe('POST /api/alerts/history/[id]/retry', () => {
     expect(res.status).toBe(400)
   })
 
+  // 회귀: pleiades#269 — AI 실패 기록은 발송 이벤트가 아니다. retry 는 ALLOWED(가족 채팅 포함)로 보낸다
+  it('ai_failure row 는 상태와 무관하게 400 — 재발송하지 않는다', async () => {
+    const { prisma } = await import('@/lib/prisma')
+    const { redispatchAlert } = await import('@/bot/notifications/alert-dispatcher')
+    vi.mocked(redispatchAlert).mockClear()
+    vi.mocked(prisma.alertHistory.findUnique).mockResolvedValueOnce({
+      id: 'f1',
+      deliveryStatus: 'failed',
+      kind: 'ai_failure',
+      ticker: null,
+      price: null,
+      changePercent: null,
+      message: '🤖 AI 실패',
+      contextJson: null,
+    } as never)
+
+    const { POST } = await import('../route')
+    const res = await POST(buildReq() as never, { params: Promise.resolve({ id: 'f1' }) })
+    expect(res.status).toBe(400)
+    expect(redispatchAlert).not.toHaveBeenCalled()
+  })
+
   it('없는 row → 404', async () => {
     const { prisma } = await import('@/lib/prisma')
     vi.mocked(prisma.alertHistory.findUnique).mockResolvedValueOnce(null as never)

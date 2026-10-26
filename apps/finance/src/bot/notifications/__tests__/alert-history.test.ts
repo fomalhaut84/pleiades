@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { computeDeliveryStatus, recordAlertHistory } from '../alert-history'
+import { aiFailureRow, computeDeliveryStatus, recordAlertHistory } from '../alert-history'
 import { Prisma } from '@prisma/client'
 
 vi.mock('@/lib/prisma', () => ({
@@ -174,3 +174,39 @@ describe('recordAlertHistory', () => {
     errSpy.mockRestore()
   })
 })
+
+// 회귀: pleiades#269 — AI 실패를 웹 [알림 이력] 에. 발송 없는 기록 행이라 retry 대상(`failed`)이 아니다
+describe('aiFailureRow', () => {
+  const base = {
+    caller: 'cron:ta_signal',
+    code: 'quota_exceeded',
+    message: 'Claude CLI 종료 코드: 1 (subtype=error_max_budget_usd cost=$0.1020)',
+    consecutiveFailures: 1,
+    alerted: true,
+    at: Date.UTC(2026, 9, 27, 0, 0, 0),
+  }
+
+  it('kind ai_failure · deliveryStatus recorded · 수신자 0 · 발생 시각', () => {
+    const row = aiFailureRow(base)
+    expect(row.kind).toBe('ai_failure')
+    expect(row.deliveryStatus).toBe('recorded')
+    expect(row.recipientCount).toBe(0)
+    expect(row.firedAt.toISOString()).toBe('2026-10-27T00:00:00.000Z')
+    expect(row.contextJson).toBe(Prisma.JsonNull)
+  })
+
+  it('message 에 caller · 코드 · 원인 요약 · 알림 여부를 담는다', () => {
+    const { message } = aiFailureRow(base)
+    expect(message).toContain('cron:ta_signal')
+    expect(message).toContain('quota_exceeded')
+    expect(message).toContain('cost=$0.1020')
+    expect(message).toContain('관리자 알림 발송')
+    expect(aiFailureRow({ ...base, alerted: false }).message).toContain('관리자 알림 미발송')
+  })
+
+  it('긴 메시지는 자른다', () => {
+    const { message } = aiFailureRow({ ...base, message: 'x'.repeat(5000) })
+    expect(message.length).toBeLessThan(700)
+  })
+})
+

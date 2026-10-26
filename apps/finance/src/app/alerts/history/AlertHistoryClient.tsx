@@ -7,7 +7,7 @@ import {
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
 import { KIND_META, kindMetaOf, STATUS_META, type AlertKind } from './kinds'
-import { formatFiredAt, messageForDisplay, periodFromISO } from './client-utils'
+import { computeSuccessRate, formatFiredAt, messageForDisplay, periodFromISO } from './client-utils'
 import AlertHistoryDetailModal, {
   type AlertHistoryDetailRow,
 } from '@/components/alerts/AlertHistoryDetailModal'
@@ -29,7 +29,7 @@ interface HistoryRow {
 
 interface Stats {
   total: number
-  byStatus: { sent: number; partial: number; failed: number }
+  byStatus: { sent: number; partial: number; failed: number; recorded?: number }
   byKind: Array<{ kind: string; count: number }>
   byDay: Array<{ date: string; count: number }>
 }
@@ -235,9 +235,8 @@ export default function AlertHistoryClient() {
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
 
   const successRate = useMemo(() => {
-    if (!stats || stats.total === 0) return null
-    const success = stats.byStatus.sent + stats.byStatus.partial * 0.5
-    return (success / stats.total) * 100
+    if (!stats) return null
+    return computeSuccessRate(stats.total, stats.byStatus)
   }, [stats])
 
   return (

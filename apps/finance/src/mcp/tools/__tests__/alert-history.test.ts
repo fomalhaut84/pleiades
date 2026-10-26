@@ -168,3 +168,21 @@ describe('listAlertHistory', () => {
     }
   })
 })
+
+// 회귀: pleiades#269 — AI 실패 기록(운영 데이터)은 어드바이저 컨텍스트로 가지 않는다
+describe('listAlertHistory — ai_failure 제외', () => {
+  it('기본 조회 where 에 kind not ai_failure 를 건다', async () => {
+    const { prisma } = await import('@/lib/prisma')
+    vi.mocked(prisma.alertHistory.findMany).mockReset()
+    vi.mocked(prisma.alertHistory.findMany).mockResolvedValueOnce([] as never)
+    await listAlertHistory({})
+    const arg = vi.mocked(prisma.alertHistory.findMany).mock.calls[0][0] as { where: { kind: unknown } }
+    expect(arg.where.kind).toEqual({ not: 'ai_failure' })
+  })
+
+  it('kind 로 ai_failure 를 지정할 수 없다', async () => {
+    const result = await listAlertHistory({ kind: 'ai_failure' })
+    expect((result as { isError?: boolean }).isError).toBe(true)
+  })
+})
+

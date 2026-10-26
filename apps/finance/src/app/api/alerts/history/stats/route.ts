@@ -71,6 +71,8 @@ export async function GET(req: NextRequest) {
         sent: byStatusMap.get('sent') ?? 0,
         partial: byStatusMap.get('partial') ?? 0,
         failed: byStatusMap.get('failed') ?? 0,
+        // pleiades#269 — 발송 없는 기록 행(ai_failure). 성공률 분모에서 뺀다 (computeSuccessRate)
+        recorded: byStatusMap.get('recorded') ?? 0,
       },
       byKind,
       byDay,
