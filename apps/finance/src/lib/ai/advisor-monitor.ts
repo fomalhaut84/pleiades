@@ -232,16 +232,19 @@ export function createAdvisorMonitor(
       const state = states.get(key)
       if (!state) return
       const previousFailures = state.consecutiveFailures
+      const wasAlerted = state.lastAlertAt !== null
+      // PR #270 Codex P2: await 전에 동기로 지운다 — 복구 알림 발송 중 들어온 같은 caller 의 실패는
+      // 새 상태로 쌓이고, 뒤늦은 delete 가 그것을 지우지 않는다. 동시 성공의 복구 알림 중복도 막는다
+      states.delete(key)
 
       // 복구 알림: 알림이 실제로 나간 실패 뒤에만 (일회성 실패는 조용히 지나감)
-      if (notifyRecovery && previousFailures > 0 && state.lastAlertAt !== null) {
+      if (notifyRecovery && previousFailures > 0 && wasAlerted) {
         try {
           await sendAlert(buildRecoveryAlert(previousFailures, caller))
         } catch (sendErr) {
           console.error('[advisor-monitor] recovery 알림 발송 실패:', sendErr)
         }
       }
-      states.delete(key)
       void now // 파라미터 유지 (future timestamp 로깅용)
     },
 

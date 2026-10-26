@@ -340,6 +340,23 @@ describe('createAdvisorMonitor — caller 별 · 예산 초과 즉시 · 기록 
     vi.restoreAllMocks()
   })
 
+  // 회귀: PR #270 Codex P2 — 복구 알림 await 중 들어온 실패가 뒤늦은 delete 로 지워졌다
+  it('복구 알림 발송 중 들어온 같은 caller 의 실패를 지우지 않는다 · 동시 성공은 복구 알림 1회', async () => {
+    let release: (v: boolean) => void = () => {}
+    const sender = vi.fn(async (message: string) =>
+      message.includes('복구됨') ? new Promise<boolean>((r) => { release = r }) : true,
+    )
+    const m = createAdvisorMonitor(sender)
+    await m.recordFailure(budgetError(), 'bot:ai_chat', 1000)
+    const success1 = m.recordSuccess(2000, 'bot:ai_chat')
+    const success2 = m.recordSuccess(2001, 'bot:ai_chat')
+    await m.recordFailure(makeError(), 'bot:ai_chat', 2002)
+    release(true)
+    await Promise.all([success1, success2])
+    expect(m.getState('bot:ai_chat').consecutiveFailures).toBe(1)
+    expect(sender.mock.calls.filter(([msg]) => msg.includes('복구됨'))).toHaveLength(1)
+  })
+
   it('알림 진단 힌트는 pleiades pm2 이름을 쓴다', () => {
     const alert = buildFailureAlert(
       { consecutiveFailures: 3, lastFailureAt: 1, lastAlertAt: null, lastError: { message: 'x' } },
