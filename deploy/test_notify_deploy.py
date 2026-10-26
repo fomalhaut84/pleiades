@@ -80,6 +80,17 @@ class NotifyDeploy(unittest.TestCase):
             self.assertEqual(r.returncode, 0)
             self.assertIn("보내지 않았다", r.stdout)
 
+    def test_http_error_reports_status_only(self):
+        # 비-2xx — 상태 코드만 · 토큰 없음(비출력 계약의 나머지 반쪽 · 사전 리뷰 info)
+        self.env_file("finance", "TELEGRAM_BOT_TOKEN=1:SECRETTOKEN\nTELEGRAM_ADMIN_CHAT_IDS=9\n")
+        (self.root / "http401.cjs").write_text("globalThis.fetch = async () => ({ ok: false, status: 401, body: null })\n")
+        env = {"PATH": f"{NODE_DIR}:{BASE_PATH}", "NODE_OPTIONS": "--require=" + str(self.root / "http401.cjs")}
+        r = subprocess.run(["node", str(self.root / "deploy" / "notify-deploy.cjs"), "fin", "ok", "v1.0.5", "x"],
+                           capture_output=True, text=True, env=env, timeout=30)
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("실패 HTTP 401", r.stdout)
+        self.assertNotIn("SECRETTOKEN", r.stdout + r.stderr)
+
     def test_real_send_failure_hides_token(self):
         # 실제 전송 경로 — 접속이 실패해도 토큰이 담긴 URL 을 내지 않고 0 으로 끝난다(네트워크 없이 · 잘못된 프록시로 실패시킨다)
         self.env_file("finance", "TELEGRAM_BOT_TOKEN=1:SECRETTOKEN\nTELEGRAM_ADMIN_CHAT_IDS=9\n")
@@ -127,7 +138,19 @@ class SshDeployNotifies(unittest.TestCase):
         lines = self.log.read_text().splitlines()
         self.assertEqual(len(lines), 1)
         self.assertTrue(lines[0].startswith("fin|fail|v1.0.5|rc 4 · 중단 — C4 — 빌드 실패"), lines[0])
+        self.assertTrue(lines[0].endswith("· fit 은 하지 않았다"), lines[0])
         self.assertNotIn("/home/svc", lines[0])
+
+    def test_already_deployed_is_not_reported_as_a_new_deploy(self):
+        for app in ("fin", "fit"):
+            (self.base / f"pleiades-{app}" / "deploy" / "release-inplace.sh").write_text('#!/bin/bash\necho "결과: 통과 — 이미 배포됨"\n')
+        self.assertEqual(self.run_cmd().returncode, 0)
+        self.assertEqual(self.log.read_text().splitlines()[0], "fin|ok|v1.0.5|통과 — 이미 배포됨")
+
+    def test_failure_before_form_has_no_dangling_separator(self):
+        (self.base / "pleiades-fin" / "deploy" / "release-inplace.sh").write_text("#!/bin/bash\nexit 127\n")
+        self.assertEqual(self.run_cmd().returncode, 127)
+        self.assertEqual(self.log.read_text().splitlines(), ["fin|fail|v1.0.5|rc 127 · fit 은 하지 않았다"])
 
     def test_missing_notify_script_is_skipped(self):
         for app in ("fin", "fit"):

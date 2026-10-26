@@ -7,6 +7,7 @@
 //   Discord 별도 채널은 T-10 에서(사용자 2026-10-26) — 지금은 텔레그램만.
 // 출력: 보낸 수 한 줄. 토큰·채팅 ID 는 내지 않는다. 알림 실패는 종료 코드 0(배포 결과를 바꾸지 않는다) + 사유 한 줄.
 // 테스트: PLEIADES_TEST=1 NOTIFY_DRY_RUN=1 이면 보내지 않고 수신자 수·본문만 낸다.
+// 인자 형식은 직전 판 ssh-deploy.sh 와 호환을 유지한다 — 도는 ssh-deploy 는 한 판 뒤처진 채 새 체크아웃의 이 파일을 부른다.
 'use strict'
 
 const fs = require('fs')
@@ -49,6 +50,8 @@ async function send(token, chatId, text) {
       body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true }),
       signal: ctrl.signal,
     })
+    // 본문은 쓰지 않는다 — 끊어 두어야 keep-alive 로 프로세스가 늦게 끝나지 않는다
+    if (res.body && typeof res.body.cancel === 'function') await res.body.cancel().catch(() => {})
     return res.ok ? null : `HTTP ${res.status}`
   } catch (err) {
     // 오류 메시지에 요청 URL(토큰)이 실릴 수 있다 — 이름만 낸다
@@ -85,4 +88,4 @@ async function main() {
   console.log(`notify-deploy: ${app} 보냄 ${chats.length - errors.length}/${chats.length}${errors.length ? ` · 실패 ${errors.join(',')}` : ''}`)
 }
 
-main().catch(() => fail('예외'))
+main().then(() => process.exit(0), () => fail('예외'))
