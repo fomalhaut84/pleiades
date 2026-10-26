@@ -3,6 +3,7 @@ import path from 'path'
 import { SYSTEM_PROMPT } from './system-prompt'
 import { getGlobalAdvisorMonitor } from './advisor-monitor'
 import { detectModelDrift, modelDriftWarning, pinnedModelEnv, resolveModelId, type ModelTier } from './models'
+import { monorepoExcludeArgs } from './cli-isolation'
 
 /** 모델 등급. 실제 모델 ID 는 `./models` 의 고정값 (#255) */
 export type AdvisorModel = ModelTier
@@ -557,6 +558,13 @@ interface ClaudeJsonOutput {
   // classify 시 이 필드도 참조해야 auth/quota 분류 가능.
   api_error_status?: number | string
   errors?: unknown
+  /**
+   * #247 — 결과 종류. 성공은 `success`, 실패는 `error_max_budget_usd` ·
+   * `error_max_turns` · `error_during_execution` 등. exit != 0 의 원인 판정에 쓴다.
+   */
+  subtype?: string
+  /** #247 — 종료 사유 (예: `budget_exhausted`). CLI 버전에 따라 없을 수 있다 */
+  terminal_reason?: string
   /** #255 — 실제 쓴 모델 ID → 사용량. CLI 보조 모델도 포함 */
   modelUsage?: Record<string, unknown>
   /**
@@ -582,6 +590,35 @@ export function extractAdvisorErrorText(json: Partial<ClaudeJsonOutput>): string
     } catch { /* ignore stringify failure */ }
   }
   return parts.join('\n')
+}
+
+/** #247 — CLI 가 예산 한도(`--max-budget-usd`)에서 멈췄을 때의 result subtype */
+const BUDGET_EXCEEDED_SUBTYPE = 'error_max_budget_usd'
+
+/**
+ * #247 — 실패한 result event 의 원인 요약 (로그·오류 메시지용). pure.
+ * 예: `subtype=error_max_budget_usd terminal_reason=budget_exhausted cost=$0.1023 turns=1`.
+ * 사용자 노출용이 아니다 (describeAdvisorError 가 따로 있다) — 비밀·본문은 담지 않는다.
+ */
+export function describeResultFailure(output: Partial<ClaudeJsonOutput> | undefined): string {
+  if (!output) return 'result=none'
+  const parts = [`subtype=${output.subtype ?? 'unknown'}`]
+  if (output.terminal_reason) parts.push(`terminal_reason=${output.terminal_reason}`)
+  if (typeof output.total_cost_usd === 'number') parts.push(`cost=$${output.total_cost_usd.toFixed(4)}`)
+  if (typeof output.num_turns === 'number') parts.push(`turns=${output.num_turns}`)
+  return parts.join(' ')
+}
+
+/**
+ * #247 — 실패 분류. 예산 한도 종료(`error_max_budget_usd`)는 텍스트 패턴과 무관하게
+ * 기존 총 예산 cap 초과와 같은 `quota_exceeded` 로 — 그 외는 classifyAdvisorError. pure.
+ */
+export function classifyResultFailure(
+  output: Partial<ClaudeJsonOutput> | undefined,
+  text: string | undefined,
+): AdvisorErrorCode {
+  if (output?.subtype === BUDGET_EXCEEDED_SUBTYPE) return 'quota_exceeded'
+  return classifyAdvisorError(text)
 }
 
 /**
@@ -783,6 +820,8 @@ async function runAdvisorOnce(
   cmdParts.push(
     '--mcp-config', shellEscape(mcpConfigPath),
     '--strict-mcp-config',
+    // #247: 모노레포 루트 CLAUDE.md·rules 를 컨텍스트에서 뺀다 (cli-isolation.ts)
+    ...monorepoExcludeArgs(projectRoot).map(shellEscape),
     '--allowedTools', shellEscape(ALLOWED_TOOLS),
     // Codex PR #484 P1 (security): `--tools` 는 built-in Claude Code tool 의
     // **availability allowlist** — 지정 tool 만 subprocess 에서 사용 가능.
@@ -873,9 +912,14 @@ async function runAdvisorOnce(
         if (stderrTail) console.error('[advisor] claude stderr:', stderrTail)
         const jsonErrorText = output ? extractAdvisorErrorText(output) : ''
         const combined = [jsonErrorText, stderrTail].filter(Boolean).join('\n')
-        const errorCode = classifyAdvisorError(combined || undefined)
+        const errorCode = classifyResultFailure(output, combined || undefined)
         const detail = jsonErrorText.slice(0, 1024) || stderrTail || undefined
-        reject(new AdvisorError(`Claude CLI 종료 코드: ${code}`, detail, errorCode, observedCost))
+        // #247: 종료 코드만으로는 예산 초과인지 알 수 없었다 — 원인 요약을 메시지·로그에
+        const failure = describeResultFailure(output)
+        console.error(
+          `[advisor] fail caller=${options.caller ?? 'unknown'} model=${modelId} code=${errorCode} exit=${code} ${failure}`,
+        )
+        reject(new AdvisorError(`Claude CLI 종료 코드: ${code} (${failure})`, detail, errorCode, observedCost))
         return
       }
 
@@ -887,7 +931,11 @@ async function runAdvisorOnce(
 
       if (output.is_error) {
         const errorText = extractAdvisorErrorText(output)
-        const errorCode = classifyAdvisorError(errorText || undefined)
+        const errorCode = classifyResultFailure(output, errorText || undefined)
+        console.error(
+          `[advisor] fail caller=${options.caller ?? 'unknown'} model=${modelId} code=${errorCode} exit=0 ` +
+            describeResultFailure(output),
+        )
         reject(new AdvisorError(
           `AI 응답 오류: ${output.result || `api_error_status=${output.api_error_status ?? 'unknown'}`}`,
           errorText.slice(0, 1024) || undefined,
