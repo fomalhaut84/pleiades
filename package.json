@@ -1,6 +1,6 @@
 {
   "name": "pleiades",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "pleiades — 루트는 @pleiades/notify 의 git 의존성 위임점이다 (003 §2-1 정정 · ALT-d). 패키지 본체는 packages/notify/",
   "repository": {
