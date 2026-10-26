@@ -12,7 +12,7 @@ vi.mock('../prisma', () => ({ prisma: {} }))
 vi.mock('../price-fetcher', () => ({ refreshPrices: vi.fn() }))
 vi.mock('../performance/snapshot', () => ({ takeAllSnapshots: vi.fn() }))
 vi.mock('../krx-stocks', () => ({ syncKrxStocks: vi.fn() }))
-vi.mock('../performance/benchmark', () => ({ backfillAllBenchmarks: vi.fn() }))
+vi.mock('../performance/benchmark', () => ({ refreshAllBenchmarks: vi.fn() }))
 vi.mock('@/bot/notifications/price-alert', () => ({ checkPriceAlerts: vi.fn() }))
 vi.mock('@/bot/notifications/ta-signal-alert', () => ({ checkTASignals: vi.fn() }))
 vi.mock('@/bot/notifications/custom-strategy-alert', () => ({ checkCustomStrategies: vi.fn() }))
@@ -20,13 +20,13 @@ vi.mock('@/bot/notifications/notifier', () => ({ recipients: vi.fn(() => []), Ro
 vi.mock('../whooing-webhook', () => ({ sendToWhooing: vi.fn() }))
 
 import cron from 'node-cron'
-import { backfillAllBenchmarks } from '../performance/benchmark'
+import { refreshAllBenchmarks } from '../performance/benchmark'
 import { scheduleBenchmarkRefresh } from '../cron'
 
 describe('scheduleBenchmarkRefresh', () => {
   beforeEach(() => {
     vi.mocked(cron.schedule).mockClear()
-    vi.mocked(backfillAllBenchmarks).mockReset()
+    vi.mocked(refreshAllBenchmarks).mockReset()
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -51,16 +51,28 @@ describe('scheduleBenchmarkRefresh', () => {
     expect(options).toEqual({ timezone: 'Asia/Seoul' })
   })
 
-  it('최근 1개월만 upsert 적재한다', async () => {
-    vi.mocked(backfillAllBenchmarks).mockResolvedValue([{ ticker: '^GSPC', inserted: 21, skipped: 0 }])
+  it('티커별 적재 결과를 한 줄로 요약한다', async () => {
+    vi.mocked(refreshAllBenchmarks).mockResolvedValue([{ ticker: '^GSPC', inserted: 21, skipped: 0, months: 1 }])
     registered().run()
     await flush()
-    expect(backfillAllBenchmarks).toHaveBeenCalledWith(1)
-    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('[cron] 벤치마크 적재 완료: 1개 (^GSPC+21/0)'))
+    expect(refreshAllBenchmarks).toHaveBeenCalledTimes(1)
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('[cron] 벤치마크 적재 완료: 1개 (^GSPC+21/0(1M))'))
+    expect(console.error).not.toHaveBeenCalled()
   })
 
-  it('적재가 실패해도 예외가 크론 밖으로 새지 않고 실패 로그만 남는다', async () => {
-    vi.mocked(backfillAllBenchmarks).mockRejectedValue(new Error('yahoo down'))
+  it('일부 티커 실패는 요약에 표시하고 실패 로그를 따로 남긴다', async () => {
+    vi.mocked(refreshAllBenchmarks).mockResolvedValue([
+      { ticker: '^KS11', inserted: 0, skipped: 0, months: 1, error: 'Too Many Requests' },
+      { ticker: '^GSPC', inserted: 21, skipped: 0, months: 1 },
+    ])
+    registered().run()
+    await flush()
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('^KS11:실패 ^GSPC+21/0(1M)'))
+    expect(console.error).toHaveBeenCalledWith('[cron] 벤치마크 적재 일부 실패: ^KS11')
+  })
+
+  it('적재가 통째로 실패해도 예외가 크론 밖으로 새지 않고 실패 로그만 남는다', async () => {
+    vi.mocked(refreshAllBenchmarks).mockRejectedValue(new Error('db down'))
     const { run } = registered()
     expect(() => run()).not.toThrow()
     await flush()
