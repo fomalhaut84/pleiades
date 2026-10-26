@@ -153,13 +153,13 @@ console.log("남은 항목", rest.length)' "$F"                  # 남은 항목
 함께 들어간 것(#271 · 확인 1 의 AI 질문 뒤 같은 셸에서):
 
 ```bash
-pm2 logs pleiades-fin-bot --lines 1000 --nostream 2>&1 | grep -E '\[advisor\] (ok|fail)' | tail -5   # #255 · #247 C — 한 줄씩 model= 과 used= 가 정확히 같은가 · cost=
+pm2 logs pleiades-fin-bot --lines 1000 --nostream 2>&1 | grep -E '\[advisor\] (ok|fail)' | tail -5   # #255 · #247 C — used= 에 model= 값이 있고 나머지도 고정 ID 인가 · cost=
 pm2 logs pleiades-fin-bot --lines 1000 --nostream 2>&1 | grep -c '모델 드리프트'                     # #255 — 0
 pm2 logs pleiades-fit-bot --lines 1000 --nostream 2>&1 | grep -c '모델 드리프트'                     # #255 fit — 0
 pm2 logs pleiades-fit-web --lines 1000 --nostream 2>&1 | grep -c '모델 드리프트'                     # #255 fit 웹 — 0
 ```
 
-- **확인 3 (#255):** `used=` 가 `model=` 과 **정확히** 같다(날짜 없는 ID — 다르면 매 호출 드리프트 오탐 · 런북 `ai-model-upgrade.md`) · 드리프트 0. 다음 브리핑·주간 리뷰(토 09:00)가 10/22·10/17 수준인지는 사용자 판정.
+- **확인 3 (#255):** `used=` 에 `model=` 값이 **들어 있고**, 함께 찍힌 다른 ID 도 `apps/*/src/lib/ai/models.ts` 의 고정 ID 다 — sonnet 호출은 CLI 보조 모델(고정 haiku)이 같이 찍히는 게 정상이다(`detectModelDrift` 와 같은 기준 · 런북 `ai-model-upgrade.md`). **판정 기준은 `모델 드리프트` 0** 이다 — 고정 목록 밖 ID 가 찍히면 그 경고가 같이 난다(PR #272 Codex P2). 다음 브리핑·주간 리뷰(토 09:00)가 10/22·10/17 수준인지는 사용자 판정.
 - **확인 4 (#269 · fin 웹):** [알림 이력] 유형 필터에 **🤖 AI 실패** 가 보인다(행은 실패가 있어야 생긴다 · 성공률 카드는 그 행을 세지 않는다). TA 가이드가 예산으로 실패하면 관리자 채팅에 **💸 예산·사용량 초과** 알림이 첫 실패에 온다 — 오면 `cost=` 를 보고 한도(\$0.25 · `TA_GUIDE_BUDGET_USD`)를 다시 맞춘다.
 - **확인 5 (#261 · 다음 화~토 06:15 뒤):** `pm2 logs pleiades-fin-bot --lines 3000 --nostream 2>&1 | grep '\[cron\] 벤치마크 적재'` 에 `완료: <n>개 (<티커>+…)` · `일부 실패` 없음. 토 09:00 주간 리뷰에 알파 줄(10/31 첫 확인).
 
@@ -189,7 +189,7 @@ C4 plan rc <n> · 기본 실행 rc <n> · <초>s · 완료 안내: 예/아니오
 C5 프로브 오류 응답 <수>(<처음 HH:MM:SS>~<마지막 HH:MM:SS>) · 창 안 오류 줄 web <n> bot <n> mcp <n>
    3 online · mcp <코드> · 409 0 · 재기동 6 same: 예/아니오 · 웹: 예/아니오 · 현황|/today: 예/아니오
 C6 (fit 뒤 한 번) 임시 완화 제거 · 남은 항목 <n> · fin AI 응답·비용 줄: 예/아니오 · fit AI 응답: 예/아니오 · TA 가이드 문구: 예/아니오/아직
-   used=model 일치: 예/아니오 · 드리프트 fin <n> fit <n> · 웹 'AI 실패' 필터: 예/아니오 · 💸 알림: 없음/왔음(cost <$>)
+   used 에 model 포함·고정 ID 만: 예/아니오 · 드리프트 fin <n> fit <n> · 웹 'AI 실패' 필터: 예/아니오 · 💸 알림: 없음/왔음(cost <$>)
    벤치마크 적재(06:15 뒤): 완료/일부 실패/아직 · 주간 리뷰 알파: 예/아니오/아직
 R-8 했나: 아니오/예(<이유 한 줄>) · R-2 했나: 아니오/예
 ```
