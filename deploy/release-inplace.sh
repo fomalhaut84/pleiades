@@ -24,6 +24,20 @@ PROBE_INTERVAL=2
 usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 # 프로브 정리 — 정상 끝 · stop · 신호(Ctrl-C · ssh 끊김 · SIGTERM) 어디서든(#278 사전 리뷰 M1 — 비대화형 bash 의 백그라운드는 SIGINT 를 무시한다)
 kill_probe() { [[ -z "${PROBE_PID:-}" ]] || kill "$PROBE_PID" 2>/dev/null || true; PROBE_PID=; }
+# 서버 배포 락 — 두 배포(Actions 재실행 · job 취소 뒤 남은 서버 쪽 실행 · 손 실행)가 같은 서버에서 겹치지 않게(#242 보안 리뷰 major).
+# flock 은 macOS(테스트)에 없다 — mkdir 은 원자적이다. 죽은 pid 의 락은 넘겨받는다
+LOCK_DIR=
+take_lock() {
+  local dir=$1 pid
+  if ! mkdir "$dir" 2>/dev/null; then
+    pid=$(cat "$dir/pid" 2>/dev/null || true)
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then return 1; fi
+    rm -rf "$dir" && mkdir "$dir" 2>/dev/null || return 1
+  fi
+  echo $$ > "$dir/pid"; LOCK_DIR=$dir
+}
+release_lock() { [[ -z "$LOCK_DIR" ]] || rm -rf "$LOCK_DIR"; LOCK_DIR=; }
+cleanup() { kill_probe; release_lock; }
 # A 의 diff — 실패를 0 으로 세지 않는다(M3 · 편도 게이트가 열린 채 통과)
 # $(…) 안에서 stop 을 부르면 양식이 변수로 빨려 든다 — 실패는 부르는 쪽에서 stop
 diff_list() { git -C "$ROOT" diff --name-only "$P" "$V" -- "$@" 2>>"$LOG"; }
@@ -146,6 +160,9 @@ main() {
   parent=$(cd "$(dirname "$PRIVATE")" 2>/dev/null && pwd -P) || stop 1 "원본 위치의 상위 디렉터리가 없다"
   case "$parent/$(basename "$PRIVATE")/" in "$ROOT"/*) stop 1 "원본 위치가 체크아웃 안이다(git 에 섞인다)" ;; esac
   (umask 077; mkdir -p "$PRIVATE" 2>/dev/null && chmod 700 "$PRIVATE") || stop 1 "원본 위치를 만들 수 없다"
+  trap cleanup EXIT
+  trap 'exit 130' INT TERM HUP
+  [[ $DRY -eq 1 ]] || take_lock "$PRIVATE/deploy.lock" || stop 1 "다른 배포가 이 서버에서 진행 중이다(락 $PRIVATE/deploy.lock · pid $(cat "$PRIVATE/deploy.lock/pid" 2>/dev/null))"
   LOG="$PRIVATE/inplace-$APP-$(date +%Y%m%d-%H%M%S).log"
   (umask 077; : > "$LOG") || stop 1 "원본 파일을 만들 수 없다"
 
@@ -156,6 +173,12 @@ main() {
   # PR #283 Codex P2: C4·C5 실패 뒤 HEAD 는 이미 V 다 — 배포 완료와 checkout 만 된 상태를 가른다(--retry)
   LAST_OK_FILE="$PRIVATE/inplace-$APP-last-ok"
   LAST_OK=$(cat "$LAST_OK_FILE" 2>/dev/null || true)
+  if [[ "$P" == "$V" && $RETRY -eq 0 && "$LAST_OK" == "$V" ]]; then
+    # 이미 끝난 배포 — Actions 가 손 배포 뒤 다시 와도 실패로 남지 않게(#242 보안 리뷰 major · 할 일 없음)
+    form "   이미 $V 배포됨(마지막 통과 = $V) — 할 일 없음"
+    emit_form "통과 — 이미 배포됨"
+    exit 0
+  fi
   if [[ "$P" == "$V" ]]; then
     [[ $RETRY -eq 1 ]] || stop 1 "A — HEAD 가 이미 $V 다(앞 배포가 실패했으면 --retry · 마지막 통과 ${LAST_OK:-기록 없음})"
     form "   재시도 — HEAD 이미 $V · 마지막 통과 ${LAST_OK:-기록 없음}"
@@ -252,8 +275,6 @@ main() {
   # ── C3. 프로브 ──────────────────────────────────────────────────────
   local probe="$PRIVATE/inplace-$APP-probe-$(date +%Y%m%d-%H%M%S).log"
   (umask 077; : > "$probe")   # 리다이렉션은 subshell 의 umask 보다 먼저라 파일을 먼저 만든다(I2)
-  trap kill_probe EXIT
-  trap 'exit 130' INT TERM HUP
   ( while :; do
       printf '%s %s\n' "$(date +%T)" "$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://127.0.0.1:$web_port/")"
       sleep "$PROBE_INTERVAL"

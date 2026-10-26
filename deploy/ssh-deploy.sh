@@ -2,7 +2,7 @@
 # ssh-deploy.sh — 배포 전용 ssh 키의 forced command (#242 · 007 D-b). 이 키로는 이 스크립트만 돈다.
 #
 # 서버 ~/.ssh/authorized_keys 한 줄(사용자가 등록):
-#   command="<홈>/pleiades-fin/deploy/ssh-deploy.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA… pleiades-deploy
+#   restrict,command="<홈>/pleiades-fin/deploy/ssh-deploy.sh" ssh-ed25519 AAAA… pleiades-deploy   (런북 release-inplace.md *자동 배포*)
 # 받는 명령은 하나뿐: SSH_ORIGINAL_COMMAND = "deploy vX.Y.Z" — 그 밖은 거부(셸·인자 추가·다른 명령 없음).
 # 하는 일: fin → fit 순서로 각 체크아웃의 deploy/release-inplace.sh <app> <V> --yes. fin 이 통과하지 않으면 fit 은 하지 않는다.
 # 출력은 release-inplace.sh 의 판정 양식뿐 — Actions 로그는 공개 저장소에서 누구나 본다.
@@ -13,6 +13,7 @@ TAG_RE='^v[0-9]+\.[0-9]+\.[0-9]+$'
 
 main() {
   set -uo pipefail
+  export LC_ALL=C   # [0-9] 등 정규식이 ssh 로 넘어온 로캘에 따르지 않게
   local cmd=${SSH_ORIGINAL_COMMAND:-}
   local verb tag extra
   read -r verb tag extra <<<"$cmd"
@@ -32,8 +33,10 @@ main() {
   local app rc
   for app in fin fit; do
     echo "## $app"
-    bash "$base/pleiades-$app/deploy/release-inplace.sh" "$app" "$tag" --yes </dev/null
-    rc=$?
+    # stderr 까지 공개 로그로 간다 — 홈 경로를 ~ 로(release-inplace 의 stdout 은 이미 가린다 · #242 보안 리뷰 info)
+    bash "$base/pleiades-$app/deploy/release-inplace.sh" "$app" "$tag" --yes </dev/null 2>&1 \
+      | sed -E "s#$HOME#~#g; s#/(home|Users)/[^/[:space:]]+#~#g"
+    rc=${PIPESTATUS[0]}
     if [[ $rc -ne 0 ]]; then
       [[ $app == fin ]] && echo "fit 은 하지 않았다 — fin 이 통과하지 않았다(rc $rc)"
       return "$rc"

@@ -20,7 +20,8 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ !github.event.release.prerelease && !github.event.release.draft }}
+    # prerelease 는 배포하지 않는다 — 마이그레이션 릴리즈처럼 손으로 배포하는 태그(workflow.md 릴리즈 절)
+    if: ${{ !github.event.release.prerelease }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 40
@@ -43,6 +44,7 @@ jobs:
         run: |
           set -o pipefail
           for v in KEY HOST SSH_USER KNOWN_HOSTS; do [[ -n "${!v}" ]] || { echo "secret 없음: $v"; exit 1; }; done
+          trap 'rm -f ~/.ssh/deploy' EXIT
           install -m 700 -d ~/.ssh
           (umask 077; printf '%s\n' "$KEY" > ~/.ssh/deploy; printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts)
           rc=0
@@ -56,5 +58,4 @@ jobs:
             cat forms.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          rm -f ~/.ssh/deploy
           exit "$rc"

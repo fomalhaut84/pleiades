@@ -43,9 +43,18 @@ gh pr list -R fomalhaut84/pleiades --state open
 # I-9(#242 개정) — 저장소 수준 secrets 0 · environment production 은 허용 목록(DEPLOY_SSH_KEY·HOST·USER·KNOWN_HOSTS·PORT)만.
 # 어긋나면 브리핑 첫 줄에 적고 사용자에게 보고(이름만 본다 — 값은 API 로도 읽을 수 없다)
 echo "actions secrets(저장소): $(gh api repos/fomalhaut84/pleiades/actions/secrets --jq .total_count)"
-env_names=$(gh api repos/fomalhaut84/pleiades/environments/production/secrets --jq '.secrets[].name' 2>/dev/null | sort | paste -sd' ' -)
-extra=$(printf '%s\n' $env_names | grep -vxE 'DEPLOY_(SSH_KEY|HOST|USER|KNOWN_HOSTS|PORT)' | paste -sd' ' -)
-echo "production secrets: ${env_names:-없음}${extra:+ · 허용 목록 밖: $extra}"
+# environment 가 없으면(설정 전) 404 — API 실패와 "없음" 을 가른다
+if env_json=$(gh api repos/fomalhaut84/pleiades/environments/production 2>/dev/null); then
+  env_names=$(gh api repos/fomalhaut84/pleiades/environments/production/secrets --jq '.secrets[].name' | sort | paste -sd' ' -) || env_names="조회 실패"
+  extra=$(printf '%s\n' $env_names | grep -vxE 'DEPLOY_(SSH_KEY|HOST|USER|KNOWN_HOSTS|PORT)' | paste -sd' ' -)
+  # 배포 대상 규칙 — 정확히 태그 v* 하나여야 한다(I-9 · 이 규칙이 키를 지킨다)
+  custom=$(printf '%s' "$env_json" | jq -r '.deployment_branch_policy.custom_branch_policies // false')
+  rules=$(gh api repos/fomalhaut84/pleiades/environments/production/deployment-branch-policies --jq '[.branch_policies[]|"\(.type // "branch"):\(.name)"]|join(",")' 2>/dev/null || echo 조회실패)
+  [[ "$custom" == true && "$rules" == "tag:v*" ]] && policy=ok || policy="어긋남(custom=$custom · $rules)"
+  echo "production: secrets ${env_names:-없음}${extra:+ · 허용 목록 밖: $extra} · 배포 대상 $policy"
+else
+  echo "production: environment 없음(자동 배포 설정 전) 또는 조회 실패"
+fi
 # 정기 수용 판정 (006 §4-S · Q54b) — 서비스 dev tip(ls-remote · 읽기) ↔ 마지막 수용 머지 커밋의 Service-Dev 트레일러
 for r in myFinance myFitness; do
   # --exit-code: ref 가 없으면 2 · 접근 불가면 128 — 빈 SHA 로 판정을 이어가지 않는다 (PR #105 Codex P2)

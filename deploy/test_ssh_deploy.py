@@ -64,6 +64,16 @@ class SshDeploy(unittest.TestCase):
             self.assertEqual(self.calls(), ["fin v1.0.3 --yes stdin=none"])
             self.assertIn("fit 은 하지 않았다", r.stdout)
 
+    def test_stderr_home_paths_are_redacted_and_code_survives_the_pipe(self):
+        # 공개 Actions 로그로 가는 stderr 도 홈 경로를 가린다 — 파이프 뒤에도 앱의 종료 코드를 지킨다
+        stub = self.base / "pleiades-fin" / "deploy" / "release-inplace.sh"
+        stub.write_text('#!/bin/bash\necho "boom /home/svc/x and $HOME/y" >&2\nexit 4\n')
+        r = self.run_cmd("deploy v1.0.3")
+        self.assertEqual(r.returncode, 4)
+        self.assertNotIn("/home/svc", r.stdout + r.stderr)
+        self.assertNotIn(str(self.base), r.stdout + r.stderr)
+        self.assertIn("boom ~/x and ~/y", r.stdout)
+
     def test_fit_failure_returns_its_code(self):
         r = self.run_cmd("deploy v1.0.3", STUB_RC_fit="4")
         self.assertEqual(r.returncode, 4)
@@ -120,6 +130,10 @@ class Workflow(unittest.TestCase):
         self.assertIn("permissions: {}", self.text)
         used = set(re.findall(r"secrets\.([A-Z_]+)", self.text))
         self.assertEqual(used, {"DEPLOY_SSH_KEY", "DEPLOY_HOST", "DEPLOY_USER", "DEPLOY_KNOWN_HOSTS", "DEPLOY_PORT"})
+
+    def test_prerelease_is_skipped_and_key_file_is_removed(self):
+        self.assertIn("!github.event.release.prerelease", self.text)
+        self.assertIn("trap 'rm -f ~/.ssh/deploy' EXIT", self.text)
 
     def test_strict_host_key_and_single_command(self):
         self.assertIn("StrictHostKeyChecking=yes", self.text)

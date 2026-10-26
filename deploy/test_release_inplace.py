@@ -468,6 +468,39 @@ class ReleaseInplace(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertEqual(self.srv.head(), "v1.0.1")
 
+    # 회귀: #242 보안 리뷰 major — 두 배포(Actions 재실행 · 취소 뒤 남은 서버 실행 · 손 실행)가 겹치지 않는다
+    def test_live_lock_stops_and_stale_lock_is_taken_over(self):
+        self.srv.release("v1.0.1")
+        lock = self.srv.tmp / "private" / "deploy.lock"
+        lock.mkdir(parents=True)
+        holder = subprocess.Popen(["sleep", "30"])
+        try:
+            (lock / "pid").write_text(str(holder.pid))
+            self.assertStoppedBeforeChange(self.srv.run("fin", "v1.0.1", "--yes"), "다른 배포")
+        finally:
+            holder.kill()
+            holder.wait()
+        r = self.srv.run("fin", "v1.0.1", "--yes")   # 죽은 pid 의 락은 넘겨받는다
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse(lock.exists(), "끝나면 락을 푼다")
+
+    def test_dry_run_takes_no_lock(self):
+        self.srv.release("v1.0.1")
+        lock = self.srv.tmp / "private" / "deploy.lock"
+        lock.mkdir(parents=True)
+        (lock / "pid").write_text(str(os.getpid()))
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--dry-run").returncode, 0)
+
+    # 회귀: #242 보안 리뷰 major — 손으로 먼저 배포한 태그를 Actions 가 다시 받으면 실패가 아니라 할 일 없음
+    def test_already_deployed_tag_is_a_noop(self):
+        self.srv.release("v1.0.1")
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes").returncode, 0)
+        before = self.srv.calls().count("deploy fin\n")
+        r = self.srv.run("fin", "v1.0.1", "--yes")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("이미 v1.0.1 배포됨", r.stdout)
+        self.assertEqual(self.srv.calls().count("deploy fin\n"), before)
+
     def test_private_dir_inside_checkout_is_refused(self):
         self.srv.release("v1.0.1")
         r = self.srv.run("fin", "v1.0.1", "--yes", PLEIADES_PRIVATE_DIR=str(self.srv.root / "logs-here"))
