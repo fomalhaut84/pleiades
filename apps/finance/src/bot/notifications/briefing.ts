@@ -10,21 +10,24 @@ import { askAdvisor, describeAdvisorError } from '@/lib/ai/claude-advisor'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 import { notifierFor, notifierForChat, Route, htmlContent } from './notifier'
 import { sanitizeError } from '@/bot/utils/error'
+import { formatKstDate } from '@/lib/kst-date'
+import { newsSearchRules } from '@/lib/ai/news-rules'
 
 type MarketSession = 'KR' | 'US'
 
-function buildBriefingPrompt(session: MarketSession): string {
+/** `now` 는 테스트 고정을 위한 주입점 (기본값 = 현재 시각) */
+export function buildBriefingPrompt(session: MarketSession, now: Date = new Date()): string {
   const sessionLabel = session === 'KR' ? '🇰🇷 한국장' : '🇺🇸 미국장'
 
   return [
-    `${sessionLabel} 모닝 브리핑을 작성해줘.\n`,
+    `${sessionLabel} 모닝 브리핑을 작성해줘. (오늘: ${formatKstDate(now)} KST 기준)\n`,
     '다음 단계로 진행해:',
     '1. get_all_strategies로 전체 종목 전략 확인',
     '2. get_portfolio(전체)로 현재 보유 현황 확인',
     session === 'US'
       ? '3. 미국주(USD) 종목 중 스윙/모멘텀/단타 전략은 get_technical_analysis로 TA 확인'
       : '3. 한국주(KRW) 종목 중 스윙/모멘텀/단타 전략은 get_technical_analysis로 TA 확인',
-    '4. WebSearch로 보유 종목 관련 최신 뉴스 검색',
+    '4. WebSearch로 보유 종목 관련 뉴스 검색 — 아래 뉴스 규칙대로 (회사명 + 연·월 · 게시일 확인)',
     '',
     '브리핑 구성:',
     '- 시장 동향 요약 (주요 지수, 이슈)',
@@ -34,6 +37,9 @@ function buildBriefingPrompt(session: MarketSession): string {
     '- 오늘 주목 이벤트 (실적, FOMC, 점검일 등)',
     '',
     '계좌별로 섹션 분리 (소담/다솜 장기 vs 세진 능동).',
+    '',
+    // pleiades#279: 게시일 없는 검색 결과에서 옛 기사가 "최신 뉴스" 로 인용됐다
+    ...newsSearchRules('briefing', now),
   ].join('\n')
 }
 

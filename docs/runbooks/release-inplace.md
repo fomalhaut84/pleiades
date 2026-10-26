@@ -2,7 +2,47 @@
 
 **누가:** 서버 단계는 사용자가 서비스 계정으로 한다(Claude 서버 무접촉 · I-3). 태그 대조(A)·릴리즈만 Claude 가 한다.
 **무엇:** 전환 뒤 릴리즈를 **이미 서비스 중인 체크아웃**(`~/pleiades-fin` · `~/pleiades-fit`)에 배포한다 — 007 R-8 의 정방향. 전환 런북(`007-t5-fin-cutover.md` · `007-t9-fit-cutover.md`)과 달리 옛 서비스가 없으므로 `deploy/deploy.sh <app>` 기본 실행이 **exit 3 없이 활성화까지 한 번에** 간다.
+> **결과 (2026-10-26 · #276) — `v1.0.1` 서버 첫 적용 완료.** fin `rc 0 · 134 s` → fit `rc 0 · 81 s` · 노출 창 프로브 오류 응답 **0**(두 앱) · 창 안 오류 줄 = web 1(Next.js 시작 경고)·bot 0·mcp 0(두 앱) · R-8 없음. C6 임시 완화 제거 · 확인 1~4 통과(확인 5 는 다음 06:15 · 토 주간 리뷰). 판정 표 `measured-facts.md` *2026-10-26 — v1.0.1 제자리 재배포*. 실행 중 고친 것: C5 오류 줄 명령(파일명의 pm2 id). 되돌리기: 문구 (**즉시**).
+
 **첫 적용:** `v1.0.1`(#247 — CLI 상위 컨텍스트 제외 · 예산 초과 로깅 · fin·fit 둘 다 · 함께: #255 모델 고정 · #261 fin 벤치마크 크론 · #269 fin AI 실패 가시성·TA 가이드 한도 \$0.25 — 확인은 C6). **이 경로는 서버에서 처음이다** — 결과가 #242(배포 자동화)의 전제가 된다.
+## 실행 — 스크립트 (#278 · `v1.0.2` 부터)
+
+**아래 A~C5 는 `deploy/release-inplace.sh` 가 한 번에 한다.** 사용자는 앱마다 한 줄을 돌리고 **끝에 나오는 판정 양식 블록만** 세션에 붙인다. 원본 로그는 `~/pleiades-private/inplace-<app>-<시각>.log`(600 · 저장소 밖)에만 남는다.
+
+```bash
+V=v1.0.2
+~/pleiades-fin/deploy/release-inplace.sh fin "$V" --dry-run   # A·B·C1 검사만 — 바꾸지 않는다(먼저 한 번)
+~/pleiades-fin/deploy/release-inplace.sh fin "$V"             # 확인 [y/N] 뒤 C2~C5 → 판정 양식
+#  fin 결과가 "결과: 통과" 이고 웹·텔레그램 현황 확인 뒤
+~/pleiades-fit/deploy/release-inplace.sh fit "$V"
+```
+
+**첫 배포 — 부트스트랩(`v1.0.1` → `v1.0.2` 한 번만).** 지금 서버 체크아웃(`v1.0.1`)에는 이 스크립트가 없다 — 새 태그에서 꺼낸 판을 체크아웃 **밖**에서 부르고 `--checkout` 으로 가리킨다. 태그 fetch 는 ref 만 만들어 체크아웃은 깨끗하다(PR #283 Codex P2).
+
+```bash
+V=v1.0.2; mkdir -p ~/pleiades-private && chmod 700 ~/pleiades-private
+git -C ~/pleiades-fin fetch -q --no-tags origin tag "$V"
+git -C ~/pleiades-fin show "$V":deploy/release-inplace.sh > ~/pleiades-private/release-inplace.sh
+bash ~/pleiades-private/release-inplace.sh fin "$V" --checkout ~/pleiades-fin --dry-run
+bash ~/pleiades-private/release-inplace.sh fin "$V" --checkout ~/pleiades-fin
+bash ~/pleiades-private/release-inplace.sh fit "$V" --checkout ~/pleiades-fit
+```
+
+그 뒤(`v1.0.2` 가 돌고 있으면)부터는 위의 체크아웃 안 판을 쓴다.
+
+- **실패 뒤 다시:** C4·C5 에서 실패하면 HEAD 는 이미 새 태그다 — 같은 태그를 다시 돌릴 때는 `--retry`(양식의 "재시도:" 줄 그대로). R-8 이 실패했을 때도 같다. 통과할 때마다 `~/pleiades-private/inplace-<app>-last-ok` 에 태그를 적고(기록이 없는 첫 배포는 checkout 전에 직전 태그를 적는다 · PR #286 Codex P2), R-8 안내는 그 값을 쓴다.
+- **이 스크립트는 그 앱 체크아웃 안의 것**을 부른다 — `pleiades-<app>-*` 3 프로세스가 그 체크아웃에서 돌지 않으면 C1 에서 멈춘다.
+- **새 셸에서 불러도 된다** — C1(셸 키 비우기 · `PLEIADES_ENV_FILE` · 도는 6 `same`)을 스크립트가 자기 안에서 한다.
+- **종료 코드:** 0 통과 · **1 서비스·체크아웃 그대로 중단**(A·B·C1 · 빌드 전 실패면 스크립트가 직전 태그로 checkout 을 되돌린 뒤) · 3 deploy.sh exit 3(옛 서비스 online) · **4 빌드·재기동 뒤 실패**(또는 되돌리기 실패) → 양식의 R-8 줄 그대로(`release-inplace.sh <app> <직전 태그>` · 직전 배포가 중간에 멈춰 프로세스가 3 개 미만이어도 돈다).
+- `--dry-run` 은 서비스·체크아웃을 바꾸지 않는다 — 원본 로그 파일을 만들고 새 태그를 fetch 할 뿐이다(백업 없음).
+- **창 안 오류 줄의 한계:** pm2 는 쓰기 덩어리마다 시각을 붙여 여러 줄 스택의 뒷줄은 세지 않는다(적게 센다) · 시각은 pm2 데몬 TZ 기준.
+- 봇 `409` 는 재기동 뒤의 텔레그램 getUpdates 충돌 줄만 센다(숫자 409 · 옛 줄 제외).
+- 스크립트가 멈추는 것(사람 판단 없이): 마이그레이션 · `mcp-config.json` 변경 · HEAD 가 태그가 아님 · 체크아웃 dirty · 플랫폼 설정 권한 ≠ 600 · 도는 프로세스의 `PLEIADES_ENV_FILE` 이 다름 · deploy.sh rc ≠ 0 · C5(3 online · mcp 200 · 409 0 · 재기동 `same`) 실패.
+- **사람이 하는 것:** C0 시각 고르기 · 양식의 "사람 확인" 줄(웹 화면 · 텔레그램 `현황`/`/today`) · 릴리즈별 확인(C6 처럼 그 릴리즈에 있으면).
+- 아래 A~C5 절은 **스크립트가 하는 일의 설명**이자 스크립트가 없을 때의 수동 경로다. 둘이 다르면 스크립트가 정본이다(테스트 `python3 -m unittest discover -s deploy`).
+
+> **정정 (2026-10-26 · #278) — A 의 pathspec.** 아래 A 의 `'apps/*/prisma/migrations'` · `'apps/*/.env.example'` · `'apps/*/package-lock.json'` 은 **언제나 0 을 낸다** — 와일드카드 pathspec 은 디렉터리 접두로 맞지 않는다(실측: 이 저장소 이력에서 0 ↔ 앱 경로 직접 68). 스크립트 테스트가 잡았다. `v1.0.0 → v1.0.1` 은 앱 경로로 다시 재도 전부 0 — 그날 판정은 맞았다(`deploy.sh` 의 DB 대조도 2차로 막는다). 아래 명령은 앱 경로로 고쳤다. 되돌리기: 문구 (**즉시**).
+
 **언제:** T-6 판정(2026-10-26 월 07:00 이후) 뒤. 앱마다 따로 — **fin 먼저 → 확인 → fit.**
 **셸:** bash · zsh. **C 절은 처음부터 끝까지 같은 셸**에서(앱 둘을 같은 셸에서 이어 해도 된다).
 **결과:** 원본 출력은 세션에 주지 않는다. 맨 아래 [판정 양식](#판정-양식)만.
@@ -37,10 +77,10 @@
 
 ```bash
 P=v1.0.0 V=v1.0.1
-git diff --name-only "$P" "$V" -- 'apps/*/prisma/migrations'               # 없음 — 있으면 멈춘다(Q74 · 편도)
+git diff --name-only "$P" "$V" -- apps/finance/prisma/migrations apps/fitness/prisma/migrations   # 없음 — 있으면 멈춘다(Q74 · 편도) · 와일드카드 pathspec 금지(#278)
 git diff --name-only "$P" "$V" -- apps/finance/src/lib/ai/mcp-config.json  # 없음 — 있으면 멈춘다(007 Q83 조건 (ii): 도는 fin 이 호출마다 읽는다)
-git diff --name-only "$P" "$V" -- deploy/ 'apps/*/.env.example'           # 있으면 릴리즈 노트 "서버 조치" 와 대조(major 여부 · workflow.md 릴리즈 절)
-git diff --name-only "$P" "$V" -- package-lock.json 'apps/*/package-lock.json'   # 있으면 npm ci 가 바꾸는 범위가 크다 — 판정 양식에 적는다
+git diff --name-only "$P" "$V" -- deploy/ apps/finance/.env.example apps/fitness/.env.example   # 있으면 릴리즈 노트 "서버 조치" 와 대조(major 여부 · workflow.md 릴리즈 절)
+git diff --name-only "$P" "$V" -- package-lock.json apps/finance/package-lock.json apps/fitness/package-lock.json   # 있으면 npm ci 가 바꾸는 범위가 크다 — 판정 양식에 적는다
 git diff --stat "$P" "$V" -- apps packages deploy package.json | tail -1   # 규모
 ```
 
@@ -115,7 +155,7 @@ T1=$(date '+%F %T')
 
 ```bash
 kill "$PROBE"; awk '$2 !~ /^[23]/' "$PR" | wc -l; awk '$2 !~ /^[23]/' "$PR" | sed -n '1p;$p'   # 오류 응답 수 · 처음·마지막 시각
-for r in web bot mcp; do f=~/.pm2/logs/pleiades-$APP-$r-error.log; printf '%s ' "$r"; [ -f "$f" ] && awk -v s="$T0" -v e="$T1" 'substr($0,1,19)>=s && substr($0,1,19)<=e' "$f" | wc -l || echo -; done   # 창 안 오류 줄 수
+for r in web bot mcp; do printf '%s ' "$r"; cat ~/.pm2/logs/pleiades-$APP-$r-error*.log 2>/dev/null | awk -v s="$T0" -v e="$T1" 'substr($0,1,19)>=s && substr($0,1,19)<=e' | wc -l; done   # 창 안 오류 줄 수 — 파일명에 pm2 id 가 붙는다(-error-<id>.log · 재배포로 봇 id 가 바뀐다 · #276)
 pm2 ls | grep -E "pleiades-$APP"                                               # 3 online
 case $APP in fin) MP=4210 ;; fit) MP=4301 ;; esac
 curl -sS -o /dev/null -w 'mcp %{http_code}\n' "http://127.0.0.1:$MP/health"   # 200
