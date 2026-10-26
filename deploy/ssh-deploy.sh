@@ -66,7 +66,9 @@ notify() {  # <base> <app> <tag> <rc> <양식 파일>
     status=fail; summary="rc $4${result:+ · $result}"
     [[ $2 == fin ]] && summary+=" · fit 은 하지 않았다"
   fi
-  node "$script" "$2" "$status" "$3" "$summary" </dev/null 2>&1 | sed -E "s#$HOME#~#g; s#/(home|Users)/[^/[:space:]]+#~#g" || true
+  # pm2 프로세스와 같은 주소 선택 타임아웃 — 서버는 IPv6 경로가 없고 IPv4 연결이 ~250 ms 라 기본값이면 텔레그램 연결이
+  # 실패한다(#191 · deploy/pleiades.config.cjs NET_ARGS · PR #305 Codex P2)
+  node --network-family-autoselection-attempt-timeout=2000 "$script" "$2" "$status" "$3" "$summary" </dev/null 2>&1 | sed -E "s#$HOME#~#g; s#/(home|Users)/[^/[:space:]]+#~#g" || true
 }
 
 [[ "${BASH_SOURCE[0]}" != "$0" ]] || { main "$@"; exit $?; }

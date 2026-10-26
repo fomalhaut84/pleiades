@@ -116,7 +116,8 @@ class SshDeployNotifies(unittest.TestCase):
                 '#!/bin/bash\necho "C4 plan rc 0 · 기본 실행 rc ${STUB_RC:-0} · 77s · 완료 안내: 예"\n'
                 'echo "C5 프로브 오류 응답 0 · 창 안 오류 줄 web 1(경고 1)"\n'
                 '[[ ${STUB_RC:-0} -eq 0 ]] && echo "결과: 통과" || echo "결과: 중단 — C4 — 빌드 실패 (/home/svc/x)"\nexit ${STUB_RC:-0}\n')
-            (d / "notify-deploy.cjs").write_text("require('fs').appendFileSync(process.env.STUB_LOG, process.argv.slice(2).join('|') + '\\n')\n")
+            (d / "notify-deploy.cjs").write_text("require('fs').appendFileSync(process.env.STUB_LOG, process.argv.slice(2).join('|') + '\\n');"
+                                                 "require('fs').appendFileSync(process.env.STUB_LOG + '.exec', process.execArgv.join(' ') + '\\n')\n")
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -151,6 +152,14 @@ class SshDeployNotifies(unittest.TestCase):
         (self.base / "pleiades-fin" / "deploy" / "release-inplace.sh").write_text("#!/bin/bash\nexit 127\n")
         self.assertEqual(self.run_cmd().returncode, 127)
         self.assertEqual(self.log.read_text().splitlines(), ["fin|fail|v1.0.5|rc 127 · fit 은 하지 않았다"])
+
+    # 회귀: PR #305 Codex P2 — 서버 IPv4 ~250 ms · IPv6 경로 없음 → pm2 와 같은 타임아웃을 알림 node 에도(#191)
+    def test_notifier_gets_network_family_timeout(self):
+        self.assertEqual(self.run_cmd().returncode, 0)
+        execs = Path(str(self.log) + ".exec").read_text().splitlines()
+        self.assertEqual(execs, ["--network-family-autoselection-attempt-timeout=2000"] * 2)
+        cfg = (HERE / "pleiades.config.cjs").read_text()
+        self.assertIn("--network-family-autoselection-attempt-timeout=2000", cfg, "pm2 설정과 같은 값")
 
     def test_missing_notify_script_is_skipped(self):
         for app in ("fin", "fit"):
