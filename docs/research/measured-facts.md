@@ -4462,3 +4462,18 @@ ls -d apps/<app>/prisma/migrations/*/ | wc -l                                   
 - 노출 창 비교(제자리): v1.0.1 fin 134 s · 오류 응답 0 / v1.0.2 fin 135 s · 1 — 웹 재기동의 짧은 공백이 2 s 표본에 걸리기도 한다. #242(무인 배포) 판단 근거.
 - 다음 배포부터는 체크아웃 안 `~/pleiades-<app>/deploy/release-inplace.sh <app> <V>`.
 
+# 2026-10-26 — v1.0.3 손 배포 · v1.0.4~v1.0.6 자동 배포 (#312 · #242 · #304)
+
+`v1.0.3` 은 사용자가 서버에서 `release-inplace.sh`(forced command 파일 설치용) · `v1.0.4`~ 는 Release 발행 → `deploy.yml` → ssh → `ssh-deploy.sh` → fin → fit. 판정은 Actions 실행 로그의 판정 양식(공개 · secrets 마스킹 확인).
+
+| 태그 | 경로 | 발행 → 완료 | fin C4 · 프로브 오류 | fit C4 · 프로브 오류 | 알림 | 사람 확인 |
+|---|---|---|---|---|---|---|
+| v1.0.3 | 손 | 16:44 ~ 16:48 | rc 0 · 133 s · 1 | rc 0 · 69 s · 0 | — | 예 |
+| v1.0.4 | **자동(첫)** | 17:16:22 → 17:19:57 | rc 0 · 129 s · 0 | rc 0 · 70 s · 0 | —(코드 없음) | 예 |
+| v1.0.5 | 자동 | 18:05 → 18:08:42 | rc 0 · 130 s · 0 | rc 0 · 69 s · 0 | 없음(정상 · 직전 판 ssh-deploy) | — |
+| v1.0.6 | 자동 | 18:25:57 → 18:29:42 | rc 0 · 131 s · 1 | rc 0 · 69 s · 0 | **fin 1/1 · fit 1/1 수신** | 알림 확인 |
+
+- 모든 회차 C5: online 3/3 · mcp 200 · 409 0 · 재기동 `same` 6 · 창 안 오류 줄 web 1(Next.js 시작 경고)·bot 0·mcp 0.
+- fin 프로브 오류 응답 1(웹 재기동 ≈2 s)은 제자리 재배포 6회 중 3회.
+- 설정 점검(Claude · 읽기): 저장소 secrets 0 · production secrets = DEPLOY_HOST·KNOWN_HOSTS·SSH_KEY·USER · 배포 대상 custom `tag:v*` 하나 · 승인자 없음.
+
