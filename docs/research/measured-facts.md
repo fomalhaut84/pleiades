@@ -4416,3 +4416,29 @@ ls -d apps/<app>/prisma/migrations/*/ | wc -l                                   
 
 - `재시도 3/4`(최종 직전) 0 · 최종 실패 0.
 - **판정: 늘어난 것은 전환 첫 17시간뿐**이고 그 뒤 나흘은 옛 서비스 이하 · 새 fit 0 → `NET_ARGS`(#191) 프로세스 설정 가설은 근거 없음. 전환 첫날의 일시 현상으로 닫는다. 재발은 008 모니터링에서 본다.
+
+# 2026-10-26 — v1.0.1 제자리 재배포 (#276 · 런북 `release-inplace.md` 서버 첫 적용)
+
+**사용자가 서버에서 실행**(Claude 무접촉 · I-3). `v1.0.0` → `v1.0.1`(태그 = main 머지 `2ea2f3c` · PR #275) · 같은 체크아웃에 checkout → `deploy/deploy.sh <app>` 기본 실행 한 번. 장중(월 13:16~13:23 KST · 사용자 판단). 판정만 적는다(계정 · 경로 · pid 없음).
+
+| 단계 | fin | fit |
+|---|---|---|
+| A 태그 대조(Claude) | 마이그레이션 0 · `mcp-config.json` 불변 · `deploy/`·`.env.example` 변경 0 · lock = 루트 버전 문자열 2줄 | 같음 |
+| B 직전 태그 · 깨끗 · `dump.pm2` 사본(700/600) | 예 | 예 |
+| C1 셸 키 0 · platform 600 · 도는 6 `same` | 예 | 예 |
+| C2 `v1.0.1` · 깨끗 | 예 | 예 |
+| C4 plan · 기본 실행 | rc 0 · **rc 0 · 134 s** | rc 0 · **rc 0 · 81 s**(전환 C3 326 s — 캐시된 `node_modules`·`.next`) |
+| C5 노출 창 프로브(2 s 간격) 오류 응답 | **0** | **0** |
+| C5 창 안 오류 줄 web · bot · mcp | 1(Next.js `instrumentationHook` 경고) · 0 · 0 | 1(Next.js workspace root 추론 경고) · 0 · 0 |
+| C5 3 online · mcp `/health` 200 · 409 0 · 재기동 6 `same` · 웹 · 봇 명령 | 예 | 예 |
+| C6 임시 완화(사용자 설정 `claudeMdExcludes` 4항목) 제거 | 남은 항목 0 | (공유) |
+| C6 확인 1 AI 응답 · 비용 줄 | `[advisor] ok caller=bot:ai_chat … cost=$0.2403 turns=7 tools=6` | AI 응답 예(fit 은 성공 비용 로그 없음) |
+| C6 확인 3 #255 | `model=` 요청 sonnet 고정 ID · `used=` = 그 ID + 고정 haiku(CLI 보조) → 정상 · 드리프트 0 | 드리프트 봇 0 · 웹 0 |
+| C6 확인 4 #269 | 웹 [알림 이력] 'AI 실패' 필터 보임 · 💸 알림 없음 | — |
+| C6 확인 5 #261 | 다음 화~토 06:15 · 토 09:00 주간 리뷰 알파 — 그때 | — |
+| R-8 | 안 함 | 안 함 |
+
+- **봇 pm2 id 가 바뀐다**(재배포마다 새 id) → pm2 오류 로그 파일명 `-error-<id>.log` 도 바뀐다. 런북 C5 명령을 glob 으로 고쳤다(#276).
+- **배포 전 13:15 fit mcp → web → bot 재시작 1회**(pm2.log: SIGINT 정지 → 재기동 · 봇 새 id) — `deploy.sh` 활성화 순서와 같다. 체크아웃은 그때 `v1.0.0` 이라 같은 버전 재기동 · 영향 없음 · 원인 명령은 확인하지 못했다(사용자 조작 추정).
+- fin 비용 1건은 채팅(도구 6) — TA 가이드 실제 비용은 다음 TA 알림의 `[advisor] ok|fail caller=cron:ta_signal … cost=` 로 본다(#269 한도 $0.25).
+
