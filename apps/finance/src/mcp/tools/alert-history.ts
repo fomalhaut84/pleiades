@@ -47,7 +47,9 @@ export interface ListAlertHistoryArgs {
 
 export async function listAlertHistory(args: ListAlertHistoryArgs = {}) {
   try {
-    const where: Prisma.AlertHistoryWhereInput = {}
+    // pleiades#269: AI 실패 기록(ai_failure)은 운영 데이터 — 어드바이저 컨텍스트에 넣지 않는다
+    // (kind 인자는 KIND_LABELS 로만 받으므로 지정해도 조회되지 않는다)
+    const where: Prisma.AlertHistoryWhereInput = { kind: { not: 'ai_failure' } }
     if (args.kind) {
       if (!(args.kind in KIND_LABELS)) {
         return toolError(

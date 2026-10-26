@@ -2,6 +2,7 @@ import cron from 'node-cron'
 import { refreshPrices } from './price-fetcher'
 import { takeAllSnapshots } from './performance/snapshot'
 import { syncKrxStocks } from './krx-stocks'
+import { refreshAllBenchmarks } from './performance/benchmark'
 import { prisma } from './prisma'
 import { checkPriceAlerts } from '@/bot/notifications/price-alert'
 import { checkTASignals } from '@/bot/notifications/ta-signal-alert'
@@ -198,6 +199,39 @@ export function scheduleKrxSync(): void {
   })()
 
   console.log('[cron] KRX 종목 동기화 스케줄러 등록 (매주 월 07:00 KST)')
+}
+
+/**
+ * #261 — 벤치마크 시세 일일 적재 스케줄러.
+ * 화~토 06:15 KST — 미국장(월~금 현지) 마감 뒤 · 전날 한국 지수 종가 포함 · 어닝(06:00)·스냅샷(06:05) 뒤.
+ * 토 09:00 주간 리뷰 전에 금요일 시세가 들어온다.
+ *
+ * 범위는 티커별 마지막 적재일부터(최대 12개월) — upsert 라 겹쳐도 같다.
+ *
+ * 이 크론이 없을 때는 웹 [벤치마크] backfill 버튼이 유일한 적재 경로라 시세가 2026-06-01 에서 멈췄고,
+ * 1M TWR 의 알파가 빠졌다 (calculateBenchmarkReturn 은 구간 시세 2건 미만이면 null).
+ */
+export function scheduleBenchmarkRefresh(): void {
+  const guard = createCronGuard('벤치마크 적재', 5 * 60 * 1000)
+
+  cron.schedule(
+    '15 6 * * 2-6',
+    () => {
+      void guard(async () => {
+        // 범위는 티커별 마지막 적재일부터(최대 12개월) · 티커별 실패 격리 — refreshAllBenchmarks
+        const results = await refreshAllBenchmarks()
+        const summary = results
+          .map((r) => (r.error ? `${r.ticker}:실패` : `${r.ticker}+${r.inserted}/${r.skipped}(${r.months}M)`))
+          .join(' ')
+        console.log(`[cron] 벤치마크 적재 완료: ${results.length}개 (${summary || '설정된 벤치마크 없음'})`)
+        const failed = results.filter((r) => r.error).map((r) => r.ticker)
+        if (failed.length > 0) console.error(`[cron] 벤치마크 적재 일부 실패: ${failed.join(',')}`)
+      })
+    },
+    { timezone: 'Asia/Seoul' }
+  )
+
+  console.log('[cron] 벤치마크 적재 스케줄러 등록 (화~토 06:15 KST)')
 }
 
 /**

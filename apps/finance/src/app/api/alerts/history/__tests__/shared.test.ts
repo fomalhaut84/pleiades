@@ -5,16 +5,17 @@ import {
 } from '../shared'
 
 describe('KNOWN_KINDS', () => {
-  it('9종 kind 를 모두 포함 (33-A AlertHistory 매핑과 동기화)', () => {
+  it('10종 kind 를 모두 포함 (33-A AlertHistory 매핑과 동기화 · ai_failure = pleiades#269)', () => {
     for (const k of [
       'surge', 'drop', 'fx',
       'target_hit', 'stop_loss',
       'watch_buy', 'watch_zone',
       'ta_signal', 'custom_strategy',
+      'ai_failure',
     ]) {
       expect(KNOWN_KINDS.has(k)).toBe(true)
     }
-    expect(KNOWN_KINDS.size).toBe(9)
+    expect(KNOWN_KINDS.size).toBe(10)
   })
 
   it('알려지지 않은 값은 false', () => {

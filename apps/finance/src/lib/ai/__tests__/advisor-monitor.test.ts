@@ -21,6 +21,7 @@ import {
   buildRecoveryAlert,
   FAIL_THRESHOLD,
   REPEAT_INTERVAL_MS,
+  type AdvisorFailureRecord,
 } from '../advisor-monitor'
 import { AdvisorError } from '../claude-advisor'
 
@@ -36,7 +37,7 @@ describe('createAdvisorMonitor — 실패 카운트 + alert', () => {
       await m.recordFailure(makeError(), 'briefing', 1000 + i)
     }
     expect(sender).not.toHaveBeenCalled()
-    expect(m.getState().consecutiveFailures).toBe(FAIL_THRESHOLD - 1)
+    expect(m.getState('briefing').consecutiveFailures).toBe(FAIL_THRESHOLD - 1)
   })
 
   it('임계 도달 시 alert 1회 발송', async () => {
@@ -80,12 +81,12 @@ describe('createAdvisorMonitor — 실패 카운트 + alert', () => {
     for (let i = 0; i < FAIL_THRESHOLD; i++) {
       await m.recordFailure(makeError(), 'briefing', 1000 + i)
     }
-    expect(m.getState().consecutiveFailures).toBe(FAIL_THRESHOLD)
+    expect(m.getState('briefing').consecutiveFailures).toBe(FAIL_THRESHOLD)
 
-    await m.recordSuccess(2000)
-    expect(m.getState().consecutiveFailures).toBe(0)
-    expect(m.getState().lastAlertAt).toBeNull()
-    expect(m.getState().lastError).toBeNull()
+    await m.recordSuccess(2000, 'briefing')
+    expect(m.getState('briefing').consecutiveFailures).toBe(0)
+    expect(m.getState('briefing').lastAlertAt).toBeNull()
+    expect(m.getState('briefing').lastError).toBeNull()
   })
 
   it('임계 이상 실패 후 성공 → 복구 알림 발송', async () => {
@@ -96,7 +97,7 @@ describe('createAdvisorMonitor — 실패 카운트 + alert', () => {
     }
     // 1st call: failure alert. 2nd: recovery.
     sender.mockClear()
-    await m.recordSuccess(2000)
+    await m.recordSuccess(2000, 'briefing')
     expect(sender).toHaveBeenCalledTimes(1)
     expect(sender).toHaveBeenCalledWith(expect.stringContaining('복구됨'))
   })
@@ -105,7 +106,7 @@ describe('createAdvisorMonitor — 실패 카운트 + alert', () => {
     const sender = vi.fn(async () => true)
     const m = createAdvisorMonitor(sender)
     await m.recordFailure(makeError(), 'briefing', 1000)
-    await m.recordSuccess(2000)
+    await m.recordSuccess(2000, 'briefing')
     expect(sender).not.toHaveBeenCalled()
   })
 
@@ -116,7 +117,7 @@ describe('createAdvisorMonitor — 실패 카운트 + alert', () => {
       await m.recordFailure(makeError(), 'briefing', 1000 + i)
     }
     sender.mockClear()
-    await m.recordSuccess(2000)
+    await m.recordSuccess(2000, 'briefing')
     expect(sender).not.toHaveBeenCalled()
   })
 
@@ -128,11 +129,11 @@ describe('createAdvisorMonitor — 실패 카운트 + alert', () => {
       await m.recordFailure(makeError(), 'briefing', 1000 + i)
     }
     // 첫 발송 예외 → lastAlertAt 원복 (여전히 null)
-    expect(m.getState().lastAlertAt).toBeNull()
+    expect(m.getState('briefing').lastAlertAt).toBeNull()
     // 다음 실패에서 (interval 로직 우회) 재시도
     await m.recordFailure(makeError(), 'briefing', 1000 + FAIL_THRESHOLD)
     expect(sender).toHaveBeenCalledTimes(2)
-    expect(m.getState().lastAlertAt).not.toBeNull()
+    expect(m.getState('briefing').lastAlertAt).not.toBeNull()
     errSpy.mockRestore()
   })
 
@@ -146,11 +147,11 @@ describe('createAdvisorMonitor — 실패 카운트 + alert', () => {
       await m.recordFailure(makeError(), 'briefing', 1000 + i)
     }
     // 첫 발송 false → lastAlertAt 원복 (null 유지)
-    expect(m.getState().lastAlertAt).toBeNull()
+    expect(m.getState('briefing').lastAlertAt).toBeNull()
     // 다음 실패에서 재시도 → 이번엔 true
     await m.recordFailure(makeError(), 'briefing', 1000 + FAIL_THRESHOLD)
     expect(sender).toHaveBeenCalledTimes(2)
-    expect(m.getState().lastAlertAt).toBe(1000 + FAIL_THRESHOLD)
+    expect(m.getState('briefing').lastAlertAt).toBe(1000 + FAIL_THRESHOLD)
   })
 
   // Self-review P1 회귀 방지 — 동시 recordFailure race 시 두 번째 호출이 첫 번째의
@@ -197,7 +198,7 @@ describe('createAdvisorMonitor — 실패 카운트 + alert', () => {
       await m.recordFailure(makeError(), 'briefing', 1000 + i)
     }
     m.reset()
-    const s = m.getState()
+    const s = m.getState('briefing')
     expect(s.consecutiveFailures).toBe(0)
     expect(s.lastFailureAt).toBeNull()
     expect(s.lastAlertAt).toBeNull()
@@ -268,3 +269,102 @@ describe('buildRecoveryAlert', () => {
     expect(alert).toContain('5회')
   })
 })
+
+// 회귀: pleiades#269 — 전역 카운트 하나면 다른 호출의 성공이 카운트를 리셋해
+// TA 가이드 반복 실패가 가려졌다(10-21~23 실패 6회 · 알림 1회). 예산 초과는 첫 실패에 알린다.
+describe('createAdvisorMonitor — caller 별 · 예산 초과 즉시 · 기록 (pleiades#269)', () => {
+  const budgetError = () =>
+    new AdvisorError('Claude CLI 종료 코드: 1 (subtype=error_max_budget_usd cost=$0.1020)', undefined, 'quota_exceeded')
+
+  it('다른 caller 의 성공이 이 caller 의 연속 실패를 지우지 않는다', async () => {
+    const sender = vi.fn(async (_message: string) => true)
+    const m = createAdvisorMonitor(sender)
+    for (let i = 0; i < FAIL_THRESHOLD; i++) {
+      await m.recordFailure(makeError(), 'cron:ta_signal', 1000 + i * 10)
+      await m.recordSuccess(1005 + i * 10, 'ai:chat')
+    }
+    expect(m.getState('cron:ta_signal').consecutiveFailures).toBe(FAIL_THRESHOLD)
+    expect(sender).toHaveBeenCalledTimes(1)
+    expect(sender.mock.calls[0][0]).toContain('cron:ta_signal')
+  })
+
+  it('예산 초과(quota_exceeded)는 첫 실패에 알린다 — 제목·진단도 예산부터', async () => {
+    const sender = vi.fn(async (_message: string) => true)
+    const m = createAdvisorMonitor(sender)
+    await m.recordFailure(budgetError(), 'cron:ta_signal', 1000)
+    expect(sender).toHaveBeenCalledTimes(1)
+    const alert = sender.mock.calls[0][0] as string
+    expect(alert).toContain('예산·사용량 초과 (1회)')
+    expect(alert).toContain('maxBudgetUsd')
+    expect(alert).toContain('cost=$0.1020')
+  })
+
+  it('예산 초과도 repeat interval 안에서는 다시 알리지 않는다', async () => {
+    const sender = vi.fn(async (_message: string) => true)
+    const m = createAdvisorMonitor(sender)
+    await m.recordFailure(budgetError(), 'cron:ta_signal', 1000)
+    await m.recordFailure(budgetError(), 'cron:ta_signal', 2000)
+    expect(sender).toHaveBeenCalledTimes(1)
+  })
+
+  it('즉시 알림 뒤 성공하면 1회 실패여도 복구 알림을 보낸다', async () => {
+    const sender = vi.fn(async (_message: string) => true)
+    const m = createAdvisorMonitor(sender)
+    await m.recordFailure(budgetError(), 'cron:ta_signal', 1000)
+    await m.recordSuccess(2000, 'cron:ta_signal')
+    expect(sender).toHaveBeenCalledTimes(2)
+    expect(sender.mock.calls[1][0]).toContain('복구됨')
+    expect(sender.mock.calls[1][0]).toContain('cron:ta_signal')
+  })
+
+  it('실패마다 기록한다 — 알림 여부·연속 횟수·코드 포함, detail 은 넣지 않는다', async () => {
+    const records: AdvisorFailureRecord[] = []
+    const m = createAdvisorMonitor(vi.fn(async () => true), {
+      recordHistory: async (r) => { records.push(r) },
+    })
+    await m.recordFailure(makeError('x', 'secret stderr'), 'briefing', 1000)
+    await m.recordFailure(budgetError(), 'cron:ta_signal', 1001)
+    expect(records).toEqual([
+      { caller: 'briefing', code: 'unknown', message: 'x', consecutiveFailures: 1, alerted: false, at: 1000 },
+      expect.objectContaining({ caller: 'cron:ta_signal', code: 'quota_exceeded', consecutiveFailures: 1, alerted: true }),
+    ])
+    expect(JSON.stringify(records)).not.toContain('secret stderr')
+  })
+
+  it('기록 sink 가 실패해도 알림 흐름은 계속된다', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const sender = vi.fn(async (_message: string) => true)
+    const m = createAdvisorMonitor(sender, { recordHistory: async () => { throw new Error('db down') } })
+    await expect(m.recordFailure(budgetError(), 'cron:ta_signal', 1000)).resolves.toBeUndefined()
+    expect(sender).toHaveBeenCalledTimes(1)
+    vi.restoreAllMocks()
+  })
+
+  // 회귀: PR #270 Codex P2 — 복구 알림 await 중 들어온 실패가 뒤늦은 delete 로 지워졌다
+  it('복구 알림 발송 중 들어온 같은 caller 의 실패를 지우지 않는다 · 동시 성공은 복구 알림 1회', async () => {
+    let release: (v: boolean) => void = () => {}
+    const sender = vi.fn(async (message: string) =>
+      message.includes('복구됨') ? new Promise<boolean>((r) => { release = r }) : true,
+    )
+    const m = createAdvisorMonitor(sender)
+    await m.recordFailure(budgetError(), 'bot:ai_chat', 1000)
+    const success1 = m.recordSuccess(2000, 'bot:ai_chat')
+    const success2 = m.recordSuccess(2001, 'bot:ai_chat')
+    await m.recordFailure(makeError(), 'bot:ai_chat', 2002)
+    release(true)
+    await Promise.all([success1, success2])
+    expect(m.getState('bot:ai_chat').consecutiveFailures).toBe(1)
+    expect(sender.mock.calls.filter(([msg]) => msg.includes('복구됨'))).toHaveLength(1)
+  })
+
+  it('알림 진단 힌트는 pleiades pm2 이름을 쓴다', () => {
+    const alert = buildFailureAlert(
+      { consecutiveFailures: 3, lastFailureAt: 1, lastAlertAt: null, lastError: { message: 'x' } },
+      'briefing',
+    )
+    expect(alert).toContain('pleiades-fin-mcp')
+    expect(alert).toContain('pleiades-fin-bot')
+    expect(alert).not.toContain('myfinance-')
+  })
+})
+

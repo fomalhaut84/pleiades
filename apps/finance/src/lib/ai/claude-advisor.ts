@@ -2,8 +2,11 @@ import { spawn } from 'child_process'
 import path from 'path'
 import { SYSTEM_PROMPT } from './system-prompt'
 import { getGlobalAdvisorMonitor } from './advisor-monitor'
+import { detectModelDrift, modelDriftWarning, pinnedModelEnv, resolveModelId, type ModelTier } from './models'
+import { monorepoExcludeArgs } from './cli-isolation'
 
-export type AdvisorModel = 'haiku' | 'sonnet'
+/** 모델 등급. 실제 모델 ID 는 `./models` 의 고정값 (#255) */
+export type AdvisorModel = ModelTier
 
 /**
  * 호출 의도 — 모델 자동 선택 근거 (Phase 35-A / #433).
@@ -556,6 +559,15 @@ interface ClaudeJsonOutput {
   api_error_status?: number | string
   errors?: unknown
   /**
+   * #247 — 결과 종류. 성공은 `success`, 실패는 `error_max_budget_usd` ·
+   * `error_max_turns` · `error_during_execution` 등. exit != 0 의 원인 판정에 쓴다.
+   */
+  subtype?: string
+  /** #247 — 종료 사유 (예: `budget_exhausted`). CLI 버전에 따라 없을 수 있다 */
+  terminal_reason?: string
+  /** #255 — 실제 쓴 모델 ID → 사용량. CLI 보조 모델도 포함 */
+  modelUsage?: Record<string, unknown>
+  /**
    * #483 — Claude 대화 turn 수. tool 사용 시 최소 2 (assistant → tool_use →
    * assistant), 미사용 시 1. `expectsTools: true` caller 는 이 값으로 도구
    * 미호출 응답을 감지.
@@ -578,6 +590,35 @@ export function extractAdvisorErrorText(json: Partial<ClaudeJsonOutput>): string
     } catch { /* ignore stringify failure */ }
   }
   return parts.join('\n')
+}
+
+/** #247 — CLI 가 예산 한도(`--max-budget-usd`)에서 멈췄을 때의 result subtype */
+const BUDGET_EXCEEDED_SUBTYPE = 'error_max_budget_usd'
+
+/**
+ * #247 — 실패한 result event 의 원인 요약 (로그·오류 메시지용). pure.
+ * 예: `subtype=error_max_budget_usd terminal_reason=budget_exhausted cost=$0.1023 turns=1`.
+ * 사용자 노출용이 아니다 (describeAdvisorError 가 따로 있다) — 비밀·본문은 담지 않는다.
+ */
+export function describeResultFailure(output: Partial<ClaudeJsonOutput> | undefined): string {
+  if (!output) return 'result=none'
+  const parts = [`subtype=${output.subtype ?? 'unknown'}`]
+  if (output.terminal_reason) parts.push(`terminal_reason=${output.terminal_reason}`)
+  if (typeof output.total_cost_usd === 'number') parts.push(`cost=$${output.total_cost_usd.toFixed(4)}`)
+  if (typeof output.num_turns === 'number') parts.push(`turns=${output.num_turns}`)
+  return parts.join(' ')
+}
+
+/**
+ * #247 — 실패 분류. 예산 한도 종료(`error_max_budget_usd`)는 텍스트 패턴과 무관하게
+ * 기존 총 예산 cap 초과와 같은 `quota_exceeded` 로 — 그 외는 classifyAdvisorError. pure.
+ */
+export function classifyResultFailure(
+  output: Partial<ClaudeJsonOutput> | undefined,
+  text: string | undefined,
+): AdvisorErrorCode {
+  if (output?.subtype === BUDGET_EXCEEDED_SUBTYPE) return 'quota_exceeded'
+  return classifyAdvisorError(text)
 }
 
 /**
@@ -684,7 +725,8 @@ export async function askAdvisor(
       const result = await runAdvisorOnce(effectivePrompt, attemptOptions)
       costSpent += result.costUsd
       // 성공 monitor — 재시도 성공 시에도 이전 실패 카운트를 리셋
-      getGlobalAdvisorMonitor().recordSuccess().catch((e) => {
+      // pleiades#269: caller 별 — 이 경로의 실패 카운트만 리셋
+      getGlobalAdvisorMonitor().recordSuccess(Date.now(), options.caller).catch((e) => {
         console.error('[advisor] monitor.recordSuccess 실패:', e)
       })
       // Codex #487 P1: 최종 반환 costUsd 는 모든 시도의 총합 (부분 실패 spend
@@ -749,6 +791,8 @@ async function runAdvisorOnce(
   } = options
   // Phase 35-A (#433): intent → model 폴백 매핑. 명시 model 우선.
   const model = pickModel(options.model, options.intent)
+  // #255: 별칭은 CLI 버전에 따라 모델이 바뀐다 — 고정 ID 로 넘긴다
+  const modelId = resolveModelId(model)
 
   const projectRoot = process.env.MYFINANCE_ROOT ?? process.cwd()
   const mcpConfigPath = process.env.MCP_CONFIG_PATH
@@ -763,7 +807,7 @@ async function runAdvisorOnce(
     // 호출 횟수를 정확히 카운트 (expectsTools 검증에 사용).
     '--output-format', 'stream-json',
     '--verbose',
-    '--model', model,
+    '--model', shellEscape(modelId),
   ]
 
   if (sessionId) {
@@ -777,6 +821,8 @@ async function runAdvisorOnce(
   cmdParts.push(
     '--mcp-config', shellEscape(mcpConfigPath),
     '--strict-mcp-config',
+    // #247: 모노레포 루트 CLAUDE.md·rules 를 컨텍스트에서 뺀다 (cli-isolation.ts)
+    ...monorepoExcludeArgs(projectRoot).map(shellEscape),
     '--allowedTools', shellEscape(ALLOWED_TOOLS),
     // Codex PR #484 P1 (security): `--tools` 는 built-in Claude Code tool 의
     // **availability allowlist** — 지정 tool 만 subprocess 에서 사용 가능.
@@ -813,7 +859,8 @@ async function runAdvisorOnce(
 
     const child = spawn('sh', ['-c', cmd], {
       cwd: projectRoot,
-      env: { ...process.env },
+      // #255: CLI 내부 보조 호출(WebSearch 요약 등)의 별칭도 고정 ID 로
+      env: pinnedModelEnv(),
       stdio: ['ignore', 'pipe', 'pipe'],
     })
 
@@ -848,6 +895,10 @@ async function runAdvisorOnce(
       const output = parsedStream.finalResult
       const toolCalls = parsedStream.toolCalls
 
+      // #255: 드리프트는 성공·실패 무관하게 먼저 본다 — 모델 교체는 실패로 먼저 드러나기 쉽다
+      const driftWarning = output ? modelDriftWarning(options.caller ?? 'unknown', output.modelUsage, modelId) : null
+      if (driftWarning) console.warn(driftWarning)
+
       // Codex PR #487 P1 (2차): subprocess 가 result event 를 발행했다면 실
       // 지출 cost 를 담아 error 를 throw. retry loop 이 이걸 costSpent 에 누적
       // 해 다음 attempt 의 remaining budget 을 정확히 축소 (총 cost cap 준수).
@@ -862,9 +913,14 @@ async function runAdvisorOnce(
         if (stderrTail) console.error('[advisor] claude stderr:', stderrTail)
         const jsonErrorText = output ? extractAdvisorErrorText(output) : ''
         const combined = [jsonErrorText, stderrTail].filter(Boolean).join('\n')
-        const errorCode = classifyAdvisorError(combined || undefined)
+        const errorCode = classifyResultFailure(output, combined || undefined)
         const detail = jsonErrorText.slice(0, 1024) || stderrTail || undefined
-        reject(new AdvisorError(`Claude CLI 종료 코드: ${code}`, detail, errorCode, observedCost))
+        // #247: 종료 코드만으로는 예산 초과인지 알 수 없었다 — 원인 요약을 메시지·로그에
+        const failure = describeResultFailure(output)
+        console.error(
+          `[advisor] fail caller=${options.caller ?? 'unknown'} model=${modelId} code=${errorCode} exit=${code} ${failure}`,
+        )
+        reject(new AdvisorError(`Claude CLI 종료 코드: ${code} (${failure})`, detail, errorCode, observedCost))
         return
       }
 
@@ -876,7 +932,11 @@ async function runAdvisorOnce(
 
       if (output.is_error) {
         const errorText = extractAdvisorErrorText(output)
-        const errorCode = classifyAdvisorError(errorText || undefined)
+        const errorCode = classifyResultFailure(output, errorText || undefined)
+        console.error(
+          `[advisor] fail caller=${options.caller ?? 'unknown'} model=${modelId} code=${errorCode} exit=0 ` +
+            describeResultFailure(output),
+        )
         reject(new AdvisorError(
           `AI 응답 오류: ${output.result || `api_error_status=${output.api_error_status ?? 'unknown'}`}`,
           errorText.slice(0, 1024) || undefined,
@@ -937,6 +997,15 @@ async function runAdvisorOnce(
           return
         }
       }
+
+      // #255: 실제 쓴 모델 기록 (드리프트 경고는 파싱 직후에 이미 냈다)
+      const drift = detectModelDrift(output.modelUsage, modelId)
+      const usedModels = drift ? drift.used.join(',') : 'unknown'
+      const cost = typeof output.total_cost_usd === 'number' ? output.total_cost_usd.toFixed(4) : '?'
+      console.log(
+        `[advisor] ok caller=${options.caller ?? 'unknown'} model=${modelId} used=${usedModels} ` +
+          `cost=$${cost} turns=${numTurns} tools=${toolCalls.length}`,
+      )
 
       resolve({
         response: output.result,

@@ -6,6 +6,7 @@ import { spawn } from "child_process";
 import { buildExtractPrompt } from "./extract-prompt";
 import { parseExtractResponse, type ExtractedPage } from "./extract-schema";
 import { CLAUDE_CLI_ISOLATION_ARGS } from "@/lib/ai/cli-isolation";
+import { claudeModelId, claudeSpawnEnv, warnModelDriftFromStdout } from "@/lib/ai/models";
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 /** Nginx proxy_read_timeout 60초 안 — 장당 실측 9~11초 */
@@ -34,7 +35,8 @@ export function extractCheckupPage(imagePath: string, opts: ExtractOptions = {})
     "--output-format",
     "json",
     "--model",
-    "sonnet",
+    // #255: 별칭이 아닌 고정 ID — CLI 업데이트로 모델이 조용히 바뀌지 않게
+    claudeModelId("sonnet"),
     "--max-turns",
     "1",
     "--tools",
@@ -47,6 +49,7 @@ export function extractCheckupPage(imagePath: string, opts: ExtractOptions = {})
     const child = spawnFn(CLAUDE_BIN, args, {
       timeout: opts.timeoutMs ?? EXTRACT_TIMEOUT_MS,
       cwd: process.cwd(),
+      env: claudeSpawnEnv(),
       stdio: ["pipe", "pipe", "pipe"],
     });
     child.stdin?.end();
@@ -59,6 +62,8 @@ export function extractCheckupPage(imagePath: string, opts: ExtractOptions = {})
       resolve({ ok: false, reason: "spawn" });
     });
     child.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
+      // #255: 종료 코드·is_error 판정 전에 — 실패로 드러나는 모델 교체도 경고한다 (#258 Codex P2)
+      warnModelDriftFromStdout("checkup-extract", stdout, "sonnet");
       if (signal === "SIGTERM") {
         console.warn("[checkup-extract] 시간 초과");
         return resolve({ ok: false, reason: "timeout" });

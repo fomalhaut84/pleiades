@@ -9,6 +9,7 @@ export type AlertKind =
   | 'target_hit' | 'stop_loss'
   | 'watch_buy' | 'watch_zone'
   | 'ta_signal' | 'custom_strategy'
+  | 'ai_failure'
 
 export interface KindMeta {
   key: AlertKind
@@ -30,6 +31,8 @@ export const KIND_META: KindMeta[] = [
   { key: 'watch_zone',      label: '매수구간',    icon: '🔔', colorClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30',        hex: '#fbbf24' },
   { key: 'ta_signal',       label: 'TA 시그널',   icon: '📊', colorClass: 'bg-violet-500/15 text-violet-400 border-violet-500/30',     hex: '#a78bfa' },
   { key: 'custom_strategy', label: '커스텀 전략', icon: '🧠', colorClass: 'bg-dasom/15 text-dasom border-dasom/30',                    hex: '#fb923c' },
+  // pleiades#269 — AI 어드바이저 호출 실패 (운영 기록 · 재발송 없음)
+  { key: 'ai_failure',      label: 'AI 실패',     icon: '🤖', colorClass: 'bg-slate-500/15 text-slate-300 border-slate-500/30',        hex: '#94a3b8' },
 ]
 
 export const KIND_BY_KEY: Record<AlertKind, KindMeta> = Object.fromEntries(
@@ -44,4 +47,6 @@ export const STATUS_META: Record<string, { label: string; colorClass: string }> 
   sent:    { label: '전송',       colorClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
   partial: { label: '일부 전송',  colorClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
   failed:  { label: '실패',       colorClass: 'bg-red-500/15 text-red-400 border-red-500/30' },
+  // pleiades#269 — 발송 없는 기록 행 (ai_failure)
+  recorded: { label: '기록',      colorClass: 'bg-surface text-sub border-border' },
 }

@@ -4332,3 +4332,87 @@ ls -d apps/<app>/prisma/migrations/*/ | wc -l                                   
 | 2 | 크기 | 체크아웃 fin 1.5 GB · fit 1.4 GB · 디스크 여유 125 GB(전 128 GB) |
 
 - 서버 셸은 **zsh** — 1회차 0-1 의 인자 없는 `unset` 오류 · `| tail` 에 가려진 실패 rc 를 2회차 런북에서 고쳤다.
+
+# 2026-10-21 — T-5 fin 전환 (#215 런북 · 기록 #222)
+
+**사용자가 서버에서 실행**(Claude 무접촉 · I-3). 런북 `docs/runbooks/007-t5-fin-cutover.md`(`70462b6`) · 체크아웃 `~/pleiades-fin` = `v1.0.0`(`e1127ccffe39`). 판정만 적는다(DB 이름 · 경로 · 계정 없음).
+
+| 회차 | 단계 | 판정 |
+|---|---|---|
+| 1 | B 백업 | **실행 안 됨** — `FIN_DB` 빈값으로 `: "${FIN_DB:?}"` 에서 멈춰 아래 명령이 돌지 않았다(디렉터리만 생성) → 런북 보완 |
+| 1 | C1 | 셸 키 0 · platform 600·0 byte · 앱 `.env` 600 · 키 4 · `FIRECRAWL_API_KEY` 0 · `PORT`/`MCP_PORT` 4100/4210 |
+| 1 | C3 기본 실행 | rc 3 · 65 s · exit 3 안내 · 표지 = HEAD |
+| 1 | C4→C5 중단 창 | **약 73 s**(C4 시작 → C5 끝) · `--activate` rc 0 · 20 s |
+| 1 | C6 | `pleiades-fin-{mcp,web,bot}` online · web 307 · mcp `/health` 200 · 봇 로그 409 0 · 사용자 웹·텔레그램 확인 |
+| 1 | C7 | `pm2 startup systemd` → `pm2-<계정>` **enabled**(T-2 U3 의 미설정 해소) |
+| 1 | **R-2 시험**(사용자 의도) | `pleiades-fin-*` 정지·delete → 링크 제거 · 상태 `mv -T` 원위치(실제 디렉터리 확인) → 옛 ecosystem 기동 · `pm2 save` → 옛 fin 3 online — **R-2 절차 동작 확인** |
+| 2 | B 백업 | `pg_dump -Fc` TABLE DATA 31 · 상태 tar 35 항목 · `dump.pm2` 사본 · G-a 산출물 3 있음 · 디렉터리 700(파일은 664 — 런북 보완) |
+| 2 | C3 기본 실행 | rc 3 · 67 s · 표지 = HEAD(1회차 `--activate` 가 표지를 소비해 기본 실행부터 다시) |
+| 2 | C4→C5 중단 창 | **36 s** · `--activate` rc 0 · 20 s |
+| 2 | C6 | `pleiades-fin` 3 online · 옛 `myfinance*` 없음 · web 307 · mcp 200 · 409 0 · 사용자 `/브리핑` · 웹 확인 |
+| 2 | C7 | `enabled`(1회차 설정 유지) · `dump.pm2` 에 새 fin 저장 |
+| — | **C0** 서비스 fin 배포 workflow | **2회차 전환 뒤** 사용자가 비활성(진입 조건이 늦게 충족 — 그 사이 서비스 Release 는 없었다) |
+
+- 마이그레이션 적용 0(이름 대조 일치 · 서버 29 = pleiades 29). P-2′ 상태 이동(fin `reports` · `logs`)은 두 회차 모두 링크 2 · 새 쪽 실제 디렉터리 2 · `git status` 깨끗.
+
+# 2026-10-22 — T-9 fit 전환 (#230 런북 · #233 병행 · 기록 #235)
+
+**사용자가 서버에서 실행**(Claude 무접촉 · I-3). 런북 `docs/runbooks/007-t9-fit-cutover.md`(`1b5ede7`) · 체크아웃 `~/pleiades-fit` = `v1.0.0`(`e1127ccffe39` — fin 과 같은 태그). fin T-6 관찰과 병행(#233). 판정만 적는다(DB 이름 · 경로 · 계정 없음).
+
+| 단계 | 판정 |
+|---|---|
+| A-1(Claude · https 읽기) | 서비스 fit `main` `aa93346`(`v2.46.1`) · `dev` `35a04d78e532` = 마지막 수용 · `prisma/migrations` 트리 `main` = `dev` = `apps/fitness`(42) · `v1.0.0..dev` 런타임 차이 = 테스트 1 → `v1.0.0` |
+| A | 체크아웃 `v1.0.0` · 깨끗 · 상태 디렉터리 0 |
+| B 백업 | `pg_dump -Fc` TABLE DATA 23 · 상태 tar 23 항목 · `dump.pm2` 사본 · 디렉터리 700 · 파일 600 · G-a 산출물 4 있음 |
+| C0 서비스 fit 배포 workflow | 사용자가 비활성 — 전환 뒤 확인 보고(2026-10-22 · 그 사이 서비스 Release 없음: 최신 태그 `v2.46.1` 그대로) |
+| C1 | 옛 fit cwd = 옛 디렉터리 ×3 · 셸 키 0 · platform 600·0 byte · 앱 `.env` 600 · 필수 키 5 · 빈 값 0 · T-4 더미 DB 0 · `PORT`/`MCP_PORT` 4200/4301 |
+| C3 기본 실행 | rc 3 · **326 s**(`npm ci` · `prisma generate` · `next build` 포함 — fin 65 s) · 표지 = HEAD |
+| C4→C5 중단 창 | **37 s**(12:16:43 → 12:17:20 KST · 웹 싱크 12:00 과 15:00 사이) · `--activate` rc 0 · 23 s |
+| C4′ 상태 이동(P-2′) | 옛 경로 링크 4 · 새 쪽 실제 디렉터리 4(`.garmin-tokens` `.omron-tokens` `.runtime` `logs`) · `git status` 깨끗 · pre-flight 가 만든 상태 디렉터리 없음 |
+| C6 | `pleiades-fit-{mcp,web,bot}` online · 재시작 0 · web 200 · mcp `/health` 200 · 봇 로그 409 0 · 기동 직후 web·bot error 로그 `error\|fail` 0 · 사용자 웹·텔레그램 확인 |
+| C7 | `pm2 save` · `pm2-<계정>` enabled(T-5 설정 유지) |
+| R-2 | 안 함 |
+
+- 마이그레이션 적용 0(`deploy.sh` 이름 대조 통과 · 서버 42 = pleiades 42).
+- 옛 fit 웹·MCP 의 pm2 재시작 누계가 정지 직전 100 단위였다(웹 113 · MCP 73 · 봇 0) — 옛 서비스 이력이라 원인은 보지 않는다. 새 프로세스의 재시작 수는 T-6 관찰 항목.
+
+# 2026-10-26 — T-6 종료 판정 fin·fit (#265 · #257 1절)
+
+**사용자가 서버에서 실행**(Claude 무접촉 · I-3) · 명령은 두 런북 C8 + #232 일별 빈도(`~/.pm2/logs/<name>-*.log` 를 날짜·종류로 집계 · 옛 서비스는 10-08 이후). 판정만 적는다(계정 · 경로 · 채팅 ID · 오류 원문 없음). 관찰 종료 시각 2026-10-26 오전(f4 07:00 · b3 07:00 뒤).
+
+**fin** — 관찰 2026-10-21 17:46 ~ 10-26 오전 · **T-6 종료: 예**
+
+| 항목 | 판정 |
+|---|---|
+| 프로세스 | `pleiades-fin` 3 online · 재시작 0 · 업타임 4일 |
+| f3 어닝 | 매일 06:00 완료 · `attempted=14 ok=9 failed=5` 매일 같음(옛 서비스와 동일 → 서비스 유래 · Q57) |
+| f4 KRX | 10-26 07:00 완료(수정 1) |
+| f5 반복거래 | 10-22 09:05 생성 4 · 다른 날은 생성 0(로그 없음 = 정상) |
+| f6 베스팅 | 로그 없음(전환 0) |
+| 실패·타임아웃 줄(`[cron\|notification]` · `실패\|타임아웃\|refresh failed`) | 0 |
+| 알림 n1 · n9 · n10 · n11 · n12 · n13 | 전부 수신(사용자) |
+| 장주기 예외 | 월간 n6·n7·n8(11-01) · 분기 n2·n3(2027-01) — 해당 시점에 따로 |
+
+**fit** — 관찰 2026-10-22 12:17 ~ 10-26 오전 · **T-6 종료: 예**
+
+| 항목 | 판정 |
+|---|---|
+| 프로세스 | `pleiades-fit` 3 online · 재시작 0 · 업타임 3일 |
+| w1 싱크 | 웹 반영 확인(사용자) |
+| b1 · b2 · b3(월 07:00) · b4 | 전부 확인(사용자) |
+| bot `error\|fail` | 5줄 — 10-26 07:00 Garmin `user-settings` Cloudflare 520(`retryable`) → user_profile 부분 실패 · 08:00 Garmin 500 → daily_stats 싱크 실패. **외부(Garmin) 일시 장애** · 다음 주기 재시도 · R-2 사유 아님 |
+| web `error\|fail` | `Server Reference ID did not match the expected format`(받은 ID `0`·`1`·`action`·`x`) — 10-25 04:12 · 13:40 두 묶음. **외부 스캐너의 엉터리 Server Action 요청을 Next.js 가 형식 검사에서 거부한 것** · 앱 기능 무관. 버전 next 16.3.8 · react 19.2.5(fin next 15.5.28 · react 19.3.1 — `package-lock.json`) |
+
+**#232 일별 빈도** (재시도 = `전송 재시도` · 시세 = `Failed to fetch`)
+
+| 날짜 | 옛 fin | 새 fin | 옛 fit | 새 fit |
+|---|---|---|---|---|
+| 10-14 | — | — | 재시도 1 | — |
+| 10-18 | 시세 1 | — | — | — |
+| 10-20 | 시세 1 | — | — | — |
+| 10-21 | 시세 1 | 재시도 1(17:46 전환 뒤) | 재시도 1 | — |
+| 10-22 | — | 재시도 2 · 시세 2 | — | 0 |
+| 10-23 ~ 10-26 | — | **0** | — | **0** |
+
+- `재시도 3/4`(최종 직전) 0 · 최종 실패 0.
+- **판정: 늘어난 것은 전환 첫 17시간뿐**이고 그 뒤 나흘은 옛 서비스 이하 · 새 fit 0 → `NET_ARGS`(#191) 프로세스 설정 가설은 근거 없음. 전환 첫날의 일시 현상으로 닫는다. 재발은 008 모니터링에서 본다.

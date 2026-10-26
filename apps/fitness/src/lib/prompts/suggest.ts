@@ -9,6 +9,7 @@ import { startRun } from "./runs";
 import { SUGGEST_RESULT_LIMIT, SUGGEST_TIMEOUT_MS, buildSuggestPrompt, parseSuggestion, type SuggestSample } from "./suggest-prompt";
 import { PromptActionError } from "./versions";
 import { CLAUDE_CLI_ISOLATION_ARGS } from "@/lib/ai/cli-isolation";
+import { claudeModelId, claudeSpawnEnv, warnModelDriftFromStdout } from "@/lib/ai/models";
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 
@@ -57,9 +58,9 @@ export interface SuggestCliOptions {
 /** 1회성 호출 → 응답 본문. 실패는 사용자에게 보여 줄 문구로 throw (응답 원문은 로그에 남기지 않는다) */
 export function runSuggestCli(prompt: string, opts: SuggestCliOptions = {}): Promise<string> {
   const spawnFn = opts.spawnImpl ?? spawn;
-  const args = ["-p", prompt, "--output-format", "json", "--model", "sonnet", "--max-turns", "1", "--tools", "", ...CLAUDE_CLI_ISOLATION_ARGS];
+  const args = ["-p", prompt, "--output-format", "json", "--model", claudeModelId("sonnet"), "--max-turns", "1", "--tools", "", ...CLAUDE_CLI_ISOLATION_ARGS];
   return new Promise<string>((resolve, reject) => {
-    const child = spawnFn(CLAUDE_BIN, args, { timeout: opts.timeoutMs ?? SUGGEST_TIMEOUT_MS, cwd: process.cwd(), stdio: ["pipe", "pipe", "ignore"] });
+    const child = spawnFn(CLAUDE_BIN, args, { timeout: opts.timeoutMs ?? SUGGEST_TIMEOUT_MS, cwd: process.cwd(), env: claudeSpawnEnv(), stdio: ["pipe", "pipe", "ignore"] });
     child.stdin?.end();
     let stdout = "";
     child.stdout?.on("data", (d: Buffer) => {
@@ -67,6 +68,8 @@ export function runSuggestCli(prompt: string, opts: SuggestCliOptions = {}): Pro
     });
     child.on("error", (err: Error) => reject(new Error(`Claude CLI 를 실행하지 못했습니다: ${err.message}`)));
     child.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
+      // #255: 종료 코드·is_error 판정 전에 — 실패로 드러나는 모델 교체도 경고한다 (#258 Codex P2)
+      warnModelDriftFromStdout("prompt-suggest", stdout, "sonnet");
       if (signal === "SIGTERM") return reject(new Error("시간 초과 — 3분 안에 개선안을 받지 못했습니다"));
       if (code !== 0) return reject(new Error(cliFailureMessage(stdout, code)));
       let outer: CliResult;

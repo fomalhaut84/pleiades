@@ -36,6 +36,13 @@ const TA_AI_GUIDE_LABEL = 'TA 시그널 AI 가이드 (on/off)'
 const AI_GUIDE_COOLDOWN_MS = 6 * 60 * 60 * 1000
 const lastAiAskByTicker = new Map<string, number>()
 
+/**
+ * pleiades#269 — TA 가이드 호출 예산 상한(USD). $0.10 → $0.25 (사용자 2026-10-26).
+ * 가이드는 호출 간격이 길어 매번 캐시가 식은 상태로 불리고, 새 CLI 는 1시간 캐시 쓰기(2배 단가)로 적재한다
+ * — 로컬 haiku ping 만 $0.046. 실제 비용은 `[advisor] ok … cost=` 로그로 보고 다시 맞춘다.
+ */
+export const TA_GUIDE_BUDGET_USD = 0.25
+
 /** 봇 시작 시 row 존재 보장 — [[project_ai_session_resume]] 배포 정책 참고 */
 export async function ensureTaAiGuideSetting(): Promise<void> {
   try {
@@ -302,7 +309,7 @@ async function doCheckTASignals(): Promise<void> {
     for (const r of guideTargets) {
       try {
         const prompt = `${r.displayName}(${r.ticker})에서 다음 TA 시그널이 발생했다: ${r.signals.join(', ')}. stock-trading-method 프레임워크 기준으로 현재 상황 1~2줄 가이드를 작성해줘. 간결하게.`
-        const guide = await askAdvisor(prompt, { timeout: 30_000, maxBudgetUsd: 0.10, intent: 'guide', caller: 'cron:ta_signal' })  // 1~2줄 가이드 → haiku (35-A)
+        const guide = await askAdvisor(prompt, { timeout: 30_000, maxBudgetUsd: TA_GUIDE_BUDGET_USD, intent: 'guide', caller: 'cron:ta_signal' })  // 1~2줄 가이드 → haiku (35-A)
         aiGuides.set(r.ticker, guide.response.trim())
       } catch (error) {
         console.warn(`[ta-signal] ${r.ticker} AI 가이드 실패:`, error instanceof Error ? error.message : error)

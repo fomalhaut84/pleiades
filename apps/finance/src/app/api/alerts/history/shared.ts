@@ -9,6 +9,7 @@ export const KNOWN_KINDS = new Set([
   'target_hit', 'stop_loss',
   'watch_buy', 'watch_zone',
   'ta_signal', 'custom_strategy',
+  'ai_failure', // pleiades#269
 ])
 
 export function parseISOOrNull(s: string | undefined | null): Date | null {
