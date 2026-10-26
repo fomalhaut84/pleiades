@@ -4,6 +4,7 @@
 
 import { spawn } from "child_process";
 import { CLAUDE_CLI_ISOLATION_ARGS } from "@/lib/ai/cli-isolation";
+import { claudeModelId, claudeSpawnEnv, warnModelDriftFromStdout } from "@/lib/ai/models";
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 const DEFAULT_TIMEOUT_MS = 18_000;
@@ -147,7 +148,8 @@ export async function extractFoodQuery(
     "--output-format",
     "json",
     "--model",
-    "sonnet",
+    // #255: 별칭이 아닌 고정 ID — CLI 업데이트로 모델이 조용히 바뀌지 않게
+    claudeModelId("sonnet"),
     "--max-turns",
     "1",
     "--tools",
@@ -160,6 +162,7 @@ export async function extractFoodQuery(
     const child = spawnFn(CLAUDE_BIN, args, {
       timeout: timeoutMs,
       cwd: process.cwd(),
+      env: claudeSpawnEnv(),
       stdio: ["pipe", "pipe", "pipe"],
     });
     child.stdin.end();
@@ -176,6 +179,8 @@ export async function extractFoodQuery(
       resolve(null);
     });
     child.on("close", (code: number | null) => {
+      // #255: 종료 코드·is_error 판정 전에 — 실패로 드러나는 모델 교체도 경고한다 (#258 Codex P2)
+      warnModelDriftFromStdout("extract-food-query", stdout, "sonnet");
       if (code !== 0) {
         console.warn(
           `[extract-food-query] CLI exit code=${code}: ${stderr.slice(0, 200) || "(no stderr)"}`,
