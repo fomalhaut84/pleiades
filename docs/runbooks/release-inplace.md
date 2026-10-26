@@ -2,6 +2,8 @@
 
 **누가:** 서버 단계는 사용자가 서비스 계정으로 한다(Claude 서버 무접촉 · I-3). 태그 대조(A)·릴리즈만 Claude 가 한다.
 **무엇:** 전환 뒤 릴리즈를 **이미 서비스 중인 체크아웃**(`~/pleiades-fin` · `~/pleiades-fit`)에 배포한다 — 007 R-8 의 정방향. 전환 런북(`007-t5-fin-cutover.md` · `007-t9-fit-cutover.md`)과 달리 옛 서비스가 없으므로 `deploy/deploy.sh <app>` 기본 실행이 **exit 3 없이 활성화까지 한 번에** 간다.
+> **결과 (2026-10-26 · #276) — `v1.0.1` 서버 첫 적용 완료.** fin `rc 0 · 134 s` → fit `rc 0 · 81 s` · 노출 창 프로브 오류 응답 **0**(두 앱) · 창 안 오류 줄 = web 1(Next.js 시작 경고)·bot 0·mcp 0(두 앱) · R-8 없음. C6 임시 완화 제거 · 확인 1~4 통과(확인 5 는 다음 06:15 · 토 주간 리뷰). 판정 표 `measured-facts.md` *2026-10-26 — v1.0.1 제자리 재배포*. 실행 중 고친 것: C5 오류 줄 명령(파일명의 pm2 id). 되돌리기: 문구 (**즉시**).
+
 **첫 적용:** `v1.0.1`(#247 — CLI 상위 컨텍스트 제외 · 예산 초과 로깅 · fin·fit 둘 다 · 함께: #255 모델 고정 · #261 fin 벤치마크 크론 · #269 fin AI 실패 가시성·TA 가이드 한도 \$0.25 — 확인은 C6). **이 경로는 서버에서 처음이다** — 결과가 #242(배포 자동화)의 전제가 된다.
 **언제:** T-6 판정(2026-10-26 월 07:00 이후) 뒤. 앱마다 따로 — **fin 먼저 → 확인 → fit.**
 **셸:** bash · zsh. **C 절은 처음부터 끝까지 같은 셸**에서(앱 둘을 같은 셸에서 이어 해도 된다).
@@ -115,7 +117,7 @@ T1=$(date '+%F %T')
 
 ```bash
 kill "$PROBE"; awk '$2 !~ /^[23]/' "$PR" | wc -l; awk '$2 !~ /^[23]/' "$PR" | sed -n '1p;$p'   # 오류 응답 수 · 처음·마지막 시각
-for r in web bot mcp; do f=~/.pm2/logs/pleiades-$APP-$r-error.log; printf '%s ' "$r"; [ -f "$f" ] && awk -v s="$T0" -v e="$T1" 'substr($0,1,19)>=s && substr($0,1,19)<=e' "$f" | wc -l || echo -; done   # 창 안 오류 줄 수
+for r in web bot mcp; do printf '%s ' "$r"; cat ~/.pm2/logs/pleiades-$APP-$r-error*.log 2>/dev/null | awk -v s="$T0" -v e="$T1" 'substr($0,1,19)>=s && substr($0,1,19)<=e' | wc -l; done   # 창 안 오류 줄 수 — 파일명에 pm2 id 가 붙는다(-error-<id>.log · 재배포로 봇 id 가 바뀐다 · #276)
 pm2 ls | grep -E "pleiades-$APP"                                               # 3 online
 case $APP in fin) MP=4210 ;; fit) MP=4301 ;; esac
 curl -sS -o /dev/null -w 'mcp %{http_code}\n' "http://127.0.0.1:$MP/health"   # 200
