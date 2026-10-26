@@ -3,8 +3,14 @@
  * 날짜·최신성 규칙이 클로징 리뷰(fin#501)에만 있었다 → 모든 뉴스 경로에 같은 공통 규칙.
  */
 
-import { describe, expect, it } from 'vitest'
-import { kstYearMonth, NEWS_MAX_AGE_DAYS, newsSearchRules } from '../news-rules'
+import { describe, expect, it, vi } from 'vitest'
+
+// 봇·DB·CLI 모듈을 실제로 로드하지 않는다 (active-review.test.ts 와 같은 방식 · #279 사전 리뷰 info)
+vi.mock('@/bot/index', () => ({ getBot: vi.fn() }))
+vi.mock('@/lib/prisma', () => ({ prisma: {} }))
+vi.mock('@/lib/ai/claude-advisor', () => ({ askAdvisor: vi.fn(), AdvisorError: class extends Error {}, describeAdvisorError: vi.fn() }))
+
+import { kstSearchMonths, kstYearMonth, NEWS_FETCH_LIMIT, NEWS_MAX_AGE_DAYS, newsSearchRules } from '../news-rules'
 import { SYSTEM_PROMPT } from '../system-prompt'
 import { buildBriefingPrompt } from '@/bot/notifications/briefing'
 import { buildTickerAnalysisPrompt } from '@/bot/commands/briefing'
@@ -20,16 +26,46 @@ describe('kstYearMonth', () => {
   })
 })
 
+// 회귀: #279 사전 리뷰 major — 이번 달만 넣으면 월초에 지난달 기사가 안 잡힌다
+describe('kstSearchMonths', () => {
+  it('기간이 지난달에 걸치면 두 달', () => {
+    expect(kstSearchMonths(NOW, 30)).toEqual(['2026년 10월', '2026년 11월'])
+    expect(kstSearchMonths(NOW, 7)).toEqual(['2026년 10월', '2026년 11월'])
+  })
+
+  it('한 달 안이면 한 달', () => {
+    expect(kstSearchMonths(new Date('2026-10-26T03:00:00Z'), 7)).toEqual(['2026년 10월'])
+  })
+})
+
 describe('newsSearchRules', () => {
   it('오늘 날짜 · 연월 질의 · 기간 · 게시일 확인 · 날짜 표기 · 도구 시세를 담는다', () => {
     const text = newsSearchRules('briefing', NOW).join('\n')
     expect(text).toContain('2026-11-01 (KST)')
-    expect(text).toContain('"2026년 11월"')
+    expect(text).toContain('"2026년 10월" 또는 "2026년 11월"')
     expect(text).toContain(`최근 ${NEWS_MAX_AGE_DAYS.briefing}일 이내`)
     expect(text).toContain('WebFetch')
     expect(text).toContain('(YYYY-MM-DD)')
     expect(text).toContain('티커 코드')
     expect(text).toContain('get_prices')
+  })
+
+  // 회귀: #279 사전 리뷰 major — 기사마다 WebFetch 하면 턴·시간이 기사 수에 비례
+  it('날짜 확인 WebFetch 상한을 둔다', () => {
+    expect(newsSearchRules('briefing', NOW).join('\n')).toContain(`최대 ${NEWS_FETCH_LIMIT.briefing}건`)
+    expect(newsSearchRules('analysis', NOW).join('\n')).toContain(`최대 ${NEWS_FETCH_LIMIT.analysis}건`)
+  })
+
+  // 회귀: #279 사전 리뷰 major — 게시일 규칙이 FOMC·실적 일정(캘린더 페이지)까지 막았다
+  it('예정 이벤트는 게시일 대신 이벤트 날짜·출처', () => {
+    const text = newsSearchRules('briefing', NOW).join('\n')
+    expect(text).toContain('예정 이벤트')
+    expect(text).toContain('이벤트 날짜와 출처')
+  })
+
+  it('기간 안 기사 없음 문구는 바꿀 수 있다 — 클로징은 "당일 뉴스 미확인" 한 벌', () => {
+    expect(newsSearchRules('briefing', NOW).join('\n')).toContain('"최근 뉴스 미확인"')
+    expect(newsSearchRules('briefing', NOW, { missingLabel: '당일 뉴스 미확인' }).join('\n')).not.toContain('최근 뉴스 미확인')
   })
 
   it('분석은 30일 · 브리핑은 7일', () => {
@@ -67,7 +103,7 @@ describe('뉴스 경로마다 공통 규칙이 들어간다', () => {
     const p = buildTickerAnalysisPrompt('000660.KS', NOW)
     expect(p).toContain('(오늘: 2026-11-01 KST 기준)')
     expect(p).not.toContain('"000660.KS 최신 뉴스"')
-    expect(p).toContain('회사명 + "2026년 11월"')
+    expect(p).toContain('"2026년 10월" 또는 "2026년 11월"')
     expect(p).toContain(marker)
   })
 
@@ -76,6 +112,7 @@ describe('뉴스 경로마다 공통 규칙이 들어간다', () => {
       const p = buildClosingPrompt(s, NOW)
       expect(p).toContain('날짜가 불확실하면 인용하지 말 것')
       expect(p).toContain(marker)
+      expect(p).not.toContain('최근 뉴스 미확인')
     }
   })
 
@@ -83,5 +120,6 @@ describe('뉴스 경로마다 공통 규칙이 들어간다', () => {
     const p = buildWeeklyPrompt(NOW)
     expect(p).toContain('(오늘: 2026-11-01 KST 기준)')
     expect(p).toContain(marker)
+    expect(p).toContain('이벤트 날짜와 출처')
   })
 })

@@ -4,7 +4,7 @@ import { askAdvisor, AdvisorError, describeAdvisorError } from '@/lib/ai/claude-
 import { splitMessage } from '@/bot/utils/formatter'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 import { formatKstDate } from '@/lib/kst-date'
-import { kstYearMonth, newsSearchRules } from '@/lib/ai/news-rules'
+import { newsSearchRules } from '@/lib/ai/news-rules'
 
 const TYPING_INTERVAL_MS = 5000
 
@@ -71,7 +71,7 @@ export function buildTickerAnalysisPrompt(ticker: string, now: Date = new Date()
     `1. get_holding_strategy(${ticker})로 전략/목표가/손절가 확인`,
     `2. get_technical_analysis(${ticker})로 TA 리포트 확인`,
     `3. get_portfolio(전체)에서 ${ticker} 보유 현황 확인 — 회사명도 여기서 확인`,
-    `4. WebSearch로 ${ticker} 의 회사명 + "${kstYearMonth(now)}" 로 뉴스 검색 (티커 코드만으로 검색하지 말 것)`,
+    `4. WebSearch로 ${ticker} 의 회사명 + 연·월로 뉴스 검색 (아래 뉴스 규칙 · 티커 코드만으로 검색하지 말 것)`,
     '',
     '분석 내용:',
     '- 현재 보유 현황 (수량, 평단, 수익률)',
