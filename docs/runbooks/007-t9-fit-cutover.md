@@ -191,6 +191,8 @@ pm2 logs pleiades-fit-web --lines 2000 --nostream 2>&1 | grep -iE 'error|fail' |
 pm2 logs pleiades-fit-bot --lines 2000 --nostream 2>&1 | grep -iE 'error|fail' | tail -20
 ```
 
+**종료 판정 (2026-10-26 · 사용자 · #265): T-6 종료 — 예.** 3 online · 재시작 0 · w1 반영 · b1 b2 b3(10-26 07:00) b4 확인. 오류 줄은 앱 결함이 아니다 — bot: Garmin 일시 장애(Cloudflare 520 · 500 · 다음 주기 재시도) · web: 외부 스캐너의 엉터리 Server Action 요청을 Next.js 가 거부(`Server Reference ID did not match`). 전송 재시도 0. 판정 표는 `measured-facts.md` *2026-10-26 — T-6 종료 판정*.
+
 ---
 
 ## R-2 — 옛 fit 으로 되돌리기
