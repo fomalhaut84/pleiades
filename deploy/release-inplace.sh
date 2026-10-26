@@ -119,7 +119,8 @@ revert_checkout() {  # <이유>
   # 재시도면 되돌릴 checkout 이 없다(이미 V) — 서비스는 앞 실패 상태 그대로다
   [[ $RETRY -eq 0 ]] || stop 4 "$1 (재시도 · 빌드 전 — 서비스는 앞 실패 상태 그대로) → $(recovery)"
   if git -C "$ROOT" checkout -q "$P" >>"$LOG" 2>&1 && [[ "$(git -C "$ROOT" describe --tags --exact-match HEAD 2>/dev/null)" == "$P" ]]; then
-    rm -f "$PENDING_FILE"   # 빌드 전이라 P 그대로다 — 끝나지 않은 시도가 없다
+    # 빌드 전이라 서비스는 이 시도 전 그대로다 — 진행 중 표지도 이 시도 전 값으로(앞 시도의 실패 표지를 지우지 않는다 · PR #296 Codex P2)
+    if [[ -n "${PENDING:-}" ]]; then (umask 077; printf '%s\n' "$PENDING" > "$PENDING_FILE") 2>>"$LOG"; else rm -f "$PENDING_FILE"; fi
     stop 1 "$1 → $P 로 checkout 되돌림(빌드 전 · 재기동 없음)"
   fi
   stop 4 "$1 → 되돌리기 실패: git -C ~/pleiades-$APP checkout -q $P (빌드 전 · 재기동 불필요)"
