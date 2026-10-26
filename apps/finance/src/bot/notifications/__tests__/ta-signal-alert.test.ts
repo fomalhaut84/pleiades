@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { selectAiGuideTargets } from '../ta-signal-alert'
+import { selectAiGuideTargets, TA_GUIDE_BUDGET_USD } from '../ta-signal-alert'
 
 const COOLDOWN = 6 * 60 * 60 * 1000
 
@@ -50,3 +52,14 @@ describe('selectAiGuideTargets', () => {
     expect(result).toEqual([])
   })
 })
+
+// 회귀: pleiades#269 — $0.10 은 컨텍스트만으로 닿았다(#247 · 1시간 캐시 쓰기 2배 단가). 사용자 결정 $0.25
+describe('TA 가이드 예산', () => {
+  it('$0.25 상수를 askAdvisor 에 넘긴다', () => {
+    expect(TA_GUIDE_BUDGET_USD).toBe(0.25)
+    const src = readFileSync(path.resolve(__dirname, '../ta-signal-alert.ts'), 'utf-8')
+    expect(src).toMatch(/maxBudgetUsd:\s*TA_GUIDE_BUDGET_USD,\s*intent:\s*'guide'/)
+    expect(src).not.toMatch(/maxBudgetUsd:\s*0\.10/)
+  })
+})
+

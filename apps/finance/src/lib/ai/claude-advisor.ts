@@ -725,7 +725,8 @@ export async function askAdvisor(
       const result = await runAdvisorOnce(effectivePrompt, attemptOptions)
       costSpent += result.costUsd
       // 성공 monitor — 재시도 성공 시에도 이전 실패 카운트를 리셋
-      getGlobalAdvisorMonitor().recordSuccess().catch((e) => {
+      // pleiades#269: caller 별 — 이 경로의 실패 카운트만 리셋
+      getGlobalAdvisorMonitor().recordSuccess(Date.now(), options.caller).catch((e) => {
         console.error('[advisor] monitor.recordSuccess 실패:', e)
       })
       // Codex #487 P1: 최종 반환 costUsd 는 모든 시도의 총합 (부분 실패 spend

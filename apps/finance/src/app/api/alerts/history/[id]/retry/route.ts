@@ -35,6 +35,11 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     const row = await prisma.alertHistory.findUnique({ where: { id } })
     if (!row) return fail('해당 알림 이력을 찾을 수 없습니다.', 404)
 
+    // pleiades#269: AI 실패 기록은 발송 이벤트가 아니다 — retry 는 ALLOWED(가족 채팅 포함)로 보낸다
+    if (row.kind === 'ai_failure') {
+      return fail('AI 실패 기록은 재발송할 수 없습니다.', 400)
+    }
+
     if (row.deliveryStatus !== 'failed') {
       return fail('실패한 알림만 재발송할 수 있습니다.', 400)
     }
