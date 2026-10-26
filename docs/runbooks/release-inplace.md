@@ -30,7 +30,7 @@ bash ~/pleiades-private/release-inplace.sh fit "$V" --checkout ~/pleiades-fit
 
 그 뒤(`v1.0.2` 가 돌고 있으면)부터는 위의 체크아웃 안 판을 쓴다.
 
-- **실패 뒤 다시:** C4·C5 에서 실패하면 HEAD 는 이미 새 태그다 — 같은 태그를 다시 돌릴 때는 `--retry`(양식의 "재시도:" 줄 그대로). R-8 이 실패했을 때도 같다. 통과할 때마다 `~/pleiades-private/inplace-<app>-last-ok` 에 태그를 적고, R-8 안내는 그 값을 쓴다.
+- **실패 뒤 다시:** C4·C5 에서 실패하면 HEAD 는 이미 새 태그다 — 같은 태그를 다시 돌릴 때는 `--retry`(양식의 "재시도:" 줄 그대로). R-8 이 실패했을 때도 같다. 통과할 때마다 `~/pleiades-private/inplace-<app>-last-ok` 에 태그를 적고(기록이 없는 첫 배포는 checkout 전에 직전 태그를 적는다 · PR #286 Codex P2), R-8 안내는 그 값을 쓴다.
 - **이 스크립트는 그 앱 체크아웃 안의 것**을 부른다 — `pleiades-<app>-*` 3 프로세스가 그 체크아웃에서 돌지 않으면 C1 에서 멈춘다.
 - **새 셸에서 불러도 된다** — C1(셸 키 비우기 · `PLEIADES_ENV_FILE` · 도는 6 `same`)을 스크립트가 자기 안에서 한다.
 - **종료 코드:** 0 통과 · **1 서비스·체크아웃 그대로 중단**(A·B·C1 · 빌드 전 실패면 스크립트가 직전 태그로 checkout 을 되돌린 뒤) · 3 deploy.sh exit 3(옛 서비스 online) · **4 빌드·재기동 뒤 실패**(또는 되돌리기 실패) → 양식의 R-8 줄 그대로(`release-inplace.sh <app> <직전 태그>` · 직전 배포가 중간에 멈춰 프로세스가 3 개 미만이어도 돈다).
