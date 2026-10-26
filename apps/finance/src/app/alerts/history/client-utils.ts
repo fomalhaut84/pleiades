@@ -57,3 +57,18 @@ const PRE_ESCAPED_KINDS = new Set<string>(['target_hit', 'stop_loss', 'watch_buy
 export function messageForDisplay(message: string, kind: string): string {
   return PRE_ESCAPED_KINDS.has(kind) ? stripHtml(message) : message
 }
+
+/**
+ * 발송 성공률(%) — partial 은 0.5 로 친다. 발송 대상이 없으면 null.
+ * pleiades#269: `recorded`(ai_failure 기록 행)는 발송 이벤트가 아니라 분모에서 뺀다 —
+ * 넣으면 AI 실패가 쌓일수록 발송 성공률이 낮게 보인다 (사전 리뷰 major).
+ */
+export function computeSuccessRate(
+  total: number,
+  byStatus: { sent: number; partial: number; recorded?: number },
+): number | null {
+  const delivered = total - (byStatus.recorded ?? 0)
+  if (delivered <= 0) return null
+  return ((byStatus.sent + byStatus.partial * 0.5) / delivered) * 100
+}
+
