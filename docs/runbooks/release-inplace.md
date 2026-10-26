@@ -38,6 +38,7 @@ ssh-keygen -lf /tmp/pleiades_known_hosts      # 지문을 서버의 `ssh-keygen 
 5) **GitHub** — Settings → Environments → `production`(없으면 New) → *Deployment branches and tags* = **Selected branches and tags** · **Add rule → Tag → `v*`** 하나만(브랜치 규칙은 두지 않는다 — 이 규칙이 키를 지킨다 · `pleiades-resume` 이 매 세션 점검) → *Environment secrets* 에 `DEPLOY_SSH_KEY`(= 서버 `deploy_key` 내용) · `DEPLOY_HOST` · `DEPLOY_USER` · `DEPLOY_KNOWN_HOSTS`(= 4 의 파일 내용) · `DEPLOY_PORT`(22 가 아니면). **저장소 수준 secrets 는 0 그대로**(I-9). Claude 는 secrets 를 만들지도 읽지도 않는다.
 6) 서버 — `rm ~/pleiades-private/deploy_key`(개인 키는 GitHub 에만 · 공개 키는 authorized_keys 에 남는다). 실제 배포 확인은 다음 Release.
 
+- **배포 알림(#304)** — 앱마다 끝나면 그 앱의 봇이 관리자에게 보낸다(fin `TELEGRAM_ADMIN_CHAT_IDS` · fit `TELEGRAM_ALLOWED_CHAT_IDS` · 서버 `.env` 의 토큰 · GitHub secrets 아님): "✅ <app> <tag> 배포 완료 · 소요 · 프로브" 또는 "⚠️ … 배포 중단 · rc · 결과 줄" + 릴리즈 링크. 알림 실패는 배포 결과를 바꾸지 않는다. 자동 배포에서만 보낸다(손 실행은 보내지 않는다). `ssh-deploy.sh` 는 실행 중인 판으로 돈다 — 이 알림이 든 태그의 **다음** 자동 배포부터 온다. Discord 별도 채널은 T-10(사용자).
 - **두 배포가 겹치지 않는다** — `release-inplace.sh` 가 `~/pleiades-private/deploy.lock` 에 flock 을 잡는다(손 실행 포함 · 프로세스가 끝나면 커널이 푼다 · 지우지 않는다).
 - **R-8 로 #242 이전 태그(`v1.0.2` 이하)에 가면** fin 체크아웃에서 `ssh-deploy.sh` 가 사라진다 — 그동안 자동 배포는 실패로 닫힌다(안전 쪽). 다시 #242 이후 태그를 손으로 배포하면 돌아온다.
 - 마이그레이션 릴리즈는 prerelease 로 발행돼 건너뛴다 · 서버 조치 릴리즈는 draft → 조치 뒤 Publish(`workflow.md` 릴리즈 절).
