@@ -3,6 +3,8 @@ import { sendBriefing } from '@/bot/notifications/briefing'
 import { askAdvisor, AdvisorError, describeAdvisorError } from '@/lib/ai/claude-advisor'
 import { splitMessage } from '@/bot/utils/formatter'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
+import { formatKstDate } from '@/lib/kst-date'
+import { newsSearchRules } from '@/lib/ai/news-rules'
 
 const TYPING_INTERVAL_MS = 5000
 
@@ -58,6 +60,32 @@ async function handleBriefing(ctx: Context): Promise<void> {
 }
 
 /**
+ * 종목 심층 분석 프롬프트. pure — `now` 는 테스트 고정을 위한 주입점.
+ * pleiades#279: 질의를 `"<티커> 최신 뉴스"` 로 고정하면 티커 코드 검색(한국 종목 `000660.KS`)이 되고,
+ * 게시일 없는 결과에서 옛 기사가 인용됐다 → 회사명 + 연·월 · 게시일 확인 규칙.
+ */
+export function buildTickerAnalysisPrompt(ticker: string, now: Date = new Date()): string {
+  return [
+    `${ticker} 종목 심층 분석을 해줘. (오늘: ${formatKstDate(now)} KST 기준)\n`,
+    '다음 단계로 진행해:',
+    `1. get_holding_strategy(${ticker})로 전략/목표가/손절가 확인`,
+    `2. get_technical_analysis(${ticker})로 TA 리포트 확인`,
+    `3. get_portfolio(전체)에서 ${ticker} 보유 현황 확인 — 회사명도 여기서 확인`,
+    `4. WebSearch로 ${ticker} 의 회사명 + 연·월로 뉴스 검색 (아래 뉴스 규칙 · 티커 코드만으로 검색하지 말 것)`,
+    '',
+    '분석 내용:',
+    '- 현재 보유 현황 (수량, 평단, 수익률)',
+    '- 전략 설정 (목표가/손절 대비 현재 위치)',
+    '- 기술적 분석 요약 (RSI, MACD, BB, SMA, 지지/저항, 종합 시그널)',
+    '- 최신 뉴스/이슈 요약 (2~3건 · 각 기사 게시일 표기)',
+    '- 전략별 맞춤 조언 (장기보유→간략, 스윙→타이밍, 감시→점검기준)',
+    '- 종합 판단 + 주의사항',
+    '',
+    ...newsSearchRules('analysis', now),
+  ].join('\n')
+}
+
+/**
  * 종목 심층 분석 (fire-and-forget)
  */
 function fireTickerAnalysis(ctx: Context, chatId: number, ticker: string): void {
@@ -65,22 +93,7 @@ function fireTickerAnalysis(ctx: Context, chatId: number, ticker: string): void 
     ctx.replyWithChatAction('typing').catch(() => { /* 무시 */ })
   }, TYPING_INTERVAL_MS)
 
-  const prompt = [
-    `${ticker} 종목 심층 분석을 해줘.\n`,
-    '다음 단계로 진행해:',
-    `1. get_holding_strategy(${ticker})로 전략/목표가/손절가 확인`,
-    `2. get_technical_analysis(${ticker})로 TA 리포트 확인`,
-    `3. get_portfolio(전체)에서 ${ticker} 보유 현황 확인`,
-    `4. WebSearch로 "${ticker} 최신 뉴스" 검색`,
-    '',
-    '분석 내용:',
-    '- 현재 보유 현황 (수량, 평단, 수익률)',
-    '- 전략 설정 (목표가/손절 대비 현재 위치)',
-    '- 기술적 분석 요약 (RSI, MACD, BB, SMA, 지지/저항, 종합 시그널)',
-    '- 최신 뉴스/이슈 요약 (2~3건)',
-    '- 전략별 맞춤 조언 (장기보유→간략, 스윙→타이밍, 감시→점검기준)',
-    '- 종합 판단 + 주의사항',
-  ].join('\n')
+  const prompt = buildTickerAnalysisPrompt(ticker)
 
   askAdvisor(prompt, {
     model: 'sonnet',

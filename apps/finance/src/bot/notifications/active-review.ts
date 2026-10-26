@@ -13,6 +13,7 @@ import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 import { notifierFor, Route, htmlContent } from './notifier'
 import { sanitizeError } from '@/bot/utils/error'
 import { formatKstDate } from '@/lib/kst-date'
+import { newsSearchRules } from '@/lib/ai/news-rules'
 
 type MarketSession = 'KR' | 'US'
 
@@ -98,13 +99,17 @@ export function buildClosingPrompt(session: MarketSession, now: Date = new Date(
       : []),
     '- 도구로 수치를 받았으면 "데이터 부족"·"확인 불가" 라고 쓰지 말 것. 뉴스만 못 찾은 경우엔 "당일 뉴스 미확인" 으로 표현',
     '',
+    // pleiades#279: 다른 뉴스 경로와 같은 공통 규칙 (위 표기 규칙이 클로징 고유분)
+    ...newsSearchRules('briefing', now, { missingLabel: '당일 뉴스 미확인' }),
+    '',
     '주의: 매매 결정은 사용자 몫이라 참고만. 손절 없음 전략 (stock-trading-method 스킬 참조).',
   ].join('\n')
 }
 
-function buildWeeklyPrompt(): string {
+/** `now` 는 테스트 고정을 위한 주입점 (기본값 = 현재 시각) */
+export function buildWeeklyPrompt(now: Date = new Date()): string {
   return [
-    '지난주 (월-금) 포트폴리오 회고 + 다음주 관찰 캘린더를 작성해줘.\n',
+    `지난주 (월-금) 포트폴리오 회고 + 다음주 관찰 캘린더를 작성해줘. (오늘: ${formatKstDate(now)} KST 기준)\n`,
     '다음 단계:',
     '1. get_networth로 순자산 스냅샷',
     '2. get_performance(전체, 1M)로 지난 1개월 TWR + 알파',
@@ -119,6 +124,9 @@ function buildWeeklyPrompt(): string {
     '- 전략 재조정 힌트 (있다면, 참고용)',
     '',
     '주의: 매매/자산 결정은 사용자 몫. stock-trading-method 스킬 기반 참고 조언.',
+    '',
+    // pleiades#279
+    ...newsSearchRules('briefing', now),
   ].join('\n')
 }
 
