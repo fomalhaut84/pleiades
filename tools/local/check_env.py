@@ -108,7 +108,8 @@ def effective_discord_tokens(env: dict[str, str], *, cwd: Path, root: Path) -> d
     path = platform_file(env, cwd, root)
     if path.exists():
         # 줄은 \r?\n 에서만 나눈다 — splitlines() 는 \x0b·\x85 등에서도 나눠 platformEnv 와 결과가 갈린다(#328 사전 리뷰 info)
-        for raw in re.split(r"\r?\n", path.read_text(encoding="utf-8").lstrip("\ufeff")):
+        # 바이트로 읽는다 — read_text 는 홀로 선 \r 을 \n 으로 바꿔 platformEnv(번역 없음)와 줄이 갈린다(PR #329 Codex P2)
+        for raw in re.split(r"\r?\n", path.read_bytes().decode("utf-8").lstrip("\ufeff")):
             m = LINE.match(raw)
             if not m or raw.lstrip().startswith("#") or not DISCORD_TOKEN_KEY.match(m.group(1)):
                 continue
@@ -120,12 +121,13 @@ def effective_discord_tokens(env: dict[str, str], *, cwd: Path, root: Path) -> d
 
 
 def token_hash(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
+    # 앱 discordBotConfig() 는 토큰을 trim 해 쓴다 — 해시·같은 봇 판정도 쓰이는 값으로(PR #329 Codex P2)
+    return hashlib.sha256(token.strip().encode()).hexdigest()
 
 
 def discord_hash_lines(env: dict[str, str], *, cwd: Path, root: Path) -> list[str]:
     """허용 목록에 넣을 해시 — 키 이름과 해시만(토큰 값은 내지 않는다 · G-2)."""
-    return [f"{k} {token_hash(v)}" for k, v in effective_discord_tokens(env, cwd=cwd, root=root).items() if v]
+    return [f"{k} {token_hash(v)}" for k, v in effective_discord_tokens(env, cwd=cwd, root=root).items() if v.strip()]
 
 
 def _check_platform_file(env: dict[str, str], cwd: Path, root: Path) -> list[Problem]:
@@ -140,7 +142,7 @@ def _check_platform_file(env: dict[str, str], cwd: Path, root: Path) -> list[Pro
 def _check_discord(tokens: dict[str, str], allowed: set[str]) -> list[Problem]:
     out, seen = [], {}
     for key, value in tokens.items():
-        if not value:
+        if not value.strip():
             continue  # 비면 gateway 를 열지 않는다
         h = token_hash(value)
         if h not in allowed:

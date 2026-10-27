@@ -300,6 +300,16 @@ class Discord(Base):
         self.root_env(f"DISCORD_BOT_TOKEN_FITNESS={self.PROD} #\x0bDISCORD_BOT_TOKEN_FITNESS={self.VERIFY_FIT}\n")
         self.assertEqual(self.dkeys({}), {"DISCORD_BOT_TOKEN_FITNESS"})
 
+    # 회귀: PR #329 Codex P2 — 홀로 선 \r 은 줄을 나누지 않는다(platformEnv 는 번역 없이 읽는다)
+    def test_lone_carriage_return_does_not_split_lines(self):
+        (self.root / ".env").write_bytes(f"DISCORD_BOT_TOKEN_FITNESS={self.PROD}\n# c\rDISCORD_BOT_TOKEN_FITNESS={self.VERIFY_FIT}\n".encode())
+        self.assertEqual(self.dkeys({}), {"DISCORD_BOT_TOKEN_FITNESS"})
+
+    # 회귀: PR #329 Codex P2 — 앱은 토큰을 trim 해 쓴다 → 공백만 다른 두 토큰은 같은 봇
+    def test_whitespace_variant_is_same_bot(self):
+        self.root_env(f'DISCORD_BOT_TOKEN_FINANCE="{self.VERIFY} "\nDISCORD_BOT_TOKEN_FITNESS={self.VERIFY}\n')
+        self.assertEqual(self.dkeys({}), {"DISCORD_BOT_TOKEN_FITNESS"})
+
     def test_uppercase_hash_in_allowlist(self):
         self.root_env(f"DISCORD_BOT_TOKEN_FITNESS={self.VERIFY_FIT}\n")
         self.assertEqual(self.dkeys({}, discord_hashes={c.token_hash(self.VERIFY_FIT).upper()}), set())
