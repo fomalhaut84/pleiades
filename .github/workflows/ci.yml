@@ -40,6 +40,7 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             packages/notify/package-lock.json
+            packages/chat/package-lock.json
 
       # 루트 npm ci 는 prepare(tsc -p packages/notify)를 돌린다 — 소비자 설치 경로와 같은 조건이다
       - name: Install dependencies (root)
@@ -48,6 +49,10 @@ jobs:
       # vitest·@types/node 는 packages/notify devDependency 다 (루트에 workspaces 없음 · 8절 선행 조건)
       - name: Install dependencies (packages/notify)
         run: npm --prefix packages/notify ci
+
+      # @pleiades/chat(009 D-0 · #332) — @pleiades/notify 를 file: 로 링크하므로 위 prepare(notify dist) 뒤에 설치한다
+      - name: Install dependencies (packages/chat)
+        run: npm --prefix packages/chat ci
 
       - name: Typecheck
         run: npm run typecheck && npm run typecheck:test
