@@ -112,9 +112,9 @@ async function check(file, send) {
   const bad = formatErrors(values)
   out(`키 ${REQUIRED.length - missing.length}/${REQUIRED.length} 채움${missing.length ? ` · 비어 있음 ${missing.join(',')}` : ''}`)
   out(`형식 오류 ${bad.length}${bad.length ? ` (${bad.join(',')})` : ''} · 해석 불가 줄 ${invalid.length}${invalid.length ? ` (${invalid.join(',')})` : ''}`)
-  // 배포 알림은 별도 채널(사용자 2026-10-27) — 다른 웹훅과 같으면 알린다(막지는 않는다)
+  // 배포 알림 채널을 다른 라우트와 같이 써도 된다(사용자 2026-10-27 · #321 — ADMIN 채널에서 함께) — 판정에 영향 없는 참고 줄
   const dup = Object.entries(WEBHOOKS).filter(([a, k]) => a !== 'DEPLOY' && values[k] && values[k] === values[WEBHOOKS.DEPLOY]).map(([a]) => a)
-  if (dup.length) out(`참고: 배포 웹훅이 ${dup.join(',')} 와 같다 — 별도 채널이 아니다`)
+  if (dup.length) out(`참고: 배포 알림은 ${dup.join(',')} 채널과 같은 곳으로 간다`)
   const users = (values[ALLOWED_USERS] || '').split(',').filter((s) => s.trim()).length
   out(`버튼 허용 사용자 ${users}명`)
   if (missing.length || bad.length || invalid.length) return finish(false)

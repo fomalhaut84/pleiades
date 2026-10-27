@@ -4,7 +4,7 @@
 // 사용:  node deploy/notify-deploy.cjs <fin|fit> <ok|fail> <tag> <요약 한 줄>
 //   봇 토큰·수신자는 그 앱의 서버 .env(apps/<dir>/.env)에서 읽는다 — GitHub secrets 에 두지 않는다(I-9).
 //   수신자: fin = TELEGRAM_ADMIN_CHAT_IDS(관리자 경로) · fit = TELEGRAM_ALLOWED_CHAT_IDS(fit 은 관리자 경로가 없다 · 003 Q25)
-//   Discord(T-10 · #314 · 사용자 2026-10-27): 플랫폼 설정에 NOTIFY_DEPLOY_CHANNEL=discord + DISCORD_WEBHOOK_DEPLOY 면 그 웹훅(별도 채널)으로만 —
+//   Discord(T-10 · #314 · 사용자 2026-10-27): 플랫폼 설정에 NOTIFY_DEPLOY_CHANNEL=discord + DISCORD_WEBHOOK_DEPLOY 면 그 웹훅으로만(ADMIN 과 같은 채널이어도 된다 · #321) —
 //   동시 모드 없음. Discord 전송이 실패하면 텔레그램으로 대신 보낸다(알림을 잃지 않게). 플랫폼 설정 = PLEIADES_ENV_FILE 또는 ~/pleiades-platform.env
 //   (ssh-deploy 는 그 변수를 넘기지 않는다 — release-inplace.sh C1 과 같은 위치).
 // 출력: 보낸 수 한 줄. 토큰·채팅 ID 는 내지 않는다. 알림 실패는 종료 코드 0(배포 결과를 바꾸지 않는다) + 사유 한 줄.

@@ -105,12 +105,15 @@ restart_bots() {  # 재시작 → 둘 다 online 인지
 
 # gateway 판정 — 두 봇 모두 "[discord-<app>] gateway 준비 완료" 가 재시작 뒤에 · 종료 코드·미설정 줄 0
 judge_gateway() {
-  local waited=0 b app ready=0 lines
+  local waited=0 b app ready=0 lines=
   while (( waited < READY_WAIT )); do
     ready=0
     for b in "${BOTS[@]}"; do
       app=${b#pleiades-}; app=${app%-bot}
-      since "$b" | grep -q "\[discord-$app\] gateway 준비 완료" && ready=$((ready + 1))
+      # 파이프로 grep -q 하지 않는다 — pipefail 아래에서 grep 이 먼저 끝나면 다음 로그 파일을 쓰는 tail 이 SIGPIPE 로
+      # 파이프라인을 실패시켜 준비를 못 본다(서버 첫 on · #321). 변수로 받아 검사한다
+      lines=$(since "$b")
+      grep -q "\[discord-$app\] gateway 준비 완료" <<<"$lines" && ready=$((ready + 1))
     done
     (( ready == ${#BOTS[@]} )) && break
     sleep 3; waited=$((waited + 3))
