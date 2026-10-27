@@ -49,6 +49,15 @@ function cdnUrl(raw: unknown): string | undefined {
   }
 }
 
+/** 읽지 않을 응답 본문을 닫는다 — 거부한 내려받기가 연결을 붙잡지 않게(PR #334 Codex P2). */
+async function discard(res: ChatResponse): Promise<void> {
+  try {
+    await res.body?.getReader().cancel();
+  } catch {
+    // 이미 닫힘
+  }
+}
+
 async function readCapped(res: ChatResponse, max: number): Promise<Uint8Array> {
   const reader = res.body?.getReader();
   if (reader === undefined) {
@@ -98,9 +107,13 @@ export function toAttachment(raw: RawAttachment, policy: AttachmentPolicy, fetch
       }
       if (url === undefined) throw new Error('@pleiades/chat: 첨부 주소가 Discord CDN 이 아니다');
       const res = await fetchFn()(url, { method: 'GET', headers: {} });
-      if (!res.ok) throw new Error(`@pleiades/chat: 첨부 내려받기 응답 ${res.status}`);
+      if (!res.ok) {
+        await discard(res);
+        throw new Error(`@pleiades/chat: 첨부 내려받기 응답 ${res.status}`);
+      }
       const declared = Number(res.headers?.get('content-length') ?? Number.NaN);
       if (Number.isFinite(declared) && declared > policy.maxBytes) {
+        await discard(res);
         throw new Error(`@pleiades/chat: 첨부 상한 초과 (${declared} > ${policy.maxBytes} 바이트)`);
       }
       return readCapped(res, policy.maxBytes);

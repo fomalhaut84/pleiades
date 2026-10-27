@@ -184,4 +184,14 @@ describe('첨부 수신 — 크기·형식·출처 검증 (0-3 · R6)', () => {
     expect(fetch).not.toHaveBeenCalled();
     await expect(toAttachment(raw(), policy, () => fetch).download()).rejects.toThrow(/999/);
   });
+  it('거부한 응답(content-length 초과 · 실패 상태)의 본문을 닫는다', async () => {
+    // 회귀: PR #334 Codex P2 (거부한 내려받기가 연결을 붙잡는다)
+    const big = streamRes([new Uint8Array(1)], { 'content-length': '999' });
+    await expect(toAttachment(raw(), policy, () => async () => big.r).download()).rejects.toThrow(/999/);
+    expect(big.cancel).toHaveBeenCalledOnce();
+    const bad = streamRes([]);
+    const failed = { ...bad.r, ok: false, status: 404 };
+    await expect(toAttachment(raw(), policy, () => async () => failed).download()).rejects.toThrow(/404/);
+    expect(bad.cancel).toHaveBeenCalledOnce();
+  });
 });
