@@ -5,7 +5,7 @@
 
 | | 값 |
 |---|---|
-| 결정 | 라우트 셋(ALLOWED · ADMIN · INTERACTIVE)을 **한 번에** · 배포 알림(#304)은 **Discord 별도 채널** (사용자 2026-10-27) · 텔레그램+Discord 동시 모드 없음(사용자 2026-10-22) |
+| 결정 | 라우트 셋(ALLOWED · ADMIN · INTERACTIVE)을 **한 번에** · 배포 알림(#304)은 **Discord**(~~별도 채널~~ → ADMIN 채널과 같이 써도 된다 · 사용자 2026-10-27 · #321) · 텔레그램+Discord 동시 모드 없음(사용자 2026-10-22) |
 | 실행기 | `deploy/discord-switch.sh <check\|on\|off>` — `v1.0.7` 이후 체크아웃(`~/pleiades-fin`)에 있다 |
 | 바뀌는 것 | 플랫폼 설정 `~/pleiades-platform.env` 의 스위치 4줄(`NOTIFY_ALLOWED/ADMIN/INTERACTIVE/DEPLOY_CHANNEL`) · 두 앱 봇 재시작 |
 | 바뀌지 않는 것 | 텔레그램 고정 경로(키보드 메시지 · `/브리핑` · fin 분기 PDF) · 봇 명령(인바운드) · 웹 · MCP · 앱 `.env` |
@@ -21,7 +21,7 @@
 
 검증 서버를 그대로 운영으로 쓴다(Q80).
 
-1. 채널 넷: fin 알림 · fit 알림 · 관리자(fin ADMIN) · **배포(새로)**. 채널마다 웹훅 하나씩 → URL 4개.
+1. 채널: fin 알림 · fit 알림 · 관리자(fin ADMIN) · 배포(선택 — 관리자 채널에서 함께 받으려면 `DISCORD_WEBHOOK_DEPLOY` 에 ADMIN 웹훅을 그대로 넣는다 · #321). 키는 4개 다 채운다.
 2. 봇 둘(fin · fit — M-6b 검증 봇 그대로): 각자 자기 앱 채널에 *채널 보기 · 메시지 보내기* 권한.
 3. 버튼을 누를 사용자 ID(개발자 모드 → 프로필 → ID 복사). 허용 = 사용자 AND 채널.
 
@@ -48,7 +48,7 @@ cd ~/pleiades-fin && deploy/discord-switch.sh check
 
 - 도는 web·bot 4개가 이 파일을 읽는지 대조한다(DIFF/MISSING 0 · 봇 2) — 다르면 바꾸지 않고 멈춘다. 셸에 `PLEIADES_ENV_FILE` 을 export 해 두었으면 `unset` 하고 돌린다.
 - 권한 600 · 키 9/9 · 형식 오류 0 · 웹훅 4개·봇 채널 2개에 점검 메시지 1건씩 → Discord 채널 여섯 곳에 `🔧 pleiades T-10 점검 메시지` 가 왔는지 눈으로 본다.
-- 양식에 "참고: 배포 웹훅이 … 와 같다" 가 있으면 배포 채널이 따로가 아니다 — 1-1 로 돌아간다.
+- 양식의 "참고: 배포 알림은 … 채널과 같은 곳으로 간다" 는 판정에 영향이 없다 — 의도한 것이면 그대로 둔다.
 
 ## 4. 서버 — 켜기
 

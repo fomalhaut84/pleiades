@@ -217,6 +217,18 @@ class DiscordSwitch(unittest.TestCase):
         self.assertIn("fin 봇 gateway 준비 0", r.stdout)
         self.assertTrue(all(v == '""' for v in self.switches().values()))
 
+    # 회귀: 서버 첫 on(2026-10-27) — 봇 로그가 error·out 둘이면 grep -q 가 첫 파일에서 끝나 다음 tail 이 SIGPIPE →
+    # pipefail 로 준비를 못 보고 상한까지 기다려 판정 실패했다
+    def test_ready_found_with_out_log_after_error_log(self):
+        stub = (self.bin / "pm2").read_text().replace(
+            '    case "${STUB_GATEWAY:-ok}" in',
+            '    head -c 2000000 /dev/zero | tr "\\0" "x" >> "$PLEIADES_PM2_LOGS/$2-out.log"; echo >> "$PLEIADES_PM2_LOGS/$2-out.log"\n'
+            '    case "${STUB_GATEWAY:-ok}" in')
+        (self.bin / "pm2").write_text(stub)
+        r = self.run_sh("on", "--no-send", PLEIADES_READY_WAIT="9")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("대기 0s", r.stdout)
+
     def test_rotated_log_is_read_from_start(self):
         big = "x" * 5000 + "\n"
         for b in ("pleiades-fin-bot", "pleiades-fit-bot"):
