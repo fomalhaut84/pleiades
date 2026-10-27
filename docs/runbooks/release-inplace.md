@@ -19,6 +19,8 @@ V=v1.0.2
 
 ## 자동 배포 (#242 · Release 발행 = 배포)
 
+> **결과 (2026-10-26 · #312) — 자동 배포 동작.** `v1.0.4`(첫) · `v1.0.5` · `v1.0.6` 세 번 모두 fin → fit 통과(발행 뒤 약 3분 40초) · `v1.0.6` 에서 앱 봇 배포 완료 알림 수신(#304). 판정 표 `measured-facts.md` *2026-10-26 — v1.0.3 손 배포 · v1.0.4~v1.0.6 자동 배포*.
+
 설정을 마친 뒤로는 **Release 가 발행되면** `.github/workflows/deploy.yml` 이 서버에 `deploy <tag>` 를 보내고, forced command `deploy/ssh-deploy.sh` 가 fin → fit 순서로 `release-inplace.sh <app> <tag> --yes` 를 돌린다(fin 이 통과하지 않으면 fit 은 하지 않는다). 판정 양식은 그 Actions 실행의 **요약(Summary)** 에 남는다 — 실패면 양식의 "재시도:"·"R-8:" 줄을 서버에서 손으로 실행한다. 서버 조치가 필요한 릴리즈는 Claude 가 draft 로 만들고 사용자가 서버 조치 뒤 Publish 한다(`workflow.md` 릴리즈 절).
 
 **한 번만 하는 설정(사용자)** — `ssh-deploy.sh` 가 서버 fin 체크아웃에 있어야 하므로 **이 파일이 든 태그를 먼저 손으로 배포한 뒤**(아래 스크립트 실행) 한다. 그 전의 Release 발행은 workflow 가 "secret 없음" 으로 곧바로 실패한다 — 정상이다.
