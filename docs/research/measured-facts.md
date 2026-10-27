@@ -4477,3 +4477,27 @@ ls -d apps/<app>/prisma/migrations/*/ | wc -l                                   
 - fin 프로브 오류 응답 1(웹 재기동 ≈2 s)은 제자리 재배포 6회 중 3회.
 - 설정 점검(Claude · 읽기): 저장소 secrets 0 · production secrets = DEPLOY_HOST·KNOWN_HOSTS·SSH_KEY·USER · 배포 대상 custom `tag:v*` 하나 · 승인자 없음.
 
+
+---
+
+# 2026-10-27 — 009 텔레그램 종료 실측 (#326)
+
+**기준:** pleiades `dev` `8192b0c` · `apps/*/src`(테스트 제외) · 읽기 전용. **상세(측정 명령 · 파일:줄 · 열거)는 `_workspace/009/01_surveyor_fin.md` · `01_surveyor_fit.md` · `01_discord_platform.md`** — 이 절은 대장만 옮긴다(숫자의 정본은 그 열거).
+
+| 항목 | fin | fit | 출처 |
+|---|---|---|---|
+| grammY 등록 command / hears / on / callbackQuery | 21 / 28 / 5 / 1 | 10(+정규식 1) / 0 / 2(텍스트·사진) / 2 | fin §1 · fit §1 |
+| 논리 명령 | **32**(슬래시만 4 · 한글만 11 · 둘 다 17) | **11** | fin §1 표 · fit §1 |
+| 콜백 접두 · 그중 Discord 판 있음 | 5 · 1(vest) | 2 · 1(auto_adjust) | fin §3 · fit §3 |
+| 프로세스 메모리 상태 맵 | 6 | 식단 편집 2단계(`Map<number,…>`) | fin §2·3 · fit §2 |
+| grammY `ctx` 참조 | 269 | 91 | fin §5 · fit §5 |
+| notifier 아웃바운드 호출 — 전부 grammY `Bot` 인자 | 22 | 6 | fin §4·8 · fit §4 |
+| 텔레그램 고정 아웃바운드(스위치 밖) | 1(`/브리핑` `notifierForChat`) | 0 | fin §4 · fit §4 |
+| 미디어 수신 | 0 | 사진 1(`getFile` 직접) | fin §7 · fit §2 |
+| 봇 프로세스가 텔레그램 기동 실패 시 함께 멈추는 크론 | **20**(lib 7 + 알림 13) | 리포트·자동조정·sweep 등 | fin §9 · fit §9 |
+| DB 텔레그램 식별자 컬럼 | 0 | 2(읽는 경로 0) | fin §8 · fit §8 |
+
+**정정:** fin 봇 프로세스 크론은 19 → **20**(#261 벤치마크 추가 · `lib/cron.ts:217`).
+**패키지 Discord 능력:** 웹훅 텍스트·파일 1개(10 MiB) · 봇 REST 전송 · 키보드 → 버튼 변환 · gateway `intents: 0`(READY·RESUMED·INTERACTION_CREATE 버튼만). **없음:** 슬래시 명령 · 메시지 수신 · 모달 · select · 파일 수신 · 인터랙션 밖 편집 · DM(`01_discord_platform.md` A).
+**Discord 플랫폼(공식 문서 · 2026-10-27 확인):** gateway 로 인터랙션 수신(HTTP endpoint 불요) · 첫 응답 3 s · 토큰 15 분 · guild 명령 즉시 반영 · 명령 100개 한도 · MESSAGE_CONTENT 는 고유 사용자 10,000 미만이면 포털 토글 · 본문 2000자 · 파일 기본 20 MiB(같은 파일 B 절).
+**못 잰 것:** 응답 길이 분포(2000자 초과 빈도 — 서비스 DB · I-7) · global 명령 반영 지연 · 한국어 슬래시 명령 이름 허용(→ 플랫폼 파일 "미확인").
