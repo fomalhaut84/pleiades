@@ -14,6 +14,7 @@ import stat
 import subprocess
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -231,6 +232,27 @@ class DiscordSwitch(unittest.TestCase):
         self.assertIn("앞서 뜬 봇은 discord 설정일 수 있다", r.stdout)
         self.assertNotIn("텔레그램으로 되돌렸다", r.stdout)
         self.assertTrue(all(v == '""' for v in self.switches().values()))
+
+    # 회귀: PR #315 Codex P2 — 스위치를 쓴 뒤 신호로 끊기면 텔레그램으로 되돌린다
+    def test_signal_after_switch_reverts(self):
+        env = {
+            "PATH": f"{self.bin}:{NODE_DIR}:{BASE_PATH}", "HOME": str(self.home), "PLEIADES_TEST": "1",
+            "PLEIADES_LOCK": "mkdir", "PLEIADES_PM2_LOGS": str(self.logs), "PLEIADES_READY_WAIT": "30",
+            "STUB_CALLS": str(self.calls), "STUB_GATEWAY": "none",
+        }
+        p = subprocess.Popen(["bash", str(SH), "on", "--no-send"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+        for _ in range(100):   # 판정 대기에 들어설 때까지(스위치 discord · 재시작 끝)
+            if self.calls.exists() and len(self.calls.read_text().split()) >= 4:
+                break
+            time.sleep(0.1)
+        time.sleep(1)
+        self.assertEqual(self.switches()["NOTIFY_ALLOWED_CHANNEL"], '"discord"')
+        p.terminate()
+        out, _ = p.communicate(timeout=30)
+        self.assertEqual(p.returncode, 3, out)
+        self.assertIn("중단 신호 — 텔레그램으로 되돌렸다", out)
+        self.assertTrue(all(v == '""' for v in self.switches().values()))
+        self.assertFalse((self.home / "pleiades-private" / "deploy.lock.d").exists(), "락은 풀린다")
 
     def test_on_does_nothing_when_check_fails(self):
         self.write_env(FULL.replace('DISCORD_ALLOWED_USER_IDS="323456789012345678"', 'DISCORD_ALLOWED_USER_IDS=""'))

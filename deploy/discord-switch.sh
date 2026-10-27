@@ -118,6 +118,7 @@ judge_gateway() {
 # on 실패 — 바로 텔레그램으로 되돌린다(반쯤 켜진 상태로 두지 않는다). 되돌리기 자체의 성패를 따로 적는다(사전 리뷰 major:
 # 재시작이 다시 실패하면 앞서 뜬 봇은 discord 설정으로 남는다 — "되돌렸다" 로 덮지 않는다)
 revert() {  # <이유>
+  CUTOVER=0
   node_step set "$FILE" telegram || stop 3 "$1 · 되돌리기 실패(스위치를 쓰지 못했다) — 백업에서 복원 후 off"
   if restart_bots; then
     form "   되돌림 · 봇 online: 예"
@@ -125,6 +126,13 @@ revert() {  # <이유>
   fi
   form "   되돌림 · 봇 online: 아니오"
   stop 3 "$1 · 스위치는 텔레그램이지만 봇 재시작 실패 — 앞서 뜬 봇은 discord 설정일 수 있다 · pm2 확인 후 off"
+}
+
+CUTOVER=0
+on_signal() {
+  trap '' INT TERM HUP   # 되돌리는 중에 다시 끊기지 않게
+  [[ $CUTOVER -eq 1 ]] && revert "중단 신호"
+  stop 130 "중단 신호 — 바꾸기 전"
 }
 
 main() {
@@ -162,7 +170,8 @@ main() {
   fi
 
   trap release_lock EXIT
-  trap 'exit 130' INT TERM HUP
+  # 신호(Ctrl-C · ssh 끊김 · SIGTERM) — on 이 스위치를 쓴 뒤면 텔레그램으로 되돌리고 끝낸다(PR #315 Codex P2)
+  trap on_signal INT TERM HUP
   take_lock "$private/deploy.lock" || stop 1 "배포가 이 서버에서 진행 중이다(끝난 뒤 다시)"
 
   if [[ "$cmd" == on ]]; then
@@ -176,6 +185,7 @@ main() {
   form "   백업 $(printf '%s' "$backup" | redact)"
 
   local to=discord; [[ "$cmd" == on ]] || to=telegram
+  [[ "$cmd" == on ]] && CUTOVER=1
   node_step set "$file" "$to" || stop 1 "스위치를 쓰지 못했다(백업으로 그대로)"
 
   mark_logs
