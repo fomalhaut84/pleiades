@@ -22,10 +22,10 @@
   ],
   "scripts": {
     "prepare": "tsc -p packages/notify",
-    "build": "tsc -p packages/notify",
-    "typecheck": "tsc --noEmit -p packages/notify",
-    "typecheck:test": "tsc --noEmit -p packages/notify/tsconfig.test.json",
-    "test": "npm --prefix packages/notify run test"
+    "build": "tsc -p packages/notify && tsc -p packages/chat",
+    "typecheck": "tsc --noEmit -p packages/notify && tsc --noEmit -p packages/chat",
+    "typecheck:test": "tsc --noEmit -p packages/notify/tsconfig.test.json && tsc --noEmit -p packages/chat/tsconfig.test.json",
+    "test": "npm --prefix packages/notify run test && npm --prefix packages/chat run test"
   },
   "devDependencies": {
     "typescript": "^5"

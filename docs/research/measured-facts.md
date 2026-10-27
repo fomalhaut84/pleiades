@@ -4501,3 +4501,20 @@ ls -d apps/<app>/prisma/migrations/*/ | wc -l                                   
 **패키지 Discord 능력:** 웹훅 텍스트·파일 1개(10 MiB) · 봇 REST 전송 · 키보드 → 버튼 변환 · gateway `intents: 0`(READY·RESUMED·INTERACTION_CREATE 버튼만). **없음:** 슬래시 명령 · 메시지 수신 · 모달 · select · 파일 수신 · 인터랙션 밖 편집 · DM(`01_discord_platform.md` A).
 **Discord 플랫폼(공식 문서 · 2026-10-27 확인):** gateway 로 인터랙션 수신(HTTP endpoint 불요) · 첫 응답 3 s · 토큰 15 분 · guild 명령 즉시 반영 · 명령 100개 한도 · MESSAGE_CONTENT 는 고유 사용자 10,000 미만이면 포털 토글 · 본문 2000자 · 파일 기본 20 MiB(같은 파일 B 절).
 **못 잰 것:** 응답 길이 분포(2000자 초과 빈도 — 서비스 DB · I-7) · global 명령 반영 지연 · 한국어 슬래시 명령 이름 허용(→ 플랫폼 파일 "미확인").
+
+## 2026-10-27 — 009 D-0 `packages/chat` 로컬 실측 (#332)
+
+검증 fit Discord 봇(사용자 생성 · `check_env` 허용 목록 통과) · 검증 서버 채널 1 · 허용 사용자 1. 명령: `tools/local/run.sh fit -- node ../../tools/local/chat-live-check.cjs fit` (2회 · 06:31~06:34 · 06:42 UTC).
+
+| 항목 | 결과 |
+|---|---|
+| IDENTIFY intents `GUILD_MESSAGES \| MESSAGE_CONTENT`(33280) | READY 수신 · close 4014 없음(포털 토글 켜짐) · 로그 `[discord-fit] gateway 준비 완료` 그대로(L16′ 계약) |
+| 일반 메시지 수신 → 같은 채널 답장 | 통과 |
+| 2000자 초과(150줄) | 여러 메시지로 나뉘어 001~150 순서·누락 없음 · 버튼은 마지막 메시지에만(사용자 눈 확인) |
+| 버튼 교체 · 본인 안내(ephemeral) · 버튼 → 원본 편집 | 통과 |
+| 인터랙션 밖 편집 + 버튼 제거 | 통과(2회차 — 1회차는 3초 대기 중 종료로 미기록) |
+| 봇 경로 파일(multipart) | 통과 |
+| 첨부 수신(사진) · 허용 밖 형식 거부 | 통과 |
+
+**npm 10.8.2 결함:** `file:../notify` 의존을 가진 패키지에서 `npm install` 이 `TypeError: Cannot read properties of null (reading 'edgesOut')`(arborist `#loadPeerSet`)로 실패 — `--legacy-peer-deps` 로 통과. `packages/chat/.npmrc` 에 고정, `npm --prefix packages/chat ci` 도 그 설정을 읽는다(실측).
+미측정: U-2(같은 토큰 두 세션) · U-15 의 실제 `remaining` 값(코드는 `GET /gateway/bot` `session_start_limit` 을 읽는다 — 값은 출력하지 않았다).

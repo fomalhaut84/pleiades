@@ -6,6 +6,9 @@ _workspace_prev/
 # apps/ 는 추적된다(006 M-1) — 루트 Grep 이 apps/ 를 검색한다(잡음이 크면 path 로 좁힌다).
 repos/
 packages/notify/dist/
+packages/chat/dist/
+# 로컬 chat 실측 상태(IDENTIFY 기록 · #332)
+/.chat-local/
 _workspace/**/backup/
 __pycache__/
 .claude/worktrees/

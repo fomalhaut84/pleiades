@@ -264,7 +264,7 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 
 | 대상 | lint | 타입 | 테스트 | 빌드 |
 |---|---|---|---|---|
-| **pleiades** | **해당 없음** (린터 미도입 — 타입체크가 그 자리를 대신한다) | **`npm run typecheck && npm run typecheck:test`** (= `tsc --noEmit -p packages/notify` + `tsc --noEmit -p packages/notify/tsconfig.test.json` — 후자가 테스트 파일을 타입체크한다. #37 결정 (b) · #32 I1 · 1a-1(#47)에서 도입) | **`npm test`** (= `npm --prefix packages/notify run test` → `vitest run`) | **`npm run build`** (= `tsc -p packages/notify`) |
+| **pleiades** | **해당 없음** (린터 미도입 — 타입체크가 그 자리를 대신한다) | **`npm run typecheck && npm run typecheck:test`** (= `tsc --noEmit -p packages/notify` + `tsc --noEmit -p packages/notify/tsconfig.test.json` — 후자가 테스트 파일을 타입체크한다. #37 결정 (b) · #32 I1 · 1a-1(#47)에서 도입 · **#332 이후 `packages/chat` 두 줄이 이어진다**) | **`npm test`** (= `npm --prefix packages/notify run test` → `vitest run` · **#332 이후 + `npm --prefix packages/chat run test`**) | **`npm run build`** (= `tsc -p packages/notify` · **#332 이후 + `tsc -p packages/chat`**) |
 | **`repos/myFinance`** | `npm run lint` | **`npx tsc --noEmit`** | **`npm run test:run`** | `npm run build` |
 | **`repos/myFitness`** | `npm run lint` | `npm run typecheck` | `npm run test` | `npm run build` |
 | **`apps/finance`** (M-2 이후 · cwd `apps/finance`) | `npm run lint` | **`npx tsc --noEmit`** | **`npm run test:run`** | `npm run build` — **선행: 로컬 `pleiades_fin` + `npx prisma migrate deploy`**(prerender 가 Prisma 를 부른다 · 006 ㉑) · **M-5b(#136) 이후 + 루트 `npm ci`**(pleiades 루트에서 직접 · `run.sh` 밖 — `packages/notify/dist` · 006 ㉒) |
@@ -278,6 +278,8 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 > **DB 는 `pleiades_` 접두 로컬 DB 만** · 실효 env 사전 검사 후(`isolation.md` I-14 · 006 L-1·L-2). 되돌리기: 문구 (**즉시**).
 >
 > **실행 방법 (2026-10-01 · M-2 · #118).** `apps/*` 행의 명령은 전부 **`tools/local/run.sh <fin|fit> -- <명령>`** 으로 돌린다(cwd · 실효 env 검사 · claude shim). 처음 한 번: `python3 tools/local/write_env.py <fin|fit>`(루트 템플릿 → `apps/<app>/.env` · 덮어쓰지 않음) · fin 은 `python3 tools/local/db.py create fin`(삭제는 `db.py drop fin --confirm pleiades_fin`). 첫 통과 실측은 `measured-facts.md` *2026-10-01 — M-2*. 되돌리기: 문구 (**즉시**).
+>
+> **정정 (2026-10-27 · 009 D-0 · #332) — `packages/chat` 추가.** 루트 `typecheck`·`typecheck:test`·`test`·`build` 가 `packages/chat` 도 돈다. **선행이 하나 늘었다:** 루트 `npm ci`(prepare → `packages/notify/dist`) → `npm --prefix packages/notify install` → **`npm --prefix packages/chat ci`**(chat 은 `@pleiades/notify` 를 `file:../notify` 로 링크한다 — notify dist 가 먼저 있어야 타입·테스트가 그것을 찾는다 · CI `ci.yml` 순서와 같다). 없으면 `vitest: command not found` · TS2307. `packages/chat/.npmrc` 의 `legacy-peer-deps=true` 는 npm 10 arborist 의 `file:` 링크 결함(`null.edgesOut`) 우회다. 서버 배포는 루트 `npm ci`(prepare = notify 만)라 영향 없음 — 앱이 chat 을 쓰는 D-1 에서 서버 설치 경로를 다시 정한다. 되돌리기: 문구 (**즉시**).
 >
 > **CI (2026-10-01 · M-3 · #120).** 같은 단계가 `.github/workflows/apps-ci.yml` 에서 돈다 — **필수 = `apps-fin`·`apps-fit`**(서비스 CI 단계 그대로) · **`apps-fin-test` 는 비필수**(서비스 CI 에 없는 추가분 · 006 Q52 확정). `apps/*` 서비스 결함으로 실패하면 고치지 않고 그 체크를 비필수로 내린 뒤 pleiades 이슈에 기록한다(006 Q57 확정 · `isolation.md` 파생 규칙). 로컬 8절과 달리 CI 에는 `.env` 가 없다 — `DATABASE_URL` 만 러너 postgres 로. 되돌리기: 문구 (**즉시**).
 
