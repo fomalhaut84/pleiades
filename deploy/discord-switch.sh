@@ -80,6 +80,20 @@ online() {  # <봇 이름> — pm2 jlist 앞의 "[PM2][WARN]" 줄을 건너 JSON
       const p = list.find((x) => x.name === process.argv[1]); process.stdout.write(p && p.pm2_env.status === "online" ? "1" : "0") })' "$1"
 }
 
+# 도는 web·bot 이 읽는 플랫폼 설정이 이 파일인지 — pm2 restart 는 저장된 env 를 그대로 쓰므로(--update-env 없음) 다른 파일을
+# 고치면 스위치가 바뀌지 않은 채 판정만 통과한다(PR #318 Codex P2 · release-inplace.sh C1 과 같은 대조). 값은 내지 않는다
+# 출력: "<봇 수> <같음> <다름·없음>"
+env_same() {  # <파일>
+  pm2 jlist 2>/dev/null 9>&- | node -e '
+    let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
+      const i = s.search(/\[\{|\[\]/); let list = []; try { list = JSON.parse(s.slice(i)) } catch {}
+      const mine = list.filter((p) => /^pleiades-(fin|fit)-(web|bot)$/.test(p.name))
+      const bots = mine.filter((p) => /-bot$/.test(p.name)).length
+      const v = (p) => p.pm2_env.PLEIADES_ENV_FILE ?? (p.pm2_env.env || {}).PLEIADES_ENV_FILE
+      const same = mine.filter((p) => v(p) === process.argv[1]).length
+      process.stdout.write(`${bots} ${same} ${mine.length - same}`) })' "$1"
+}
+
 restart_bots() {  # 재시작 → 둘 다 online 인지
   local b
   for b in "${BOTS[@]}"; do
@@ -157,6 +171,11 @@ main() {
   form "   플랫폼 설정 권한 $perm"
   [[ "$perm" == 600 ]] || stop 1 "플랫폼 설정 권한이 600 이 아니다"
   node_step state "$file" || stop 1 "스위치 상태를 읽지 못했다"
+  local es
+  read -r -a es <<<"$(env_same "$file")"
+  form "   도는 web·bot 플랫폼 설정 same ${es[1]:-0} · DIFF/MISSING ${es[2]:-?} · 봇 ${es[0]:-0}"
+  [[ "${es[0]:-0}" == 2 && "${es[2]:-1}" == 0 ]] \
+    || stop 1 "도는 프로세스의 PLEIADES_ENV_FILE 이 이 파일과 다르거나 봇이 없다 — 셸의 PLEIADES_ENV_FILE 을 풀고(unset) 다시"
 
   PM2_LOGS=$HOME/.pm2/logs
   [[ "${PLEIADES_TEST:-}" != 1 || -z "${PLEIADES_PM2_LOGS:-}" ]] || PM2_LOGS=$PLEIADES_PM2_LOGS

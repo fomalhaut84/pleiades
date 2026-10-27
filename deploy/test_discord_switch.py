@@ -59,7 +59,9 @@ case "$1" in
   jlist)
     s=${STUB_ONLINE:-online}
     echo "[PM2][WARN] 경고 줄"
-    echo "[{\"name\":\"pleiades-fin-bot\",\"pm2_env\":{\"status\":\"$s\"}},{\"name\":\"pleiades-fit-bot\",\"pm2_env\":{\"status\":\"$s\"}}]" ;;
+    e=${STUB_ENV_FILE:-}
+    p() { echo "{\"name\":\"$1\",\"pm2_env\":{\"status\":\"$2\",\"PLEIADES_ENV_FILE\":\"$e\"}}"; }
+    echo "[$(p pleiades-fin-web online),$(p pleiades-fin-bot "$s"),$(p pleiades-fin-mcp online),$(p pleiades-fit-web online),$(p pleiades-fit-bot "$s")]" ;;
 esac
 """
 
@@ -122,6 +124,7 @@ class DiscordSwitch(unittest.TestCase):
             "PLEIADES_DISCORD_BASE": f"http://127.0.0.1:{self.server.server_port}",
             "PLEIADES_READY_WAIT": "6",
             "STUB_CALLS": str(self.calls),
+            "STUB_ENV_FILE": str(self.env_file),
             **extra,
         }
         r = subprocess.run(["bash", str(SH), *args], capture_output=True, text=True, env=env, timeout=60)
@@ -238,7 +241,7 @@ class DiscordSwitch(unittest.TestCase):
         env = {
             "PATH": f"{self.bin}:{NODE_DIR}:{BASE_PATH}", "HOME": str(self.home), "PLEIADES_TEST": "1",
             "PLEIADES_LOCK": "mkdir", "PLEIADES_PM2_LOGS": str(self.logs), "PLEIADES_READY_WAIT": "30",
-            "STUB_CALLS": str(self.calls), "STUB_GATEWAY": "none",
+            "STUB_CALLS": str(self.calls), "STUB_GATEWAY": "none", "STUB_ENV_FILE": str(self.env_file),
         }
         p = subprocess.Popen(["bash", str(SH), "on", "--no-send"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
         for _ in range(100):   # 판정 대기에 들어설 때까지(스위치 discord · 재시작 끝)
@@ -277,6 +280,16 @@ class DiscordSwitch(unittest.TestCase):
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("배포가 이 서버에서 진행 중", r.stdout)
         self.assertEqual(self.switches()["NOTIFY_ALLOWED_CHANNEL"], '""')
+
+    # 회귀: PR #318 Codex P2 — 도는 프로세스가 다른 플랫폼 파일을 읽으면 바꾸기 전에 거부한다
+    def test_running_processes_must_read_this_file(self):
+        r = self.run_sh("on", "--no-send", STUB_ENV_FILE="/elsewhere/pleiades-platform.env")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("DIFF/MISSING 4", r.stdout)
+        self.assertIn("PLEIADES_ENV_FILE 이 이 파일과 다르거나", r.stdout)
+        self.assertNotIn("elsewhere", r.stdout)
+        self.assertEqual(self.switches()["NOTIFY_ALLOWED_CHANNEL"], '""')
+        self.assertFalse(self.calls.exists())
 
     def test_usage(self):
         self.assertEqual(self.run_sh("off", "--no-send").returncode, 2)

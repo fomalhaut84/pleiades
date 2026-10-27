@@ -46,6 +46,7 @@ DISCORD_ALLOWED_USER_IDS
 cd ~/pleiades-fin && deploy/discord-switch.sh check
 ```
 
+- 도는 web·bot 4개가 이 파일을 읽는지 대조한다(DIFF/MISSING 0 · 봇 2) — 다르면 바꾸지 않고 멈춘다. 셸에 `PLEIADES_ENV_FILE` 을 export 해 두었으면 `unset` 하고 돌린다.
 - 권한 600 · 키 9/9 · 형식 오류 0 · 웹훅 4개·봇 채널 2개에 점검 메시지 1건씩 → Discord 채널 여섯 곳에 `🔧 pleiades T-10 점검 메시지` 가 왔는지 눈으로 본다.
 - 양식에 "참고: 배포 웹훅이 … 와 같다" 가 있으면 배포 채널이 따로가 아니다 — 1-1 로 돌아간다.
 
@@ -93,6 +94,7 @@ cd ~/pleiades-fin && deploy/discord-switch.sh off
 CMD on --no-send
    플랫폼 설정 권한 600
    스위치 ALLOWED=telegram ADMIN=telegram INTERACTIVE=telegram DEPLOY=telegram
+   도는 web·bot 플랫폼 설정 same 4 · DIFF/MISSING 0 · 봇 2
    키 9/9 채움
    형식 오류 0 · 해석 불가 줄 0
    버튼 허용 사용자 1명
