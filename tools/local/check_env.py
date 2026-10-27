@@ -5,13 +5,16 @@
 값은 출력하지 않는다(비밀) — 키 이름과 이유만.
 
 사용 (cwd = apps/<app> · 보통 tools/local/run.sh 가 부른다):
-  PLEIADES_VERIFY_BOT_IDS=<id,id> PLEIADES_VERIFY_CHAT_IDS=<id,…> python3 ../../tools/local/check_env.py <fin|fit> [--other-token-id ID]
+  PLEIADES_VERIFY_BOT_IDS=<id,id> PLEIADES_VERIFY_CHAT_IDS=<id,…> PLEIADES_VERIFY_DISCORD_TOKEN_SHA256=<hash,hash> \
+    python3 ../../tools/local/check_env.py <fin|fit> [--other-token-id ID]
+  해시 구하기: python3 ../../tools/local/check_env.py <fin|fit> --discord-hashes   (실효 Discord 봇 토큰의 SHA-256 만 출력)
 종료 코드: 0 통과 · 1 위반 · 2 사용 오류
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import re
 import shutil
@@ -43,6 +46,10 @@ PLATFORM_KEY = re.compile(
 )  # @pleiades/notify platform-env.ts PLATFORM_KEY_RE 와 같아야 한다
 
 
+# 009 D-G(#328) — Discord 봇 토큰. 토큰 → 봇 ID 도출은 공식 문서로 확인하지 못했다(009 U-9) — 허용 목록은 토큰 SHA-256 이다
+DISCORD_TOKEN_KEY = re.compile(r"^DISCORD_BOT_TOKEN_[A-Z0-9_]+$")
+
+
 @dataclass(frozen=True)
 class Problem:
     key: str
@@ -70,6 +77,81 @@ def parse_dotenv(path: Path) -> dict[str, str]:
 def effective_env(app_dir: Path, environ: dict[str, str]) -> dict[str, str]:
     """dotenv 는 이미 있는 process.env 를 덮지 않는다 — 셸 값이 이긴다."""
     return {**parse_dotenv(app_dir / ".env"), **environ}
+
+
+def parse_platform_value(raw: str) -> str | None:
+    """@pleiades/notify parseEnvValue 와 같은 규칙 — 따옴표 값은 닫는 따옴표까지 · 따옴표 없는 값은 ` #` 앞까지 · 해석 불가 None."""
+    v = raw.strip()
+    if v[:1] in ("'", '"'):
+        end = v.find(v[0], 1)
+        if end < 0:
+            return None
+        rest = v[end + 1:].strip()
+        return v[1:end] if rest == "" or rest.startswith("#") else None
+    cut = re.search(r"\s#", v)
+    return (v if cut is None else v[:cut.start()]).strip()
+
+
+def platform_file(env: dict[str, str], cwd: Path, root: Path) -> Path:
+    """platformEnv 의 파일 — PLEIADES_ENV_FILE(상대면 cwd 기준) → 루트 .env."""
+    explicit = env.get("PLEIADES_ENV_FILE", "").strip()
+    if explicit:
+        path = Path(explicit)
+        return path if path.is_absolute() else cwd / path
+    return root / ".env"
+
+
+def effective_discord_tokens(env: dict[str, str], *, cwd: Path, root: Path) -> dict[str, str]:
+    """앱이 실제로 쓸 Discord 봇 토큰 — platformEnv 순서: 프로세스 env(빈 값도 이긴다) → 플랫폼 파일 (009 L27′).
+    파일을 읽을 수 없으면 OSError — 부르는 쪽이 거부로 바꾼다(fail-closed)."""
+    from_file: dict[str, str] = {}
+    path = platform_file(env, cwd, root)
+    if path.exists():
+        # 줄은 \r?\n 에서만 나눈다 — splitlines() 는 \x0b·\x85 등에서도 나눠 platformEnv 와 결과가 갈린다(#328 사전 리뷰 info)
+        # 바이트로 읽는다 — read_text 는 홀로 선 \r 을 \n 으로 바꿔 platformEnv(번역 없음)와 줄이 갈린다(PR #329 Codex P2)
+        for raw in re.split(r"\r?\n", path.read_bytes().decode("utf-8").lstrip("\ufeff")):
+            m = LINE.match(raw)
+            if not m or raw.lstrip().startswith("#") or not DISCORD_TOKEN_KEY.match(m.group(1)):
+                continue
+            value = parse_platform_value(m.group(2))
+            if value is not None:
+                from_file[m.group(1)] = value
+    keys = set(from_file) | {k for k in env if DISCORD_TOKEN_KEY.match(k)}
+    return {k: env[k] if k in env else from_file[k] for k in sorted(keys)}
+
+
+def token_hash(token: str) -> str:
+    # 앱 discordBotConfig() 는 토큰을 trim 해 쓴다 — 해시·같은 봇 판정도 쓰이는 값으로(PR #329 Codex P2)
+    return hashlib.sha256(token.strip().encode()).hexdigest()
+
+
+def discord_hash_lines(env: dict[str, str], *, cwd: Path, root: Path) -> list[str]:
+    """허용 목록에 넣을 해시 — 키 이름과 해시만(토큰 값은 내지 않는다 · G-2)."""
+    return [f"{k} {token_hash(v)}" for k, v in effective_discord_tokens(env, cwd=cwd, root=root).items() if v.strip()]
+
+
+def _check_platform_file(env: dict[str, str], cwd: Path, root: Path) -> list[Problem]:
+    """PLEIADES_ENV_FILE 이 가리키는 파일이 없으면 거부 — 검사는 토큰 0 으로 보는데 앱은 다른 해석으로 다른 파일을 열 수 있다."""
+    if not env.get("PLEIADES_ENV_FILE", "").strip():
+        return []
+    if not platform_file(env, cwd, root).is_file():
+        return [Problem("PLEIADES_ENV_FILE", "가리키는 파일이 없다 — 플랫폼 설정을 확인할 수 없어 멈춘다 (009 G-1 · fail-closed)")]
+    return []
+
+
+def _check_discord(tokens: dict[str, str], allowed: set[str]) -> list[Problem]:
+    out, seen = [], {}
+    for key, value in tokens.items():
+        if not value.strip():
+            continue  # 비면 gateway 를 열지 않는다
+        h = token_hash(value)
+        if h not in allowed:
+            out.append(Problem(key, "검증 봇 허용 목록(PLEIADES_VERIFY_DISCORD_TOKEN_SHA256)에 없다 — 운영 봇이면 서버 gateway 와 "
+                                    "같은 토큰 두 세션이다 (I-4′ · 009 G-1)"))
+        elif h in seen:
+            out.append(Problem(key, f"{seen[h]} 와 같은 봇이다 — 로컬 두 앱이 한 토큰으로 두 세션 (009 G-1)"))
+        seen.setdefault(h, key)
+    return out
 
 
 def _ids(value: str) -> set[str]:
@@ -140,7 +222,8 @@ def _check_advisor(app: str, env: dict[str, str], root: Path) -> list[Problem]:
 
 
 def problems(app: str, env: dict[str, str], *, cwd: Path, root: Path = ROOT, bot_ids: set[str],
-             chat_ids: set[str], other_token_id: str | None = None) -> list[Problem]:
+             chat_ids: set[str], other_token_id: str | None = None,
+             discord_hashes: set[str] = frozenset()) -> list[Problem]:
     if app not in APP_DIRS:
         raise ValueError(f"알 수 없는 앱 {app!r}")
     app_dir = root / "apps" / APP_DIRS[app]
@@ -158,10 +241,19 @@ def problems(app: str, env: dict[str, str], *, cwd: Path, root: Path = ROOT, bot
         other_token = parse_dotenv(root / "apps" / APP_DIRS[other] / ".env").get("TELEGRAM_BOT_TOKEN", "")
         other_token_id = other_token.split(":", 1)[0] or None
     out += _check_telegram(app, env, bot_ids, chat_ids, other_token_id)
+    out += _check_platform_file(env, cwd, root)
+    try:
+        out += _check_discord(effective_discord_tokens(env, cwd=cwd, root=root), {h.lower() for h in discord_hashes})
+    except (OSError, UnicodeDecodeError):
+        out.append(Problem("DISCORD_BOT_TOKEN_*", "플랫폼 설정 파일을 읽지 못했다 — 실효 토큰을 확인할 수 없어 멈춘다 (009 G-1)"))
     out += [Problem(k, "비워야 한다") for k in MUST_BE_EMPTY[app] if env.get(k)]
     out += _check_advisor(app, env, root)
     out += [Problem(k, "플랫폼 키는 pleiades 루트 .env 에 둔다 — 앱 .env 값이 루트 값을 가린다 (#143)")
             for k in sorted(parse_dotenv(app_dir / ".env")) if PLATFORM_KEY.match(k)]
+    # 앱 .env 의 PLEIADES_ENV_FILE — dotenv 는 ` # 주석` 을 벗기고 parse_dotenv 는 벗기지 않아 검사와 앱이 다른 파일을 본다
+    # (#328 사전 리뷰 major · 실측 재현). 지정은 셸·pm2 env 로만
+    if "PLEIADES_ENV_FILE" in parse_dotenv(app_dir / ".env"):
+        out.append(Problem("PLEIADES_ENV_FILE", "앱 .env 에 두지 않는다 — 셸·pm2 env 로만 지정한다 (009 G-1)"))
     return out
 
 
@@ -170,12 +262,17 @@ def main() -> int:
     ap.add_argument("app", choices=sorted(APP_DIRS))
     ap.add_argument("--other-token-id", default=None)
     ap.add_argument("--root", default=str(ROOT), help="pleiades 루트 (run.sh 가 넘긴다)")
+    ap.add_argument("--discord-hashes", action="store_true", help="실효 Discord 봇 토큰의 SHA-256 만 출력하고 끝낸다")
     args = ap.parse_args()
     cwd = Path.cwd()
     env = effective_env(cwd, dict(os.environ))
+    if args.discord_hashes:
+        print("\n".join(discord_hash_lines(env, cwd=cwd, root=Path(args.root))) or "Discord 봇 토큰 없음")
+        return 0
     found = problems(args.app, env, cwd=cwd, root=Path(args.root), bot_ids=_ids(os.environ.get("PLEIADES_VERIFY_BOT_IDS", "")),
                      chat_ids=_ids(os.environ.get("PLEIADES_VERIFY_CHAT_IDS", "")),
-                     other_token_id=args.other_token_id)
+                     other_token_id=args.other_token_id,
+                     discord_hashes=_ids(os.environ.get("PLEIADES_VERIFY_DISCORD_TOKEN_SHA256", "")))
     if not found:
         print(f"check_env: {args.app} 통과")
         return 0
