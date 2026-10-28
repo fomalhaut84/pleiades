@@ -8,7 +8,7 @@ import { registerSleepCommand } from "./commands/sleep";
 import { registerWeightCommand } from "./commands/weight";
 import { registerSyncCommand } from "./commands/sync";
 import { registerReportCommand } from "./commands/report";
-import { registerAiCommands, handleAiQuestion } from "./commands/ai";
+import { registerAiCommands, handleAiQuestion, TELEGRAM_AI_CHANNEL } from "./commands/ai";
 import { isFoodInput, handleFoodInput, handleFoodKcalCommand } from "./commands/food";
 import {
   registerFoodEditCallback,
@@ -17,6 +17,7 @@ import {
 import { registerFoodPhotoHandler } from "./commands/food-photo";
 import { shouldConsumeAsEditInput } from "./commands/food-edit-state";
 import { registerAutoAdjustCallback } from "./notifications/auto-adjust-callback";
+import { telegramStateKeyOf } from "./core/state-key";
 
 // IPv6 라우트가 없는 환경(국내 ISP 등)에서 node-fetch의 IPv6 우선 시도가
 // ETIMEDOUT으로 누적되는 것을 방지하기 위해 IPv4 강제. keepAlive로 cron 호출 시
@@ -74,9 +75,10 @@ export function getBot(): Bot {
     // #292: 편집 프롬프트 이후 입력 처리 (kcal 숫자 / 설명 텍스트).
     // #350: reply_to_message 대신 chat 단위 pending 으로 라우팅 (force_reply 폐기).
     // 소비 조건은 shouldConsumeAsEditInput 에 있다 (회귀 스크립트가 검증 — 사전 리뷰 P0).
-    const chatId = ctx.chat?.id;
-    if (typeof chatId === "number" && shouldConsumeAsEditInput(chatId, text)) {
-      const handled = await handleFoodEditInput(ctx);
+    // pleiades#364: 상태 키는 `telegram:<chatId>`(core/state-key) — chat id 가 숫자가 아니면 건너뛴다(옛 가드와 같다).
+    const stateKey = telegramStateKeyOf(ctx.chat);
+    if (stateKey !== undefined && shouldConsumeAsEditInput(stateKey, text)) {
+      const handled = await handleFoodEditInput(stateKey, ctx);
       if (handled) return;
     }
 
@@ -87,7 +89,7 @@ export function getBot(): Bot {
     }
 
     // 그 외 텍스트 → AI 질문 (#253: bot 참조 전달로 인증 만료 감지 시 관리자 alert 가능).
-    await handleAiQuestion(ctx, text, { bot });
+    await handleAiQuestion(ctx, text, { channel: TELEGRAM_AI_CHANNEL, bot });
   });
 
   return bot;

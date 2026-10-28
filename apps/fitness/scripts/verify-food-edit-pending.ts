@@ -25,12 +25,17 @@ import {
   buildKcalChangeMessage,
   descPreview,
 } from "../src/bot/commands/food-edit-format";
+import { discordStateKey, telegramStateKey } from "../src/bot/core/state-key";
 
 const ACTIVE_TTL_MS = 5 * 60 * 1000;
 const MAX_RETRIES = 3;
 
-const CHAT_A = 1001;
-const CHAT_B = 2002;
+// pleiades 009 D-2 PR-2 (pleiades#364 · 설계 S): pending 키는 문자열 상태 키 — 텔레그램 chat 단위 · Discord 채널+사용자 단위.
+const CHAT_A = telegramStateKey(1001); // "telegram:1001"
+const CHAT_B = discordStateKey("2002", "9"); // "discord:2002:9"
+// C6b — 같은 숫자의 다른 플랫폼 키
+const TG_SAME = telegramStateKey(2002);
+const DC_SAME = discordStateKey("1001", "1001");
 
 let failed = 0;
 
@@ -57,6 +62,8 @@ function withClockAdvancedBy<T>(offsetMs: number, fn: () => T): T {
 function reset(): void {
   deletePendingEdit(CHAT_A);
   deletePendingEdit(CHAT_B);
+  deletePendingEdit(TG_SAME);
+  deletePendingEdit(DC_SAME);
 }
 
 // C1: mark → peek 이 logId/action 반환
@@ -158,6 +165,21 @@ check("CHAT_A 는 log-a", peekPendingEdit(CHAT_A)?.logId === "log-a");
 check("CHAT_B 는 log-b", peekPendingEdit(CHAT_B)?.logId === "log-b");
 deletePendingEdit(CHAT_A);
 check("CHAT_A 삭제해도 CHAT_B 유지", isPendingEdit(CHAT_B) === true);
+
+// C6b: 플랫폼 교차 격리 — 같은 숫자의 telegram/discord 키가 서로를 소비하지 않는다 (pleiades#364)
+console.log("C6b: 플랫폼 교차 격리 (telegram ↔ discord)");
+reset();
+check("키 문자열 형식 telegram", CHAT_A === "telegram:1001");
+check("키 문자열 형식 discord", CHAT_B === "discord:2002:9");
+markPendingEdit(TG_SAME, "log-tg", "kcal");
+check("telegram:2002 대기 중에도 discord:2002:* 는 소비 안 함", shouldConsumeAsEditInput(CHAT_B, "650") === false);
+check("discord 쪽 peek null", peekPendingEdit(CHAT_B) === null);
+markPendingEdit(DC_SAME, "log-dc", "desc");
+check("discord:1001:1001 대기가 telegram:1001 에 보이지 않음", isPendingEdit(CHAT_A) === false);
+check("discord 취소가 telegram 대기를 지우지 않음", clearPendingEditFor(TG_SAME, "log-dc") === false);
+check("discord 키로 telegram logId 취소 불가", clearPendingEditFor(DC_SAME, "log-tg") === false);
+deletePendingEdit(DC_SAME);
+check("discord 삭제 뒤 telegram 대기 유지", peekPendingEdit(TG_SAME)?.logId === "log-tg");
 
 // C7: 라우팅 판단 — bot/index.ts message:text 가 이 텍스트를 편집 입력으로 소비할지
 //   (사전 리뷰 P0: index.ts 인라인 조건이면 검증 불가라 함수로 추출)

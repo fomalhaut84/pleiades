@@ -11,7 +11,11 @@ import {
 } from "../../lib/monitoring/admin-alerts";
 import { mdToHtml, replyLong } from "../utils/telegram";
 
+// 전역 락 — 플랫폼 공유(009 D-2 설계 S · AI 락 공유 유지).
 let isProcessing = false;
+
+/** 텔레그램 AI 세션 채널 — askAdvisor · resetSession 의 채널 키(pleiades#364 · 플랫폼별 세션). */
+export const TELEGRAM_AI_CHANNEL = "telegram";
 
 type ReportType = "morning" | "evening" | "weekly";
 
@@ -76,13 +80,14 @@ export function registerAiCommands(bot: Bot) {
     // #212: /ai 명시적 진입에서만 리포트 감지. bot/index.ts 자연어 fallback 은
     // 감지 skip → 오탐으로 인한 강제 재생성/덮어쓰기 원천 차단 (Codex bot P2).
     await handleAiQuestion(ctx, question, {
+      channel: TELEGRAM_AI_CHANNEL,
       detectReportRequest: true,
       bot,
     });
   });
 
   bot.command("reset", async (ctx) => {
-    resetSession("telegram");
+    resetSession(TELEGRAM_AI_CHANNEL);
     await ctx.reply("🔄 AI 세션이 초기화되었습니다.");
   });
 }
@@ -96,7 +101,7 @@ export async function handleAiQuestion(
     chat: { id: number };
   },
   question: string,
-  options?: { detectReportRequest?: boolean; bot?: Bot },
+  options: { channel: string; detectReportRequest?: boolean; bot?: Bot },
 ) {
   if (isProcessing) {
     await ctx.reply("⏳ 이전 질문 처리 중입니다. 잠시 후 다시 시도해주세요.");
@@ -122,7 +127,7 @@ export async function handleAiQuestion(
       return;
     }
     await ctx.reply("🤔 분석 중...");
-    const { result } = await askAdvisor(question, { channel: "telegram" });
+    const { result } = await askAdvisor(question, { channel: options.channel });
     const html = mdToHtml(result);
     await replyLong(ctx as Parameters<typeof replyLong>[0], html, true);
   } catch (error) {

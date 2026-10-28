@@ -30,6 +30,7 @@ import {
   buildKcalChangeMessage,
   descPreview,
 } from "./food-edit-format";
+import { telegramStateKeyOf, type StateKey } from "../core/state-key";
 
 export const CALLBACK_PREFIX = "food";
 
@@ -92,8 +93,8 @@ export function registerFoodEditCallback(bot: Bot): void {
 
     // #350: 편집 대기 취소. DB 접근 불필요 — pending 만 정리한다.
     if (action === "edit-cancel") {
-      const cancelChatId = ctx.chat?.id;
-      if (typeof cancelChatId !== "number") {
+      const cancelKey = telegramStateKeyOf(ctx.chat);
+      if (cancelKey === undefined) {
         try {
           await ctx.answerCallbackQuery({ text: "처리할 수 없는 요청입니다." });
         } catch {
@@ -101,7 +102,7 @@ export function registerFoodEditCallback(bot: Bot): void {
         }
         return;
       }
-      const cleared = clearPendingEditFor(cancelChatId, logId);
+      const cleared = clearPendingEditFor(cancelKey, logId);
       try {
         await ctx.answerCallbackQuery({
           text: cleared ? "편집을 취소했습니다." : "이미 종료된 요청입니다.",
@@ -126,7 +127,7 @@ export function registerFoodEditCallback(bot: Bot): void {
     }
 
     if (action === "delete") {
-      const deleteChatId = ctx.chat?.id;
+      const deleteKey = telegramStateKeyOf(ctx.chat);
       let deletedDate: Date | null = null;
       // 로그가 이미 없었던 경우 (웹 API 등 다른 경로로 삭제됨).
       let alreadyGone = false;
@@ -160,8 +161,8 @@ export function registerFoodEditCallback(bot: Bot): void {
       // (이미 삭제됨) — 모두에서 정리해야 한다. P2025 가 early return 하던 구조에서는 웹 API
       // 로 먼저 지운 뒤 봇 삭제 버튼을 누르면 pending 이 최대 5분간 살아남아 텍스트를 가로챘다.
       // 분기별 cleanup 을 빠뜨릴 수 없도록 단일 지점으로 합쳤다.
-      if (typeof deleteChatId === "number") {
-        clearPendingEditFor(deleteChatId, logId);
+      if (deleteKey !== undefined) {
+        clearPendingEditFor(deleteKey, logId);
       }
 
       // deletedDate 를 함께 검사해 이후 recalculateCalorieBalance 호출까지 Date 로 좁힌다
@@ -267,8 +268,8 @@ export function registerFoodEditCallback(bot: Bot): void {
     // #350: 일반 메시지 + [✕ 취소] 로 프롬프트 발송. 이 chat 의 다음 텍스트가 편집 입력이 된다.
     // chat 당 pending 1건이라 버튼을 다시 눌러도 덮어쓰기 — 프롬프트 스태킹이 발생하지 않는다.
     // #357: 발송/등록 순서는 armPendingEdit 이 강제한다 (발송 실패 시 stale pending 잔존 방지).
-    const chatId = ctx.chat?.id;
-    if (typeof chatId !== "number") return;
+    const editKey = telegramStateKeyOf(ctx.chat);
+    if (editKey === undefined) return;
 
     const prompt =
       action === "edit-desc"
@@ -282,7 +283,7 @@ export function registerFoodEditCallback(bot: Bot): void {
             : "현재 값: 미측정");
 
     await armPendingEdit(
-      chatId,
+      editKey,
       logId,
       action === "edit-desc" ? "desc" : "kcal",
       async () => {
@@ -304,13 +305,14 @@ export function registerFoodEditCallback(bot: Bot): void {
  * Codex P2 (#293): peek → validate → 성공 시에만 delete. 검증 실패 (오타 등) 로 entry 삭제 안 함
  * → 사용자가 재입력 가능.
  */
-export async function handleFoodEditInput(ctx: {
-  chat?: { id?: number };
-  reply: (text: string, options?: Record<string, unknown>) => Promise<unknown>;
-  message?: { text?: string };
-}): Promise<boolean> {
-  const chatId = ctx.chat?.id;
-  if (typeof chatId !== "number") return false;
+export async function handleFoodEditInput(
+  key: StateKey,
+  ctx: {
+    reply: (text: string, options?: Record<string, unknown>) => Promise<unknown>;
+    message?: { text?: string };
+  },
+): Promise<boolean> {
+  const chatId = key;
   const entry = peekPendingEdit(chatId);
   if (!entry) return false;
   const { logId, action } = entry;
@@ -422,7 +424,7 @@ export async function handleFoodEditInput(ctx: {
  * 리셋해 backfill 이 재추정 (PATCH /api/food/[id] descOrMealChanged 로직과 동일 정책).
  */
 async function handleDescReply(
-  chatId: number,
+  chatId: StateKey,
   logId: string,
   raw: string,
   reply: (text: string, options?: Record<string, unknown>) => Promise<unknown>,
