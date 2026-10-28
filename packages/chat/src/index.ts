@@ -17,10 +17,10 @@ export type {
   SentMessage,
   TextFormat,
 } from './types';
-export { createChat } from './chat';
+export { createChat, BUSY_BUTTON_TEXT } from './chat';
 export type { Chat, ChatOptions } from './chat';
 export { createRouter, splitCommand } from './router';
-export type { Router, CommandHandler, HearsHandler, PlainHandler, ActionHandler } from './router';
+export type { Router, RouterOptions, CommandHandler, CommandOptions, HearsHandler, PlainHandler, ActionHandler } from './router';
 export { createIdentifyGuard, fileGuardStore, DEFAULT_IDENTIFY_LIMIT } from './identify-guard';
 export type { IdentifyGuard, IdentifyGuardOptions, GuardStore, BlockInfo, BlockReason, GuardDecision } from './identify-guard';
 export { DEFAULT_ATTACHMENT_POLICY } from './attachments';
