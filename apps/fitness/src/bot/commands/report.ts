@@ -5,15 +5,20 @@ import { generateMorningReport, generateEveningReport } from "../../lib/daily-re
 import { htmlReply, plainReply, type ReplyOutput } from "../core/reply";
 import type { NotifyBot } from "../notifications/notifier";
 import { telegramOutput } from "../utils/telegram-reply";
+import { sanitizeError } from "../utils/error";
+
+/** Discord 판 재생성 실패 안내 — 원문 대신(W10 · #365 · pleiades#367). */
+export const REPORT_REGENERATE_FAILED_STATIC = "❌ 재생성 실패 — 잠시 후 다시 시도해주세요.";
 
 /**
  * /report [regenerate morning|evening] — 최근 리포트 표시 또는 재생성(판단 · pleiades#364).
  * `arg` 는 명령 뒤 인자(플랫폼 접두를 뗀 문자열 · 없으면 undefined). `bot` 은 preSync Garmin 실패 admin alert 경로.
+ * `staticErrors` 면 재생성 실패 원문을 내지 않고 정적 안내만(Discord 판 · pleiades#367) — 텔레그램 판은 넘기지 않는다(무변경).
  */
 export async function decideReport(
   arg: string | undefined,
   out: ReplyOutput,
-  options: { bot?: NotifyBot } = {},
+  options: { bot?: NotifyBot; staticErrors?: boolean } = {},
 ): Promise<void> {
   const normalized = arg?.trim().toLowerCase();
 
@@ -31,7 +36,12 @@ export async function decideReport(
         const html = mdToHtml(result);
         await out.reply(htmlReply(`✅ 재생성 완료\n\n${html}`, { long: true }));
       } catch (error) {
-        // 서비스 유래: 실패 원문 노출(W10 · Q57 — 텔레그램 판 무변경 · Discord 판은 PR-3 이 정적 안내로)
+        if (options.staticErrors) {
+          console.error(`[bot/report] 재생성 실패: ${sanitizeError(error)}`);
+          await out.reply(plainReply(REPORT_REGENERATE_FAILED_STATIC));
+          return;
+        }
+        // 서비스 유래: 실패 원문 노출(W10 · Q57 — 텔레그램 판 무변경 · Discord 판은 위 정적 안내)
         const msg = error instanceof Error ? error.message : String(error);
         await out.reply(plainReply(`❌ 재생성 실패: ${msg.slice(0, 200)}`));
       }

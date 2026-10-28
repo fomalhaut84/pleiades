@@ -19,6 +19,8 @@ let isProcessing = false;
 
 /** 텔레그램 AI 세션 채널 — askAdvisor · resetSession 의 채널 키(pleiades#364 · 플랫폼별 세션). */
 export const TELEGRAM_AI_CHANNEL = "telegram";
+/** Discord AI 세션 채널 — 텔레그램 세션과 따로(설계 S · R10 · pleiades#367). */
+export const DISCORD_AI_CHANNEL = "discord";
 
 type ReportType = "morning" | "evening" | "weekly";
 
