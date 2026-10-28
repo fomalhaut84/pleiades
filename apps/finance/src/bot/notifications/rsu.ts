@@ -12,7 +12,7 @@
 
 import { InlineKeyboard } from 'grammy'
 import { prisma } from '@/lib/prisma'
-import { getBot } from '@/bot/index'
+import { notifyBot } from '@/bot/index'
 import { formatKRWFull } from '@/bot/utils/formatter'
 import { escapeHtml, h } from '@/bot/utils/telegram'
 import { interactiveNotifierFor, notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
@@ -40,7 +40,7 @@ function diffDays(target: Date): number {
  * D-day 처리 키보드는 마감 후 sendRSUVestConfirmations 가 발송.
  */
 export async function sendRSUReminders(): Promise<void> {
-  const bot = getBot()
+  const bot = notifyBot()
   const lines: string[] = []
 
   // D-7 ~ D-1 범위 (KST 기준 오늘 + 1일 ~ 오늘 + 7일)
@@ -120,7 +120,7 @@ export async function sendRSUReminders(): Promise<void> {
  * 사용자는 [✅ 확정] 한 번 탭으로 처리 — 종가는 자동 조회.
  */
 export async function sendRSUVestConfirmations(): Promise<void> {
-  const bot = getBot()
+  const bot = notifyBot()
 
   // D-day (KST 기준 오늘)
   const now = new Date()

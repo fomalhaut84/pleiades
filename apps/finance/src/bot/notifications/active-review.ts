@@ -7,7 +7,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { getBot } from '@/bot/index'
+import { notifyBot } from '@/bot/index'
 import { askAdvisor, describeAdvisorError } from '@/lib/ai/claude-advisor'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 import { notifierFor, Route, htmlContent } from './notifier'
@@ -135,7 +135,7 @@ async function sendReview(
   prompt: string,
   fallbackHint: string,
 ): Promise<void> {
-  const bot = getBot()
+  const bot = notifyBot()
 
   try {
     const result = await askAdvisor(prompt, {

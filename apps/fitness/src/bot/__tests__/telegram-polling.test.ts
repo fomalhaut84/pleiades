@@ -94,8 +94,7 @@ describe("startTelegramPolling — 밀린 업데이트 (1-5)", () => {
     ["on", false],
   ] as const)("직전 상태 %s → drop_pending_updates %s · 시작하면 on 을 남긴다", async (prev, drop) => {
     const state = memoryStore(prev);
-    let b!: ReturnType<typeof fakeBot>;
-    b = fakeBot(pollsUntilStopped(() => b));
+    const b: ReturnType<typeof fakeBot> = fakeBot(pollsUntilStopped(() => b));
     const t = startTelegramPolling({ createBot: () => b as unknown as Bot, state, disabled: false });
     await flush();
     expect(b.start.mock.calls[0][0].drop_pending_updates).toBe(drop);

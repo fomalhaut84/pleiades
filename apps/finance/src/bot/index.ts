@@ -1,4 +1,5 @@
 import { Bot } from 'grammy'
+import { BOT_PROCESS_WITHOUT_TELEGRAM, telegramTokenSet, type NotifyBot } from './notifications/notifier'
 import { Agent } from 'https'
 import { registerCommands } from './commands/start'
 import { registerPortfolioCommands } from './commands/portfolio'
@@ -72,10 +73,22 @@ function createBot(): Bot {
   return instance
 }
 
-export function getBot(): Bot {
-  if (!bot) {
+/**
+ * 봇 싱글턴. `fresh` 면 새로 만들어 바꾼다 — 텔레그램 폴링이 실패 뒤 다시 시작할 때만 쓴다
+ * (grammY 는 start 뒤 미들웨어 등록을 막는다 · 009 D-1 · pleiades#349).
+ */
+export function getBot(opts?: { fresh?: boolean }): Bot {
+  if (!bot || opts?.fresh === true) {
     bot = createBot()
   }
   return bot
+}
+
+/**
+ * 아웃바운드 핸들 — 텔레그램 토큰이 있으면 봇 인스턴스, 없으면 텔레그램 없는 핸들(Discord 라우트만 · 009 D-1 · pleiades#349).
+ * 알림 경로는 `getBot()` 대신 이것을 쓴다 — 토큰이 없어도 throw 하지 않는다(웹 3경로 포함).
+ */
+export function notifyBot(): NotifyBot {
+  return telegramTokenSet() ? getBot() : BOT_PROCESS_WITHOUT_TELEGRAM
 }
 

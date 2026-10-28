@@ -7,11 +7,11 @@
  * 자동 재시도 (exponential backoff) 은 스코프 밖 (스펙 §6 명시).
  */
 
-import type { Bot } from 'grammy'
 import { escapeHtml } from '@/bot/utils/telegram'
 import { notifierFor, Route, htmlContent, lastErrorOf } from './notifier'
 import { computeDeliveryStatus, recordAlertHistory, type AlertKind } from './alert-history'
-import { getBot } from '../index'
+import { notifyBot } from '../index'
+import type { NotifyBot } from './notifier'
 import type { AlertHistoryContext } from '@/lib/alert-history/context'
 
 /** 동일 id 재발송 최소 간격 (스팸 방지 — 스펙 5분). */
@@ -102,7 +102,7 @@ const PRE_ESCAPED_KINDS = new Set<string>(['target_hit', 'stop_loss', 'watch_buy
 
 export async function redispatchAlert(
   row: Pick<RedispatchTargetRow, 'message' | 'kind'>,
-  bot: Bot = getBot(),
+  bot: NotifyBot = notifyBot(),
 ): Promise<RedispatchResult> {
   // Codex #462 · #463 P2 (2차): 저장 상태가 kind 별로 mixed —
   //   - PRE_ESCAPED_KINDS: `A &amp; B` (이미 escape 된 상태로 store)

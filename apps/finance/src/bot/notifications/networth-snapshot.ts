@@ -6,7 +6,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { getBot } from '@/bot/index'
+import { notifyBot } from '@/bot/index'
 import {
   calcCurrentValueKRW,
   DEFAULT_FX_RATE_USD_KRW,
@@ -16,7 +16,7 @@ import { h } from '@/bot/utils/telegram'
 import { notifierFor, recipients, Route, htmlContent } from './notifier'
 
 export async function takeNetWorthSnapshot(): Promise<void> {
-  const bot = getBot()
+  const bot = notifyBot()
 
   // 환율
   const fxCache = await prisma.priceCache.findUnique({ where: { ticker: 'USDKRW=X' } })

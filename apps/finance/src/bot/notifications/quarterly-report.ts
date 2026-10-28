@@ -7,7 +7,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { InputFile } from 'grammy'
-import { getBot } from '@/bot/index'
+import { notifyBot } from '@/bot/index'
 import { generateReportPDF } from '@/lib/report/pdf-generator'
 import { sanitizeError } from '@/bot/utils/error'
 import { h } from '@/bot/utils/telegram'
@@ -41,7 +41,7 @@ export async function sendQuarterlyReport(): Promise<void> {
     console.warn('[report] 분기 리포트 수신자 0 (채널 선택 기준) — 생성 건너뜀')
     return
   }
-  const bot = getBot()
+  const bot = notifyBot()
   const { year, quarter } = getPreviousQuarter()
 
   // 생성 시작 알림
@@ -79,11 +79,15 @@ export async function sendQuarterlyReport(): Promise<void> {
     }
 
     // 003 §7-4: 텔레그램 API 직접 — Discord 를 고르지 않았을 때만.
-    for (const chatId of discord === 'not-discord' ? telegramRecipients(Route.ALLOWED) : []) {
-      try {
-        await bot.api.sendDocument(chatId, new InputFile(pdfBuffer, fileName), { caption })
-      } catch (error) {
-        console.error(`[report] PDF 발송 실패 (chatId: ${chatId}):`, error)
+    // 토큰이 없으면 telegramRecipients 가 0 이고 api 도 없다(009 D-1) — 같은 조건을 타입으로도 건다
+    const api = discord === 'not-discord' ? bot.api : undefined
+    if (api !== undefined) {
+      for (const chatId of telegramRecipients(Route.ALLOWED)) {
+        try {
+          await api.sendDocument(chatId, new InputFile(pdfBuffer, fileName), { caption })
+        } catch (error) {
+          console.error(`[report] PDF 발송 실패 (chatId: ${chatId}):`, error)
+        }
       }
     }
 

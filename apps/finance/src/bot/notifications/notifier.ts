@@ -13,6 +13,11 @@
  * `/브리핑` 응답(`notifierForChat`)은 항상 텔레그램. 분기 PDF 는 `sendFileIfDiscord`(M-6b-1).
  * 키보드 메시지(`interactiveNotifierFor`)는 별도 스위치 `NOTIFY_INTERACTIVE_CHANNEL=discord` 면 fin Discord 봇(M-6b-4 #155),
  * 아니면 텔레그램(혼합 운영 Q11). 버튼 클릭은 봇 프로세스의 gateway(`discord-interactions.ts`)가 받는다.
+ *
+ * pleiades 009 D-1 (pleiades#349): 인자는 grammY `Bot` 대신 `NotifyBot`(`{ api? }`) — 텔레그램 토큰 없이도 Discord 라우트로 보낸다.
+ * **토큰이 없으면 텔레그램 수신자는 0** 이다 — 아래 `TELEGRAM_TARGETS` 한 곳에서 정하므로 크론 실행 판정(`recipients` ·
+ * `telegramRecipients` · `fileRecipientCount` · `interactiveRecipientCount`)과 실제 전송이 같은 출처를 본다(토큰 없음 + chat ID 있음
+ * + 라우트 텔레그램이면 AI 생성 없이 건너뛴다).
  */
 
 import type { Bot } from 'grammy'
@@ -36,10 +41,29 @@ export type { BroadcastResult }
 
 type FinRoute = 'ALLOWED' | 'ADMIN'
 
+/** 텔레그램 토큰이 있는가 — 없으면 텔레그램 수신자 0(전송도 실행 판정도). 호출 시점마다 읽는다. */
+export function telegramTokenSet(): boolean {
+  return (process.env.TELEGRAM_BOT_TOKEN ?? '').trim() !== ''
+}
+
+const whenTelegram = (targets: () => string[]) => (): string[] => (telegramTokenSet() ? targets() : [])
+
 const TELEGRAM_TARGETS = {
-  ALLOWED: csvEnv('TELEGRAM_ALLOWED_CHAT_IDS', { numericOnly: true }),
-  ADMIN: csvEnv('TELEGRAM_ADMIN_CHAT_IDS', { numericOnly: true }),
+  ALLOWED: whenTelegram(csvEnv('TELEGRAM_ALLOWED_CHAT_IDS', { numericOnly: true })),
+  ADMIN: whenTelegram(csvEnv('TELEGRAM_ADMIN_CHAT_IDS', { numericOnly: true })),
 } as const
+
+/** 아웃바운드 핸들 — `api` 는 텔레그램 토큰이 있을 때만 있다. grammY `Bot` 은 그대로 이 모양이다. */
+export type NotifyBot = { readonly api?: Bot['api'] }
+
+/** 텔레그램 없이 뜬 프로세스의 핸들 — Discord 라우트는 그대로 보내고 텔레그램 라우트는 수신자 0. */
+export const BOT_PROCESS_WITHOUT_TELEGRAM: NotifyBot = Object.freeze({})
+
+function telegramTransport(bot: NotifyBot): Transport {
+  // 텔레그램 수신자는 토큰이 없으면 0 이라 transport 를 만들지 않는다 — 닿으면 설계 위반이라 던진다
+  if (bot.api === undefined) throw new Error('텔레그램 토큰 없이 텔레그램 transport 를 만들 수 없다')
+  return createTelegramTransport({ api: bot.api })
+}
 
 const DISCORD_ALIAS: Readonly<Record<FinRoute, string>> = { ALLOWED: 'finance', ADMIN: 'admin' }
 
@@ -63,9 +87,13 @@ const discordWebhooks = (): Record<string, string> => ({
   admin: webhookEnv('DISCORD_WEBHOOK_ADMIN'),
 })
 
-/** Discord 를 골랐는데 웹훅이 비면 수신자 0 — 텔레그램 env 미설정과 같은 의미(가드가 건너뛴다). */
-const routedTargets = (route: FinRoute) => (): string[] => {
-  if (!usesDiscord(route)) return TELEGRAM_TARGETS[route]()
+/**
+ * Discord 를 골랐는데 웹훅이 비면 수신자 0 — 텔레그램 env 미설정과 같은 의미(가드가 건너뛴다).
+ * `bot` 을 주면 그 핸들에 텔레그램 api 가 없을 때도 텔레그램 수신자 0 — 토큰은 있는데 텔레그램 없는 핸들로 보낼 때(401 중지 알림)
+ * transport 를 만들려다 던지지 않게(PR-3 사전 리뷰 info 1).
+ */
+const routedTargets = (route: FinRoute, bot?: NotifyBot) => (): string[] => {
+  if (!usesDiscord(route)) return bot !== undefined && bot.api === undefined ? [] : TELEGRAM_TARGETS[route]()
   const alias = DISCORD_ALIAS[route]
   return discordWebhooks()[alias] === '' ? [] : [alias]
 }
@@ -79,14 +107,14 @@ export const NOTIFY_CTX: NotifyContext = Object.freeze({ label: 'notification' }
  * 봇 인스턴스로 파사드를 만든다 — 라우트마다 텔레그램 또는 Discord. transport 는 인스턴스의 첫 전송 때 정해지므로
  * **인스턴스를 오래 쥐지 않고 보낼 때마다 만든다**(재시작 없는 채널 전환 · PR #144 Codex P2).
  */
-export function notifierFor(bot: Bot): Notifier {
+export function notifierFor(bot: NotifyBot): Notifier {
   const transportFor = (route: FinRoute) => (): Transport =>
     usesDiscord(route)
       ? createDiscordTransport({ webhooks: discordWebhooks })
-      : createTelegramTransport({ api: bot.api })
+      : telegramTransport(bot)
   return createNotifier({
     transport: { ALLOWED: transportFor('ALLOWED'), ADMIN: transportFor('ADMIN') },
-    targets: TARGETS,
+    targets: { ALLOWED: routedTargets('ALLOWED', bot), ADMIN: routedTargets('ADMIN', bot) },
   })
 }
 
@@ -97,11 +125,11 @@ export function notifierFor(bot: Bot): Notifier {
  *   discord → fin 봇으로 `#finance` · 키보드는 버튼으로 자동 변환 · 봇 설정이 없으면 수신자 0(텔레그램으로 우회하지 않는다)
  * fin 은 키보드 메시지의 id 를 저장하지 않는다 — DB 무관(Q61).
  */
-export function interactiveNotifierFor(bot: Bot): Notifier {
+export function interactiveNotifierFor(bot: NotifyBot): Notifier {
   if (!interactiveUsesDiscord()) {
     return createNotifier({
-      transport: createTelegramTransport({ api: bot.api }),
-      targets: { ALLOWED: TELEGRAM_TARGETS.ALLOWED },
+      transport: () => telegramTransport(bot),
+      targets: { ALLOWED: () => (bot.api === undefined ? [] : TELEGRAM_TARGETS.ALLOWED()) },
     })
   }
   const discord = discordBotConfig()
@@ -176,10 +204,10 @@ export function telegramRecipients(route: FinRoute): string[] {
  * 요청한 chat 하나에만 보낸다 — 봇 명령의 on-demand 발송(`/브리핑` → `sendBriefing(session, chatId)`).
  * 재시도·폴백·분할 정책은 `notifierFor` 와 같고, 대상만 그 chat 으로 고정한다(구 `sendBriefing([chatId], …)` 보존).
  */
-export function notifierForChat(bot: Bot, chatId: number): Notifier {
+export function notifierForChat(bot: NotifyBot, chatId: number): Notifier {
   return createNotifier({
-    transport: createTelegramTransport({ api: bot.api }),
-    targets: { ALLOWED: () => [String(chatId)] },
+    transport: () => telegramTransport(bot),
+    targets: { ALLOWED: () => (bot.api === undefined ? [] : [String(chatId)]) },
   })
 }
 
