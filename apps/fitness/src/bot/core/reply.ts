@@ -23,7 +23,7 @@ export interface BotReply {
    * 개념이 없는 플랫폼(Discord)은 무시한다. `buttons` 와 함께 쓰지 않는다.
    */
   readonly clearKeyboard?: boolean;
-  /** 길 수 있는 본문(AI 답 · 리포트) — 텔레그램은 4096 분할 + HTML 실패 시 plain 재전송(replyLong) · Discord 는 chat 분할. */
+  /** 길 수 있는 본문(AI 답 · 리포트) — 텔레그램은 4096 분할 + HTML 실패 시 plain 재전송(replyLong) · Discord 는 chat 분할. `buttons`·`clearKeyboard` 와 함께 쓰지 않는다(텔레그램 어댑터가 무시한다 · PR-2 사전 리뷰 info 3). */
   readonly long?: boolean;
 }
 

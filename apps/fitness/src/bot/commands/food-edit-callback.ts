@@ -320,8 +320,7 @@ export async function decideFoodEditInput(
   text: string,
   out: ReplyOutput,
 ): Promise<boolean> {
-  const chatId = key;
-  const entry = peekPendingEdit(chatId);
+  const entry = peekPendingEdit(key);
   if (!entry) return false;
   const { logId, action } = entry;
 
@@ -330,7 +329,7 @@ export async function decideFoodEditInput(
   // #309: 설명 정정 분기.
   // Codex P1 (PR #310 2회차): grammY ctx.reply 는 bound 로 불러야 한다 — 텔레그램 어댑터(telegramOutput)가 closure 로 감싼다.
   if (action === "desc") {
-    return handleDescReply(chatId, logId, raw, out);
+    return handleDescReply(key, logId, raw, out);
   }
 
   // action === "kcal" (기본).
@@ -339,7 +338,7 @@ export async function decideFoodEditInput(
   // 사전 리뷰 P1 (#350): 재프롬프트는 registerRetry 로 상한을 건다. 무제한 TTL 갱신이면
   // 프롬프트를 잊고 대화를 이어갈 때 pending 이 영원히 만료되지 않고 모든 텍스트를 삼킨다.
   const reissueForRetry = async (message: string): Promise<void> => {
-    if (!registerRetry(chatId)) {
+    if (!registerRetry(key)) {
       await out.reply(plainReply(`${message}\n\n입력이 여러 번 형식에 맞지 않아 편집을 종료했습니다. ` +
           `다시 [🔢 kcal] 버튼을 눌러주세요.`, CLEAR_REPLY_MARKUP));
       return;
@@ -363,7 +362,7 @@ export async function decideFoodEditInput(
     const correction = await applyKcalCorrection(prisma, logId, kcal);
     if (!correction.ok) {
       if (correction.reason === "not-found") {
-        deletePendingEdit(chatId);
+        deletePendingEdit(key);
         await out.reply(plainReply("이미 삭제된 로그입니다.", CLEAR_REPLY_MARKUP));
       } else {
         await out.reply(plainReply("동시 수정 감지, 잠시 후 다시 시도해주세요."));
@@ -375,7 +374,7 @@ export async function decideFoodEditInput(
       select: { date: true, description: true },
     });
     if (!updated) {
-      deletePendingEdit(chatId);
+      deletePendingEdit(key);
       await out.reply(plainReply("이미 삭제된 로그입니다.", CLEAR_REPLY_MARKUP));
       return true;
     }
@@ -397,7 +396,7 @@ export async function decideFoodEditInput(
     });
 
     // 성공 → entry 소비.
-    deletePendingEdit(chatId);
+    deletePendingEdit(key);
     // Codex P2 (PR #351): 커밋 이후 전송은 try 밖에서. 여기서 던지면 catch 가 이미 반영된
     // 수정을 '실패' 로 오인 보고한다.
     successMessage = buildKcalChangeMessage(updated.description, kcal);
@@ -407,7 +406,7 @@ export async function decideFoodEditInput(
       err.code === "P2025"
     ) {
       // 로그 자체가 삭제 — entry 도 무효, 삭제.
-      deletePendingEdit(chatId);
+      deletePendingEdit(key);
       await out.reply(plainReply("이미 삭제된 로그입니다.", CLEAR_REPLY_MARKUP));
       return true;
     }
@@ -426,7 +425,7 @@ export async function decideFoodEditInput(
  * 리셋해 backfill 이 재추정 (PATCH /api/food/[id] descOrMealChanged 로직과 동일 정책).
  */
 async function handleDescReply(
-  chatId: StateKey,
+  key: StateKey,
   logId: string,
   raw: string,
   out: ReplyOutput,
@@ -434,7 +433,7 @@ async function handleDescReply(
   const trimmed = raw.trim();
   // 사전 리뷰 P1 (#350): kcal 경로와 동일하게 재프롬프트 횟수에 상한.
   const reissueForRetry = async (message: string): Promise<void> => {
-    if (!registerRetry(chatId)) {
+    if (!registerRetry(key)) {
       await out.reply(plainReply(`${message}\n\n입력이 여러 번 형식에 맞지 않아 편집을 종료했습니다. ` +
           `다시 [📝 설명] 버튼을 눌러주세요.`, CLEAR_REPLY_MARKUP));
       return;
@@ -459,12 +458,12 @@ async function handleDescReply(
       select: { description: true, date: true },
     });
     if (!existing) {
-      deletePendingEdit(chatId);
+      deletePendingEdit(key);
       await out.reply(plainReply("이미 삭제된 로그입니다.", CLEAR_REPLY_MARKUP));
       return true;
     }
     if (existing.description === trimmed) {
-      deletePendingEdit(chatId);
+      deletePendingEdit(key);
       await out.reply(plainReply(`ℹ️ 이미 "${descPreview(trimmed)}" 로 저장되어 있습니다 (변경 없음).`, CLEAR_REPLY_MARKUP));
       return true;
     }
@@ -504,7 +503,7 @@ async function handleDescReply(
     });
 
 
-    deletePendingEdit(chatId);
+    deletePendingEdit(key);
     // 사전 리뷰 P1 (#350): desc 경로는 임의 텍스트가 그대로 description 이 되고 같은 update 로
     // kcal/매크로/items 가 전부 null 로 파기된다 (kcal 경로는 숫자 검증이 있어 비대칭).
     // 오소비 판별 대신 **복구 가능성**을 보장 — 이전 설명을 응답에 남긴다.
@@ -517,7 +516,7 @@ async function handleDescReply(
       err instanceof Prisma.PrismaClientKnownRequestError &&
       err.code === "P2025"
     ) {
-      deletePendingEdit(chatId);
+      deletePendingEdit(key);
       await out.reply(plainReply("이미 삭제된 로그입니다.", CLEAR_REPLY_MARKUP));
       return true;
     }

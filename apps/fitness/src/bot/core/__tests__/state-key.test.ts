@@ -40,6 +40,14 @@ describe("편집 대기 — 플랫폼 교차 격리", () => {
     expect(peekPendingEdit(tg)?.logId).toBe("log-tg");
   });
 
+  // PR-2 사전 리뷰 info 1 — logId 가 같아야 진짜 교차 검사다
+  it("같은 logId 라도 한쪽 취소가 다른 쪽 대기를 지우지 않는다", () => {
+    markPendingEdit(tg, "same", "kcal");
+    markPendingEdit(dc, "same", "desc");
+    expect(clearPendingEditFor(dc, "same")).toBe(true);
+    expect(peekPendingEdit(tg)).toEqual({ logId: "same", action: "kcal" });
+  });
+
   it("Discord 는 같은 채널이라도 사용자별", () => {
     markPendingEdit(dc, "log-dc", "kcal");
     expect(shouldConsumeAsEditInput(dcOther, "650")).toBe(false);

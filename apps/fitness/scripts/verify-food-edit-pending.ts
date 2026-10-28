@@ -176,10 +176,15 @@ check("telegram:2002 대기 중에도 discord:2002:* 는 소비 안 함", should
 check("discord 쪽 peek null", peekPendingEdit(CHAT_B) === null);
 markPendingEdit(DC_SAME, "log-dc", "desc");
 check("discord:1001:1001 대기가 telegram:1001 에 보이지 않음", isPendingEdit(CHAT_A) === false);
-check("discord 취소가 telegram 대기를 지우지 않음", clearPendingEditFor(TG_SAME, "log-dc") === false);
-check("discord 키로 telegram logId 취소 불가", clearPendingEditFor(DC_SAME, "log-tg") === false);
-deletePendingEdit(DC_SAME);
-check("discord 삭제 뒤 telegram 대기 유지", peekPendingEdit(TG_SAME)?.logId === "log-tg");
+// 같은 숫자(2002)·같은 logId 로 양쪽에 걸고 한쪽만 지운다 — logId 불일치로 우연히 통과하지 않게 (PR-2 사전 리뷰 info 1)
+reset();
+markPendingEdit(TG_SAME, "log-same", "kcal");
+markPendingEdit(CHAT_B, "log-same", "desc");
+check("discord 취소(같은 logId)가 성공", clearPendingEditFor(CHAT_B, "log-same") === true);
+check("discord 취소 뒤 telegram 대기 유지", peekPendingEdit(TG_SAME)?.logId === "log-same");
+markPendingEdit(CHAT_B, "log-same", "desc");
+deletePendingEdit(TG_SAME);
+check("telegram 삭제 뒤 discord 대기 유지", peekPendingEdit(CHAT_B)?.action === "desc");
 
 // C7: 라우팅 판단 — bot/index.ts message:text 가 이 텍스트를 편집 입력으로 소비할지
 //   (사전 리뷰 P0: index.ts 인라인 조건이면 검증 불가라 함수로 추출)
