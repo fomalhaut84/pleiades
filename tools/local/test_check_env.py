@@ -214,5 +214,111 @@ class Dotenv(Base):
         self.assertEqual(eff["Q"], "a b")
 
 
+
+class Discord(Base):
+    """009 D-G(#328) — 실효 Discord 봇 토큰은 검증 봇 허용 목록(SHA-256)에 있어야 한다 · 값은 출력하지 않는다."""
+
+    VERIFY = "verify.token.fin-aaaaaaaaaaaaaaaaaaaa"
+    VERIFY_FIT = "verify.token.fit-bbbbbbbbbbbbbbbbbbbb"
+    PROD = "PROD.SECRET.token-cccccccccccccccccccc"
+
+    def hashes(self, *tokens):
+        return {c.token_hash(t) for t in tokens}
+
+    def dkeys(self, env, **opts):
+        opts.setdefault("discord_hashes", self.hashes(self.VERIFY, self.VERIFY_FIT))
+        return {p.key for p in self.problems("fit", {**GOOD_FIT, **env}, **opts)} - {"claude"}
+
+    def root_env(self, text):
+        (self.root / ".env").write_text(text)
+
+    def test_no_discord_token_passes(self):
+        self.assertEqual(self.dkeys({}), set())
+
+    def test_root_env_verify_token_passes(self):
+        self.root_env(f'DISCORD_BOT_TOKEN_FINANCE="{self.VERIFY}"\nDISCORD_BOT_TOKEN_FITNESS={self.VERIFY_FIT}\n')
+        self.assertEqual(self.dkeys({}), set())
+
+    def test_root_env_production_token_is_refused(self):
+        self.root_env(f'DISCORD_BOT_TOKEN_FITNESS="{self.PROD}"\n')
+        self.assertEqual(self.dkeys({}), {"DISCORD_BOT_TOKEN_FITNESS"})
+
+    def test_shell_token_wins_and_is_checked(self):
+        # 프로세스 env 가 이긴다(platformEnv 1순위) — 셸로 운영 토큰을 넣으면 거부
+        self.root_env(f"DISCORD_BOT_TOKEN_FITNESS={self.VERIFY_FIT}\n")
+        self.assertEqual(self.dkeys({"DISCORD_BOT_TOKEN_FITNESS": self.PROD}), {"DISCORD_BOT_TOKEN_FITNESS"})
+
+    def test_empty_shell_value_hides_file_token(self):
+        # 빈 값도 프로세스 env 가 이긴다 — 파일의 운영 토큰은 앱이 읽지 않으므로 통과
+        self.root_env(f"DISCORD_BOT_TOKEN_FITNESS={self.PROD}\n")
+        self.assertEqual(self.dkeys({"DISCORD_BOT_TOKEN_FITNESS": ""}), set())
+
+    def test_pleiades_env_file_absolute_and_relative(self):
+        self.root_env(f"DISCORD_BOT_TOKEN_FITNESS={self.VERIFY_FIT}\n")
+        other = self.root / "other.env"
+        other.write_text(f"DISCORD_BOT_TOKEN_FITNESS={self.PROD}\n")
+        self.assertEqual(self.dkeys({"PLEIADES_ENV_FILE": str(other)}), {"DISCORD_BOT_TOKEN_FITNESS"})
+        self.assertEqual(self.dkeys({"PLEIADES_ENV_FILE": "../../other.env"}), {"DISCORD_BOT_TOKEN_FITNESS"})  # cwd 기준
+
+    def test_inline_comment_and_quotes_parse_like_platform_env(self):
+        self.root_env(f"DISCORD_BOT_TOKEN_FITNESS={self.VERIFY_FIT} # 검증\nDISCORD_BOT_TOKEN_FINANCE='{self.VERIFY}'\n")
+        self.assertEqual(self.dkeys({}), set())
+
+    def test_same_token_for_both_apps_is_refused(self):
+        self.root_env(f"DISCORD_BOT_TOKEN_FINANCE={self.VERIFY}\nDISCORD_BOT_TOKEN_FITNESS={self.VERIFY}\n")
+        self.assertEqual(self.dkeys({}), {"DISCORD_BOT_TOKEN_FITNESS"})
+
+    def test_empty_allowlist_refuses_any_token(self):
+        self.root_env(f"DISCORD_BOT_TOKEN_FITNESS={self.VERIFY_FIT}\n")
+        self.assertEqual(self.dkeys({}, discord_hashes=set()), {"DISCORD_BOT_TOKEN_FITNESS"})
+
+    def test_values_never_in_messages(self):
+        self.root_env(f"DISCORD_BOT_TOKEN_FITNESS={self.PROD}\nDISCORD_BOT_TOKEN_FINANCE={self.PROD}\n")
+        text = " ".join(str(p) for p in self.problems("fit", GOOD_FIT, discord_hashes=set()))
+        self.assertNotIn(self.PROD, text)
+        self.assertNotIn(c.token_hash(self.PROD), text)
+
+    # 회귀: #328 사전 리뷰 major — 앱 .env 의 PLEIADES_ENV_FILE(` # 주석` 해석 차이)로 운영 토큰 파일을 가리키는 우회
+    def test_app_env_pleiades_env_file_is_refused(self):
+        (self.root / "prod.env").write_text(f"DISCORD_BOT_TOKEN_FITNESS={self.PROD}\n")
+        (self.root / "apps/fitness/.env").write_text("PLEIADES_ENV_FILE=../../prod.env # 주석\n")
+        env = c.effective_env(self.root / "apps/fitness", GOOD_FIT)
+        self.assertIn("PLEIADES_ENV_FILE", self.dkeys({k: v for k, v in env.items() if k not in GOOD_FIT}))
+
+    def test_missing_pleiades_env_file_fails_closed(self):
+        self.assertEqual(self.dkeys({"PLEIADES_ENV_FILE": str(self.root / "nope.env")}), {"PLEIADES_ENV_FILE"})
+
+    def test_unreadable_platform_file_fails_closed(self):
+        (self.root / "dir.env").mkdir()
+        self.assertIn("PLEIADES_ENV_FILE", self.dkeys({"PLEIADES_ENV_FILE": str(self.root / "dir.env")}))
+
+    def test_bom_crlf_export_and_unclosed_quote(self):
+        self.root_env(f'\ufeffexport DISCORD_BOT_TOKEN_FITNESS={self.VERIFY_FIT}\r\nDISCORD_BOT_TOKEN_FINANCE="{self.PROD}\r\n')
+        self.assertEqual(self.dkeys({}), set())  # 닫히지 않은 따옴표 값은 platformEnv 처럼 무시된다
+
+    def test_vertical_tab_does_not_split_lines(self):
+        self.root_env(f"DISCORD_BOT_TOKEN_FITNESS={self.PROD} #\x0bDISCORD_BOT_TOKEN_FITNESS={self.VERIFY_FIT}\n")
+        self.assertEqual(self.dkeys({}), {"DISCORD_BOT_TOKEN_FITNESS"})
+
+    # 회귀: PR #329 Codex P2 — 홀로 선 \r 은 줄을 나누지 않는다(platformEnv 는 번역 없이 읽는다)
+    def test_lone_carriage_return_does_not_split_lines(self):
+        (self.root / ".env").write_bytes(f"DISCORD_BOT_TOKEN_FITNESS={self.PROD}\n# c\rDISCORD_BOT_TOKEN_FITNESS={self.VERIFY_FIT}\n".encode())
+        self.assertEqual(self.dkeys({}), {"DISCORD_BOT_TOKEN_FITNESS"})
+
+    # 회귀: PR #329 Codex P2 — 앱은 토큰을 trim 해 쓴다 → 공백만 다른 두 토큰은 같은 봇
+    def test_whitespace_variant_is_same_bot(self):
+        self.root_env(f'DISCORD_BOT_TOKEN_FINANCE="{self.VERIFY} "\nDISCORD_BOT_TOKEN_FITNESS={self.VERIFY}\n')
+        self.assertEqual(self.dkeys({}), {"DISCORD_BOT_TOKEN_FITNESS"})
+
+    def test_uppercase_hash_in_allowlist(self):
+        self.root_env(f"DISCORD_BOT_TOKEN_FITNESS={self.VERIFY_FIT}\n")
+        self.assertEqual(self.dkeys({}, discord_hashes={c.token_hash(self.VERIFY_FIT).upper()}), set())
+
+    def test_hash_helper_prints_hashes_not_tokens(self):
+        self.root_env(f"DISCORD_BOT_TOKEN_FITNESS={self.VERIFY_FIT}\n")
+        lines = c.discord_hash_lines({}, cwd=self.root / "apps/fitness", root=self.root)
+        self.assertEqual(lines, [f"DISCORD_BOT_TOKEN_FITNESS {c.token_hash(self.VERIFY_FIT)}"])
+
+
 if __name__ == "__main__":
     unittest.main()

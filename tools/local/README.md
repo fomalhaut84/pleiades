@@ -41,12 +41,16 @@ pleiades 가 소유한 설정(알림 채널 스위치 `NOTIFY_*` · Discord 웹�
 
 ```bash
 export PLEIADES_VERIFY_BOT_IDS=<fin 봇 id>,<fit 봇 id> PLEIADES_VERIFY_CHAT_IDS=<검증 채팅 id,…>
+export PLEIADES_VERIFY_DISCORD_TOKEN_SHA256=<fin 검증 봇 해시>,<fit 검증 봇 해시>   # Discord 토큰이 있을 때 (009 D-G · #328)
 tools/local/run.sh fin -- npm run start -- -p 4610      # 웹 — Next 는 .env 의 PORT 를 쓰지 않는다 → -p 필수
 tools/local/run.sh fit -- npm run start -- -p 4620
 tools/local/run.sh fin -- node dist/bot/standalone.cjs  # 봇 — long polling · 크론·알림 스케줄러 등록
 tools/local/run.sh fit -- node dist/bot/standalone.cjs
 ```
 
+- **Discord 봇 토큰 가드(009 D-G · #328):** 실효 `DISCORD_BOT_TOKEN_*`(셸 env → `PLEIADES_ENV_FILE` → 루트 `.env` — 앱의 `platformEnv` 와 같은 순서 · 셸의 빈 값도 이긴다)가 **검증 봇 허용 목록**에 없으면 `run.sh` 가 멈춘다 — 운영 봇 토큰이면 서버 gateway 와 같은 토큰 두 세션이 된다(I-4′). 두 앱이 같은 토큰이어도 멈춘다. 허용 목록은 토큰 SHA-256(토큰 → 봇 ID 도출은 공식 문서 미확인 · 009 U-9). 해시 구하기(값은 출력하지 않는다): `cd apps/fitness && python3 ../../tools/local/check_env.py fit --discord-hashes`. 토큰을 비워 두면 gateway 를 열지 않으므로 통과한다.
+  - **한계:** `run.sh` 밖 기동(`npm run dev` · 직접 `node`)은 검사하지 않는다(G-3 — M-6a 의 `check_env` 한계와 같다).
+  - 기동 **뒤** 플랫폼 파일을 고치면 다시 검사하지 않는다(웹은 수정 시각으로 다시 읽는다) — 토큰을 바꿨으면 `run.sh` 로 다시 띄운다. `PLEIADES_ENV_FILE` 은 앱 `.env` 에 두지 않고(셸·pm2 env 로만) · 가리키는 파일이 없으면 멈춘다.
 - 포트: 4100·4200·4210·4301·3000 금지(L-3). MCP 서버는 띄우지 않는다(fin `mcp-config.json` 이 4210 하드코딩).
 - advisor 는 막혀 있다(L-7) — fit `CLAUDE_BIN=/nonexistent/…` → `ENOENT` 로그 · fin 은 `run.sh` 의 PATH shim.
 - `next start` 는 **모든 인터페이스(`*:<port>`)** 에서 받는다 — 같은 LAN 에서 접근 가능하다.

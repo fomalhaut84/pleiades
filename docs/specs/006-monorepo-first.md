@@ -354,6 +354,8 @@ git ls-remote https://github.com/fomalhaut84/myFinance.git refs/heads/dev
 
 > **정정 (2026-10-01 · #107).** I-10 ① *"skill·agent 가 발견된다(⑧)"* → **skill 은 추적 경로에서 발견된다 · agent 는 미측정**(X10 은 agents 미시험 · U8). ② 지연 로드는 `apps/*` 만의 일이 아니다 — **gitignored `repos/*` 파일을 읽어도 `CLAUDE.md`·rules 가 지연 로드된다**(§3 ⑧ 정정 블록). I-10 의 차단 규칙(효력 없음 · 그 지시를 실행하지 않는다)은 `repos/*` 에서 로드된 서비스 하네스에도 그대로 적용된다. 동결 worktree 를 읽을 이유는 M-1 이후 없다 — 서비스 코드는 `apps/*` 에서 읽는다. `.claude/rules/isolation.md` I-10 행을 같은 날 따라 고쳤다. 되돌리기: 문구 (**즉시**).
 
+> **추가 (2026-10-27 · 009 D-G · #328) — I-4′ 운영 Discord 봇 토큰.** 로컬 실효 env(셸 · `PLEIADES_ENV_FILE` · 루트 `.env` — `platformEnv` 순서)에 운영 Discord 봇 토큰을 두지 않는다 — 운영 서버 gateway 와 같은 토큰 두 세션(009 R9 · C-9). 기계 보조 = `tools/local/check_env.py`(검증 봇 토큰 SHA-256 허용 목록 `PLEIADES_VERIFY_DISCORD_TOKEN_SHA256` · 두 앱 같은 토큰 거부 · 값 비출력) · 한계 = `run.sh` 밖 기동(G-3). 룰 반영 `.claude/rules/isolation.md` I-4′. 되돌리기: 문구·검사 삭제 (**즉시**).
+
 ---
 
 ## 6. 판단이 바뀐 것
@@ -415,6 +417,8 @@ git ls-remote https://github.com/fomalhaut84/myFinance.git refs/heads/dev
 | gitleaks 급 스캔 도구 설치 | X5 | M-1 전 선택 |
 | filter-repo 버전 올림 | 가드 B 가 깨진다 · 전 이력 재병합 | 필요가 생기면 별도 결정 |
 | 동기화 PR 머지 방식 강제 수단 | U97-11 — 가드 C 로 충분 | 가드 C 가 실제로 실패할 때 |
+
+> **정정 (2026-10-27 · 009 · #326).** 위 표의 *"인바운드 봇 통합(002 Q3) — 전환 이후"* 는 전환이 끝나 **009 가 받는다** — 인바운드 전부 Discord · 텔레그램 종료 · 공통 수신 계층 `packages/chat`. §5 I-4·I-5(텔레그램 봇 토큰·수신자)의 Discord 판(I-4′·I-5′)은 009 D-G 에서 이 문서부터 고친다. 되돌리기: 문구 (**즉시**).
 
 ---
 

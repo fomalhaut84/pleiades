@@ -1,6 +1,6 @@
 {
   "name": "pleiades",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "private": true,
   "description": "pleiades — 루트는 @pleiades/notify 의 git 의존성 위임점이다 (003 §2-1 정정 · ALT-d). 패키지 본체는 packages/notify/",
   "repository": {
@@ -22,10 +22,10 @@
   ],
   "scripts": {
     "prepare": "tsc -p packages/notify",
-    "build": "tsc -p packages/notify",
-    "typecheck": "tsc --noEmit -p packages/notify",
-    "typecheck:test": "tsc --noEmit -p packages/notify/tsconfig.test.json",
-    "test": "npm --prefix packages/notify run test"
+    "build": "tsc -p packages/notify && tsc -p packages/chat",
+    "typecheck": "tsc --noEmit -p packages/notify && tsc --noEmit -p packages/chat",
+    "typecheck:test": "tsc --noEmit -p packages/notify/tsconfig.test.json && tsc --noEmit -p packages/chat/tsconfig.test.json",
+    "test": "npm --prefix packages/notify run test && npm --prefix packages/chat run test"
   },
   "devDependencies": {
     "typescript": "^5"

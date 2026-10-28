@@ -1,0 +1,18 @@
+{
+  "name": "@pleiades/chat",
+  "version": "1.1.0",
+  "private": true,
+  "description": "인바운드 대화 계층 — Discord 메시지·버튼·첨부 수신 + 플랫폼 중립 핸들러 (009 D-0 · #332)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@pleiades/notify": "file:../notify"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "vitest": "^4.1.8"
+  }
+}

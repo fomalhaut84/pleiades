@@ -29,6 +29,8 @@ export {
   toDiscordContent,
   sendDiscordFile,
   DISCORD_DEFAULT_MAX_FILE_BYTES,
+  requestDiscord,
+  defaultSleep,
 } from './discord';
 export type {
   DiscordTransportOptions,
@@ -38,6 +40,7 @@ export type {
   FetchResponseLike,
   FormDataLike,
   RequestInitLike,
+  PostConfig,
 } from './discord';
 export { htmlToDiscordMarkdown, escapeDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
 export {
