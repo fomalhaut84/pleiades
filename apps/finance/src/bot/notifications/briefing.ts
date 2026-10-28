@@ -5,7 +5,7 @@
  * 한국장 08:30 KST / 미국장 23:00 KST 자동 발송.
  */
 
-import { getBot } from '@/bot/index'
+import { notifyBot } from '@/bot/index'
 import { askAdvisor, describeAdvisorError } from '@/lib/ai/claude-advisor'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 import { notifierFor, notifierForChat, Route, htmlContent } from './notifier'
@@ -50,7 +50,7 @@ export async function sendBriefing(
   session: MarketSession,
   chatId?: number,
 ): Promise<void> {
-  const bot = getBot()
+  const bot = notifyBot()
   const notifier = chatId === undefined ? notifierFor(bot) : notifierForChat(bot, chatId)
   const prompt = buildBriefingPrompt(session)
 

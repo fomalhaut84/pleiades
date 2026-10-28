@@ -28,10 +28,8 @@ let scheduled = false
 export function scheduleNotifications(): void {
   if (scheduled) return
 
-  if (!process.env.TELEGRAM_BOT_TOKEN) {
-    console.log('[notification] TELEGRAM_BOT_TOKEN 미설정, 알림 스케줄 건너뜀')
-    return
-  }
+  // pleiades 009 D-1 (pleiades#349): 텔레그램 토큰 게이트는 없앴다 — 토큰이 없으면 텔레그램 수신자가 0 이라(notifier
+  // `TELEGRAM_TARGETS`) 아래 실행 판정이 그대로 건너뛰고, Discord 라우트면 토큰 없이도 돈다.
 
   // 수신자가 0 이어도 등록은 한다 — 루트 .env(Discord)를 나중에 채우면 재시작 없이 다음 실행부터 반영된다(#143 · PR #144 Codex P2).
   // 대신 실행마다 확인해 0 이면 건너뛴다(구 동작 "수신자 없으면 아무 작업도 안 함" 보존 — AI 생성·스냅샷 포함).

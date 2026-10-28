@@ -4,7 +4,7 @@
  * 매월 지정일에 askAdvisor로 전월 리포트를 생성하여 텔레그램 발송.
  */
 
-import { getBot } from '@/bot/index'
+import { notifyBot } from '@/bot/index'
 import { askAdvisor } from '@/lib/ai/claude-advisor'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 import { notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
@@ -23,7 +23,7 @@ function getPrevMonth(): { year: number; month: number } {
 }
 
 export async function sendMonthlyReport(): Promise<void> {
-  const bot = getBot()
+  const bot = notifyBot()
   const { year, month } = getPrevMonth()
 
   const prompt =

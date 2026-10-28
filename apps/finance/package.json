@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "@pleiades/chat": "file:../../packages/chat",
     "@pleiades/notify": "file:../../packages/notify",
     "@prisma/client": "^6.19.2",
     "@react-pdf/renderer": "4.5.1",

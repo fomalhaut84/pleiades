@@ -204,7 +204,7 @@ export function createAdvisorMonitor(
         state.lastAlertAt = now
         try {
           alerted = await sendAlert(buildFailureAlert(state, caller))
-          // Self-review P1: sender 가 false 리턴 시 (예: web 프로세스 getBot 실패,
+          // Self-review P1: sender 가 false 리턴 시 (예: bot 모듈 로드 실패 · 수신자 0,
           // 관리자 수신자 미설정, 모든 chat 발송 실패) 실제 관리자에게
           // 도달 안 함 → lastAlertAt 원복해 다음 실패에서 재시도 가능하게.
           if (!alerted) {
@@ -290,9 +290,9 @@ export function getGlobalAdvisorMonitor(): AdvisorMonitor {
       // Lazy require — advisor-monitor 는 lib/ 아래 있어 web/bot 양쪽에서 load 됨.
       // web 프로세스는 bot 인스턴스 없어서 require 자체를 지연.
       try {
-        const { getBot } = await import('@/bot')
+        const { notifyBot } = await import('@/bot')
         const { notifierFor, htmlContent } = await import('@/bot/notifications/notifier')
-        const delivery = await notifierFor(getBot()).notify(Route.ADMIN, htmlContent(message), {
+        const delivery = await notifierFor(notifyBot()).notify(Route.ADMIN, htmlContent(message), {
           label: 'advisor-monitor',
         })
         return delivery.sent > 0

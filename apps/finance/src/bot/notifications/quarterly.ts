@@ -4,7 +4,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { getBot } from '@/bot/index'
+import { notifyBot } from '@/bot/index'
 import {
   calcCostKRW,
   calcCurrentValueKRW,
@@ -27,7 +27,7 @@ function getQuarterLabel(month: number): string {
 }
 
 export async function sendQuarterlyReminder(): Promise<void> {
-  const bot = getBot()
+  const bot = notifyBot()
 
   const accounts = await prisma.account.findMany({
     include: {
