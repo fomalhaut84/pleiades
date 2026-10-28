@@ -69,6 +69,10 @@ export interface Rest {
   send(channelId: string, msg: Outgoing): Promise<SentMessage>;
   edit(channelId: string, messageId: string, msg: Outgoing): Promise<void>;
   setButtons(channelId: string, messageId: string, rows: ButtonRows): Promise<void>;
+  /** 메시지 삭제 — 404(이미 없음)는 성공으로 본다. 응답 본문이 없어 재시도 루프를 타지 않는다. */
+  delete(channelId: string, messageId: string): Promise<void>;
+  /** "입력 중" 표시(204). */
+  typing(channelId: string): Promise<void>;
   sendFile(channelId: string, file: OutgoingFile): Promise<SentMessage>;
   /** 인터랙션 원본 편집 — 넘치는 조각은 `channelId` 에 새 메시지로. */
   editOriginal(hookUrl: string, channelId: string, msg: Outgoing): Promise<void>;
@@ -149,6 +153,7 @@ export function createRest(opts: RestOptions): Rest {
     channelId,
     edit: (msg) => rest.edit(channelId, id, msg),
     setButtons: (rows) => rest.setButtons(channelId, id, rows),
+    delete: () => rest.delete(channelId, id),
   });
 
   /** 여러 조각을 채널에 보낸다 — 버튼은 마지막에. 마지막 메시지 id. */
@@ -206,6 +211,18 @@ export function createRest(opts: RestOptions): Rest {
     },
     async setButtons(channelId, messageId, rows) {
       await request(`${channelUrl(channelId)}/${encodeURIComponent(messageId)}`, botJson('PATCH', { components: toComponents(rows) }));
+    },
+    async delete(channelId, messageId) {
+      const res = await fetchFn()(`${channelUrl(channelId)}/${encodeURIComponent(messageId)}`, {
+        method: 'DELETE',
+        headers: { authorization: `Bot ${token()}` },
+      });
+      if (!res.ok && res.status !== 404) throw new Error(`@pleiades/chat: 메시지 삭제 ${res.status}`);
+    },
+    async typing(channelId) {
+      const url = `${channelUrl(channelId).replace(/\/messages$/, '')}/typing`;
+      const res = await fetchFn()(url, { method: 'POST', headers: { authorization: `Bot ${token()}` } });
+      if (!res.ok) throw new Error(`@pleiades/chat: 입력 중 표시 ${res.status}`);
     },
     async sendFile(channelId, file) {
       if (file.data.byteLength > maxFileBytes) {

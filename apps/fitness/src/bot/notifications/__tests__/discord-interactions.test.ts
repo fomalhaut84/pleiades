@@ -17,7 +17,7 @@ function ctx(action: string) {
     channelId: "2",
     messageId: "3",
     edit: vi.fn(async () => {}),
-    send: vi.fn(async () => ({ id: "m", channelId: "2", edit: async () => {}, setButtons: async () => {} })),
+    send: vi.fn(async () => ({ id: "m", channelId: "2", edit: async () => {}, setButtons: async () => {}, delete: async () => {} })),
     notice: vi.fn(async () => {}),
     setButtons: vi.fn(async () => {}),
   };

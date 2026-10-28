@@ -1,7 +1,9 @@
 /**
  * 라우터 — 받은 메시지·버튼을 핸들러로 나눈다 (009 C-6: 일반 메시지 수신 · 한글 텍스트 명령·자연어 그대로).
  *
- * 메시지 순서: 첨부가 있고 첨부 경로가 있으면 → 첨부 · 아니면 명령(첫 단어 · 앞 `/` 는 있어도 없어도) → 정규식(등록 순) → 나머지.
+ * 메시지 순서: 첨부가 있고 첨부 경로가 있으면 → 첨부 · 아니면 명령(첫 단어) → 정규식(등록 순) → 나머지.
+ * 명령의 앞 `/`: 기본 **필수**(`slash: 'required'` — 텔레그램과 같다 · `sleep 어땠어` 같은 자연어가 명령으로 가지 않는다 · 009 D-2 R3) ·
+ * `slash: 'optional'` 로 등록한 명령만 접두 없이도 잡힌다(한글 이름 명령용).
  * 버튼: action 접두(`'vest:'`) 또는 정규식 — 등록 순 첫 일치.
  * 빌더는 새 라우터를 돌려준다(원본 불변).
  */
@@ -12,8 +14,13 @@ export type HearsHandler = (ctx: MessageContext, match: RegExpMatchArray) => Pro
 export type PlainHandler = (ctx: MessageContext) => Promise<void>;
 export type ActionHandler = (ctx: ButtonContext, match: RegExpMatchArray | undefined) => Promise<void>;
 
+export interface CommandOptions {
+  /** 앞 `/` — 기본 `'required'`. `'optional'` 이면 접두 없이도 잡힌다. */
+  slash?: 'required' | 'optional';
+}
+
 interface Routes {
-  commands: ReadonlyArray<{ names: readonly string[]; h: CommandHandler }>;
+  commands: ReadonlyArray<{ names: readonly string[]; h: CommandHandler; slashOptional: boolean }>;
   hears: ReadonlyArray<{ re: RegExp; h: HearsHandler }>;
   attachment?: PlainHandler;
   fallback?: PlainHandler;
@@ -21,7 +28,7 @@ interface Routes {
 }
 
 export interface Router {
-  command(names: string | readonly string[], h: CommandHandler): Router;
+  command(names: string | readonly string[], h: CommandHandler, opts?: CommandOptions): Router;
   hears(re: RegExp, h: HearsHandler): Router;
   attachment(h: PlainHandler): Router;
   fallback(h: PlainHandler): Router;
@@ -42,7 +49,14 @@ export function splitCommand(text: string): { head: string; args: string } {
 
 function build(r: Routes): Router {
   return {
-    command: (names, h) => build({ ...r, commands: [...r.commands, { names: (typeof names === 'string' ? [names] : names).map(norm), h }] }),
+    command: (names, h, opts) =>
+      build({
+        ...r,
+        commands: [
+          ...r.commands,
+          { names: (typeof names === 'string' ? [names] : names).map(norm), h, slashOptional: opts?.slash === 'optional' },
+        ],
+      }),
     hears: (re, h) => build({ ...r, hears: [...r.hears, { re, h }] }),
     attachment: (h) => build({ ...r, attachment: h }),
     fallback: (h) => build({ ...r, fallback: h }),
@@ -54,8 +68,9 @@ function build(r: Routes): Router {
       }
       const { head, args } = splitCommand(ctx.text);
       const name = norm(head);
+      const slashed = head.startsWith('/');
       if (name !== '') {
-        const cmd = r.commands.find((c) => c.names.includes(name));
+        const cmd = r.commands.find((c) => (slashed || c.slashOptional) && c.names.includes(name));
         if (cmd !== undefined) {
           await cmd.h(ctx, args);
           return true;

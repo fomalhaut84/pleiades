@@ -45,6 +45,8 @@ export interface SentMessage {
   edit(msg: Outgoing): Promise<void>;
   /** 본문은 두고 버튼만 바꾼다 — `[]` 면 지운다. */
   setButtons(rows: ButtonRows): Promise<void>;
+  /** 메시지를 지운다(진행 안내 같은 임시 메시지 · 009 D-2 C). 이미 없으면 조용히 끝난다. */
+  delete(): Promise<void>;
 }
 
 /** 받은 첨부. 내용은 `download()` 로만 — 크기·형식 검증을 거친다(0-3 · R6). */
@@ -69,6 +71,10 @@ interface BaseContext {
 export interface MessageContext extends BaseContext {
   readonly text: string;
   readonly attachments: readonly Attachment[];
+  /** 사용자가 보낸 시각(epoch ms) — 플랫폼 시각 · 없으면 메시지 ID · 그것도 없으면 받은 시각(009 D-2 C). */
+  readonly sentAt: number;
+  /** "입력 중" 표시(약 10초 지속 — 긴 작업이면 다시 부른다). 실패는 삼키고 경고만 남긴다. */
+  typing(): Promise<void>;
   /** 같은 채널에 보낸다 · 2000자를 넘으면 나눠 보내고 버튼은 마지막에(R1). */
   reply(msg: Outgoing): Promise<SentMessage>;
   replyFile(file: OutgoingFile): Promise<SentMessage>;
