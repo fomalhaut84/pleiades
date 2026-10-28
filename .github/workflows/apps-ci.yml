@@ -9,6 +9,7 @@ name: Apps CI
 # - apps/* 서비스 결함으로 실패하면 고치지 않는다 (Q57) — 그 체크를 비필수로 내리고 pleiades 이슈에 기록한다.
 # - 세 job 모두 루트 npm ci 를 먼저 한다 (006 ㉒ · fit M-5a #132 · fin M-5b #136) — apps/* 가 file:../../packages/notify 를 참조하고
 #   packages/notify/dist 는 루트 prepare 만 만든다. 루트 package-lock.json 은 fit next build 의 workspace root 추론에도 쓰인다(006 ㉒).
+# - 그다음 packages/chat 설치·빌드(009 D-1 · #345) — 서버 deploy.sh 1단계와 같은 순서. 앱이 chat 을 쓰기 전에도 그 단계가 CI 에서 돈다.
 
 on:
   push:
@@ -55,10 +56,15 @@ jobs:
           cache-dependency-path: |
             apps/finance/package-lock.json
             package-lock.json
+            packages/chat/package-lock.json
       # 루트 npm ci → prepare(tsc -p packages/notify) → packages/notify/dist (006 ㉒ · M-5b #136)
       - name: Install root (packages/notify)
         working-directory: .
         run: npm ci
+      # packages/chat 설치·빌드 — notify dist 뒤 · 앱 npm ci 앞(deploy.sh 1단계와 같은 순서 · 009 D-1 #345)
+      - name: Install and build packages/chat
+        working-directory: .
+        run: npm --prefix packages/chat ci && npx --no-install tsc -p packages/chat
       - name: Install dependencies
         run: npm ci
       - name: Generate Prisma client
@@ -104,10 +110,15 @@ jobs:
           cache-dependency-path: |
             apps/finance/package-lock.json
             package-lock.json
+            packages/chat/package-lock.json
       # 루트 npm ci → prepare(tsc -p packages/notify) → packages/notify/dist (006 ㉒ · M-5b #136)
       - name: Install root (packages/notify)
         working-directory: .
         run: npm ci
+      # packages/chat 설치·빌드 — notify dist 뒤 · 앱 npm ci 앞(deploy.sh 1단계와 같은 순서 · 009 D-1 #345)
+      - name: Install and build packages/chat
+        working-directory: .
+        run: npm --prefix packages/chat ci && npx --no-install tsc -p packages/chat
       - name: Install dependencies
         run: npm ci
       - name: Generate Prisma client
@@ -148,10 +159,15 @@ jobs:
           cache-dependency-path: |
             apps/fitness/package-lock.json
             package-lock.json
+            packages/chat/package-lock.json
       # 루트 npm ci → prepare(tsc -p packages/notify) → packages/notify/dist. 없으면 tsc TS2307 (006 ㉒ · #132)
       - name: Install root (packages/notify)
         working-directory: .
         run: npm ci
+      # packages/chat 설치·빌드 — notify dist 뒤 · 앱 npm ci 앞(deploy.sh 1단계와 같은 순서 · 009 D-1 #345)
+      - name: Install and build packages/chat
+        working-directory: .
+        run: npm --prefix packages/chat ci && npx --no-install tsc -p packages/chat
       - name: Install dependencies
         run: npm ci
       - name: Generate Prisma client

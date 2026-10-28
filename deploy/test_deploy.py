@@ -201,6 +201,23 @@ class DeployDryRun(unittest.TestCase):
         self.assertLess(out.index("pleiades-fin-mcp"), out.index("pleiades-fin-web"))
         self.assertLess(out.index("pleiades-fin-web"), out.index("pleiades-fin-bot"))
 
+    def test_install_order_root_then_chat_then_app(self):
+        # 009 D-1 PR-1(#345) — chat 은 notify dist(루트 prepare) 뒤에 설치·빌드하고, 앱 봇 번들보다 먼저 dist 가 있어야 한다
+        for app, d in (("fin", "finance"), ("fit", "fitness")):
+            with self.subTest(app=app):
+                out = deploy(self.root, app, "--dry-run").stdout
+                root_ci = out.index("+ npm ci")
+                chat_ci = out.index("+ npm --prefix packages/chat ci")
+                chat_tsc = out.index("+ npx --no-install tsc -p packages/chat")
+                app_ci = out.index(f"+ (apps/{d}) npm ci")
+                self.assertLess(root_ci, chat_ci)
+                self.assertLess(chat_ci, chat_tsc)
+                self.assertLess(chat_tsc, app_ci)
+
+    def test_activate_skips_chat_install(self):
+        out = deploy(self.root, "fit", "--dry-run", "--activate").stdout
+        self.assertNotIn("packages/chat", out)
+
     def test_refuses_app_env_readable_by_other_accounts(self):
         # #193 — 옛 서비스 .env 가 664 였다(T-2 U7). 같은 서버에 다른 계정·서비스가 돈다(U3)
         env = self.root / "apps/finance/.env"

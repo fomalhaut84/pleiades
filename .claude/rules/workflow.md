@@ -281,6 +281,8 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 >
 > **정정 (2026-10-27 · 009 D-0 · #332) — `packages/chat` 추가.** 루트 `typecheck`·`typecheck:test`·`test`·`build` 가 `packages/chat` 도 돈다. **선행이 하나 늘었다:** 루트 `npm ci`(prepare → `packages/notify/dist`) → `npm --prefix packages/notify install` → **`npm --prefix packages/chat ci`**(chat 은 `@pleiades/notify` 를 `file:../notify` 로 링크한다 — notify dist 가 먼저 있어야 타입·테스트가 그것을 찾는다 · CI `ci.yml` 순서와 같다). 없으면 `vitest: command not found` · TS2307. `packages/chat/.npmrc` 의 `legacy-peer-deps=true` 는 npm 10 arborist 의 `file:` 링크 결함(`null.edgesOut`) 우회다. 서버 배포는 루트 `npm ci`(prepare = notify 만)라 영향 없음 — 앱이 chat 을 쓰는 D-1 에서 서버 설치 경로를 다시 정한다. 되돌리기: 문구 (**즉시**).
 >
+> **정정 (2026-10-28 · 009 D-1 PR-1 · #345) — `apps/*` 행 선행에 chat 설치·빌드.** 두 앱 행의 선행은 **루트 `npm ci` → `npm --prefix packages/chat ci` → `npx --no-install tsc -p packages/chat`**(pleiades 루트에서 · `run.sh` 밖)이다 — 앱 봇 번들이 빌드 때 chat dist 를 인라인한다(D-1 PR-2·PR-3 부터 앱이 import). 서버 `deploy/deploy.sh` 1단계와 `apps-ci.yml` 세 잡이 같은 순서로 돈다. 앱 cwd 의 `npm ci` 는 chat 링크를 npm 10·11 모두 문제없이 받는다 — 앱 `.npmrc` 는 두지 않는다(`_workspace/009/d1/01_m1_app_npm_ci.md`). 되돌리기: 문구 (**즉시**).
+>
 > **CI (2026-10-01 · M-3 · #120).** 같은 단계가 `.github/workflows/apps-ci.yml` 에서 돈다 — **필수 = `apps-fin`·`apps-fit`**(서비스 CI 단계 그대로) · **`apps-fin-test` 는 비필수**(서비스 CI 에 없는 추가분 · 006 Q52 확정). `apps/*` 서비스 결함으로 실패하면 고치지 않고 그 체크를 비필수로 내린 뒤 pleiades 이슈에 기록한다(006 Q57 확정 · `isolation.md` 파생 규칙). 로컬 8절과 달리 CI 에는 `.env` 가 없다 — `DATABASE_URL` 만 러너 postgres 로. 되돌리기: 문구 (**즉시**).
 
 전부 통과해야 다음 단계. 실패 시 수정 후 재실행. **건너뛰기 금지.**

@@ -37,7 +37,7 @@ const flush = async (): Promise<void> => {
   for (let i = 0; i < 10; i++) await Promise.resolve();
 };
 
-function setup(router: Router, extra: { store?: GuardStore; limit?: number; onBlocked?: () => void; remaining?: number } = {}) {
+function setup(router: Router, extra: { store?: GuardStore; limit?: number; onBlocked?: () => void; remaining?: number; intents?: number } = {}) {
   const sockets: FakeSocket[] = [];
   const fetch = vi.fn<ChatFetch>(async (url) =>
     url.endsWith('/gateway/bot')
@@ -61,6 +61,7 @@ function setup(router: Router, extra: { store?: GuardStore; limit?: number; onBl
     reconnectDelaysMs: [10],
     retryDelaysMs: [],
     sleep: async () => {},
+    intents: extra.intents,
     identifyGuard:
       extra.store === undefined
         ? 'none'
@@ -99,6 +100,17 @@ describe('createChat — 연결 (0-1 · 0-4)', () => {
     expect(MESSAGE_INTENTS).toBe(512 | 32768);
     // 계약: deploy/discord-switch.sh judge_gateway 가 이 줄을 찾는다(L16′) — 바꾸면 운영 승계 판정이 깨진다
     expect(logger.warn).toHaveBeenCalledWith('[discord-fit] gateway 준비 완료');
+  });
+
+  it('intents 0 이면 IDENTIFY 에 0 을 싣는다 — 버튼만 · 포털 토글 불필요 (009 D-1 G1)', async () => {
+    const { last, logger, ready } = setup(createRouter(), { intents: 0 });
+    await ready();
+    expect(last().sent.find((p) => p.op === 2)?.d).toMatchObject({ intents: 0 });
+    expect(logger.warn).toHaveBeenCalledWith('[discord-fit] gateway 준비 완료');
+  });
+
+  it.each([-1, 1.5, Number.NaN])('intents %s 는 만들 때 거부한다', (bad) => {
+    expect(() => setup(createRouter(), { intents: bad })).toThrow(/intents/);
   });
 
   it('4014(intent 미허용)는 다시 접속하지 않고 포털 안내를 남긴다', async () => {

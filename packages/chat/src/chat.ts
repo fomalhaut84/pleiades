@@ -26,6 +26,11 @@ export interface ChatOptions {
   label: string;
   /** IDENTIFY 보호(0-5) — 필수. 끄려면 `'none'` 을 명시한다(테스트 · 일회성 도구만 · #332 사전 리뷰 info 1). */
   identifyGuard: IdentifyGuard | 'none';
+  /**
+   * gateway intents — 기본 `MESSAGE_INTENTS`(일반 메시지 수신 · 개발자 포털 MESSAGE CONTENT 토글 필요 · 없으면 4014).
+   * `0` 이면 버튼만 받는다 — 인터랙션은 intent 없이 온다(009 D-1 G1 · 포털 토글 전 단계).
+   */
+  intents?: number;
   attachmentPolicy?: AttachmentPolicy;
   logger?: Logger;
   fetch?: ChatFetch;
@@ -77,6 +82,8 @@ export function createChat(opts: ChatOptions): Chat {
   const label = opts.label;
   const policy = opts.attachmentPolicy ?? DEFAULT_ATTACHMENT_POLICY;
   const now = opts.now ?? Date.now;
+  const intents = opts.intents ?? MESSAGE_INTENTS;
+  if (!Number.isInteger(intents) || intents < 0) throw new Error(`[${label}] intents 는 0 이상의 정수여야 한다`);
   const rest: Rest = createRest({
     token: opts.token,
     fetch: opts.fetch,
@@ -171,7 +178,7 @@ export function createChat(opts: ChatOptions): Chat {
 
   const gateway = createGateway({
     token: opts.token,
-    intents: MESSAGE_INTENTS,
+    intents,
     label,
     logger,
     createSocket: opts.createSocket,

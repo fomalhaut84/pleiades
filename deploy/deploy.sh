@@ -14,6 +14,7 @@
 # 서비스 deploy.sh 와 다른 점(007 §4-1 표):
 #   - git 조작·작업트리 정리 없음 — 정리 명령은 P-2 상태 심링크를 지운다(4-2 정정 1)
 #   - 루트 npm ci 가 첫 단계 — prepare 가 packages/notify/dist 를 만든다(⑭). 실패 = 배포 실패
+#     그다음 packages/chat 설치·빌드(009 D-1 · #345) — 앱 봇 번들이 빌드 때 chat dist 를 인라인한다. notify dist 뒤 · 앱 npm ci 앞
 #   - 마이그레이션은 적용하지 않고 검사만 한다 — status(대기) + psql 이름 대조(DB 전용 · status 가 놓친다 · #180). 차이가 있으면 중단(정정 5 · Q74)
 #   - 활성화 직전 점유 검사 — 옛 서비스 pm2 가 online 이면 빌드·pre-flight 뒤 exit 3(→ 옛 프로세스 정지 → --activate),
 #     다른 프로세스가 포트를 잡고 있으면 중단. 같은 포트라 옛 프로세스가 health 에 대신 응답한다(정정 4 의 거울상 · #176 사전 리뷰).
@@ -292,8 +293,12 @@ if [[ $ACTIVATE -eq 1 ]]; then
 else
   echo "+ rm -f $READY  # 옛 준비 표지 — 이 실행이 pre-flight 를 통과해야 다시 생긴다"
   [[ $DRY -eq 1 ]] || rm -f "$READY"
-  step "1. 의존성 (루트 → 앱)"
+  step "1. 의존성 (루트 → chat → 앱)"
   at_root npm ci
+  # chat 은 @pleiades/notify 를 file: 로 링크한다 — --prefix 라 packages/chat/.npmrc(legacy-peer-deps)를 읽는다(#332)
+  # tsc 는 루트 devDependency — at_root 는 PATH 를 바꾸지 않으므로 npx --no-install 로 루트 node_modules/.bin 을 쓴다
+  at_root npm --prefix packages/chat ci
+  at_root npx --no-install tsc -p packages/chat
   at_app npm ci
 fi
 
