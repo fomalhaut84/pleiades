@@ -166,6 +166,15 @@ class DiscordInbound(unittest.TestCase):
         self.assertEqual(self.key_line(), f'{KEY}=""')
         self.assertEqual(self.restarts(), ["restart", "pleiades-fit-bot", "restart", "pleiades-fit-bot"])
 
+    # 회귀: PR-3 사전 리뷰 info 2 — 다른 채널로 켜져 있던 상태의 on 실패는 직전 값이 아니라 끔으로 되돌린다
+    def test_revert_from_previously_set_says_off_not_restore(self):
+        self.write_env(BASE + f'{KEY}="{"9" * 18}"\n')
+        r = self.run_sh("fit", "on", CHAT_ID, STUB_PORTAL="off")
+        self.assertEqual(r.returncode, 3, r.stdout)
+        self.assertIn("되돌림 = 끔(직전 값 복원 아님 · 직전 값은 백업에)", r.stdout)
+        self.assertEqual(self.key_line(), f'{KEY}=""')
+        self.assertNotIn("9" * 18, r.stdout)
+
     def test_on_revert_failure_is_reported(self):
         r = self.run_sh("fit", "on", CHAT_ID, STUB_GATEWAY="fatal")
         self.assertEqual(r.returncode, 3, r.stdout)

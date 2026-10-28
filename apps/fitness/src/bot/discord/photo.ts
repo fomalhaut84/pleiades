@@ -77,7 +77,8 @@ export async function handleDiscordAttachment(ctx: MessageContext, deps: PhotoDe
     await ctx.reply(PHOTO_FAILED_TEXT).catch(() => undefined);
     return;
   }
-  if (ctx.attachments.length > 1) await ctx.reply(PHOTO_FIRST_ONLY_TEXT);
+  // 이미지가 아닌 첨부는 세지 않는다(사진 1 + PDF 1 이면 안내 없음 · PR-3 사전 리뷰 info 3)
+  if (images.length > 1) await ctx.reply(PHOTO_FIRST_ONLY_TEXT);
 }
 
 async function analyzePhoto(ctx: MessageContext, photo: Attachment, tmpDir?: string): Promise<void> {

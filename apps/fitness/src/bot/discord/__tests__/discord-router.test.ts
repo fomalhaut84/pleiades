@@ -371,6 +371,15 @@ describe("사진(P)", () => {
     expect(texts().at(-1)).toBe(PHOTO_FIRST_ONLY_TEXT);
   });
 
+  // 회귀: PR-3 사전 리뷰 info 3 — 이미지가 아닌 첨부까지 세어 "여러 장" 안내가 나갔다
+  it("사진 1장 + 이미지 아닌 첨부 → 여러 장 안내 없음", async () => {
+    vi.mocked(estimateNutritionFromPhoto).mockResolvedValueOnce(null as never);
+    db.foodLog.create.mockResolvedValueOnce({ id: "p3" });
+    const { ctx, texts } = msg("점심", [attachment({ contentType: "image/jpeg" }), attachment({ id: "a9", contentType: "application/pdf" })]);
+    await handleDiscordAttachment(ctx, { handleText, tmpDir: tmp });
+    expect(texts()).not.toContain(PHOTO_FIRST_ONLY_TEXT);
+  });
+
   it("내려받기 실패 → 텔레그램과 같은 안내 · ack 삭제 · 임시파일 없음", async () => {
     const a = attachment({ download: vi.fn(async () => Promise.reject(new Error("응답 500"))) });
     const err = vi.spyOn(console, "error").mockImplementation(() => undefined);

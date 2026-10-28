@@ -143,6 +143,8 @@ judge() {  # <단계> <on|off>
 # on 실패 — 키를 비우고 재시작해 버튼만으로 되돌린다(반쯤 켜진 상태로 두지 않는다 · 키를 둔 채면 재시작마다 강등 + 알림 + IDENTIFY 2)
 revert() {  # <이유>
   CHANGED=0
+  # 직전에 다른 채널로 켜져 있었어도 그 값으로 돌리지 않는다 — 끔(버튼만)이 되돌림이다 (PR-3 사전 리뷰 info 2)
+  [[ $PREV_SET -eq 1 ]] && form "   되돌림 = 끔(직전 값 복원 아님 · 직전 값은 백업에)"
   if apply "" 되돌림 off; then
     form "   되돌림 성공"
     stop 3 "$1 — 키를 비우고 버튼만으로 되돌렸다(포털 MESSAGE CONTENT 토글 · 채널 권한 확인 후 다시 on)"
@@ -152,9 +154,13 @@ revert() {  # <이유>
 }
 
 CHANGED=0
+OFF_STARTED=0
+PREV_SET=0
 on_signal() {
   trap '' INT TERM HUP
   [[ $CHANGED -eq 1 ]] && revert "중단 신호"
+  # off 는 키를 비운 뒤일 수 있다 — 안전한 쪽(다음 메시지부터 무시)이지만 재시작·판정은 미확인 (PR-3 사전 리뷰 info 1)
+  [[ $OFF_STARTED -eq 1 ]] && stop 130 "중단 신호 — 끄기 진행 중(키 비움 뒤일 수 있다 · 재시작·판정 미확인 → off 를 다시)"
   stop 130 "중단 신호 — 바꾸기 전"
 }
 
@@ -200,6 +206,7 @@ main() {
   form "   플랫폼 설정 권한 $perm"
   [[ "$perm" == 600 ]] || stop 1 "플랫폼 설정 권한이 600 이 아니다"
   node_step state "$file" "$KEY" || stop 1 "플랫폼 설정을 읽지 못했다"
+  grep -q "플랫폼 파일 키 설정됨" <<<"${FORM[*]: -1}" && PREV_SET=1
 
   local st
   read -r -a st <<<"$(bot_state "$file")"
@@ -223,6 +230,7 @@ main() {
   form "   백업 만듦(비공개 위치)"
 
   if [[ "$cmd" == off ]]; then
+    OFF_STARTED=1
     apply "" off off || stop 3 "끄기 판정 실패 — 위 줄 확인(pm2 env 키 있음 · PLEIADES_ENV_FILE 다름이면 파일을 비워도 꺼지지 않는다)"
     emit_form "통과 — 메시지 수신 꺼짐(버튼만)"
     exit 0
