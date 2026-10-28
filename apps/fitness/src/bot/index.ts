@@ -8,15 +8,13 @@ import { registerSleepCommand } from "./commands/sleep";
 import { registerWeightCommand } from "./commands/weight";
 import { registerSyncCommand } from "./commands/sync";
 import { registerReportCommand } from "./commands/report";
-import { registerAiCommands, handleAiQuestion } from "./commands/ai";
-import { isFoodInput, handleFoodInput, handleFoodKcalCommand } from "./commands/food";
-import {
-  registerFoodEditCallback,
-  handleFoodEditInput,
-} from "./commands/food-edit-callback";
+import { registerAiCommands, TELEGRAM_AI_CHANNEL } from "./commands/ai";
+import { registerFoodEditCallback } from "./commands/food-edit-callback";
 import { registerFoodPhotoHandler } from "./commands/food-photo";
-import { shouldConsumeAsEditInput } from "./commands/food-edit-state";
+import { decideFreeText } from "./commands/free-text";
 import { registerAutoAdjustCallback } from "./notifications/auto-adjust-callback";
+import { telegramStateKeyOf } from "./core/state-key";
+import { telegramOutput } from "./utils/telegram-reply";
 
 // IPv6 라우트가 없는 환경(국내 ISP 등)에서 node-fetch의 IPv6 우선 시도가
 // ETIMEDOUT으로 누적되는 것을 방지하기 위해 IPv4 강제. keepAlive로 cron 호출 시
@@ -60,34 +58,15 @@ export function getBot(): Bot {
   // #309 (M14 Phase 2 #5): 음식 사진 → Vision 자동 로그.
   registerFoodPhotoHandler(bot);
 
-  // 자연어 fallback
+  // 자연어 fallback — 4 분기(/food_kcal → 편집 대기 → 식단 → AI) 판단은 commands/free-text.ts (pleiades#364).
+  // 상태 키 `telegram:<chatId>` — chat id 가 숫자가 아니면 편집 대기 분기를 건너뛴다(옛 가드와 같다).
+  // bot = 이 폴링 인스턴스 — 인증 만료 감지 시 관리자 alert (#253).
   bot.on("message:text", async (ctx) => {
-    const text = ctx.message.text.trim();
-
-    // #283: /food_kcal <id> <kcal> — 이전 로그 kcal 정정 (backward-compat).
-    // #350: 명령은 편집 pending 보다 우선. pending 중에도 명령이 정상 동작해야 한다.
-    if (/^\/food_kcal(?:@\S+)?\b/.test(text)) {
-      await handleFoodKcalCommand(ctx, text);
-      return;
-    }
-
-    // #292: 편집 프롬프트 이후 입력 처리 (kcal 숫자 / 설명 텍스트).
-    // #350: reply_to_message 대신 chat 단위 pending 으로 라우팅 (force_reply 폐기).
-    // 소비 조건은 shouldConsumeAsEditInput 에 있다 (회귀 스크립트가 검증 — 사전 리뷰 P0).
-    const chatId = ctx.chat?.id;
-    if (typeof chatId === "number" && shouldConsumeAsEditInput(chatId, text)) {
-      const handled = await handleFoodEditInput(ctx);
-      if (handled) return;
-    }
-
-    // 식단 입력 감지
-    if (isFoodInput(text)) {
-      await handleFoodInput(ctx, text);
-      return;
-    }
-
-    // 그 외 텍스트 → AI 질문 (#253: bot 참조 전달로 인증 만료 감지 시 관리자 alert 가능).
-    await handleAiQuestion(ctx, text, { bot });
+    await decideFreeText(ctx.message.text.trim(), telegramOutput(ctx), {
+      stateKey: telegramStateKeyOf(ctx.chat),
+      aiChannel: TELEGRAM_AI_CHANNEL,
+      bot,
+    });
   });
 
   return bot;

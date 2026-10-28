@@ -21,6 +21,8 @@
 // 단일 사용자 · 단일 프로세스 시나리오라 in-memory Map 으로 충분. Bot 재시작 시 pending
 // 소실은 TTL 5분 이내에 입력하지 않으면 어차피 무효이므로 실질 영향 없음.
 
+import type { StateKey } from "../core/state-key";
+
 const ACTIVE_TTL_MS = 5 * 60 * 1000;
 
 // 검증 실패 재프롬프트 허용 횟수. 초과 시 pending 을 종료한다.
@@ -41,14 +43,16 @@ interface PendingEdit {
   retries: number;
 }
 
-const pending = new Map<number, PendingEdit>();
+// pleiades 009 D-2 PR-2 (pleiades#364 · 설계 S): 키는 문자열 상태 키(`../core/state-key`) — 텔레그램 `telegram:<chatId>` ·
+// Discord `discord:<channelId>:<userId>`. 이 모듈은 키의 모양을 보지 않는다(접두가 플랫폼을 가른다).
+const pending = new Map<StateKey, PendingEdit>();
 
 /** 만료된 entry 를 제거하고 유효한 것만 반환 (lazy delete). */
-function getActive(chatId: number): PendingEdit | null {
-  const entry = pending.get(chatId);
+function getActive(key: StateKey): PendingEdit | null {
+  const entry = pending.get(key);
   if (!entry) return null;
   if (Date.now() > entry.activeUntil) {
-    pending.delete(chatId);
+    pending.delete(key);
     return null;
   }
   return entry;
@@ -59,11 +63,11 @@ function getActive(chatId: number): PendingEdit | null {
  * action 미지정 시 kcal (기존 호환).
  */
 export function markPendingEdit(
-  chatId: number,
+  key: StateKey,
   logId: string,
   action: PendingEditAction = "kcal",
 ): void {
-  pending.set(chatId, {
+  pending.set(key, {
     logId,
     action,
     activeUntil: Date.now() + ACTIVE_TTL_MS,
@@ -76,14 +80,14 @@ export function markPendingEdit(
  * 한도를 초과하면 pending 을 삭제하고 false — 호출부는 종료 안내를 보내야 한다.
  * pending 이 이미 없으면 false.
  */
-export function registerRetry(chatId: number): boolean {
-  const entry = getActive(chatId);
+export function registerRetry(key: StateKey): boolean {
+  const entry = getActive(key);
   if (!entry) return false;
   if (entry.retries >= MAX_RETRIES) {
-    pending.delete(chatId);
+    pending.delete(key);
     return false;
   }
-  pending.set(chatId, {
+  pending.set(key, {
     ...entry,
     retries: entry.retries + 1,
     activeUntil: Date.now() + ACTIVE_TTL_MS,
@@ -92,8 +96,8 @@ export function registerRetry(chatId: number): boolean {
 }
 
 /** 유효한 pending 존재 여부. 만료된 entry 는 여기서 정리된다. */
-export function isPendingEdit(chatId: number): boolean {
-  return getActive(chatId) !== null;
+export function isPendingEdit(key: StateKey): boolean {
+  return getActive(key) !== null;
 }
 
 /**
@@ -101,23 +105,23 @@ export function isPendingEdit(chatId: number): boolean {
  * 재시도 가능해야 하기 때문 (Codex P2 #293). 만료 시 null.
  */
 export function peekPendingEdit(
-  chatId: number,
+  key: StateKey,
 ): { logId: string; action: PendingEditAction } | null {
-  const entry = getActive(chatId);
+  const entry = getActive(key);
   if (!entry) return null;
   return { logId: entry.logId, action: entry.action };
 }
 
 /**
- * #350: bot/index.ts message:text 라우팅 판단. 이 chat 의 텍스트를 편집 입력으로 소비할지.
+ * #350: 자유 텍스트 라우팅 판단(pleiades#364 이후 commands/free-text.ts). 이 키의 텍스트를 편집 입력으로 소비할지.
  * 사전 리뷰 P0 (#350): index.ts 인라인 조건이면 회귀 스크립트가 커버할 수 없어 추출.
  *
  * 슬래시로 시작하는 텍스트는 소비하지 않는다 — pending 중 미등록 명령(`/foo`)이 kcal 값으로
  * 먹히는 것을 방지. 등록된 명령은 grammy command 핸들러가 먼저 잡아 여기까지 오지 않는다.
  */
-export function shouldConsumeAsEditInput(chatId: number, text: string): boolean {
+export function shouldConsumeAsEditInput(key: StateKey, text: string): boolean {
   if (text.startsWith("/")) return false;
-  return isPendingEdit(chatId);
+  return isPendingEdit(key);
 }
 
 /**
@@ -134,19 +138,19 @@ export function shouldConsumeAsEditInput(chatId: number, text: string): boolean 
  * 한쪽을 빠뜨릴 수 있다.
  */
 export async function armPendingEdit(
-  chatId: number,
+  key: StateKey,
   logId: string,
   action: PendingEditAction,
   sendPrompt: () => Promise<void>,
 ): Promise<void> {
-  deletePendingEdit(chatId);
+  deletePendingEdit(key);
   await sendPrompt();
-  markPendingEdit(chatId, logId, action);
+  markPendingEdit(key, logId, action);
 }
 
 /** 성공 처리 · 취소 후 entry 명시 삭제. */
-export function deletePendingEdit(chatId: number): void {
-  pending.delete(chatId);
+export function deletePendingEdit(key: StateKey): void {
+  pending.delete(key);
 }
 
 /**
@@ -154,10 +158,10 @@ export function deletePendingEdit(chatId: number): void {
  * 오래된 프롬프트의 취소 버튼을 뒤늦게 눌렀을 때 그 사이 시작된 **다른** 편집을 취소하지
  * 않기 위함. 반환값: 실제로 취소했으면 true.
  */
-export function clearPendingEditFor(chatId: number, logId: string): boolean {
-  const entry = getActive(chatId);
+export function clearPendingEditFor(key: StateKey, logId: string): boolean {
+  const entry = getActive(key);
   if (!entry || entry.logId !== logId) return false;
-  pending.delete(chatId);
+  pending.delete(key);
   return true;
 }
 
@@ -165,7 +169,7 @@ export function clearPendingEditFor(chatId: number, logId: string): boolean {
 // 아무 메시지도 안 보내는 chat 의 entry 가 남지 않도록 보강.
 setInterval(() => {
   const now = Date.now();
-  for (const [chatId, entry] of pending.entries()) {
-    if (now > entry.activeUntil) pending.delete(chatId);
+  for (const [key, entry] of pending.entries()) {
+    if (now > entry.activeUntil) pending.delete(key);
   }
 }, 60 * 1000).unref?.();
