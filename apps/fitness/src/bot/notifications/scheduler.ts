@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import type { Bot } from "grammy";
+import type { NotifyBot } from "./notifier";
 import { generateMorningReport, generateEveningReport } from "../../lib/daily-report";
 import { generateWeeklyReport } from "../../lib/weekly-report";
 import { runAutoAdjustProposal } from "./auto-adjust";
@@ -15,7 +15,7 @@ import { BOT_NOTIFY_CTX, notifierFor } from "./notifier";
 
 /** 리포트 cron 콜백 공통 처리: 단계별 로그 + 실패 시 텔레그램 알림 (조용한 실패 차단) */
 async function runReportCron(
-  bot: Bot,
+  bot: NotifyBot,
   label: string,
   emoji: string,
   generate: () => Promise<string>
@@ -60,7 +60,7 @@ async function runReportCron(
   }
 }
 
-export function startBotScheduler(bot: Bot) {
+export function startBotScheduler(bot: NotifyBot) {
   // 모닝 리포트 (08:00 KST)
   const morningSchedule = process.env.MORNING_REPORT_CRON ?? "0 8 * * *";
   cron.schedule(

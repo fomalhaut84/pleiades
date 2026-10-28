@@ -201,6 +201,23 @@ class DeployDryRun(unittest.TestCase):
         self.assertLess(out.index("pleiades-fin-mcp"), out.index("pleiades-fin-web"))
         self.assertLess(out.index("pleiades-fin-web"), out.index("pleiades-fin-bot"))
 
+    def test_install_order_root_then_chat_then_app(self):
+        # 009 D-1 PR-1(#345) — chat 은 notify dist(루트 prepare) 뒤에 설치·빌드하고, 앱 봇 번들보다 먼저 dist 가 있어야 한다
+        for app, d in (("fin", "finance"), ("fit", "fitness")):
+            with self.subTest(app=app):
+                out = deploy(self.root, app, "--dry-run").stdout
+                root_ci = out.index("+ npm ci")
+                chat_ci = out.index("+ npm --prefix packages/chat ci")
+                chat_tsc = out.index("+ npx --no-install tsc -p packages/chat")
+                app_ci = out.index(f"+ (apps/{d}) npm ci")
+                self.assertLess(root_ci, chat_ci)
+                self.assertLess(chat_ci, chat_tsc)
+                self.assertLess(chat_tsc, app_ci)
+
+    def test_activate_skips_chat_install(self):
+        out = deploy(self.root, "fit", "--dry-run", "--activate").stdout
+        self.assertNotIn("packages/chat", out)
+
     def test_refuses_app_env_readable_by_other_accounts(self):
         # #193 — 옛 서비스 .env 가 664 였다(T-2 U7). 같은 서버에 다른 계정·서비스가 돈다(U3)
         env = self.root / "apps/finance/.env"
@@ -709,6 +726,51 @@ class ScriptText(unittest.TestCase):
         self.assertNotRegex(self.CODE, r"migrate\s+deploy")
         self.assertNotIn("ecosystem.config", self.CODE)
         self.assertNotRegex(self.CODE, r"apps/[^/\s]+/deploy/")
+
+
+class SmokeIsolation(unittest.TestCase):
+    """fin 빌드 스모크 3겹 차단 (009 D-1 · #349 · 1-6 · R13). 서버 빌드는 운영자 셸 env(운영 플랫폼 설정 경로 포함)로 돈다.
+
+    ① `--smoke` 인자는 운영 pm2 정의에 없어야 한다(운영자 셸은 argv 를 못 바꾼다 — env 키와 달리 `--update-env` 로 새지 않는다)
+    ② 스모크가 인자를 실제로 넘기고, 진입점이 등록보다 먼저 그 인자를 본다 ③ 자식 env 가 운영 접속값을 덮는다.
+    """
+
+    SMOKE = (REPO / "apps/finance/scripts/smoke-bot-bundle.mjs").read_text()
+    ENTRY = (REPO / "apps/finance/src/bot/standalone.ts").read_text()
+
+    def setUp(self):
+        self.fake = FakeRoot()
+
+    def tearDown(self):
+        self.fake.close()
+
+    def test_bot_definitions_have_no_args_and_no_smoke(self):
+        for app in DIRS:
+            r = load_config(self.fake.root, app, None)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            bots = [a for a in json.loads(r.stdout)["apps"] if a["name"].endswith("-bot")]
+            self.assertEqual(len(bots), 1, app)
+            self.assertNotIn("args", bots[0], app)
+        self.assertNotIn("--smoke", (HERE / "pleiades.config.cjs").read_text())
+
+    def test_smoke_passes_arg_and_entry_checks_it_before_any_registration(self):
+        self.assertIn("const SMOKE_ARG = '--smoke'", self.SMOKE)
+        self.assertRegex(self.SMOKE, r"spawn\(process\.execPath, \[BUNDLE, SMOKE_ARG\]")
+        self.assertIn("const SMOKE_ARG = '--smoke'", self.ENTRY)
+        check = self.ENTRY.index("process.argv.includes(SMOKE_ARG)")
+        self.assertLess(self.ENTRY.index("'[bot] standalone 프로세스 시작...'"), check)  # 스모크 READY_MARKER 가 먼저
+        for first in ("schedulePriceUpdates()", "scheduleNotifications()", "startDiscordInteractions(", "startTelegramPolling(", "getBot("):
+            self.assertLess(check, self.ENTRY.index(first, self.ENTRY.index("async function main")), first)
+
+    def test_smoke_child_env_overrides_operational_values(self):
+        # 지우지 않고 덮는다 — 지우면 dotenv 가 앱 .env 로, platformEnv 가 다음 출처로 다시 채운다
+        self.assertRegex(self.SMOKE, r"PLEIADES_ENV_FILE: '/[^']+'")  # 비어 있지 않은 경로 — 빈 문자열이면 루트 .env 탐색으로 떨어진다
+        self.assertIn("DISCORD_BOT_TOKEN_FINANCE: ''", self.SMOKE)
+        self.assertIn("DISCORD_BOT_TOKEN_FITNESS: ''", self.SMOKE)
+        self.assertRegex(self.SMOKE, r"DATABASE_URL: DUMMY_DATABASE_URL")
+        self.assertIn("@127.0.0.1:1/", self.SMOKE)
+        self.assertIn("TELEGRAM_BOT_TOKEN: INVALID_TOKEN", self.SMOKE)
+        self.assertIn("env: smokeEnv(process.env)", self.SMOKE)
 
 
 class GitignoreStatePaths(unittest.TestCase):

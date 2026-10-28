@@ -37,8 +37,11 @@ vi.mock('@/bot/notifications/alert-dispatcher', async () => {
 
 describe('POST /api/alerts/history/[id]/retry', () => {
   const OLD_ENV = process.env.TELEGRAM_ALLOWED_CHAT_IDS
+  const OLD_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 
   beforeEach(async () => {
+    // pleiades 009 D-1 (#350): 토큰이 없으면 텔레그램 수신자 0 — 실제 설정처럼 토큰을 넣는다(CI 에는 앱 .env 가 없다 · #354)
+    process.env.TELEGRAM_BOT_TOKEN = '1:x'
     process.env.TELEGRAM_ALLOWED_CHAT_IDS = '111'
     const { prisma } = await import('@/lib/prisma')
     vi.mocked(prisma.alertHistory.findUnique).mockReset()
@@ -50,6 +53,8 @@ describe('POST /api/alerts/history/[id]/retry', () => {
 
   afterEach(() => {
     process.env.TELEGRAM_ALLOWED_CHAT_IDS = OLD_ENV
+    if (OLD_TOKEN === undefined) delete process.env.TELEGRAM_BOT_TOKEN
+    else process.env.TELEGRAM_BOT_TOKEN = OLD_TOKEN
   })
 
   const buildReq = () => new Request('http://x/api/alerts/history/x/retry', { method: 'POST' })

@@ -11,7 +11,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { getBot } from '@/bot/index'
+import { notifyBot } from '@/bot/index'
 import { escapeHtml } from '@/bot/utils/telegram'
 import { notifierFor, recipients, Route, htmlContent, lastErrorOf } from './notifier'
 import { generateTAReport } from '@/lib/ta/engine'
@@ -159,7 +159,7 @@ async function runScan(): Promise<void> {
   if (!(await isCustomStrategyAlertsEnabled())) return
 
   // 봇 초기화 실패 시 DB 상태 갱신 전에 fail-fast — "발동 기록만 남고 발송은 안 됨" 방지
-  const bot = getBot()
+  const bot = notifyBot()
 
   const strategies = await prisma.customStrategy.findMany({
     where: { isActive: true },

@@ -6,7 +6,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { getBot } from '@/bot/index'
+import { notifyBot } from '@/bot/index'
 import { calcGiftTaxSummary } from '@/lib/tax/gift-tax'
 import { formatKRWFull } from '@/bot/utils/formatter'
 import { escapeHtml, h } from '@/bot/utils/telegram'
@@ -61,7 +61,7 @@ export async function checkBudgetUsage(): Promise<void> {
   const usagePct = (totalSpent / totalBudget) * 100
   if (usagePct < warnPct) return
 
-  const bot = getBot()
+  const bot = notifyBot()
   const emoji = usagePct >= 100 ? '🚨' : '⚠️'
   const message =
     `${emoji} ${h.b('예산 경고')} (${year}년 ${month}월)\n\n` +
@@ -93,7 +93,7 @@ export async function checkGiftTaxLimit(accountId: string): Promise<void> {
   const summary = calcGiftTaxSummary(deposits, true)
   if (summary.usageRate < 0.8) return
 
-  const bot = getBot()
+  const bot = notifyBot()
   const emoji = summary.usageRate >= 1.0 ? '🚨' : '⚠️'
   const pct = (summary.usageRate * 100).toFixed(0)
   const message =

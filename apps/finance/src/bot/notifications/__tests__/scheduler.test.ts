@@ -72,6 +72,31 @@ describe('scheduleNotifications — 수신자 확인은 실행 시점에', () =>
     expect(sendRSUReminders).toHaveBeenCalledTimes(1)
   })
 
+  // pleiades 009 D-1 (pleiades#349) — 토큰 게이트(E3)를 없애도 실행 판정과 전송이 같은 출처를 본다(E2)
+  it('토큰 없음 — 알림 크론은 그대로 등록된다(게이트 제거)', async () => {
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', '')
+    const { count } = await registered()
+    expect(count).toBeGreaterThan(0)
+  })
+
+  // 회귀: 009 D-1 감사 [A]#5 — 토큰 없음 + chat ID 남음 + 라우트 텔레그램이면 생성 뒤 버리지 않고 아예 실행하지 않는다
+  it('토큰 없음 + 텔레그램 chat ID 있음 + 라우트 텔레그램 — 실행하지 않는다(생성 호출 0)', async () => {
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', '')
+    vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '11')
+    const { run } = await registered()
+    await run()
+    expect(sendRSUReminders).not.toHaveBeenCalled()
+  })
+
+  it('토큰 없음 + Discord 라우트 — 실행한다', async () => {
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', '')
+    vi.stubEnv('NOTIFY_ALLOWED_CHANNEL', 'discord')
+    vi.stubEnv('DISCORD_WEBHOOK_FINANCE', 'https://discord.com/api/webhooks/1/tok')
+    const { run } = await registered()
+    await run()
+    expect(sendRSUReminders).toHaveBeenCalledTimes(1)
+  })
+
   it('텔레그램 수신자만 있어도 실행한다 (키보드·PDF 는 텔레그램)', async () => {
     const { run } = await registered()
     vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '11')

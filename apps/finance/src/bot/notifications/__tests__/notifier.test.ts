@@ -6,7 +6,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from 'grammy'
 import {
+  BOT_PROCESS_WITHOUT_TELEGRAM,
   discordBotConfig,
+  interactiveRecipientCount,
+  notifierForChat,
   htmlContent,
   interactiveNotifierFor,
   notifierFor,
@@ -34,6 +37,7 @@ describe('fin notifier — 라우트별 채널', () => {
     sendMessage.mockClear()
     fetchMock.mockClear()
     vi.stubGlobal('fetch', fetchMock)
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', '1:x') // 009 D-1: 토큰이 없으면 텔레그램 수신자 0 — 아래 블록
     vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '11,22')
     vi.stubEnv('TELEGRAM_ADMIN_CHAT_IDS', '99')
     vi.stubEnv('DISCORD_WEBHOOK_FINANCE', WEBHOOK_FIN)
@@ -182,5 +186,64 @@ describe('fin notifier — 라우트별 채널', () => {
       await expect(sendFileIfDiscord('ALLOWED', pdf, 'c')).resolves.toBe('no-webhook')
       expect(fetchMock).not.toHaveBeenCalled()
     })
+  })
+})
+
+// pleiades 009 D-1 (pleiades#349) — 텔레그램 토큰이 없으면 텔레그램 수신자 0 — 실행 판정(recipients · telegramRecipients ·
+// fileRecipientCount · interactiveRecipientCount)과 전송이 같은 출처(TELEGRAM_TARGETS)를 본다 · Discord 라우트는 그대로.
+describe('fin notifier — 텔레그램 토큰 없음 (009 D-1)', () => {
+  const fetchMock = vi.fn<(url: string, init: { body: string }) => Promise<unknown>>(async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ id: 'd1' }),
+    text: async () => '',
+  }))
+
+  beforeEach(() => {
+    fetchMock.mockClear()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', '')
+    vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '11,22')
+    vi.stubEnv('TELEGRAM_ADMIN_CHAT_IDS', '99')
+    vi.stubEnv('DISCORD_WEBHOOK_FINANCE', WEBHOOK_FIN)
+    vi.stubEnv('DISCORD_WEBHOOK_ADMIN', WEBHOOK_ADMIN)
+    vi.stubEnv('NOTIFY_ALLOWED_CHANNEL', '')
+    vi.stubEnv('NOTIFY_ADMIN_CHANNEL', '')
+    vi.stubEnv('NOTIFY_INTERACTIVE_CHANNEL', '')
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
+  it('chat ID 가 있어도 텔레그램 수신자 0 — 판정 함수 전부', () => {
+    expect(recipients.targetCount(Route.ALLOWED)).toBe(0)
+    expect(recipients.targetCount(Route.ADMIN)).toBe(0)
+    expect(telegramRecipients(Route.ALLOWED)).toEqual([])
+    expect(fileRecipientCount(Route.ALLOWED)).toBe(0)
+    expect(interactiveRecipientCount()).toBe(0)
+  })
+
+  it('텔레그램 라우트 전송은 throw 없이 0 · /브리핑(notifierForChat)도 0', async () => {
+    expect(await notifierFor(BOT_PROCESS_WITHOUT_TELEGRAM).notify(Route.ALLOWED, htmlContent('x'))).toMatchObject({ total: 0 })
+    expect(await interactiveNotifierFor(BOT_PROCESS_WITHOUT_TELEGRAM).notify(Route.ALLOWED, htmlContent('x'))).toMatchObject({ total: 0 })
+    expect(await notifierForChat(BOT_PROCESS_WITHOUT_TELEGRAM, 11).notify(Route.ALLOWED, htmlContent('x'))).toMatchObject({ total: 0 })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  // 회귀: PR-3 사전 리뷰 info 1 — 토큰은 있는데 텔레그램 없는 핸들(401 중지 알림)로 텔레그램 라우트에 보내면 transport 를 만들려다 던졌다
+  it('토큰이 있어도 텔레그램 없는 핸들이면 텔레그램 라우트 수신자 0 — 던지지 않는다', async () => {
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', '1:x')
+    expect(await notifierFor(BOT_PROCESS_WITHOUT_TELEGRAM).notify(Route.ADMIN, htmlContent('x'))).toMatchObject({ total: 0 })
+    expect(await interactiveNotifierFor(BOT_PROCESS_WITHOUT_TELEGRAM).notify(Route.ALLOWED, htmlContent('x'))).toMatchObject({ total: 0 })
+    expect(recipients.targetCount(Route.ADMIN)).toBe(1) // 실행 판정은 토큰 기준 그대로(봇 프로세스는 api 있는 핸들로 보낸다)
+  })
+
+  it('Discord 라우트는 토큰 없이도 보낸다 — ADMIN 포함', async () => {
+    vi.stubEnv('NOTIFY_ALLOWED_CHANNEL', 'discord')
+    vi.stubEnv('NOTIFY_ADMIN_CHANNEL', 'discord')
+    expect(await notifierFor(BOT_PROCESS_WITHOUT_TELEGRAM).notify(Route.ALLOWED, htmlContent('x'))).toMatchObject({ sent: 1 })
+    expect(await notifierFor(BOT_PROCESS_WITHOUT_TELEGRAM).notify(Route.ADMIN, htmlContent('x'))).toMatchObject({ sent: 1 })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })

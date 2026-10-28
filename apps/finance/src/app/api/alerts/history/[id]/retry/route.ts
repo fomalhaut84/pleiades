@@ -5,7 +5,7 @@
  * - `deliveryStatus === 'failed'` 인 row 만 대상. 그 외는 400 (이미 성공/부분성공).
  * - 원본 row 는 mutate 하지 않고 새 AlertHistory row 를 append (`retriedFrom` 마커).
  * - Rate limit: 동일 id 5분내 재시도 금지 (스팸 방지). 프로세스 in-memory.
- * - Bot 인스턴스는 `getBot()` 첫 호출 시점에 지연 초기화되며 (module load 시점 아님),
+ * - Bot 인스턴스는 `notifyBot()`(→ 토큰이 있을 때만 `getBot()`) 첫 호출 시점에 지연 초기화되며 (module load 시점 아님 · 토큰이 없으면 텔레그램 없는 핸들 · pleiades 009 D-1),
  *   `alert-dispatcher` 의 `redispatchAlert` 내부에서 호출된다. static import 는 안전 —
  *   `alert-dispatcher` 모듈 로드가 곧 Bot 초기화는 아니기 때문이다.
  */

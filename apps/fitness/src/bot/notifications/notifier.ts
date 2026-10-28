@@ -8,6 +8,9 @@
 // 값은 pleiades 루트 `.env`(`platformEnv` · 프로세스 env 우선)에서 읽는다 — 앱 실행 방식과 무관.
 // 키보드(인터랙션) 메시지는 `interactiveNotifierFor` — 별도 스위치 `NOTIFY_INTERACTIVE_CHANNEL=discord` 면 Discord 봇(M-6b-3 #151),
 // 아니면 텔레그램(혼합 운영 Q11). 버튼 클릭은 봇 프로세스의 gateway(`discord-interactions.ts`)가 받는다.
+//
+// pleiades 009 D-1 (pleiades#347): 인자는 grammY `Bot` 대신 `NotifyBot` — 봇 프로세스가 텔레그램 토큰 없이 떠도 Discord 라우트로
+// 보낸다. 텔레그램 토큰이 없으면(`api` 없음) 텔레그램 라우트 수신자는 0 이다(호출부 가드의 `total === 0` 과 같은 출처).
 
 import type { Bot } from "grammy";
 import {
@@ -48,22 +51,39 @@ export function webhookEnv(name: string): string {
 
 const discordWebhooks = () => ({ [DISCORD_ALIAS]: webhookEnv("DISCORD_WEBHOOK_FITNESS") });
 
+/**
+ * 아웃바운드 핸들 — **봇 프로세스만** 넘긴다. 웹은 넘기지 않는다(undefined) — admin-alerts 의 `!bot` 은
+ * "웹은 alert 를 보내지 않는다" 는 뜻이고 텔레그램 유무와 무관하다(009 1-7).
+ * `api` 는 텔레그램 토큰이 있을 때만 있다. grammY `Bot` 은 그대로 이 모양이다.
+ */
+export type NotifyBot = { readonly api?: Bot["api"] };
+
+/** 텔레그램 없이 뜬 봇 프로세스의 핸들 — Discord 라우트는 그대로 보내고 텔레그램 라우트는 수신자 0. */
+export const BOT_PROCESS_WITHOUT_TELEGRAM: NotifyBot = Object.freeze({});
+
+/** 텔레그램 수신자 — 토큰(api)이 없으면 0. 수신자가 0 이면 transport 를 만들지 않는다(패키지 코어). */
+const telegramTargets = (bot: NotifyBot) => (): string[] => (bot.api === undefined ? [] : TELEGRAM_ALLOWED());
+
+function telegramTransport(bot: NotifyBot): Transport {
+  // telegramTargets 가 api 없을 때 0 을 돌려주므로 여기 닿지 않는다 — 닿으면 설계 위반이라 던진다
+  if (bot.api === undefined) throw new Error("텔레그램 토큰 없이 텔레그램 transport 를 만들 수 없다");
+  return createTelegramTransport({ api: bot.api });
+}
+
 /** Discord 를 골랐는데 웹훅이 비면 수신자 0 — 텔레그램 env 미설정과 같은 의미(가드가 건너뛴다). */
-function allowedTargets(): string[] {
-  if (!allowedUsesDiscord()) return TELEGRAM_ALLOWED();
+function allowedTargets(bot: NotifyBot): string[] {
+  if (!allowedUsesDiscord()) return telegramTargets(bot)();
   return discordWebhooks()[DISCORD_ALIAS] === "" ? [] : [DISCORD_ALIAS];
 }
 
 /**
- * 봇 인스턴스로 파사드를 만든다. 호출부가 이미 `bot` 을 인자로 받으므로 `bot.api` 를 그대로 넘긴다(D-2).
+ * 봇 핸들로 파사드를 만든다(D-2).
  * transport 는 인스턴스의 첫 전송 때 정해지므로 인스턴스를 오래 쥐지 않고 보낼 때마다 만든다(PR #144 Codex P2).
  */
-export function notifierFor(bot: Bot): Notifier {
+export function notifierFor(bot: NotifyBot): Notifier {
   const transport = (): Transport =>
-    allowedUsesDiscord()
-      ? createDiscordTransport({ webhooks: discordWebhooks })
-      : createTelegramTransport({ api: bot.api });
-  return createNotifier({ transport, targets: { ALLOWED: allowedTargets } });
+    allowedUsesDiscord() ? createDiscordTransport({ webhooks: discordWebhooks }) : telegramTransport(bot);
+  return createNotifier({ transport, targets: { ALLOWED: () => allowedTargets(bot) } });
 }
 
 /**
@@ -72,11 +92,11 @@ export function notifierFor(bot: Bot): Notifier {
  *   discord → fit 봇: `first.ref` = Discord 메시지 id · `first.target` = 별칭 `fitness` · 봇 설정이 없으면 수신자 0
  * 어느 쪽이든 `WorkoutAdjustment.telegramMessageId`·`telegramChatId` 에 그대로 저장된다(003 §6-2 D-a · 읽기 경로 0 · Q61).
  */
-export function interactiveNotifierFor(bot: Bot): Notifier {
+export function interactiveNotifierFor(bot: NotifyBot): Notifier {
   if (!interactiveUsesDiscord()) {
     return createNotifier({
-      transport: createTelegramTransport({ api: bot.api }),
-      targets: { ALLOWED: TELEGRAM_ALLOWED },
+      transport: () => telegramTransport(bot),
+      targets: { ALLOWED: telegramTargets(bot) },
     });
   }
   // Discord 봇 — first.ref(Discord 메시지 id)·target(별칭)이 telegramMessageId·ChatId 에 들어간다(003 §6-2 D-a · 읽기 경로 0)

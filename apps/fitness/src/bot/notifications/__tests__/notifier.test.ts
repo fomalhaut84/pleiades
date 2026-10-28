@@ -5,7 +5,7 @@ import cron from "node-cron";
 import prisma from "@/lib/prisma";
 import { generateMorningReport } from "@/lib/daily-report";
 import { recommendTodayWorkout } from "@/mcp/tools/recommend-today-workout";
-import { BOT_NOTIFY_CTX, interactiveNotifierFor, notifierFor } from "../notifier";
+import { BOT_NOTIFY_CTX, BOT_PROCESS_WITHOUT_TELEGRAM, interactiveNotifierFor, notifierFor } from "../notifier";
 import { startBotScheduler } from "../scheduler";
 import { runAutoAdjustProposal } from "../auto-adjust";
 import { runAutoAdjustMaintenance } from "../auto-adjust-cron";
@@ -520,5 +520,61 @@ describe("notifierFor — NOTIFY_ALLOWED_CHANNEL=discord", () => {
     expect(r).toMatchObject({ sent: 2, total: 2, first: { target: "1", ref: "55" } });
     expect(sendMessage).toHaveBeenCalledTimes(2);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+// pleiades 009 D-1 (pleiades#347) — 텔레그램 토큰 없이 뜬 봇 프로세스. `api` 없는 핸들은 텔레그램 수신자 0(throw 없음) ·
+// Discord 라우트는 그대로 · admin alert 는 "봇 프로세스냐"(핸들 유무)로 판단한다 — 웹(undefined)만 건너뛴다(1-7).
+describe("NotifyBot — 텔레그램 토큰 없는 봇 프로세스 (009 D-1)", () => {
+  const WEBHOOK = "https://discord.com/api/webhooks/3/fit-token";
+  const fetchMock = vi.fn<(url: string, init: { body: string }) => Promise<unknown>>(async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ id: "d9" }),
+    text: async () => "",
+  }));
+  const db = vi.mocked(prisma, true);
+
+  beforeEach(() => {
+    fetchMock.mockClear();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("TELEGRAM_ALLOWED_CHAT_IDS", "1,2");
+    vi.stubEnv("DISCORD_WEBHOOK_FITNESS", WEBHOOK);
+    db.systemAlertState.updateMany.mockReset();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("텔레그램 라우트 + chat ID 가 있어도 수신자 0 — throw 없이 아무것도 보내지 않는다", async () => {
+    const r = await notifierFor(BOT_PROCESS_WITHOUT_TELEGRAM).notify(Route.ALLOWED, html("x"), BOT_NOTIFY_CTX);
+    expect(r).toMatchObject({ sent: 0, failed: 0, total: 0 });
+    expect(notifierFor(BOT_PROCESS_WITHOUT_TELEGRAM).targetCount(Route.ALLOWED)).toBe(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("키보드 메시지도 텔레그램 라우트면 수신자 0", async () => {
+    const kb = { inline_keyboard: [[{ text: "ok", callback_data: "c" }]] } as unknown as InlineKeyboard;
+    const r = await interactiveNotifierFor(BOT_PROCESS_WITHOUT_TELEGRAM).notify(Route.ALLOWED, html("제안", kb), BOT_NOTIFY_CTX);
+    expect(r.total).toBe(0);
+  });
+
+  it("Discord 라우트는 토큰 없이도 웹훅으로 보낸다", async () => {
+    vi.stubEnv("NOTIFY_ALLOWED_CHANNEL", "discord");
+    const r = await notifierFor(BOT_PROCESS_WITHOUT_TELEGRAM).notify(Route.ALLOWED, html("<b>리포트</b>"), BOT_NOTIFY_CTX);
+    expect(r).toMatchObject({ sent: 1, total: 1 });
+    expect(fetchMock.mock.calls[0][0]).toBe(`${WEBHOOK}?wait=true`);
+  });
+
+  it("admin alert — 토큰 없는 봇 프로세스는 보낸다 · 웹(핸들 없음)은 건너뛴다 (!bot 의미 보존 · 1-7)", async () => {
+    vi.stubEnv("NOTIFY_ALLOWED_CHANNEL", "discord");
+    db.systemAlertState.updateMany.mockResolvedValue({ count: 1 } as never);
+    await notifyClaudeAuthExpiredIfNeeded(undefined, new Error("Please run /login · authentication failed"));
+    expect(db.systemAlertState.updateMany).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await notifyClaudeAuthExpiredIfNeeded(BOT_PROCESS_WITHOUT_TELEGRAM, new Error("Please run /login · authentication failed"));
+    expect(db.systemAlertState.updateMany).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

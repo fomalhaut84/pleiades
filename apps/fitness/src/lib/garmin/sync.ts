@@ -1,5 +1,5 @@
 import type { GarminConnect } from "@flow-js/garmin-connect";
-import type { Bot } from "grammy";
+import type { NotifyBot } from "@/bot/notifications/notifier";
 import prisma from "@/lib/prisma";
 import { withReauth } from "./client";
 import { advanceLastSyncDateWhere, clampCursorToToday } from "./sync-metadata";
@@ -318,7 +318,7 @@ export async function syncAll(
      * #256: 각 dataType 실패 시 관리자에게 Telegram alert 발송 시도용 Bot 참조.
      * 미제공 시 알림 skip (서버 로그만). Garmin 재인증 실패 자동 감지 목적.
      */
-    notifyBot?: Bot;
+    notifyBot?: NotifyBot;
     /**
      * #414: `activities` 타입만 startDate 를 `today − N일` 까지 앞당긴다 (넓히기만). 과거 활동의 레이스 표시 · 이름 · 유형 변경이
      * 다음 싱크에 반영되도록 — 매일 cron (3일 창) · 봇 /sync 가 `ACTIVITY_RECHECK_DAYS` 를 넘긴다. 리포트 전 싱크 (지연 민감) ·

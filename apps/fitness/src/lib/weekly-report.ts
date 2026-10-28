@@ -35,7 +35,7 @@ import type { ReportJob } from "@/generated/prisma/client";
  * 이미 저장된 강도는 재싱크가 덮어쓰지 않는다).
  */
 async function preSyncForWeekly(
-  options?: { notifyBot?: import("grammy").Bot },
+  options?: { notifyBot?: import("@/bot/notifications/notifier").NotifyBot },
 ): Promise<void> {
   const NON_PROFILE_TYPES = [
     "sleep",
@@ -124,7 +124,7 @@ async function preSyncForWeekly(
 async function generateAndSaveWeekly(
   reportDate: string,
   force = false,
-  notifyBot?: import("grammy").Bot,
+  notifyBot?: import("@/bot/notifications/notifier").NotifyBot,
 ): Promise<void> {
   // #210: daily-report generateReport 와 대칭 — force=false 면 기존 record 재사용.
   // 기존엔 항상 delete+create 라 "주간 생성" 버튼 (force=false) 클릭 시 기존 리포트
@@ -176,7 +176,7 @@ async function runWeeklyViaJob(params: {
   force: boolean;
   reportDate: string;
   background: boolean;
-  notifyBot?: import("grammy").Bot;
+  notifyBot?: import("@/bot/notifications/notifier").NotifyBot;
 }): Promise<{ job: ReportJob; result: string | null }> {
   const { force, reportDate, background, notifyBot } = params;
   const { job, created } = await createOrGetReportJob({
@@ -231,7 +231,7 @@ export async function startWeeklyReportJob(params: {
 /** cron / 완료 대기 흐름. #212: /ai 리포트 명시 요청 시 force=true 지원 (daily 와 대칭). */
 export async function generateWeeklyReport(
   force = false,
-  options?: { notifyBot?: import("grammy").Bot },
+  options?: { notifyBot?: import("@/bot/notifications/notifier").NotifyBot },
 ): Promise<string> {
   const { result, job } = await runWeeklyViaJob({
     force,

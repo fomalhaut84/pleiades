@@ -4,7 +4,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { getBot } from '@/bot/index'
+import { notifyBot } from '@/bot/index'
 import {
   calcCostKRW,
   calcCurrentValueKRW,
@@ -21,7 +21,7 @@ import { notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
 import { KST_OFFSET_MS } from '@/lib/kst-date'
 
 export async function sendDailySummary(): Promise<void> {
-  const bot = getBot()
+  const bot = notifyBot()
 
   // 환율 조회
   const fxCache = await prisma.priceCache.findUnique({

@@ -17,7 +17,7 @@ import type { ReportJob } from "@/generated/prisma/client";
  * #256: notifyBot 이 있으면 Garmin 재인증 실패 자동 감지 → 관리자 alert.
  */
 export async function preSyncForReport(
-  options?: { notifyBot?: import("grammy").Bot },
+  options?: { notifyBot?: import("@/bot/notifications/notifier").NotifyBot },
 ): Promise<void> {
   try {
     console.log("[report] 리포트 전 데이터 싱크 시작");
@@ -41,7 +41,7 @@ async function generateReport(
   category: DailyCategory,
   force = false,
   reportDate?: string,
-  notifyBot?: import("grammy").Bot,
+  notifyBot?: import("@/bot/notifications/notifier").NotifyBot,
 ): Promise<string> {
   const dateStr = kstDateStr();
   // reportDate 명시됐으면 그것 사용 (UI 재생성 버튼 등 자정 넘김 케이스).
@@ -104,7 +104,7 @@ async function runReportViaJob(params: {
   force: boolean;
   reportDate: string;
   background: boolean;
-  notifyBot?: import("grammy").Bot;
+  notifyBot?: import("@/bot/notifications/notifier").NotifyBot;
 }): Promise<{ job: ReportJob; result: string | null }> {
   const { category, force, reportDate, background, notifyBot } = params;
 
@@ -187,7 +187,7 @@ function buildReportError(category: string, job: ReportJob): Error {
 export async function generateMorningReport(
   force = false,
   reportDate?: string,
-  options?: { notifyBot?: import("grammy").Bot },
+  options?: { notifyBot?: import("@/bot/notifications/notifier").NotifyBot },
 ): Promise<string> {
   const { result, job } = await runReportViaJob({
     category: "morning_report",
@@ -203,7 +203,7 @@ export async function generateMorningReport(
 export async function generateEveningReport(
   force = false,
   reportDate?: string,
-  options?: { notifyBot?: import("grammy").Bot },
+  options?: { notifyBot?: import("@/bot/notifications/notifier").NotifyBot },
 ): Promise<string> {
   const { result, job } = await runReportViaJob({
     category: "evening_report",
