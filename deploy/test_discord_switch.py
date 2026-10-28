@@ -8,6 +8,7 @@ Discord 에는 보내지 않는다(로컬 HTTP 스텁 · PLEIADES_DISCORD_BASE) 
 
 import http.server
 import json
+import re
 import os
 import shutil
 import stat
@@ -347,6 +348,28 @@ class JudgeStringContract(unittest.TestCase):
                 for needle in self.UNSET:
                     self.assertIn(f"[discord-{app}] {needle}", text)
                 self.assertRegex(text, rf"""(label: ['"]discord-{app}['"]|LABEL = ['"]discord-{app}['"])""")
+
+    # 009 D-2 PR-3 (#367 · [A]C2 · W12): 메시지 수신 줄 2 · 4014 강등 줄 · 강등 알림 경고는 스위치 판정을 건드리지 않는다 —
+    # `gateway 종료 코드`(자동 off) · 미설정 2문구 grep 에 걸리지 않는다(버튼은 살아 있다)
+    def test_inbound_lines_do_not_trip_switch_greps(self):
+        fit = (self.REPO / "apps/fitness/src/bot/notifications/discord-interactions.ts").read_text()
+        gateway = (self.REPO / "packages/chat/src/gateway.ts").read_text()
+        lines = [
+            "[discord-fit] 메시지 수신 켜짐(대화 채널)",
+            "[discord-fit] 메시지 수신 꺼짐(버튼만)",
+            "4014 강등 알림 미전송",
+        ]
+        for line in lines:
+            self.assertIn(line, fit)
+        degrade = "MESSAGE CONTENT 미허용(4014) — intents ${intents} 로 낮춰 다시 접속한다(메시지 수신 꺼짐) · 포털 토글을 켠다"
+        self.assertIn(degrade, gateway)
+        lines.append(f"[discord-fit] {degrade.replace('${intents}', '0')}")
+        unset_re = re.compile(r"\[discord-fit\] (봇 토큰·채널 미설정|DISCORD_ALLOWED_USER_IDS 비어 있음)")
+        for line in lines:
+            with self.subTest(line=line):
+                self.assertNotIn("gateway 종료 코드", line)
+                self.assertNotIn("gateway 준비 완료", line)
+                self.assertIsNone(unset_re.search(line))
 
 
 if __name__ == "__main__":

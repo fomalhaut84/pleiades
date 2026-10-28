@@ -4,6 +4,9 @@
  * notify `discord-gateway.ts`(M-6b-2 #149)의 수명주기를 그대로 잇는다: HELLO → heartbeat · IDENTIFY/RESUME · READY ·
  * ACK 누락 = 좀비 → 끊고 RESUME · RECONNECT(7) · INVALID_SESSION(9) · 치명 close 코드는 멈춘다.
  * 바뀐 것: intents(메시지 수신) · **IDENTIFY 직전 보호 검사**(0-5) — 거부되면 접속하지 않고 허용 시각까지 기다린다.
+ * **4014 강등(009 D-2 F1):** `fallbackIntents` 가 있으면 4014 에서 멈추지 않고 그 intents 로 낮춰 새로 IDENTIFY 한다 —
+ * 프로세스 수명 동안 유지(이후 새 세션도 낮춘 값 · RESUME 은 intents 를 보내지 않는다) · 낮춘 값으로 받은 4014 는 치명.
+ * 강등 로그는 `gateway 종료 코드` 를 쓰지 않는다 — 버튼은 살아 있으므로 `discord-switch.sh` 판정을 실패시키지 않는다.
  *
  * **로그 문자열 계약(0-4 · L16′):** `[<label>] gateway 준비 완료` — `deploy/discord-switch.sh` 가 이 줄로 판정한다. 바꾸지 않는다.
  */
@@ -34,6 +37,10 @@ export type IdentifyDecision = { ok: true } | { ok: false; retryAt: number; reas
 export interface GatewayOptions {
   token: () => string;
   intents: number;
+  /** 4014(intent 미허용)일 때 낮출 intents — 없으면 4014 는 치명(지금과 같다). */
+  fallbackIntents?: number;
+  /** 강등 1회 알림 — 실패(throw·reject)는 삼키고 경고만 · 재접속은 그대로. */
+  onIntentsFallback?: () => void | Promise<void>;
   onDispatch: (type: string, data: unknown) => void;
   /** IDENTIFY(새 세션) 직전에만 부른다 — RESUME 은 횟수 제한 대상이 아니다. */
   beforeIdentify?: () => Promise<IdentifyDecision>;
@@ -97,6 +104,7 @@ export function createGateway(opts: GatewayOptions): Gateway {
   let timer: unknown;
   let acked = true;
   let failures = 0;
+  let intents = opts.intents;
 
   const clearBeats = (): void => {
     if (heartbeat !== undefined) clearInterval(heartbeat);
@@ -144,6 +152,15 @@ export function createGateway(opts: GatewayOptions): Gateway {
     later(delay);
   };
 
+  const notifyFallback = (): void => {
+    const warn = (err: unknown): void => logger.warn(`[${label}] intents 강등 알림 실패: ${sanitizeError(err)}`);
+    try {
+      Promise.resolve(opts.onIntentsFallback?.()).catch(warn);
+    } catch (err) {
+      warn(err);
+    }
+  };
+
   const identify = async (sock: WebSocketLike): Promise<void> => {
     let decision: IdentifyDecision = { ok: true };
     if (opts.beforeIdentify !== undefined) {
@@ -164,7 +181,7 @@ export function createGateway(opts: GatewayOptions): Gateway {
     }
     sendPayload({
       op: 2,
-      d: { token: opts.token(), intents: opts.intents, properties: { os: 'linux', browser: 'pleiades', device: 'pleiades' } },
+      d: { token: opts.token(), intents, properties: { os: 'linux', browser: 'pleiades', device: 'pleiades' } },
     });
   };
 
@@ -254,6 +271,15 @@ export function createGateway(opts: GatewayOptions): Gateway {
       ws = undefined;
       clearBeats();
       if (NEW_SESSION_CLOSE.has(code)) forgetSession();
+      if (code === 4014 && opts.fallbackIntents !== undefined && intents !== opts.fallbackIntents) {
+        // FATAL 분기보다 먼저 — 강등이면 `gateway 종료 코드` 줄을 남기지 않는다(L16′)
+        intents = opts.fallbackIntents;
+        forgetSession();
+        logger.error(`[${label}] MESSAGE CONTENT 미허용(4014) — intents ${intents} 로 낮춰 다시 접속한다(메시지 수신 꺼짐) · 포털 토글을 켠다`);
+        notifyFallback();
+        scheduleReconnect();
+        return;
+      }
       if (FATAL_CLOSE.has(code)) {
         stopped = true;
         const hint = code === 4014 ? ' — 포털에서 MESSAGE CONTENT INTENT 를 켠다' : '(토큰·권한 확인)';

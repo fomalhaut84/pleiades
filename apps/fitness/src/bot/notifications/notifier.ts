@@ -122,3 +122,16 @@ export function discordBotConfig(): { token: string; channelId: string; allowedU
     .filter((v) => /^\d{5,25}$/.test(v));
   return { token, channelId, allowedUserIds, ready: token !== "" && /^\d{5,25}$/.test(channelId) };
 }
+
+/** 대화 채널 키(009 D-2 Kb1 · pleiades#367) — 비어 있거나 형식이 아니면 메시지 수신을 켜지 않는다(스위치를 겸한다). */
+export const DISCORD_CHAT_CHANNEL_KEY = "DISCORD_CHANNEL_ID_FITNESS_CHAT";
+
+/**
+ * fit 대화 채널 ID — 부를 때마다 읽는다(프로세스 env → 루트 `.env`). 형식(숫자 5~25자리)이 아니면 "".
+ * 알림 채널(`DISCORD_CHANNEL_ID_FITNESS`)과 같은 값이어도 된다(사용자 2026-10-28 · `_workspace/009/d2/05_live_chat.md` D-1).
+ * 값은 로그에 쓰지 않는다.
+ */
+export function discordChatChannelId(): string {
+  const v = (platformEnv(DISCORD_CHAT_CHANNEL_KEY) ?? "").trim();
+  return /^\d{5,25}$/.test(v) ? v : "";
+}

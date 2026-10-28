@@ -11,7 +11,8 @@ import { markStaleRecalcDate } from "@/lib/nutrition/stale-recalc";
 import { findRecentSameDescription } from "@/lib/nutrition/repeat-lookup";
 import { applyKcalCorrection, scaleMacrosForNewKcal } from "@/lib/nutrition/scale-macros";
 import { scaleItemsForNewKcal } from "@/lib/nutrition/food-items";
-import { buildFoodInlineKeyboard } from "./food-edit-callback";
+import { foodLogButtons } from "./food-edit-callback";
+import { plainReply, type ReplyOutput } from "../core/reply";
 
 /**
  * recalculateCalorieBalance 를 소규모 재시도. 최종 실패면 stale-recalc 큐에 date 를 기록해
@@ -171,22 +172,20 @@ export function isCommandLikeDescription(description: string): boolean {
   return false;
 }
 
-interface BotCtx {
-  reply: (text: string, options?: Record<string, unknown>) => Promise<unknown>;
-  /** grammy Context — replyWithChatAction 은 optional (테스트 mock 편의). */
-  replyWithChatAction?: (action: "typing") => Promise<unknown>;
-}
-
-export async function handleFoodInput(
-  ctx: BotCtx,
-  text: string
+/**
+ * 식단 텍스트(`점심 김치찌개 밥`) → FoodLog 저장 → kcal 추정 → 기록 완료 + [kcal][설명][삭제] 버튼(판단 · pleiades#364).
+ * 플랫폼 중립 — 응답은 `out` 으로(텔레그램 어댑터 · Discord 어댑터).
+ */
+export async function decideFoodInput(
+  text: string,
+  out: ReplyOutput,
 ) {
   const meal = MEAL_PATTERNS.find((m) => m.pattern.test(text));
   const mealType = meal?.type ?? "snack";
   const description = text.replace(meal?.pattern ?? "", "").trim();
 
   if (!description) {
-    await ctx.reply("먹은 것을 함께 입력해주세요.\n예: 점심 김치찌개 밥 계란후라이");
+    await out.reply(plainReply("먹은 것을 함께 입력해주세요.\n예: 점심 김치찌개 밥 계란후라이"));
     return;
   }
 
@@ -207,12 +206,12 @@ export async function handleFoodInput(
       description.length > PREVIEW_MAX
         ? description.slice(0, PREVIEW_MAX) + "…"
         : description;
-    await ctx.reply(
+    await out.reply(plainReply(
       `"${mealLabel} ${preview}" 이 식단이 맞나요?\n` +
         `식단이면 음식 이름/양으로 다시 입력해주세요 (예: ${mealLabel} 김치찌개 밥 1공기).\n` +
         `AI 질문·명령·리포트 요청이면 원문 앞에 /ai 를 붙여 다시 보내주세요.\n` +
         `참고: 리포트 관련 요청은 "${mealLabel}" + "리포트" 단어 사용 (조식/석식/보고서 등 alias 는 인식 안 될 수 있음).`,
-    );
+    ));
     return;
   }
 
@@ -250,7 +249,7 @@ export async function handleFoodInput(
   // repeat hit 이 complete 이면 AI 호출 스킵이라 필요 없지만 lookup 결과 확정 후에 판단.
   if (needsAI) {
     try {
-      await ctx.replyWithChatAction?.("typing");
+      await out.typing();
     } catch {
       // ignore
     }
@@ -404,30 +403,29 @@ export async function handleFoodInput(
   } else {
     lines.push("⚠️ kcal 자동 추정 실패 — [수정] 버튼으로 직접 입력하세요");
   }
-  await ctx.reply(lines.join("\n"), {
-    reply_markup: buildFoodInlineKeyboard(log.id),
-  });
+  await out.reply(plainReply(lines.join("\n"), { buttons: foodLogButtons(log.id) }));
 }
 
 /**
- * `/food_kcal <id> <kcal>` — 이전 로그의 kcal 을 사용자 지정 값으로 갱신.
- * id 는 handleFoodInput 응답에 노출된 것.
+ * `/food_kcal <id> <kcal>` — 이전 로그의 kcal 을 사용자 지정 값으로 갱신(판단 · pleiades#364).
+ * id 는 decideFoodInput 응답에 노출된 것. `raw` 는 `/food_kcal` 로 시작하는 원문(텔레그램 `@봇이름` 허용 —
+ * 다른 플랫폼 어댑터는 접두를 `/food_kcal` 로 맞춰 넘긴다).
  */
-export async function handleFoodKcalCommand(
-  ctx: BotCtx,
+export async function decideFoodKcal(
   raw: string,
+  out: ReplyOutput,
 ): Promise<void> {
   // "/food_kcal <id> <kcal>" 또는 "/food_kcal@botname <id> <kcal>"
   // 사전 리뷰 P0: regex 상한 (\d{1,5}) 을 이후 검증 (kcal <= 10000) 과 일치시켜 UX 통일.
   const m = raw.match(/^\/food_kcal(?:@\S+)?\s+(\S+)\s+(\d{1,5})\s*$/);
   if (!m) {
-    await ctx.reply("사용법: /food_kcal <id> <kcal>\n예: /food_kcal ckabc123 650");
+    await out.reply(plainReply("사용법: /food_kcal <id> <kcal>\n예: /food_kcal ckabc123 650"));
     return;
   }
   const [, id, kcalStr] = m;
   const kcal = parseInt(kcalStr, 10);
   if (!Number.isFinite(kcal) || kcal < 0 || kcal > 10000) {
-    await ctx.reply("kcal 은 0~10000 범위 정수여야 합니다.");
+    await out.reply(plainReply("kcal 은 0~10000 범위 정수여야 합니다."));
     return;
   }
   try {
@@ -436,9 +434,9 @@ export async function handleFoodKcalCommand(
     const correction = await applyKcalCorrection(prisma, id, kcal);
     if (!correction.ok) {
       if (correction.reason === "not-found") {
-        await ctx.reply(`해당 id 를 찾을 수 없습니다: ${id}`);
+        await out.reply(plainReply(`해당 id 를 찾을 수 없습니다: ${id}`));
       } else {
-        await ctx.reply("동시 수정 감지, 잠시 후 다시 시도해주세요.");
+        await out.reply(plainReply("동시 수정 감지, 잠시 후 다시 시도해주세요."));
       }
       return;
     }
@@ -447,7 +445,7 @@ export async function handleFoodKcalCommand(
       select: { date: true, description: true, mealType: true },
     });
     if (!updated) {
-      await ctx.reply(`해당 id 를 찾을 수 없습니다: ${id}`);
+      await out.reply(plainReply(`해당 id 를 찾을 수 없습니다: ${id}`));
       return;
     }
     // Codex P2: 재계산 실패해도 kcal 은 이미 저장됨 → 백필이 이 row 를 다시 안 뽑음 →
@@ -456,16 +454,16 @@ export async function handleFoodKcalCommand(
     const recalcOk = await withHistoryCacheBump(() => recalcWithRetry(updated.date, 1)); // #403 (major 1: kcal 보정도 bump)
     const label = updated.mealType ? MEAL_LABELS[updated.mealType] ?? updated.mealType : "";
     const tail = recalcOk ? "" : "\n⚠️ 일일 요약 재계산 실패 — 잠시 후 자동 재시도됩니다.";
-    await ctx.reply(
+    await out.reply(plainReply(
       `✏️ ${label} "${updated.description}" → ${kcal.toLocaleString("ko-KR")} kcal 로 수정됨${tail}`,
-    );
+    ));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("Record to update not found") || msg.includes("P2025")) {
-      await ctx.reply(`해당 id 를 찾을 수 없습니다: ${id}`);
+      await out.reply(plainReply(`해당 id 를 찾을 수 없습니다: ${id}`));
       return;
     }
     console.error("[bot/food_kcal] 수정 실패:", msg);
-    await ctx.reply("kcal 수정 중 오류가 발생했습니다.");
+    await out.reply(plainReply("kcal 수정 중 오류가 발생했습니다."));
   }
 }

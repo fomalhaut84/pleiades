@@ -67,8 +67,10 @@ const msgCtx = (text: string, attachments: MessageContext['attachments'] = []): 
   messageId: '3',
   text,
   attachments,
+  sentAt: 0,
   reply: vi.fn(),
   replyFile: vi.fn(),
+  typing: vi.fn(),
 });
 
 describe('router — 메시지 (C-6 일반 메시지)', () => {
@@ -77,13 +79,40 @@ describe('router — 메시지 (C-6 일반 메시지)', () => {
     expect(splitCommand('기록\n둘째 줄')).toEqual({ head: '기록', args: '둘째 줄' });
     expect(splitCommand('   ')).toEqual({ head: '', args: '' });
   });
-  it('명령은 앞 `/` 가 있어도 없어도 같다 · 영문은 대소문자 무시', async () => {
+  it("prefix 'optional' 명령은 앞 `/` 가 있어도 없어도 같다 · 영문은 대소문자 무시", async () => {
     const h = vi.fn(async () => {});
-    const r = createRouter().command(['잔고', 'Balance'], h);
+    const r = createRouter().command(['잔고', 'Balance'], h, { prefix: 'optional' });
     await r.handleMessage(msgCtx('/잔고 삼성'));
     await r.handleMessage(msgCtx('잔고'));
     await r.handleMessage(msgCtx('/balance'));
     expect(h.mock.calls.map((c) => (c as unknown[])[1])).toEqual(['삼성', '', '']);
+  });
+  // 회귀: 009 D-2 R3 — 영어 명령 이름(sleep · run)이 자연어·편집 입력의 첫 단어를 가로채지 않는다
+  it('명령은 기본으로 앞 `/` 가 있어야 한다 — 접두 없는 첫 단어는 정규식·나머지로', async () => {
+    const cmd = vi.fn(async () => {});
+    const rest = vi.fn(async () => {});
+    const r = createRouter().command(['sleep', 'today'], cmd).fallback(rest);
+    await r.handleMessage(msgCtx('sleep 어땠어?'));
+    await r.handleMessage(msgCtx('/today'));
+    await r.handleMessage(msgCtx('/TODAY 상세'));
+    await r.handleMessage(msgCtx('today'));
+    expect(cmd.mock.calls.map((c) => (c as unknown[])[1])).toEqual(['', '상세']);
+    expect(rest.mock.calls.map((c) => ((c as unknown[])[0] as MessageContext).text)).toEqual(['sleep 어땠어?', 'today']);
+  });
+  // 회귀: 009 D-2 X-1 실측 — Discord 입력창은 `/…` 를 앱 명령 검색으로 가로챈다 → 앱은 `!` 접두
+  it("commandPrefix '!' — `!today` 만 명령 · `/today` 와 접두 없는 첫 단어는 나머지로", async () => {
+    const cmd = vi.fn(async () => {});
+    const rest = vi.fn(async () => {});
+    const r = createRouter({ commandPrefix: '!' }).command(['today', 'food_kcal'], cmd).fallback(rest);
+    await r.handleMessage(msgCtx('!today'));
+    await r.handleMessage(msgCtx('!FOOD_KCAL 350'));
+    await r.handleMessage(msgCtx('/today'));
+    await r.handleMessage(msgCtx('today 뭐 먹지'));
+    expect(cmd.mock.calls.map((c) => (c as unknown[])[1])).toEqual(['', '350']);
+    expect(rest.mock.calls.map((c) => ((c as unknown[])[0] as MessageContext).text)).toEqual(['/today', 'today 뭐 먹지']);
+  });
+  it.each(['', ' ', '! '])('commandPrefix %j 는 거부한다', (bad) => {
+    expect(() => createRouter({ commandPrefix: bad })).toThrow(/commandPrefix/);
   });
   it('명령 → 정규식(등록 순) → 나머지 순서', async () => {
     const order: string[] = [];
@@ -92,7 +121,7 @@ describe('router — 메시지 (C-6 일반 메시지)', () => {
       .hears(/체중/, async () => void order.push('hears2'))
       .command('체중', async () => void order.push('cmd'))
       .fallback(async () => void order.push('fallback'));
-    await r.handleMessage(msgCtx('체중'));
+    await r.handleMessage(msgCtx('/체중'));
     await r.handleMessage(msgCtx('오늘 체중 72'));
     await r.handleMessage(msgCtx('안녕'));
     expect(order).toEqual(['cmd', 'hears1:72', 'fallback']);
@@ -110,8 +139,8 @@ describe('router — 메시지 (C-6 일반 메시지)', () => {
   it('일치가 없으면 false · 빌더는 원본을 바꾸지 않는다', async () => {
     const base = createRouter();
     const withCmd = base.command('a', async () => {});
-    expect(await base.handleMessage(msgCtx('a'))).toBe(false);
-    expect(await withCmd.handleMessage(msgCtx('a'))).toBe(true);
+    expect(await base.handleMessage(msgCtx('/a'))).toBe(false);
+    expect(await withCmd.handleMessage(msgCtx('/a'))).toBe(true);
   });
 });
 
