@@ -19,7 +19,7 @@ export async function decideToday(now: Date = new Date()): Promise<BotReply> {
   ]);
 
   if (!daily && !sleep) {
-    return plainReply("오늘 데이터가 아직 없습니다. /sync 로 싱크해보세���.");
+    return plainReply("오늘 데이터가 아직 없습니다. /sync 로 싱크해보세요.");
   }
 
   const lines: string[] = ["📊 <b>오늘 요약</b>\n"];

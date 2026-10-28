@@ -152,7 +152,7 @@ describe("라우팅 표", () => {
     expect(await router.handleMessage(ctx)).toBe(true);
     // 안내문의 /sync 는 Discord 접두로 보인다(문구 끝 깨진 글자는 서비스 유래 · 고치지 않는다 Q57)
     expect(texts()).toHaveLength(1);
-    expect(texts()[0]).toMatch(/^오늘 데이터가 아직 없습니다\. !sync 로 싱크해보세/);
+    expect(texts()[0]).toBe("오늘 데이터가 아직 없습니다. !sync 로 싱크해보세요."); // #365 깨진 문자 수정
     expect(askAdvisor).not.toHaveBeenCalled();
   });
 

@@ -269,7 +269,7 @@ describe("명령 11 — 텔레그램 호출열", () => {
     const { ctx, calls } = tctx({});
     await command("today")(ctx);
     // 원문 그대로 — 소스에 U+FFFD 3자가 들어 있다(서비스 유래 · Q57 고치지 않는다)
-    expect(calls).toEqual([["reply", "오늘 데이터가 아직 없습니다. /sync 로 싱크해보세���."]]);
+    expect(calls).toEqual([["reply", "오늘 데이터가 아직 없습니다. /sync 로 싱크해보세요."]]);
   });
 
   it("/today — 요약 HTML", async () => {
