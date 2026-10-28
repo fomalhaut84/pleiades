@@ -316,5 +316,38 @@ class DiscordSwitch(unittest.TestCase):
         self.assertIn("서버 전용", r.stdout)
 
 
+class JudgeStringContract(unittest.TestCase):
+    """discord-switch.sh 판정 문자열 ↔ 실제로 그 줄을 찍는 파일 (009 D-1 · #347 · L16′ · N10).
+
+    스위치는 봇 로그에서 세 가지를 grep 한다 — 준비 완료 · 종료 코드 · 미설정 2문구. 앞 둘은 gateway 패키지가,
+    미설정 문구는 앱 파일이 찍는다. 어느 한쪽만 바뀌면 운영 판정이 조용히 깨지므로(준비를 못 보면 자동 off) 함께 고정한다.
+    """
+
+    REPO = HERE.parent
+    SWITCH = SH.read_text()
+    APPS = {"fin": "finance", "fit": "fitness"}
+    UNSET = ("봇 토큰·채널 미설정", "DISCORD_ALLOWED_USER_IDS 비어 있음")
+
+    def test_switch_greps_the_three_lines(self):
+        for needle in ("gateway 준비 완료", "gateway 종료 코드", *self.UNSET):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, self.SWITCH)
+
+    def test_gateway_packages_print_ready_and_fatal_with_label(self):
+        for pkg in ("packages/chat/src/gateway.ts", "packages/notify/src/discord-gateway.ts"):
+            text = (self.REPO / pkg).read_text()
+            with self.subTest(pkg=pkg):
+                self.assertIn("`[${label}] gateway 준비 완료`", text)
+                self.assertIn("`[${label}] gateway 종료 코드 ${code}", text)
+
+    def test_apps_print_unset_lines_literally_and_use_switch_label(self):
+        for app, d in self.APPS.items():
+            text = (self.REPO / f"apps/{d}/src/bot/notifications/discord-interactions.ts").read_text()
+            with self.subTest(app=app):
+                for needle in self.UNSET:
+                    self.assertIn(f"[discord-{app}] {needle}", text)
+                self.assertRegex(text, rf"""(label: ['"]discord-{app}['"]|LABEL = ['"]discord-{app}['"])""")
+
+
 if __name__ == "__main__":
     unittest.main()

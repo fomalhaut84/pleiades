@@ -31,6 +31,7 @@
   "dependencies": {
     "@flow-js/garmin-connect": "^1.6.16",
     "@modelcontextprotocol/sdk": "^1.31.0",
+    "@pleiades/chat": "file:../../packages/chat",
     "@pleiades/notify": "file:../../packages/notify",
     "@prisma/client": "^6.19.3",
     "date-fns": "^4.1.0",

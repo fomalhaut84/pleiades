@@ -1,21 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // pleiades M-6b-3 (pleiades#151) — Discord 버튼 → decideAutoAdjust(텔레그램과 같은 판단) → 본인 안내 · 수락/거절은 버튼 제거
+// pleiades 009 D-1 (pleiades#347) — gateway 를 @pleiades/chat 으로(action · notice · setButtons([]))
 vi.mock("../auto-adjust-callback", () => ({ decideAutoAdjust: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({ default: {} }));
 
 import { decideAutoAdjust } from "../auto-adjust-callback";
-import { handleDiscordButton, startDiscordInteractions } from "../discord-interactions";
+import { discordRouter, handleDiscordButton, startDiscordInteractions } from "../discord-interactions";
+import { BOT_PROCESS_WITHOUT_TELEGRAM } from "../notifier";
 
-function ctx(customId: string) {
+function ctx(action: string) {
   return {
-    customId,
+    platform: "discord" as const,
+    action,
     userId: "1",
     channelId: "2",
     messageId: "3",
     edit: vi.fn(async () => {}),
-    reply: vi.fn(async () => {}),
-    removeButtons: vi.fn(async () => {}),
+    send: vi.fn(async () => ({ id: "m", channelId: "2", edit: async () => {}, setButtons: async () => {} })),
+    notice: vi.fn(async () => {}),
+    setButtons: vi.fn(async () => {}),
   };
 }
 
@@ -27,21 +31,21 @@ describe("handleDiscordButton", () => {
     const c = ctx("auto_adjust:accept:adj1");
     await handleDiscordButton(c);
     expect(decideAutoAdjust).toHaveBeenCalledWith("auto_adjust:accept:adj1");
-    expect(c.reply).toHaveBeenCalledWith("✅ 반영");
-    expect(c.removeButtons).toHaveBeenCalledTimes(1);
+    expect(c.notice).toHaveBeenCalledWith("✅ 반영");
+    expect(c.setButtons).toHaveBeenCalledWith([]);
   });
 
   it("스누즈 — 안내만 · 버튼 유지", async () => {
     vi.mocked(decideAutoAdjust).mockResolvedValue({ notice: "💤 1시간 뒤", removeKeyboard: false });
     const c = ctx("auto_adjust:snooze:adj1");
     await handleDiscordButton(c);
-    expect(c.removeButtons).not.toHaveBeenCalled();
+    expect(c.setButtons).not.toHaveBeenCalled();
   });
 
   it("버튼 제거 실패는 무시(텔레그램과 같이)", async () => {
     vi.mocked(decideAutoAdjust).mockResolvedValue({ notice: "ok", removeKeyboard: true });
     const c = ctx("auto_adjust:reject:adj1");
-    c.removeButtons.mockRejectedValue(new Error("404"));
+    c.setButtons.mockRejectedValue(new Error("404"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     await expect(handleDiscordButton(c)).resolves.toBeUndefined();
     warn.mockRestore();
@@ -51,10 +55,10 @@ describe("handleDiscordButton", () => {
   it("안내 실패에도 버튼 제거는 계속", async () => {
     vi.mocked(decideAutoAdjust).mockResolvedValue({ notice: "✅", removeKeyboard: true });
     const c = ctx("auto_adjust:accept:adj1");
-    c.reply.mockRejectedValue(new Error("Unknown interaction"));
+    c.notice.mockRejectedValue(new Error("Unknown interaction"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     await expect(handleDiscordButton(c)).resolves.toBeUndefined();
-    expect(c.removeButtons).toHaveBeenCalledTimes(1);
+    expect(c.setButtons).toHaveBeenCalledWith([]);
     warn.mockRestore();
   });
 
@@ -62,7 +66,13 @@ describe("handleDiscordButton", () => {
     const c = ctx("vest:confirm:r1");
     await handleDiscordButton(c);
     expect(decideAutoAdjust).not.toHaveBeenCalled();
-    expect(c.reply).toHaveBeenCalledWith("알 수 없는 요청입니다.");
+    expect(c.notice).toHaveBeenCalledWith("알 수 없는 요청입니다.");
+  });
+
+  it("라우터는 모든 버튼을 핸들러로 보낸다 — 알 수 없는 접두사도 처리됨(chat 의 실패 안내가 나가지 않는다)", async () => {
+    const c = ctx("vest:confirm:r1");
+    await expect(discordRouter.handleButton(c)).resolves.toBe(true);
+    expect(c.notice).toHaveBeenCalledWith("알 수 없는 요청입니다.");
   });
 });
 
@@ -73,7 +83,7 @@ describe("startDiscordInteractions", () => {
     vi.stubEnv("DISCORD_BOT_TOKEN_FITNESS", "");
     vi.stubEnv("DISCORD_CHANNEL_ID_FITNESS", "");
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    expect(startDiscordInteractions()).toBeUndefined();
+    expect(startDiscordInteractions(BOT_PROCESS_WITHOUT_TELEGRAM)).toBeUndefined();
     log.mockRestore();
   });
 });

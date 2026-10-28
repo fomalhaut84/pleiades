@@ -3,7 +3,7 @@
 //   1) snoozed + snoozeUntil <= now → 원 조정 메시지 재전송 후 decision=pending, snoozeUntil=null
 //   2) (pending|snoozed) + proposedAt+8h 초과 or 자정 KST 지남 → decision=expired
 
-import type { Bot } from "grammy";
+import type { NotifyBot } from "./notifier";
 import prisma from "@/lib/prisma";
 import { sanitizeError } from "../utils/error";
 import { buildAutoAdjustKeyboard, escapeHtml, typeKo } from "./auto-adjust";
@@ -63,7 +63,7 @@ function kstMidnightToday(): Date {
 
 /** 스누즈 재전송 1건 처리. best-effort — 실패해도 다른 건 진행. */
 async function processSnoozed(
-  bot: Bot,
+  bot: NotifyBot,
   adj: {
     id: string;
     proposedType: string;
@@ -116,7 +116,7 @@ async function processSnoozed(
  * 스누즈 재전송 + TTL expire 사이클 (1 tick).
  * cron 이 아니라 캘러가 호출 — scheduler.ts 에서 setInterval 로 5분 주기 실행.
  */
-export async function runAutoAdjustMaintenance(bot: Bot): Promise<void> {
+export async function runAutoAdjustMaintenance(bot: NotifyBot): Promise<void> {
   const now = new Date();
   const ttlCutoff = new Date(now.getTime() - TTL_HOURS * 60 * 60 * 1000);
   const midnight = kstMidnightToday();

@@ -4,7 +4,7 @@
 //
 // 2026-07-21 사고 배경: Claude 인증 만료가 자동 감지 없이 사용자 UX 저하로만 확인. 재발 방지.
 
-import type { Bot } from "grammy";
+import type { NotifyBot } from "@/bot/notifications/notifier";
 import prisma from "@/lib/prisma";
 import { sanitizeError } from "@/bot/utils/error";
 import { Route, html } from "@pleiades/notify";
@@ -186,7 +186,7 @@ interface AlertOptions {
  *   4) sent=0 or 예외 → conditional deleteMany 로 예약 해제 (next 실패 시 즉시 재시도)
  */
 async function notifyRateLimitedAlert(
-  bot: Bot | undefined,
+  bot: NotifyBot | undefined,
   err: unknown,
   opts: AlertOptions,
 ): Promise<void> {
@@ -268,7 +268,7 @@ async function notifyRateLimitedAlert(
 // ─── 카테고리별 wrapper ─────────────────────────────────────────────────────
 
 export async function notifyClaudeAuthExpiredIfNeeded(
-  bot: Bot | undefined,
+  bot: NotifyBot | undefined,
   err: unknown,
 ): Promise<void> {
   if (classifyClaudeError(err) !== "claude_auth_expired") return;
@@ -289,7 +289,7 @@ export async function notifyClaudeAuthExpiredIfNeeded(
 }
 
 export async function notifyMcpTransportDownIfNeeded(
-  bot: Bot | undefined,
+  bot: NotifyBot | undefined,
   err: unknown,
 ): Promise<void> {
   if (classifyClaudeError(err) !== "mcp_transport_down") return;
@@ -311,7 +311,7 @@ export async function notifyMcpTransportDownIfNeeded(
 }
 
 export async function notifyGarminAuthFailedIfNeeded(
-  bot: Bot | undefined,
+  bot: NotifyBot | undefined,
   err: unknown,
 ): Promise<void> {
   if (!isGarminAuthError(err)) return;
@@ -334,7 +334,7 @@ export async function notifyGarminAuthFailedIfNeeded(
 
 /** #514: OMRON 로그인 실패 (계정 · 비밀번호 · 앱 키) 만 알린다 — 네트워크 · 일시 오류는 다음 싱크에서 재시도 */
 export async function notifyOmronAuthFailedIfNeeded(
-  bot: Bot | undefined,
+  bot: NotifyBot | undefined,
   err: unknown,
 ): Promise<void> {
   if (!(err instanceof OmronAuthError)) return;
@@ -367,7 +367,7 @@ export async function notifyOmronAuthFailedIfNeeded(
  * `notifyGarminAuthFailedIfNeeded` 를 직접 호출한다.
  */
 export async function notifyAdminIfKnownFailure(
-  bot: Bot | undefined,
+  bot: NotifyBot | undefined,
   err: unknown,
 ): Promise<void> {
   const category = classifyClaudeError(err);

@@ -5,7 +5,7 @@
 // Phase 1 은 read-only. Phase 2 부터 inline keyboard (Accept/Reject/Snooze) + WorkoutAdjustment
 // 이력 저장 + Accept 시 TrainingWorkout 실제 update + Snooze DB 재전송 flow 추가.
 
-import type { Bot } from "grammy";
+import type { NotifyBot } from "./notifier";
 import { InlineKeyboard } from "grammy";
 import prisma from "@/lib/prisma";
 import { recommendTodayWorkout } from "@/mcp/tools/recommend-today-workout";
@@ -240,7 +240,7 @@ export function formatAutoAdjustMessage(
  * - adjusted === true → Telegram push + AIAdvice 로그
  * 조용한 실패 방지: 오류 시 notifier 로 사용자 알림.
  */
-export async function runAutoAdjustProposal(bot: Bot): Promise<void> {
+export async function runAutoAdjustProposal(bot: NotifyBot): Promise<void> {
   try {
     const profile = await prisma.userProfile.findFirst({
       select: { autoAdjustEnabled: true },
