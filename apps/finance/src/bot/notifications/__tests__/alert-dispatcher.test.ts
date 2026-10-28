@@ -158,6 +158,8 @@ describe('redispatchAlert', () => {
 
   beforeEach(() => {
     sendMessage.mockReset()
+    // pleiades 009 D-1 (#350): 토큰이 없으면 텔레그램 수신자 0 — 실제 설정처럼 토큰을 넣는다(CI 에는 앱 .env 가 없다 · #354)
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', '1:x')
     vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '1,2,3')
   })
   afterEach(() => {
