@@ -226,6 +226,15 @@ A2 채택 — A3 의 슬래시분은 같은 gateway 위에 나중에 얹을 수 
 **D-1 이 D-2 앞인 이유:** D-2′·D-3′ 의 끄기가 즉시 되돌림이려면 폴링만 끄는 수단(1-4)과 재개 부작용 차단(1-5)이 있어야 하고, 텔레그램이 꺼진 채 프로세스가 살아야 한다(1-2). 기존 env 로 대신하면 — 토큰 비움은 아웃바운드 텔레그램 폴백까지 끄고, 허용 chat 비움은 fit 이 거부 답장을 하고 fin 은 폴링을 계속한다([A] A3).
 **D-0 이 D-1 앞인 이유:** D-1 이 버튼 gateway 를 공통 계층으로 옮긴다(B 제약). B1 이면 순서는 자유.
 
+> **정정 (2026-10-28 · D-1 설계 · #339 · #340) — 착수 직전 측정이 더한 것과 선행 릴리즈.** 설계 계보는 `_workspace/009/d1/`(측정 `01_surveyor_fin.md` · `01_surveyor_fit_infra.md` · `01_pm2_608.md` → 초안 `02_writer_d1.md` → 감사 `03_auditor_d1.md`(정정 6 · 블로커 1) → `02_writer_d1_r2.md` → 재감사 `03_auditor_d1_r2.md`(경미 3 · 직접 반영)). **D-1 수단의 정본은 `02_writer_d1_r2.md`** 이고 요구사항 1-1~1-9 는 무변경이다.
+> - **PR-0 선행 릴리즈 `v1.1.0`(사용자 2026-10-28):** 서버에서 chat 을 처음 빌드하는 릴리즈는 `packages/chat/dist/` 를 만든다. `v1.0.8` 에는 그 무시 줄도 `packages/chat` 도 없어 R-8 checkout 뒤 `release-inplace.sh:279` 깨끗함 검사가 실패한다(서버 손 조치). 그래서 **D-1 코드 앞에 지금 `dev`(D-0 포함 · 배포 동작 변경 0 · 서버 조치 없음)를 릴리즈만 한다** → 이후 R-8 하한은 `v1.1.0`. 폴링을 끈 뒤(D-2′·D-3′)의 하한은 D-1 태그(R14).
+> - **D-1 범위가 넓어진 사실:** fin `scheduler.ts:31-34` 는 `TELEGRAM_BOT_TOKEN` 이 없으면 알림 크론과 부팅 upsert 를 건너뛴다 — 이 게이트도 1-2 범위 · fin 네트워크 장애는 `bot.init` 무한 재시도로 크론·gateway 미등록 정지(exit 가 아니다) · fit exit 지점 중 `standalone.ts:66` 은 이미 뜬 크론·gateway 를 죽인다 · fin 크론의 실행 판정은 토큰이 아니라 chat ID 를 센다 → 토큰 없으면 텔레그램 수신자 몫 0 으로 맞춘다 · `discord-switch.sh` 판정 문자열은 준비 · 종료 코드 · 미설정 셋(미설정 문구는 두 앱 파일).
+> - **S-2·S-4·S-5 (설계 결정 · 수용 기준으로 판정):** S-2 = IDENTIFY 기록을 이미 무시되는 `apps/<dir>/logs/`(재배포·R-8 을 넘어 유지 · 새 서버 상태 경로 아님) · S-4 = 앱 `.env` 선택 키 `TELEGRAM_POLLING=off` · S-5 = `--smoke` 인자 + 무효 텔레그램 토큰 유지 + 스모크 자식 env 의 Discord 토큰 빈 값·`PLEIADES_ENV_FILE=/dev/null`(빈 문자열 금지 — 루트 `.env` 탐색으로 떨어진다)·`DATABASE_URL` 더미 + `deploy/` 정적 테스트.
+> - **서버 chat 설치:** `deploy.sh` 의존성 단계(`:292-298`)와 apps-ci 에 chat 설치·빌드 — 태그에 실려 가므로 서버 수동 조치 없음. 실패하면 재기동 전 rc 4(서비스 무영향 · 사용자가 R-8/`--retry`).
+> - **chat intents:** chat gateway 는 MESSAGE_CONTENT 를 늘 요청하고 4014 는 치명이다 → D-1 은 intents 0(버튼만) 옵션 · 포털 토글은 D-2(2-4 `--draft`).
+> - **§13 갱신:** U-1 서버판 **해소** — pm2 6.0.8 `lib/God.js:189-190,455-459,476-478,507` 이 7.0.4 와 같은 의미(npm 레지스트리 tarball · 서버 접근 0) · U-15 **코드상 해소** — chat 이 `GET /gateway/bot` `session_start_limit` 을 읽는다(`packages/chat/src/rest.ts:253-259`) · 실제 `remaining` 은 로컬 실측 때.
+> - PR 순서: **PR-0(`v1.1.0` 릴리즈만) → PR-1 기반(chat intents · 설치 단계 · CI) → PR-2 fit → PR-3 fin → D-1 릴리즈(minor 예정 · 서버 조치 없음)**. 되돌리기: 문구 (**즉시**).
+
 ---
 
 ## 7. 텔레그램과 함께 사라지는 격리 가드와 대체
