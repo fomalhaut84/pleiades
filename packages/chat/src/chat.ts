@@ -5,7 +5,7 @@
  *   메시지 채널의 허용 안 된 사용자는 기록만 하고 답하지 않는다(guild 채널은 남이 본다 · R8).
  * - 버튼: 허용 밖이면 누른 사람에게만 거부 안내 · 허용이면 3초 안에 지연 응답(type 6) 뒤 핸들러.
  * - 핸들러가 던지면 원문을 노출하지 않는 일반 안내로 답한다.
- * - **채널 대기열(009 D-2 Q3):** 같은 채널의 메시지·버튼 핸들러는 받은 순서대로 하나씩 돈다(텔레그램 grammY 와 같은 의미).
+ * - **채널 대기열(009 D-2 Q3):** 같은 채널의 메시지·버튼 핸들러는 받은 순서대로 하나씩 돈다(기존 봇의 순차 처리와 같은 의미).
  *   자리는 받는 순간 동기로 잡는다 — 버튼은 지연 응답을 기다리기 전에(PR #361 Codex P2). 앞 핸들러가 실패하거나
  *   감시 시한을 넘어도 다음으로 넘어간다(넘긴 핸들러는 취소하지 않는다). 오래 기다린 버튼은 인터랙션 토큰(15분) 대신 봇 토큰으로 고친다.
  */
@@ -47,7 +47,7 @@ export interface ChatOptions {
   serializeByChannel?: boolean;
   /** 핸들러 하나를 기다리는 상한 — 넘으면 취소하지 않고 다음 입력으로 넘어간다. 기본 10분(AI 최장 540초 + 여유). */
   handlerWatchdogMs?: number;
-  /** 이보다 오래 대기열에 있던 버튼은 봇 토큰으로 고친다(인터랙션 토큰 15분 만료 전). 기본 14분. */
+  /** 버튼을 받은 지 이만큼 지난 뒤의 편집·안내는 봇 토큰으로 한다(인터랙션 토큰 15분 만료 전 · 15분 미만 필수). 기본 14분. */
   staleButtonMs?: number;
   /**
    * 버튼이 같은 채널의 앞 요청 뒤에서 기다리게 되면 누른 사람에게만 바로 보이는 안내 — 결과가 늦어도 고장처럼 보이지 않게.
@@ -79,6 +79,8 @@ const EPHEMERAL = 64;
 const MESSAGE_TYPES = new Set([0, 19]);
 const DEFAULT_WATCHDOG_MS = 10 * 60_000;
 const DEFAULT_STALE_BUTTON_MS = 14 * 60_000;
+/** Discord 인터랙션 토큰 수명. */
+const INTERACTION_TOKEN_MS = 15 * 60_000;
 /** Discord snowflake 의 시각 기준(2015-01-01T00:00:00Z) — 상위 비트 = 그 뒤 ms. */
 const DISCORD_EPOCH = 1420070400000;
 const SNOWFLAKE_SHIFT = 2 ** 22;
@@ -119,6 +121,11 @@ export function messageSentAt(m: { id?: unknown; timestamp?: unknown }, received
   return receivedAt;
 }
 
+function positiveInt(v: number, what: string, label: string): number {
+  if (!Number.isInteger(v) || v <= 0) throw new Error(`[${label}] ${what} 는 양의 정수여야 한다`);
+  return v;
+}
+
 function nonNegativeInt(v: number, what: string, label: string): number {
   if (!Number.isInteger(v) || v < 0) throw new Error(`[${label}] ${what} 는 0 이상의 정수여야 한다`);
   return v;
@@ -133,8 +140,9 @@ export function createChat(opts: ChatOptions): Chat {
   const fallbackIntents = opts.fallbackIntents === undefined ? undefined : nonNegativeInt(opts.fallbackIntents, 'fallbackIntents', label);
   const messageChannels = opts.messageChannelIds ?? opts.allowedChannelIds;
   const serialize = opts.serializeByChannel ?? true;
-  const watchdogMs = opts.handlerWatchdogMs ?? DEFAULT_WATCHDOG_MS;
-  const staleMs = opts.staleButtonMs ?? DEFAULT_STALE_BUTTON_MS;
+  const watchdogMs = positiveInt(opts.handlerWatchdogMs ?? DEFAULT_WATCHDOG_MS, 'handlerWatchdogMs', label);
+  const staleMs = positiveInt(opts.staleButtonMs ?? DEFAULT_STALE_BUTTON_MS, 'staleButtonMs', label);
+  if (staleMs >= INTERACTION_TOKEN_MS) throw new Error(`[${label}] staleButtonMs 는 인터랙션 토큰 수명(15분)보다 짧아야 한다`);
   const busyText = opts.busyButtonNotice === undefined ? BUSY_BUTTON_TEXT : opts.busyButtonNotice;
   const rest: Rest = createRest({
     token: opts.token,
@@ -216,35 +224,49 @@ export function createChat(opts: ChatOptions): Chat {
     });
   };
 
-  /** 대기열에서 꺼낸 시점의 버튼 컨텍스트 — 오래 기다렸으면 봇 토큰 경로(인터랙션 토큰 만료 · 009 D-2 [A2]#1). */
+  /**
+   * 버튼 컨텍스트 — 인터랙션 토큰(15분)이 곧 만료되면 봇 토큰 경로로. 판정은 **메서드를 부를 때마다** 한다
+   * (꺼낼 때 한 번만 보면 13분 대기 + 3분 핸들러가 만료 뒤 웹훅으로 가 조용히 실패한다 · PR-1 사전 리뷰 major · 009 D-2 [A2]#1).
+   */
   const buttonContext = (i: RawInteraction, action: string, userId: string, channelId: string, receivedAt: number): ButtonContext => {
     const messageId = str(i.message?.id);
-    const base = { platform: 'discord' as const, userId, channelId, messageId, action, send: (msg: Outgoing) => rest.send(channelId, msg) };
-    if (now() - receivedAt > staleMs) {
-      logger.warn(`[${label}] 오래 기다린 버튼 — 봇 토큰으로 고친다 (${action.slice(0, 40)})`);
-      return {
-        ...base,
-        edit: (msg) => {
-          const m = normalize(msg);
-          return rest.edit(channelId, messageId, { ...m, buttons: m.buttons ?? [] });
-        },
-        setButtons: (rows) => rest.setButtons(channelId, messageId, rows),
-        // 본인에게만 보이는 안내는 인터랙션 토큰이 있어야 한다 — 채널 메시지로 낮춘다(무표시보다 낫다)
-        notice: async (text) => {
-          await rest.send(channelId, text);
-        },
-      };
-    }
     const hook = `${apiBase}/webhooks/${str(i.application_id)}/${str(i.token)}`;
+    let warned = false;
+    const stale = (): boolean => {
+      const s = now() - receivedAt > staleMs;
+      if (s && !warned) {
+        warned = true;
+        logger.warn(`[${label}] 오래 기다린 버튼 — 봇 토큰으로 고친다 (${action.slice(0, 40)})`);
+      }
+      return s;
+    };
+    const send = (msg: Outgoing): Promise<SentMessage> => rest.send(channelId, msg);
     return {
-      ...base,
+      platform: 'discord',
+      userId,
+      channelId,
+      messageId,
+      action,
+      send,
       // 버튼을 주지 않으면 지운다 — 눌린 버튼이 남아 두 번 눌리지 않게
-      edit: (msg) => {
+      edit: async (msg) => {
         const m = normalize(msg);
-        return rest.editOriginal(hook, channelId, { ...m, buttons: m.buttons ?? [] });
+        const withButtons = { ...m, buttons: m.buttons ?? [] };
+        if (!stale()) return rest.editOriginal(hook, channelId, withButtons);
+        // 원본 id 가 없으면 고칠 수 없다 — 새 메시지로(무표시보다 낫다)
+        if (messageId === '') return void (await send(withButtons));
+        return rest.edit(channelId, messageId, withButtons);
       },
-      setButtons: (rows) => rest.setOriginalButtons(hook, rows),
-      notice: (text) => rest.followupEphemeral(hook, text),
+      setButtons: async (rows) => {
+        if (!stale()) return rest.setOriginalButtons(hook, rows);
+        if (messageId === '') return logger.warn(`[${label}] 오래 기다린 버튼 — 원본 id 가 없어 버튼을 바꾸지 못했다`);
+        return rest.setButtons(channelId, messageId, rows);
+      },
+      // 본인에게만 보이는 안내는 인터랙션 토큰이 있어야 한다 — 만료 직전이면 채널 메시지로 낮춘다(무표시보다 낫다)
+      notice: async (text) => {
+        if (!stale()) return rest.followupEphemeral(hook, text);
+        await send(text);
+      },
     };
   };
 

@@ -87,7 +87,7 @@ export interface ButtonContext extends BaseContext {
   edit(msg: Outgoing): Promise<void>;
   /** 본문은 두고 버튼만 바꾼다 — `[]` 면 지운다. */
   setButtons(rows: ButtonRows): Promise<void>;
-  /** 누른 사람에게만 보이는 짧은 안내. */
+  /** 누른 사람에게만 보이는 짧은 안내. 버튼을 받은 지 오래돼(기본 14분) 플랫폼 토큰이 곧 만료되면 채널 메시지(모두에게 보인다)로 낮춘다. */
   notice(text: string): Promise<void>;
   /** 같은 채널에 새 메시지(모두에게 보인다). */
   send(msg: Outgoing): Promise<SentMessage>;

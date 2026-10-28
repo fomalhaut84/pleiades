@@ -300,6 +300,43 @@ describe('채널 대기열 (Q3)', () => {
     ]);
   });
 
+  // 회귀: PR-1 사전 리뷰 major — 꺼낼 때 한 번만 판정하면 13분 대기 + 핸들러 3분이 만료된 웹훅으로 가 조용히 실패한다
+  it('만료 판정은 부를 때마다 — 핸들러 도중 14분을 넘기면 그 뒤 호출은 봇 토큰 경로', async () => {
+    let t = 1_000_000;
+    const g = gate();
+    const r = createRouter()
+      .fallback(async () => {
+        await g.wait;
+      })
+      .action('food:', async (ctx) => {
+        await ctx.notice('먼저'); // 13분 — 아직 웹훅
+        t += 3 * 60_000;
+        await ctx.edit('나중'); // 16분 — 봇 토큰
+      });
+    const { last, calls, ready } = setup(r, { now: () => t, busyButtonNotice: false });
+    await ready();
+    last().serverSends(message());
+    last().serverSends(press());
+    await flush();
+    const before = calls().length;
+    t += 13 * 60_000;
+    g.open();
+    await flush();
+    expect(calls().slice(before)).toEqual([
+      expect.objectContaining({ url: expect.stringMatching(/\/webhooks\/app1\/itok$/), method: 'POST' }),
+      expect.objectContaining({ url: expect.stringMatching(new RegExp(`/channels/${CHAT_CH}/messages/m7$`)), method: 'PATCH' }),
+    ]);
+  });
+
+  it.each([
+    ['handlerWatchdogMs', 0],
+    ['handlerWatchdogMs', Number.NaN],
+    ['staleButtonMs', -1],
+    ['staleButtonMs', 15 * 60_000],
+  ])('%s %s 는 만들 때 거부한다', (key, bad) => {
+    expect(() => setup(createRouter(), { [key]: bad })).toThrow(new RegExp(key));
+  });
+
   // 사용자 요청(2026-10-28): 앞 AI 뒤에서 기다리는 버튼이 고장처럼 보이지 않게 — 누른 사람에게만 바로 안내
   it('앞 요청 뒤에서 기다리게 된 버튼은 ack 직후 본인에게만 대기 안내 · 결과는 앞 요청 뒤', async () => {
     const g = gate();
