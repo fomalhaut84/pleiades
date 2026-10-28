@@ -1,5 +1,3 @@
-import type { Context } from "grammy";
-
 const MAX_MESSAGE_LENGTH = 4096;
 
 /** 마크다운을 텔레그램 HTML로 간단 변환 */
@@ -22,8 +20,12 @@ export function escapeHtml(text: string): string {
     .replace(/>/g, "&gt;");
 }
 
-/** 긴 메시지 분할 전송 */
-export async function replyLong(ctx: Context, text: string, html = false) {
+/** 긴 메시지 분할 전송. ctx 는 reply 만 쓴다(pleiades#364 — 중립 출력 어댑터가 grammY Context 일부만 넘긴다). */
+export async function replyLong(
+  ctx: { reply: (text: string, options?: Record<string, unknown>) => Promise<unknown> },
+  text: string,
+  html = false,
+) {
   const chunks = splitMessage(text, MAX_MESSAGE_LENGTH);
   for (const chunk of chunks) {
     try {

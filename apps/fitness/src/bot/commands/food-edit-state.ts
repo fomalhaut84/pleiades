@@ -113,7 +113,7 @@ export function peekPendingEdit(
 }
 
 /**
- * #350: bot/index.ts message:text 라우팅 판단. 이 chat 의 텍스트를 편집 입력으로 소비할지.
+ * #350: 자유 텍스트 라우팅 판단(pleiades#364 이후 commands/free-text.ts). 이 키의 텍스트를 편집 입력으로 소비할지.
  * 사전 리뷰 P0 (#350): index.ts 인라인 조건이면 회귀 스크립트가 커버할 수 없어 추출.
  *
  * 슬래시로 시작하는 텍스트는 소비하지 않는다 — pending 중 미등록 명령(`/foo`)이 kcal 값으로

@@ -1,6 +1,10 @@
 // #309 (M14 Phase 2 #5): 텔레그램 음식 사진 handler.
 // 사진 메시지 수신 → 최대 사이즈 download → temp 저장 → Vision → FoodLog 생성 → 3-버튼 답장.
 // 이미지는 처리 후 즉시 삭제 (spec: 보관 안 함).
+//
+// pleiades 009 D-2 PR-2 (pleiades#364 · 설계 H2 · C 표): 텔레그램 파일 다운로드 · typing · ack 메시지 · ack 삭제 ·
+// 4096 절단은 텔레그램 어댑터(handleFoodPhoto)에 남기고, 다운로드 뒤 판단(캡션 → Vision → 저장 → 응답 모델)만
+// decidePhotoFood 로 뺐다 — Discord 첨부 경로(PR-3)가 같은 판단을 쓴다.
 
 import fs from "fs/promises";
 import { createWriteStream } from "fs";
@@ -15,9 +19,11 @@ import type { Prisma } from "@/generated/prisma/client";
 import { recalculateCalorieBalance } from "@/lib/fitness/calorie-balance";
 import { markStaleRecalcDate } from "@/lib/nutrition/stale-recalc";
 import { estimateNutritionFromPhoto } from "@/lib/nutrition/estimate-nutrition-photo";
-import { buildFoodInlineKeyboard } from "./food-edit-callback";
+import { foodLogButtons } from "./food-edit-callback";
 import { MEAL_LABELS, MEAL_PATTERNS, CONFIDENCE_LABEL } from "./food";
 import { telegramAgent } from "../index";
+import { plainReply, type BotReply } from "../core/reply";
+import { sendTelegramReply } from "../utils/telegram-reply";
 
 const TG_FILE_HOST = "https://api.telegram.org/file/bot";
 // Codex P1 (PR #310 3회차): grammy 는 IPv4-only agent 로 통신하는데 download 가 global fetch 면
@@ -70,6 +76,101 @@ async function downloadTo(url: string, dest: string): Promise<void> {
   });
 }
 
+/**
+ * 다운로드된 음식 사진 1장 → Vision → FoodLog 저장 → 응답 모델(판단 · pleiades#364).
+ * `caption` 은 사진 설명 원문(식사 접두 `점심 …` 이면 mealType) · `sentAt` 은 메시지 시각(끼니 추정 · 저장 날짜 기준).
+ * 길이 절단은 하지 않는다 — 텔레그램 4096 은 어댑터 · Discord 2000 분할은 chat 이 한다(설계 C 표).
+ */
+export async function decidePhotoFood(input: {
+  imagePath: string;
+  caption?: string;
+  sentAt: Date;
+}): Promise<BotReply> {
+  const photoTimestamp = input.sentAt;
+  // 캡션 파싱 → mealType + 잔여 description.
+  // Codex P2 (PR #310 5회차): 무캡션 mealType 추정도 photoTimestamp 기준. handler 진입 시점 (now)
+  // 을 쓰면 KST 식사 boundary (10:59 → 11:00 등) 근처 재처리 시 timestamp 와 mealType 불일치 →
+  // repeat-lookup / backfill mealType 매칭 어긋남.
+  const rawCaption = input.caption?.trim();
+  const parsed = extractMealFromCaption(rawCaption);
+  const mealType = parsed?.mealType ?? guessMealTypeByKstTime(photoTimestamp);
+  const caption = (parsed?.residual ?? rawCaption)?.trim() || undefined;
+
+  const estimate = await estimateNutritionFromPhoto({
+    imagePath: input.imagePath,
+    caption,
+    mealType,
+  });
+
+  // Codex P2 (PR #310): Vision 실패 + caption 없음 → FoodLog 저장 안 함 (kcal null +
+  // meaningless description "사진 (분석 실패)" 이 backfill 큐에 들어가 매 tick 텍스트
+  // estimator 로 무한 재시도). 사용자에게 재시도/텍스트 입력 안내만.
+  if (!estimate && !caption) {
+    return plainReply(
+      "⚠️ Vision 분석 실패 — 사진을 다시 보내거나, 텍스트 (예: 아침 김치찌개 밥) 로 입력해주세요.",
+    );
+  }
+
+  // description 결정: caption 우선 → Vision items 요약 → fallback.
+  const description = caption
+    ? caption
+    : estimate?.items && estimate.items.length > 0
+      ? estimate.items.map((i) => i.name).join(" · ")
+      : "사진 (분석 실패)";
+
+  const log = await prisma.foodLog.create({
+    data: {
+      date: photoTimestamp,
+      description,
+      mealType,
+      estimatedKcal: estimate?.kcal ?? null,
+      proteinG: estimate?.proteinG ?? null,
+      carbsG: estimate?.carbsG ?? null,
+      fatG: estimate?.fatG ?? null,
+      // #322: Vision estimator items 저장 (사진 → 항목별 분해).
+      items: (estimate?.items ?? undefined) as Prisma.InputJsonValue | undefined,
+    },
+    select: { id: true },
+  });
+
+  // 칼로리 밸런스 재계산. 실패 시 stale queue mark (기존 food.ts recalcWithRetry 로직 축약).
+  // #403 (사전 리뷰 major 2): bump 는 재계산 **뒤** — 재계산 전 값이 새 키로 캐시되지 않게
+  await withHistoryCacheBump(async () => {
+    try {
+      await recalculateCalorieBalance(photoTimestamp, undefined, prisma);
+    } catch (err) {
+      console.warn(
+        `[food-photo] recalc 실패, stale queue 등록: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      try {
+        await markStaleRecalcDate(photoTimestamp);
+      } catch {
+        // ignore
+      }
+    }
+  });
+
+  // 응답 조립.
+  const mealLabel = MEAL_LABELS[mealType] ?? mealType;
+  const lines: string[] = [`✅ ${mealLabel} 기록 완료`, `📝 ${description}`];
+  if (estimate) {
+    lines.push(
+      `📊 약 ${estimate.kcal.toLocaleString("ko-KR")} kcal (신뢰도 ${CONFIDENCE_LABEL[estimate.confidence]})`,
+    );
+    const p = estimate.proteinG;
+    const c = estimate.carbsG;
+    const f = estimate.fatG;
+    if (p !== null && c !== null && f !== null) {
+      lines.push(`🥩 P ${Math.round(p)}g · C ${Math.round(c)}g · F ${Math.round(f)}g`);
+    }
+    if (estimate.notes) lines.push(`ℹ️ ${estimate.notes}`);
+  } else {
+    lines.push("⚠️ Vision 분석 실패 — [🔢 kcal] 로 직접 입력하거나 [🗑️ 삭제] 후 다시 시도");
+  }
+
+  return plainReply(lines.join("\n"), { buttons: foodLogButtons(log.id) });
+}
+
 export function registerFoodPhotoHandler(bot: Bot): void {
   bot.on("message:photo", async (ctx) => {
     try {
@@ -117,15 +218,6 @@ async function handleFoodPhoto(ctx: Context): Promise<void> {
     // ignore
   }
 
-  // 캡션 파싱 → mealType + 잔여 description.
-  // Codex P2 (PR #310 5회차): 무캡션 mealType 추정도 photoTimestamp 기준. handler 진입 시점 (now)
-  // 을 쓰면 KST 식사 boundary (10:59 → 11:00 등) 근처 재처리 시 timestamp 와 mealType 불일치 →
-  // repeat-lookup / backfill mealType 매칭 어긋남.
-  const rawCaption = message.caption?.trim();
-  const parsed = extractMealFromCaption(rawCaption);
-  const mealType = parsed?.mealType ?? guessMealTypeByKstTime(photoTimestamp);
-  const caption = (parsed?.residual ?? rawCaption)?.trim() || undefined;
-
   // 텔레그램 파일 다운로드 → temp.
   const rand = Math.random().toString(36).slice(2, 10);
   const tempPath = path.join(os.tmpdir(), `mfp-photo-${Date.now()}-${rand}.jpg`);
@@ -137,78 +229,11 @@ async function handleFoodPhoto(ctx: Context): Promise<void> {
     const url = `${TG_FILE_HOST}${token}/${file.file_path}`;
     await downloadTo(url, tempPath);
 
-    const estimate = await estimateNutritionFromPhoto({
+    const result = await decidePhotoFood({
       imagePath: tempPath,
-      caption,
-      mealType,
+      caption: message.caption,
+      sentAt: photoTimestamp,
     });
-
-    // Codex P2 (PR #310): Vision 실패 + caption 없음 → FoodLog 저장 안 함 (kcal null +
-    // meaningless description "사진 (분석 실패)" 이 backfill 큐에 들어가 매 tick 텍스트
-    // estimator 로 무한 재시도). 사용자에게 재시도/텍스트 입력 안내만.
-    if (!estimate && !caption) {
-      await ctx.reply(
-        "⚠️ Vision 분석 실패 — 사진을 다시 보내거나, 텍스트 (예: 아침 김치찌개 밥) 로 입력해주세요.",
-      );
-      return;
-    }
-
-    // description 결정: caption 우선 → Vision items 요약 → fallback.
-    const description = caption
-      ? caption
-      : estimate?.items && estimate.items.length > 0
-        ? estimate.items.map((i) => i.name).join(" · ")
-        : "사진 (분석 실패)";
-
-    const log = await prisma.foodLog.create({
-      data: {
-        date: photoTimestamp,
-        description,
-        mealType,
-        estimatedKcal: estimate?.kcal ?? null,
-        proteinG: estimate?.proteinG ?? null,
-        carbsG: estimate?.carbsG ?? null,
-        fatG: estimate?.fatG ?? null,
-        // #322: Vision estimator items 저장 (사진 → 항목별 분해).
-        items: (estimate?.items ?? undefined) as Prisma.InputJsonValue | undefined,
-      },
-      select: { id: true },
-    });
-
-    // 칼로리 밸런스 재계산. 실패 시 stale queue mark (기존 food.ts recalcWithRetry 로직 축약).
-    // #403 (사전 리뷰 major 2): bump 는 재계산 **뒤** — 재계산 전 값이 새 키로 캐시되지 않게
-    await withHistoryCacheBump(async () => {
-      try {
-        await recalculateCalorieBalance(photoTimestamp, undefined, prisma);
-      } catch (err) {
-        console.warn(
-          `[food-photo] recalc 실패, stale queue 등록: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        try {
-          await markStaleRecalcDate(photoTimestamp);
-        } catch {
-          // ignore
-        }
-      }
-    });
-
-    // 응답 조립.
-    const mealLabel = MEAL_LABELS[mealType] ?? mealType;
-    const lines: string[] = [`✅ ${mealLabel} 기록 완료`, `📝 ${description}`];
-    if (estimate) {
-      lines.push(
-        `📊 약 ${estimate.kcal.toLocaleString("ko-KR")} kcal (신뢰도 ${CONFIDENCE_LABEL[estimate.confidence]})`,
-      );
-      const p = estimate.proteinG;
-      const c = estimate.carbsG;
-      const f = estimate.fatG;
-      if (p !== null && c !== null && f !== null) {
-        lines.push(`🥩 P ${Math.round(p)}g · C ${Math.round(c)}g · F ${Math.round(f)}g`);
-      }
-      if (estimate.notes) lines.push(`ℹ️ ${estimate.notes}`);
-    } else {
-      lines.push("⚠️ Vision 분석 실패 — [🔢 kcal] 로 직접 입력하거나 [🗑️ 삭제] 후 다시 시도");
-    }
 
     // 최종 응답 (ack 삭제는 아래 finally 에서 정리).
     // Codex P2 (릴리즈 PR #311): Vision 이 items 많거나 notes 길면 4096 초과 → reply 실패 →
@@ -217,7 +242,7 @@ async function handleFoodPhoto(ctx: Context): Promise<void> {
     // malformed Unicode → Telegram reject. code point 단위로 순회하며 4095 UTF-16 code
     // units (1 for '…') 이내로 맞춤.
     const TELEGRAM_MAX_MESSAGE = 4096;
-    let replyText = lines.join("\n");
+    let replyText = result.text;
     if (replyText.length > TELEGRAM_MAX_MESSAGE) {
       const limit = TELEGRAM_MAX_MESSAGE - 1; // '…' 자리 확보
       let utf16Len = 0;
@@ -229,9 +254,7 @@ async function handleFoodPhoto(ctx: Context): Promise<void> {
       }
       replyText = replyText.slice(0, cut) + "…";
     }
-    await ctx.reply(replyText, {
-      reply_markup: buildFoodInlineKeyboard(log.id),
-    });
+    await sendTelegramReply(ctx, { ...result, text: replyText });
   } finally {
     // 사전 리뷰 P1 (feat/309-1): ack 삭제를 finally 로. 이전엔 성공 경로에서만 삭제 →
     // getFile/download/Vision/DB 중 throw 시 "🖼️ 사진 분석 중…" 이 채팅에 영구히 남고
