@@ -49,6 +49,11 @@ export interface ChatOptions {
   handlerWatchdogMs?: number;
   /** 이보다 오래 대기열에 있던 버튼은 봇 토큰으로 고친다(인터랙션 토큰 15분 만료 전). 기본 14분. */
   staleButtonMs?: number;
+  /**
+   * 버튼이 같은 채널의 앞 요청 뒤에서 기다리게 되면 누른 사람에게만 바로 보이는 안내 — 결과가 늦어도 고장처럼 보이지 않게.
+   * 기본 `BUSY_BUTTON_TEXT` · `false` 면 보내지 않는다.
+   */
+  busyButtonNotice?: string | false;
   attachmentPolicy?: AttachmentPolicy;
   logger?: Logger;
   fetch?: ChatFetch;
@@ -68,6 +73,7 @@ export interface Chat {
 }
 
 const FAILURE_TEXT = '처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+export const BUSY_BUTTON_TEXT = '⏳ 앞 요청을 처리하는 중입니다 — 끝나면 이 버튼을 반영합니다.';
 const EPHEMERAL = 64;
 /** 0 = 일반 · 19 = 답장. 그 밖(핀 · 입장 알림 등)은 명령이 아니다. */
 const MESSAGE_TYPES = new Set([0, 19]);
@@ -129,6 +135,7 @@ export function createChat(opts: ChatOptions): Chat {
   const serialize = opts.serializeByChannel ?? true;
   const watchdogMs = opts.handlerWatchdogMs ?? DEFAULT_WATCHDOG_MS;
   const staleMs = opts.staleButtonMs ?? DEFAULT_STALE_BUTTON_MS;
+  const busyText = opts.busyButtonNotice === undefined ? BUSY_BUTTON_TEXT : opts.busyButtonNotice;
   const rest: Rest = createRest({
     token: opts.token,
     fetch: opts.fetch,
@@ -257,8 +264,16 @@ export function createChat(opts: ChatOptions): Chat {
     }
     const receivedAt = now();
     // 3초 안에 — 대기열 밖에서 바로 보낸다. 자리는 아래 enqueue 가 같은 틱에 잡는다(Codex P2 · ack 를 기다리는 사이 뒤 메시지가 앞지르지 않게)
+    const busy = serialize && tails.has(channelId); // 앞 입력이 아직 돈다 — enqueue 전에 본다
     const ack = rest.interactionCallback(callbackUrl, { type: 6 });
     ack.catch(() => undefined); // 실패는 대기열 안에서 기록한다 — 처리 전 unhandled 방지
+    if (busy && busyText !== false && busyText.trim() !== '') {
+      // 대기열 밖 — ack 직후 바로(인터랙션 토큰이 살아 있다)
+      const hook = `${apiBase}/webhooks/${str(i.application_id)}/${str(i.token)}`;
+      ack
+        .then(() => rest.followupEphemeral(hook, busyText))
+        .catch((err) => logger.warn(`[${label}] 대기 안내 실패: ${sanitizeError(err)}`));
+    }
     enqueue(channelId, `버튼 처리 (${action.slice(0, 40)})`, async () => {
       try {
         await ack;

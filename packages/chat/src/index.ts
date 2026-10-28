@@ -17,7 +17,7 @@ export type {
   SentMessage,
   TextFormat,
 } from './types';
-export { createChat } from './chat';
+export { createChat, BUSY_BUTTON_TEXT } from './chat';
 export type { Chat, ChatOptions } from './chat';
 export { createRouter, splitCommand } from './router';
 export type { Router, CommandHandler, CommandOptions, HearsHandler, PlainHandler, ActionHandler } from './router';

@@ -3,7 +3,7 @@
  * 설계 정본 `_workspace/009/d2/02_writer_d2_r3.md` §4.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createChat, messageSentAt, type ChatOptions } from './chat';
+import { BUSY_BUTTON_TEXT, createChat, messageSentAt, type ChatOptions } from './chat';
 import { MESSAGE_INTENTS, type WebSocketLike } from './gateway';
 import type { ChatFetch, ChatResponse } from './rest';
 import { createRouter, type Router } from './router';
@@ -288,15 +288,60 @@ describe('채널 대기열 (Q3)', () => {
     last().serverSends(message());
     last().serverSends(press());
     await flush();
+    const before = calls().length; // ack · 대기 안내(인터랙션 토큰이 살아 있을 때 보낸 것)
     t += 15 * 60_000;
     g.open();
     await flush();
-    const after = calls().filter((c) => !c.url.endsWith('/callback'));
+    const after = calls().slice(before);
     expect(after.some((c) => c.url.includes('/webhooks/'))).toBe(false);
     expect(after).toEqual([
       expect.objectContaining({ url: expect.stringMatching(new RegExp(`/channels/${CHAT_CH}/messages/m7$`)), method: 'PATCH', body: expect.objectContaining({ components: [] }) }),
       expect.objectContaining({ url: expect.stringMatching(new RegExp(`/channels/${CHAT_CH}/messages$`)), method: 'POST', body: expect.objectContaining({ content: '대기 중' }) }),
     ]);
+  });
+
+  // 사용자 요청(2026-10-28): 앞 AI 뒤에서 기다리는 버튼이 고장처럼 보이지 않게 — 누른 사람에게만 바로 안내
+  it('앞 요청 뒤에서 기다리게 된 버튼은 ack 직후 본인에게만 대기 안내 · 결과는 앞 요청 뒤', async () => {
+    const g = gate();
+    const order: string[] = [];
+    const r = createRouter()
+      .fallback(async () => {
+        await g.wait;
+        order.push('msg');
+      })
+      .action('food:', async () => void order.push('btn'));
+    const { last, calls, ready } = setup(r);
+    await ready();
+    last().serverSends(message());
+    last().serverSends(press());
+    await flush();
+    const notice = calls().find((c) => c.url.endsWith('/webhooks/app1/itok') && c.method === 'POST');
+    expect(notice?.body).toMatchObject({ content: BUSY_BUTTON_TEXT, flags: 64 });
+    expect(order).toEqual([]);
+    g.open();
+    await flush();
+    expect(order).toEqual(['msg', 'btn']);
+  });
+
+  it('대기열이 비어 있으면 대기 안내 없음 · busyButtonNotice: false 면 끈다', async () => {
+    const g = gate();
+    const r = createRouter()
+      .fallback(async () => {
+        await g.wait;
+      })
+      .action('food:', async () => {});
+    const idle = setup(r);
+    await idle.ready();
+    idle.last().serverSends(press());
+    await flush();
+    expect(idle.calls().some((c) => c.body?.content === BUSY_BUTTON_TEXT)).toBe(false);
+    const off = setup(r, { busyButtonNotice: false });
+    await off.ready();
+    off.last().serverSends(message());
+    off.last().serverSends(press());
+    await flush();
+    expect(off.calls().some((c) => c.body?.content === BUSY_BUTTON_TEXT)).toBe(false);
+    g.open();
   });
 
   it('serializeByChannel: false 면 겹친다', async () => {
