@@ -8,6 +8,7 @@ import {
   isUnauthorized,
   pollingDisabled,
   startTelegramPolling,
+  TELEGRAM_STABLE_RUN_MS,
   type PollingState,
   type PollingStateStore,
 } from "../telegram-polling";
@@ -190,20 +191,53 @@ describe("startTelegramPolling — 방어", () => {
     await t.stop();
   });
 
-  it("정상 시작 뒤 실패는 첫 간격부터 · 이어지는 실패는 다음 간격", async () => {
+  // 회귀: PR #348 Codex P2 — grammY 는 폴링 전에 onStart 를 부른다. onStart 직후 409 가 되풀이되면 간격이 늘어나야 한다
+  it("onStart 직후 409 가 되풀이되면 간격이 늘어난다", async () => {
     const waits: number[] = [];
     let n = 0;
     let last!: ReturnType<typeof fakeBot>;
     const createBot = vi.fn(() => {
       n += 1;
       last =
-        n === 1
+        n <= 3
           ? fakeBot(async (o) => {
               o.onStart?.({ username: "verify_bot" });
               throw Object.assign(new Error("Conflict"), { error_code: 409 });
             })
+          : fakeBot(pollsUntilStopped(() => last));
+      return last as unknown as Bot;
+    });
+    const t = startTelegramPolling({
+      createBot,
+      state: memoryStore("on"),
+      disabled: false,
+      retryDelaysMs: [10, 20, 30],
+      sleep: async (ms) => {
+        waits.push(ms);
+      },
+      now: () => 0,
+    });
+    await flush();
+    expect(waits).toEqual([10, 20, 30]);
+    await t.stop();
+  });
+
+  it("충분히 오래 폴링한 뒤의 실패는 첫 간격부터", async () => {
+    const waits: number[] = [];
+    let clock = 0;
+    let n = 0;
+    let last!: ReturnType<typeof fakeBot>;
+    const createBot = vi.fn(() => {
+      n += 1;
+      last =
+        n === 1
+          ? fakeBot(async () => {
+              throw Object.assign(new Error("Conflict"), { error_code: 409 });
+            })
           : n === 2
-            ? fakeBot(async () => {
+            ? fakeBot(async (o) => {
+                o.onStart?.({ username: "verify_bot" });
+                clock += TELEGRAM_STABLE_RUN_MS;
                 throw Object.assign(new Error("Conflict"), { error_code: 409 });
               })
             : fakeBot(pollsUntilStopped(() => last));
@@ -217,9 +251,10 @@ describe("startTelegramPolling — 방어", () => {
       sleep: async (ms) => {
         waits.push(ms);
       },
+      now: () => clock,
     });
     await flush();
-    expect(waits).toEqual([10, 20]);
+    expect(waits).toEqual([10, 10]);
     await t.stop();
   });
 });
@@ -260,6 +295,17 @@ describe("filePollingStateStore", () => {
     store.write("on");
     expect(store.read()).toBe("on");
     expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+  });
+
+  // 회귀: PR #348 Codex P2 — off 기록이 실패하면 옛 on 이 남아 다음 기동이 밀린 명령을 실행했다
+  it("off 기록이 실패하면 옛 on 파일을 지운다 — 다음 기동은 버리는 쪽", () => {
+    const file = path.join(dir, "s.json");
+    const store = filePollingStateStore(file);
+    store.write("on");
+    fs.mkdirSync(`${file}.${process.pid}.tmp`); // 임시 파일 자리를 디렉터리로 막아 쓰기를 실패시킨다
+    store.write("off");
+    expect(fs.existsSync(file)).toBe(false);
+    expect(store.read()).toBeUndefined();
   });
 
   it("깨진 파일은 undefined(버리는 쪽)", () => {

@@ -34,8 +34,16 @@ export function filePollingStateStore(file: string): PollingStateStore {
         fs.writeFileSync(tmp, JSON.stringify({ polling: state, at: new Date().toISOString() }), { mode: 0o600 });
         fs.renameSync(tmp, file);
       } catch (err) {
-        // 기록 실패 = 다음 기동이 "꺼져 있었다" 로 읽어 밀린 업데이트를 버린다(안전한 쪽) — 로그만
         console.warn(`[bot] 텔레그램 폴링 상태 기록 실패: ${sanitizeError(err)}`);
+        // off 를 못 남기면 옛 on 이 남아 다음 기동이 밀린 명령을 실행한다 — 파일을 지워 "읽기 실패 = 버림" 쪽으로 보낸다
+        // (PR #348 Codex P2). on 기록 실패는 다음 기동이 버리는 쪽이라 그대로 둔다
+        if (state === "off") {
+          try {
+            fs.rmSync(file, { force: true });
+          } catch (rmErr) {
+            console.error(`[bot] 텔레그램 폴링 상태 파일 삭제도 실패 — 다음 기동 전에 손으로 지운다: ${sanitizeError(rmErr)}`);
+          }
+        }
       }
     },
   };
@@ -54,6 +62,8 @@ export function isUnauthorized(err: unknown): boolean {
 
 /** 다시 시도 간격 — 마지막 값을 반복한다. */
 export const TELEGRAM_RETRY_DELAYS_MS: readonly number[] = [5_000, 30_000, 120_000, 300_000];
+/** 이만큼 폴링이 이어진 뒤의 실패만 간격을 처음부터 센다 — grammY 는 폴링 전에 onStart 를 부른다(PR #348 Codex P2). */
+export const TELEGRAM_STABLE_RUN_MS = 60_000;
 
 export interface TelegramPollingOptions {
   /** 토큰이 없으면 undefined. 다시 시도할 때마다 새 인스턴스를 받는다(grammY 는 start 뒤 미들웨어 등록을 막는다). */
@@ -64,6 +74,7 @@ export interface TelegramPollingOptions {
   onFatal?: (reason: string) => Promise<void> | void;
   retryDelaysMs?: readonly number[];
   sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
 }
 
 export interface TelegramPolling {
@@ -78,6 +89,7 @@ const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms).
 export function startTelegramPolling(opts: TelegramPollingOptions): TelegramPolling {
   const delays = opts.retryDelaysMs ?? TELEGRAM_RETRY_DELAYS_MS;
   const sleep = opts.sleep ?? defaultSleep;
+  const now = opts.now ?? Date.now;
   let stopped = false;
   let bot: Bot | undefined;
 
@@ -97,6 +109,7 @@ export function startTelegramPolling(opts: TelegramPollingOptions): TelegramPoll
     let drop = opts.state.read() !== "on";
     let failures = 0;
     while (!stopped) {
+      let startedAt: number | undefined;
       try {
         const b = createBot();
         bot = b;
@@ -108,7 +121,7 @@ export function startTelegramPolling(opts: TelegramPollingOptions): TelegramPoll
             console.log(`[bot] Long polling 시작${drop ? " (밀린 업데이트 버림 — 직전에 꺼져 있었다)" : ""}`);
             opts.state.write("on");
             drop = false;
-            failures = 0; // 정상 시작 뒤 실패는 처음 간격부터
+            startedAt = now();
           },
         });
         if (stopped) return;
@@ -127,6 +140,8 @@ export function startTelegramPolling(opts: TelegramPollingOptions): TelegramPoll
           );
           return;
         }
+        // 충분히 오래 폴링한 뒤의 실패만 처음 간격부터 — onStart 직후 409 가 되풀이되면 간격이 늘어난다
+        if (startedAt !== undefined && now() - startedAt >= TELEGRAM_STABLE_RUN_MS) failures = 0;
         const wait = delays[Math.min(failures, delays.length - 1)];
         failures += 1;
         console.error(`[bot] Long polling 비정상 종료 — ${wait} ms 뒤 다시: ${sanitizeError(err)}`);
