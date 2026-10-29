@@ -1,4 +1,4 @@
-import { Bot, Context, InlineKeyboard } from 'grammy'
+import { Bot } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { parseExpenseInput, isParseError } from '@/lib/expense-parser'
 import { matchCategory, suggestByHistory, getAllCategories, type MatchedCategory } from '@/lib/category-matcher'
@@ -9,9 +9,34 @@ import { isTradeMessage } from '../utils/trade-trigger'
 import { checkBudgetUsage } from '../notifications/budget-alert'
 import { sendToWhooing } from '@/lib/whooing-webhook'
 import { KST_OFFSET_MS } from '@/lib/kst-date'
+import {
+  isSameRequester,
+  plainReply,
+  type ButtonOutput,
+  type ButtonPress,
+  type ReplyButton,
+  type ReplyOutput,
+  type Requester,
+} from '../core/reply'
+import { pendingKey } from '../core/state-key'
+import {
+  telegramButtonOutput,
+  telegramButtonPress,
+  telegramOutput,
+  telegramRequester,
+} from '../utils/telegram-reply'
+
+// pleiades 009 D-3 PR-1a (pleiades#382 · 설계 §4 H2 · B · S): 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말한다.
+// 텔레그램 등록부(register*)는 grammY ctx 를 어댑터(`../utils/telegram-reply`)로 감싸 넘긴다 — 호출열은 분리 전과 같다
+// (특성 테스트 `__tests__/expense-telegram.test.ts`). Discord 수신은 PR-3.
+
+/** `수입 …` 명시적 prefix — 인자 필수("수입" 단독은 budget 핸들러). grammY 와 chat(PR-3)이 같은 객체를 쓴다(설계 P). */
+export const INCOME_RE = /^수입\s+.+$/
 
 interface PendingTransaction {
-  requestedByUserId: number
+  requestedByUserId: string
+  /** `Transaction.userId` 에 쓸 값(Requester.dbUserId) */
+  dbUserId: string
   description: string
   amount: number
   type: 'expense' | 'income'
@@ -20,7 +45,7 @@ interface PendingTransaction {
   expiresAt: number
 }
 
-// messageKey → 대기 중인 거래 정보
+// pendingKey(메시지 키, txId) → 대기 중인 거래 정보
 const pendingTransactions = new Map<string, PendingTransaction>()
 
 // 5분 후 자동 만료
@@ -36,49 +61,71 @@ function cleanExpired(): void {
 }
 
 /**
- * 카테고리 선택 InlineKeyboard 생성.
- * 2열 그리드로 표시.
+ * 카테고리 선택 버튼 행.
+ * 2열 그리드 + 마지막 행 `취소`(지금 텔레그램 키보드 모양 그대로 — 행 재배치는 Discord 어댑터 몫 · 설계 B).
  */
-function buildCategoryKeyboard(
-  categories: MatchedCategory[],
-  txId: string
-): InlineKeyboard {
-  const keyboard = new InlineKeyboard()
-
-  for (let i = 0; i < categories.length; i++) {
-    const cat = categories[i]
-    const label = cat.icon ? `${cat.icon} ${cat.name}` : cat.name
-    keyboard.text(label, `tx:cat:${txId}:${cat.id}`)
-    // 2열 그리드
-    if (i % 2 === 1) keyboard.row()
+function buildCategoryRows(categories: MatchedCategory[], txId: string): ReplyButton[][] {
+  const rows: ReplyButton[][] = []
+  for (let i = 0; i < categories.length; i += 2) {
+    rows.push(
+      categories.slice(i, i + 2).map((cat) => ({
+        label: cat.icon ? `${cat.icon} ${cat.name}` : cat.name,
+        action: `tx:cat:${txId}:${cat.id}`,
+      })),
+    )
   }
-  // 홀수개면 마지막 행 닫기
-  if (categories.length % 2 === 1) keyboard.row()
+  rows.push([{ label: '❌ 취소', action: `tx:cancel:${txId}` }])
+  return rows
+}
 
-  keyboard.text('❌ 취소', `tx:cancel:${txId}`)
+// 복수 건 감지: 금액 토큰(숫자+단위 or 3자리 이상 독립 숫자)이 2개 이상이면 AI 복수 파싱
+// 날짜(N월/N일) 및 제품명 내 숫자(RTX4090)는 제외
+const AMOUNT_TOKEN_RE = /(?<=^|[\s,])\d[\d,]*(만\s*원|원|만)(?=$|[\s,.])|(?<=^|[\s,])\d{3,}(?=$|[\s,.])/g
 
-  return keyboard
+// 소비 fallback 이 거르는 명령 단어 — 커맨드 단어 뒤에 공백 또는 문자열 끝이어야 매칭 (예: "매수수수료"는 통과)
+// "수입 ..."은 expense 핸들러가 처리, "소비"/"수입" 단독은 budget 핸들러가 처리
+const COMMAND_WORD_RE = /^(현황|계좌|주가|환율|매수|매도|수입|예산설정|알림설정|전략|전략목록|관심|관심삭제|관심목록|분석|브리핑|순자산|자산목록|자산추가|자산수정|리포트|백테스트)(\s|$)/i
+const BUDGET_ALONE_RE = /^(소비|예산)\s*$/i
+
+/**
+ * 자유 텍스트가 소비 입력인지 — 아니면 다음 fallback(AI 거래 · AI 질문)으로 넘긴다.
+ * `isCommand` 는 어댑터가 정한다(텔레그램 `/` 시작 · Discord `!` 시작 — 설계 P).
+ */
+export function expenseFallbackRoute(text: string, isCommand: boolean): 'expense' | 'next' {
+  // 명령은 무시 → 다음 핸들러로
+  if (isCommand) return 'next'
+  // 기존 커맨드 패턴은 무시 (이미 다른 핸들러에서 처리됨)
+  if (COMMAND_WORD_RE.test(text)) return 'next'
+  if (BUDGET_ALONE_RE.test(text)) return 'next'
+
+  // 숫자 미포함 → 다음 핸들러(AI fallback)로 전달
+  if (!/\d/.test(text)) return 'next'
+
+  // 숫자 포함이지만 질문형 키워드가 있으면 AI fallback으로 전달
+  // (예: "테슬라 2026 전망 알려줘")
+  if (isAiQuestion(text)) return 'next'
+
+  // 숫자 포함이지만 거래 키워드가 있으면 AI 거래 파싱으로 전달
+  // (예: "소담 TIGER S&P500 10주 24900원에 샀어")
+  if (isTradeMessage(text)) return 'next'
+
+  return 'expense'
 }
 
 /**
  * 자연어 소비/수입 입력 처리.
  * 기존 커맨드(주가, 환율, 매수, 매도, 현황, 계좌)에 매칭되지 않는 텍스트를 처리.
  */
-async function handleExpenseInput(ctx: Context): Promise<void> {
-  const text = ctx.message?.text ?? ''
-
-  // 복수 건 감지: 금액 토큰(숫자+단위 or 3자리 이상 독립 숫자)이 2개 이상이면 AI 복수 파싱
-  // 날짜(N월/N일) 및 제품명 내 숫자(RTX4090)는 제외
-  const amountPattern = /(?<=^|[\s,])\d[\d,]*(만\s*원|원|만)(?=$|[\s,.])|(?<=^|[\s,])\d{3,}(?=$|[\s,.])/g
-  const amountCount = (text.match(amountPattern) ?? []).length
+export async function decideExpenseInput(text: string, out: ReplyOutput, who: Requester): Promise<void> {
+  const amountCount = (text.match(AMOUNT_TOKEN_RE) ?? []).length
   if (amountCount >= 2) {
-    fireMultiExpenseParse(ctx, text)
+    fireMultiExpenseParse(out, who, text)
     return
   }
 
   const result = parseExpenseInput(text)
   if (isParseError(result)) {
-    await ctx.reply(`⚠️ ${result.error}`)
+    await out.reply(plainReply(`⚠️ ${result.error}`))
     return
   }
 
@@ -97,7 +144,8 @@ async function handleExpenseInput(ctx: Context): Promise<void> {
 
     cleanExpired()
     const pending: PendingTransaction = {
-      requestedByUserId: ctx.from?.id ?? 0,
+      requestedByUserId: who.userId,
+      dbUserId: who.dbUserId,
       description,
       amount,
       type,
@@ -106,23 +154,24 @@ async function handleExpenseInput(ctx: Context): Promise<void> {
       expiresAt: Date.now() + PENDING_TTL_MS,
     }
 
-    const keyboard = new InlineKeyboard()
-      .text('✅ 확인', `tx:confirm:${txId}`)
-      .text('🔄 카테고리 변경', `tx:change:${txId}`)
-      .row()
-      .text('❌ 취소', `tx:cancel:${txId}`)
-
-    const sent = await ctx.reply(
-      `📝 ${typeLabel} 기록\n\n` +
-        `내용: ${description}\n` +
-        `금액: ${formatKRWFull(amount)}\n` +
-        `카테고리: ${catLabel}\n\n` +
-        `기록하시겠습니까?`,
-      { reply_markup: keyboard }
+    const messageKey = await out.reply(
+      plainReply(
+        `📝 ${typeLabel} 기록\n\n` +
+          `내용: ${description}\n` +
+          `금액: ${formatKRWFull(amount)}\n` +
+          `카테고리: ${catLabel}\n\n` +
+          `기록하시겠습니까?`,
+        [
+          [
+            { label: '✅ 확인', action: `tx:confirm:${txId}` },
+            { label: '🔄 카테고리 변경', action: `tx:change:${txId}` },
+          ],
+          [{ label: '❌ 취소', action: `tx:cancel:${txId}` }],
+        ],
+      ),
     )
 
-    const key = `${sent.chat.id}:${sent.message_id}:${txId}`
-    pendingTransactions.set(key, pending)
+    pendingTransactions.set(pendingKey(messageKey, txId), pending)
     return
   }
 
@@ -143,14 +192,15 @@ async function handleExpenseInput(ctx: Context): Promise<void> {
   }
 
   if (categories.length === 0) {
-    await ctx.reply(`⚠️ ${typeLabel} 카테고리가 없습니다. 웹에서 카테고리를 추가해주세요.`)
+    await out.reply(plainReply(`⚠️ ${typeLabel} 카테고리가 없습니다. 웹에서 카테고리를 추가해주세요.`))
     return
   }
 
   cleanExpired()
   // categoryId는 아직 미확정 — 선택 후 설정
-  const basePending = {
-    requestedByUserId: ctx.from?.id ?? 0,
+  const basePending: PendingTransaction = {
+    requestedByUserId: who.userId,
+    dbUserId: who.dbUserId,
     description,
     amount,
     type,
@@ -166,71 +216,71 @@ async function handleExpenseInput(ctx: Context): Promise<void> {
         ? `추천 카테고리에서 선택해주세요:`
         : `카테고리를 선택해주세요:`
 
-  const keyboard = buildCategoryKeyboard(categories, txId)
+  const rows = buildCategoryRows(categories, txId)
   if (suggestionSource === 'history') {
-    keyboard.text('📋 전체 카테고리', `tx:allcat:${txId}`)
-    keyboard.row()
+    // 취소 옆에 "전체 카테고리" · 끝의 빈 행은 지금 텔레그램 키보드 모양(InlineKeyboard `.row()`) 그대로
+    rows[rows.length - 1].push({ label: '📋 전체 카테고리', action: `tx:allcat:${txId}` })
+    rows.push([])
   }
-  const sent = await ctx.reply(
-    `📝 ${typeLabel} 기록\n\n` +
-      `내용: ${description}\n` +
-      `금액: ${formatKRWFull(amount)}\n\n` +
-      prompt,
-    { reply_markup: keyboard }
+  const messageKey = await out.reply(
+    plainReply(
+      `📝 ${typeLabel} 기록\n\n` +
+        `내용: ${description}\n` +
+        `금액: ${formatKRWFull(amount)}\n\n` +
+        prompt,
+      rows,
+    ),
   )
 
-  const key = `${sent.chat.id}:${sent.message_id}:${txId}`
-  pendingTransactions.set(key, basePending)
+  pendingTransactions.set(pendingKey(messageKey, txId), basePending)
 }
 
 /**
- * InlineKeyboard 콜백 처리.
+ * 버튼 처리.
  * tx:confirm:{txId} — 확인
  * tx:cancel:{txId} — 취소
  * tx:cat:{txId}:{categoryId} — 카테고리 선택
  * tx:change:{txId} — 카테고리 변경
  * tx:allcat:{txId} — 전체 카테고리 보기
  */
-async function handleExpenseCallback(ctx: Context): Promise<void> {
-  const data = ctx.callbackQuery?.data
-  if (!data?.startsWith('tx:')) return
+export async function decideExpenseButton(data: string, press: ButtonPress, out: ButtonOutput): Promise<void> {
+  if (!data.startsWith('tx:')) return
 
   const parts = data.split(':')
   const action = parts[1]
   const txId = parts[2]
-  const message = ctx.callbackQuery?.message
-  if (!message || !txId) {
-    await ctx.answerCallbackQuery({ text: '⚠️ 메시지를 찾을 수 없습니다.' })
+  if (!press.messageKey || !txId) {
+    await out.toast('⚠️ 메시지를 찾을 수 없습니다.')
     return
   }
 
-  const key = `${message.chat.id}:${message.message_id}:${txId}`
+  const key = pendingKey(press.messageKey, txId)
 
   const pending = pendingTransactions.get(key)
   if (!pending) {
-    await ctx.answerCallbackQuery({ text: '⚠️ 만료된 요청입니다.' })
-    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
+    await out.toast('⚠️ 만료된 요청입니다.')
+    await out.removeButtons()
     return
   }
 
   // 요청자 검증 (모든 액션 공통)
-  if (ctx.from?.id !== pending.requestedByUserId) {
-    await ctx.answerCallbackQuery({ text: '⚠️ 본인만 확인/취소할 수 있습니다.' })
+  if (!isSameRequester(press.clickerId, pending.requestedByUserId)) {
+    await out.toast('⚠️ 본인만 확인/취소할 수 있습니다.')
     return
   }
 
   if (pending.expiresAt < Date.now()) {
     pendingTransactions.delete(key)
-    await ctx.answerCallbackQuery({ text: '⚠️ 요청이 만료되었습니다.' })
-    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
+    await out.toast('⚠️ 요청이 만료되었습니다.')
+    await out.removeButtons()
     return
   }
 
   if (action === 'cancel') {
     pendingTransactions.delete(key)
-    await ctx.answerCallbackQuery({ text: '취소되었습니다.' })
-    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
-    await ctx.editMessageText('❌ 기록이 취소되었습니다.')
+    await out.toast('취소되었습니다.')
+    await out.removeButtons()
+    await out.edit(plainReply('❌ 기록이 취소되었습니다.'))
     return
   }
 
@@ -240,7 +290,7 @@ async function handleExpenseCallback(ctx: Context): Promise<void> {
 
     const categoryId = parts[3]
     if (!categoryId) {
-      await ctx.answerCallbackQuery({ text: '⚠️ 카테고리 정보가 없습니다.' })
+      await out.toast('⚠️ 카테고리 정보가 없습니다.')
       return
     }
 
@@ -250,70 +300,51 @@ async function handleExpenseCallback(ctx: Context): Promise<void> {
     })
 
     if (!category) {
-      await ctx.answerCallbackQuery({ text: '⚠️ 카테고리를 찾을 수 없습니다.' })
+      await out.toast('⚠️ 카테고리를 찾을 수 없습니다.')
       return
     }
 
-    await createTransaction(ctx, { ...pending, categoryId: category.id, categoryName: category.name })
+    await createTransaction(out, { ...pending, categoryId: category.id, categoryName: category.name })
     return
   }
 
-  if (action === 'allcat') {
-    // 전체 카테고리 목록 표시 (히스토리 추천에서 "전체 보기" 클릭)
+  if (action === 'allcat' || action === 'change') {
+    // allcat: 전체 카테고리 목록 표시 (히스토리 추천에서 "전체 보기" 클릭)
+    // change: 카테고리 변경 → 전체 카테고리 목록 표시
     const categories = await getAllCategories(pending.type)
     if (categories.length === 0) {
-      await ctx.answerCallbackQuery({ text: '⚠️ 카테고리가 없습니다.' })
+      await out.toast('⚠️ 카테고리가 없습니다.')
       return
     }
 
     const typeLabel = pending.type === 'expense' ? '소비' : '수입'
-    const keyboard = buildCategoryKeyboard(categories, txId)
-    await ctx.answerCallbackQuery()
-    await ctx.editMessageText(
-      `📝 ${typeLabel} 기록\n\n` +
-        `내용: ${pending.description}\n` +
-        `금액: ${formatKRWFull(pending.amount)}\n\n` +
-        `카테고리를 선택해주세요:`,
-      { reply_markup: keyboard }
-    )
-    return
-  }
-
-  if (action === 'change') {
-    // 카테고리 변경 → 전체 카테고리 목록 표시
-    const categories = await getAllCategories(pending.type)
-    if (categories.length === 0) {
-      await ctx.answerCallbackQuery({ text: '⚠️ 카테고리가 없습니다.' })
-      return
-    }
-
-    const typeLabel = pending.type === 'expense' ? '소비' : '수입'
-    const keyboard = buildCategoryKeyboard(categories, txId)
-    await ctx.answerCallbackQuery()
-    await ctx.editMessageText(
-      `📝 ${typeLabel} 기록\n\n` +
-        `내용: ${pending.description}\n` +
-        `금액: ${formatKRWFull(pending.amount)}\n\n` +
-        `카테고리를 선택해주세요:`,
-      { reply_markup: keyboard }
+    await out.toast()
+    await out.edit(
+      plainReply(
+        `📝 ${typeLabel} 기록\n\n` +
+          `내용: ${pending.description}\n` +
+          `금액: ${formatKRWFull(pending.amount)}\n\n` +
+          `카테고리를 선택해주세요:`,
+        buildCategoryRows(categories, txId),
+      ),
     )
     return
   }
 
   if (action === 'confirm') {
     if (!pending.categoryId) {
-      await ctx.answerCallbackQuery({ text: '⚠️ 카테고리가 선택되지 않았습니다.' })
+      await out.toast('⚠️ 카테고리가 선택되지 않았습니다.')
       return
     }
 
     pendingTransactions.delete(key)
-    await createTransaction(ctx, pending)
+    await createTransaction(out, pending)
     return
   }
 }
 
 async function createTransaction(
-  ctx: Context,
+  out: ButtonOutput,
   pending: PendingTransaction
 ): Promise<void> {
   const typeLabel = pending.type === 'expense' ? '소비' : '수입'
@@ -329,7 +360,7 @@ async function createTransaction(
         amount: pending.amount,
         description: pending.description,
         categoryId: pending.categoryId,
-        userId: String(pending.requestedByUserId),
+        userId: pending.dbUserId,
         transactedAt: new Date(),
       },
     })
@@ -350,13 +381,15 @@ async function createTransaction(
       ? `${category.icon} ${category.name}`
       : pending.categoryName
 
-    await ctx.answerCallbackQuery({ text: '기록 완료!' })
-    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
-    await ctx.editMessageText(
-      `✅ ${typeLabel} 기록 완료\n\n` +
-        `내용: ${pending.description}\n` +
-        `금액: ${formatKRWFull(pending.amount)}\n` +
-        `카테고리: ${catLabel}`
+    await out.toast('기록 완료!')
+    await out.removeButtons()
+    await out.edit(
+      plainReply(
+        `✅ ${typeLabel} 기록 완료\n\n` +
+          `내용: ${pending.description}\n` +
+          `금액: ${formatKRWFull(pending.amount)}\n` +
+          `카테고리: ${catLabel}`,
+      ),
     )
 
     // 소비 기록 후 예산 사용률 체크 (비동기, 실패해도 무시)
@@ -366,10 +399,11 @@ async function createTransaction(
       )
     }
   } catch (error) {
+    // 현재 동작(서비스 유래 · UQ-3): 기록 뒤 원본 수정이 실패해도 여기로 와 "실패" 를 띄운다 — 특성 테스트가 고정
     console.error('[bot/expense] 거래 기록 실패:', error)
-    await ctx.answerCallbackQuery({ text: '⚠️ 기록에 실패했습니다.' })
-    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
-    await ctx.editMessageText(`⚠️ ${typeLabel} 기록에 실패했습니다. 잠시 후 다시 시도해주세요.`)
+    await out.toast('⚠️ 기록에 실패했습니다.')
+    await out.removeButtons()
+    await out.edit(plainReply(`⚠️ ${typeLabel} 기록에 실패했습니다. 잠시 후 다시 시도해주세요.`))
   }
 }
 
@@ -385,7 +419,9 @@ interface ParsedMultiExpense {
 }
 
 interface PendingMultiExpense {
-  requestedByUserId: number
+  requestedByUserId: string
+  /** `Transaction.userId` 에 쓸 값(Requester.dbUserId) */
+  dbUserId: string
   items: { parsed: ParsedMultiExpense; categoryId: string; categoryName: string }[]
   expiresAt: number
 }
@@ -420,26 +456,27 @@ function buildMultiParsePrompt(): string {
 메시지: `
 }
 
-function fireMultiExpenseParse(ctx: Context, text: string): void {
-  ctx.reply('📝 여러 건 파싱 중...')
+/** fire-and-forget — 진행 안내 뒤 곧 돌아간다. 오류는 이 작업이 스스로 정적 안내로 받는다(설계 Q · T18). */
+function fireMultiExpenseParse(out: ReplyOutput, who: Requester, text: string): void {
+  out.reply(plainReply('📝 여러 건 파싱 중...'))
     .catch((e) => console.error('[bot] 복수 파싱 중 응답 실패:', e))
 
   const typingInterval = setInterval(() => {
-    ctx.replyWithChatAction('typing').catch(() => {})
-  }, 5000)
+    out.typing().catch(() => {})
+  }, out.typingIntervalMs)
 
   askAdvisor(buildMultiParsePrompt() + text, { timeout: 60_000, intent: 'parse', caller: 'bot:expense_parse' })  // 구조 JSON 파싱 → haiku (35-A)
     .then(async (result) => {
-      await handleMultiExpenseParsed(ctx, result.response)
+      await handleMultiExpenseParsed(out, who, result.response)
     })
     .catch(async (error) => {
       console.error('[bot] 복수 거래 파싱 실패:', error)
-      await ctx.reply('⚠️ 여러 건 파싱에 실패했습니다. 한 건씩 입력해주세요.\n예: 점심 12000')
+      await out.reply(plainReply('⚠️ 여러 건 파싱에 실패했습니다. 한 건씩 입력해주세요.\n예: 점심 12000'))
     })
     .finally(() => clearInterval(typingInterval))
 }
 
-async function handleMultiExpenseParsed(ctx: Context, response: string): Promise<void> {
+async function handleMultiExpenseParsed(out: ReplyOutput, who: Requester, response: string): Promise<void> {
   const jsonMatch = response.match(/\[[\s\S]*\]/)
   if (!jsonMatch) {
     // 단일 에러 객체 체크
@@ -447,11 +484,11 @@ async function handleMultiExpenseParsed(ctx: Context, response: string): Promise
     if (errMatch) {
       try {
         const err = JSON.parse(errMatch[0])
-        await ctx.reply(`⚠️ 파싱 실패: ${err.error}`)
+        await out.reply(plainReply(`⚠️ 파싱 실패: ${err.error}`))
         return
       } catch { /* fall through */ }
     }
-    await ctx.reply('⚠️ 거래 정보를 파싱할 수 없습니다. 한 건씩 입력해주세요.')
+    await out.reply(plainReply('⚠️ 거래 정보를 파싱할 수 없습니다. 한 건씩 입력해주세요.'))
     return
   }
 
@@ -459,7 +496,7 @@ async function handleMultiExpenseParsed(ctx: Context, response: string): Promise
   try {
     const raw = JSON.parse(jsonMatch[0])
     if (!Array.isArray(raw) || raw.length === 0) {
-      await ctx.reply('⚠️ 거래를 추출할 수 없습니다.')
+      await out.reply(plainReply('⚠️ 거래를 추출할 수 없습니다.'))
       return
     }
     items = raw.map((r: Record<string, unknown>) => ({
@@ -469,14 +506,14 @@ async function handleMultiExpenseParsed(ctx: Context, response: string): Promise
       type: r.type === 'income' ? 'income' as const : 'expense' as const,
     }))
   } catch {
-    await ctx.reply('⚠️ 파싱 결과를 해석할 수 없습니다.')
+    await out.reply(plainReply('⚠️ 파싱 결과를 해석할 수 없습니다.'))
     return
   }
 
   // 검증
   const valid = items.filter((i) => i.description && i.amount > 0)
   if (valid.length === 0) {
-    await ctx.reply('⚠️ 유효한 거래가 없습니다.')
+    await out.reply(plainReply('⚠️ 유효한 거래가 없습니다.'))
     return
   }
 
@@ -512,59 +549,60 @@ async function handleMultiExpenseParsed(ctx: Context, response: string): Promise
   }
   lines.push('\n기록하시겠습니까?')
 
-  const keyboard = new InlineKeyboard()
-    .text('✅ 전체 확인', `multi:confirm:${txId}`)
-    .text('❌ 취소', `multi:cancel:${txId}`)
+  const messageKey = await out.reply(
+    plainReply(lines.join('\n'), [
+      [
+        { label: '✅ 전체 확인', action: `multi:confirm:${txId}` },
+        { label: '❌ 취소', action: `multi:cancel:${txId}` },
+      ],
+    ]),
+  )
 
-  const sent = await ctx.reply(lines.join('\n'), { reply_markup: keyboard })
-
-  const key = `${sent.chat.id}:${sent.message_id}:${txId}`
-  pendingMultiExpenses.set(key, {
-    requestedByUserId: ctx.from?.id ?? 0,
+  pendingMultiExpenses.set(pendingKey(messageKey, txId), {
+    requestedByUserId: who.userId,
+    dbUserId: who.dbUserId,
     items: matched,
     expiresAt: Date.now() + PENDING_TTL_MS,
   })
 }
 
-async function handleMultiExpenseCallback(ctx: Context): Promise<void> {
-  const data = ctx.callbackQuery?.data
-  if (!data?.startsWith('multi:')) return
+export async function decideMultiExpenseButton(data: string, press: ButtonPress, out: ButtonOutput): Promise<void> {
+  if (!data.startsWith('multi:')) return
 
   const parts = data.split(':')
   const action = parts[1]
   const txId = parts[2]
-  const message = ctx.callbackQuery?.message
-  if (!message || !txId) {
-    await ctx.answerCallbackQuery({ text: '⚠️ 메시지를 찾을 수 없습니다.' })
+  if (!press.messageKey || !txId) {
+    await out.toast('⚠️ 메시지를 찾을 수 없습니다.')
     return
   }
 
-  const key = `${message.chat.id}:${message.message_id}:${txId}`
+  const key = pendingKey(press.messageKey, txId)
   const pending = pendingMultiExpenses.get(key)
   if (pending) pendingMultiExpenses.delete(key)
 
   if (!pending) {
-    await ctx.answerCallbackQuery({ text: '⚠️ 만료된 요청입니다.' })
-    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
+    await out.toast('⚠️ 만료된 요청입니다.')
+    await out.removeButtons()
     return
   }
 
-  if (ctx.from?.id !== pending.requestedByUserId) {
+  if (!isSameRequester(press.clickerId, pending.requestedByUserId)) {
     pendingMultiExpenses.set(key, pending)
-    await ctx.answerCallbackQuery({ text: '⚠️ 본인만 확인/취소할 수 있습니다.' })
+    await out.toast('⚠️ 본인만 확인/취소할 수 있습니다.')
     return
   }
 
   if (pending.expiresAt < Date.now()) {
-    await ctx.answerCallbackQuery({ text: '⚠️ 요청이 만료되었습니다.' })
-    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
+    await out.toast('⚠️ 요청이 만료되었습니다.')
+    await out.removeButtons()
     return
   }
 
   if (action === 'cancel') {
-    await ctx.answerCallbackQuery({ text: '취소되었습니다.' })
-    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
-    await ctx.editMessageText('❌ 기록이 취소되었습니다.')
+    await out.toast('취소되었습니다.')
+    await out.removeButtons()
+    await out.edit(plainReply('❌ 기록이 취소되었습니다.'))
     return
   }
 
@@ -573,8 +611,8 @@ async function handleMultiExpenseCallback(ctx: Context): Promise<void> {
       const skipped = pending.items.filter((m) => !m.categoryId)
       const validItems = pending.items.filter((m) => m.categoryId)
       if (validItems.length === 0) {
-        await ctx.answerCallbackQuery({ text: '⚠️ 유효한 거래가 없습니다.' })
-        await ctx.editMessageReplyMarkup({ reply_markup: undefined })
+        await out.toast('⚠️ 유효한 거래가 없습니다.')
+        await out.removeButtons()
         return
       }
 
@@ -585,7 +623,7 @@ async function handleMultiExpenseCallback(ctx: Context): Promise<void> {
               amount: m.parsed.amount,
               description: m.parsed.description,
               categoryId: m.categoryId,
-              userId: String(pending.requestedByUserId),
+              userId: pending.dbUserId,
               transactedAt: new Date(`${m.parsed.date}T00:00:00.000Z`),
             },
           })
@@ -609,9 +647,9 @@ async function handleMultiExpenseCallback(ctx: Context): Promise<void> {
       const skippedMsg = skipped.length > 0
         ? `\n⚠️ 카테고리 미설정 ${skipped.length}건 제외: ${skipped.map((s) => s.parsed.description).join(', ')}`
         : ''
-      await ctx.answerCallbackQuery({ text: `${created.length}건 기록 완료!` })
-      await ctx.editMessageReplyMarkup({ reply_markup: undefined })
-      await ctx.editMessageText(`✅ ${created.length}건 거래 기록 완료${skippedMsg}`)
+      await out.toast(`${created.length}건 기록 완료!`)
+      await out.removeButtons()
+      await out.edit(plainReply(`✅ ${created.length}건 거래 기록 완료${skippedMsg}`))
 
       const hasExpense = validItems.some((m) => m.parsed.type === 'expense')
       if (hasExpense) {
@@ -620,19 +658,24 @@ async function handleMultiExpenseCallback(ctx: Context): Promise<void> {
         )
       }
     } catch (error) {
+      // 현재 동작(서비스 유래 · UQ-3): 기록 뒤 원본 수정 실패도 여기로 온다
       console.error('[bot/multi-expense] 거래 기록 실패:', error)
-      await ctx.answerCallbackQuery({ text: '⚠️ 기록에 실패했습니다.' })
-      await ctx.editMessageReplyMarkup({ reply_markup: undefined })
-      await ctx.editMessageText('⚠️ 거래 기록에 실패했습니다.')
+      await out.toast('⚠️ 기록에 실패했습니다.')
+      await out.removeButtons()
+      await out.edit(plainReply('⚠️ 거래 기록에 실패했습니다.'))
     }
   }
 }
 
+// ============================================================
+// 텔레그램 등록부 — grammY ctx → 어댑터 → decide*
+// ============================================================
+
 export function registerExpenseCommands(bot: Bot): void {
   // "수입 ..." 명시적 prefix (인자 필수 — "수입" 단독은 budget 핸들러가 처리)
-  bot.hears(/^수입\s+.+$/, async (ctx) => {
+  bot.hears(INCOME_RE, async (ctx) => {
     try {
-      await handleExpenseInput(ctx)
+      await decideExpenseInput(ctx.message?.text ?? '', telegramOutput(ctx), telegramRequester(ctx))
     } catch (error) {
       console.error('[bot] 수입 입력 실패:', error)
       await ctx.reply('⚠️ 수입 기록에 실패했습니다.')
@@ -644,14 +687,14 @@ export function registerExpenseCommands(bot: Bot): void {
     const data = ctx.callbackQuery?.data
     if (data?.startsWith('tx:')) {
       try {
-        await handleExpenseCallback(ctx)
+        await decideExpenseButton(data, telegramButtonPress(ctx), telegramButtonOutput(ctx))
       } catch (error) {
         console.error('[bot] 콜백 처리 실패:', error)
         await ctx.answerCallbackQuery({ text: '⚠️ 처리 중 오류가 발생했습니다.' })
       }
     } else if (data?.startsWith('multi:')) {
       try {
-        await handleMultiExpenseCallback(ctx)
+        await decideMultiExpenseButton(data, telegramButtonPress(ctx), telegramButtonOutput(ctx))
       } catch (error) {
         console.error('[bot] 복수 거래 콜백 실패:', error)
         await ctx.answerCallbackQuery({ text: '⚠️ 처리 중 오류가 발생했습니다.' })
@@ -669,27 +712,11 @@ export function registerExpenseCommands(bot: Bot): void {
 export function registerExpenseFallback(bot: Bot): void {
   bot.on('message:text', async (ctx, next) => {
     const text = ctx.message.text
-    // 슬래시 커맨드는 무시 → 다음 핸들러로
-    if (text.startsWith('/')) return next()
-    // 기존 커맨드 패턴은 무시 (이미 다른 핸들러에서 처리됨)
-    // 커맨드 단어 뒤에 공백 또는 문자열 끝이어야 매칭 (예: "매수수수료"는 통과)
-    // "수입 ..."은 expense 핸들러가 처리, "소비"/"수입" 단독은 budget 핸들러가 처리
-    if (/^(현황|계좌|주가|환율|매수|매도|수입|예산설정|알림설정|전략|전략목록|관심|관심삭제|관심목록|분석|브리핑|순자산|자산목록|자산추가|자산수정|리포트|백테스트)(\s|$)/i.test(text)) return next()
-    if (/^(소비|예산)\s*$/i.test(text)) return next()
-
-    // 숫자 미포함 → 다음 핸들러(AI fallback)로 전달
-    if (!/\d/.test(text)) return next()
-
-    // 숫자 포함이지만 질문형 키워드가 있으면 AI fallback으로 전달
-    // (예: "테슬라 2026 전망 알려줘")
-    if (isAiQuestion(text)) return next()
-
-    // 숫자 포함이지만 거래 키워드가 있으면 AI 거래 파싱으로 전달
-    // (예: "소담 TIGER S&P500 10주 24900원에 샀어")
-    if (isTradeMessage(text)) return next()
+    // 텔레그램 명령 = 슬래시 시작
+    if (expenseFallbackRoute(text, text.startsWith('/')) === 'next') return next()
 
     try {
-      await handleExpenseInput(ctx)
+      await decideExpenseInput(text, telegramOutput(ctx), telegramRequester(ctx))
     } catch (error) {
       console.error('[bot] 소비 입력 실패:', error)
       await ctx.reply('⚠️ 소비 기록에 실패했습니다.')
