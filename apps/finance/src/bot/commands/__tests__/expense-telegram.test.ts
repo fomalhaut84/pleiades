@@ -130,6 +130,7 @@ describe('T1 자유 텍스트 거름 — 다음 핸들러로 넘기는 조건과
 
 describe('T2 금액 토큰 분기', () => {
   it('금액 토큰 2개 → 복수 파싱(AI) · 진행 안내', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] }) // 끝나지 않는 AI — 실제 typing 타이머를 남기지 않는다
     mocked.ask.mockReturnValueOnce(new Promise(() => undefined))
     const r = await sendText('점심 12000 커피 4500')
     expect(r.calls).toEqual([['reply', '📝 여러 건 파싱 중...']])
@@ -294,7 +295,7 @@ describe('T5 tx: 콜백', () => {
     expect(r.calls).toEqual([['answerCallbackQuery', { text: '⚠️ 본인만 확인/취소할 수 있습니다.' }]])
   })
 
-  it('T17 요청에 from 이 없었으면(요청자 0) 아무도 확정할 수 없다 · DB 값 "0"', async () => {
+  it('T17 요청에 from 이 없었으면(요청자 0) 아무도 확정할 수 없다', async () => {
     const { messageId, txId } = await startSingle('점심 12000', { fromId: undefined })
     const r = await press(`tx:cancel:${txId}`, messageId)
     expect(r.calls).toEqual([['answerCallbackQuery', { text: '⚠️ 본인만 확인/취소할 수 있습니다.' }]])
@@ -481,6 +482,23 @@ describe('T15 복수 파싱(fire-and-forget) · T6 multi: 콜백', () => {
     expect(mocked.all.mock.calls).toEqual([['expense'], ['income']])
   })
 
+  it('typing — 5 s 마다 · AI 가 끝나면 멈춘다(.finally)', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    let resolve: (v: unknown) => void = () => undefined
+    mocked.ask.mockReturnValueOnce(new Promise((r) => (resolve = r)) as never)
+    const r = await sendText('점심 12000 커피 4500')
+    expect(r.ctx.replyWithChatAction).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(5000)
+    expect(r.ctx.replyWithChatAction).toHaveBeenCalledTimes(1)
+    expect(r.ctx.replyWithChatAction).toHaveBeenCalledWith('typing')
+    vi.advanceTimersByTime(4999)
+    expect(r.ctx.replyWithChatAction).toHaveBeenCalledTimes(1)
+    resolve({ response: '[]' })
+    await flush()
+    vi.advanceTimersByTime(20_000)
+    expect(r.ctx.replyWithChatAction).toHaveBeenCalledTimes(1)
+  })
+
   it.each([
     ['형식 없음', '모르겠어요', '⚠️ 거래 정보를 파싱할 수 없습니다. 한 건씩 입력해주세요.'],
     ['오류 객체', '{"error":"날짜가 없음"}', '⚠️ 파싱 실패: 날짜가 없음'],
@@ -577,6 +595,15 @@ describe('T15 복수 파싱(fire-and-forget) · T6 multi: 콜백', () => {
     ])
   })
 
+  it('T17 요청에 from 이 없었으면 아무도 확정할 수 없다', async () => {
+    const a = await multiReady({ fromId: undefined })
+    const own = await press(`multi:confirm:${a.tx}`, a.messageId)
+    expect(own.calls).toEqual([['answerCallbackQuery', { text: '⚠️ 본인만 확인/취소할 수 있습니다.' }]])
+    const anon = await press(`multi:confirm:${a.tx}`, a.messageId, { fromId: undefined })
+    expect(anon.calls).toEqual([['answerCallbackQuery', { text: '⚠️ 본인만 확인/취소할 수 있습니다.' }]])
+    expect(mocked.$transaction).not.toHaveBeenCalled()
+  })
+
   it('시간 만료 → 만료 안내 · 버튼 제거', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-10-29T00:00:00Z'))
@@ -616,6 +643,7 @@ describe('T16 수입 … hears', () => {
   })
 
   it('금액 토큰 2개 → 복수 파싱', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
     mocked.ask.mockReturnValueOnce(new Promise(() => undefined))
     const f = await income('수입 월급 5000000 보너스 300000')
     expect(f.calls).toEqual([['reply', '📝 여러 건 파싱 중...']])

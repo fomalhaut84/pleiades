@@ -65,7 +65,8 @@ export function fakeCtx(opts: FakeCtxOptions = {}) {
       sentIds.push(id)
       return { chat: { id: chatId }, message_id: id }
     }),
-    replyWithChatAction: vi.fn(async () => true),
+    // typing 은 타이머로 끼어들므로 calls 줄 밖에 따로 센다(9-1 리뷰 info 1)
+    replyWithChatAction: vi.fn<(action: string) => Promise<boolean>>(async () => true),
     answerCallbackQuery: record('answerCallbackQuery'),
     editMessageReplyMarkup: record('editMessageReplyMarkup'),
     editMessageText: record('editMessageText'),
