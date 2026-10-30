@@ -95,6 +95,22 @@ export interface ButtonPress {
   readonly clickerId: string | undefined
 }
 
+/**
+ * 기록(DB 쓰기) 뒤 화면 갱신 — 단계마다 따로 시도하고 실패는 로그만 남긴다.
+ * 앞 단계(예: 콜백 만료로 토스트 실패)가 실패해도 버튼 제거·본문 교체는 돈다 — 기록된 거래가 화면에 남지 않으면
+ * 사용자가 결과를 몰라 다시 입력한다(중복 기록). 기록 뒤 실패를 "기록 실패" 로 바꾸지 않는다.
+ * pleiades 009 D-3 PR-2c (pleiades#396 · UQ-3 · 9-1 리뷰 major).
+ */
+export async function afterCommit(label: string, steps: readonly (() => Promise<void>)[]): Promise<void> {
+  for (const step of steps) {
+    try {
+      await step()
+    } catch (error) {
+      console.error(`${label} 기록 뒤 원본 수정 실패(기록은 됨):`, error)
+    }
+  }
+}
+
 export function plainReply(text: string, buttons?: ReplyButtonRows): BotReply {
   return buttons ? { text, format: 'plain', buttons } : { text, format: 'plain' }
 }

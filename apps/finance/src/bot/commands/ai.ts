@@ -14,6 +14,7 @@ import { markdownToTelegramHtml } from '../utils/markdown'
 import { sanitizeError } from '../utils/error'
 import { buildTickerCheckLines } from '../utils/trade-price-check'
 import {
+  afterCommit,
   htmlReply,
   isSameRequester,
   plainReply,
@@ -453,19 +454,17 @@ export async function decideAiTradeButton(data: string, press: ButtonPress, out:
       : '전량 매도 (보유 0주)'
 
     // 기록은 끝났다 — 화면 갱신 실패는 로그만(거짓 "거래 실패" 를 띄우지 않는다)
-    try {
-      await out.toast('거래 기록 완료!')
-      await out.removeButtons()
-      await out.edit(plainReply(
+    await afterCommit('[bot] AI 거래', [
+      () => out.toast('거래 기록 완료!'),
+      () => out.removeButtons(),
+      () => out.edit(plainReply(
         `✅ ${typeLabel} 완료\n\n` +
         `${parsed.displayName} (${parsed.ticker})\n` +
         `${parsed.shares}주 × ${parsed.currency === 'USD' ? formatUSD(parsed.price) : formatKRWFull(parsed.price)}\n` +
         `총액: ${formatKRWFull(result.trade.totalKRW)}\n` +
         `${holdingInfo}`
-      ))
-    } catch (error) {
-      console.error('[bot] AI 거래 기록 뒤 원본 수정 실패(기록은 됨):', error)
-    }
+      )),
+    ])
   }
 }
 

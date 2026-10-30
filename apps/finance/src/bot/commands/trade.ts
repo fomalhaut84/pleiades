@@ -5,6 +5,7 @@ import { formatKRWFull, formatUSD } from '../utils/formatter'
 import { escapeHtml, h } from '../utils/telegram'
 import { buildTickerCheckLines } from '../utils/trade-price-check'
 import {
+  afterCommit,
   htmlReply,
   isSameRequester,
   plainReply,
@@ -383,19 +384,17 @@ export async function decideTradeButton(data: string, press: ButtonPress, out: B
       : '전량 매도 (보유 0주)'
 
     // 기록은 끝났다 — 화면 갱신 실패는 로그만(거짓 "거래 실패" 를 띄우지 않는다)
-    try {
-      await out.toast('거래 기록 완료!')
-      await out.removeButtons()
-      await out.edit(htmlReply(
+    await afterCommit('[bot] 거래', [
+      () => out.toast('거래 기록 완료!'),
+      () => out.removeButtons(),
+      () => out.edit(htmlReply(
         `✅ ${h.b(typeLabel + ' 완료')}\n\n` +
         `${escapeHtml(pending.displayName)} (${escapeHtml(pending.ticker)})\n` +
         `${pending.shares}주 × ${pending.currency === 'USD' ? formatUSD(pending.price) : formatKRWFull(pending.price)}\n` +
         `${h.b('총액')}: ${formatKRWFull(result.trade.totalKRW)}\n` +
         `${holdingInfo}`,
-      ))
-    } catch (error) {
-      console.error('[bot] 거래 기록 뒤 원본 수정 실패(기록은 됨):', error)
-    }
+      )),
+    ])
   }
 }
 

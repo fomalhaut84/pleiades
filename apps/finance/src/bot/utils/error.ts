@@ -107,10 +107,7 @@ export function isHtmlParseError(err: unknown): boolean {
  */
 export function knownUserMessage(err: unknown, prefixes: readonly string[]): string | null {
   if (!(err instanceof Error)) return null
-  const msg = err.message
-    .split('\n')
-    .filter((line) => !line.startsWith('원문:'))
-    .join('\n')
-    .trim()
+  // 파서는 `\n원문: ${raw.slice(0, 200)}` 를 붙인다 — AI 원문은 여러 줄일 수 있어 첫 `원문:` 줄부터 끝까지 뗀다(PR-2c 9-1 리뷰 major)
+  const msg = err.message.split(/(?:^|\n)원문:/)[0].trim()
   return prefixes.some((p) => msg.startsWith(p)) ? msg : null
 }

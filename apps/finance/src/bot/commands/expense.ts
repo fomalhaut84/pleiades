@@ -10,6 +10,7 @@ import { checkBudgetUsage } from '../notifications/budget-alert'
 import { sendToWhooing } from '@/lib/whooing-webhook'
 import { KST_OFFSET_MS } from '@/lib/kst-date'
 import {
+  afterCommit,
   isSameRequester,
   plainReply,
   type ButtonOutput,
@@ -393,20 +394,18 @@ async function createTransaction(
     : pending.categoryName
 
   // 기록은 끝났다 — 화면 갱신 실패는 로그만(거짓 "실패" 를 띄우지 않는다)
-  try {
-    await out.toast('기록 완료!')
-    await out.removeButtons()
-    await out.edit(
+  await afterCommit('[bot/expense]', [
+    () => out.toast('기록 완료!'),
+    () => out.removeButtons(),
+    () => out.edit(
       plainReply(
         `✅ ${typeLabel} 기록 완료\n\n` +
           `내용: ${pending.description}\n` +
           `금액: ${formatKRWFull(pending.amount)}\n` +
           `카테고리: ${catLabel}`,
       ),
-    )
-  } catch (error) {
-    console.error('[bot/expense] 기록 뒤 원본 수정 실패(기록은 됨):', error)
-  }
+    ),
+  ])
 
   // 소비 기록 후 예산 사용률 체크 (비동기, 실패해도 무시)
   if (pending.type === 'expense') {
@@ -666,13 +665,11 @@ export async function decideMultiExpenseButton(data: string, press: ButtonPress,
       ? `\n⚠️ 카테고리 미설정 ${skipped.length}건 제외: ${skipped.map((s) => s.parsed.description).join(', ')}`
       : ''
     // 기록은 끝났다 — 화면 갱신 실패는 로그만(거짓 "실패" 를 띄우지 않는다)
-    try {
-      await out.toast(`${created.length}건 기록 완료!`)
-      await out.removeButtons()
-      await out.edit(plainReply(`✅ ${created.length}건 거래 기록 완료${skippedMsg}`))
-    } catch (error) {
-      console.error('[bot/multi-expense] 기록 뒤 원본 수정 실패(기록은 됨):', error)
-    }
+    await afterCommit('[bot/multi-expense]', [
+      () => out.toast(`${created.length}건 기록 완료!`),
+      () => out.removeButtons(),
+      () => out.edit(plainReply(`✅ ${created.length}건 거래 기록 완료${skippedMsg}`)),
+    ])
 
     const hasExpense = validItems.some((m) => m.parsed.type === 'expense')
     if (hasExpense) {

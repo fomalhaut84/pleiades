@@ -270,6 +270,19 @@ describe('T7 trade: 콜백', () => {
     expect(mocked.createTrade).toHaveBeenCalledTimes(1)
   })
 
+  it('기록 뒤 토스트가 실패해도 버튼 제거·본문 교체는 돈다 — 결과가 화면에 남는다(9-1 리뷰 major)', async () => {
+    const { tradeId, messageId } = await startBuy()
+    mocked.createTrade.mockResolvedValueOnce({ trade: { totalKRW: 700000 }, holding: { shares: 10 } } as never)
+    const f = fakeCtx({ data: `trade:confirm:${tradeId}`, messageId })
+    f.ctx.answerCallbackQuery.mockImplementationOnce(async (...args: unknown[]) => {
+      f.calls.push(['answerCallbackQuery', ...args])
+      throw new Error('query is too old')
+    })
+    await callback.handler(f.ctx, vi.fn())
+    expect(f.calls.map((c) => c[0])).toEqual(['answerCallbackQuery', 'editMessageReplyMarkup', 'editMessageText'])
+    expect(String(f.calls[2][1]).startsWith('✅ <b>📥 매수 완료</b>')).toBe(true)
+  })
+
   it('cancel → 세 호출 순서', async () => {
     const { tradeId, messageId } = await startBuy()
     const r = await press(`trade:cancel:${tradeId}`, messageId)

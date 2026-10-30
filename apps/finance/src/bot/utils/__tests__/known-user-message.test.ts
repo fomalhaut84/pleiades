@@ -27,3 +27,10 @@ describe('knownUserMessage', () => {
     expect(knownUserMessage(new Error('오류 — 데이터 부족: x'), PREFIXES)).toBeNull()
   })
 })
+
+describe('knownUserMessage — 여러 줄 원문 (9-1 리뷰 major)', () => {
+  it('원문: 뒤 여러 줄을 모두 뗀다', () => {
+    const err = new Error('AI 파싱 응답이 JSON 이 아닙니다. 재시도 하거나 표현을 바꿔주세요.\n원문: {\n  "ticker": "SECRET",\n  "x": 1\n}')
+    expect(knownUserMessage(err, PREFIXES)).toBe('AI 파싱 응답이 JSON 이 아닙니다. 재시도 하거나 표현을 바꿔주세요.')
+  })
+})
