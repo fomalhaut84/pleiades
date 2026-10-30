@@ -45,9 +45,6 @@ export function buildBriefingPrompt(session: MarketSession, now: Date = new Date
 }
 
 /**
- * @param chatId 있으면 그 chat 에만(봇 `/브리핑` 명령) · 없으면 ALLOWED 전체(cron).
- */
-/**
  * 브리핑 응답 대상 — 봇을 받아 notifier 를 만든다(pleiades 009 D-3 PR-2b · pleiades#394 · 설계 §4 D2).
  * 봇 명령이 넘긴다: 텔레그램 = `notifierForChat(bot, chatId)`(요청 chat 하나) · Discord = 요청 채널(PR-3).
  * 없으면 크론 경로 — `notifierFor`(라우트 스위치). `notifyBot()` 은 지금처럼 이 함수 안에서 부른다(실패 경로 같음).
@@ -59,6 +56,11 @@ export interface BriefingOptions {
   readonly aiCommand?: string
 }
 
+/**
+ * 모닝 브리핑을 만들어 보낸다.
+ * @param target 있으면 그 대상에만(봇 `/브리핑` 명령 — 요청한 곳) · 없으면 ALLOWED 라우트 전체(cron).
+ * @param options.aiCommand 실패 안내의 AI 명령 표기(기본 `/ai`).
+ */
 export async function sendBriefing(
   session: MarketSession,
   target?: BriefingTarget,

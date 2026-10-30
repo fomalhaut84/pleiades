@@ -21,8 +21,12 @@ vi.mock('fs', async (importOriginal) => {
 })
 vi.mock('@/lib/backtest/engine', () => ({ runBacktest: vi.fn() }))
 vi.mock('@/lib/custom-strategy/parser', () => ({ parseStrategyText: vi.fn() }))
+vi.mock('@/bot/notifications/notifier', () => ({ notifierForChat: vi.fn(() => ({ tag: 'chat-notifier' })) }))
 
 import { promises as fs } from 'fs'
+import { InputFile } from 'grammy'
+import { notifierForChat } from '@/bot/notifications/notifier'
+import { telegramOutput } from '../../utils/telegram-reply'
 import { sendBriefing, type BriefingTarget } from '@/bot/notifications/briefing'
 import { generateReportPDF } from '@/lib/report/pdf-generator'
 import type { BotReply, ReplyFile, ReplyOutput } from '../../core/reply'
@@ -34,7 +38,7 @@ import {
   customStrategyDeleteArgsFromText, customStrategyRegisterArgsFromText, registerCustomStrategyCommands,
 } from '../custom-strategy'
 import { ALERT_CONFIG_RE, alertArgsFromTelegram, registerAlertCommands } from '../alert'
-import { captureBot, flush } from './telegram-fake'
+import { captureBot, fakeCtx, flush } from './telegram-fake'
 
 function fakeOut() {
   const sent: (BotReply | { long: string } | { file: ReplyFile })[] = []
@@ -105,6 +109,43 @@ describe('브리핑 — 응답 대상 (D2)', () => {
     const target: BriefingTarget = vi.fn()
     await decideBriefing('미국', target, fakeOut().out)
     expect(sendBriefing).toHaveBeenCalledWith('US', target)
+  })
+})
+
+describe('브리핑 — 텔레그램 어댑터의 대상 (9-1 리뷰 info 1)', () => {
+  const handler = () => captureBot(registerBriefingCommands).hears[0].handler
+
+  it('요청 chat 의 notifierForChat — 대상 함수가 받은 봇과 그 chatId 로', async () => {
+    const f = fakeCtx({ text: '브리핑 한국', chatId: 321 })
+    await handler()(f.ctx, vi.fn())
+    const target = vi.mocked(sendBriefing).mock.calls[0][1] as BriefingTarget
+    const bot = { api: undefined }
+    expect(target(bot)).toEqual({ tag: 'chat-notifier' })
+    expect(notifierForChat).toHaveBeenCalledWith(bot, 321)
+  })
+
+  it('chat 없음 → 대상 없음 → 안내', async () => {
+    const f = fakeCtx({ text: '브리핑 한국' })
+    ;(f.ctx as { chat?: unknown }).chat = undefined
+    await handler()(f.ctx, vi.fn())
+    expect(f.calls).toEqual([['reply', '⚠️ 채팅 정보를 확인할 수 없습니다.']])
+    expect(sendBriefing).not.toHaveBeenCalled()
+  })
+})
+
+describe('replyFile 텔레그램 어댑터 (9-1 리뷰 info 3)', () => {
+  it('캡션 있음 → 인자 둘 · 없음 → 인자 하나', async () => {
+    const f = fakeCtx({ text: 'x' })
+    const out = telegramOutput(f.ctx as never)
+    const data = Buffer.from('%PDF')
+    await out.replyFile({ name: 'a.pdf', data, contentType: 'application/pdf', caption: '캡션' })
+    await out.replyFile({ name: 'b.pdf', data, contentType: 'application/pdf' })
+    expect(f.calls.map((c) => c.length)).toEqual([3, 2])
+    const [, first, opts] = f.calls[0] as [string, InputFile, unknown]
+    expect(first).toBeInstanceOf(InputFile)
+    expect(first.filename).toBe('a.pdf')
+    expect(opts).toStrictEqual({ caption: '캡션' })
+    expect((f.calls[1][1] as InputFile).filename).toBe('b.pdf')
   })
 })
 
