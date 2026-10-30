@@ -1,4 +1,4 @@
-import { Bot, Context } from 'grammy'
+import type { Bot } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import {
   calcCostKRW,
@@ -14,7 +14,18 @@ import {
   formatUSD,
   profitEmoji,
 } from '../utils/formatter'
-import { replyHtml, escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/telegram'
+import { plainReply, type ReplyOutput } from '../core/reply'
+import { telegramOutput } from '../utils/telegram-reply'
+
+/*
+ * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 현황 · 계좌.
+ * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말하고, 아래 register* 는 텔레그램 어댑터다(인자 벗기기 식 · try/catch 그대로).
+ * 특성 테스트 `__tests__/lookup-telegram.test.ts` · `manage-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ */
+
+export const PORTFOLIO_SUMMARY_RE = /^현황$/
+export const ACCOUNT_DETAIL_RE = /^계좌(\s+.+)?$/
 
 interface AccountSummary {
   name: string
@@ -59,7 +70,7 @@ function buildAccountSummary(
   return { name: account.name, currentValueKRW, costKRW, returnPct }
 }
 
-async function handlePortfolioSummary(ctx: Context): Promise<void> {
+export async function decidePortfolioSummary(out: ReplyOutput): Promise<void> {
   const { accounts, priceMap, currentFxRate, fxPrice } = await fetchPortfolioData()
 
   const summaries = accounts.map((a) => buildAccountSummary(a, priceMap, currentFxRate))
@@ -84,16 +95,16 @@ async function handlePortfolioSummary(ctx: Context): Promise<void> {
     lines.push(`\n환율: $1 = ₩${fxPrice.toFixed(2)}`)
   }
 
-  await replyHtml(ctx, lines.join('\n'))
+  await out.replyLong(lines.join('\n'))
 }
 
-async function handleAccountDetail(ctx: Context): Promise<void> {
-  const text = ctx.message?.text ?? ''
+/** 계좌 상세 — 원문 전체를 받는다(이름은 `계좌\s+(.+)` 로 꺼낸다 · 설계 A2 "원문을 쓰는 파싱"). */
+export async function decideAccountDetail(text: string, out: ReplyOutput): Promise<void> {
   const match = text.match(/^계좌\s+(.+)$/)
   const accountName = match?.[1]?.trim()
 
   if (!accountName) {
-    await ctx.reply('사용법: 계좌 [이름]\n예: 계좌 세진')
+    await out.reply(plainReply('사용법: 계좌 [이름]\n예: 계좌 세진'))
     return
   }
 
@@ -107,13 +118,13 @@ async function handleAccountDetail(ctx: Context): Promise<void> {
 
   if (candidates.length === 0) {
     const names = accounts.map((a) => escapeHtml(a.name)).join(', ')
-    await replyHtml(ctx, `계좌를 찾을 수 없습니다: ${escapeHtml(accountName!)}\n사용 가능: ${names}`)
+    await out.replyLong(`계좌를 찾을 수 없습니다: ${escapeHtml(accountName!)}\n사용 가능: ${names}`)
     return
   }
 
   if (candidates.length > 1) {
     const names = candidates.map((a) => escapeHtml(a.name)).join(', ')
-    await replyHtml(ctx, `여러 계좌가 매칭됩니다: ${names}\n정확한 이름을 입력해주세요.`)
+    await out.replyLong(`여러 계좌가 매칭됩니다: ${names}\n정확한 이름을 입력해주세요.`)
     return
   }
 
@@ -143,22 +154,22 @@ async function handleAccountDetail(ctx: Context): Promise<void> {
   lines.push(`${h.b('총 평가액')}: ${formatKRWFull(summary.currentValueKRW)}`)
   lines.push(`${h.b('총 수익률')}: ${formatPercent(summary.returnPct)}`)
 
-  await replyHtml(ctx, lines.join('\n'))
+  await out.replyLong(lines.join('\n'))
 }
 
 export function registerPortfolioCommands(bot: Bot): void {
-  bot.hears(/^현황$/, async (ctx) => {
+  bot.hears(PORTFOLIO_SUMMARY_RE, async (ctx) => {
     try {
-      await handlePortfolioSummary(ctx)
+      await decidePortfolioSummary(telegramOutput(ctx))
     } catch (error) {
       console.error('[bot] 현황 조회 실패:', error)
       await ctx.reply('⚠️ 포트폴리오 조회에 실패했습니다.')
     }
   })
 
-  bot.hears(/^계좌(\s+.+)?$/, async (ctx) => {
+  bot.hears(ACCOUNT_DETAIL_RE, async (ctx) => {
     try {
-      await handleAccountDetail(ctx)
+      await decideAccountDetail(ctx.message?.text ?? '', telegramOutput(ctx))
     } catch (error) {
       console.error('[bot] 계좌 조회 실패:', error)
       await ctx.reply('⚠️ 계좌 조회에 실패했습니다.')

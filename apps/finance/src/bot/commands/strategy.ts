@@ -1,6 +1,25 @@
-import { Bot, Context } from 'grammy'
+import type { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
-import { replyHtml, escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/telegram'
+import { plainReply, type ReplyOutput } from '../core/reply'
+import { telegramOutput } from '../utils/telegram-reply'
+
+/*
+ * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 전략 · 전략목록.
+ * 판단(decide*)은 인자(`args`)와 중립 응답 모델만 안다 · 텔레그램 원문 벗기기는 `strategyArgsFromText`(지금 식 그대로).
+ * 특성 테스트 `__tests__/manage-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ */
+
+export const STRATEGY_RE = /^전략(?:\s+.*)?$/
+export const STRATEGY_LIST_RE = /^전략목록\s*$/
+
+/**
+ * 텔레그램 원문 → 인자 — `/strategy` · `전략` 을 벗기고 trim.
+ * 현재 동작: `/strategy@bot` 의 `@bot` 은 벗기지 않는다(서비스 유래 · 특성 테스트가 고정).
+ */
+export function strategyArgsFromText(text: string): string {
+  return text.replace(/^(\/strategy|전략)\s*/, '').trim()
+}
 
 const STRATEGY_LABELS: Record<string, string> = {
   long_hold: '📦 장기보유',
@@ -41,12 +60,10 @@ function formatStrategy(strategy: string): string {
  * /전략 NVDA 메모 "3일선 돌파 매수"
  * /전략 컨텍 감시 점검일 2026-06-01
  */
-async function handleStrategy(ctx: Context): Promise<void> {
-  const text = ctx.message?.text ?? ''
-  const args = text.replace(/^(\/strategy|전략)\s*/, '').trim()
+export async function decideStrategy(args: string, out: ReplyOutput): Promise<void> {
 
   if (!args) {
-    await ctx.reply(
+    await out.reply(plainReply(
       '⚙️ 전략 설정\n\n' +
       '사용법:\n' +
       '전략 [종목] [전략] — 전략 변경\n' +
@@ -56,7 +73,7 @@ async function handleStrategy(ctx: Context): Promise<void> {
       '전략 [종목] 메모 [내용]\n' +
       '전략 [종목] 점검일 [YYYY-MM-DD]\n\n' +
       `전략 종류: ${VALID_STRATEGIES.map((s) => `${formatStrategy(s)}`).join(', ')}`
-    )
+    ))
     return
   }
 
@@ -89,13 +106,13 @@ async function handleStrategy(ctx: Context): Promise<void> {
   })
 
   if (holdings.length === 0) {
-    await ctx.reply(`⚠️ 보유 종목을 찾을 수 없습니다: ${tickerQuery}`)
+    await out.reply(plainReply(`⚠️ 보유 종목을 찾을 수 없습니다: ${tickerQuery}`))
     return
   }
 
   if (holdings.length > 1) {
     const candidates = holdings.map((h) => `- ${h.account.name} / ${h.displayName} (${h.ticker})`).join('\n')
-    await ctx.reply(`여러 계좌에 같은 종목이 있습니다. 계좌명을 포함해주세요:\n\n${candidates}\n\n예: 전략 세진 ${tickerQuery} 스윙`)
+    await out.reply(plainReply(`여러 계좌에 같은 종목이 있습니다. 계좌명을 포함해주세요:\n\n${candidates}\n\n예: 전략 세진 ${tickerQuery} 스윙`))
     return
   }
 
@@ -113,7 +130,7 @@ async function handleStrategy(ctx: Context): Promise<void> {
     if (s?.stopLoss != null) lines.push(`손절가: ${s.stopLoss}`)
     if (s?.entryLow != null && s?.entryHigh != null) lines.push(`매수구간: ${s.entryLow} ~ ${s.entryHigh}`)
     if (s?.reviewDate) lines.push(`점검일: ${s.reviewDate.toISOString().slice(0, 10)}`)
-    await ctx.reply(lines.join('\n'))
+    await out.reply(plainReply(lines.join('\n')))
     return
   }
 
@@ -154,12 +171,12 @@ async function handleStrategy(ctx: Context): Promise<void> {
       },
     })
 
-    await ctx.reply(
+    await out.reply(plainReply(
       `✅ ${holding.displayName} (${holding.ticker}) 전략 변경\n` +
       `→ ${formatStrategy(resolved)}` +
       (memo ? `\n메모: ${memo}` : '') +
       (reviewDate ? `\n점검일: ${reviewDate.toISOString().slice(0, 10)}` : '')
-    )
+    ))
     return
   }
 
@@ -167,7 +184,7 @@ async function handleStrategy(ctx: Context): Promise<void> {
   if (subCmd === '목표가' && parts[2]) {
     const price = parseFloat(parts[2])
     if (!Number.isFinite(price) || price <= 0) {
-      await ctx.reply('⚠️ 유효한 가격을 입력해주세요.')
+      await out.reply(plainReply('⚠️ 유효한 가격을 입력해주세요.'))
       return
     }
     await prisma.holdingStrategy.upsert({
@@ -175,7 +192,7 @@ async function handleStrategy(ctx: Context): Promise<void> {
       update: { targetPrice: price },
       create: { holdingId: holding.id, targetPrice: price },
     })
-    await ctx.reply(`✅ ${holding.displayName} 목표가: ${price}`)
+    await out.reply(plainReply(`✅ ${holding.displayName} 목표가: ${price}`))
     return
   }
 
@@ -183,7 +200,7 @@ async function handleStrategy(ctx: Context): Promise<void> {
   if (subCmd === '손절' && parts[2]) {
     const price = parseFloat(parts[2])
     if (!Number.isFinite(price) || price <= 0) {
-      await ctx.reply('⚠️ 유효한 가격을 입력해주세요.')
+      await out.reply(plainReply('⚠️ 유효한 가격을 입력해주세요.'))
       return
     }
     await prisma.holdingStrategy.upsert({
@@ -191,7 +208,7 @@ async function handleStrategy(ctx: Context): Promise<void> {
       update: { stopLoss: price },
       create: { holdingId: holding.id, stopLoss: price },
     })
-    await ctx.reply(`✅ ${holding.displayName} 손절가: ${price}`)
+    await out.reply(plainReply(`✅ ${holding.displayName} 손절가: ${price}`))
     return
   }
 
@@ -200,7 +217,7 @@ async function handleStrategy(ctx: Context): Promise<void> {
     const low = parseFloat(parts[2])
     const high = parseFloat(parts[3])
     if (!Number.isFinite(low) || !Number.isFinite(high) || low <= 0 || high <= 0 || low >= high) {
-      await ctx.reply('⚠️ 유효한 매수구간을 입력해주세요. (하한 < 상한)')
+      await out.reply(plainReply('⚠️ 유효한 매수구간을 입력해주세요. (하한 < 상한)'))
       return
     }
     await prisma.holdingStrategy.upsert({
@@ -208,7 +225,7 @@ async function handleStrategy(ctx: Context): Promise<void> {
       update: { entryLow: low, entryHigh: high },
       create: { holdingId: holding.id, entryLow: low, entryHigh: high },
     })
-    await ctx.reply(`✅ ${holding.displayName} 매수구간: ${low} ~ ${high}`)
+    await out.reply(plainReply(`✅ ${holding.displayName} 매수구간: ${low} ~ ${high}`))
     return
   }
 
@@ -220,7 +237,7 @@ async function handleStrategy(ctx: Context): Promise<void> {
       update: { memo: memo || null },
       create: { holdingId: holding.id, memo: memo || null },
     })
-    await ctx.reply(memo ? `✅ ${holding.displayName} 메모: ${memo}` : `✅ ${holding.displayName} 메모 삭제`)
+    await out.reply(plainReply(memo ? `✅ ${holding.displayName} 메모: ${memo}` : `✅ ${holding.displayName} 메모 삭제`))
     return
   }
 
@@ -228,7 +245,7 @@ async function handleStrategy(ctx: Context): Promise<void> {
   if (subCmd === '점검일' && parts[2]) {
     const d = new Date(parts[2])
     if (isNaN(d.getTime())) {
-      await ctx.reply('⚠️ 유효한 날짜를 입력해주세요. (YYYY-MM-DD)')
+      await out.reply(plainReply('⚠️ 유효한 날짜를 입력해주세요. (YYYY-MM-DD)'))
       return
     }
     await prisma.holdingStrategy.upsert({
@@ -236,20 +253,20 @@ async function handleStrategy(ctx: Context): Promise<void> {
       update: { reviewDate: d },
       create: { holdingId: holding.id, reviewDate: d },
     })
-    await ctx.reply(`✅ ${holding.displayName} 점검일: ${d.toISOString().slice(0, 10)}`)
+    await out.reply(plainReply(`✅ ${holding.displayName} 점검일: ${d.toISOString().slice(0, 10)}`))
     return
   }
 
-  await ctx.reply(
+  await out.reply(plainReply(
     '⚠️ 알 수 없는 명령입니다.\n' +
     '전략 [종목] [전략/목표가/손절/매수구간/메모/점검일] [값]'
-  )
+  ))
 }
 
 /**
  * /전략목록 — 전체 보유 종목 전략 현황
  */
-async function handleStrategyList(ctx: Context): Promise<void> {
+export async function decideStrategyList(out: ReplyOutput): Promise<void> {
   const accounts = await prisma.account.findMany({
     include: {
       holdings: {
@@ -278,13 +295,17 @@ async function handleStrategyList(ctx: Context): Promise<void> {
     lines.push('')
   }
 
-  await replyHtml(ctx, lines.join('\n'))
+  await out.replyLong(lines.join('\n'))
 }
 
 export function registerStrategyCommands(bot: Bot): void {
-  bot.command('strategy', handleStrategy)
-  bot.hears(/^전략(?:\s+.*)?$/, handleStrategy)
+  // 등록에 try/catch 가 없다 — 판단 밖으로 던진 오류는 지금처럼 grammY bot.catch 로 간다
+  const strategy = (ctx: Context) => decideStrategy(strategyArgsFromText(ctx.message?.text ?? ''), telegramOutput(ctx))
+  const list = (ctx: Context) => decideStrategyList(telegramOutput(ctx))
 
-  bot.command('strategylist', handleStrategyList)
-  bot.hears(/^전략목록\s*$/, handleStrategyList)
+  bot.command('strategy', strategy)
+  bot.hears(STRATEGY_RE, strategy)
+
+  bot.command('strategylist', list)
+  bot.hears(STRATEGY_LIST_RE, list)
 }

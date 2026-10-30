@@ -6,6 +6,7 @@
  *   toast   → `answerCallbackQuery({ text })` · 텍스트 없으면 `answerCallbackQuery()`
  *   removeButtons → `editMessageReplyMarkup({ reply_markup: undefined })`
  *   edit    → `editMessageText(text[, { parse_mode: 'HTML', reply_markup }])`
+ *   replyLong → `replyHtml(ctx, html)`(`./telegram` — 지금 그 함수 그대로 · PR-2a)
  *   typing  → `replyWithChatAction('typing')` · 주기 5 s(지금 값)
  * 본인 확인 값은 지금과 같다 — 요청자 `String(from?.id ?? 0)`(DB `Transaction.userId` 도 같은 값) · 누른 사람은 `from` 없으면 undefined(거부).
  */
@@ -13,6 +14,7 @@
 import { InlineKeyboard, type Context } from 'grammy'
 import type { BotReply, ButtonOutput, ButtonPress, ReplyButtonRows, ReplyOutput, Requester } from '../core/reply'
 import { telegramMessageKey, telegramStateKey, type StateKey } from '../core/state-key'
+import { replyHtml } from './telegram'
 
 const TELEGRAM_TYPING_INTERVAL_MS = 5000
 
@@ -41,6 +43,7 @@ export function telegramOutput(ctx: Context): ReplyOutput {
       const sent = options === undefined ? await ctx.reply(message.text) : await ctx.reply(message.text, options)
       return telegramMessageKey(sent.chat.id, sent.message_id)
     },
+    replyLong: (html) => replyHtml(ctx, html),
     typing: async () => {
       await ctx.replyWithChatAction('typing')
     },
