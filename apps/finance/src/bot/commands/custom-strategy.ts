@@ -5,12 +5,18 @@ import { conditionToString, type Condition } from '@/lib/custom-strategy/types'
 import { escapeHtml, h } from '../utils/telegram'
 import { plainReply, type ReplyOutput } from '../core/reply'
 import { telegramOutput } from '../utils/telegram-reply'
+import { knownUserMessage } from '../utils/error'
 
 /*
  * pleiades 009 D-3 PR-2b (pleiades#394 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 커스텀전략 등록 · 목록 · 삭제.
  * 판단(decide*)은 인자와 중립 응답 모델만 안다 · 텔레그램 원문 벗기기는 `*ArgsFromText`(지금 식 그대로).
  * 특성 테스트 `__tests__/special-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
  */
+
+/** 파서가 사용자용으로 쓴 안내의 접두(`lib/custom-strategy/parser.ts`) — 그 밖의 오류 원문은 보이지 않는다(PR-2c · UQ-3) */
+const PARSE_USER_MESSAGE_PREFIXES = [
+  '전략 텍스트를 입력해주세요', '전략 텍스트가 너무 깁니다', '파싱 실패:', 'AI 파싱 응답', 'AI 응답이 유효한 전략 스키마가 아닙니다',
+] as const
 
 export const CUSTOM_STRATEGY_REGISTER_RE = /^커스텀전략등록(?:\s+.*)?$/
 export const CUSTOM_STRATEGY_LIST_RE = /^커스텀전략목록\s*$/
@@ -77,8 +83,9 @@ export async function decideCustomStrategyRegister(body: string, out: ReplyOutpu
   try {
     parsed = await parseStrategyText(body)
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error)
-    await out.reply(plainReply(`⚠️ 전략 파싱 실패\n\n${msg}\n\n표현을 바꿔서 다시 시도해주세요.`))
+    const known = knownUserMessage(error, PARSE_USER_MESSAGE_PREFIXES)
+    if (!known) console.error('[bot] 커스텀 전략 파싱 실패:', error)
+    await out.reply(plainReply(`⚠️ 전략 파싱 실패\n\n${known ?? '전략을 해석하지 못했습니다.'}\n\n표현을 바꿔서 다시 시도해주세요.`))
     return
   }
 

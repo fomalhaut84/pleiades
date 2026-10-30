@@ -329,10 +329,14 @@ describe('백테스트', () => {
     expect(alias.calls).toMatchSnapshot()
   })
 
-  it('현재 동작 — 실패 시 오류 원문을 그대로 보인다(서비스 유래)', async () => {
-    m.backtest.mockRejectedValueOnce(new Error('데이터 부족 <30일>'))
-    const f = await runHears(backtest, 0, '백테스트 NEW')
-    expect(f.calls[1]).toEqual(['reply', '⚠️ 백테스트 실패: 데이터 부족 <30일>'])
+  // PR-2c (#396 · UQ-3) 이전: 어떤 오류든 원문을 그대로 보였다
+  it('실패 — 엔진 안내(데이터 부족)는 그대로 · 그 밖의 원문은 정적 안내(PR-2c 수정)', async () => {
+    m.backtest.mockRejectedValueOnce(new Error('데이터 부족: NEW (20일)'))
+    const known = await runHears(backtest, 0, '백테스트 NEW')
+    m.backtest.mockRejectedValueOnce(new Error('Yahoo 429 <html>'))
+    const other = await runHears(backtest, 0, '백테스트 NEW')
+    expect(known.calls[1]).toEqual(['reply', '⚠️ 백테스트 실패: 데이터 부족: NEW (20일)'])
+    expect(other.calls[1]).toEqual(['reply', '⚠️ 백테스트에 실패했습니다. 잠시 후 다시 시도해주세요.'])
   })
 })
 
@@ -354,14 +358,21 @@ describe('커스텀전략', () => {
     expect([usage.calls, full.calls, ok.calls]).toMatchSnapshot()
   })
 
-  it('현재 동작 — 파싱 실패 시 오류 원문을 그대로 보인다(UQ-3)', async () => {
-    p.customStrategy.count.mockResolvedValueOnce(0 as never)
-    m.parse.mockRejectedValueOnce(new Error('조건을 해석할 수 없음: "<x>"'))
-    const f = await runHears(custom, 0, '커스텀전략등록 아무거나')
-    expect(f.calls).toEqual([
-      ['reply', '🤖 전략 파싱 중... (최대 60초)'],
-      ['reply', '⚠️ 전략 파싱 실패\n\n조건을 해석할 수 없음: "<x>"\n\n표현을 바꿔서 다시 시도해주세요.'],
-    ])
+  // PR-2c (#396 · UQ-3) 이전: 어떤 오류든 원문(AI 응답 원문 줄 포함)을 그대로 보였다
+  it('파싱 실패 — 파서 안내는 원문 줄을 떼고 · 그 밖의 원문은 정적 안내(PR-2c 수정)', async () => {
+    const say = async (err: Error) => {
+      p.customStrategy.count.mockResolvedValueOnce(0 as never)
+      m.parse.mockRejectedValueOnce(err)
+      return (await runHears(custom, 0, '커스텀전략등록 아무거나')).calls
+    }
+    const reason = await say(new Error('파싱 실패: 종목을 찾을 수 없음'))
+    const raw = await say(new Error('AI 파싱 응답에 JSON 오브젝트가 없습니다. 표현을 바꿔서 재시도해주세요.\n원문: {"leak": "<x>"}'))
+    const other = await say(new Error('Claude CLI 종료 코드: 1'))
+    const second = (calls: unknown[][]) => calls[1][1]
+    expect(second(reason)).toBe('⚠️ 전략 파싱 실패\n\n파싱 실패: 종목을 찾을 수 없음\n\n표현을 바꿔서 다시 시도해주세요.')
+    expect(second(raw)).toBe('⚠️ 전략 파싱 실패\n\nAI 파싱 응답에 JSON 오브젝트가 없습니다. 표현을 바꿔서 재시도해주세요.\n\n표현을 바꿔서 다시 시도해주세요.')
+    expect(second(other)).toBe('⚠️ 전략 파싱 실패\n\n전략을 해석하지 못했습니다.\n\n표현을 바꿔서 다시 시도해주세요.')
+    expect(reason[0]).toEqual(['reply', '🤖 전략 파싱 중... (최대 60초)'])
     expect(p.customStrategy.create).not.toHaveBeenCalled()
   })
 
