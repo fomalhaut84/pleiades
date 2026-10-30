@@ -15,12 +15,14 @@ type Handler = (ctx: unknown, next: () => Promise<void>) => Promise<void>
 export function captureBot(register: (bot: Bot) => void) {
   const hears: { re: RegExp; handler: Handler }[] = []
   const on: { filter: string; handler: Handler }[] = []
+  const commands: { name: string; handler: Handler }[] = []
   const bot = {
     hears: (re: RegExp, handler: Handler) => hears.push({ re, handler }),
     on: (filter: string, handler: Handler) => on.push({ filter, handler }),
+    command: (name: string, handler: Handler) => commands.push({ name, handler }),
   } as unknown as Bot
   register(bot)
-  return { hears, on }
+  return { hears, on, commands }
 }
 
 export type Call = [string, ...unknown[]]
@@ -35,6 +37,8 @@ export interface FakeCtxOptions {
   chatId?: number
   /** 콜백이 가리키는 메시지 id — null 이면 `callbackQuery.message` 없음 */
   messageId?: number | null
+  /** 명령 인자(grammY `ctx.match`) */
+  match?: string
 }
 
 /** 텔레그램 ctx 흉내. reply 는 새 message_id 를 돌려주고(pending 키가 이 값을 쓴다) `sentIds` 에 순서대로 남긴다. */
@@ -50,6 +54,7 @@ export function fakeCtx(opts: FakeCtxOptions = {}) {
     })
   const ctx = {
     message: opts.text !== undefined ? { text: opts.text } : undefined,
+    match: opts.match,
     from: fromId === undefined ? undefined : { id: fromId },
     chat: { id: chatId },
     callbackQuery:
