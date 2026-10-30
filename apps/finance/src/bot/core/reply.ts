@@ -37,6 +37,17 @@ export interface BotReply {
  */
 export type MessageKey = string
 
+/**
+ * 첨부 파일 하나 — 분기 리포트 PDF(`/report`). pleiades 009 D-3 PR-2b (pleiades#394 · 설계 §4 D).
+ * 텔레그램 = `replyWithDocument(InputFile, {caption})` · Discord = chat `replyFile`(10 MiB 상한 · PR-3).
+ */
+export interface ReplyFile {
+  readonly name: string
+  readonly data: Uint8Array
+  readonly contentType: string
+  readonly caption?: string
+}
+
 /** 메시지 응답 출력 — 판단 함수가 순서대로 부른다(진행 안내 → 결과처럼 한 요청에 여러 메시지). */
 export interface ReplyOutput {
   /** 보내고 그 메시지의 키를 돌려준다. 실패는 던진다. */
@@ -47,6 +58,8 @@ export interface ReplyOutput {
    * pleiades 009 D-3 PR-2a (pleiades#392) — fit `BotReply.long` 과 같은 뜻을 메서드로 둔다(`reply` 가 키를 돌려주는 계약 유지).
    */
   replyLong(html: string): Promise<void>
+  /** 파일 하나를 보낸다(캡션 선택). 실패는 던진다. */
+  replyFile(file: ReplyFile): Promise<void>
   /** 입력 중 표시 한 번. 실패는 호출부가 삼킨다(표시용). */
   typing(): Promise<void>
   /** 긴 작업이 `typing` 을 다시 부르는 주기 — 텔레그램 5 s(지금 값) · Discord 는 어댑터 값(설계 Q). */

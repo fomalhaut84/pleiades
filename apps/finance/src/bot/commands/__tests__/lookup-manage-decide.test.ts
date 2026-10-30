@@ -45,6 +45,7 @@ function fakeOut() {
   const out: ReplyOutput = {
     reply: async (m) => { sent.push(m); return 'k' },
     replyLong: async (html) => { sent.push({ long: html }) },
+    replyFile: async () => { throw new Error('replyFile 은 이 판단에서 쓰지 않는다') },
     typing,
     typingIntervalMs: 60_000,
   }
