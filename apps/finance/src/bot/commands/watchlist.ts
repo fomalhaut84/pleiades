@@ -1,9 +1,31 @@
-import { Bot, Context } from 'grammy'
+import type { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { fetchQuote } from '@/lib/price-fetcher'
 import { formatWatchlistPriceInfo } from './price-format'
-import { replyHtml, escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/telegram'
 import { sanitizeError } from '../utils/error'
+import { plainReply, type ReplyOutput } from '../core/reply'
+import { telegramOutput } from '../utils/telegram-reply'
+
+/*
+ * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 관심 · 관심삭제 · 관심목록.
+ * 판단(decide*)은 인자(`args`)와 중립 응답 모델만 안다 · 텔레그램 원문 벗기기는 `*ArgsFromText`(지금 식 그대로).
+ * 특성 테스트 `__tests__/manage-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ */
+
+export const WATCH_RE = /^관심(?!삭제|목록)(?:\s+.*)?$/
+export const UNWATCH_RE = /^관심삭제(?:\s+.*)?$/
+export const WATCHLIST_RE = /^관심목록\s*$/
+
+/** 텔레그램 원문 → 인자 — `/watch[@bot]` · `관심` 다음 공백(또는 끝)까지 벗기고 trim(대소문자 무시). */
+export function watchArgsFromText(text: string): string {
+  return text.replace(/^(\/watch(?:@\w+)?|관심)(\s|$)/i, '').trim()
+}
+
+/** 텔레그램 원문 → 인자 — `/unwatch[@bot]` · `관심삭제` 를 벗기고 trim(대소문자 무시). */
+export function unwatchArgsFromText(text: string): string {
+  return text.replace(/^(\/unwatch(?:@\w+)?|관심삭제)\s*/i, '').trim()
+}
 
 const STRATEGY_LABELS: Record<string, string> = {
   long_hold: '💎 장기보유',
@@ -31,12 +53,9 @@ function resolveStrategy(input: string): string {
  * /관심 SOFI 목표가 8.5
  * /관심 SOFI 매수구간 7.5 8.5
  */
-async function handleWatch(ctx: Context): Promise<void> {
-  const text = ctx.message?.text ?? ''
-  const args = text.replace(/^(\/watch(?:@\w+)?|관심)(\s|$)/i, '').trim()
-
+export async function decideWatch(args: string, out: ReplyOutput): Promise<void> {
   if (!args) {
-    await ctx.reply(
+    await out.reply(plainReply(
       '👀 관심종목 관리\n\n' +
       '관심 [종목] — 관심종목 추가\n' +
       '관심 [종목] [전략] [메모] — 전략 + 메모 포함\n' +
@@ -44,7 +63,7 @@ async function handleWatch(ctx: Context): Promise<void> {
       '관심 [종목] 매수구간 [하한] [상한]\n' +
       '관심삭제 [종목] — 관심종목 제거\n' +
       '관심목록 — 전체 관심종목 표시'
-    )
+    ))
     return
   }
 
@@ -56,7 +75,7 @@ async function handleWatch(ctx: Context): Promise<void> {
     where: { ticker: tickerInput },
   })
   if (holding) {
-    await ctx.reply(`⚠️ ${escapeHtml(tickerInput)}은(는) 이미 보유 중입니다. /전략 커맨드로 관리하세요.`)
+    await out.reply(plainReply(`⚠️ ${escapeHtml(tickerInput)}은(는) 이미 보유 중입니다. /전략 커맨드로 관리하세요.`))
     return
   }
 
@@ -77,7 +96,7 @@ async function handleWatch(ctx: Context): Promise<void> {
       resolvedTicker = byName[0].ticker
     } else if (byName.length > 1) {
       const candidates = byName.map((p) => `${escapeHtml(p.displayName)} (${escapeHtml(p.ticker)})`).join('\n  ')
-      await replyHtml(ctx, `여러 종목이 매칭됩니다:\n  ${candidates}\n\n티커를 정확히 입력해주세요.`)
+      await out.replyLong(`여러 종목이 매칭됩니다:\n  ${candidates}\n\n티커를 정확히 입력해주세요.`)
       return
     }
   }
@@ -88,7 +107,7 @@ async function handleWatch(ctx: Context): Promise<void> {
       where: { ticker: resolvedTicker },
     })
     if (holdingCheck) {
-      await ctx.reply(`⚠️ ${escapeHtml(resolvedTicker)}은(는) 이미 보유 중입니다. /전략 커맨드로 관리하세요.`)
+      await out.reply(plainReply(`⚠️ ${escapeHtml(resolvedTicker)}은(는) 이미 보유 중입니다. /전략 커맨드로 관리하세요.`))
       return
     }
   }
@@ -100,7 +119,7 @@ async function handleWatch(ctx: Context): Promise<void> {
   if (parts.length >= 3 && parts[1] === '목표가') {
     const price = parseFloat(parts[2])
     if (!Number.isFinite(price) || price <= 0) {
-      await ctx.reply('⚠️ 유효한 가격을 입력해주세요.')
+      await out.reply(plainReply('⚠️ 유효한 가격을 입력해주세요.'))
       return
     }
     await prisma.watchlist.upsert({
@@ -108,7 +127,7 @@ async function handleWatch(ctx: Context): Promise<void> {
       update: { targetBuy: price },
       create: { ticker: resolvedTicker, displayName, market, targetBuy: price },
     })
-    await replyHtml(ctx, `✅ ${escapeHtml(displayName)} (${escapeHtml(resolvedTicker)}) 목표 매수가: ${price}`)
+    await out.replyLong(`✅ ${escapeHtml(displayName)} (${escapeHtml(resolvedTicker)}) 목표 매수가: ${price}`)
     return
   }
 
@@ -116,7 +135,7 @@ async function handleWatch(ctx: Context): Promise<void> {
     const low = parseFloat(parts[2])
     const high = parseFloat(parts[3])
     if (!Number.isFinite(low) || !Number.isFinite(high) || low <= 0 || high <= 0 || low >= high) {
-      await ctx.reply('⚠️ 유효한 매수구간을 입력해주세요. (하한 < 상한)')
+      await out.reply(plainReply('⚠️ 유효한 매수구간을 입력해주세요. (하한 < 상한)'))
       return
     }
     await prisma.watchlist.upsert({
@@ -124,7 +143,7 @@ async function handleWatch(ctx: Context): Promise<void> {
       update: { entryLow: low, entryHigh: high },
       create: { ticker: resolvedTicker, displayName, market, entryLow: low, entryHigh: high },
     })
-    await replyHtml(ctx, `✅ ${escapeHtml(displayName)} (${escapeHtml(resolvedTicker)}) 매수구간: ${low} ~ ${high}`)
+    await out.replyLong(`✅ ${escapeHtml(displayName)} (${escapeHtml(resolvedTicker)}) 매수구간: ${low} ~ ${high}`)
     return
   }
 
@@ -148,7 +167,7 @@ async function handleWatch(ctx: Context): Promise<void> {
   }
 
   const stratLabel = STRATEGY_LABELS[strategy] ?? strategy
-  await replyHtml(ctx,
+  await out.replyLong(
     `✅ 관심종목 추가: ${h.b(escapeHtml(displayName))} (${escapeHtml(resolvedTicker)})\n` +
     `전략: ${stratLabel}` +
     (memo ? `\n메모: ${escapeHtml(memo)}` : '')
@@ -158,35 +177,34 @@ async function handleWatch(ctx: Context): Promise<void> {
 /**
  * /관심삭제 [종목]
  */
-async function handleUnwatch(ctx: Context): Promise<void> {
-  const text = ctx.message?.text ?? ''
-  const ticker = text.replace(/^(\/unwatch(?:@\w+)?|관심삭제)\s*/i, '').trim().toUpperCase()
+export async function decideUnwatch(args: string, out: ReplyOutput): Promise<void> {
+  const ticker = args.toUpperCase()
 
   if (!ticker) {
-    await ctx.reply('사용법: 관심삭제 [종목]\n예: 관심삭제 SOFI')
+    await out.reply(plainReply('사용법: 관심삭제 [종목]\n예: 관심삭제 SOFI'))
     return
   }
 
   const existing = await prisma.watchlist.findUnique({ where: { ticker } })
   if (!existing) {
-    await ctx.reply(`⚠️ 관심종목에 없습니다: ${escapeHtml(ticker)}`)
+    await out.reply(plainReply(`⚠️ 관심종목에 없습니다: ${escapeHtml(ticker)}`))
     return
   }
 
   await prisma.watchlist.delete({ where: { ticker } })
-  await replyHtml(ctx, `✅ 관심종목 제거: ${escapeHtml(existing.displayName)} (${escapeHtml(ticker)})`)
+  await out.replyLong(`✅ 관심종목 제거: ${escapeHtml(existing.displayName)} (${escapeHtml(ticker)})`)
 }
 
 /**
  * /관심목록 — 전체 관심종목 + 현재가
  */
-async function handleWatchlist(ctx: Context): Promise<void> {
+export async function decideWatchlist(out: ReplyOutput): Promise<void> {
   const items = await prisma.watchlist.findMany({
     orderBy: { addedAt: 'asc' },
   })
 
   if (items.length === 0) {
-    await ctx.reply('👀 관심종목이 없습니다.\n\n관심 [종목] 으로 추가하세요.')
+    await out.reply(plainReply('👀 관심종목이 없습니다.\n\n관심 [종목] 으로 추가하세요.'))
     return
   }
 
@@ -235,16 +253,21 @@ async function handleWatchlist(ctx: Context): Promise<void> {
     lines.push('')
   }
 
-  await replyHtml(ctx, lines.join('\n'))
+  await out.replyLong(lines.join('\n'))
 }
 
 export function registerWatchlistCommands(bot: Bot): void {
-  bot.command('watch', handleWatch)
-  bot.hears(/^관심(?!삭제|목록)(?:\s+.*)?$/, handleWatch)
+  // 등록에 try/catch 가 없다 — 판단 밖으로 던진 오류는 지금처럼 grammY bot.catch 로 간다
+  const watch = (ctx: Context) => decideWatch(watchArgsFromText(ctx.message?.text ?? ''), telegramOutput(ctx))
+  const unwatch = (ctx: Context) => decideUnwatch(unwatchArgsFromText(ctx.message?.text ?? ''), telegramOutput(ctx))
+  const list = (ctx: Context) => decideWatchlist(telegramOutput(ctx))
 
-  bot.command('unwatch', handleUnwatch)
-  bot.hears(/^관심삭제(?:\s+.*)?$/, handleUnwatch)
+  bot.command('watch', watch)
+  bot.hears(WATCH_RE, watch)
 
-  bot.command('watchlist', handleWatchlist)
-  bot.hears(/^관심목록\s*$/, handleWatchlist)
+  bot.command('unwatch', unwatch)
+  bot.hears(UNWATCH_RE, unwatch)
+
+  bot.command('watchlist', list)
+  bot.hears(WATCHLIST_RE, list)
 }

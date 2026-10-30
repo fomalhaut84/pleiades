@@ -1,7 +1,20 @@
-import { Bot, Context } from 'grammy'
+import type { Bot } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { formatKRWFull } from '../utils/formatter'
-import { replyHtml, escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/telegram'
+import { plainReply, type ReplyOutput } from '../core/reply'
+import { telegramOutput } from '../utils/telegram-reply'
+
+/*
+ * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 소비 · 수입 · 예산 · 예산설정.
+ * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말하고, 아래 register* 는 텔레그램 어댑터다(try/catch 그대로).
+ * 특성 테스트 `__tests__/manage-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ */
+
+export const EXPENSE_SUMMARY_RE = /^소비\s*$/
+export const INCOME_SUMMARY_RE = /^수입\s*$/
+export const BUDGET_STATUS_RE = /^예산\s*$/
+export const BUDGET_SET_RE = /^예산설정(?:\s+.*)?$/
 
 /** 현재 KST 기준 연/월 */
 function getCurrentYearMonth(): { year: number; month: number } {
@@ -22,9 +35,9 @@ function getMonthRange(year: number, month: number): { start: Date; end: Date } 
 /**
  * 소비/수입 월별 요약 (카테고리별 합계) — DB groupBy 집계
  */
-async function handleTransactionSummary(
-  ctx: Context,
-  type: 'expense' | 'income'
+export async function decideTransactionSummary(
+  type: 'expense' | 'income',
+  out: ReplyOutput,
 ): Promise<void> {
   const typeLabel = type === 'expense' ? '소비' : '수입'
   const totalLabel = type === 'expense' ? '총 소비' : '총 수입'
@@ -43,7 +56,7 @@ async function handleTransactionSummary(
   })
 
   if (grouped.length === 0) {
-    await ctx.reply(`📊 ${month}월 ${typeLabel} 내역이 없습니다.`)
+    await out.reply(plainReply(`📊 ${month}월 ${typeLabel} 내역이 없습니다.`))
     return
   }
 
@@ -75,7 +88,7 @@ async function handleTransactionSummary(
     return `${label}: ${formatKRWFull(cat.total)} (${pct}%, ${cat.count}건)`
   })
 
-  await replyHtml(ctx,
+  await out.replyLong(
     `📊 ${h.b(month + '월 ' + typeLabel + ' 요약')}\n\n` +
       lines.join('\n') +
       `\n\n💰 ${h.b(totalLabel)}: ${formatKRWFull(grandTotal)} (${totalCount}건)`
@@ -85,7 +98,7 @@ async function handleTransactionSummary(
 /**
  * 예산 — 이번 달 예산 잔여 확인
  */
-async function handleBudgetStatus(ctx: Context): Promise<void> {
+export async function decideBudgetStatus(out: ReplyOutput): Promise<void> {
   const { year, month } = getCurrentYearMonth()
   const { start, end } = getMonthRange(year, month)
 
@@ -101,11 +114,11 @@ async function handleBudgetStatus(ctx: Context): Promise<void> {
   })
 
   if (!totalBudget && categoryBudgets.length === 0) {
-    await ctx.reply(
+    await out.reply(plainReply(
       `📋 ${month}월 예산이 설정되지 않았습니다.\n\n` +
         `예산설정 [금액]으로 월 예산을 설정하세요.\n` +
         `예: 예산설정 2000000`
-    )
+    ))
     return
   }
 
@@ -156,25 +169,25 @@ async function handleBudgetStatus(ctx: Context): Promise<void> {
     }
   }
 
-  await replyHtml(ctx, `📋 ${h.b(month + '월 예산 현황')}\n\n` + lines.join('\n'))
+  await out.replyLong(`📋 ${h.b(month + '월 예산 현황')}\n\n` + lines.join('\n'))
 }
 
 /**
  * 예산설정 {금액} — 월 전체 예산 설정
  */
-async function handleBudgetSet(ctx: Context): Promise<void> {
-  const text = ctx.message?.text ?? ''
+/** 예산설정 — 원문 전체를 받는다(금액은 `예산설정\s+(.+)` 로 꺼낸다 · 설계 A2 "원문을 쓰는 파싱"). */
+export async function decideBudgetSet(text: string, out: ReplyOutput): Promise<void> {
   const match = text.match(/^예산설정\s+(.+)$/)
   const amountStr = match?.[1]?.trim().replace(/,/g, '')
 
   if (!amountStr || !/^\d+$/.test(amountStr)) {
-    await ctx.reply('사용법: 예산설정 [금액]\n예: 예산설정 2000000')
+    await out.reply(plainReply('사용법: 예산설정 [금액]\n예: 예산설정 2000000'))
     return
   }
 
   const amount = parseInt(amountStr, 10)
   if (amount <= 0) {
-    await ctx.reply('⚠️ 예산은 0보다 큰 금액이어야 합니다.')
+    await out.reply(plainReply('⚠️ 예산은 0보다 큰 금액이어야 합니다.'))
     return
   }
 
@@ -195,43 +208,43 @@ async function handleBudgetSet(ctx: Context): Promise<void> {
     })
   }
 
-  await replyHtml(ctx,
+  await out.replyLong(
     `✅ ${month}월 전체 예산이 설정되었습니다.\n\n` +
       `예산: ${h.b(formatKRWFull(amount))}`
   )
 }
 
 export function registerBudgetCommands(bot: Bot): void {
-  bot.hears(/^소비\s*$/, async (ctx) => {
+  bot.hears(EXPENSE_SUMMARY_RE, async (ctx) => {
     try {
-      await handleTransactionSummary(ctx, 'expense')
+      await decideTransactionSummary('expense', telegramOutput(ctx))
     } catch (error) {
       console.error('[bot] 소비 조회 실패:', error)
       await ctx.reply('⚠️ 소비 조회에 실패했습니다.')
     }
   })
 
-  bot.hears(/^수입\s*$/, async (ctx) => {
+  bot.hears(INCOME_SUMMARY_RE, async (ctx) => {
     try {
-      await handleTransactionSummary(ctx, 'income')
+      await decideTransactionSummary('income', telegramOutput(ctx))
     } catch (error) {
       console.error('[bot] 수입 조회 실패:', error)
       await ctx.reply('⚠️ 수입 조회에 실패했습니다.')
     }
   })
 
-  bot.hears(/^예산\s*$/, async (ctx) => {
+  bot.hears(BUDGET_STATUS_RE, async (ctx) => {
     try {
-      await handleBudgetStatus(ctx)
+      await decideBudgetStatus(telegramOutput(ctx))
     } catch (error) {
       console.error('[bot] 예산 조회 실패:', error)
       await ctx.reply('⚠️ 예산 조회에 실패했습니다.')
     }
   })
 
-  bot.hears(/^예산설정(?:\s+.*)?$/, async (ctx) => {
+  bot.hears(BUDGET_SET_RE, async (ctx) => {
     try {
-      await handleBudgetSet(ctx)
+      await decideBudgetSet(ctx.message?.text ?? '', telegramOutput(ctx))
     } catch (error) {
       console.error('[bot] 예산 설정 실패:', error)
       await ctx.reply('⚠️ 예산 설정에 실패했습니다.')

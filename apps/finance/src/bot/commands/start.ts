@@ -1,5 +1,13 @@
-import { Bot } from 'grammy'
-import { replyHtml, escapeHtml, h } from '../utils/telegram'
+import type { Bot } from 'grammy'
+import { escapeHtml, h } from '../utils/telegram'
+import type { ReplyOutput } from '../core/reply'
+import { telegramOutput } from '../utils/telegram-reply'
+
+/*
+ * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 봇 소개 · 도움말.
+ * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말하고, 아래 register* 는 텔레그램 어댑터다(인자 벗기기 식 · try/catch 그대로).
+ * 특성 테스트 `__tests__/lookup-telegram.test.ts` · `manage-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ */
 
 const COMMANDS_HELP =
   `📌 ${h.b('사용 가능한 커맨드:')}\n` +
@@ -53,18 +61,27 @@ const COMMANDS_HELP =
   `백테스트 [종목] [전략] [기간] — 과거 전략 시뮬레이션\n` +
   `전략: rsi, 골든크로스, bb, sma`
 
+/** 봇 소개 — 이름이 없으면 "사용자"(텔레그램 `from.first_name` · Discord 는 PR-3). */
+export async function decideStart(firstName: string | undefined, out: ReplyOutput): Promise<void> {
+  const name = escapeHtml(firstName ?? '사용자')
+  await out.replyLong(
+    `안녕하세요, ${h.b(name)}님! 👋\n\n` +
+      `myFinance 봇입니다.\n` +
+      `포트폴리오 조회와 매매 기록을 도와드립니다.\n\n` +
+      COMMANDS_HELP
+  )
+}
+
+export async function decideHelp(out: ReplyOutput): Promise<void> {
+  await out.replyLong(COMMANDS_HELP)
+}
+
 export function registerCommands(bot: Bot): void {
   bot.command('start', async (ctx) => {
-    const name = escapeHtml(ctx.from?.first_name ?? '사용자')
-    await replyHtml(ctx,
-      `안녕하세요, ${h.b(name)}님! 👋\n\n` +
-        `myFinance 봇입니다.\n` +
-        `포트폴리오 조회와 매매 기록을 도와드립니다.\n\n` +
-        COMMANDS_HELP
-    )
+    await decideStart(ctx.from?.first_name, telegramOutput(ctx))
   })
 
   bot.command('help', async (ctx) => {
-    await replyHtml(ctx, COMMANDS_HELP)
+    await decideHelp(telegramOutput(ctx))
   })
 }

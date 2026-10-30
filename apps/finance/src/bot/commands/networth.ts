@@ -1,11 +1,34 @@
-import { Bot, Context } from 'grammy'
+import type { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import {
   calcCurrentValueKRW,
   DEFAULT_FX_RATE_USD_KRW,
 } from '@/lib/format'
 import { formatKRWCompact, formatPercent } from '../utils/formatter'
-import { replyHtml, escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/telegram'
+import { plainReply, type ReplyOutput } from '../core/reply'
+import { telegramOutput } from '../utils/telegram-reply'
+
+/*
+ * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 순자산 · 자산목록 · 자산추가 · 자산수정.
+ * 판단(decide*)은 인자(`args`)와 중립 응답 모델만 안다 · 텔레그램 원문 벗기기는 `*ArgsFromText`(지금 식 그대로).
+ * 특성 테스트 `__tests__/manage-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ */
+
+export const NET_WORTH_RE = /^순자산\s*$/
+export const ASSET_LIST_RE = /^자산목록\s*$/
+export const ASSET_ADD_RE = /^자산추가(?:\s+.*)?$/
+export const ASSET_UPDATE_RE = /^자산수정(?:\s+.*)?$/
+
+/** 텔레그램 원문 → 인자 — `/assetadd[@bot]` · `자산추가` 를 벗기고 trim(대소문자 무시). */
+export function assetAddArgsFromText(text: string): string {
+  return text.replace(/^(\/assetadd(?:@\w+)?|자산추가)\s*/i, '').trim()
+}
+
+/** 텔레그램 원문 → 인자 — `/assetupdate[@bot]` · `자산수정` 을 벗기고 trim(대소문자 무시). */
+export function assetUpdateArgsFromText(text: string): string {
+  return text.replace(/^(\/assetupdate(?:@\w+)?|자산수정)\s*/i, '').trim()
+}
 
 /** 쉼표 제거 후 숫자 파싱 (3,000,000 → 3000000) */
 function parseAmount(str: string): number {
@@ -41,7 +64,7 @@ function resolveCategory(input: string): string | null {
 /**
  * 순자산 — 현재 순자산 요약
  */
-async function handleNetWorth(ctx: Context): Promise<void> {
+export async function decideNetWorth(out: ReplyOutput): Promise<void> {
   // 환율
   const fxCache = await prisma.priceCache.findUnique({ where: { ticker: 'USDKRW=X' } })
   const fxRate = fxCache?.price ?? DEFAULT_FX_RATE_USD_KRW
@@ -112,19 +135,19 @@ async function handleNetWorth(ctx: Context): Promise<void> {
 
   lines.push(`\n💱 환율: ${fxRate.toLocaleString('ko-KR')}원/달러`)
 
-  await replyHtml(ctx, lines.join('\n'))
+  await out.replyLong(lines.join('\n'))
 }
 
 /**
  * 자산목록 — 전체 자산/부채 상세
  */
-async function handleAssetList(ctx: Context): Promise<void> {
+export async function decideAssetList(out: ReplyOutput): Promise<void> {
   const assets = await prisma.asset.findMany({
     orderBy: [{ isLiability: 'asc' }, { category: 'asc' }, { name: 'asc' }],
   })
 
   if (assets.length === 0) {
-    await replyHtml(ctx,
+    await out.replyLong(
       `📦 등록된 자산이 없습니다.\n\n자산추가 [이름] [카테고리] [금액] 으로 등록하세요.`
     )
     return
@@ -161,18 +184,15 @@ async function handleAssetList(ctx: Context): Promise<void> {
     lines.push(`  ${h.b('합계')}: -${formatKRWCompact(totalLiability)}`)
   }
 
-  await replyHtml(ctx, lines.join('\n'))
+  await out.replyLong(lines.join('\n'))
 }
 
 /**
  * 자산추가 [이름] [카테고리] [금액] [소유자]
  */
-async function handleAssetAdd(ctx: Context): Promise<void> {
-  const text = ctx.message?.text ?? ''
-  const args = text.replace(/^(\/assetadd(?:@\w+)?|자산추가)\s*/i, '').trim()
-
+export async function decideAssetAdd(args: string, out: ReplyOutput): Promise<void> {
   if (!args) {
-    await replyHtml(ctx,
+    await out.replyLong(
       `📦 ${h.b('자산 추가')}\n\n` +
       `사용법: 자산추가 [이름] [카테고리] [금액]\n` +
       `예: 자산추가 신한적금 적금 5000000\n` +
@@ -184,7 +204,7 @@ async function handleAssetAdd(ctx: Context): Promise<void> {
 
   const parts = args.split(/\s+/)
   if (parts.length < 3) {
-    await ctx.reply('⚠️ 사용법: 자산추가 [이름] [카테고리] [금액]')
+    await out.reply(plainReply('⚠️ 사용법: 자산추가 [이름] [카테고리] [금액]'))
     return
   }
 
@@ -195,13 +215,13 @@ async function handleAssetAdd(ctx: Context): Promise<void> {
 
   const category = resolveCategory(catInput)
   if (!category) {
-    await ctx.reply(`⚠️ 알 수 없는 카테고리: ${catInput}\n사용 가능: 예적금, 보험, 부동산, 연금, 대출, 현금, 기타`)
+    await out.reply(plainReply(`⚠️ 알 수 없는 카테고리: ${catInput}\n사용 가능: 예적금, 보험, 부동산, 연금, 대출, 현금, 기타`))
     return
   }
 
   const value = parseAmount(valueStr)
   if (!Number.isFinite(value) || value < 0) {
-    await ctx.reply('⚠️ 유효한 금액을 입력해주세요.')
+    await out.reply(plainReply('⚠️ 유효한 금액을 입력해주세요.'))
     return
   }
 
@@ -218,7 +238,7 @@ async function handleAssetAdd(ctx: Context): Promise<void> {
   })
 
   const catLabel = CATEGORY_LABELS[category] ?? category
-  await replyHtml(ctx,
+  await out.replyLong(
     `✅ 자산 등록 완료\n\n` +
     `${catLabel} ${h.b(escapeHtml(asset.name))}\n` +
     `금액: ${formatKRWCompact(asset.value)}\n` +
@@ -230,18 +250,15 @@ async function handleAssetAdd(ctx: Context): Promise<void> {
 /**
  * 자산수정 [이름] [금액]
  */
-async function handleAssetUpdate(ctx: Context): Promise<void> {
-  const text = ctx.message?.text ?? ''
-  const args = text.replace(/^(\/assetupdate(?:@\w+)?|자산수정)\s*/i, '').trim()
-
+export async function decideAssetUpdate(args: string, out: ReplyOutput): Promise<void> {
   if (!args) {
-    await ctx.reply('사용법: 자산수정 [이름] [금액]\n예: 자산수정 신한적금 5200000')
+    await out.reply(plainReply('사용법: 자산수정 [이름] [금액]\n예: 자산수정 신한적금 5200000'))
     return
   }
 
   const parts = args.split(/\s+/)
   if (parts.length < 2) {
-    await ctx.reply('⚠️ 사용법: 자산수정 [이름] [금액]')
+    await out.reply(plainReply('⚠️ 사용법: 자산수정 [이름] [금액]'))
     return
   }
 
@@ -250,7 +267,7 @@ async function handleAssetUpdate(ctx: Context): Promise<void> {
   const value = parseAmount(valueStr)
 
   if (!Number.isFinite(value) || value < 0) {
-    await ctx.reply('⚠️ 유효한 금액을 입력해주세요.')
+    await out.reply(plainReply('⚠️ 유효한 금액을 입력해주세요.'))
     return
   }
 
@@ -260,13 +277,13 @@ async function handleAssetUpdate(ctx: Context): Promise<void> {
   })
 
   if (matches.length === 0) {
-    await ctx.reply(`⚠️ 자산을 찾을 수 없습니다: ${name}\n자산목록 으로 확인해주세요.`)
+    await out.reply(plainReply(`⚠️ 자산을 찾을 수 없습니다: ${name}\n자산목록 으로 확인해주세요.`))
     return
   }
 
   if (matches.length > 1) {
     const list = matches.map((a) => `- ${escapeHtml(a.name)} (${escapeHtml(a.owner)}, ${CATEGORY_LABELS[a.category] ?? a.category})`).join('\n')
-    await replyHtml(ctx, `⚠️ 동일 이름 자산이 여러 개 있습니다:\n${list}\n\n웹에서 수정하거나 이름을 구분해주세요.`)
+    await out.replyLong(`⚠️ 동일 이름 자산이 여러 개 있습니다:\n${list}\n\n웹에서 수정하거나 이름을 구분해주세요.`)
     return
   }
 
@@ -278,7 +295,7 @@ async function handleAssetUpdate(ctx: Context): Promise<void> {
     data: { value: Math.round(value) },
   })
 
-  await replyHtml(ctx,
+  await out.replyLong(
     `✅ 자산 수정 완료\n\n` +
     `${h.b(escapeHtml(updated.name))}\n` +
     `이전: ${formatKRWCompact(oldValue)} → 변경: ${formatKRWCompact(updated.value)}`
@@ -286,15 +303,21 @@ async function handleAssetUpdate(ctx: Context): Promise<void> {
 }
 
 export function registerNetWorthCommands(bot: Bot): void {
-  bot.command('networth', handleNetWorth)
-  bot.hears(/^순자산\s*$/, handleNetWorth)
+  // 등록에 try/catch 가 없다 — 판단 밖으로 던진 오류는 지금처럼 grammY bot.catch 로 간다
+  const netWorth = (ctx: Context) => decideNetWorth(telegramOutput(ctx))
+  const assetList = (ctx: Context) => decideAssetList(telegramOutput(ctx))
+  const assetAdd = (ctx: Context) => decideAssetAdd(assetAddArgsFromText(ctx.message?.text ?? ''), telegramOutput(ctx))
+  const assetUpdate = (ctx: Context) => decideAssetUpdate(assetUpdateArgsFromText(ctx.message?.text ?? ''), telegramOutput(ctx))
 
-  bot.command('assetlist', handleAssetList)
-  bot.hears(/^자산목록\s*$/, handleAssetList)
+  bot.command('networth', netWorth)
+  bot.hears(NET_WORTH_RE, netWorth)
 
-  bot.command('assetadd', handleAssetAdd)
-  bot.hears(/^자산추가(?:\s+.*)?$/, handleAssetAdd)
+  bot.command('assetlist', assetList)
+  bot.hears(ASSET_LIST_RE, assetList)
 
-  bot.command('assetupdate', handleAssetUpdate)
-  bot.hears(/^자산수정(?:\s+.*)?$/, handleAssetUpdate)
+  bot.command('assetadd', assetAdd)
+  bot.hears(ASSET_ADD_RE, assetAdd)
+
+  bot.command('assetupdate', assetUpdate)
+  bot.hears(ASSET_UPDATE_RE, assetUpdate)
 }

@@ -39,6 +39,8 @@ export interface FakeCtxOptions {
   messageId?: number | null
   /** 명령 인자(grammY `ctx.match`) */
   match?: string
+  /** `from.first_name` — 생략하면 없음 */
+  firstName?: string
 }
 
 /** 텔레그램 ctx 흉내. reply 는 새 message_id 를 돌려주고(pending 키가 이 값을 쓴다) `sentIds` 에 순서대로 남긴다. */
@@ -55,7 +57,7 @@ export function fakeCtx(opts: FakeCtxOptions = {}) {
   const ctx = {
     message: opts.text !== undefined ? { text: opts.text } : undefined,
     match: opts.match,
-    from: fromId === undefined ? undefined : { id: fromId },
+    from: fromId === undefined ? undefined : { id: fromId, ...(opts.firstName !== undefined ? { first_name: opts.firstName } : {}) },
     chat: { id: chatId },
     callbackQuery:
       opts.data !== undefined
