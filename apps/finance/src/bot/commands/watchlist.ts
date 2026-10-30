@@ -54,7 +54,6 @@ function resolveStrategy(input: string): string {
  * /관심 SOFI 매수구간 7.5 8.5
  */
 export async function decideWatch(args: string, out: ReplyOutput): Promise<void> {
-
   if (!args) {
     await out.reply(plainReply(
       '👀 관심종목 관리\n\n' +

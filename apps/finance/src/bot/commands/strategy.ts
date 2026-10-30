@@ -61,7 +61,6 @@ function formatStrategy(strategy: string): string {
  * /전략 컨텍 감시 점검일 2026-06-01
  */
 export async function decideStrategy(args: string, out: ReplyOutput): Promise<void> {
-
   if (!args) {
     await out.reply(plainReply(
       '⚙️ 전략 설정\n\n' +

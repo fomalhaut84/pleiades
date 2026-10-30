@@ -191,7 +191,6 @@ export async function decideAssetList(out: ReplyOutput): Promise<void> {
  * 자산추가 [이름] [카테고리] [금액] [소유자]
  */
 export async function decideAssetAdd(args: string, out: ReplyOutput): Promise<void> {
-
   if (!args) {
     await out.replyLong(
       `📦 ${h.b('자산 추가')}\n\n` +
@@ -252,7 +251,6 @@ export async function decideAssetAdd(args: string, out: ReplyOutput): Promise<vo
  * 자산수정 [이름] [금액]
  */
 export async function decideAssetUpdate(args: string, out: ReplyOutput): Promise<void> {
-
   if (!args) {
     await out.reply(plainReply('사용법: 자산수정 [이름] [금액]\n예: 자산수정 신한적금 5200000'))
     return
