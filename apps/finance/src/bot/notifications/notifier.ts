@@ -10,7 +10,8 @@
  * 값은 pleiades 루트 `.env`(`platformEnv` · 프로세스 env 우선)에서 읽는다 — 앱 실행 방식(run.sh · npm run dev · pm2)과 무관.
  *   NOTIFY_ALLOWED_CHANNEL=discord → `#finance` (DISCORD_WEBHOOK_FINANCE)
  *   NOTIFY_ADMIN_CHANNEL=discord   → `#admin`   (DISCORD_WEBHOOK_ADMIN)
- * `/브리핑` 응답(`notifierForChat`)은 항상 텔레그램. 분기 PDF 는 `sendFileIfDiscord`(M-6b-1).
+ * `/브리핑` 응답은 요청한 곳으로 — 봇 명령이 `sendBriefing(session, target)` 에 응답 대상을 넘긴다(텔레그램 = `notifierForChat` ·
+ * Discord 요청 채널은 009 D-3 PR-3 · 설계 D2 · 라우트 스위치를 타지 않는다). 분기 PDF 는 `sendFileIfDiscord`(M-6b-1).
  * 키보드 메시지(`interactiveNotifierFor`)는 별도 스위치 `NOTIFY_INTERACTIVE_CHANNEL=discord` 면 fin Discord 봇(M-6b-4 #155),
  * 아니면 텔레그램(혼합 운영 Q11). 버튼 클릭은 봇 프로세스의 gateway(`discord-interactions.ts`)가 받는다.
  *
@@ -201,7 +202,7 @@ export function telegramRecipients(route: FinRoute): string[] {
 }
 
 /**
- * 요청한 chat 하나에만 보낸다 — 봇 명령의 on-demand 발송(`/브리핑` → `sendBriefing(session, chatId)`).
+ * 요청한 chat 하나에만 보낸다 — 봇 명령의 on-demand 발송(`/브리핑` → `sendBriefing(session, (bot) => notifierForChat(bot, chatId))`).
  * 재시도·폴백·분할 정책은 `notifierFor` 와 같고, 대상만 그 chat 으로 고정한다(구 `sendBriefing([chatId], …)` 보존).
  */
 export function notifierForChat(bot: NotifyBot, chatId: number): Notifier {

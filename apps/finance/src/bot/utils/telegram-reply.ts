@@ -7,11 +7,12 @@
  *   removeButtons → `editMessageReplyMarkup({ reply_markup: undefined })`
  *   edit    → `editMessageText(text[, { parse_mode: 'HTML', reply_markup }])`
  *   replyLong → `replyHtml(ctx, html)`(`./telegram` — 지금 그 함수 그대로 · PR-2a)
+ *   replyFile → `replyWithDocument(new InputFile(data, name)[, { caption }])`(PR-2b · contentType 은 텔레그램이 쓰지 않는다)
  *   typing  → `replyWithChatAction('typing')` · 주기 5 s(지금 값)
  * 본인 확인 값은 지금과 같다 — 요청자 `String(from?.id ?? 0)`(DB `Transaction.userId` 도 같은 값) · 누른 사람은 `from` 없으면 undefined(거부).
  */
 
-import { InlineKeyboard, type Context } from 'grammy'
+import { InlineKeyboard, InputFile, type Context } from 'grammy'
 import type { BotReply, ButtonOutput, ButtonPress, ReplyButtonRows, ReplyOutput, Requester } from '../core/reply'
 import { telegramMessageKey, telegramStateKey, type StateKey } from '../core/state-key'
 import { replyHtml } from './telegram'
@@ -44,6 +45,11 @@ export function telegramOutput(ctx: Context): ReplyOutput {
       return telegramMessageKey(sent.chat.id, sent.message_id)
     },
     replyLong: (html) => replyHtml(ctx, html),
+    replyFile: async (file) => {
+      const document = new InputFile(file.data, file.name)
+      if (file.caption === undefined) await ctx.replyWithDocument(document)
+      else await ctx.replyWithDocument(document, { caption: file.caption })
+    },
     typing: async () => {
       await ctx.replyWithChatAction('typing')
     },

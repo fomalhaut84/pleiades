@@ -53,6 +53,7 @@ function fakeOut(keyOf: (n: number) => string) {
       return keyOf(sent.length - 1)
     },
     replyLong: async () => { throw new Error('replyLong 은 이 판단에서 쓰지 않는다') },
+    replyFile: async () => { throw new Error('replyFile 은 이 판단에서 쓰지 않는다') },
     typing: async () => undefined,
     typingIntervalMs: 60_000,
   }

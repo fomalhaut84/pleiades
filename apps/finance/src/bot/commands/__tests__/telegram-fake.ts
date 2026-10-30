@@ -37,8 +37,8 @@ export interface FakeCtxOptions {
   chatId?: number
   /** 콜백이 가리키는 메시지 id — null 이면 `callbackQuery.message` 없음 */
   messageId?: number | null
-  /** 명령 인자(grammY `ctx.match`) */
-  match?: string
+  /** 명령 인자(grammY `ctx.match`) — `command` 는 문자열 · `hears` 는 정규식 매치 배열 */
+  match?: string | RegExpMatchArray
   /** `from.first_name` — 생략하면 없음 */
   firstName?: string
 }
@@ -77,6 +77,7 @@ export function fakeCtx(opts: FakeCtxOptions = {}) {
     answerCallbackQuery: record('answerCallbackQuery'),
     editMessageReplyMarkup: record('editMessageReplyMarkup'),
     editMessageText: record('editMessageText'),
+    replyWithDocument: record('replyWithDocument'),
   }
   return { ctx, calls, sentIds }
 }
