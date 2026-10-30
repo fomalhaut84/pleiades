@@ -162,6 +162,23 @@ describe('T10 AI fallback 분기', () => {
     })
   })
 
+  it('진행 안내가 advisor 호출보다 먼저다(대화 · 거래 파싱 · 9-1 리뷰 info 1)', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    const cases = [
+      ['요즘 시장 어때?', '🤔 생각 중...'],
+      [TRADE_TEXT, '📝 거래 정보 파싱 중...'],
+    ] as const
+    for (const [text, progress] of cases) {
+      const f = fakeCtx({ text, chatId: freshChat() })
+      mocked.ask.mockImplementationOnce((() => {
+        f.calls.push(['askAdvisor'])
+        return new Promise(() => undefined)
+      }) as never)
+      await fallback.handler(f.ctx, vi.fn())
+      expect(f.calls).toEqual([['reply', progress], ['askAdvisor']])
+    }
+  })
+
   it('둘 다 아니면 무응답', async () => {
     const f = await say('그냥 메모 하나')
     expect(f.calls).toEqual([])
@@ -285,11 +302,23 @@ describe('T13 /ai · /reset · 동시 1건 · 세션', () => {
     expect(mocked.ask.mock.calls[2][1]).toMatchObject({ sessionId: 'sb' })
   })
 
-  it('chat 없음 → /reset · AI 대화 모두 무응답', async () => {
+  it('chat 없음 → /reset · AI 대화 무응답 · /ai 는 사용법만', async () => {
     const r = fakeCtx({ text: '/reset' })
     ;(r.ctx as { chat?: unknown }).chat = undefined
     await resetCommand.handler(r.ctx, vi.fn())
     expect(r.calls).toEqual([])
+
+    // /ai — 인자 없음은 chat 없이도 사용법 · 인자 있음은 무응답(9-1 리뷰 info 2)
+    const usage = fakeCtx({ text: '/ai', match: '' })
+    ;(usage.ctx as { chat?: unknown }).chat = undefined
+    await aiCommand.handler(usage.ctx, vi.fn())
+    expect(usage.calls.map((c) => c[0])).toEqual(['reply'])
+    expect(String(usage.calls[0][1]).startsWith('🤖 AI 어드바이저에게 질문하세요.')).toBe(true)
+
+    const asked = fakeCtx({ text: '/ai 안녕', match: '안녕' })
+    ;(asked.ctx as { chat?: unknown }).chat = undefined
+    await aiCommand.handler(asked.ctx, vi.fn())
+    expect(asked.calls).toEqual([])
 
     const q = fakeCtx({ text: '이거 어때?' })
     ;(q.ctx as { chat?: unknown }).chat = undefined
