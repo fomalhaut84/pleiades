@@ -101,10 +101,11 @@ describe('T6 매수·매도 파싱·검증', () => {
     expect(mocked.accounts).not.toHaveBeenCalled()
   })
 
-  it('현재 동작 — 계좌 없음 안내는 plain 인데 escapeHtml 을 거친다(& 가 &amp; 로 보인다)', async () => {
+  // PR-2c (#396 · UQ-3) 이전: plain 안내가 escapeHtml 을 거쳐 & 가 &amp; 로 보였다
+  it('계좌 없음 안내(plain)는 escape 하지 않는다(PR-2c 수정)', async () => {
     mocked.accounts.mockResolvedValueOnce([]).mockResolvedValueOnce([{ name: 'A&B' }, { name: '소담' }] as never)
     const f = await say(buyHears, '매수 없는<계좌> AAPL 1 150')
-    expect(f.calls).toEqual([['reply', '⚠️ 계좌를 찾을 수 없습니다: 없는&lt;계좌&gt;\n사용 가능: A&amp;B, 소담']])
+    expect(f.calls).toEqual([['reply', '⚠️ 계좌를 찾을 수 없습니다: 없는<계좌>\n사용 가능: A&B, 소담']])
     expect(mocked.accounts.mock.calls[0][0]).toEqual({ where: { name: '없는<계좌>' }, take: 2 })
   })
 
@@ -127,6 +128,17 @@ describe('T6 매수·매도 파싱·검증', () => {
       take: 2,
     })
     expect(f.calls).toEqual([['reply', '여러 종목이 매칭됩니다:\n  삼성전자 (A)\n  삼성전자 (B)\n\n티커를 입력해주세요.']])
+  })
+
+  it('후보 안내(plain)는 escape 하지 않는다(PR-2c 수정 · 이전에는 & → &amp;)', async () => {
+    mocked.accounts.mockResolvedValueOnce([ACCOUNT] as never)
+    priceTable({})
+    mocked.priceMany.mockResolvedValueOnce([
+      { ...SAMSUNG, displayName: 'S&P <500>', ticker: 'A' },
+      { ...SAMSUNG, displayName: 'S&P <500>', ticker: 'B' },
+    ] as never)
+    const f = await say(buyHears, '매수 세진 S&P 1 70000')
+    expect(f.calls).toEqual([['reply', '여러 종목이 매칭됩니다:\n  S&P <500> (A)\n  S&P <500> (B)\n\n티커를 입력해주세요.']])
   })
 
   it('PriceCache 에 없으면 그 계좌 보유 종목에서 · 그래도 없으면 안내', async () => {

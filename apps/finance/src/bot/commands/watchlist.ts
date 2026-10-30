@@ -75,7 +75,7 @@ export async function decideWatch(args: string, out: ReplyOutput): Promise<void>
     where: { ticker: tickerInput },
   })
   if (holding) {
-    await out.reply(plainReply(`⚠️ ${escapeHtml(tickerInput)}은(는) 이미 보유 중입니다. /전략 커맨드로 관리하세요.`))
+    await out.reply(plainReply(`⚠️ ${tickerInput}은(는) 이미 보유 중입니다. /전략 커맨드로 관리하세요.`))
     return
   }
 
@@ -107,7 +107,7 @@ export async function decideWatch(args: string, out: ReplyOutput): Promise<void>
       where: { ticker: resolvedTicker },
     })
     if (holdingCheck) {
-      await out.reply(plainReply(`⚠️ ${escapeHtml(resolvedTicker)}은(는) 이미 보유 중입니다. /전략 커맨드로 관리하세요.`))
+      await out.reply(plainReply(`⚠️ ${resolvedTicker}은(는) 이미 보유 중입니다. /전략 커맨드로 관리하세요.`))
       return
     }
   }
@@ -187,7 +187,7 @@ export async function decideUnwatch(args: string, out: ReplyOutput): Promise<voi
 
   const existing = await prisma.watchlist.findUnique({ where: { ticker } })
   if (!existing) {
-    await out.reply(plainReply(`⚠️ 관심종목에 없습니다: ${escapeHtml(ticker)}`))
+    await out.reply(plainReply(`⚠️ 관심종목에 없습니다: ${ticker}`))
     return
   }
 

@@ -171,10 +171,11 @@ describe('관심 · 관심삭제 · 관심목록', () => {
     expect(p.holding.findFirst.mock.calls[0][0]).toStrictEqual({ where: { ticker: '관심종목' } })
   })
 
-  it('보유 중 → 안내(plain · escape 된 채 — 현재 동작)', async () => {
+  // PR-2c (#396 · UQ-3) 이전: plain 안내가 escapeHtml 을 거쳐 & 가 &amp; 로 보였다
+  it('보유 중 → 안내(plain · escape 하지 않는다 — PR-2c 수정)', async () => {
     p.holding.findFirst.mockResolvedValueOnce({ id: 'h' } as never)
     const f = await run(hears(watch, 0), '관심 a&b')
-    expect(f.calls).toEqual([['reply', '⚠️ A&amp;B은(는) 이미 보유 중입니다. /전략 커맨드로 관리하세요.']])
+    expect(f.calls).toEqual([['reply', '⚠️ A&B은(는) 이미 보유 중입니다. /전략 커맨드로 관리하세요.']])
   })
 
   it('이름 여럿 → 후보(html) · 이름으로 찾은 티커가 보유 중 → 안내', async () => {

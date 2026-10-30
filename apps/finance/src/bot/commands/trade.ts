@@ -100,7 +100,7 @@ export function tradeArgsFromText(type: 'BUY' | 'SELL', text: string): string | 
   return match?.[1]?.trim()
 }
 
-/** 매수·매도 — `args` = 계좌 · 종목 · 수량 · 가격(없으면 사용법). 현재 동작: plain 안내 속 `escapeHtml`(UQ-3). */
+/** 매수·매도 — `args` = 계좌 · 종목 · 수량 · 가격(없으면 사용법). plain 안내는 escape 하지 않는다(PR-2c · UQ-3). */
 export async function decideTrade(
   type: 'BUY' | 'SELL',
   args: string | undefined,
@@ -160,7 +160,7 @@ export async function decideTrade(
   if (matchedAccounts.length === 0) {
     const allAccounts = await prisma.account.findMany({ select: { name: true } })
     const names = allAccounts.map((a) => a.name).join(', ')
-    await out.reply(plainReply(`⚠️ 계좌를 찾을 수 없습니다: ${escapeHtml(accountName)}\n사용 가능: ${escapeHtml(names)}`))
+    await out.reply(plainReply(`⚠️ 계좌를 찾을 수 없습니다: ${accountName}\n사용 가능: ${names}`))
     return
   }
   if (matchedAccounts.length > 1) {
@@ -203,7 +203,7 @@ export async function decideTrade(
         .map((p) => `${p.displayName} (${p.ticker})`)
         .join('\n  ')
       await out.reply(plainReply(
-        `여러 종목이 매칭됩니다:\n  ${escapeHtml(candidates)}\n\n티커를 입력해주세요.`
+        `여러 종목이 매칭됩니다:\n  ${candidates}\n\n티커를 입력해주세요.`
       ))
       return
     } else {
@@ -223,7 +223,7 @@ export async function decideTrade(
         market = holding.market
         currency = holding.currency
       } else {
-        await out.reply(plainReply(`⚠️ 종목을 찾을 수 없습니다: ${escapeHtml(tickerOrName)}`))
+        await out.reply(plainReply(`⚠️ 종목을 찾을 수 없습니다: ${tickerOrName}`))
         return
       }
     }
