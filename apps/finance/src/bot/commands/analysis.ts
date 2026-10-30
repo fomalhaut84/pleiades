@@ -1,7 +1,23 @@
-import { Bot, Context } from 'grammy'
+import type { Bot, Context } from 'grammy'
 import { generateTAReport } from '@/lib/ta/engine'
 import { formatPercent } from '../utils/formatter'
-import { replyHtml, escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/telegram'
+import { plainReply, type ReplyOutput } from '../core/reply'
+import { telegramOutput } from '../utils/telegram-reply'
+import { knownUserMessage } from '../utils/error'
+
+/*
+ * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 기술적 분석.
+ * 판단(decideAnalysis)은 인자(`args`)와 중립 응답 모델만 안다 · 텔레그램 원문 벗기기는 `analysisArgsFromText`(지금 식 그대로).
+ * 특성 테스트 `__tests__/lookup-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ */
+
+export const ANALYSIS_RE = /^분석(?:\s+.*)?$/
+
+/** 텔레그램 원문 → 인자 — `/analysis[@bot]` · `/분석` · `분석` 을 벗기고 trim(대소문자 무시). */
+export function analysisArgsFromText(text: string): string {
+  return text.replace(/^(\/analysis(?:@\w+)?|\/분석|분석)\s*/i, '').trim()
+}
 
 const SIGNAL_LABEL: Record<string, string> = {
   STRONG_BUY: '🟢🟢 강력 매수',
@@ -26,12 +42,11 @@ function fp(price: number): string {
   return escapeHtml(s)
 }
 
-async function handleAnalysis(ctx: Context): Promise<void> {
-  const text = ctx.message?.text ?? ''
-  const ticker = text.replace(/^(\/analysis(?:@\w+)?|\/분석|분석)\s*/i, '').trim().toUpperCase()
+export async function decideAnalysis(args: string, out: ReplyOutput): Promise<void> {
+  const ticker = args.toUpperCase()
 
   if (!ticker) {
-    await replyHtml(ctx,
+    await out.replyLong(
       `📊 ${h.b('기술적 분석')}\n\n` +
       `사용법: 분석 [종목]\n` +
       `예: 분석 NVDA`
@@ -39,7 +54,7 @@ async function handleAnalysis(ctx: Context): Promise<void> {
     return
   }
 
-  await ctx.replyWithChatAction('typing')
+  await out.typing()
 
   try {
     const report = await generateTAReport(ticker)
@@ -102,15 +117,19 @@ async function handleAnalysis(ctx: Context): Promise<void> {
     }
 
     const message = [...header, ...priceSection, ...indicatorSection, ...srSection].join('\n')
-    await replyHtml(ctx, message)
+    await out.replyLong(message)
   } catch (error) {
-    const msg = error instanceof Error ? error.message : '알 수 없는 오류'
+    // TA 엔진의 사용자용 안내(`lib/ta/engine.ts`)만 보인다 — 그 밖의 원문은 로그만(PR-2c · UQ-3)
+    const known = knownUserMessage(error, ['데이터 부족:', '유효 데이터 부족:'])
     console.error(`[bot] 분석 실패 (${ticker}):`, error)
-    await ctx.reply(`⚠️ ${ticker} 분석 실패: ${msg}`)
+    await out.reply(plainReply(known ? `⚠️ ${ticker} 분석 실패: ${known}` : `⚠️ ${ticker} 분석에 실패했습니다. 잠시 후 다시 시도해주세요.`))
   }
 }
 
 export function registerAnalysisCommands(bot: Bot): void {
-  bot.command('analysis', handleAnalysis)
-  bot.hears(/^분석(?:\s+.*)?$/, handleAnalysis)
+  // 등록에 try/catch 가 없다 — 판단 밖으로 던진 오류(typing 실패 등)는 지금처럼 grammY bot.catch 로 간다
+  const handle = (ctx: Context) =>
+    decideAnalysis(analysisArgsFromText(ctx.message?.text ?? ''), telegramOutput(ctx))
+  bot.command('analysis', handle)
+  bot.hears(ANALYSIS_RE, handle)
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// discord-inbound.cjs — discord-inbound.sh 의 노드 쪽 (009 D-2 PR-3 · #367). 플랫폼 설정 파일의 대화 채널 키 한 줄만 읽고·고친다.
+// discord-inbound.cjs — discord-inbound.sh 의 노드 쪽 (009 D-2 PR-3 · #367 · fin 키 D-3 PR-3 · #398). 플랫폼 설정 파일의 대화 채널 키 한 줄만 읽고·고친다.
 //
 // 사용:  INBOUND_VALUE=<채널ID|빈 값> node deploy/discord-inbound.cjs set <파일> <KEY>   그 키 줄만 바꾼다(없으면 끝에 더한다 · 나머지 줄·주석·권한 그대로)
 //        node deploy/discord-inbound.cjs state <파일> <KEY>                               "설정됨" / "비어 있음"
@@ -10,7 +10,7 @@
 const fs = require('fs')
 const path = require('path')
 
-const KEYS = new Set(['DISCORD_CHANNEL_ID_FITNESS_CHAT'])
+const KEYS = new Set(['DISCORD_CHANNEL_ID_FITNESS_CHAT', 'DISCORD_CHANNEL_ID_FINANCE_CHAT'])
 const SNOWFLAKE_RE = /^\d{17,20}$/
 const LINE_RE = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/
 

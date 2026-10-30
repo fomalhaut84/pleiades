@@ -4518,3 +4518,13 @@ ls -d apps/<app>/prisma/migrations/*/ | wc -l                                   
 
 **npm 10.8.2 결함:** `file:../notify` 의존을 가진 패키지에서 `npm install` 이 `TypeError: Cannot read properties of null (reading 'edgesOut')`(arborist `#loadPeerSet`)로 실패 — `--legacy-peer-deps` 로 통과. `packages/chat/.npmrc` 에 고정, `npm --prefix packages/chat ci` 도 그 설정을 읽는다(실측).
 미측정: U-2(같은 토큰 두 세션) · U-15 의 실제 `remaining` 값(코드는 `GET /gateway/bot` `session_start_limit` 을 읽는다 — 값은 출력하지 않았다).
+
+## 2026-10-30 — 009 D-3 PR-2c fin `알림설정` 한글 인자 로컬 실측 (#396)
+
+- **목적:** UQ-3 조건("`알림설정` 텔레그램 쪽은 로컬 실측 확인 뒤 고친다") — 정적 판독(설계 W9: `hears` 의 `ctx.match` 는 일치 배열)을 실제 grammY 로 확인.
+- **명령:** `tools/local/run.sh fin -- npm run build:bot` → `zsh -ic 'tools/local/run.sh fin -- node dist/bot/standalone.cjs'`(검증 fin 봇 · long polling · 검증 Discord gateway) → 사용자가 검증 봇에 텔레그램으로 두 메시지 → 프로세스 종료. 코드 = `dev` `23419da`(PR-2b 머지 뒤 · 결함 그대로).
+- **결과(사용자 화면 그대로):**
+  - `알림설정` → `⚠️ 사용법: /알림설정 [항목] [값]` + 예시 + 사용 가능 목록 — **현황 조회가 아니다**(인자 없음 분기에 가지 않는다)
+  - `알림설정 급락 -3` → `⚠️ 알 수 없는 항목: 알림설정` + 사용 가능 목록 — **항목이 "알림설정" 으로 잡힌다**
+  - 두 응답 모두 특성 테스트 `special-telegram.test.ts` 의 "현재 동작" 2건과 같다 → 결함 확정 · `/alertconfig …` 영어 명령은 정상(같은 테스트)
+- **DB 쓰기(`pleiades_fin`):** 기동 시 EarningsCache 시드 대상 0 · 주가 크론 PriceCache 1행 갱신. 알림설정 값 변경 0(두 메시지 모두 변경 전 분기에서 끝남). 운영 봇·DB·서버 영향 0.

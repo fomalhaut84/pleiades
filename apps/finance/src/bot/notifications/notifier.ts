@@ -10,7 +10,8 @@
  * 값은 pleiades 루트 `.env`(`platformEnv` · 프로세스 env 우선)에서 읽는다 — 앱 실행 방식(run.sh · npm run dev · pm2)과 무관.
  *   NOTIFY_ALLOWED_CHANNEL=discord → `#finance` (DISCORD_WEBHOOK_FINANCE)
  *   NOTIFY_ADMIN_CHANNEL=discord   → `#admin`   (DISCORD_WEBHOOK_ADMIN)
- * `/브리핑` 응답(`notifierForChat`)은 항상 텔레그램. 분기 PDF 는 `sendFileIfDiscord`(M-6b-1).
+ * `/브리핑` 응답은 요청한 곳으로 — 봇 명령이 `sendBriefing(session, target)` 에 응답 대상을 넘긴다(텔레그램 = `notifierForChat` ·
+ * Discord 요청 채널은 009 D-3 PR-3 · 설계 D2 · 라우트 스위치를 타지 않는다). 분기 PDF 는 `sendFileIfDiscord`(M-6b-1).
  * 키보드 메시지(`interactiveNotifierFor`)는 별도 스위치 `NOTIFY_INTERACTIVE_CHANNEL=discord` 면 fin Discord 봇(M-6b-4 #155),
  * 아니면 텔레그램(혼합 운영 Q11). 버튼 클릭은 봇 프로세스의 gateway(`discord-interactions.ts`)가 받는다.
  *
@@ -167,6 +168,41 @@ export function discordBotConfig(): { token: string; channelId: string; allowedU
   return { token, channelId, allowedUserIds, ready: token !== '' && DISCORD_ID_RE.test(channelId) }
 }
 
+/** 대화 채널 키(009 D-3 K · pleiades#398) — 비어 있거나 형식이 아니면 메시지 수신을 켜지 않는다(스위치를 겸한다). */
+export const DISCORD_CHAT_CHANNEL_KEY = 'DISCORD_CHANNEL_ID_FINANCE_CHAT'
+
+/**
+ * fin 대화 채널 ID — 부를 때마다 읽는다(프로세스 env → 루트 `.env`). 형식(숫자 5~25자리)이 아니면 "".
+ * 알림 채널(`DISCORD_CHANNEL_ID_FINANCE`)과 같은 값이어도 된다(009 C-7 정정). 값은 로그에 쓰지 않는다.
+ */
+export function discordChatChannelId(): string {
+  const v = (platformEnv(DISCORD_CHAT_CHANNEL_KEY) ?? '').trim()
+  return DISCORD_ID_RE.test(v) ? v : ''
+}
+
+/**
+ * Discord 로 받은 봇 명령의 on-demand 발송 — 요청한 채널 하나에만(`/브리핑` · 009 D-3 D2 · pleiades#398).
+ * 라우트 스위치(`NOTIFY_ALLOWED_CHANNEL`)를 타지 않는다 — 텔레그램 `notifierForChat` 의 Discord 짝.
+ * fin 봇 토큰이 비면 수신자 0. notifier 는 던지지 않으므로 **안 나갔으면(`sent=0`) 경고 줄 1** 을 여기서 남긴다
+ * (텔레그램 명령·크론과 같은 실패 표면 · IDENTIFY 차단 알림과 같은 형태).
+ */
+export function notifierForDiscordChannel(channelId: string): Notifier {
+  const token = discordBotConfig().token
+  const inner = createNotifier({
+    transport: createDiscordBotTransport({ token, channels: { req: channelId } }),
+    targets: { ALLOWED: () => (token === '' ? [] : ['req']) },
+  })
+  return {
+    targetCount: (route) => inner.targetCount(route),
+    targets: (route) => inner.targets(route),
+    notify: async (route, content, ctx) => {
+      const r = await inner.notify(route, content, ctx)
+      if (r.sent === 0) console.warn(`[discord-fin] 요청 채널 발송 안 됨 (sent=0/total=${r.total} · ${ctx?.label ?? 'notify'})`)
+      return r
+    },
+  }
+}
+
 /**
  * 첨부 파일(분기 PDF · 003 §7-4 포트 밖) — 그 라우트가 Discord 면 웹훅에 첨부한다(M-6b-1 #147).
  *   'not-discord' → 호출부가 텔레그램 `sendDocument` 로 보낸다(구 동작)
@@ -201,7 +237,7 @@ export function telegramRecipients(route: FinRoute): string[] {
 }
 
 /**
- * 요청한 chat 하나에만 보낸다 — 봇 명령의 on-demand 발송(`/브리핑` → `sendBriefing(session, chatId)`).
+ * 요청한 chat 하나에만 보낸다 — 봇 명령의 on-demand 발송(`/브리핑` → `sendBriefing(session, (bot) => notifierForChat(bot, chatId))`).
  * 재시도·폴백·분할 정책은 `notifierFor` 와 같고, 대상만 그 chat 으로 고정한다(구 `sendBriefing([chatId], …)` 보존).
  */
 export function notifierForChat(bot: NotifyBot, chatId: number): Notifier {

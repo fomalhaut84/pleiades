@@ -8,7 +8,8 @@
 import { notifyBot } from '@/bot/index'
 import { askAdvisor, describeAdvisorError } from '@/lib/ai/claude-advisor'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
-import { notifierFor, notifierForChat, Route, htmlContent } from './notifier'
+import type { Notifier } from '@pleiades/notify'
+import { notifierFor, Route, htmlContent, type NotifyBot } from './notifier'
 import { sanitizeError } from '@/bot/utils/error'
 import { formatKstDate } from '@/lib/kst-date'
 import { newsSearchRules } from '@/lib/ai/news-rules'
@@ -44,14 +45,29 @@ export function buildBriefingPrompt(session: MarketSession, now: Date = new Date
 }
 
 /**
- * @param chatId 있으면 그 chat 에만(봇 `/브리핑` 명령) · 없으면 ALLOWED 전체(cron).
+ * 브리핑 응답 대상 — 봇을 받아 notifier 를 만든다(pleiades 009 D-3 PR-2b · pleiades#394 · 설계 §4 D2).
+ * 봇 명령이 넘긴다: 텔레그램 = `notifierForChat(bot, chatId)`(요청 chat 하나) · Discord = 요청 채널(PR-3).
+ * 없으면 크론 경로 — `notifierFor`(라우트 스위치). `notifyBot()` 은 지금처럼 이 함수 안에서 부른다(실패 경로 같음).
+ */
+export type BriefingTarget = (bot: NotifyBot) => Notifier
+
+export interface BriefingOptions {
+  /** 실패 안내의 AI 명령 표기 — 기본 텔레그램 `/ai` · Discord 는 `!ai`(PR-3 · 설계 D2 "문구를 인자로") */
+  readonly aiCommand?: string
+}
+
+/**
+ * 모닝 브리핑을 만들어 보낸다.
+ * @param target 있으면 그 대상에만(봇 `/브리핑` 명령 — 요청한 곳) · 없으면 ALLOWED 라우트 전체(cron).
+ * @param options.aiCommand 실패 안내의 AI 명령 표기(기본 `/ai`).
  */
 export async function sendBriefing(
   session: MarketSession,
-  chatId?: number,
+  target?: BriefingTarget,
+  options: BriefingOptions = {},
 ): Promise<void> {
   const bot = notifyBot()
-  const notifier = chatId === undefined ? notifierFor(bot) : notifierForChat(bot, chatId)
+  const notifier = target === undefined ? notifierFor(bot) : target(bot)
   const prompt = buildBriefingPrompt(session)
 
   try {
@@ -91,7 +107,7 @@ export async function sendBriefing(
     const advisorMsg = error instanceof Error ? describeAdvisorError(error) : ''
     const fallback =
       `📊 ${label} 모닝 브리핑 생성에 실패했습니다.\n` +
-      `${advisorMsg}\n/ai 에서 직접 질문해주세요.`
+      `${advisorMsg}\n${options.aiCommand ?? '/ai'} 에서 직접 질문해주세요.`
     await notifier.notify(Route.ALLOWED, htmlContent(fallback), { label: 'briefing' })
   }
 }

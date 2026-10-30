@@ -29,6 +29,11 @@ export interface BotReply {
   readonly format: ReplyFormat
   /** 없으면 버튼 없음. */
   readonly buttons?: ReplyButtonRows
+  /**
+   * 모델 출력(AI 답 · 종목 심층 분석) — Discord 어댑터가 명령 표기(`/ai` → `!ai`)를 바꾸지 않는다(설계 P N20 · fit `long` 과 같다).
+   * 텔레그램 어댑터는 보지 않는다. pleiades 009 D-3 PR-3 (pleiades#398).
+   */
+  readonly verbatim?: true
 }
 
 /**
@@ -37,10 +42,29 @@ export interface BotReply {
  */
 export type MessageKey = string
 
+/**
+ * 첨부 파일 하나 — 분기 리포트 PDF(`/report`). pleiades 009 D-3 PR-2b (pleiades#394 · 설계 §4 D).
+ * 텔레그램 = `replyWithDocument(InputFile, {caption})` · Discord = chat `replyFile`(10 MiB 상한 · PR-3).
+ */
+export interface ReplyFile {
+  readonly name: string
+  readonly data: Uint8Array
+  readonly contentType: string
+  readonly caption?: string
+}
+
 /** 메시지 응답 출력 — 판단 함수가 순서대로 부른다(진행 안내 → 결과처럼 한 요청에 여러 메시지). */
 export interface ReplyOutput {
   /** 보내고 그 메시지의 키를 돌려준다. 실패는 던진다. */
   reply(message: BotReply): Promise<MessageKey>
+  /**
+   * HTML 본문 — 길 수 있다(조회 결과 · 목록). 텔레그램은 지금의 `replyHtml`(4096 분할 · 네트워크 재시도 · HTML 파싱 실패 시
+   * 태그를 뗀 plain 재전송) · Discord 는 chat 이 변환·분할한다(PR-3). 버튼을 달지 않으므로 메시지 키를 돌려주지 않는다.
+   * pleiades 009 D-3 PR-2a (pleiades#392) — fit `BotReply.long` 과 같은 뜻을 메서드로 둔다(`reply` 가 키를 돌려주는 계약 유지).
+   */
+  replyLong(html: string): Promise<void>
+  /** 파일 하나를 보낸다(캡션 선택). 실패는 던진다. */
+  replyFile(file: ReplyFile): Promise<void>
   /** 입력 중 표시 한 번. 실패는 호출부가 삼킨다(표시용). */
   typing(): Promise<void>
   /** 긴 작업이 `typing` 을 다시 부르는 주기 — 텔레그램 5 s(지금 값) · Discord 는 어댑터 값(설계 Q). */
@@ -76,12 +100,33 @@ export interface ButtonPress {
   readonly clickerId: string | undefined
 }
 
+/**
+ * 기록(DB 쓰기) 뒤 화면 갱신 — 단계마다 따로 시도하고 실패는 로그만 남긴다.
+ * 앞 단계(예: 콜백 만료로 토스트 실패)가 실패해도 버튼 제거·본문 교체는 돈다 — 기록된 거래가 화면에 남지 않으면
+ * 사용자가 결과를 몰라 다시 입력한다(중복 기록). 기록 뒤 실패를 "기록 실패" 로 바꾸지 않는다.
+ * pleiades 009 D-3 PR-2c (pleiades#396 · UQ-3 · 9-1 리뷰 major).
+ */
+export async function afterCommit(label: string, steps: readonly (() => Promise<void>)[]): Promise<void> {
+  for (const step of steps) {
+    try {
+      await step()
+    } catch (error) {
+      console.error(`${label} 기록 뒤 원본 수정 실패(기록은 됨):`, error)
+    }
+  }
+}
+
 export function plainReply(text: string, buttons?: ReplyButtonRows): BotReply {
   return buttons ? { text, format: 'plain', buttons } : { text, format: 'plain' }
 }
 
 export function htmlReply(text: string, buttons?: ReplyButtonRows): BotReply {
   return buttons ? { text, format: 'html', buttons } : { text, format: 'html' }
+}
+
+/** 모델 출력 한 조각 — 형식만 고르고 `verbatim` 을 붙인다(버튼 없음). */
+export function modelReply(text: string, format: ReplyFormat): BotReply {
+  return { text, format, verbatim: true }
 }
 
 /**

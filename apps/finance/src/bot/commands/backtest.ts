@@ -1,10 +1,24 @@
-import { Bot, Context } from 'grammy'
+import type { Bot, Context } from 'grammy'
 import { runBacktest } from '@/lib/backtest/engine'
 import { PRESET_STRATEGIES, STRATEGY_ALIASES } from '@/lib/backtest/presets'
-import { replyHtml, escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/telegram'
 import { formatPercent } from '../utils/formatter'
+import { plainReply, type ReplyOutput } from '../core/reply'
+import { telegramOutput } from '../utils/telegram-reply'
+import { knownUserMessage } from '../utils/error'
 
-const TYPING_INTERVAL_MS = 5000
+/*
+ * pleiades 009 D-3 PR-2b (pleiades#394 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · Q · H2): 백테스트.
+ * 판단(decideBacktest)은 인자와 중립 응답 모델만 안다 · typing 주기는 `out.typingIntervalMs`(텔레그램 5 s 그대로).
+ * 특성 테스트 `__tests__/special-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ */
+
+export const BACKTEST_RE = /^백테스트(?:\s+.*)?$/
+
+/** 텔레그램 원문 → 인자 — `/backtest[@bot]` · `백테스트` 를 벗기고 trim(대소문자 무시). */
+export function backtestArgsFromText(text: string): string {
+  return text.replace(/^(\/backtest(?:@\w+)?|백테스트)\s*/i, '').trim()
+}
 
 /**
  * 백테스트 [종목] [전략] [기간(일)]
@@ -12,15 +26,13 @@ const TYPING_INTERVAL_MS = 5000
  * 백테스트 AAPL 골든크로스
  * 백테스트 AAPL (기본: RSI, 1년)
  */
-async function handleBacktest(ctx: Context): Promise<void> {
-  const text = ctx.message?.text ?? ''
-  const args = text.replace(/^(\/backtest(?:@\w+)?|백테스트)\s*/i, '').trim()
+export async function decideBacktest(args: string, out: ReplyOutput): Promise<void> {
 
   if (!args) {
     const stratList = Object.entries(PRESET_STRATEGIES)
       .map(([key, s]) => `  ${key} — ${s.description}`)
       .join('\n')
-    await replyHtml(ctx,
+    await out.replyLong(
       `🧪 ${h.b('백테스트')}\n\n` +
       `사용법: 백테스트 [종목] [전략] [기간(일)]\n` +
       `예: 백테스트 NVDA rsi 365\n` +
@@ -38,24 +50,24 @@ async function handleBacktest(ctx: Context): Promise<void> {
   const strategy = PRESET_STRATEGIES[strategyKey]
   if (!strategy) {
     const available = Object.keys(PRESET_STRATEGIES).join(', ')
-    await ctx.reply(`⚠️ 알 수 없는 전략: ${parts[1]}\n사용 가능: ${available}`)
+    await out.reply(plainReply(`⚠️ 알 수 없는 전략: ${parts[1]}\n사용 가능: ${available}`))
     return
   }
 
   if (!Number.isInteger(days) || days < 30 || days > 3650) {
-    await ctx.reply('⚠️ 기간은 30~3650일 사이여야 합니다.')
+    await out.reply(plainReply('⚠️ 기간은 30~3650일 사이여야 합니다.'))
     return
   }
 
-  await replyHtml(ctx,
+  await out.replyLong(
     `🧪 ${h.b(`${escapeHtml(ticker)} 백테스트`)} 실행 중...\n` +
     `전략: ${escapeHtml(strategy.name)} | 기간: ${days}일`
   )
 
   // fire-and-forget
   const typingInterval = setInterval(() => {
-    ctx.replyWithChatAction('typing').catch(() => {})
-  }, TYPING_INTERVAL_MS)
+    out.typing().catch(() => {})
+  }, out.typingIntervalMs)
 
   const endDate = new Date()
   const startDate = new Date()
@@ -105,17 +117,20 @@ async function handleBacktest(ctx: Context): Promise<void> {
         }
       }
 
-      await replyHtml(ctx, lines.join('\n'))
+      await out.replyLong(lines.join('\n'))
     })
     .catch(async (error) => {
-      const msg = error instanceof Error ? error.message : '알 수 없는 오류'
+      // 백테스트 엔진의 사용자용 안내(`lib/backtest/engine.ts`)만 보인다 — 그 밖의 원문은 로그만(PR-2c · UQ-3)
+      const known = knownUserMessage(error, ['데이터 부족:'])
       console.error(`[bot] 백테스트 실패 (${ticker}):`, error)
-      await ctx.reply(`⚠️ 백테스트 실패: ${msg}`)
+      await out.reply(plainReply(known ? `⚠️ 백테스트 실패: ${known}` : '⚠️ 백테스트에 실패했습니다. 잠시 후 다시 시도해주세요.'))
     })
     .finally(() => clearInterval(typingInterval))
 }
 
 export function registerBacktestCommands(bot: Bot): void {
-  bot.command('backtest', handleBacktest)
-  bot.hears(/^백테스트(?:\s+.*)?$/, handleBacktest)
+  // 등록에 try/catch 가 없다 — 판단 밖으로 던진 오류는 지금처럼 grammY bot.catch 로 간다
+  const handle = (ctx: Context) => decideBacktest(backtestArgsFromText(ctx.message?.text ?? ''), telegramOutput(ctx))
+  bot.command('backtest', handle)
+  bot.hears(BACKTEST_RE, handle)
 }
