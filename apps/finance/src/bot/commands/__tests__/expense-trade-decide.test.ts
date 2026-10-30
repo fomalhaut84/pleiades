@@ -29,7 +29,7 @@ vi.mock('@/bot/notifications/budget-alert', () => ({ checkBudgetUsage: vi.fn() }
 vi.mock('@/lib/trade-service', () => ({ createTrade: vi.fn() }))
 
 import { prisma } from '@/lib/prisma'
-import { matchCategory } from '@/lib/category-matcher'
+import { getAllCategories, matchCategory } from '@/lib/category-matcher'
 import { checkBudgetUsage } from '@/bot/notifications/budget-alert'
 import { createTrade } from '@/lib/trade-service'
 import type { BotReply, ButtonOutput, ButtonPress, ReplyOutput, Requester } from '../../core/reply'
@@ -38,6 +38,8 @@ import {
   INCOME_RE,
   decideExpenseButton,
   decideExpenseInput,
+  DESCRIPTION_DISPLAY_MAX,
+  displayDescription,
   expenseFallbackRoute,
   registerExpenseCommands,
 } from '../expense'
@@ -179,5 +181,41 @@ describe('설계 B — 버튼 출력 단계 열', () => {
     await decideTradeButton(`trade:confirm:${tradeId}`, { messageKey: discordMessageKey('3', '4'), clickerId: '555' }, b.out)
     expect(b.steps.map((s) => s[0])).toEqual(['toast', 'removeButtons', 'edit'])
     expect((b.steps[2][1] as BotReply).format).toBe('html')
+  })
+})
+
+// 회귀: PR #399 Codex P2 · pleiades#400 — 버튼 붙은 본문이 Discord 2000자를 넘으면 버튼이 새 메시지로 옮겨 가 대기 상태 키와 어긋난다
+describe('긴 소비 설명 — 기록 화면 표시는 줄이고 DB 에는 원문', () => {
+  const long = '가'.repeat(1990)
+
+  it('displayDescription — 한도 이하는 그대로 · 넘으면 한도 + …', () => {
+    expect(displayDescription('점심')).toBe('점심')
+    const shown = displayDescription(long)
+    expect(Array.from(shown)).toHaveLength(DESCRIPTION_DISPLAY_MAX + 1)
+    expect(shown.endsWith('…')).toBe(true)
+  })
+
+  it('카테고리 변경 본문(버튼 20 개) < 2000자 · 확인하면 원문이 기록된다', async () => {
+    vi.mocked(matchCategory).mockResolvedValueOnce([FOOD])
+    const { out, sent } = fakeOut(() => discordMessageKey('7', '8'))
+    await decideExpenseInput(`${long} 12000`, out, discordUser)
+    expect(Array.from(sent[0].text).length).toBeLessThan(2000)
+    const txId = sent[0].buttons![0][0].action.split(':')[2]
+    const press: ButtonPress = { messageKey: discordMessageKey('7', '8'), clickerId: '555' }
+
+    const cats = Array.from({ length: 20 }, (_, i) => ({ id: `c${i}`, name: `카테고리${i}`, icon: '', type: 'expense' }))
+    vi.mocked(getAllCategories).mockResolvedValueOnce(cats as never)
+    const change = fakeButtons()
+    await decideExpenseButton(`tx:change:${txId}`, press, change.out)
+    const edited = change.steps.find((st) => st[0] === 'edit')![1] as BotReply
+    expect(Array.from(edited.text).length).toBeLessThan(2000)
+    expect(edited.buttons!.flat()).toHaveLength(21)
+
+    vi.mocked(prisma.category.findUnique).mockResolvedValueOnce(null)
+    vi.mocked(prisma.transaction.create).mockResolvedValueOnce({
+      amount: 12000, description: long, categoryId: 'c-food', transactedAt: new Date(),
+    } as never)
+    await decideExpenseButton(`tx:confirm:${txId}`, press, fakeButtons().out)
+    expect(vi.mocked(prisma.transaction.create).mock.calls.at(-1)![0].data.description).toBe(long)
   })
 })
