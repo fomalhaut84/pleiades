@@ -92,8 +92,9 @@ describe('원문 → 인자 (A2)', () => {
     expect(alertArgsFromTelegram(undefined, '알림설정 급락 -3')).toBe('급락 -3')
   })
 
-  it('현재 동작 — 알림설정 hears 의 매치 배열은 원문 전체가 된다(UQ-3 · PR-2c)', () => {
-    expect(alertArgsFromTelegram('알림설정 급락 -3'.match(ALERT_CONFIG_RE), '알림설정 급락 -3')).toBe('알림설정 급락 -3')
+  it('알림설정 hears 의 매치 배열은 쓰지 않고 원문에서 벗긴다(PR-2c · UQ-3)', () => {
+    expect(alertArgsFromTelegram('알림설정 급락 -3'.match(ALERT_CONFIG_RE), '알림설정 급락 -3')).toBe('급락 -3')
+    expect(alertArgsFromTelegram('알림설정'.match(ALERT_CONFIG_RE), '알림설정')).toBe('')
   })
 })
 

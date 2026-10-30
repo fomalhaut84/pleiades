@@ -407,7 +407,8 @@ describe('T5 tx: 콜백', () => {
     expect(mocked.budget).not.toHaveBeenCalled()
   })
 
-  it('현재 동작 — 기록 뒤 본문 교체가 실패하면 "실패" 를 이어 보낸다(DB 에는 기록됨 · UQ-3)', async () => {
+  // PR-2c (#396 · UQ-3) 이전: 본문 교체 실패가 catch 로 가 기록된 소비에 "실패" 를 이어 보냈고 예산 체크도 건너뛰었다
+  it('기록 뒤 본문 교체가 실패해도 "실패" 를 보내지 않는다 · 예산 체크는 돈다(PR-2c 수정)', async () => {
     const { messageId, txId } = await startSingle()
     mocked.categoryFind.mockResolvedValueOnce(null)
     mocked.txCreate.mockResolvedValueOnce({ amount: 12000, description: '점심', categoryId: 'c-food', transactedAt: new Date() } as never)
@@ -421,11 +422,10 @@ describe('T5 tx: 콜백', () => {
       ['answerCallbackQuery', { text: '기록 완료!' }],
       ['editMessageReplyMarkup', { reply_markup: undefined }],
       ['editMessageText', '✅ 소비 기록 완료\n\n내용: 점심\n금액: ₩12,000\n카테고리: 식비'],
-      ['answerCallbackQuery', { text: '⚠️ 기록에 실패했습니다.' }],
-      ['editMessageReplyMarkup', { reply_markup: undefined }],
-      ['editMessageText', '⚠️ 소비 기록에 실패했습니다. 잠시 후 다시 시도해주세요.'],
     ])
     expect(mocked.txCreate).toHaveBeenCalledTimes(1)
+    expect(mocked.budget).toHaveBeenCalledTimes(1)
+    expect(console.error).toHaveBeenCalledWith('[bot/expense] 기록 뒤 원본 수정 실패(기록은 됨):', expect.any(Error))
   })
 
   it('후잉 실패는 기록·응답에 영향 없음', async () => {
@@ -558,6 +558,24 @@ describe('T15 복수 파싱(fire-and-forget) · T6 multi: 콜백', () => {
     expect(mocked.budget).toHaveBeenCalledTimes(1)
     const again = await press(`multi:confirm:${tx}`, messageId)
     expect(again.calls[0]).toEqual(['answerCallbackQuery', { text: '⚠️ 만료된 요청입니다.' }])
+  })
+
+  it('confirm — 기록 뒤 본문 교체가 실패해도 "실패" 를 보내지 않는다 · 예산 체크는 돈다(PR-2c 수정)', async () => {
+    const { tx, messageId } = await multiReady()
+    mocked.$transaction.mockResolvedValueOnce([
+      { amount: 12000, description: '점심', categoryId: 'c-food', transactedAt: new Date('2026-10-27T00:00:00.000Z') },
+    ] as never)
+    const f = fakeCtx({ data: `multi:confirm:${tx}`, messageId })
+    f.ctx.editMessageText.mockImplementationOnce(async (...args: unknown[]) => {
+      f.calls.push(['editMessageText', ...args])
+      throw new Error('telegram 400')
+    })
+    await callback.handler(f.ctx, vi.fn())
+    expect(f.calls.map((c) => c[0])).toEqual(['answerCallbackQuery', 'editMessageReplyMarkup', 'editMessageText'])
+    expect(f.calls[0]).toEqual(['answerCallbackQuery', { text: '1건 기록 완료!' }])
+    expect(mocked.$transaction).toHaveBeenCalledTimes(1)
+    expect(mocked.budget).toHaveBeenCalledTimes(1)
+    expect(console.error).toHaveBeenCalledWith('[bot/multi-expense] 기록 뒤 원본 수정 실패(기록은 됨):', expect.any(Error))
   })
 
   it('confirm — 유효 0 이면 토스트 · 버튼 제거', async () => {

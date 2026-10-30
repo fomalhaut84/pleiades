@@ -99,3 +99,15 @@ export function isHtmlParseError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err)
   return /can't parse entities|Bad Request:.*entit/i.test(msg)
 }
+
+/**
+ * 사용자에게 보여도 되는 오류 안내만 꺼낸다 — pleiades 009 D-3 PR-2c (pleiades#396 · UQ-3 · 사용자 2026-10-30 "알려진 안내만 유지").
+ * 메시지가 알려진 접두(엔진·파서가 사용자용으로 쓴 한국어 안내)로 시작하면 `원문:` 줄(AI 응답 원문)을 뗀 메시지를,
+ * 아니면 null — 호출부는 정적 안내를 보이고 원문은 로그로만 남긴다(네트워크·DB 등 예상 못 한 오류의 원문 노출을 막는다).
+ */
+export function knownUserMessage(err: unknown, prefixes: readonly string[]): string | null {
+  if (!(err instanceof Error)) return null
+  // 파서는 `\n원문: ${raw.slice(0, 200)}` 를 붙인다 — AI 원문은 여러 줄일 수 있어 첫 `원문:` 줄부터 끝까지 뗀다(PR-2c 9-1 리뷰 major)
+  const msg = err.message.split(/(?:^|\n)원문:/)[0].trim()
+  return prefixes.some((p) => msg.startsWith(p)) ? msg : null
+}

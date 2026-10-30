@@ -714,7 +714,8 @@ describe('T9 aitrade: 버튼', () => {
     ])
   })
 
-  it('현재 동작 — 확정 뒤 원본 수정이 실패하면 기록된 거래에 "거래 실패" 를 띄운다(UQ-3)', async () => {
+  // PR-2c (#396 · UQ-3) 이전: 본문 교체 실패가 catch 로 가 기록된 거래에 "거래 실패" 를 이어 보냈다
+  it('확정 뒤 원본 수정이 실패해도 "거래 실패" 를 보내지 않는다 — 로그만(PR-2c 수정)', async () => {
     const { tradeId, messageId } = await startAiTrade()
     mocked.createTrade.mockResolvedValueOnce({ trade: { totalKRW: 700000 }, holding: { shares: 20 } } as never)
     const f = fakeCtx({ data: `aitrade:confirm:${tradeId}`, messageId })
@@ -724,16 +725,9 @@ describe('T9 aitrade: 버튼', () => {
     })
     await callback.handler(f.ctx, vi.fn())
     expect(mocked.createTrade).toHaveBeenCalledTimes(1)
-    expect(f.calls.map((c) => c[0])).toEqual([
-      'answerCallbackQuery',
-      'editMessageReplyMarkup',
-      'editMessageText',
-      'answerCallbackQuery',
-      'editMessageReplyMarkup',
-      'editMessageText',
-    ])
-    expect(f.calls[3]).toEqual(['answerCallbackQuery', { text: '⚠️ 거래 기록에 실패했습니다.' }])
-    expect(f.calls[5]).toEqual(['editMessageText', '⚠️ 거래 실패: 거래 기록에 실패했습니다.'])
+    expect(f.calls.map((c) => c[0])).toEqual(['answerCallbackQuery', 'editMessageReplyMarkup', 'editMessageText'])
+    expect(f.calls[0]).toEqual(['answerCallbackQuery', { text: '거래 기록 완료!' }])
+    expect(console.error).toHaveBeenCalledWith('[bot] AI 거래 기록 뒤 원본 수정 실패(기록은 됨):', expect.any(Error))
   })
 
   it('처리 중 던지면 바깥에서 정적 안내', async () => {

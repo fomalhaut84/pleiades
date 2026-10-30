@@ -5,6 +5,7 @@ import { escapeHtml, h } from '../utils/telegram'
 import { formatPercent } from '../utils/formatter'
 import { plainReply, type ReplyOutput } from '../core/reply'
 import { telegramOutput } from '../utils/telegram-reply'
+import { knownUserMessage } from '../utils/error'
 
 /*
  * pleiades 009 D-3 PR-2b (pleiades#394 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · Q · H2): 백테스트.
@@ -119,9 +120,10 @@ export async function decideBacktest(args: string, out: ReplyOutput): Promise<vo
       await out.replyLong(lines.join('\n'))
     })
     .catch(async (error) => {
-      const msg = error instanceof Error ? error.message : '알 수 없는 오류'
+      // 백테스트 엔진의 사용자용 안내(`lib/backtest/engine.ts`)만 보인다 — 그 밖의 원문은 로그만(PR-2c · UQ-3)
+      const known = knownUserMessage(error, ['데이터 부족:'])
       console.error(`[bot] 백테스트 실패 (${ticker}):`, error)
-      await out.reply(plainReply(`⚠️ 백테스트 실패: ${msg}`))
+      await out.reply(plainReply(known ? `⚠️ 백테스트 실패: ${known}` : '⚠️ 백테스트에 실패했습니다. 잠시 후 다시 시도해주세요.'))
     })
     .finally(() => clearInterval(typingInterval))
 }

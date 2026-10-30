@@ -323,10 +323,14 @@ describe('분석', () => {
     expect(f.calls).toMatchSnapshot()
   })
 
-  it('현재 동작 — 실패 시 오류 원문을 그대로 보인다(서비스 유래)', async () => {
-    mocked.ta.mockRejectedValueOnce(new Error('데이터 부족: 30일 미만'))
-    const f = await run(hears(analysis, 0), '분석 NEW')
-    expect(f.calls).toEqual([['reply', '⚠️ NEW 분석 실패: 데이터 부족: 30일 미만']])
+  // PR-2c (#396 · UQ-3) 이전: 어떤 오류든 원문을 그대로 보였다
+  it('실패 — 엔진 안내(데이터 부족)는 그대로 · 그 밖의 원문은 정적 안내(PR-2c 수정)', async () => {
+    mocked.ta.mockRejectedValueOnce(new Error('데이터 부족: NEW (12일)'))
+    const known = await run(hears(analysis, 0), '분석 NEW')
+    mocked.ta.mockRejectedValueOnce(new Error('connect ECONNREFUSED 127.0.0.1:443'))
+    const other = await run(hears(analysis, 0), '분석 NEW')
+    expect(known.calls).toEqual([['reply', '⚠️ NEW 분석 실패: 데이터 부족: NEW (12일)']])
+    expect(other.calls).toEqual([['reply', '⚠️ NEW 분석에 실패했습니다. 잠시 후 다시 시도해주세요.']])
   })
 
   it('typing 실패는 그대로 던진다(try 밖 · 등록에 catch 없음)', async () => {
