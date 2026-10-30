@@ -1,4 +1,4 @@
-import { Bot, Context, InlineKeyboard } from 'grammy'
+import type { Bot } from 'grammy'
 import {
   askAdvisor,
   AdvisorTimeoutError,
@@ -13,14 +13,37 @@ import { isTradeMessage } from '../utils/trade-trigger'
 import { markdownToTelegramHtml } from '../utils/markdown'
 import { sanitizeError } from '../utils/error'
 import { buildTickerCheckLines } from '../utils/trade-price-check'
+import {
+  htmlReply,
+  isSameRequester,
+  plainReply,
+  type ButtonOutput,
+  type ButtonPress,
+  type ReplyOutput,
+  type Requester,
+} from '../core/reply'
+import { pendingKey, type StateKey } from '../core/state-key'
+import {
+  telegramButtonOutput,
+  telegramButtonPress,
+  telegramOutput,
+  telegramRequester,
+  telegramStateKeyOf,
+} from '../utils/telegram-reply'
 
-const TYPING_INTERVAL_MS = 5000
+/*
+ * pleiades 009 D-3 PR-1b (pleiades#385 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 H2 · Q · S):
+ * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말하고, 아래 register* 는 텔레그램 어댑터다.
+ * 대화 상태(세션 · 동시 1건)의 키는 상태 키(`telegram:<chatId>` — Discord 는 채널+사용자 · UQ-4 플랫폼별).
+ * 특성 테스트 `__tests__/ai-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ */
+
 const MIN_AI_TEXT_LENGTH = 3
 
-// chatId별 AI 세션 ID + 마지막 사용 시각 관리
-const chatSessions = new Map<number, { sessionId: string; lastUsed: number }>()
-// chatId별 진행 중 플래그 (직렬화)
-const chatBusy = new Set<number>()
+// 상태 키별 AI 세션 ID + 마지막 사용 시각 관리
+const chatSessions = new Map<StateKey, { sessionId: string; lastUsed: number }>()
+// 상태 키별 진행 중 플래그 (직렬화)
+const chatBusy = new Set<StateKey>()
 // 24시간 미사용 세션 정리
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000
 function cleanExpiredSessions(): void {
@@ -34,59 +57,62 @@ function cleanExpiredSessions(): void {
 // AI 질문 처리
 // ============================================================
 
-function fireAiQuestion(ctx: Context, question: string): void {
-  const chatId = ctx.chat?.id
-  if (!chatId) return
+/**
+ * AI 대화 — 진행 안내 뒤 곧 돌아가고(fire-and-forget) 답은 나중에 보낸다.
+ * 상태 키가 없으면(텔레그램 chat 없음) 무응답 · 같은 키에 진행 중인 질문이 있으면 처리 중 안내.
+ */
+export function decideAiQuestion(question: string, stateKey: StateKey | undefined, out: ReplyOutput): void {
+  if (!stateKey) return
 
-  if (chatBusy.has(chatId)) {
-    ctx.reply('⏳ 이전 질문을 처리 중입니다. 잠시 후 다시 시도해주세요.')
+  if (chatBusy.has(stateKey)) {
+    out.reply(plainReply('⏳ 이전 질문을 처리 중입니다. 잠시 후 다시 시도해주세요.'))
       .catch(() => {})
     return
   }
-  chatBusy.add(chatId)
+  chatBusy.add(stateKey)
 
-  ctx.reply('🤔 생각 중...')
+  out.reply(plainReply('🤔 생각 중...'))
     .catch((e) => console.error('[bot] 생각 중 응답 실패:', e))
 
   const typingInterval = setInterval(() => {
-    ctx.replyWithChatAction('typing')
+    out.typing()
       .catch(() => { /* 무시 */ })
-  }, TYPING_INTERVAL_MS)
+  }, out.typingIntervalMs)
 
   cleanExpiredSessions()
   askAdvisor(question, {
-    sessionId: chatSessions.get(chatId)?.sessionId,
+    sessionId: chatSessions.get(stateKey)?.sessionId,
     persist: true,
     intent: 'conversation',  // 자유 질문 → sonnet (35-A / #433)
     caller: 'bot:ai_chat',
   })
     .then(async (result) => {
-      if (result.sessionId) chatSessions.set(chatId, { sessionId: result.sessionId, lastUsed: Date.now() })
+      if (result.sessionId) chatSessions.set(stateKey, { sessionId: result.sessionId, lastUsed: Date.now() })
       const chunks = splitMessage(result.response)
       for (const chunk of chunks) {
         const chunkHtml = markdownToTelegramHtml(chunk)
         try {
-          await ctx.reply(chunkHtml, { parse_mode: 'HTML' })
+          await out.reply(htmlReply(chunkHtml))
         } catch {
-          await ctx.reply(chunk)
+          await out.reply(plainReply(chunk))
         }
       }
     })
     .catch(async (error) => {
       if (error instanceof AdvisorTimeoutError) {
-        await ctx.reply('⚠️ AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.')
+        await out.reply(plainReply('⚠️ AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.'))
       } else if (error instanceof AdvisorError) {
         // Phase 40-B (#469): code 별 fallback 메시지로 사용자 UX 개선.
         // detail (stderr) 은 console 로만 (사용자 노출 금지).
         if (error.detail) console.error(`[bot] AI advisor detail (${error.code}): ${error.detail}`)
-        await ctx.reply(describeAdvisorError(error))
+        await out.reply(plainReply(describeAdvisorError(error)))
       } else {
         console.error(`[bot] AI 질문 처리 실패: ${sanitizeError(error)}`)
-        await ctx.reply('⚠️ AI 질문 처리에 실패했습니다.')
+        await out.reply(plainReply('⚠️ AI 질문 처리에 실패했습니다.'))
       }
     })
     .catch((e) => console.error('[bot] AI 응답 전송 실패:', e))
-    .finally(() => { clearInterval(typingInterval); chatBusy.delete(chatId) })
+    .finally(() => { clearInterval(typingInterval); chatBusy.delete(stateKey) })
 }
 
 // ============================================================
@@ -104,7 +130,8 @@ interface ParsedTrade {
 }
 
 interface PendingAiTrade {
-  requestedByUserId: number
+  /** 본인 확인 값 — `Requester.userId`(텔레그램 `String(from?.id ?? 0)`) */
+  requestedByUserId: string
   parsed: ParsedTrade
   accountId: string
   market: string
@@ -137,36 +164,37 @@ const TRADE_PARSE_PROMPT = `다음 자연어 메시지에서 주식 거래 정�
 
 메시지: `
 
-function fireTradeParseQuestion(ctx: Context, text: string): void {
-  ctx.reply('📝 거래 정보 파싱 중...')
+/** AI 거래 파싱 — 진행 안내 뒤 곧 돌아가고(fire-and-forget) 확인 메시지는 나중에 보낸다. */
+export function decideTradeParse(text: string, who: Requester, out: ReplyOutput): void {
+  out.reply(plainReply('📝 거래 정보 파싱 중...'))
     .catch((e) => console.error('[bot] 파싱 중 응답 실패:', e))
 
   const typingInterval = setInterval(() => {
-    ctx.replyWithChatAction('typing')
+    out.typing()
       .catch(() => { /* 무시 */ })
-  }, TYPING_INTERVAL_MS)
+  }, out.typingIntervalMs)
 
   askAdvisor(TRADE_PARSE_PROMPT + text, { intent: 'parse', caller: 'bot:trade_parse' })  // 구조 JSON 파싱 → haiku (35-A)
     .then(async (result) => {
-      await handleParsedTrade(ctx, result.response)
+      await handleParsedTrade(out, who, result.response)
     })
     .catch(async (error) => {
       if (error instanceof AdvisorTimeoutError) {
-        await ctx.reply('⚠️ 파싱 시간이 초과되었습니다. "매수 [계좌] [종목] [수량] [가격]" 형식으로 입력해주세요.')
+        await out.reply(plainReply('⚠️ 파싱 시간이 초과되었습니다. "매수 [계좌] [종목] [수량] [가격]" 형식으로 입력해주세요.'))
       } else {
         console.error('[bot] 거래 파싱 실패:', error)
-        await ctx.reply('⚠️ 거래 파싱에 실패했습니다. "매수 [계좌] [종목] [수량] [가격]" 형식으로 입력해주세요.')
+        await out.reply(plainReply('⚠️ 거래 파싱에 실패했습니다. "매수 [계좌] [종목] [수량] [가격]" 형식으로 입력해주세요.'))
       }
     })
     .catch((e) => console.error('[bot] 파싱 응답 전송 실패:', e))
     .finally(() => clearInterval(typingInterval))
 }
 
-async function handleParsedTrade(ctx: Context, response: string): Promise<void> {
+async function handleParsedTrade(out: ReplyOutput, who: Requester, response: string): Promise<void> {
   // JSON 추출 (응답에 부가 텍스트가 있을 수 있음)
   const jsonMatch = response.match(/\{[^}]+\}/)
   if (!jsonMatch) {
-    await ctx.reply('⚠️ 거래 정보를 파싱할 수 없습니다. "매수 [계좌] [종목] [수량] [가격]" 형식으로 입력해주세요.')
+    await out.reply(plainReply('⚠️ 거래 정보를 파싱할 수 없습니다. "매수 [계좌] [종목] [수량] [가격]" 형식으로 입력해주세요.'))
     return
   }
 
@@ -174,11 +202,11 @@ async function handleParsedTrade(ctx: Context, response: string): Promise<void> 
   try {
     const raw = JSON.parse(jsonMatch[0])
     if (raw.error) {
-      await ctx.reply(`⚠️ 파싱 실패: ${raw.error}\n"매수 [계좌] [종목] [수량] [가격]" 형식으로 입력해주세요.`)
+      await out.reply(plainReply(`⚠️ 파싱 실패: ${raw.error}\n"매수 [계좌] [종목] [수량] [가격]" 형식으로 입력해주세요.`))
       return
     }
     if (raw.type !== 'BUY' && raw.type !== 'SELL') {
-      await ctx.reply(`⚠️ 매수/매도를 구분할 수 없습니다. "매수 [계좌] [종목] [수량] [가격]" 형식으로 입력해주세요.`)
+      await out.reply(plainReply(`⚠️ 매수/매도를 구분할 수 없습니다. "매수 [계좌] [종목] [수량] [가격]" 형식으로 입력해주세요.`))
       return
     }
     parsed = {
@@ -191,21 +219,21 @@ async function handleParsedTrade(ctx: Context, response: string): Promise<void> 
       currency: raw.currency === 'USD' ? 'USD' : 'KRW',
     }
   } catch {
-    await ctx.reply('⚠️ 거래 정보를 파싱할 수 없습니다. "매수 [계좌] [종목] [수량] [가격]" 형식으로 입력해주세요.')
+    await out.reply(plainReply('⚠️ 거래 정보를 파싱할 수 없습니다. "매수 [계좌] [종목] [수량] [가격]" 형식으로 입력해주세요.'))
     return
   }
 
   // 검증
   if (!parsed.accountName) {
-    await ctx.reply('⚠️ 계좌명을 확인해주세요.')
+    await out.reply(plainReply('⚠️ 계좌명을 확인해주세요.'))
     return
   }
   if (!Number.isFinite(parsed.shares) || parsed.shares <= 0 || !Number.isInteger(parsed.shares)) {
-    await ctx.reply('⚠️ 수량은 1 이상의 정수여야 합니다.')
+    await out.reply(plainReply('⚠️ 수량은 1 이상의 정수여야 합니다.'))
     return
   }
   if (!Number.isFinite(parsed.price) || parsed.price <= 0) {
-    await ctx.reply('⚠️ 가격은 0보다 큰 숫자여야 합니다.')
+    await out.reply(plainReply('⚠️ 가격은 0보다 큰 숫자여야 합니다.'))
     return
   }
 
@@ -217,7 +245,7 @@ async function handleParsedTrade(ctx: Context, response: string): Promise<void> 
   if (accounts.length !== 1) {
     const allAccounts = await prisma.account.findMany({ select: { name: true } })
     const names = allAccounts.map((a) => a.name).join(', ')
-    await ctx.reply(`⚠️ 계좌를 찾을 수 없습니다: ${parsed.accountName}\n사용 가능: ${names}`)
+    await out.reply(plainReply(`⚠️ 계좌를 찾을 수 없습니다: ${parsed.accountName}\n사용 가능: ${names}`))
     return
   }
   const account = accounts[0]
@@ -247,7 +275,7 @@ async function handleParsedTrade(ctx: Context, response: string): Promise<void> 
     })
     if (byName.length > 1) {
       const candidates = byName.map((p) => `${p.displayName} (${p.ticker})`).join('\n  ')
-      await ctx.reply(`여러 종목이 매칭됩니다:\n  ${candidates}\n\n티커를 정확히 입력해주세요.`)
+      await out.reply(plainReply(`여러 종목이 매칭됩니다:\n  ${candidates}\n\n티커를 정확히 입력해주세요.`))
       return
     }
     if (byName.length === 1) {
@@ -278,14 +306,14 @@ async function handleParsedTrade(ctx: Context, response: string): Promise<void> 
   }
 
   if (!ticker || !market) {
-    await ctx.reply(`⚠️ 종목을 찾을 수 없습니다: ${parsed.displayName || parsed.ticker}\n티커를 정확히 입력하거나 "매수 [계좌] [종목] [수량] [가격]" 형식으로 입력해주세요.`)
+    await out.reply(plainReply(`⚠️ 종목을 찾을 수 없습니다: ${parsed.displayName || parsed.ticker}\n티커를 정확히 입력하거나 "매수 [계좌] [종목] [수량] [가격]" 형식으로 입력해주세요.`))
     return
   }
 
   // 파싱 통화와 종목 통화 불일치 체크
   if (parsed.currency !== currency) {
     const currLabel = currency === 'USD' ? '달러(USD)' : '원화(KRW)'
-    await ctx.reply(`⚠️ ${displayName}은(는) ${currLabel} 종목입니다. 가격 단위를 확인해주세요.`)
+    await out.reply(plainReply(`⚠️ ${displayName}은(는) ${currLabel} 종목입니다. 가격 단위를 확인해주세요.`))
     return
   }
 
@@ -296,7 +324,7 @@ async function handleParsedTrade(ctx: Context, response: string): Promise<void> 
       where: { ticker: 'USDKRW=X' },
     })
     if (!fxData || !Number.isFinite(fxData.price) || fxData.price <= 0) {
-      await ctx.reply('⚠️ 환율 데이터가 없습니다.')
+      await out.reply(plainReply('⚠️ 환율 데이터가 없습니다.'))
       return
     }
     fxRate = fxData.price
@@ -335,15 +363,13 @@ async function handleParsedTrade(ctx: Context, response: string): Promise<void> 
   ].join('\n')
 
   const tradeId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-  const keyboard = new InlineKeyboard()
-    .text('✅ 확인', `aitrade:confirm:${tradeId}`)
-    .text('❌ 취소', `aitrade:cancel:${tradeId}`)
+  const messageKey = await out.reply(plainReply(preview, [[
+    { label: '✅ 확인', action: `aitrade:confirm:${tradeId}` },
+    { label: '❌ 취소', action: `aitrade:cancel:${tradeId}` },
+  ]]))
 
-  const sent = await ctx.reply(preview, { reply_markup: keyboard })
-
-  const key = `${sent.chat.id}:${sent.message_id}:${tradeId}`
-  pendingAiTrades.set(key, {
-    requestedByUserId: ctx.from?.id ?? 0,
+  pendingAiTrades.set(pendingKey(messageKey, tradeId), {
+    requestedByUserId: who.userId,
     parsed: { ...parsed, ticker, displayName, currency },
     accountId: account.id,
     market,
@@ -352,45 +378,43 @@ async function handleParsedTrade(ctx: Context, response: string): Promise<void> 
   })
 }
 
-async function handleAiTradeCallback(ctx: Context): Promise<void> {
-  const data = ctx.callbackQuery?.data
-  if (!data?.startsWith('aitrade:')) return
+export async function decideAiTradeButton(data: string, press: ButtonPress, out: ButtonOutput): Promise<void> {
+  if (!data.startsWith('aitrade:')) return
 
   const parts = data.split(':')
   const action = parts[1]
   const tradeId = parts[2]
-  const message = ctx.callbackQuery?.message
-  if (!message || !tradeId) {
-    await ctx.answerCallbackQuery({ text: '⚠️ 메시지를 찾을 수 없습니다.' })
+  if (!press.messageKey || !tradeId) {
+    await out.toast('⚠️ 메시지를 찾을 수 없습니다.')
     return
   }
 
-  const key = `${message.chat.id}:${message.message_id}:${tradeId}`
+  const key = pendingKey(press.messageKey, tradeId)
   const pending = pendingAiTrades.get(key)
   if (pending) pendingAiTrades.delete(key)
 
   if (!pending) {
-    await ctx.answerCallbackQuery({ text: '⚠️ 만료된 거래입니다.' })
-    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
+    await out.toast('⚠️ 만료된 거래입니다.')
+    await out.removeButtons()
     return
   }
 
-  if (ctx.from?.id !== pending.requestedByUserId) {
+  if (!isSameRequester(press.clickerId, pending.requestedByUserId)) {
     pendingAiTrades.set(key, pending)
-    await ctx.answerCallbackQuery({ text: '⚠️ 본인만 확인/취소할 수 있습니다.' })
+    await out.toast('⚠️ 본인만 확인/취소할 수 있습니다.')
     return
   }
 
   if (pending.expiresAt < Date.now()) {
-    await ctx.answerCallbackQuery({ text: '⚠️ 거래가 만료되었습니다.' })
-    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
+    await out.toast('⚠️ 거래가 만료되었습니다.')
+    await out.removeButtons()
     return
   }
 
   if (action === 'cancel') {
-    await ctx.answerCallbackQuery({ text: '취소되었습니다.' })
-    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
-    await ctx.editMessageText('❌ 거래가 취소되었습니다.')
+    await out.toast('취소되었습니다.')
+    await out.removeButtons()
+    await out.edit(plainReply('❌ 거래가 취소되었습니다.'))
     return
   }
 
@@ -415,55 +439,82 @@ async function handleAiTradeCallback(ctx: Context): Promise<void> {
         ? `보유: ${result.holding.shares}주`
         : '전량 매도 (보유 0주)'
 
-      await ctx.answerCallbackQuery({ text: '거래 기록 완료!' })
-      await ctx.editMessageReplyMarkup({ reply_markup: undefined })
-      await ctx.editMessageText(
+      await out.toast('거래 기록 완료!')
+      await out.removeButtons()
+      await out.edit(plainReply(
         `✅ ${typeLabel} 완료\n\n` +
         `${parsed.displayName} (${parsed.ticker})\n` +
         `${parsed.shares}주 × ${parsed.currency === 'USD' ? formatUSD(parsed.price) : formatKRWFull(parsed.price)}\n` +
         `총액: ${formatKRWFull(result.trade.totalKRW)}\n` +
         `${holdingInfo}`
-      )
+      ))
     } catch (error) {
       const rawMsg = error instanceof Error ? error.message : ''
       const isBusinessError = rawMsg.includes('초과합니다') || rawMsg.includes('보유 수량 부족')
       const userMsg = isBusinessError ? rawMsg : '거래 기록에 실패했습니다.'
       if (!isBusinessError) console.error('[bot] AI 거래 기록 실패:', error)
-      await ctx.answerCallbackQuery({ text: `⚠️ ${userMsg}` })
-      await ctx.editMessageReplyMarkup({ reply_markup: undefined })
-      await ctx.editMessageText(`⚠️ 거래 실패: ${userMsg}`)
+      await out.toast(`⚠️ ${userMsg}`)
+      await out.removeButtons()
+      await out.edit(plainReply(`⚠️ 거래 실패: ${userMsg}`))
     }
   }
 }
 
 // ============================================================
-// 등록
+// 명령 판단
+// ============================================================
+
+/** `/ai <질문>` — 인자(앞뒤 공백 포함 원문)가 비면 사용법 · 있으면 AI 대화(키워드 판정 없이). */
+export async function decideAiCommand(args: string | undefined, stateKey: StateKey | undefined, out: ReplyOutput): Promise<void> {
+  const question = args?.trim()
+
+  if (!question) {
+    await out.reply(plainReply(
+      '🤖 AI 어드바이저에게 질문하세요.\n\n' +
+        '사용법: /ai 전체 포트폴리오 현황 분석해줘\n' +
+        '또는 그냥 자연어로 질문하면 됩니다.\n\n' +
+        '거래 입력도 가능합니다:\n' +
+        '"소담 TIGER S&P500 10주 24900원에 샀어"'
+    ))
+    return
+  }
+
+  decideAiQuestion(question, stateKey, out)
+}
+
+/** `/reset` — 그 상태 키의 AI 세션만 지운다(다른 chat·플랫폼 세션은 그대로). */
+export async function decideReset(stateKey: StateKey | undefined, out: ReplyOutput): Promise<void> {
+  if (!stateKey) return
+  chatSessions.delete(stateKey)
+  await out.reply(plainReply('🔄 AI 대화 세션이 초기화되었습니다.'))
+}
+
+/**
+ * AI fallback 경로 — 앞 핸들러(소비 입력 등)가 넘긴 텍스트.
+ * 명령 모양 판정은 어댑터가 넘긴다(텔레그램 = `/` 시작 · Discord = 접두 `!` 는 PR-3).
+ */
+export function aiFallbackRoute(text: string, isCommand: boolean): 'trade' | 'question' | 'none' {
+  if (isCommand) return 'none'
+  if (text.trim().length < MIN_AI_TEXT_LENGTH) return 'none'
+  // 거래 키워드 → AI 거래 파싱 (질문 키워드보다 먼저)
+  if (isTradeMessage(text)) return 'trade'
+  // 질문형 키워드 → AI 질문
+  if (isAiQuestion(text)) return 'question'
+  return 'none'
+}
+
+// ============================================================
+// 등록 — 텔레그램 어댑터
 // ============================================================
 
 export function registerAiCommands(bot: Bot): void {
   bot.command('ai', async (ctx) => {
-    const question = ctx.match?.toString().trim()
-
-    if (!question) {
-      await ctx.reply(
-        '🤖 AI 어드바이저에게 질문하세요.\n\n' +
-          '사용법: /ai 전체 포트폴리오 현황 분석해줘\n' +
-          '또는 그냥 자연어로 질문하면 됩니다.\n\n' +
-          '거래 입력도 가능합니다:\n' +
-          '"소담 TIGER S&P500 10주 24900원에 샀어"'
-      )
-      return
-    }
-
-    fireAiQuestion(ctx, question)
+    await decideAiCommand(ctx.match?.toString(), telegramStateKeyOf(ctx), telegramOutput(ctx))
   })
 
   // AI 세션 초기화
   bot.command('reset', async (ctx) => {
-    const chatId = ctx.chat?.id
-    if (!chatId) return
-    chatSessions.delete(chatId)
-    await ctx.reply('🔄 AI 대화 세션이 초기화되었습니다.')
+    await decideReset(telegramStateKeyOf(ctx), telegramOutput(ctx))
   })
 
   // aitrade: 콜백 처리
@@ -471,7 +522,7 @@ export function registerAiCommands(bot: Bot): void {
     const data = ctx.callbackQuery?.data
     if (data?.startsWith('aitrade:')) {
       try {
-        await handleAiTradeCallback(ctx)
+        await decideAiTradeButton(data, telegramButtonPress(ctx), telegramButtonOutput(ctx))
       } catch (error) {
         console.error('[bot] AI 거래 콜백 실패:', error)
         await ctx.answerCallbackQuery({ text: '⚠️ 처리 중 오류가 발생했습니다.' })
@@ -488,19 +539,16 @@ export function registerAiCommands(bot: Bot): void {
 export function registerAiFallback(bot: Bot): void {
   bot.on('message:text', async (ctx) => {
     const text = ctx.message.text
+    // 텔레그램 명령 = 슬래시 시작
+    const route = aiFallbackRoute(text, text.startsWith('/'))
 
-    if (text.startsWith('/')) return
-    if (text.trim().length < MIN_AI_TEXT_LENGTH) return
-
-    // 거래 키워드 → AI 거래 파싱
-    if (isTradeMessage(text)) {
-      fireTradeParseQuestion(ctx, text)
+    if (route === 'trade') {
+      decideTradeParse(text, telegramRequester(ctx), telegramOutput(ctx))
       return
     }
 
-    // 질문형 키워드 → AI 질문
-    if (isAiQuestion(text)) {
-      fireAiQuestion(ctx, text)
+    if (route === 'question') {
+      decideAiQuestion(text, telegramStateKeyOf(ctx), telegramOutput(ctx))
       return
     }
   })

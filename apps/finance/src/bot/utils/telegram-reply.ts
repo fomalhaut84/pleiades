@@ -12,7 +12,7 @@
 
 import { InlineKeyboard, type Context } from 'grammy'
 import type { BotReply, ButtonOutput, ButtonPress, ReplyButtonRows, ReplyOutput, Requester } from '../core/reply'
-import { telegramMessageKey } from '../core/state-key'
+import { telegramMessageKey, telegramStateKey, type StateKey } from '../core/state-key'
 
 const TELEGRAM_TYPING_INTERVAL_MS = 5000
 
@@ -79,4 +79,10 @@ export function telegramButtonPress(ctx: Context): ButtonPress {
     messageKey: message ? telegramMessageKey(message.chat.id, message.message_id) : undefined,
     clickerId: fromId === undefined ? undefined : String(fromId),
   }
+}
+
+/** 대화 상태 키(AI 세션 · 동시 1건) — chat 이 없으면 undefined(그때 AI 대화·`/reset` 은 무응답 · 지금과 같다). */
+export function telegramStateKeyOf(ctx: Context): StateKey | undefined {
+  const chatId = ctx.chat?.id
+  return chatId ? telegramStateKey(chatId) : undefined
 }
