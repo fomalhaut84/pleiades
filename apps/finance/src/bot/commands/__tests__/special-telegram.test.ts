@@ -438,16 +438,25 @@ describe('알림설정', () => {
     expect([num.calls, toggle.calls]).toMatchSnapshot()
   })
 
-  it('현재 동작 — 한글 "알림설정 급락 -3" 은 매치 배열 전체가 인자라 항목이 "알림설정" 이 된다(UQ-3)', async () => {
-    const f = await runHears(alert, 0, '알림설정 급락 -3')
-    expect(f.calls).toEqual([['reply', `⚠️ 알 수 없는 항목: 알림설정\n사용 가능: ${'급락, 급등, 환율, 예산, 요약시각, 리포트일, 모니터링주기, 능동리뷰, TA가이드, 전략알림, 관심종목시간대'}`]])
-    expect(p.alertConfig.update).not.toHaveBeenCalled()
+  // PR-2c (#396 · UQ-3) 이전: 매치 배열 전체가 인자라 항목 = "알림설정" · 인자 없음이 인자 부족 안내였다(로컬 실측 2026-10-30)
+  it('한글 "알림설정 급락 -3" → /alertconfig 와 같은 변경(PR-2c 수정)', async () => {
+    p.alertConfig.findUnique.mockResolvedValueOnce({ value: '-5' } as never)
+    p.alertConfig.update.mockResolvedValueOnce({ label: '급락 <기준>', value: '-3' } as never)
+    const ko = await runHears(alert, 0, '알림설정 급락 -3')
+    p.alertConfig.findUnique.mockResolvedValueOnce({ value: '-5' } as never)
+    p.alertConfig.update.mockResolvedValueOnce({ label: '급락 <기준>', value: '-3' } as never)
+    const en = await runCmd(alert, 'alertconfig', '/alertconfig 급락 -3')
+    expect(ko.calls).toEqual(en.calls)
+    expect(p.alertConfig.update.mock.calls[0][0]).toStrictEqual({ where: { key: 'price_drop_pct' }, data: { value: '-3' } })
   })
 
-  it('현재 동작 — 한글 "알림설정" 만 → 인자 부족 안내(현황이 아니다 · UQ-3)', async () => {
-    const f = await runHears(alert, 0, '알림설정')
-    expect(f.calls).toMatchSnapshot()
-    expect(p.alertConfig.findMany).not.toHaveBeenCalled()
+  it('한글 "알림설정" 만 → 현황(PR-2c 수정)', async () => {
+    p.alertConfig.findMany.mockResolvedValueOnce(CONFIGS as never)
+    const ko = await runHears(alert, 0, '알림설정')
+    p.alertConfig.findMany.mockResolvedValueOnce(CONFIGS as never)
+    const en = await runCmd(alert, 'alertconfig', '/alertconfig')
+    expect(ko.calls).toEqual(en.calls)
+    expect(String(ko.calls[0][1]).startsWith('⚙️ <b>알림 설정 현황</b>')).toBe(true)
   })
 
   it('처리 중 던지면 정적 안내', async () => {

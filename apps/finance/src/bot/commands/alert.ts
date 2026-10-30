@@ -14,11 +14,13 @@ import { telegramOutput } from '../utils/telegram-reply'
 export const ALERT_CONFIG_RE = /^알림설정(?:\s+.*)?$/
 
 /**
- * 텔레그램 → 인자 — grammY `ctx.match` 를 먼저 쓰고 비면 원문에서 벗긴다.
- * 현재 동작(UQ-3 · PR-2c 에서 고친다): `hears` 의 `ctx.match` 는 정규식 매치 배열이라 `"알림설정 급락 -3"` 원문 전체가 인자가 된다.
+ * 텔레그램 → 인자 — `/alertconfig` 명령의 `ctx.match`(명령 뒤 문자열)를 쓰고, 그 밖에는 원문에서 벗긴다.
+ * pleiades 009 D-3 PR-2c (pleiades#396 · UQ-3): `hears` 의 `ctx.match` 는 정규식 매치 배열이라 예전에는 `"알림설정 급락 -3"`
+ * 원문 전체가 인자가 됐다(항목 = "알림설정" · `알림설정` 만 치면 현황 대신 인자 부족 — 로컬 실측 `measured-facts.md` 2026-10-30).
  */
 export function alertArgsFromTelegram(match: string | RegExpMatchArray | null | undefined, text: string): string {
-  return (match?.toString().trim()) || text.replace(/^(\/alertconfig|알림설정)\s*/, '').trim()
+  if (typeof match === 'string' && match.trim()) return match.trim()
+  return text.replace(/^(\/alertconfig|알림설정)\s*/, '').trim()
 }
 
 /** 키 → 사용자 친화적 별칭 매핑 */
