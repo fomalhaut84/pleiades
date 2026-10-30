@@ -254,7 +254,8 @@ describe('T7 trade: 콜백', () => {
     ])
   })
 
-  it('현재 동작 — 기록 뒤 본문 교체가 실패하면 "거래 실패" 를 이어 보낸다(UQ-3)', async () => {
+  // PR-2c (#396 · UQ-3) 이전: 본문 교체 실패가 catch 로 가 기록된 거래에 "거래 실패" 를 이어 보냈다
+  it('기록 뒤 본문 교체가 실패해도 "거래 실패" 를 보내지 않는다 — 로그만(PR-2c 수정)', async () => {
     const { tradeId, messageId } = await startBuy()
     mocked.createTrade.mockResolvedValueOnce({ trade: { totalKRW: 1 }, holding: null } as never)
     const f = fakeCtx({ data: `trade:confirm:${tradeId}`, messageId })
@@ -263,15 +264,9 @@ describe('T7 trade: 콜백', () => {
       throw new Error('telegram 400')
     })
     await callback.handler(f.ctx, vi.fn())
-    expect(f.calls.map((c) => c[0])).toEqual([
-      'answerCallbackQuery',
-      'editMessageReplyMarkup',
-      'editMessageText',
-      'answerCallbackQuery',
-      'editMessageReplyMarkup',
-      'editMessageText',
-    ])
-    expect(f.calls[5]).toEqual(['editMessageText', '⚠️ 거래 실패: 거래 기록에 실패했습니다.'])
+    expect(f.calls.map((c) => c[0])).toEqual(['answerCallbackQuery', 'editMessageReplyMarkup', 'editMessageText'])
+    expect(f.calls[0]).toEqual(['answerCallbackQuery', { text: '거래 기록 완료!' }])
+    expect(console.error).toHaveBeenCalledWith('[bot] 거래 기록 뒤 원본 수정 실패(기록은 됨):', expect.any(Error))
     expect(mocked.createTrade).toHaveBeenCalledTimes(1)
   })
 

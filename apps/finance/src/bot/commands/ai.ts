@@ -419,9 +419,12 @@ export async function decideAiTradeButton(data: string, press: ButtonPress, out:
   }
 
   if (action === 'confirm') {
+    // pleiades 009 D-3 PR-2c (pleiades#396 · UQ-3): "거래 실패" 는 기록(createTrade) 실패에만 — 기록 뒤 원본 수정 실패는
+    // 예전에 여기서 "거래 실패" 로 바뀌어 기록된 거래에 거짓 안내를 띄웠다. 이제 기록 뒤 단계는 따로 잡는다.
+    const { parsed } = pending
+    let result: Awaited<ReturnType<typeof createTrade>>
     try {
-      const { parsed } = pending
-      const result = await createTrade({
+      result = await createTrade({
         accountId: pending.accountId,
         ticker: parsed.ticker,
         displayName: parsed.displayName,
@@ -433,12 +436,24 @@ export async function decideAiTradeButton(data: string, press: ButtonPress, out:
         fxRate: pending.fxRate,
         tradedAt: new Date(),
       })
+    } catch (error) {
+      const rawMsg = error instanceof Error ? error.message : ''
+      const isBusinessError = rawMsg.includes('초과합니다') || rawMsg.includes('보유 수량 부족')
+      const userMsg = isBusinessError ? rawMsg : '거래 기록에 실패했습니다.'
+      if (!isBusinessError) console.error('[bot] AI 거래 기록 실패:', error)
+      await out.toast(`⚠️ ${userMsg}`)
+      await out.removeButtons()
+      await out.edit(plainReply(`⚠️ 거래 실패: ${userMsg}`))
+      return
+    }
 
-      const typeLabel = parsed.type === 'BUY' ? '📥 매수' : '📤 매도'
-      const holdingInfo = result.holding
-        ? `보유: ${result.holding.shares}주`
-        : '전량 매도 (보유 0주)'
+    const typeLabel = parsed.type === 'BUY' ? '📥 매수' : '📤 매도'
+    const holdingInfo = result.holding
+      ? `보유: ${result.holding.shares}주`
+      : '전량 매도 (보유 0주)'
 
+    // 기록은 끝났다 — 화면 갱신 실패는 로그만(거짓 "거래 실패" 를 띄우지 않는다)
+    try {
       await out.toast('거래 기록 완료!')
       await out.removeButtons()
       await out.edit(plainReply(
@@ -449,13 +464,7 @@ export async function decideAiTradeButton(data: string, press: ButtonPress, out:
         `${holdingInfo}`
       ))
     } catch (error) {
-      const rawMsg = error instanceof Error ? error.message : ''
-      const isBusinessError = rawMsg.includes('초과합니다') || rawMsg.includes('보유 수량 부족')
-      const userMsg = isBusinessError ? rawMsg : '거래 기록에 실패했습니다.'
-      if (!isBusinessError) console.error('[bot] AI 거래 기록 실패:', error)
-      await out.toast(`⚠️ ${userMsg}`)
-      await out.removeButtons()
-      await out.edit(plainReply(`⚠️ 거래 실패: ${userMsg}`))
+      console.error('[bot] AI 거래 기록 뒤 원본 수정 실패(기록은 됨):', error)
     }
   }
 }

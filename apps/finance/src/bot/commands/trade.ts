@@ -345,9 +345,11 @@ export async function decideTradeButton(data: string, press: ButtonPress, out: B
   }
 
   if (action === 'confirm') {
-
+    // pleiades 009 D-3 PR-2c (pleiades#396 · UQ-3): "거래 실패" 는 기록(createTrade) 실패에만 — 기록 뒤 원본 수정 실패는
+    // 예전에 여기서 "거래 실패" 로 바뀌어 기록된 거래에 거짓 안내를 띄웠다. 이제 기록 뒤 단계는 따로 잡는다.
+    let result: Awaited<ReturnType<typeof createTrade>>
     try {
-      const result = await createTrade({
+      result = await createTrade({
         accountId: pending.accountId,
         ticker: pending.ticker,
         displayName: pending.displayName,
@@ -359,23 +361,7 @@ export async function decideTradeButton(data: string, press: ButtonPress, out: B
         fxRate: pending.fxRate,
         tradedAt: new Date(),
       })
-
-      const typeLabel = pending.type === 'BUY' ? '📥 매수' : '📤 매도'
-      const holdingInfo = result.holding
-        ? `보유: ${result.holding.shares}주`
-        : '전량 매도 (보유 0주)'
-
-      await out.toast('거래 기록 완료!')
-      await out.removeButtons()
-      await out.edit(htmlReply(
-        `✅ ${h.b(typeLabel + ' 완료')}\n\n` +
-        `${escapeHtml(pending.displayName)} (${escapeHtml(pending.ticker)})\n` +
-        `${pending.shares}주 × ${pending.currency === 'USD' ? formatUSD(pending.price) : formatKRWFull(pending.price)}\n` +
-        `${h.b('총액')}: ${formatKRWFull(result.trade.totalKRW)}\n` +
-        `${holdingInfo}`,
-      ))
     } catch (error) {
-      // 현재 동작(서비스 유래 · UQ-3): 기록 뒤 원본 수정 실패도 여기로 와 "거래 실패" 를 띄운다
       const rawMsg = error instanceof Error ? error.message : ''
       // 비즈니스 에러만 사용자에게 노출
       const isBusinessError = rawMsg.includes('초과합니다') ||
@@ -388,6 +374,27 @@ export async function decideTradeButton(data: string, press: ButtonPress, out: B
       await out.toast(`⚠️ ${userMsg}`)
       await out.removeButtons()
       await out.edit(plainReply(`⚠️ 거래 실패: ${userMsg}`))
+      return
+    }
+
+    const typeLabel = pending.type === 'BUY' ? '📥 매수' : '📤 매도'
+    const holdingInfo = result.holding
+      ? `보유: ${result.holding.shares}주`
+      : '전량 매도 (보유 0주)'
+
+    // 기록은 끝났다 — 화면 갱신 실패는 로그만(거짓 "거래 실패" 를 띄우지 않는다)
+    try {
+      await out.toast('거래 기록 완료!')
+      await out.removeButtons()
+      await out.edit(htmlReply(
+        `✅ ${h.b(typeLabel + ' 완료')}\n\n` +
+        `${escapeHtml(pending.displayName)} (${escapeHtml(pending.ticker)})\n` +
+        `${pending.shares}주 × ${pending.currency === 'USD' ? formatUSD(pending.price) : formatKRWFull(pending.price)}\n` +
+        `${h.b('총액')}: ${formatKRWFull(result.trade.totalKRW)}\n` +
+        `${holdingInfo}`,
+      ))
+    } catch (error) {
+      console.error('[bot] 거래 기록 뒤 원본 수정 실패(기록은 됨):', error)
     }
   }
 }

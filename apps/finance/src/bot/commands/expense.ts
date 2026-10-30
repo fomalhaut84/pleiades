@@ -349,13 +349,17 @@ async function createTransaction(
 ): Promise<void> {
   const typeLabel = pending.type === 'expense' ? '소비' : '수입'
 
+  // pleiades 009 D-3 PR-2c (pleiades#396 · UQ-3): "실패" 안내는 기록 전 단계에만 — 기록 뒤 원본 수정 실패는
+  // 예전에 여기로 와 기록된 거래에 "기록에 실패했습니다" 를 띄웠다. 이제 기록 뒤 단계는 아래에서 따로 잡는다.
+  let category: { icon: string | null; name: string } | null
+  let created: { amount: number; description: string; categoryId: string; transactedAt: Date }
   try {
-    const category = await prisma.category.findUnique({
+    category = await prisma.category.findUnique({
       where: { id: pending.categoryId },
       select: { icon: true, name: true },
     })
 
-    const created = await prisma.transaction.create({
+    created = await prisma.transaction.create({
       data: {
         amount: pending.amount,
         description: pending.description,
@@ -364,23 +368,32 @@ async function createTransaction(
         transactedAt: new Date(),
       },
     })
+  } catch (error) {
+    console.error('[bot/expense] 거래 기록 실패:', error)
+    await out.toast('⚠️ 기록에 실패했습니다.')
+    await out.removeButtons()
+    await out.edit(plainReply(`⚠️ ${typeLabel} 기록에 실패했습니다. 잠시 후 다시 시도해주세요.`))
+    return
+  }
 
-    // 후잉 웹훅 전송 (별도 try-catch, 실패해도 거래 기록·텔레그램 응답에 영향 없음)
-    try {
-      await sendToWhooing({
-        amount: created.amount,
-        description: created.description,
-        categoryId: created.categoryId,
-        transactedAt: created.transactedAt,
-      })
-    } catch (error) {
-      console.error('[bot/expense] 후잉 전송 실패:', error)
-    }
+  // 후잉 웹훅 전송 (별도 try-catch, 실패해도 거래 기록·텔레그램 응답에 영향 없음)
+  try {
+    await sendToWhooing({
+      amount: created.amount,
+      description: created.description,
+      categoryId: created.categoryId,
+      transactedAt: created.transactedAt,
+    })
+  } catch (error) {
+    console.error('[bot/expense] 후잉 전송 실패:', error)
+  }
 
-    const catLabel = category?.icon
-      ? `${category.icon} ${category.name}`
-      : pending.categoryName
+  const catLabel = category?.icon
+    ? `${category.icon} ${category.name}`
+    : pending.categoryName
 
+  // 기록은 끝났다 — 화면 갱신 실패는 로그만(거짓 "실패" 를 띄우지 않는다)
+  try {
     await out.toast('기록 완료!')
     await out.removeButtons()
     await out.edit(
@@ -391,19 +404,15 @@ async function createTransaction(
           `카테고리: ${catLabel}`,
       ),
     )
-
-    // 소비 기록 후 예산 사용률 체크 (비동기, 실패해도 무시)
-    if (pending.type === 'expense') {
-      checkBudgetUsage().catch((error) =>
-        console.error('[bot/expense] 예산 경고 체크 실패:', error)
-      )
-    }
   } catch (error) {
-    // 현재 동작(서비스 유래 · UQ-3): 기록 뒤 원본 수정이 실패해도 여기로 와 "실패" 를 띄운다 — 특성 테스트가 고정
-    console.error('[bot/expense] 거래 기록 실패:', error)
-    await out.toast('⚠️ 기록에 실패했습니다.')
-    await out.removeButtons()
-    await out.edit(plainReply(`⚠️ ${typeLabel} 기록에 실패했습니다. 잠시 후 다시 시도해주세요.`))
+    console.error('[bot/expense] 기록 뒤 원본 수정 실패(기록은 됨):', error)
+  }
+
+  // 소비 기록 후 예산 사용률 체크 (비동기, 실패해도 무시)
+  if (pending.type === 'expense') {
+    checkBudgetUsage().catch((error) =>
+      console.error('[bot/expense] 예산 경고 체크 실패:', error)
+    )
   }
 }
 
@@ -607,16 +616,18 @@ export async function decideMultiExpenseButton(data: string, press: ButtonPress,
   }
 
   if (action === 'confirm') {
+    // pleiades 009 D-3 PR-2c (pleiades#396 · UQ-3): "실패" 안내는 기록 전 단계에만 — 기록 뒤 원본 수정 실패는 로그만
+    const skipped = pending.items.filter((m) => !m.categoryId)
+    const validItems = pending.items.filter((m) => m.categoryId)
+    let created: { amount: number; description: string; categoryId: string; transactedAt: Date }[]
     try {
-      const skipped = pending.items.filter((m) => !m.categoryId)
-      const validItems = pending.items.filter((m) => m.categoryId)
       if (validItems.length === 0) {
         await out.toast('⚠️ 유효한 거래가 없습니다.')
         await out.removeButtons()
         return
       }
 
-      const created = await prisma.$transaction(
+      created = await prisma.$transaction(
         validItems.map((m) =>
           prisma.transaction.create({
             data: {
@@ -629,40 +640,45 @@ export async function decideMultiExpenseButton(data: string, press: ButtonPress,
           })
         )
       )
-
-      // 후잉 전송 (트랜잭션 외부, 실패해도 거래 기록에 영향 없음)
-      for (const tx of created) {
-        try {
-          await sendToWhooing({
-            amount: tx.amount,
-            description: tx.description,
-            categoryId: tx.categoryId,
-            transactedAt: tx.transactedAt,
-          })
-        } catch (err) {
-          console.error('[bot/multi-expense] 후잉 전송 실패:', err)
-        }
-      }
-
-      const skippedMsg = skipped.length > 0
-        ? `\n⚠️ 카테고리 미설정 ${skipped.length}건 제외: ${skipped.map((s) => s.parsed.description).join(', ')}`
-        : ''
-      await out.toast(`${created.length}건 기록 완료!`)
-      await out.removeButtons()
-      await out.edit(plainReply(`✅ ${created.length}건 거래 기록 완료${skippedMsg}`))
-
-      const hasExpense = validItems.some((m) => m.parsed.type === 'expense')
-      if (hasExpense) {
-        checkBudgetUsage().catch((error) =>
-          console.error('[bot/multi-expense] 예산 경고 체크 실패:', error)
-        )
-      }
     } catch (error) {
-      // 현재 동작(서비스 유래 · UQ-3): 기록 뒤 원본 수정 실패도 여기로 온다
       console.error('[bot/multi-expense] 거래 기록 실패:', error)
       await out.toast('⚠️ 기록에 실패했습니다.')
       await out.removeButtons()
       await out.edit(plainReply('⚠️ 거래 기록에 실패했습니다.'))
+      return
+    }
+
+    // 후잉 전송 (트랜잭션 외부, 실패해도 거래 기록에 영향 없음)
+    for (const tx of created) {
+      try {
+        await sendToWhooing({
+          amount: tx.amount,
+          description: tx.description,
+          categoryId: tx.categoryId,
+          transactedAt: tx.transactedAt,
+        })
+      } catch (err) {
+        console.error('[bot/multi-expense] 후잉 전송 실패:', err)
+      }
+    }
+
+    const skippedMsg = skipped.length > 0
+      ? `\n⚠️ 카테고리 미설정 ${skipped.length}건 제외: ${skipped.map((s) => s.parsed.description).join(', ')}`
+      : ''
+    // 기록은 끝났다 — 화면 갱신 실패는 로그만(거짓 "실패" 를 띄우지 않는다)
+    try {
+      await out.toast(`${created.length}건 기록 완료!`)
+      await out.removeButtons()
+      await out.edit(plainReply(`✅ ${created.length}건 거래 기록 완료${skippedMsg}`))
+    } catch (error) {
+      console.error('[bot/multi-expense] 기록 뒤 원본 수정 실패(기록은 됨):', error)
+    }
+
+    const hasExpense = validItems.some((m) => m.parsed.type === 'expense')
+    if (hasExpense) {
+      checkBudgetUsage().catch((error) =>
+        console.error('[bot/multi-expense] 예산 경고 체크 실패:', error)
+      )
     }
   }
 }
