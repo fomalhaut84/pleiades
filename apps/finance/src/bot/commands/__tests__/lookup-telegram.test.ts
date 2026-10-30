@@ -59,6 +59,15 @@ async function run(handler: Handler, text: string, opts: FakeCtxOptions = {}) {
 const cmd = (bot: ReturnType<typeof captureBot>, name: string) => bot.commands.find((c) => c.name === name)!.handler
 const hears = (bot: ReturnType<typeof captureBot>, i: number) => bot.hears[i].handler
 
+/**
+ * 날짜를 `toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })` 로 찍는 응답은 Node·ICU 판에 따라 모양이 다르다
+ * (Node 20.18 `오후 3:00:00` ↔ 최신 20.x `PM 3:00:00` — PR #393 CI). 같은 런타임 값을 자리표시자로 바꿔 스냅샷을 판에 무관하게 한다.
+ */
+function kstPlaceholder(calls: unknown, date: Date): unknown {
+  const local = date.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
+  return JSON.parse(JSON.stringify(calls).split(local).join('<KST 시각>'))
+}
+
 const QUOTE = {
   ticker: 'AAPL', displayName: 'Apple', price: 190.5, currency: 'USD', market: 'NASDAQ',
   change: 1.25, changePercent: 0.66, marketTime: new Date('2026-10-29T20:00:00Z'), marketState: 'CLOSED',
@@ -170,15 +179,16 @@ describe('주가 · 환율', () => {
   })
 
   it('주가 — 보유 종목 실시간 실패 → 캐시 fallback · 캐시도 없으면 일시 오류', async () => {
+    const updatedAt = new Date('2026-10-29T06:00:00Z')
     mocked.priceFind
       .mockResolvedValueOnce({ ticker: 'AAPL' } as never)
-      .mockResolvedValueOnce({ ...QUOTE, updatedAt: new Date('2026-10-29T06:00:00Z') } as never)
+      .mockResolvedValueOnce({ ...QUOTE, updatedAt } as never)
     mocked.fetchQuote.mockRejectedValueOnce(new Error('net'))
     const cached = await run(priceCmd(), '주가 AAPL')
     mocked.priceFind.mockResolvedValueOnce({ ticker: 'AAPL' } as never).mockResolvedValueOnce(null as never)
     mocked.fetchQuote.mockRejectedValueOnce(new Error('net'))
     const nothing = await run(priceCmd(), '주가 AAPL')
-    expect([cached.calls, nothing.calls]).toMatchSnapshot()
+    expect(kstPlaceholder([cached.calls, nothing.calls], updatedAt)).toMatchSnapshot()
   })
 
   it('주가 — 캐시 이름 여럿 · 부분 여럿(외 다수) → 후보(html)', async () => {
@@ -251,15 +261,16 @@ describe('주가 · 환율', () => {
   })
 
   it('환율 — 있음(html) · 없음 · 오류', async () => {
+    const updatedAt = new Date('2026-10-30T00:00:00Z')
     mocked.priceFind.mockResolvedValueOnce({
-      ticker: 'USDKRW=X', price: 1388.456, change: -3.2, changePercent: -0.23, updatedAt: new Date('2026-10-30T00:00:00Z'),
+      ticker: 'USDKRW=X', price: 1388.456, change: -3.2, changePercent: -0.23, updatedAt,
     } as never)
     const ok = await run(hears(price, 1), '환율')
     mocked.priceFind.mockResolvedValueOnce(null as never)
     const none = await run(hears(price, 1), '환율 ')
     mocked.priceFind.mockRejectedValueOnce(new Error('db'))
     const err = await run(hears(price, 1), '환율')
-    expect([ok.calls, none.calls, err.calls]).toMatchSnapshot()
+    expect(kstPlaceholder([ok.calls, none.calls, err.calls], updatedAt)).toMatchSnapshot()
   })
 })
 
