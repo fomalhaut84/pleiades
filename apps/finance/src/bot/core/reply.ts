@@ -29,6 +29,11 @@ export interface BotReply {
   readonly format: ReplyFormat
   /** 없으면 버튼 없음. */
   readonly buttons?: ReplyButtonRows
+  /**
+   * 모델 출력(AI 답 · 종목 심층 분석) — Discord 어댑터가 명령 표기(`/ai` → `!ai`)를 바꾸지 않는다(설계 P N20 · fit `long` 과 같다).
+   * 텔레그램 어댑터는 보지 않는다. pleiades 009 D-3 PR-3 (pleiades#398).
+   */
+  readonly verbatim?: true
 }
 
 /**
@@ -117,6 +122,11 @@ export function plainReply(text: string, buttons?: ReplyButtonRows): BotReply {
 
 export function htmlReply(text: string, buttons?: ReplyButtonRows): BotReply {
   return buttons ? { text, format: 'html', buttons } : { text, format: 'html' }
+}
+
+/** 모델 출력 한 조각 — 형식만 고르고 `verbatim` 을 붙인다(버튼 없음). */
+export function modelReply(text: string, format: ReplyFormat): BotReply {
+  return { text, format, verbatim: true }
 }
 
 /**
