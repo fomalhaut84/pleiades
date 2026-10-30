@@ -168,6 +168,41 @@ export function discordBotConfig(): { token: string; channelId: string; allowedU
   return { token, channelId, allowedUserIds, ready: token !== '' && DISCORD_ID_RE.test(channelId) }
 }
 
+/** 대화 채널 키(009 D-3 K · pleiades#398) — 비어 있거나 형식이 아니면 메시지 수신을 켜지 않는다(스위치를 겸한다). */
+export const DISCORD_CHAT_CHANNEL_KEY = 'DISCORD_CHANNEL_ID_FINANCE_CHAT'
+
+/**
+ * fin 대화 채널 ID — 부를 때마다 읽는다(프로세스 env → 루트 `.env`). 형식(숫자 5~25자리)이 아니면 "".
+ * 알림 채널(`DISCORD_CHANNEL_ID_FINANCE`)과 같은 값이어도 된다(009 C-7 정정). 값은 로그에 쓰지 않는다.
+ */
+export function discordChatChannelId(): string {
+  const v = (platformEnv(DISCORD_CHAT_CHANNEL_KEY) ?? '').trim()
+  return DISCORD_ID_RE.test(v) ? v : ''
+}
+
+/**
+ * Discord 로 받은 봇 명령의 on-demand 발송 — 요청한 채널 하나에만(`/브리핑` · 009 D-3 D2 · pleiades#398).
+ * 라우트 스위치(`NOTIFY_ALLOWED_CHANNEL`)를 타지 않는다 — 텔레그램 `notifierForChat` 의 Discord 짝.
+ * fin 봇 토큰이 비면 수신자 0. notifier 는 던지지 않으므로 **안 나갔으면(`sent=0`) 경고 줄 1** 을 여기서 남긴다
+ * (텔레그램 명령·크론과 같은 실패 표면 · IDENTIFY 차단 알림과 같은 형태).
+ */
+export function notifierForDiscordChannel(channelId: string): Notifier {
+  const token = discordBotConfig().token
+  const inner = createNotifier({
+    transport: createDiscordBotTransport({ token, channels: { req: channelId } }),
+    targets: { ALLOWED: () => (token === '' ? [] : ['req']) },
+  })
+  return {
+    targetCount: (route) => inner.targetCount(route),
+    targets: (route) => inner.targets(route),
+    notify: async (route, content, ctx) => {
+      const r = await inner.notify(route, content, ctx)
+      if (r.sent === 0) console.warn(`[discord-fin] 요청 채널 발송 안 됨 (sent=0/total=${r.total} · ${ctx?.label ?? 'notify'})`)
+      return r
+    },
+  }
+}
+
 /**
  * 첨부 파일(분기 PDF · 003 §7-4 포트 밖) — 그 라우트가 Discord 면 웹훅에 첨부한다(M-6b-1 #147).
  *   'not-discord' → 호출부가 텔레그램 `sendDocument` 로 보낸다(구 동작)

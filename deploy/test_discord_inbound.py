@@ -1,9 +1,9 @@
-"""deploy/discord-inbound.sh · discord-inbound.cjs — fit Discord 메시지 수신 켜기·끄기 (009 D-2 PR-3 · #367).
+"""deploy/discord-inbound.sh · discord-inbound.cjs — 앱 Discord 메시지 수신 켜기·끄기 (009 D-2 PR-3 · #367 · fin D-3 PR-3 · #398).
 
 실행: python3 -m unittest discover -s deploy
 pm2 는 스텁(재시작 때 플랫폼 파일의 키를 읽어 앱과 같은 기동 로그를 쓴다). 핵심 계약: 값(채널 ID · 토큰 · 경로)을
 출력하지 않는다 · 바꾸기 전 검사가 실패하면 아무것도 바꾸지 않는다 · on 은 키 1줄만 · 판정 실패면 키를 비우고 되돌린다 ·
-off 는 키 줄을 비운다 · 파일 권한 600 유지 · fin 거부 · Darwin 은 --dry-run 만.
+off 는 키 줄을 비운다 · 파일 권한 600 유지 · 앱별 키·봇·label(fit 문구는 그대로 · fin 은 #398) · Darwin 은 --dry-run 만.
 """
 
 import os
@@ -47,25 +47,28 @@ case "$1" in
     [[ -n "${STUB_RESTART_FAIL:-}" ]] && exit 1
     log="$PLEIADES_PM2_LOGS/$2-out.log"; err="$PLEIADES_PM2_LOGS/$2-error.log"
     ts=$(date '+%Y-%m-%d %H:%M:%S')
-    v=$(grep -E '^DISCORD_CHANNEL_ID_FITNESS_CHAT=' "$STUB_ENV_FILE" | tail -1 | sed -E 's/^[^=]*="?([^"]*)"?$/\1/')
+    if [[ "$2" == pleiades-fin-bot ]]; then key=DISCORD_CHANNEL_ID_FINANCE_CHAT; l=discord-fin; else key=DISCORD_CHANNEL_ID_FITNESS_CHAT; l=discord-fit; fi
+    v=$(grep -E "^$key=" "$STUB_ENV_FILE" | tail -1 | sed -E 's/^[^=]*="?([^"]*)"?$/\1/')
     if [[ -n "$v" ]]; then
-      echo "$ts: [discord-fit] 메시지 수신 켜짐(대화 채널)" >> "$log"
-      [[ "${STUB_PORTAL:-on}" == off ]] && echo "$ts: [discord-fit] MESSAGE CONTENT 미허용(4014) — intents 0 로 낮춰 다시 접속한다(메시지 수신 꺼짐) · 포털 토글을 켠다" >> "$err"
+      echo "$ts: [$l] 메시지 수신 켜짐(대화 채널)" >> "$log"
+      [[ "${STUB_PORTAL:-on}" == off ]] && echo "$ts: [$l] MESSAGE CONTENT 미허용(4014) — intents 0 로 낮춰 다시 접속한다(메시지 수신 꺼짐) · 포털 토글을 켠다" >> "$err"
     else
-      echo "$ts: [discord-fit] 메시지 수신 꺼짐(버튼만)" >> "$log"
+      echo "$ts: [$l] 메시지 수신 꺼짐(버튼만)" >> "$log"
     fi
     case "${STUB_GATEWAY:-ok}" in
-      ok) echo "$ts: [discord-fit] gateway 준비 완료" >> "$err" ;;
-      fatal) echo "$ts: [discord-fit] gateway 종료 코드 4004 — 다시 접속하지 않는다(토큰·권한 확인)" >> "$err" ;;
+      ok) echo "$ts: [$l] gateway 준비 완료" >> "$err" ;;
+      fatal) echo "$ts: [$l] gateway 종료 코드 4004 — 다시 접속하지 않는다(토큰·권한 확인)" >> "$err" ;;
     esac ;;
   jlist)
     echo "[PM2][WARN] 경고 줄"
     e=${STUB_ENV_FILE:-}
-    k=""
-    [[ "${STUB_PM2_KEY:-}" == top ]] && k=",\"DISCORD_CHANNEL_ID_FITNESS_CHAT\":\"1\""
-    n=""
-    [[ "${STUB_PM2_KEY:-}" == nested ]] && n=",\"env\":{\"DISCORD_CHANNEL_ID_FITNESS_CHAT\":\"1\"}"
-    echo "[{\"name\":\"pleiades-fin-bot\",\"pm2_env\":{\"status\":\"online\"}},{\"name\":\"pleiades-fit-bot\",\"pm2_env\":{\"status\":\"${STUB_ONLINE:-online}\",\"PLEIADES_ENV_FILE\":\"$e\"$k$n}}]" ;;
+    entry() {  # <bot> <key>
+      local k="" n=""
+      [[ "${STUB_PM2_KEY:-}" == top ]] && k=",\"$2\":\"1\""
+      [[ "${STUB_PM2_KEY:-}" == nested ]] && n=",\"env\":{\"$2\":\"1\"}"
+      printf '{"name":"%s","pm2_env":{"status":"%s","PLEIADES_ENV_FILE":"%s"%s%s}}' "$1" "${STUB_ONLINE:-online}" "$e" "$k" "$n"
+    }
+    echo "[$(entry pleiades-fin-bot DISCORD_CHANNEL_ID_FINANCE_CHAT),$(entry pleiades-fit-bot DISCORD_CHANNEL_ID_FITNESS_CHAT)]" ;;
 esac
 """
 
@@ -241,11 +244,8 @@ class DiscordInbound(unittest.TestCase):
         self.assertIn("배포가 이 서버에서 진행 중", r.stdout)
         self.assertIsNone(self.key_line())
 
-    def test_fin_and_usage_are_refused(self):
-        r = self.run_sh("fin", "on", CHAT_ID)
-        self.assertEqual(r.returncode, 2, r.stdout)
-        self.assertIn("fin 은 아직이다", r.stdout)
-        for args in (("fit",), ("fit", "on"), ("fit", "bogus"), ("fit", "off", "--x"), ("x", "off")):
+    def test_usage_is_refused(self):
+        for args in (("fit",), ("fit", "on"), ("fit", "bogus"), ("fit", "off", "--x"), ("x", "off"), ("fin", "on")):
             with self.subTest(args=args):
                 self.assertEqual(self.run_sh(*args).returncode, 2)
         bad = self.run_sh("fit", "on", "#chat")
@@ -287,11 +287,73 @@ class DiscordInbound(unittest.TestCase):
         self.assertIsNone(self.key_line())
 
 
+FIN_KEY = "DISCORD_CHANNEL_ID_FINANCE_CHAT"
+FIN_BASE = BASE + 'DISCORD_BOT_TOKEN_FINANCE="BOTSECRETFIN.cccccccccccccccccccc"\n'
+
+
+class FinInbound(DiscordInbound):
+    """fin — 같은 스크립트가 fin 키 · pleiades-fin-bot · discord-fin 으로 판정한다(009 D-3 PR-3 · #398).
+    상속한 fit 테스트는 fin 플랫폼 파일에서도 그대로 통과해야 한다(fin 줄이 fit 판정에 끼지 않는다)."""
+
+    def setUp(self):
+        super().setUp()
+        self.write_env(FIN_BASE)
+
+    def fin_key_line(self) -> str | None:
+        lines = [l for l in self.env_file.read_text().splitlines() if l.startswith(f"{FIN_KEY}=")]
+        return lines[-1] if lines else None
+
+    def test_fin_on_writes_fin_key_and_restarts_fin_only(self):
+        r = self.run_sh("fin", "on", CHAT_ID)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual(self.fin_key_line(), f'{FIN_KEY}="{CHAT_ID}"')
+        self.assertIsNone(self.key_line(), "fit 키는 건드리지 않는다")
+        for line in (
+            "[on] 재시작 뒤 준비 완료 1",
+            "[on] 메시지 수신 켜짐(대화 채널) 1",
+            "[on] MESSAGE CONTENT 미허용(4014) 강등 0",
+            "[on] pm2 env 키 없음",
+            "플랫폼 파일 키 설정됨",
+            "되돌리기: deploy/discord-inbound.sh fin off",
+            "결과: 통과 — 메시지 수신 켜짐(대화 채널에서 !help · 한글 명령 1 개 · 소비 1 건 확인)",
+        ):
+            self.assertIn(line, r.stdout)
+        self.assertIn("BOTSECRETFIN", self.env_file.read_text())
+        self.assertEqual(self.restarts(), ["restart", "pleiades-fin-bot"], "fin 봇만 재시작")
+
+    def test_fin_portal_off_reverts_and_off_clears(self):
+        r = self.run_sh("fin", "on", CHAT_ID, STUB_PORTAL="off")
+        self.assertEqual(r.returncode, 3, r.stdout)
+        self.assertIn("[on] MESSAGE CONTENT 미허용(4014) 강등 1", r.stdout)
+        self.assertIn("되돌림 성공", r.stdout)
+        self.assertEqual(self.fin_key_line(), f'{FIN_KEY}=""')
+        self.write_env(FIN_BASE + f'{FIN_KEY}="{CHAT_ID}"\n')
+        off = self.run_sh("fin", "off")
+        self.assertEqual(off.returncode, 0, off.stdout)
+        self.assertEqual(self.fin_key_line(), f'{FIN_KEY}=""')
+        self.assertIn("결과: 통과 — 메시지 수신 꺼짐", off.stdout)
+
+    def test_fin_pm2_env_key_stops_before_change(self):
+        r = self.run_sh("fin", "on", CHAT_ID, STUB_PM2_KEY="top")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn(FIN_KEY, r.stdout)
+        self.assertIsNone(self.fin_key_line())
+        self.assertEqual(self.restarts(), [])
+
+    def test_fit_key_set_does_not_turn_fin_on(self):
+        # fit 키만 채워진 파일 — fin on 판정은 fin 키를 본다(앱 사이 키가 섞이지 않는다)
+        self.write_env(FIN_BASE + f'{KEY}="{CHAT_ID}"\n')
+        r = self.run_sh("fin", "off")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual(self.key_line(), f'{KEY}="{CHAT_ID}"', "fit 키는 그대로")
+
+
 class StaticContract(unittest.TestCase):
     """판정 문자열 ↔ 그 줄을 찍는 파일 · 금지 명령 · 비출력."""
 
     TEXT = SH.read_text()
     APP = (REPO / "apps/fitness/src/bot/notifications/discord-interactions.ts").read_text()
+    FIN_APP = (REPO / "apps/finance/src/bot/notifications/discord-interactions.ts").read_text()
     GATEWAY = (REPO / "packages/chat/src/gateway.ts").read_text()
 
     def test_app_prints_on_off_lines_literally(self):
@@ -299,6 +361,9 @@ class StaticContract(unittest.TestCase):
         self.assertIn(f'"{OFF_LOG}"', self.APP)
         self.assertIn("메시지 수신 켜짐(대화 채널)", self.TEXT)
         self.assertIn("메시지 수신 꺼짐(버튼만)", self.TEXT)
+        self.assertIn("'[discord-fin] 메시지 수신 켜짐(대화 채널)'", self.FIN_APP)
+        self.assertIn("'[discord-fin] 메시지 수신 꺼짐(버튼만)'", self.FIN_APP)
+        self.assertIn("LABEL = 'discord-fin'", self.FIN_APP)
 
     def test_gateway_prints_degrade_and_ready_lines(self):
         self.assertIn("`[${label}] MESSAGE CONTENT 미허용(4014) — intents ${intents} 로 낮춰", self.GATEWAY)

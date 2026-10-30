@@ -15,8 +15,8 @@ import { sanitizeError } from '../utils/error'
 import { buildTickerCheckLines } from '../utils/trade-price-check'
 import {
   afterCommit,
-  htmlReply,
   isSameRequester,
+  modelReply,
   plainReply,
   type ButtonOutput,
   type ButtonPress,
@@ -93,9 +93,9 @@ export function decideAiQuestion(question: string, stateKey: StateKey | undefine
       for (const chunk of chunks) {
         const chunkHtml = markdownToTelegramHtml(chunk)
         try {
-          await out.reply(htmlReply(chunkHtml))
+          await out.reply(modelReply(chunkHtml, 'html'))
         } catch {
-          await out.reply(plainReply(chunk))
+          await out.reply(modelReply(chunk, 'plain'))
         }
       }
     })

@@ -1,17 +1,18 @@
 import type { Bot, Context } from 'grammy'
-import { sendBriefing, type BriefingTarget } from '@/bot/notifications/briefing'
+import { sendBriefing, type BriefingOptions, type BriefingTarget } from '@/bot/notifications/briefing'
 import { notifierForChat } from '@/bot/notifications/notifier'
 import { askAdvisor, AdvisorError, describeAdvisorError } from '@/lib/ai/claude-advisor'
 import { splitMessage } from '@/bot/utils/formatter'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 import { formatKstDate } from '@/lib/kst-date'
 import { newsSearchRules } from '@/lib/ai/news-rules'
-import { htmlReply, plainReply, type ReplyOutput } from '../core/reply'
+import { modelReply, plainReply, type ReplyOutput } from '../core/reply'
 import { telegramOutput } from '../utils/telegram-reply'
 
 /*
  * pleiades 009 D-3 PR-2b (pleiades#394 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 D2 · A2 · Q · H2): 브리핑 · 종목 심층 분석.
  * 판단(decideBriefing)은 인자 · 응답 대상(`BriefingTarget` — 없으면 대상 불명) · 중립 응답 모델만 안다.
+ * Discord 어댑터(PR-3 · pleiades#398)는 요청 채널 notifier 와 `{ aiCommand: '!ai' }` 를 넘긴다 · 모델 출력은 `modelReply`(명령 표기 변환 없음).
  * 텔레그램 어댑터는 요청 chat 의 `notifierForChat` 을 대상으로 넘긴다(지금 `sendBriefing(session, chatId)` 와 같은 notifier).
  * 특성 테스트 `__tests__/special-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
  */
@@ -32,7 +33,12 @@ export function briefingArgsFromText(text: string): string {
  * /브리핑 NVDA — 종목 심층 분석
  * /브리핑 (기본) — 현재 시간 기준 자동 판단
  */
-export async function decideBriefing(args: string, target: BriefingTarget | undefined, out: ReplyOutput): Promise<void> {
+export async function decideBriefing(
+  args: string,
+  target: BriefingTarget | undefined,
+  out: ReplyOutput,
+  options?: BriefingOptions,
+): Promise<void> {
   if (!target) {
     await out.reply(plainReply('⚠️ 채팅 정보를 확인할 수 없습니다.'))
     return
@@ -61,7 +67,9 @@ export async function decideBriefing(args: string, target: BriefingTarget | unde
     session = kstHour >= 6 && kstHour < 15 ? 'KR' : 'US'
   }
 
-  sendBriefing(session, target).catch((e) =>
+  // 텔레그램은 지금과 같은 두 인자 · Discord 는 실패 안내의 AI 명령 표기(`!ai`)를 넘긴다(설계 D2 · PR-3)
+  const sending = options === undefined ? sendBriefing(session, target) : sendBriefing(session, target, options)
+  sending.catch((e) =>
     console.error('[bot] 브리핑 발송 실패:', e)
   )
 }
@@ -118,14 +126,14 @@ function fireTickerAnalysis(out: ReplyOutput, ticker: string): void {
       const html = markdownToTelegramHtml(result.response)
       if (html.length <= 4096) {
         try {
-          await out.reply(htmlReply(html))
+          await out.reply(modelReply(html, 'html'))
         } catch {
-          await out.reply(plainReply(result.response))
+          await out.reply(modelReply(result.response, 'plain'))
         }
       } else {
         const chunks = splitMessage(result.response)
         for (const chunk of chunks) {
-          await out.reply(plainReply(chunk))
+          await out.reply(modelReply(chunk, 'plain'))
         }
       }
     })

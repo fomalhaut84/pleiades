@@ -65,6 +65,18 @@ function cleanExpired(): void {
  * 카테고리 선택 버튼 행.
  * 2열 그리드 + 마지막 행 `취소`(지금 텔레그램 키보드 모양 그대로 — 행 재배치는 Discord 어댑터 몫 · 설계 B).
  */
+/**
+ * 단건 기록 화면(확인 · 카테고리 선택 · 완료)의 "내용" 표시 — 길면 줄여 보인다(DB 에는 원문 그대로 기록한다).
+ * 버튼이 붙은 본문이 Discord 2000자를 넘으면 chat 이 나눠 보내며 버튼이 새 메시지로 옮겨 가 대기 상태 키와 어긋난다
+ * (`tx:change`·`tx:allcat` 본문 교체 · pleiades#400 · PR #399 Codex P2). 두 플랫폼에 같은 표시를 쓴다.
+ */
+export const DESCRIPTION_DISPLAY_MAX = 300
+
+export function displayDescription(description: string): string {
+  const chars = Array.from(description)
+  return chars.length <= DESCRIPTION_DISPLAY_MAX ? description : `${chars.slice(0, DESCRIPTION_DISPLAY_MAX).join('')}…`
+}
+
 function buildCategoryRows(categories: MatchedCategory[], txId: string): ReplyButton[][] {
   const rows: ReplyButton[][] = []
   for (let i = 0; i < categories.length; i += 2) {
@@ -158,7 +170,7 @@ export async function decideExpenseInput(text: string, out: ReplyOutput, who: Re
     const messageKey = await out.reply(
       plainReply(
         `📝 ${typeLabel} 기록\n\n` +
-          `내용: ${description}\n` +
+          `내용: ${displayDescription(description)}\n` +
           `금액: ${formatKRWFull(amount)}\n` +
           `카테고리: ${catLabel}\n\n` +
           `기록하시겠습니까?`,
@@ -226,7 +238,7 @@ export async function decideExpenseInput(text: string, out: ReplyOutput, who: Re
   const messageKey = await out.reply(
     plainReply(
       `📝 ${typeLabel} 기록\n\n` +
-        `내용: ${description}\n` +
+        `내용: ${displayDescription(description)}\n` +
         `금액: ${formatKRWFull(amount)}\n\n` +
         prompt,
       rows,
@@ -323,7 +335,7 @@ export async function decideExpenseButton(data: string, press: ButtonPress, out:
     await out.edit(
       plainReply(
         `📝 ${typeLabel} 기록\n\n` +
-          `내용: ${pending.description}\n` +
+          `내용: ${displayDescription(pending.description)}\n` +
           `금액: ${formatKRWFull(pending.amount)}\n\n` +
           `카테고리를 선택해주세요:`,
         buildCategoryRows(categories, txId),
@@ -400,7 +412,7 @@ async function createTransaction(
     () => out.edit(
       plainReply(
         `✅ ${typeLabel} 기록 완료\n\n` +
-          `내용: ${pending.description}\n` +
+          `내용: ${displayDescription(pending.description)}\n` +
           `금액: ${formatKRWFull(pending.amount)}\n` +
           `카테고리: ${catLabel}`,
       ),
