@@ -1,12 +1,35 @@
-import { Bot, Context, InlineKeyboard } from 'grammy'
+import { Bot } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { createTrade } from '@/lib/trade-service'
 import { formatKRWFull, formatUSD } from '../utils/formatter'
 import { escapeHtml, h } from '../utils/telegram'
 import { buildTickerCheckLines } from '../utils/trade-price-check'
+import {
+  htmlReply,
+  isSameRequester,
+  plainReply,
+  type ButtonOutput,
+  type ButtonPress,
+  type ReplyOutput,
+  type Requester,
+} from '../core/reply'
+import { pendingKey } from '../core/state-key'
+import {
+  telegramButtonOutput,
+  telegramButtonPress,
+  telegramOutput,
+  telegramRequester,
+} from '../utils/telegram-reply'
+
+// pleiades 009 D-3 PR-1a (pleiades#382 · 설계 §4 H2 · A · B · S): 판단(decide*)은 중립 응답 모델로만 말하고 인자(`args`)를 받는다.
+// 텔레그램 등록부는 지금의 벗기기 식으로 `args` 를 만들어 넘긴다 — 호출열은 분리 전과 같다(특성 테스트 `__tests__/trade-telegram.test.ts`).
+
+/** 매수·매도 — grammY 와 chat(PR-3)이 같은 객체를 쓴다(설계 P). */
+export const BUY_RE = /^매수(?:\s+.*)?$/
+export const SELL_RE = /^매도(?:\s+.*)?$/
 
 interface PendingTrade {
-  requestedByUserId: number
+  requestedByUserId: string
   accountId: string
   accountName: string
   ticker: string
@@ -20,7 +43,7 @@ interface PendingTrade {
   expiresAt: number
 }
 
-// 메시지 ID → 대기 중인 거래 정보
+// pendingKey(메시지 키, tradeId) → 대기 중인 거래 정보
 const pendingTrades = new Map<string, PendingTrade>()
 
 // 5분 후 자동 만료
@@ -70,29 +93,39 @@ function formatTradePreview(
   return lines.join('\n')
 }
 
-async function handleTrade(ctx: Context, type: 'BUY' | 'SELL'): Promise<void> {
+/** 텔레그램 원문에서 인자를 벗긴다 — 지금 식 그대로(`매수 …` · `매도 …`). */
+export function tradeArgsFromText(type: 'BUY' | 'SELL', text: string): string | undefined {
   const typeLabel = type === 'BUY' ? '매수' : '매도'
-  const text = ctx.message?.text ?? ''
   const match = text.match(new RegExp(`^${typeLabel}(?:\\s+(.*))?$`))
-  const args = match?.[1]?.trim()
+  return match?.[1]?.trim()
+}
+
+/** 매수·매도 — `args` = 계좌 · 종목 · 수량 · 가격(없으면 사용법). 현재 동작: plain 안내 속 `escapeHtml`(UQ-3). */
+export async function decideTrade(
+  type: 'BUY' | 'SELL',
+  args: string | undefined,
+  out: ReplyOutput,
+  who: Requester,
+): Promise<void> {
+  const typeLabel = type === 'BUY' ? '매수' : '매도'
 
   if (!args) {
-    await ctx.reply(
+    await out.reply(plainReply(
       `사용법: ${typeLabel} [계좌] [종목] [수량] [가격]\n` +
       `예: ${typeLabel} 세진 AAPL 10 150\n` +
       `예: ${typeLabel} 소담 TIGER미국S&P500 5 18500`
-    )
+    ))
     return
   }
 
   // 파싱: 마지막 2개는 수량, 가격. 첫번째는 계좌명. 나머지는 종목명.
   const parts = args.split(/\s+/)
   if (parts.length < 4) {
-    await ctx.reply(
+    await out.reply(plainReply(
       `⚠️ 입력이 부족합니다.\n` +
       `사용법: ${typeLabel} [계좌] [종목] [수량] [가격]\n` +
       `예: ${typeLabel} 세진 AAPL 10 150`
-    )
+    ))
     return
   }
 
@@ -103,11 +136,11 @@ async function handleTrade(ctx: Context, type: 'BUY' | 'SELL'): Promise<void> {
 
   // 수량/가격 엄격 검증 (숫자만 허용, 단위 문자 혼입 방지)
   if (!/^[1-9]\d*$/.test(sharesStr)) {
-    await ctx.reply(`⚠️ 수량은 1 이상의 정수여야 합니다: ${sharesStr}`)
+    await out.reply(plainReply(`⚠️ 수량은 1 이상의 정수여야 합니다: ${sharesStr}`))
     return
   }
   if (!/^\d+(\.\d+)?$/.test(priceStr)) {
-    await ctx.reply(`⚠️ 가격은 0보다 큰 숫자여야 합니다: ${priceStr}`)
+    await out.reply(plainReply(`⚠️ 가격은 0보다 큰 숫자여야 합니다: ${priceStr}`))
     return
   }
 
@@ -115,7 +148,7 @@ async function handleTrade(ctx: Context, type: 'BUY' | 'SELL'): Promise<void> {
   const price = parseFloat(priceStr)
 
   if (price <= 0) {
-    await ctx.reply(`⚠️ 가격은 0보다 큰 숫자여야 합니다: ${priceStr}`)
+    await out.reply(plainReply(`⚠️ 가격은 0보다 큰 숫자여야 합니다: ${priceStr}`))
     return
   }
 
@@ -127,11 +160,11 @@ async function handleTrade(ctx: Context, type: 'BUY' | 'SELL'): Promise<void> {
   if (matchedAccounts.length === 0) {
     const allAccounts = await prisma.account.findMany({ select: { name: true } })
     const names = allAccounts.map((a) => a.name).join(', ')
-    await ctx.reply(`⚠️ 계좌를 찾을 수 없습니다: ${escapeHtml(accountName)}\n사용 가능: ${escapeHtml(names)}`)
+    await out.reply(plainReply(`⚠️ 계좌를 찾을 수 없습니다: ${escapeHtml(accountName)}\n사용 가능: ${escapeHtml(names)}`))
     return
   }
   if (matchedAccounts.length > 1) {
-    await ctx.reply(`⚠️ 동일 이름의 계좌가 여러 개 있습니다. 관리자에게 문의해주세요.`)
+    await out.reply(plainReply(`⚠️ 동일 이름의 계좌가 여러 개 있습니다. 관리자에게 문의해주세요.`))
     return
   }
   const account = matchedAccounts[0]
@@ -169,9 +202,9 @@ async function handleTrade(ctx: Context, type: 'BUY' | 'SELL'): Promise<void> {
       const candidates = priceByName
         .map((p) => `${p.displayName} (${p.ticker})`)
         .join('\n  ')
-      await ctx.reply(
+      await out.reply(plainReply(
         `여러 종목이 매칭됩니다:\n  ${escapeHtml(candidates)}\n\n티커를 입력해주세요.`
-      )
+      ))
       return
     } else {
       // Holding에서 검색 (PriceCache에 없는 종목)
@@ -190,7 +223,7 @@ async function handleTrade(ctx: Context, type: 'BUY' | 'SELL'): Promise<void> {
         market = holding.market
         currency = holding.currency
       } else {
-        await ctx.reply(`⚠️ 종목을 찾을 수 없습니다: ${escapeHtml(tickerOrName)}`)
+        await out.reply(plainReply(`⚠️ 종목을 찾을 수 없습니다: ${escapeHtml(tickerOrName)}`))
         return
       }
     }
@@ -203,7 +236,7 @@ async function handleTrade(ctx: Context, type: 'BUY' | 'SELL'): Promise<void> {
     })
     if (!holding || holding.shares < shares) {
       const current = holding?.shares ?? 0
-      await ctx.reply(`⚠️ 보유 수량(${current}주)을 초과합니다.`)
+      await out.reply(plainReply(`⚠️ 보유 수량(${current}주)을 초과합니다.`))
       return
     }
   }
@@ -215,12 +248,12 @@ async function handleTrade(ctx: Context, type: 'BUY' | 'SELL'): Promise<void> {
       where: { ticker: 'USDKRW=X' },
     })
     if (!fxData) {
-      await ctx.reply('⚠️ 환율 데이터가 없습니다. 주가 갱신을 확인해주세요.')
+      await out.reply(plainReply('⚠️ 환율 데이터가 없습니다. 주가 갱신을 확인해주세요.'))
       return
     }
     fxRate = fxData.price
     if (!Number.isFinite(fxRate) || fxRate <= 0) {
-      await ctx.reply('⚠️ 환율 데이터가 비정상입니다. 주가 갱신을 확인해주세요.')
+      await out.reply(plainReply('⚠️ 환율 데이터가 비정상입니다. 주가 갱신을 확인해주세요.'))
       return
     }
   }
@@ -229,7 +262,7 @@ async function handleTrade(ctx: Context, type: 'BUY' | 'SELL'): Promise<void> {
   cleanExpired()
 
   const pending: PendingTrade = {
-    requestedByUserId: ctx.from?.id ?? 0,
+    requestedByUserId: who.userId,
     accountId: account.id,
     accountName: account.name,
     ticker,
@@ -244,9 +277,6 @@ async function handleTrade(ctx: Context, type: 'BUY' | 'SELL'): Promise<void> {
   }
 
   const tradeId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-  const keyboard = new InlineKeyboard()
-    .text('✅ 확인', `trade:confirm:${tradeId}`)
-    .text('❌ 취소', `trade:cancel:${tradeId}`)
 
   // #510: 이름 → 티커 오매칭을 확인 단계에서 드러내기 위한 검증 라인
   const tickerCache = await prisma.priceCache.findUnique({
@@ -255,30 +285,31 @@ async function handleTrade(ctx: Context, type: 'BUY' | 'SELL'): Promise<void> {
   })
   const checkLines = buildTickerCheckLines(price, currency, tickerCache)
 
-  const sent = await ctx.reply(formatTradePreview(type, pending, checkLines), {
-    parse_mode: 'HTML',
-    reply_markup: keyboard,
-  })
+  const messageKey = await out.reply(
+    htmlReply(formatTradePreview(type, pending, checkLines), [
+      [
+        { label: '✅ 확인', action: `trade:confirm:${tradeId}` },
+        { label: '❌ 취소', action: `trade:cancel:${tradeId}` },
+      ],
+    ]),
+  )
 
-  // tradeId 키로 저장 (chatId:messageId도 함께 매핑)
-  const key = `${sent.chat.id}:${sent.message_id}:${tradeId}`
-  pendingTrades.set(key, pending)
+  // 보낸 메시지 키 + tradeId 로 저장
+  pendingTrades.set(pendingKey(messageKey, tradeId), pending)
 }
 
-async function handleTradeCallback(ctx: Context): Promise<void> {
-  const data = ctx.callbackQuery?.data
-  if (!data?.startsWith('trade:')) return
+export async function decideTradeButton(data: string, press: ButtonPress, out: ButtonOutput): Promise<void> {
+  if (!data.startsWith('trade:')) return
 
   const parts = data.split(':')
   const action = parts[1]
   const tradeId = parts[2]
-  const message = ctx.callbackQuery?.message
-  if (!message || !tradeId) {
-    await ctx.answerCallbackQuery({ text: '⚠️ 메시지를 찾을 수 없습니다.' })
+  if (!press.messageKey || !tradeId) {
+    await out.toast('⚠️ 메시지를 찾을 수 없습니다.')
     return
   }
 
-  const key = `${message.chat.id}:${message.message_id}:${tradeId}`
+  const key = pendingKey(press.messageKey, tradeId)
 
   // 원자적으로 Map에서 꺼내기 (중복 클릭 방지)
   const pending = pendingTrades.get(key)
@@ -287,29 +318,29 @@ async function handleTradeCallback(ctx: Context): Promise<void> {
   }
 
   if (!pending) {
-    await ctx.answerCallbackQuery({ text: '⚠️ 만료된 거래입니다.' })
-    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
+    await out.toast('⚠️ 만료된 거래입니다.')
+    await out.removeButtons()
     return
   }
 
   // 요청자 검증
-  if (ctx.from?.id !== pending.requestedByUserId) {
+  if (!isSameRequester(press.clickerId, pending.requestedByUserId)) {
     // 원래 사용자가 아니면 다시 Map에 넣어두기
     pendingTrades.set(key, pending)
-    await ctx.answerCallbackQuery({ text: '⚠️ 본인만 확인/취소할 수 있습니다.' })
+    await out.toast('⚠️ 본인만 확인/취소할 수 있습니다.')
     return
   }
 
   if (pending.expiresAt < Date.now()) {
-    await ctx.answerCallbackQuery({ text: '⚠️ 거래가 만료되었습니다.' })
-    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
+    await out.toast('⚠️ 거래가 만료되었습니다.')
+    await out.removeButtons()
     return
   }
 
   if (action === 'cancel') {
-    await ctx.answerCallbackQuery({ text: '취소되었습니다.' })
-    await ctx.editMessageReplyMarkup({ reply_markup: undefined })
-    await ctx.editMessageText('❌ 거래가 취소되었습니다.')
+    await out.toast('취소되었습니다.')
+    await out.removeButtons()
+    await out.edit(plainReply('❌ 거래가 취소되었습니다.'))
     return
   }
 
@@ -334,17 +365,17 @@ async function handleTradeCallback(ctx: Context): Promise<void> {
         ? `보유: ${result.holding.shares}주`
         : '전량 매도 (보유 0주)'
 
-      await ctx.answerCallbackQuery({ text: '거래 기록 완료!' })
-      await ctx.editMessageReplyMarkup({ reply_markup: undefined })
-      await ctx.editMessageText(
+      await out.toast('거래 기록 완료!')
+      await out.removeButtons()
+      await out.edit(htmlReply(
         `✅ ${h.b(typeLabel + ' 완료')}\n\n` +
         `${escapeHtml(pending.displayName)} (${escapeHtml(pending.ticker)})\n` +
         `${pending.shares}주 × ${pending.currency === 'USD' ? formatUSD(pending.price) : formatKRWFull(pending.price)}\n` +
         `${h.b('총액')}: ${formatKRWFull(result.trade.totalKRW)}\n` +
         `${holdingInfo}`,
-        { parse_mode: 'HTML' }
-      )
+      ))
     } catch (error) {
+      // 현재 동작(서비스 유래 · UQ-3): 기록 뒤 원본 수정 실패도 여기로 와 "거래 실패" 를 띄운다
       const rawMsg = error instanceof Error ? error.message : ''
       // 비즈니스 에러만 사용자에게 노출
       const isBusinessError = rawMsg.includes('초과합니다') ||
@@ -354,26 +385,30 @@ async function handleTradeCallback(ctx: Context): Promise<void> {
       if (!isBusinessError) {
         console.error('[bot] 거래 기록 실패:', error)
       }
-      await ctx.answerCallbackQuery({ text: `⚠️ ${userMsg}` })
-      await ctx.editMessageReplyMarkup({ reply_markup: undefined })
-      await ctx.editMessageText(`⚠️ 거래 실패: ${userMsg}`)
+      await out.toast(`⚠️ ${userMsg}`)
+      await out.removeButtons()
+      await out.edit(plainReply(`⚠️ 거래 실패: ${userMsg}`))
     }
   }
 }
 
+// ============================================================
+// 텔레그램 등록부 — grammY ctx → 어댑터 → decide*
+// ============================================================
+
 export function registerTradeCommands(bot: Bot): void {
-  bot.hears(/^매수(?:\s+.*)?$/, async (ctx) => {
+  bot.hears(BUY_RE, async (ctx) => {
     try {
-      await handleTrade(ctx, 'BUY')
+      await decideTrade('BUY', tradeArgsFromText('BUY', ctx.message?.text ?? ''), telegramOutput(ctx), telegramRequester(ctx))
     } catch (error) {
       console.error('[bot] 매수 실패:', error)
       await ctx.reply('⚠️ 매수 기록에 실패했습니다.')
     }
   })
 
-  bot.hears(/^매도(?:\s+.*)?$/, async (ctx) => {
+  bot.hears(SELL_RE, async (ctx) => {
     try {
-      await handleTrade(ctx, 'SELL')
+      await decideTrade('SELL', tradeArgsFromText('SELL', ctx.message?.text ?? ''), telegramOutput(ctx), telegramRequester(ctx))
     } catch (error) {
       console.error('[bot] 매도 실패:', error)
       await ctx.reply('⚠️ 매도 기록에 실패했습니다.')
@@ -384,7 +419,7 @@ export function registerTradeCommands(bot: Bot): void {
     const data = ctx.callbackQuery?.data
     if (data?.startsWith('trade:')) {
       try {
-        await handleTradeCallback(ctx)
+        await decideTradeButton(data, telegramButtonPress(ctx), telegramButtonOutput(ctx))
       } catch (error) {
         console.error('[bot] 콜백 처리 실패:', error)
         await ctx.answerCallbackQuery({ text: '⚠️ 처리 중 오류가 발생했습니다.' })
