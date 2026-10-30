@@ -428,3 +428,12 @@ D-2 F1 을 그대로 쓴다(chat 이 이미 한다 · `[discord-fin] MESSAGE CON
 | C6 (참고) | PR-1a 의 pending 형태에 플랫폼 = 키에만 | `createTransaction` 은 키를 몰라 PR-3 이 `discord:` 접두를 붙일 자리가 없다 | PR-1a 행에 "pending 값에도 플랫폼(또는 DB 표기 ID)" 1 구 |
 
 **정정 개수:** 정정 0 · 경미 4 + 참고 1 반영. **권고 무변경** — PS2(1a → 1b) · B 단계 열 · 토스트 규칙 · S · D2 그대로. 바뀐 것은 PR-2 의 순서 칸(1b 와 병행 가능 → 1b 뒤 순차)과 문안뿐이다. 재감사 지정에 따라 재감사 없이 UQ-1~UQ-5 를 사용자 질문으로 넘긴다.
+
+## 12-3. 정정 블록 (구현 중 · PR-2 분할 · 사용자 2026-10-30 · #392)
+
+| # | 원문 | 사실 | 정정 |
+|---|---|---|---|
+| 1 | §5 PR-2 행 — 나머지 명령 · `/브리핑` · `/report` · UQ-3 결함 수정을 **한 PR** | 착수 직전 실측: 파일 13 · 영어 명령 19 · 한글 `hears` 25 · `ctx.` 약 100 — PR-1b(ctx 52)가 9-1 리뷰가 감당한 크기의 두 배 · UQ-3 결함 4 중 둘(확정 뒤 거짓 "실패" · plain `&amp;`)은 PR-1a·1b 파일에 있다 | **PR-2a**(조회·단순 쓰기 8 파일: start·portfolio·price·analysis·strategy·watchlist·networth·budget · #392) → **PR-2b**(특수 경로 5: briefing D2 · report 파일 단계 · backtest · custom-strategy · alert) → **PR-2c**(UQ-3 결함 4 — **의도된 텔레그램 변경만**) → PR-3. 2a·2b 는 텔레그램 무변경 · 2c 는 diff 가 곧 변경 목록 |
+| 2 | §4 D "4096 plain 분기는 옮기지 않는다" · H2 응답 형식 "`replyHtml` 38 → `reply({format:'html'})`" | 텔레그램 쪽은 `replyHtml`(4096 분할 · 재시도 · HTML 실패 시 태그 뗀 plain)을 그대로 써야 호출열이 같다 · fin `reply` 는 메시지 키를 돌려주는 계약(PR-1a) | 응답 모델에 **`replyLong(html)`** — 텔레그램 = `replyHtml` 그대로 · Discord = chat 변환·분할(PR-3) · 키 없음(버튼 없음). fit `BotReply.long` 과 같은 뜻을 메서드로 |
+
+되돌리기: 문구(**즉시**). 권고(P2 · A2 · H2 · D2 · B · S)는 무변경.
