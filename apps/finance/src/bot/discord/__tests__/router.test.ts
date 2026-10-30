@@ -305,6 +305,17 @@ describe('버튼 — 접두 5 + 알 수 없는 접두', () => {
     expect(c.notice).toHaveBeenCalledWith('⏰ 만료된 요청입니다.')
   })
 
+  // 회귀: PR-3 9-1 리뷰 info — 판단이 던져도 모아 둔 토스트는 나간다(예외는 그대로 chat 으로)
+  it('판단이 던져도 토스트는 본인 안내로 · 예외는 다시 던진다', async () => {
+    vi.mocked(expense.decideExpenseButton).mockImplementationOnce(async (_d, _p, out) => {
+      await out.toast('취소됨')
+      throw new Error('edit 실패')
+    })
+    const c = btn('tx:cancel:t1')
+    await expect(router.handleButton(c as never)).rejects.toThrow('edit 실패')
+    expect(c.notice).toHaveBeenCalledWith('취소됨')
+  })
+
   it('vest: → decideVest · 알 수 없는 접두 → 안내', async () => {
     const v = btn('vest:confirm:r1')
     await router.handleButton(v as never)

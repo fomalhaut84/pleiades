@@ -14,7 +14,7 @@ export LC_ALL=C
 
 READY_WAIT=${PLEIADES_READY_WAIT:-90}
 
-# 앱별 표 — 키 · pm2 이름 · 로그 label · 통과 안내. 알 수 없는 앱이면 1(사용법)
+# 앱별 표 — 키 · pm2 이름 · 로그 label · 통과 안내. 알 수 없는 앱이면 실패 → usage(종료 2)
 # 판정 문자열 — 앱(apps/<dir>/src/bot/notifications/discord-interactions.ts)과 chat gateway 가 찍는다(deploy/test_discord_inbound.py 가 고정)
 set_app() {  # <fit|fin>
   case "$1" in

@@ -131,8 +131,9 @@ export function discordButtonSession(ctx: Pick<ButtonContext, 'edit' | 'setButto
       },
       removeButtons: () => ctx.setButtons([]),
       edit: async (message) => {
-        edited = true
         await ctx.edit(toOutgoing(message))
+        // 성공한 뒤에만 — 기록 뒤 본문 교체가 실패하면(afterCommit 이 삼킨다) 토스트가 유일한 결과 표시다(9-1 리뷰 major)
+        edited = true
       },
     },
     // 본문을 바꾼 결정이면 토스트는 버린다(본문이 결과다) · 아니면 본인 전용 안내 1(만료 · 본인 아님 · 중복 클릭)

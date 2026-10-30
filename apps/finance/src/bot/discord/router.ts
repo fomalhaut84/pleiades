@@ -149,12 +149,18 @@ export async function handleDiscordText(ctx: MessageContext): Promise<void> {
   else if (route === 'question') decideAiQuestion(text, stateKey(ctx), out(ctx))
 }
 
-/** 버튼 판단 하나 — 판단이 끝나면 모아 둔 토스트를 처리한다(본문을 바꾸지 않은 결정만 본인 안내). 예외는 chat 의 실패 안내로. */
+/**
+ * 버튼 판단 하나 — 판단이 끝나면 모아 둔 토스트를 처리한다(본문을 바꾸지 않은 결정만 본인 안내). 예외는 chat 의 실패 안내로.
+ * 판단이 던져도 토스트는 처리한다 — 텔레그램은 그 시점에 이미 토스트를 보냈다(예: 취소 버튼 제거 뒤 본문 교체 실패 · 9-1 리뷰 info).
+ */
 function button(decide: (data: string, press: ButtonPress, out: ButtonOutput) => Promise<void>) {
   return async (ctx: ButtonContext): Promise<void> => {
     const session = discordButtonSession(ctx)
-    await decide(ctx.action, discordButtonPress(ctx), session.out)
-    await session.finish()
+    try {
+      await decide(ctx.action, discordButtonPress(ctx), session.out)
+    } finally {
+      await session.finish().catch((error: unknown) => console.warn('[discord-fin] 버튼 안내 전송 실패 (무시):', error))
+    }
   }
 }
 

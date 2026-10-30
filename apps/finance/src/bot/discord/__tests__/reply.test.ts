@@ -153,6 +153,18 @@ describe('버튼 출력 — 토스트 규칙 (B)', () => {
     expect(c2.notice).not.toHaveBeenCalled()
   })
 
+  // 회귀: PR-3 9-1 리뷰 major — 기록 뒤 본문 교체가 실패하면(afterCommit 이 삼킨다) 토스트가 결과 표시로 남아야 한다
+  it('edit 이 실패하면 토스트를 본인 안내로 보낸다(기록 완료가 화면에서 사라지지 않게)', async () => {
+    const c = buttonCtx()
+    c.edit.mockRejectedValueOnce(new Error('PATCH 429'))
+    const s = discordButtonSession(c)
+    await s.out.toast('거래 기록 완료!')
+    await s.out.removeButtons()
+    await expect(s.out.edit({ text: '✅ 기록', format: 'plain' })).rejects.toThrow('PATCH 429')
+    await s.finish()
+    expect(c.notice).toHaveBeenCalledWith('거래 기록 완료!')
+  })
+
   it('edit 에 버튼 — 재배치를 탄다', async () => {
     const c = buttonCtx()
     await discordButtonSession(c).out.edit({ text: 't', format: 'plain', buttons: [...cats(9), cancel] })
