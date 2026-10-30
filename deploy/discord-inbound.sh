@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# discord-inbound.sh — 앱 Discord 메시지 수신 켜기·끄기 (009 D-2 PR-3 · #367). 서버에서 사용자가 실행한다(Claude 는 서버에 닿지 않는다 · I-3).
+# discord-inbound.sh — 앱 Discord 메시지 수신 켜기·끄기 (009 D-2 PR-3 · #367 · fin D-3 PR-3 · #398). 서버에서 사용자가 실행한다(Claude 는 서버에 닿지 않는다 · I-3).
 #
-# 사용:  deploy/discord-inbound.sh fit on <채널ID> [--dry-run]   백업 → 대화 채널 키 1줄 기입 → pleiades-fit-bot 재시작 → 판정
-#        deploy/discord-inbound.sh fit off [--dry-run]           백업 → 키 줄 비움 → pleiades-fit-bot 재시작 → 판정 (되돌리기)
-#   fin 은 아직이다(D-3). 먼저: 운영 fit 봇 포털 MESSAGE CONTENT 토글 켬 · 대화 채널(알림 채널과 같아도 된다)에 봇 권한.
-# 플랫폼 설정: PLEIADES_ENV_FILE(절대경로) 또는 ~/pleiades-platform.env(release-inplace.sh 와 같다). 키 DISCORD_CHANNEL_ID_FITNESS_CHAT 한 줄만 쓴다.
+# 사용:  deploy/discord-inbound.sh <fit|fin> on <채널ID> [--dry-run]   백업 → 대화 채널 키 1줄 기입 → pleiades-<앱>-bot 재시작 → 판정
+#        deploy/discord-inbound.sh <fit|fin> off [--dry-run]           백업 → 키 줄 비움 → pleiades-<앱>-bot 재시작 → 판정 (되돌리기)
+#   먼저: 운영 그 앱 봇 포털 MESSAGE CONTENT 토글 켬 · 대화 채널(알림 채널과 같아도 된다)에 봇 권한.
+# 플랫폼 설정: PLEIADES_ENV_FILE(절대경로) 또는 ~/pleiades-platform.env(release-inplace.sh 와 같다). 키 DISCORD_CHANNEL_ID_<FITNESS|FINANCE>_CHAT 한 줄만 쓴다.
 # 출력: 판정 양식만 — 값(채널 ID · 토큰 · 경로)은 내지 않는다. 백업은 ~/pleiades-private/(700).
 # 종료: 0 통과 · 1 중단(바꾸기 전) · 2 사용법 · 3 바꾼 뒤 판정 실패(on 이면 키를 비우고 재시작해 되돌린다 — 되돌림 성패를 따로 적는다)
 # 로컬(Darwin)은 --dry-run 만(I-3). 끄기의 "즉시" 는 키 비움 → 다음 메시지부터 무시(재시작 없이) — 재시작은 intents 까지 0 으로.
@@ -12,16 +12,24 @@
 set -uo pipefail
 export LC_ALL=C
 
-KEY=DISCORD_CHANNEL_ID_FITNESS_CHAT
-BOT=pleiades-fit-bot
-LABEL=discord-fit
 READY_WAIT=${PLEIADES_READY_WAIT:-90}
-# 판정 문자열 — 앱(apps/fitness/src/bot/notifications/discord-interactions.ts)과 chat gateway 가 찍는다(deploy/test_discord_inbound.py 가 고정)
-READY_LINE="[$LABEL] gateway 준비 완료"
-ON_LINE="[$LABEL] 메시지 수신 켜짐(대화 채널)"
-OFF_LINE="[$LABEL] 메시지 수신 꺼짐(버튼만)"
-DEGRADE_LINE="[$LABEL] MESSAGE CONTENT 미허용(4014)"
-FATAL_LINE="[$LABEL] gateway 종료 코드"
+
+# 앱별 표 — 키 · pm2 이름 · 로그 label · 통과 안내. 알 수 없는 앱이면 1(사용법)
+# 판정 문자열 — 앱(apps/<dir>/src/bot/notifications/discord-interactions.ts)과 chat gateway 가 찍는다(deploy/test_discord_inbound.py 가 고정)
+set_app() {  # <fit|fin>
+  case "$1" in
+    fit) KEY=DISCORD_CHANNEL_ID_FITNESS_CHAT; BOT=pleiades-fit-bot; LABEL=discord-fit
+         PASS_HINT="대화 채널에서 !today · 자유 텍스트 · 사진 1회씩 확인" ;;
+    fin) KEY=DISCORD_CHANNEL_ID_FINANCE_CHAT; BOT=pleiades-fin-bot; LABEL=discord-fin
+         PASS_HINT="대화 채널에서 !help · 한글 명령 1 개 · 소비 1 건 확인" ;;
+    *) return 1 ;;
+  esac
+  READY_LINE="[$LABEL] gateway 준비 완료"
+  ON_LINE="[$LABEL] 메시지 수신 켜짐(대화 채널)"
+  OFF_LINE="[$LABEL] 메시지 수신 꺼짐(버튼만)"
+  DEGRADE_LINE="[$LABEL] MESSAGE CONTENT 미허용(4014)"
+  FATAL_LINE="[$LABEL] gateway 종료 코드"
+}
 
 usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 redact() { sed -E "s#$HOME#~#g; s#/(home|Users)/[^/[:space:]]+#~#g"; }
@@ -171,7 +179,7 @@ main() {
   for a in "$@"; do case "$a" in --dry-run) dry=1 ;; *) usage ;; esac; done
   case "$cmd" in on|off) ;; *) usage ;; esac
   form "CMD $app $cmd$([[ $dry -eq 1 ]] && echo ' --dry-run')"
-  [[ "$app" == fit ]] || { [[ "$app" == fin ]] && stop 2 "fin 은 아직이다(009 D-3)"; usage; }
+  set_app "$app" || usage
   if [[ "$cmd" == on ]]; then
     [[ "$channel" =~ ^[0-9]{17,20}$ ]] || stop 2 "채널 ID 형식이 아니다(숫자 17~20자리)"
     form "   채널 ID 형식 통과"
@@ -238,8 +246,8 @@ main() {
   CHANGED=1
   if apply "$channel" on on; then
     CHANGED=0
-    form "   되돌리기: deploy/discord-inbound.sh fit off"
-    emit_form "통과 — 메시지 수신 켜짐(대화 채널에서 !today · 자유 텍스트 · 사진 1회씩 확인)"
+    form "   되돌리기: deploy/discord-inbound.sh $app off"
+    emit_form "통과 — 메시지 수신 켜짐($PASS_HINT)"
     exit 0
   fi
   revert "켜기 판정 실패(강등 ≥1 이면 포털 MESSAGE CONTENT 토글이 꺼져 있다)"
