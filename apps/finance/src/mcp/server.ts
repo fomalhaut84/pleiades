@@ -448,7 +448,7 @@ server.tool(
 
 server.tool(
   'create_custom_strategy',
-  '자연어로 커스텀 매매 전략 등록. 예: "SOXL이 40달러 이하 + RSI 30 이하 시 알림". AI가 자동으로 조건(price/rsi/macd_signal/sma_cross/bb_position/change_pct)으로 파싱. cron이 조건 만족 여부 감시 → 텔레그램 알림.',
+  '자연어로 커스텀 매매 전략 등록. 예: "SOXL이 40달러 이하 + RSI 30 이하 시 알림". AI가 자동으로 조건(price/rsi/macd_signal/sma_cross/bb_position/change_pct)으로 파싱. cron이 조건 만족 여부 감시 → 알림.',
   {
     text: z.string().min(1).max(500).describe('자연어 전략 텍스트'),
   },
