@@ -3,6 +3,7 @@ import path from 'path'
 import { SYSTEM_PROMPT } from './system-prompt'
 import { getGlobalAdvisorMonitor } from './advisor-monitor'
 import { detectModelDrift, modelDriftWarning, pinnedModelEnv, resolveModelId, type ModelTier } from './models'
+import { advisorToolArgs, READ_ONLY_PROMPT_NOTICE } from './advisor-tools'
 import { monorepoExcludeArgs } from './cli-isolation'
 
 /** 모델 등급. 실제 모델 ID 는 `./models` 의 고정값 (#255) */
@@ -38,6 +39,11 @@ export interface AdvisorOptions {
   timeout?: number
   /** API 비용 상한 USD (기본: 0.50) */
   maxBudgetUsd?: number
+  /**
+   * 쓰기 MCP 도구 허용 (기본 false · pleiades#419). 사람이 대화로 확인하는 호출만 켠다 —
+   * 크론·파서·세션 없는 웹처럼 확인 턴이 없는 호출에는 주지 않는다.
+   */
+  allowWriteTools?: boolean
   /** 기존 세션 이어가기 */
   sessionId?: string
   /** 세션을 디스크에 저장 (기본: false). 텔레그램 AI만 true */
@@ -484,69 +490,6 @@ export function describeAdvisorError(err: AdvisorError | AdvisorTimeoutError | E
   }
 }
 
-/** 허용된 MCP 읽기 전용 도구 목록 */
-const ALLOWED_TOOLS = [
-  'mcp__myfinance__get_portfolio',
-  'mcp__myfinance__get_trades',
-  'mcp__myfinance__get_performance',
-  'mcp__myfinance__get_gift_tax_status',
-  'mcp__myfinance__get_dividends',
-  'mcp__myfinance__get_spending_summary',
-  'mcp__myfinance__simulate_growth',
-  'mcp__myfinance__get_prices',
-  'mcp__myfinance__get_fx_rate',
-  'mcp__myfinance__get_technical_analysis',
-  'mcp__myfinance__get_holding_strategy',
-  'mcp__myfinance__get_all_strategies',
-  'mcp__myfinance__set_holding_strategy',
-  'mcp__myfinance__get_networth',
-  'mcp__myfinance__get_rsu_schedule',
-  'mcp__myfinance__get_stock_options',
-  'mcp__myfinance__get_watchlist',
-  'mcp__myfinance__add_watchlist',
-  'mcp__myfinance__update_watchlist',
-  'mcp__myfinance__delete_watchlist',
-  'mcp__myfinance__get_transactions',
-  'mcp__myfinance__create_transaction',
-  'mcp__myfinance__update_transaction',
-  'mcp__myfinance__delete_transaction',
-  'mcp__myfinance__create_category',
-  'mcp__myfinance__update_category',
-  'mcp__myfinance__delete_category',
-  'mcp__myfinance__list_assets',
-  'mcp__myfinance__create_asset',
-  'mcp__myfinance__update_asset',
-  'mcp__myfinance__delete_asset',
-  'mcp__myfinance__create_asset_deposit',
-  'mcp__myfinance__list_budgets',
-  'mcp__myfinance__set_budget',
-  'mcp__myfinance__delete_budget',
-  'mcp__myfinance__list_recurring_transactions',
-  'mcp__myfinance__create_recurring_transaction',
-  'mcp__myfinance__update_recurring_transaction',
-  'mcp__myfinance__delete_recurring_transaction',
-  'mcp__myfinance__list_alert_configs',
-  'mcp__myfinance__update_alert_config',
-  'mcp__myfinance__list_alert_history',
-  'mcp__myfinance__create_rsu_schedule',
-  'mcp__myfinance__update_rsu_schedule',
-  'mcp__myfinance__delete_rsu_schedule',
-  'mcp__myfinance__vest_rsu',
-  'mcp__myfinance__create_stock_option',
-  'mcp__myfinance__update_stock_option',
-  'mcp__myfinance__delete_stock_option',
-  'mcp__myfinance__create_stock_option_vesting',
-  'mcp__myfinance__update_stock_option_vesting',
-  'mcp__myfinance__delete_stock_option_vesting',
-  'mcp__myfinance__exercise_vesting',
-  'mcp__myfinance__create_custom_strategy',
-  'mcp__myfinance__list_custom_strategies',
-  'mcp__myfinance__update_custom_strategy',
-  'mcp__myfinance__delete_custom_strategy',
-  'WebSearch',
-  'WebFetch',
-].join(',')
-
 interface ClaudeJsonOutput {
   is_error: boolean
   result: string
@@ -815,7 +758,8 @@ async function runAdvisorOnce(
     cmdParts.push('--resume', shellEscape(sessionId))
   } else {
     // 새 세션: system-prompt 포함
-    cmdParts.push('--system-prompt', shellEscape(SYSTEM_PROMPT))
+    // pleiades#419: 읽기 전용 호출은 쓰기를 못 한다고 알린다
+    cmdParts.push('--system-prompt', shellEscape(options.allowWriteTools === true ? SYSTEM_PROMPT : SYSTEM_PROMPT + READ_ONLY_PROMPT_NOTICE))
   }
 
   cmdParts.push(
@@ -823,7 +767,8 @@ async function runAdvisorOnce(
     '--strict-mcp-config',
     // #247: 모노레포 루트 CLAUDE.md·rules 를 컨텍스트에서 뺀다 (cli-isolation.ts)
     ...monorepoExcludeArgs(projectRoot).map(shellEscape),
-    '--allowedTools', shellEscape(ALLOWED_TOOLS),
+    // pleiades#419: 기본은 읽기만 — 쓰기는 호출부가 allowWriteTools 로 명시
+    ...advisorToolArgs(options.allowWriteTools === true).map(shellEscape),
     // Codex PR #484 P1 (security): `--tools` 는 built-in Claude Code tool 의
     // **availability allowlist** — 지정 tool 만 subprocess 에서 사용 가능.
     // `--allowedTools` 는 permission prompt 없이 사용 가능한 tool 만 지정
