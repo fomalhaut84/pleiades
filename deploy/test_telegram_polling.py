@@ -1,10 +1,11 @@
-"""deploy/telegram-polling.sh · telegram-polling.cjs — fit 텔레그램 폴링 끄기·켜기 (009 D-2′ · #376).
+"""deploy/telegram-polling.sh · telegram-polling.cjs — 앱 텔레그램 폴링 끄기·켜기 (009 D-2′ · #376 · fin D-3′ · #411).
 
 실행: python3 -m unittest discover -s deploy
 pm2 는 스텁(재시작 때 앱 .env 의 TELEGRAM_POLLING 과 플랫폼 파일의 대화 채널 키를 읽어 앱과 같은 기동 로그·상태 파일을 쓴다).
 핵심 계약: 값(토큰 · 채널 ID · 경로)을 출력하지 않는다 · 바꾸기 전 검사가 실패하면 아무것도 바꾸지 않는다 · 키 1줄만 ·
 off 는 Discord 수신이 켜져 있을 때만 · off 판정 실패면 키를 비우고 되돌린다 · on 은 밀린 업데이트 버림을 본다(1-5) ·
-.env 심링크 유지 · 권한 600 유지 · fin 거부 · Darwin 은 --dry-run 만.
+.env 심링크 유지 · 권한 600 유지 · 그 앱의 키·봇만 · Darwin 은 --dry-run 만.
+fit 케이스 전부를 TelegramPollingFin 이 fin 으로 다시 돌린다.
 """
 
 import json
@@ -26,16 +27,23 @@ NODE_DIR = str(Path(shutil.which("node") or "/usr/bin/node").parent)
 
 KEY = "TELEGRAM_POLLING"
 APP_ENV = "\n".join([
-    "# fit 앱",
-    'TELEGRAM_BOT_TOKEN="111111:TGSECRETFIT"',
+    "# 앱 설정",
+    'TELEGRAM_BOT_TOKEN="111111:TGSECRETAPP"',
     'ALLOWED_CHAT_IDS="987654321"',
     "",
 ])
-PLATFORM = "\n".join([
-    'DISCORD_BOT_TOKEN_FITNESS="BOTSECRETFIT.bbbbbbbbbbbbbbbbbbbb"',
-    'DISCORD_CHANNEL_ID_FITNESS_CHAT="523456789012345678"',
-    "",
-])
+FIT_CHAT_KEY = "DISCORD_CHANNEL_ID_FITNESS_CHAT"
+FIN_CHAT_KEY = "DISCORD_CHANNEL_ID_FINANCE_CHAT"
+
+
+def platform_text(chat_key: str) -> str:
+    return "\n".join([
+        'DISCORD_BOT_TOKEN="BOTSECRET.bbbbbbbbbbbbbbbbbbbb"',
+        f'{chat_key}="523456789012345678"',
+        "",
+    ])
+
+
 SECRETS = ("TGSECRET", "987654321", "BOTSECRET", "523456789012345678")
 
 # 판정 문자열(앱이 찍는 것) — 아래 계약 테스트가 실제 파일과 맞춘다
@@ -53,7 +61,7 @@ case "$1" in
     [[ -n "${STUB_RESTART_FAIL:-}" ]] && exit 1
     log="$PLEIADES_PM2_LOGS/$2-out.log"; err="$PLEIADES_PM2_LOGS/$2-error.log"
     ts=$(date '+%Y-%m-%d %H:%M:%S')
-    st="$STUB_APP/logs/telegram-polling-fit.json"; mkdir -p "$STUB_APP/logs"
+    st="$STUB_APP/logs/telegram-polling-$STUB_SLUG.json"; mkdir -p "$STUB_APP/logs"
     prev=$(sed -n 's/.*"polling":"\([a-z]*\)".*/\1/p' "$st" 2>/dev/null)
     v=$(grep -E '^TELEGRAM_POLLING=' "$STUB_APP/.env" | tail -1 | sed -E 's/^[^=]*="?([^"]*)"?$/\1/')
     if [[ "${STUB_TELEGRAM:-ok}" == none ]]; then
@@ -68,14 +76,14 @@ case "$1" in
       else echo "$ts: [bot] Long polling 시작 (밀린 업데이트 버림 — 직전에 꺼져 있었다)" >> "$log"; fi
       echo '{"polling":"on"}' > "$st"
     fi
-    c=$(grep -E '^DISCORD_CHANNEL_ID_FITNESS_CHAT=' "$STUB_PLATFORM" | tail -1 | sed -E 's/^[^=]*="?([^"]*)"?$/\1/')
-    if [[ -n "$c" ]]; then echo "$ts: [discord-fit] 메시지 수신 켜짐(대화 채널)" >> "$log"
-    else echo "$ts: [discord-fit] 메시지 수신 꺼짐(버튼만)" >> "$log"; fi
+    c=$(grep -E "^$STUB_CHAT_KEY=" "$STUB_PLATFORM" | tail -1 | sed -E 's/^[^=]*="?([^"]*)"?$/\1/')
+    if [[ -n "$c" ]]; then echo "$ts: [discord-$STUB_SLUG] 메시지 수신 켜짐(대화 채널)" >> "$log"
+    else echo "$ts: [discord-$STUB_SLUG] 메시지 수신 꺼짐(버튼만)" >> "$log"; fi
     case "${STUB_GATEWAY:-ok}" in
-      ok) echo "$ts: [discord-fit] gateway 준비 완료" >> "$err" ;;
-      degrade) [[ -n "$c" ]] && echo "$ts: [discord-fit] MESSAGE CONTENT 미허용(4014) — intents 0 로 낮춰 다시 접속한다(메시지 수신 꺼짐) · 포털 토글을 켠다" >> "$err"
-               echo "$ts: [discord-fit] gateway 준비 완료" >> "$err" ;;
-      fatal) echo "$ts: [discord-fit] gateway 종료 코드 4004 — 다시 접속하지 않는다(토큰·권한 확인)" >> "$err" ;;
+      ok) echo "$ts: [discord-$STUB_SLUG] gateway 준비 완료" >> "$err" ;;
+      degrade) [[ -n "$c" ]] && echo "$ts: [discord-$STUB_SLUG] MESSAGE CONTENT 미허용(4014) — intents 0 로 낮춰 다시 접속한다(메시지 수신 꺼짐) · 포털 토글을 켠다" >> "$err"
+               echo "$ts: [discord-$STUB_SLUG] gateway 준비 완료" >> "$err" ;;
+      fatal) echo "$ts: [discord-$STUB_SLUG] gateway 종료 코드 4004 — 다시 접속하지 않는다(토큰·권한 확인)" >> "$err" ;;
     esac ;;
   jlist)
     echo "[PM2][WARN] 경고 줄"
@@ -83,18 +91,23 @@ case "$1" in
     [[ "${STUB_PM2_KEY:-}" == top ]] && k=",\"TELEGRAM_POLLING\":\"on\""
     n=""
     [[ "${STUB_PM2_KEY:-}" == nested ]] && n=",\"env\":{\"TELEGRAM_POLLING\":\"on\"}"
-    echo "[{\"name\":\"pleiades-fin-bot\",\"pm2_env\":{\"status\":\"online\"}},{\"name\":\"pleiades-fit-bot\",\"pm2_env\":{\"status\":\"${STUB_ONLINE:-online}\",\"pm_cwd\":\"${STUB_CWD:-$STUB_APP}\",\"PLEIADES_ENV_FILE\":\"${STUB_ENV_FILE:-}\"$k$n}}]" ;;
+    other=fin; [[ "$STUB_SLUG" == fin ]] && other=fit
+    echo "[{\"name\":\"pleiades-$other-bot\",\"pm2_env\":{\"status\":\"online\"}},{\"name\":\"pleiades-$STUB_SLUG-bot\",\"pm2_env\":{\"status\":\"${STUB_ONLINE:-online}\",\"pm_cwd\":\"${STUB_CWD:-$STUB_APP}\",\"PLEIADES_ENV_FILE\":\"${STUB_ENV_FILE:-}\"$k$n}}]" ;;
 esac
 """
 
 
 class TelegramPolling(unittest.TestCase):
+    APP = "fit"
+    DIR = "fitness"
+    CHAT_KEY = FIT_CHAT_KEY
+
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         t = Path(os.path.realpath(self._tmp.name))
         self.home = t / "home"
         self.home.mkdir()
-        self.app = t / "checkout" / "apps" / "fitness"
+        self.app = t / "checkout" / "apps" / self.DIR
         self.app.mkdir(parents=True)
         self.logs = t / "pm2logs"
         self.logs.mkdir()
@@ -105,7 +118,7 @@ class TelegramPolling(unittest.TestCase):
         self.calls = t / "calls"
         self.env_file = self.app / ".env"
         self.platform = self.home / "pleiades-platform.env"
-        self.platform.write_text(PLATFORM)
+        self.platform.write_text(platform_text(self.CHAT_KEY))
         self.platform.chmod(0o600)
         self.write_env(APP_ENV)
         self.write_state("on")
@@ -119,7 +132,7 @@ class TelegramPolling(unittest.TestCase):
 
     def write_state(self, value: str) -> None:
         (self.app / "logs").mkdir(exist_ok=True)
-        (self.app / "logs" / "telegram-polling-fit.json").write_text(json.dumps({"polling": value}, separators=(",", ":")))
+        (self.app / "logs" / f"telegram-polling-{self.APP}.json").write_text(json.dumps({"polling": value}, separators=(",", ":")))
 
     def env(self, **extra: str) -> dict:
         return {
@@ -135,6 +148,8 @@ class TelegramPolling(unittest.TestCase):
             "STUB_APP": str(self.app),
             "STUB_PLATFORM": str(self.platform),
             "STUB_ENV_FILE": str(self.platform),
+            "STUB_SLUG": self.APP,
+            "STUB_CHAT_KEY": self.CHAT_KEY,
             **extra,
         }
 
@@ -149,11 +164,14 @@ class TelegramPolling(unittest.TestCase):
         lines = [l for l in self.env_file.read_text().splitlines() if l.startswith(f"{KEY}=")]
         return lines[-1] if lines else None
 
+    def bot(self) -> str:
+        return f"pleiades-{self.APP}-bot"
+
     def restarts(self) -> list[str]:
         return self.calls.read_text().split() if self.calls.exists() else []
 
     def test_off_writes_key_restarts_and_prints_form(self):
-        r = self.run_sh("fit", "off")
+        r = self.run_sh(self.APP, "off")
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertEqual(self.key_line(), f"{KEY}=off")
         for line in (
@@ -163,16 +181,16 @@ class TelegramPolling(unittest.TestCase):
             "[off] 봇 online 1 · cwd 이 체크아웃 1 · pm2 env 키 없음",
             "봇 폴링 상태 기록 off",
             "앱 .env 폴링 키 끔(off)",
-            "되돌리기: deploy/telegram-polling.sh fit on",
+            f"되돌리기: deploy/telegram-polling.sh {self.APP} on",
             "결과: 통과 — 텔레그램 폴링 꺼짐",
         ):
             self.assertIn(line, r.stdout)
         self.assertEqual(stat.S_IMODE(self.env_file.stat().st_mode), 0o600)
         text = self.env_file.read_text()
-        self.assertIn("TGSECRETFIT", text, "토큰은 그대로")
-        self.assertIn("# fit 앱", text)
-        self.assertEqual(self.restarts(), ["restart", "pleiades-fit-bot"], "fit 봇만 재시작")
-        backups = list((self.home / "pleiades-private").glob("fit-env-*.bak"))
+        self.assertIn("TGSECRETAPP", text, "토큰은 그대로")
+        self.assertIn("# 앱 설정", text)
+        self.assertEqual(self.restarts(), ["restart", self.bot()], "그 앱 봇만 재시작")
+        backups = list((self.home / "pleiades-private").glob(f"{self.APP}-env-*.bak"))
         self.assertEqual(len(backups), 1)
         self.assertNotIn(KEY, backups[0].read_text(), "백업은 바꾸기 전 것")
         self.assertEqual(stat.S_IMODE((self.home / "pleiades-private").stat().st_mode), 0o700)
@@ -180,7 +198,7 @@ class TelegramPolling(unittest.TestCase):
     def test_on_after_off_requires_drop_pending(self):
         self.write_env(APP_ENV + f"{KEY}=off\n")
         self.write_state("off")
-        r = self.run_sh("fit", "on")
+        r = self.run_sh(self.APP, "on")
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertEqual(self.key_line(), f"{KEY}=")
         for line in ("폴링 시작 1 (밀린 업데이트 버림 1)", "봇 폴링 상태 기록 on", "앱 .env 폴링 키 켬(off 아님)",
@@ -191,7 +209,7 @@ class TelegramPolling(unittest.TestCase):
     def test_on_without_drop_after_off_fails(self):
         self.write_env(APP_ENV + f"{KEY}=off\n")
         self.write_state("off")
-        r = self.run_sh("fit", "on", STUB_DROP="never")
+        r = self.run_sh(self.APP, "on", STUB_DROP="never")
         self.assertEqual(r.returncode, 3, r.stdout)
         self.assertIn("(밀린 업데이트 버림 0)", r.stdout)
         self.assertIn("켜기 판정 실패", r.stdout)
@@ -200,7 +218,7 @@ class TelegramPolling(unittest.TestCase):
     def test_on_uses_state_record_not_env_for_drop(self):
         self.write_env(APP_ENV + f"{KEY}=off\n")
         self.write_state("on")
-        r = self.run_sh("fit", "on")
+        r = self.run_sh(self.APP, "on")
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertIn("(밀린 업데이트 버림 0)", r.stdout)
 
@@ -208,14 +226,14 @@ class TelegramPolling(unittest.TestCase):
     def test_on_passes_when_discord_is_down(self):
         self.write_env(APP_ENV + f"{KEY}=off\n")
         self.write_state("off")
-        r = self.run_sh("fit", "on", STUB_GATEWAY="fatal")
+        r = self.run_sh(self.APP, "on", STUB_GATEWAY="fatal")
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertIn("gateway 종료 코드 1", r.stdout)
         self.assertIn("결과: 통과 — 텔레그램 폴링 켜짐(병행) (Discord 비정상", r.stdout)
 
     # 회귀: 사전 리뷰 major 1 — "수신 켜짐" 줄은 기동 때 찍힌다. 4014 강등이면 Discord 수신이 없으므로 끄지 않는다
     def test_off_with_4014_degrade_reverts(self):
-        r = self.run_sh("fit", "off", STUB_GATEWAY="degrade")
+        r = self.run_sh(self.APP, "off", STUB_GATEWAY="degrade")
         self.assertEqual(r.returncode, 3, r.stdout)
         self.assertIn("[off] Discord 준비 완료 1 · 메시지 수신 켜짐(대화 채널) 1 · MESSAGE CONTENT 미허용(4014) 강등 1", r.stdout)
         self.assertIn("되돌림 성공 (Discord 비정상", r.stdout)
@@ -225,13 +243,13 @@ class TelegramPolling(unittest.TestCase):
     def test_off_again_failure_says_revert_is_on(self):
         self.write_env(APP_ENV + f"{KEY}=off\n")
         self.write_state("off")
-        r = self.run_sh("fit", "off", STUB_GATEWAY="degrade")
+        r = self.run_sh(self.APP, "off", STUB_GATEWAY="degrade")
         self.assertEqual(r.returncode, 3, r.stdout)
         self.assertIn("되돌림 = 켬(직전 값 off 복원 아님", r.stdout)
 
     # 회귀: 사전 리뷰 info 3 — 도는 봇의 플랫폼 파일이 다르면 off 는 바꾸기 전에 멈춘다(on 은 상관없다)
     def test_off_stops_when_bot_uses_other_platform_file(self):
-        r = self.run_sh("fit", "off", STUB_ENV_FILE="/elsewhere/pleiades-platform.env")
+        r = self.run_sh(self.APP, "off", STUB_ENV_FILE="/elsewhere/pleiades-platform.env")
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("PLEIADES_ENV_FILE 같음 0", r.stdout)
         self.assertNotIn("elsewhere", r.stdout)
@@ -239,7 +257,7 @@ class TelegramPolling(unittest.TestCase):
 
     def test_off_replaces_existing_lines_and_keeps_comments(self):
         self.write_env(APP_ENV + f"{KEY}=on\n# {KEY}=off\n{KEY}=\n")
-        r = self.run_sh("fit", "off")
+        r = self.run_sh(self.APP, "off")
         self.assertEqual(r.returncode, 0, r.stdout)
         text = self.env_file.read_text()
         self.assertEqual(text.splitlines().count(f"{KEY}=off"), 2, "유효 줄 2개 모두 off")
@@ -252,38 +270,38 @@ class TelegramPolling(unittest.TestCase):
         real.chmod(0o600)
         self.env_file.unlink()
         self.env_file.symlink_to(real)
-        r = self.run_sh("fit", "off")
+        r = self.run_sh(self.APP, "off")
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertTrue(self.env_file.is_symlink(), "링크를 파일로 덮지 않는다")
         self.assertIn(f"{KEY}=off", real.read_text())
         self.assertEqual(stat.S_IMODE(real.stat().st_mode), 0o600)
 
     def test_off_refused_when_discord_inbound_off(self):
-        self.platform.write_text('DISCORD_CHANNEL_ID_FITNESS_CHAT=""\n')
-        r = self.run_sh("fit", "off")
+        self.platform.write_text(f'{self.CHAT_KEY}=""\n')
+        r = self.run_sh(self.APP, "off")
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("Discord 메시지 수신이 꺼져 있다", r.stdout)
         self.assertIsNone(self.key_line())
         self.assertEqual(self.restarts(), [])
 
     def test_off_gateway_fatal_reverts_to_parallel(self):
-        r = self.run_sh("fit", "off", STUB_GATEWAY="fatal")
+        r = self.run_sh(self.APP, "off", STUB_GATEWAY="fatal")
         self.assertEqual(r.returncode, 3, r.stdout)
         self.assertIn("gateway 종료 코드 1", r.stdout)
         self.assertIn("되돌림 성공 (Discord 비정상", r.stdout, "텔레그램은 살렸다 · Discord 는 따로 확인")
         self.assertEqual(self.key_line(), f"{KEY}=", "키는 비웠다")
-        self.assertEqual(self.restarts(), ["restart", "pleiades-fit-bot", "restart", "pleiades-fit-bot"])
+        self.assertEqual(self.restarts(), ["restart", self.bot(), "restart", self.bot()])
 
     def test_off_with_missing_token_fails_and_reverts(self):
         # 토큰이 없으면 폴링 꺼짐 줄이 아니라 "토큰 없음" 이 찍힌다 — D-2′ 는 토큰을 남기는 단계라 실패로 본다
-        r = self.run_sh("fit", "off", STUB_TELEGRAM="none")
+        r = self.run_sh(self.APP, "off", STUB_TELEGRAM="none")
         self.assertEqual(r.returncode, 3, r.stdout)
         self.assertIn("[off] 텔레그램 토큰 없음 1", r.stdout)
         self.assertIn("되돌림 실패", r.stdout)
 
     def test_off_revert_success(self):
         # 끄기 판정 실패(Discord 수신 줄이 재시작 뒤 0) → 되돌림 on 은 Discord 수신 줄을 요구하지 않는다
-        r = self.run_sh("fit", "off", PLEIADES_READY_WAIT="3", STUB_PLATFORM=str(self.empty_platform()))
+        r = self.run_sh(self.APP, "off", PLEIADES_READY_WAIT="3", STUB_PLATFORM=str(self.empty_platform()))
         self.assertEqual(r.returncode, 3, r.stdout)
         self.assertIn("[off] Discord 준비 완료 1 · 메시지 수신 켜짐(대화 채널) 0", r.stdout)
         self.assertIn("되돌림 성공", r.stdout)
@@ -294,63 +312,60 @@ class TelegramPolling(unittest.TestCase):
     def empty_platform(self) -> Path:
         # 스텁만 보는 플랫폼 파일 — 스크립트의 사전 검사는 진짜 파일(키 설정됨)을 본다
         p = self.home.parent / "stub-platform.env"
-        p.write_text('DISCORD_CHANNEL_ID_FITNESS_CHAT=""\n')
+        p.write_text(f'{self.CHAT_KEY}=""\n')
         return p
 
     def test_on_401_fails(self):
         self.write_env(APP_ENV + f"{KEY}=off\n")
         self.write_state("off")
-        r = self.run_sh("fit", "on", STUB_TELEGRAM="401")
+        r = self.run_sh(self.APP, "on", STUB_TELEGRAM="401")
         self.assertEqual(r.returncode, 3, r.stdout)
         self.assertIn("토큰 무효(401) 1", r.stdout)
 
     def test_pm2_env_key_stops_before_change(self):
         for where in ("top", "nested"):
             with self.subTest(where=where):
-                r = self.run_sh("fit", "off", STUB_PM2_KEY=where)
+                r = self.run_sh(self.APP, "off", STUB_PM2_KEY=where)
                 self.assertEqual(r.returncode, 1, r.stdout)
                 self.assertIn("pm2 env 키 있음", r.stdout)
                 self.assertIsNone(self.key_line())
                 self.assertEqual(self.restarts(), [])
 
     def test_other_checkout_stops_before_change(self):
-        r = self.run_sh("fit", "off", STUB_CWD="/elsewhere/apps/fitness")
+        r = self.run_sh(self.APP, "off", STUB_CWD="/elsewhere/apps/fitness")
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("cwd 이 체크아웃 0", r.stdout)
         self.assertNotIn("elsewhere", r.stdout)
         self.assertEqual(self.restarts(), [])
 
     def test_bot_not_online_stops(self):
-        r = self.run_sh("fit", "off", STUB_ONLINE="errored")
+        r = self.run_sh(self.APP, "off", STUB_ONLINE="errored")
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIsNone(self.key_line())
 
     def test_old_lines_do_not_pass(self):
-        (self.logs / "pleiades-fit-bot-error.log").write_text("2099-01-01 00:00:00: [discord-fit] gateway 준비 완료\n")
-        (self.logs / "pleiades-fit-bot-out.log").write_text(f"2099-01-01 00:00:00: {POLL_OFF}\n")
-        r = self.run_sh("fit", "off", STUB_GATEWAY="none", PLEIADES_READY_WAIT="3")
+        (self.logs / f"{self.bot()}-error.log").write_text(f"2099-01-01 00:00:00: [discord-{self.APP}] gateway 준비 완료\n")
+        (self.logs / f"{self.bot()}-out.log").write_text(f"2099-01-01 00:00:00: {POLL_OFF}\n")
+        r = self.run_sh(self.APP, "off", STUB_GATEWAY="none", PLEIADES_READY_WAIT="3")
         self.assertEqual(r.returncode, 3, r.stdout)
         self.assertIn("[off] Discord 준비 완료 0", r.stdout)
 
     def test_permission_must_be_600(self):
         self.write_env(APP_ENV, 0o644)
-        r = self.run_sh("fit", "off")
+        r = self.run_sh(self.APP, "off")
         self.assertEqual(r.returncode, 1)
         self.assertIn("권한이 600 이 아니다", r.stdout)
         self.assertIsNone(self.key_line())
 
     def test_lock_held_stops_before_change(self):
         (self.home / "pleiades-private" / "deploy.lock.d").mkdir(parents=True)
-        r = self.run_sh("fit", "off")
+        r = self.run_sh(self.APP, "off")
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("배포가 이 서버에서 진행 중", r.stdout)
         self.assertIsNone(self.key_line())
 
-    def test_fin_and_usage_are_refused(self):
-        r = self.run_sh("fin", "off")
-        self.assertEqual(r.returncode, 2, r.stdout)
-        self.assertIn("fin 은 아직이다", r.stdout)
-        for args in (("fit",), ("fit", "bogus"), ("fit", "off", "--x"), ("x", "off"), ("fit", "on", "1")):
+    def test_usage_is_refused(self):
+        for args in ((self.APP,), (self.APP, "bogus"), (self.APP, "off", "--x"), ("x", "off"), (self.APP, "on", "1")):
             with self.subTest(args=args):
                 self.assertEqual(self.run_sh(*args).returncode, 2)
         self.assertIsNone(self.key_line())
@@ -359,7 +374,7 @@ class TelegramPolling(unittest.TestCase):
     def test_dry_run_changes_nothing_and_needs_no_pm2(self):
         (self.bin / "pm2").unlink()
         before = self.env_file.read_text()
-        r = self.run_sh("fit", "off", "--dry-run")
+        r = self.run_sh(self.APP, "off", "--dry-run")
         self.assertEqual(r.returncode, 0, r.stdout)
         for line in ("dry-run — 바꾸지 않았다", "앱 .env 있음 · 권한 600", "앱 .env 폴링 키 켬(off 아님)", "플랫폼 파일 키 설정됨"):
             self.assertIn(line, r.stdout)
@@ -370,11 +385,11 @@ class TelegramPolling(unittest.TestCase):
         if os.uname().sysname != "Darwin":
             self.skipTest("Darwin 전용")
         env = {"PATH": f"{self.bin}:{NODE_DIR}:{BASE_PATH}", "HOME": str(self.home), "STUB_CALLS": str(self.calls)}
-        r = subprocess.run(["bash", str(SH), "fit", "off"], capture_output=True, text=True, env=env, timeout=30)
+        r = subprocess.run(["bash", str(SH), self.APP, "off"], capture_output=True, text=True, env=env, timeout=30)
         self.assertEqual(r.returncode, 1)
         self.assertIn("서버 전용", r.stdout)
         self.assertEqual(self.restarts(), [])
-        d = subprocess.run(["bash", str(SH), "fit", "off", "--dry-run"], capture_output=True, text=True, env=env, timeout=30)
+        d = subprocess.run(["bash", str(SH), self.APP, "off", "--dry-run"], capture_output=True, text=True, env=env, timeout=30)
         self.assertEqual(d.returncode, 0, d.stdout)
 
     def test_cjs_rejects_other_values(self):
@@ -387,34 +402,81 @@ class TelegramPolling(unittest.TestCase):
         self.assertIsNone(self.key_line())
 
 
+class TelegramPollingFin(TelegramPolling):
+    """fit 케이스 전부를 fin 으로 다시 돈다(D-3′ · #411) + fin 만의 경계."""
+
+    APP = "fin"
+    DIR = "finance"
+    CHAT_KEY = FIN_CHAT_KEY
+
+    # 앱 경계 — fit 대화 채널만 켜져 있으면 fin 을 끄지 않는다
+    def test_off_refused_when_only_fit_chat_key_is_set(self):
+        self.platform.write_text(platform_text(FIT_CHAT_KEY))
+        r = self.run_sh("fin", "off")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("먼저 deploy/discord-inbound.sh fin on", r.stdout)
+        self.assertIsNone(self.key_line())
+        self.assertEqual(self.restarts(), [])
+
+    def test_pass_message_names_fin_commands(self):
+        r = self.run_sh("fin", "off")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("결과: 통과 — 텔레그램 폴링 꺼짐(fin 은 Discord 만 받는다", r.stdout)
+        self.assertIn("!help", r.stdout)
+        self.assertNotIn("!today", r.stdout)
+
+
+# 두 앱의 인용 부호가 다르다(fit " · fin ') — 문자열 내용만 대조한다
+def app_source(rel: str) -> str:
+    return (REPO / rel).read_text().replace("'", '"')
+
+
 class StaticContract(unittest.TestCase):
-    """판정 문자열 ↔ 그 줄을 찍는 파일 · 금지 명령 · 비출력."""
+    """판정 문자열 ↔ 그 줄을 찍는 파일(두 앱) · 금지 명령 · 비출력."""
 
     TEXT = SH.read_text()
-    POLLING = (REPO / "apps/fitness/src/bot/telegram-polling.ts").read_text()
-    STANDALONE = (REPO / "apps/fitness/src/bot/standalone.ts").read_text()
-    INTERACTIONS = (REPO / "apps/fitness/src/bot/notifications/discord-interactions.ts").read_text()
     GATEWAY = (REPO / "packages/chat/src/gateway.ts").read_text()
+    CONFIG = (HERE / "pleiades.config.cjs").read_text()
+    APPS = (("fit", "fitness", FIT_CHAT_KEY), ("fin", "finance", FIN_CHAT_KEY))
 
     def test_app_prints_polling_lines_literally(self):
-        self.assertIn(f'"{POLL_OFF}"', self.POLLING)
-        self.assertIn('"[bot] 텔레그램 토큰 없음 — 폴링 안 함', self.POLLING)
-        self.assertIn("`[bot] Long polling 시작${drop ? \" (밀린 업데이트 버림 — 직전에 꺼져 있었다)\" : \"\"}`", self.POLLING)
-        self.assertIn("`[bot] 텔레그램 토큰 무효(401)", self.POLLING)
+        for _, d, _key in self.APPS:
+            with self.subTest(app=d):
+                polling = app_source(f"apps/{d}/src/bot/telegram-polling.ts")
+                self.assertIn(f'"{POLL_OFF}"', polling)
+                self.assertIn('"[bot] 텔레그램 토큰 없음 — 폴링 안 함', polling)
+                self.assertIn("`[bot] Long polling 시작${drop ? \" (밀린 업데이트 버림 — 직전에 꺼져 있었다)\" : \"\"}`", polling)
+                self.assertIn("`[bot] 텔레그램 토큰 무효(401)", polling)
         for s in (POLL_OFF, "[bot] Long polling 시작", "[bot] Long polling 시작 (밀린 업데이트 버림", "[bot] 텔레그램 토큰 무효(401)"):
             self.assertIn(s, self.TEXT)
 
     def test_state_file_path_matches_app(self):
-        self.assertIn('POLLING_STATE_FILE = "logs/telegram-polling-fit.json"', self.STANDALONE)
-        self.assertIn("logs/telegram-polling-fit.json", self.TEXT)
-        self.assertIn('return (env.TELEGRAM_POLLING ?? "").trim().toLowerCase() === "off"', self.POLLING)
+        for a, d, _key in self.APPS:
+            with self.subTest(app=d):
+                self.assertIn(f'POLLING_STATE_FILE = "logs/telegram-polling-{a}.json"', app_source(f"apps/{d}/src/bot/standalone.ts"))
+                self.assertIn('return (env.TELEGRAM_POLLING ?? "").trim().toLowerCase() === "off"', app_source(f"apps/{d}/src/bot/telegram-polling.ts"))
+        self.assertIn("logs/telegram-polling-$app.json", self.TEXT)
 
     def test_discord_lines_match(self):
-        self.assertIn('"[discord-fit] 메시지 수신 켜짐(대화 채널)"', self.INTERACTIONS)
+        for a, d, _key in self.APPS:
+            with self.subTest(app=d):
+                self.assertIn(f'"[discord-{a}] 메시지 수신 켜짐(대화 채널)"', app_source(f"apps/{d}/src/bot/notifications/discord-interactions.ts"))
         self.assertIn("`[${label}] MESSAGE CONTENT 미허용(4014) — intents ${intents} 로 낮춰", self.GATEWAY)
         self.assertIn('DEGRADE_LINE="[$LABEL] MESSAGE CONTENT 미허용(4014)"', self.TEXT)
         self.assertIn("`[${label}] gateway 준비 완료`", self.GATEWAY)
         self.assertIn("메시지 수신 켜짐(대화 채널)", self.TEXT)
+
+    # 앱별 표 ↔ pm2 정의(봇 이름 · env 에 폴링 키 없음)와 앱이 읽는 대화 채널 키
+    def test_app_table_matches_config_and_app(self):
+        self.assertNotIn("TELEGRAM_POLLING", self.CONFIG)
+        for a, d, key in self.APPS:
+            with self.subTest(app=d):
+                self.assertIn(f"name: 'pleiades-{a}-bot'", self.CONFIG)
+                self.assertIn(f"KEY={key}", self.TEXT)
+                self.assertIn(f"BOT=pleiades-{a}-bot", self.TEXT)
+                self.assertIn(f"REL_DIR=apps/{d}", self.TEXT)
+                src = "".join(p.read_text() for p in (REPO / f"apps/{d}/src").rglob("*.ts") if "__tests__" not in p.parts)
+                self.assertIn(key, src)
 
     def test_no_forbidden_commands(self):
         code = "\n".join(l for l in self.TEXT.splitlines() if not l.lstrip().startswith("#"))
