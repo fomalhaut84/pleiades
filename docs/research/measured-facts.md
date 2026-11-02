@@ -4528,3 +4528,17 @@ ls -d apps/<app>/prisma/migrations/*/ | wc -l                                   
   - `알림설정 급락 -3` → `⚠️ 알 수 없는 항목: 알림설정` + 사용 가능 목록 — **항목이 "알림설정" 으로 잡힌다**
   - 두 응답 모두 특성 테스트 `special-telegram.test.ts` 의 "현재 동작" 2건과 같다 → 결함 확정 · `/alertconfig …` 영어 명령은 정상(같은 테스트)
 - **DB 쓰기(`pleiades_fin`):** 기동 시 EarningsCache 시드 대상 0 · 주가 크론 PriceCache 1행 갱신. 알림설정 값 변경 0(두 메시지 모두 변경 전 분기에서 끝남). 운영 봇·DB·서버 영향 0.
+
+## 2026-11-02 — 009 D-4 "텔레그램" 문구 (HEAD `40c7ef40cd2f` · `_workspace/009/d4/01_surveyor_d4.md` · 감사 `03_auditor_d4*.md`)
+
+`git grep --text -n -i -E '텔레그램|telegram' -- apps/finance apps/fitness packages deploy tools` = 1646 줄.
+분류(A AI 입력 / B 사용자 / C 운영자 / D 주석·문서 / E 동작 / 테스트): 10 / 14 / 65 / 762 / 338 / 457.
+
+- fin 프롬프트: 코드 상수 · 호출 12곳 · 세션 없을 때만 전달 · HTML·길이 지시 0 · `/ai`·`/reset`(`:162-163`)은 verbatim 이라 `!` 변환을 타지 않는다.
+- **fin 앱 `CLAUDE.md`·`.claude/rules` 도 모델 입력이다**(`cli-isolation.ts:12-15` · `claude-advisor.ts:861` cwd — 코드 판독 · 실행 미확인 · I-8). fit 은 추적 파일 0.
+- fit: usage 변경 = 새 행 0(`codeHash` 는 본문만) · `system.ts:78` 변경 = `system` 키 1행 · active 가 `code_default` 또는 최신 해시 `restore` 면 자동 전환 · 그 외 draft. `ensureDefaults` 4곳(웹 부팅 · 봇 부팅 · `GET /api/prompts` · 목록 화면). 웹 `restore` 는 새 행 · 재배포 없음 · 이후 코드 기본값 변경은 draft. fit 세션은 메모리라 모든 릴리즈가 비운다.
+- fin `spending.ts` 4행의 "텔레그램에서 입력·수정·삭제" 경로는 봇에 없다(이체·`transfer` 0건) · 웹에는 화면까지 있다.
+- **fin `ALLOWED_TOOLS` 57 = 쓰기 34 + 읽기 23**(`server.tool` 57 차집합 0 · 구현 기준) · 읽기 중 `get_prices`·`get_watchlist` 는 `PriceCache` upsert. 모든 호출에 같은 목록(`:826`) · #419. fit 27 은 쓰기 도구 없음(`generate_training_plan` 제외 · 웹 경유 조회의 하위 lib 은 미추적).
+- `release-inplace.sh:338` 사람 확인 줄 고정 테스트 0 · 판정 문자열 고정은 C 에만 있다(A·B 0).
+- 앱 PR 은 squash 로 들어온다(`git log --merges --since=2026-10-22 -- apps` 0 · PR #397 커밋 6 → 1). 앱 하네스 파일 변경 10-22 이후 0 · `apps/finance/src` 14커밋.
+
