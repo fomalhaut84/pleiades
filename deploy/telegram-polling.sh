@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# telegram-polling.sh — 앱 텔레그램 수신(롱폴링) 끄기·켜기 (009 D-2′ · #376). 서버에서 사용자가 실행한다(Claude 는 서버에 닿지 않는다 · I-3).
+# telegram-polling.sh — 앱 텔레그램 수신(롱폴링) 끄기·켜기 (009 D-2′ · #376 · fin D-3′ · #411). 서버에서 사용자가 실행한다(Claude 는 서버에 닿지 않는다 · I-3).
 #
-# 사용:  deploy/telegram-polling.sh fit off [--dry-run]   백업 → 앱 .env TELEGRAM_POLLING=off → pleiades-fit-bot 재시작 → 판정
-#        deploy/telegram-polling.sh fit on [--dry-run]    백업 → 키 비움 → pleiades-fit-bot 재시작 → 판정 (되돌리기 · 밀린 업데이트는 버린다)
-#   이 체크아웃의 apps/<dir>/.env 를 바꾼다 — 도는 봇의 체크아웃에서 부른다. fin 은 아직이다(D-3′).
+# 사용:  deploy/telegram-polling.sh <fit|fin> off [--dry-run]   백업 → 앱 .env TELEGRAM_POLLING=off → pleiades-<앱>-bot 재시작 → 판정
+#        deploy/telegram-polling.sh <fit|fin> on [--dry-run]    백업 → 키 비움 → pleiades-<앱>-bot 재시작 → 판정 (되돌리기 · 밀린 업데이트는 버린다)
+#   이 체크아웃의 apps/<dir>/.env 를 바꾼다 — 도는 봇의 체크아웃에서 부른다.
 #   off 의 전제: C-11 통과 · Discord 메시지 수신이 켜져 있다(플랫폼 설정 대화 채널 키 · 아니면 바꾸기 전에 멈춘다).
 # 토큰·아웃바운드 텔레그램은 그대로다(폴링만). 출력: 판정 양식만 — 값·경로는 내지 않는다. 백업은 ~/pleiades-private/(700).
 # 종료: 0 통과 · 1 중단(바꾸기 전) · 2 사용법 · 3 바꾼 뒤 판정 실패(off 면 키를 비우고 재시작해 되돌린다 — 되돌림 성패를 따로 적는다)
@@ -20,6 +20,21 @@ POLL_START_LINE="[bot] Long polling 시작"
 POLL_DROP_LINE="[bot] Long polling 시작 (밀린 업데이트 버림"
 NO_TOKEN_LINE="[bot] 텔레그램 토큰 없음"
 UNAUTHORIZED_LINE="[bot] 텔레그램 토큰 무효(401)"
+
+# 앱별 표 — 앱 디렉터리 · 대화 채널 키 · pm2 이름 · 로그 label · 통과 안내. 알 수 없는 앱이면 실패 → usage(종료 2)
+set_app() {  # <fit|fin>
+  case "$1" in
+    fit) REL_DIR=apps/fitness; CHAT_KEY=DISCORD_CHANNEL_ID_FITNESS_CHAT; BOT=pleiades-fit-bot; LABEL=discord-fit
+         PASS_HINT="텔레그램 /today 무응답 · Discord !today 응답을 1회 확인" ;;
+    fin) REL_DIR=apps/finance; CHAT_KEY=DISCORD_CHANNEL_ID_FINANCE_CHAT; BOT=pleiades-fin-bot; LABEL=discord-fin
+         PASS_HINT="텔레그램 /help 무응답 · Discord !help 응답을 1회 확인" ;;
+    *) return 1 ;;
+  esac
+  READY_LINE="[$LABEL] gateway 준비 완료"
+  INBOUND_ON_LINE="[$LABEL] 메시지 수신 켜짐(대화 채널)"
+  FATAL_LINE="[$LABEL] gateway 종료 코드"
+  DEGRADE_LINE="[$LABEL] MESSAGE CONTENT 미허용(4014)"
+}
 
 usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 redact() { sed -E "s#$HOME#~#g; s#/(home|Users)/[^/[:space:]]+#~#g"; }
@@ -192,22 +207,15 @@ main() {
   for a in "$@"; do case "$a" in --dry-run) dry=1 ;; *) usage ;; esac; done
   case "$cmd" in on|off) ;; *) usage ;; esac
   form "CMD $app $cmd$([[ $dry -eq 1 ]] && echo ' --dry-run')"
-  [[ "$app" == fit ]] || { [[ "$app" == fin ]] && stop 2 "fin 은 아직이다(009 D-3′)"; usage; }
-  BOT=pleiades-fit-bot
-  LABEL=discord-fit
-  CHAT_KEY=DISCORD_CHANNEL_ID_FITNESS_CHAT
-  READY_LINE="[$LABEL] gateway 준비 완료"
-  INBOUND_ON_LINE="[$LABEL] 메시지 수신 켜짐(대화 채널)"
-  FATAL_LINE="[$LABEL] gateway 종료 코드"
-  DEGRADE_LINE="[$LABEL] MESSAGE CONTENT 미허용(4014)"
+  set_app "$app" || usage
 
   HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
   [[ $dry -eq 1 || "$(uname -s)" != Darwin || "${PLEIADES_TEST:-}" == 1 ]] || stop 1 "로컬에서는 --dry-run 만 — 서버 전용(I-3)"
-  APP_DIR=$HERE/../apps/fitness
+  APP_DIR=$HERE/../$REL_DIR
   [[ "${PLEIADES_TEST:-}" != 1 || -z "${PLEIADES_APP_DIR:-}" ]] || APP_DIR=$PLEIADES_APP_DIR
   APP_DIR=$(cd "$APP_DIR" 2>/dev/null && pwd -P) || stop 1 "앱 디렉터리가 없다"
   ENV_FILE=$APP_DIR/.env
-  STATE_FILE=$APP_DIR/logs/telegram-polling-fit.json
+  STATE_FILE=$APP_DIR/logs/telegram-polling-$app.json
   PLATFORM=${PLEIADES_ENV_FILE:-$HOME/pleiades-platform.env}
   local platform=$PLATFORM
   [[ "$platform" == /* ]] || stop 1 "PLEIADES_ENV_FILE 는 절대경로여야 한다"
@@ -243,7 +251,7 @@ main() {
     # 텔레그램을 끄면 Discord 가 유일한 수신이다 — 대화 채널이 켜져 있어야 한다(2′-2)
     [[ -f "$platform" ]] || stop 1 "플랫폼 설정 파일이 없다 — Discord 수신을 확인할 수 없다"
     node_step discord-inbound.cjs state "$platform" "$CHAT_KEY" || stop 1 "플랫폼 설정을 읽지 못했다"
-    [[ "$(last_form)" == *"키 설정됨" ]] || stop 1 "Discord 메시지 수신이 꺼져 있다 — 먼저 deploy/discord-inbound.sh fit on"
+    [[ "$(last_form)" == *"키 설정됨" ]] || stop 1 "Discord 메시지 수신이 꺼져 있다 — 먼저 deploy/discord-inbound.sh $app on"
   fi
 
   local st
@@ -265,7 +273,7 @@ main() {
   take_lock "$private/deploy.lock" || stop 1 "배포가 이 서버에서 진행 중이다(끝난 뒤 다시)"
 
   local backup
-  backup="$private/fit-env-$(date +%Y%m%d-%H%M%S).bak"
+  backup="$private/$app-env-$(date +%Y%m%d-%H%M%S).bak"
   (umask 077; cp -p "$ENV_FILE" "$backup") 2>/dev/null || stop 1 "백업 실패 — 바꾸지 않았다"
   form "   백업 만듦(비공개 위치)"
 
@@ -278,8 +286,8 @@ main() {
   CHANGED=1
   if apply off off off; then
     CHANGED=0
-    form "   되돌리기: deploy/telegram-polling.sh fit on"
-    emit_form "통과 — 텔레그램 폴링 꺼짐(fit 은 Discord 만 받는다 · 텔레그램 /today 무응답 · Discord !today 응답을 1회 확인)"
+    form "   되돌리기: deploy/telegram-polling.sh $app on"
+    emit_form "통과 — 텔레그램 폴링 꺼짐($app 은 Discord 만 받는다 · $PASS_HINT)"
     exit 0
   fi
   revert "끄기 판정 실패"
