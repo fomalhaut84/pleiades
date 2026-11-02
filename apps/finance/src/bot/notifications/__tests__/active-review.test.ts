@@ -8,6 +8,8 @@
  * pure 함수 (buildClosingPrompt) 만 검증한다.
  */
 
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/prisma', () => ({ prisma: { alertConfig: { upsert: vi.fn() } } }))
@@ -66,5 +68,17 @@ describe('buildClosingPrompt (#499)', () => {
   it('"데이터 부족" 표현 가드 지시를 포함', () => {
     expect(buildClosingPrompt('KR', KR_CLOSING_NOW)).toContain('데이터 부족')
     expect(buildClosingPrompt('KR', KR_CLOSING_NOW)).toContain('당일 뉴스 미확인')
+  })
+})
+
+// pleiades 009 D-4(#418): 실패 안내는 변환을 타지 않아 상태마다 참인 웹 표기만 쓴다
+describe('실패 안내 표기', () => {
+  const source = readFileSync(join(__dirname, '..', 'active-review.ts'), 'utf8')
+
+  it('봇 /ai 명령을 안내하지 않는다', () => {
+    expect(source).not.toContain('/ai 명령')
+    expect(source).not.toContain("'/ai 에서")
+    expect(source).toContain('웹 AI 분석(/ai)에서 직접 질문해주세요.')
+    expect(source).toContain('웹 AI 분석 페이지에서 회고를 확인해주세요.')
   })
 })

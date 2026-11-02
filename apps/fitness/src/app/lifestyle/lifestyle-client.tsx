@@ -150,7 +150,7 @@ function TodayFoodSection({
             {isToday && (
               <>
                 <br />
-                텔레그램에서 &quot;점심 김치찌개 밥&quot; 입력 or 위 <b>📷 사진 등록</b> 버튼으로 자동 기록.
+                봇에서 &quot;점심 김치찌개 밥&quot; 입력 or 위 <b>📷 사진 등록</b> 버튼으로 자동 기록.
               </>
             )}
           </div>

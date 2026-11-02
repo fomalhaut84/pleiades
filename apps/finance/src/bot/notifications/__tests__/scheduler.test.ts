@@ -57,6 +57,23 @@ describe('scheduleNotifications — 수신자 확인은 실행 시점에', () =>
     return { count: calls.length, run: rsu![1] as unknown as () => Promise<void> }
   }
 
+  // pleiades 009 D-4(#418): 크론 실패 안내는 알림 변환을 타지 않는다 — 수신 경로인 Discord 표기를 넘긴다
+  it.each([
+    ['KR', '30 8 * * 1-5'],
+    ['US', '0 23 * * 1-5'],
+  ])('크론 브리핑(%s)은 실패 안내에 !ai 를 넘긴다', async (session, expr) => {
+    const { scheduleNotifications } = await import('../scheduler')
+    scheduleNotifications()
+    const job = vi.mocked(cron.schedule).mock.calls.find((c) => c[0] === expr)
+    expect(job).toBeDefined()
+    vi.stubEnv('NOTIFY_ALLOWED_CHANNEL', 'discord')
+    vi.stubEnv('DISCORD_WEBHOOK_FINANCE', 'https://discord.com/api/webhooks/1/tok')
+    const { sendBriefing } = await import('../briefing')
+    vi.mocked(sendBriefing).mockClear()
+    await (job![1] as unknown as () => Promise<void>)()
+    expect(sendBriefing).toHaveBeenCalledWith(session, undefined, { aiCommand: '!ai' })
+  })
+
   it('수신자 0 으로 떠도 작업은 등록된다 — 실행 때 0 이면 건너뛴다', async () => {
     const { count, run } = await registered()
     expect(count).toBeGreaterThan(0)

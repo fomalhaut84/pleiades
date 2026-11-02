@@ -176,7 +176,7 @@ export default function CategoryEditPanel({ category, onClose }: CategoryEditPan
               placeholder="점심, 저녁, 커피, 배달"
               className={inputClasses}
             />
-            <p className="text-[11px] text-dim mt-1">텔레그램 자연어 입력 시 자동 분류에 사용됩니다.</p>
+            <p className="text-[11px] text-dim mt-1">봇 자연어 입력 시 자동 분류에 사용됩니다.</p>
           </div>
 
           {/* 그룹 */}

@@ -440,7 +440,7 @@ export default function ProfileClient({
           {/* M13 Phase 1 (#243): auto-adjust 사전 알림 토글 */}
           <Field
             label="Auto-adjust 사전 알림"
-            hint="아침 06:30 부상 위험/readiness 저하 시 조정 제안 Telegram push. Phase 2 부터 Accept/Reject flow."
+            hint="아침 06:30 부상 위험/readiness 저하 시 조정 제안 알림. Phase 2 부터 Accept/Reject flow."
           >
             <label className="inline-flex items-center gap-2 text-sm">
               <input

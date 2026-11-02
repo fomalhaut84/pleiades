@@ -95,8 +95,8 @@ export const ALERT_KEY_INPUT_TYPE: Record<string, AlertInputType> = {
 
 /** 키별 사용자 향 설명 (label 은 DB label, 이건 부가 설명) */
 export const ALERT_KEY_DESCRIPTION: Record<string, string> = {
-  price_drop_pct: '일일 변동률이 이 값 이하이면 텔레그램 급락 알림',
-  price_surge_pct: '일일 변동률이 이 값 이상이면 텔레그램 급등 알림',
+  price_drop_pct: '일일 변동률이 이 값 이하이면 급락 알림',
+  price_surge_pct: '일일 변동률이 이 값 이상이면 급등 알림',
   fx_change_krw: '원/달러 하루 변동폭이 이 값 이상이면 알림',
   budget_warn_pct: '카테고리별 월 예산 사용률이 이 값을 초과하면 경고',
   daily_summary_hour: '매일 이 시각 (KST) 에 포트폴리오 요약 발송',
@@ -104,7 +104,7 @@ export const ALERT_KEY_DESCRIPTION: Record<string, string> = {
   ta_check_interval_min: 'TA 시그널 스캔 최소 간격',
   ta_ai_guide: 'TA 시그널 알림에 AI 짧은 조언 첨부 (티커별 6h 쿨다운)',
   active_review: 'KR 15:40 / US 07:15 클로징 리뷰 + 주간 리뷰 자동 발송',
-  custom_strategy_alerts: '/strategies 에 등록한 조건 발동 시 텔레그램 알림',
+  custom_strategy_alerts: '/strategies 에 등록한 조건 발동 시 알림',
   watchlist_market_hours_only: '관심종목 목표매수가/매수구간 알림을 각 시장 거래시간에만 발송 (기본 off = 24h)',
 }
 

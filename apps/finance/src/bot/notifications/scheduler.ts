@@ -33,7 +33,7 @@ export function scheduleNotifications(): void {
 
   // 수신자가 0 이어도 등록은 한다 — 루트 .env(Discord)를 나중에 채우면 재시작 없이 다음 실행부터 반영된다(#143 · PR #144 Codex P2).
   // 대신 실행마다 확인해 0 이면 건너뛴다(구 동작 "수신자 없으면 아무 작업도 안 함" 보존 — AI 생성·스냅샷 포함).
-  // Discord 를 골라도 키보드(RSU 확정)·분기 PDF 는 텔레그램으로 간다 — 둘 중 하나라도 있으면 실행한다.
+  // 키보드(RSU 확정)는 INTERACTIVE 라우트 · 분기 PDF 는 ALLOWED 라우트를 따른다 — 수신자가 하나라도 있으면 실행한다.
   if (!hasAllowedRecipients()) {
     console.log('[notification] ALLOWED 수신자 0 (TELEGRAM_ALLOWED_CHAT_IDS · Discord 웹훅 모두 비어 있음) — 스케줄은 등록하고 실행 때마다 건너뜀')
   }
@@ -204,7 +204,7 @@ export function scheduleNotifications(): void {
       '30 8 * * 1-5',
       async () => {
         try {
-          await sendBriefing('KR')
+          await sendBriefing('KR', undefined, { aiCommand: '!ai' })
         } catch (error) {
           console.error('[notification] 한국장 브리핑 실패:', error)
         }
@@ -217,7 +217,7 @@ export function scheduleNotifications(): void {
       '0 23 * * 1-5',
       async () => {
         try {
-          await sendBriefing('US')
+          await sendBriefing('US', undefined, { aiCommand: '!ai' })
         } catch (error) {
           console.error('[notification] 미국장 브리핑 실패:', error)
         }
