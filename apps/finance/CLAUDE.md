@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Charts**: Recharts
 - **Price API**: yahoo-finance2 (미국주 + 한국주/ETF + historical OHLCV)
 - **TA Engine**: trading-signals (RSI, MACD, BB, SMA/EMA — 로컬 계산)
-- **AI**: Claude Code CLI (`claude -p`, Max 플랜) — `--resume`으로 텔레그램 대화 세션 유지
+- **AI**: Claude Code CLI (`claude -p`, Max 플랜) — `--resume`으로 봇 대화 세션 유지
 - **MCP**: 자체 myFinance MCP 서버 (포트폴리오/세금/관심종목/RSU/스톡옵션/가계부 조회 도구)
 - **Bot**: grammY (텔레그램 봇, standalone 프로세스로 분리 운영)
 - **Deploy**: PM2 + Nginx on Ubuntu (`myfinance` 웹 + `myfinance-bot` standalone 2개 프로세스)
@@ -85,13 +85,13 @@ PM2 ──► myfinance-bot (standalone)        │
 **핵심 설계 결정:**
 - PostgreSQL 선택 이유: 동시 쓰기 채널 다수(웹+봇+cron+AI). SQLite write lock 병목 회피.
 - 봇 분리 운영: Next.js webhook 대신 standalone long polling 프로세스 → 응답 지연 해소, 웹/봇 자원 격리. cron + 알림 스케줄러도 봇 프로세스에서 실행.
-- AI 어드바이저: Claude API 대신 서버 Claude Code CLI(`claude -p`) subprocess 호출. Max 플랜에 포함. 텔레그램 chat별 `--resume`으로 대화 컨텍스트 유지(`/reset`로 초기화).
+- AI 어드바이저: Claude API 대신 서버 Claude Code CLI(`claude -p`) subprocess 호출. Max 플랜에 포함. 봇 대화별 `--resume`으로 대화 컨텍스트 유지(`!reset`로 초기화).
 - 주가 갱신: node-cron으로 장중 10분, 장외 1시간 간격. PriceCache 테이블에 upsert. 보유 종목 + 관심종목 모두 갱신.
 - 거래시간 필터: `src/lib/market-hours.ts`로 한국장(KS/KQ)·미국장(DST 반영) 판별. 장외 시간대 급등락 알림 차단(허위 알림 방지).
 - 환율: USDKRW=X 티커로 Yahoo Finance에서 함께 조회. 24시간 알림 허용.
 - AI 가이드: TA 시그널 발생 시 stock-trading-method 스킬 기반 1~2줄 가이드 자동 첨부.
 - PDF 리포트: Noto Sans KR 폰트 로컬 번들 (assets/fonts/).
-- 모바일: 웹은 "조회 + 관리 대시보드", 입력/알림은 텔레그램 중심(자연어 거래/가계부 입력 지원).
+- 모바일: 웹은 "조회 + 관리 대시보드", 입력/알림은 봇 중심(자연어 거래/가계부 입력 지원).
 
 ## Key Domain Rules
 

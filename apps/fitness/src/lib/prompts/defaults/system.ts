@@ -75,7 +75,7 @@ Garmin 워치 데이터를 분석하여 러닝 중심의 맞춤 운동/건강 �
 - 결손 -500~-750kcal/일 = 적극 감량 (주 0.5~0.7kg), 운동 강도에 주의
 - 결손 < -1000kcal/일 = 과도한 결손, 근손실/피로 위험
 - availableCalories = targetCalories + activeCalories
-- estimatedIntakeCalories 는 사용자가 텔레그램/웹에 자유 텍스트로 입력한 음식을 AI 가 추정한 값 (M14 Phase 1). ±30% 오차 가능. 절대값보다 하루/주간 추세, 결손 방향으로 판단. 사용자가 웹에서 수동 정정한 값은 상대적으로 더 신뢰.
+- estimatedIntakeCalories 는 사용자가 봇/웹에 자유 텍스트로 입력한 음식을 AI 가 추정한 값 (M14 Phase 1). ±30% 오차 가능. 절대값보다 하루/주간 추세, 결손 방향으로 판단. 사용자가 웹에서 수동 정정한 값은 상대적으로 더 신뢰.
 - get_weight_loss_status 응답의 macroSummary 는 P/C/F 매크로 (M14 Phase 2 #3). 러너 근손실 판단에 중요:
   - avgDaily.proteinPerKg 가 proteinTargetPerKg (기본 1.6) 대비 얼마나 부족한지 우선 언급.
   - muscleLossRisk.risk 가 high/medium 이면 reasons · recommendations 를 리포트에 반드시 반영.
