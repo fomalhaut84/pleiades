@@ -52,6 +52,8 @@ class Base(unittest.TestCase):
         self.os_name = "Linux"
         self.timers = ""
         self.timers_fail = False
+        self.user_timers = ""
+        self.user_timers_fail = False
         self.same_disk = True
         self.locked = []
 
@@ -87,10 +89,13 @@ esac
 cat "$f"''')
         tm = self.tmp / "timers.txt"
         tm.write_text(self.timers)
+        um = self.tmp / "user-timers.txt"
+        um.write_text(self.user_timers)
         fail = "exit 1" if self.timers_fail else ""
+        user = "exit 1" if self.user_timers_fail else f'cat "{um}"; exit 0'
         stub(self.bin, "systemctl", f'''{fail}
 case "$*" in
-  *--user*) exit 1 ;;
+  *--user*) {user} ;;
 esac
 cat "{tm}"''')
         pg_dev = "/dev/a" if self.same_disk else "/dev/b"
@@ -304,6 +309,24 @@ class Unknowns(Base):
         r = self.run_script()
         self.assertIn("systemd 타이머 미확인", r.stdout)
         self.assertIn("후보 못 찾음(일부 미확인", r.stdout)
+
+    def test_user_timer_failure_is_not_zero(self):
+        # 회귀: PR #442 Codex P2 — 사용자 타이머를 못 봤는데 "못 찾음" 으로 단정했다
+        self.user_timers_fail = True
+        r = self.run_script()
+        self.assertIn("systemd 타이머 0 (사용자 타이머 미확인)", r.stdout)
+        self.assertIn("후보 못 찾음(일부 미확인", r.stdout)
+
+    def test_user_timer_failure_keeps_system_candidates(self):
+        self.timers = "Mon 2026-11-03 03:00:00 KST 7h left - - restic-db.timer restic-db.service\n"
+        self.user_timers_fail = True
+        r = self.run_script()
+        self.assertIn("systemd 타이머 1 (사용자 타이머 미확인)", r.stdout)
+        self.assertIn("후보 1", r.stdout)
+
+    def test_user_timer_candidates_count(self):
+        self.user_timers = "Mon 2026-11-03 03:00:00 KST 7h left - - db-backup.timer db-backup.service\n"
+        self.assertIn("systemd 타이머 1", self.run_script().stdout)
 
     def test_unreadable_cron_file_is_not_a_candidate(self):
         # 회귀: #441 사전 리뷰 major 3 — 읽지 못한 파일이 "등록 있음" 이 됐다

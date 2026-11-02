@@ -60,11 +60,15 @@ scan_etc() {
   done
 }
 
-timer_count() {  # 유닛 이름만 본다 — 이름에 드러나지 않는 타이머는 놓친다
+TIMERS=미확인; TIMER_NOTE=; TIMER_PARTIAL=0
+scan_timers() {  # 유닛 이름만 본다 — 이름에 드러나지 않는 타이머는 놓친다
   local sys usr
-  sys=$(systemctl list-timers --all --no-legend --no-pager) || { echo 미확인; return; }
-  usr=$(systemctl --user list-timers --all --no-legend --no-pager) || usr=
-  printf '%s\n%s\n' "$sys" "$usr" | count_sched
+  sys=$(systemctl list-timers --all --no-legend --no-pager) || return
+  # ssh 세션은 사용자 서비스 관리자에 못 붙을 수 있다 — 못 본 것을 0 으로 적지 않는다(PR #442 Codex P2)
+  if ! usr=$(systemctl --user list-timers --all --no-legend --no-pager); then
+    usr=; TIMER_NOTE=" (사용자 타이머 미확인)"; TIMER_PARTIAL=1
+  fi
+  TIMERS=$(printf '%s\n%s\n' "$sys" "$usr" | count_sched)
 }
 
 FIND_PARTIAL=0
@@ -147,13 +151,14 @@ else
   ROOT_CRON=미확인; PG_CRON=미확인
 fi
 scan_etc
-TIMERS=$(timer_count)
+scan_timers
 
 SCHED=$ETC_CRON; UNKNOWN=0
 for v in "$USER_CRON" "$ROOT_CRON" "$PG_CRON" "$TIMERS"; do
   if is_int "$v"; then SCHED=$((SCHED + v)); else UNKNOWN=1; fi
 done
 [[ $ETC_FAIL -eq 0 ]] || UNKNOWN=1
+[[ $TIMER_PARTIAL -eq 0 ]] || UNKNOWN=1
 
 is_fresh() { [[ -n "$1" && $1 -lt $FRESH_DAYS ]]; }
 
@@ -168,7 +173,7 @@ verdict_app() {  # $1 = 그 앱의 최신 일수
 }
 
 if [[ $SCHED -gt 0 ]]; then SCHED_TEXT="후보 ${SCHED} — 내용은 사람이 확인"
-elif [[ $UNKNOWN -eq 1 ]]; then SCHED_TEXT="후보 못 찾음(일부 미확인 — sudo -v 뒤 다시)"
+elif [[ $UNKNOWN -eq 1 ]]; then SCHED_TEXT="후보 못 찾음(일부 미확인 — 위 미확인 칸을 본다)"
 else SCHED_TEXT="탐지 범위에서 못 찾음"; fi
 
 DATA_DIR=$PG_HOME
@@ -196,7 +201,7 @@ PG_VER=$(pg_dump --version | grep -oE '[0-9]+' | head -1); [[ -n "$PG_VER" ]] ||
 ETC_NOTE=; [[ $ETC_FAIL -eq 0 ]] || ETC_NOTE=" (읽기 실패 ${ETC_FAIL})"
 
 echo "=== 백업 점검 판정 양식 (이 블록만 세션에 붙인다) ==="
-echo "등록  계정 crontab ${USER_CRON} · root ${ROOT_CRON} · postgres ${PG_CRON} · /etc 항목 ${ETC_CRON}${ETC_NOTE} · systemd 타이머 ${TIMERS}"
+echo "등록  계정 crontab ${USER_CRON} · root ${ROOT_CRON} · postgres ${PG_CRON} · /etc 항목 ${ETC_CRON}${ETC_NOTE} · systemd 타이머 ${TIMERS}${TIMER_NOTE}"
 echo "덤프  전체 ${TOTAL} · 합계 $((BYTES / 1048576)) MB · 남이 읽을 수 있는 파일 ${OPEN_PERM} · 너무 작은 파일 ${TINY}"
 echo "      fin ${FIN_N} ($(age_text "$FIN_MIN")) · fit ${FIT_N} ($(age_text "$FIT_MIN")) · 미분류 ${ETC_N} ($(age_text "$ETC_MIN"))"
 echo "위치  ${DISK} · DB 와 같은 디스크: ${SAME}"
