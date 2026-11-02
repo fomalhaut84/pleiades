@@ -196,7 +196,7 @@ export default function PromptDetailClient({ promptKey, versions, resultCounts, 
       <div className="grid min-w-0 gap-3">
         {promptKey === "system" && (
           <p className="rounded-lg bg-amber-900/40 px-3 py-2 text-xs text-amber-100">
-            저장하고 활성화하면 웹 채팅 · 텔레그램 · 리포트 · 운동 평가에 바로 적용됩니다. 이어지던 대화는 다음 질문부터 새로 시작합니다. 사용자 프로필 · HR 존 · 현재 시각 · 개인 목표는 이 프롬프트 뒤에 자동으로 붙습니다.
+            저장하고 활성화하면 웹 채팅 · 봇 대화 · 리포트 · 운동 평가에 바로 적용됩니다. 이어지던 대화는 다음 질문부터 새로 시작합니다. 사용자 프로필 · HR 존 · 현재 시각 · 개인 목표는 이 프롬프트 뒤에 자동으로 붙습니다.
           </p>
         )}
         {pendingDefault && active && (
