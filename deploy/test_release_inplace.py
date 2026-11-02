@@ -167,6 +167,20 @@ class Server:
         return (self.stub / "log").read_text()
 
 
+class HumanCheckLine(unittest.TestCase):
+    """009 D-4(#418): 양식의 사람 확인 줄은 실제로 응답하는 곳을 가리킨다 — 두 앱 모두 Discord 로 받는다."""
+
+    def test_points_to_discord_commands(self):
+        script = (HERE / "release-inplace.sh").read_text()
+        lines = [l for l in script.splitlines() if "사람 확인" in l and l.lstrip().startswith("form ")]
+        self.assertEqual(len(lines), 1)
+        self.assertNotIn("텔레그램", lines[0])
+        self.assertIn("Discord", lines[0])
+        self.assertIn("!today", lines[0])
+        self.assertIn("현황", lines[0])
+        self.assertNotIn("/today", lines[0])
+
+
 class ReleaseInplace(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
