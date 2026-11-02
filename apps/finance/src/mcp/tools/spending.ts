@@ -219,9 +219,9 @@ export async function createTransaction(args: {
       transactedAt = new Date()
     }
 
-    // transfer 유형은 웹/봇 경로만 사용 (자산 반영 트랜잭션 필요)
-    if (args.type) return toolError('이체 거래는 텔레그램 봇 또는 웹에서 입력해주세요. (자산 잔액 연동 필요)')
-    if (category.type === 'transfer') return toolError('이체 카테고리는 텔레그램 봇 또는 웹에서 입력해주세요.')
+    // transfer 유형은 웹 경로만 사용 (자산 반영 트랜잭션 필요 · 봇에는 이체 입력·수정·삭제가 없다)
+    if (args.type) return toolError('이체 거래는 웹에서 입력해주세요. (자산 잔액 연동 필요)')
+    if (category.type === 'transfer') return toolError('이체 카테고리는 웹에서 입력해주세요.')
 
     const tx = await prisma.transaction.create({
       data: {
@@ -259,7 +259,7 @@ export async function updateTransaction(args: {
   try {
     const existing = await prisma.transaction.findUnique({ where: { id: args.id } })
     if (!existing) return toolError(`거래를 찾을 수 없습니다: ${args.id}`)
-    if (existing.type) return toolError('이체 거래는 웹 또는 텔레그램에서 수정해주세요. (자산 잔액 연동 필요)')
+    if (existing.type) return toolError('이체 거래는 웹에서 수정해주세요. (자산 잔액 연동 필요)')
 
     const data: Record<string, unknown> = {}
 
@@ -312,7 +312,7 @@ export async function deleteTransaction(args: { id: string }) {
       include: { category: { select: { name: true } } },
     })
     if (!existing) return toolError(`거래를 찾을 수 없습니다: ${args.id}`)
-    if (existing.type) return toolError('이체 거래는 웹 또는 텔레그램에서 삭제해주세요. (자산 잔액 역보정 필요)')
+    if (existing.type) return toolError('이체 거래는 웹에서 삭제해주세요. (자산 잔액 역보정 필요)')
 
     await prisma.transaction.delete({ where: { id: args.id } })
     return toolResult(

@@ -179,7 +179,7 @@ export async function sendClosingReview(
   await sendReview(
     label,
     buildClosingPrompt(session),
-    '/ai 에서 직접 질문해주세요.',
+    '웹 AI 분석(/ai)에서 직접 질문해주세요.',
   )
 }
 
@@ -191,6 +191,6 @@ export async function sendWeeklyReview(): Promise<void> {
   await sendReview(
     '📅 주간 리뷰',
     buildWeeklyPrompt(),
-    '웹 AI 분석 페이지 또는 /ai 명령으로 회고를 확인해주세요.',
+    '웹 AI 분석 페이지에서 회고를 확인해주세요.',
   )
 }
