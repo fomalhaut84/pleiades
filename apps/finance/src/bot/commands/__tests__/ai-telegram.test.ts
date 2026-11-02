@@ -159,6 +159,7 @@ describe('T10 AI fallback 분기', () => {
       persist: true,
       intent: 'conversation',
       caller: 'bot:ai_chat',
+      allowWriteTools: true, // pleiades#419 — 대화 경로만 쓰기를 받는다
     })
   })
 

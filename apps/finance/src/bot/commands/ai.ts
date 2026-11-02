@@ -86,6 +86,8 @@ export function decideAiQuestion(question: string, stateKey: StateKey | undefine
     persist: true,
     intent: 'conversation',  // 자유 질문 → sonnet (35-A / #433)
     caller: 'bot:ai_chat',
+    // pleiades#419: 대화로 사용자 확인을 받는 유일한 경로 — 세션이 있어 확인 턴이 이어진다
+    allowWriteTools: true,
   })
     .then(async (result) => {
       if (result.sessionId) chatSessions.set(stateKey, { sessionId: result.sessionId, lastUsed: Date.now() })
