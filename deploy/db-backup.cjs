@@ -3,12 +3,14 @@
 //
 // 사용:  node db-backup.cjs                백업 1회(crontab 이 부른다)
 //        node db-backup.cjs --test-alert   실패 알림 경로만 시험한다
+//        node db-backup.cjs --accept-shrink <fin|fit>   DB 가 정말 줄었다고 사람이 인정한다 — 이 시각 이전 덤프를 크기 기준에서 뺀다
 //
 // 서비스 계정으로 돈다 — 접속 정보는 각 앱 체크아웃의 .env DATABASE_URL · 비밀번호는 명령줄에 두지 않는다(ps 노출).
 // 체크아웃 안에 두지 않는다 — R-8 로 옛 태그를 꺼내면 파일이 사라져 백업이 조용히 멈춘다. 설치는 docs/runbooks/db-backup.md.
 // 검증(크기 · pg_restore -l)을 통과한 덤프만 정식 이름으로 옮기고, 그 앱이 성공했을 때만 오래된 것을 지운다.
 // 실패 = 종료 코드 1 + Discord 알림(앱 이름·사유 코드만). 일요일 성공도 한 번 알린다 — 그 알림이 끊기면 크론이 멈춘 것이다.
-// 크기가 직전의 절반 아래로 줄면 경고하고 옛 덤프를 지우지 않는다 — 비어 버린 DB 가 좋은 백업을 밀어내지 않게.
+// 크기가 남아 있는 매일분 중 가장 큰 것의 절반 아래면 경고하고 옛 덤프를 지우지 않는다 — 비어 버린 DB 가 좋은 백업을 밀어내지 않게.
+// 직전 덤프와 비교하면 줄어든 덤프가 다음 날의 기준이 되어 보호가 하루 만에 풀린다(PR #443 Codex P1). 사람이 인정하거나 크기가 돌아올 때까지 매일 경고한다.
 // 덤프 전체를 읽어 검증하지만 실제 복원을 증명하지는 않는다 — 복원 시험은 런북.
 'use strict'
 
@@ -71,10 +73,22 @@ function prune(dir, app, keep) {
   for (const n of names.slice(keep)) fs.unlinkSync(path.join(dir, n))
 }
 
-function latestSize(dir, app) {
+const acceptFile = (app) => path.join(ROOT, `.accept-shrink-${app}`)
+
+function baselineSize(dir, app) {
   const re = new RegExp(`^${app}-\\d{8}-\\d{4}\\.dump$`)
-  const newest = fs.readdirSync(dir).filter((n) => re.test(n)).sort().pop()
-  return newest ? fs.statSync(path.join(dir, newest)).size : 0
+  let accepted = ''
+  try {
+    accepted = fs.readFileSync(acceptFile(app), 'utf8').trim()
+  } catch {
+    // 인정한 적이 없다
+  }
+  const after = accepted ? `${app}-${accepted}` : ''
+  let max = 0
+  for (const n of fs.readdirSync(dir)) {
+    if (re.test(n) && n > after) max = Math.max(max, fs.statSync(path.join(dir, n)).size)
+  }
+  return max
 }
 
 function syncFile(p) {
@@ -127,7 +141,8 @@ function backupApp(app, appDir) {
       return { ok: false, reason: 'verify' }
     }
 
-    const shrunk = latestSize(daily, app) >= MIN_BYTES && bytes * 2 < latestSize(daily, app)
+    const baseline = baselineSize(daily, app)
+    const shrunk = baseline >= MIN_BYTES && bytes * 2 < baseline
     syncFile(tmp)
 
     const name = `${app}-${stamp(NOW)}.dump`
@@ -248,7 +263,7 @@ async function run() {
   const when = stamp(NOW)
   lines.forEach((l) => console.log(`${when} 통과: ${l}`))
   if (shrunk.length > 0) {
-    const err = await alert(`⚠️ DB 백업 크기 급감: ${shrunk.join(' · ')} — 옛 덤프를 지우지 않았다`)
+    const err = await alert(`⚠️ DB 백업 크기 급감: ${shrunk.join(' · ')} — 옛 덤프를 지우지 않았다. 런북 5절을 본다`)
     console.log(`${when} 경고: 크기 급감 ${shrunk.join(' · ')}`)
     if (err) console.log(`알림 실패: ${err}`)
   }
@@ -268,8 +283,9 @@ async function run() {
 
 async function main() {
   const args = process.argv.slice(2)
-  if (args.length > 1 || (args.length === 1 && args[0] !== '--test-alert')) {
-    console.error('사용법: node db-backup.cjs [--test-alert]')
+  const accept = args[0] === '--accept-shrink' && args.length === 2 && APPS[args[1]]
+  if (!accept && (args.length > 1 || (args.length === 1 && args[0] !== '--test-alert'))) {
+    console.error('사용법: node db-backup.cjs [--test-alert | --accept-shrink <fin|fit>]')
     return 2
   }
   if (process.platform === 'darwin' && !TEST) {
@@ -277,6 +293,11 @@ async function main() {
     return 1
   }
   process.umask(0o077)
+  if (accept) {
+    fs.writeFileSync(acceptFile(args[1]), `${stamp(NOW)}\n`)
+    console.log(`${args[1]} 크기 기준을 초기화했다 — 다음 백업부터 옛 덤프를 다시 정리한다`)
+    return 0
+  }
   if (args[0] === '--test-alert') {
     const err = await alert('🔔 DB 백업 알림 시험')
     console.log(err ? `알림 실패: ${err}` : '알림 보냄')

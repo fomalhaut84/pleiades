@@ -240,6 +240,53 @@ class Failures(Base):
         self.assertIn("크기 급감: fin", r.stdout)
         self.assertEqual(len(self.dumps("daily", "fin-")), 21)
 
+    def seed_large_fin(self):
+        old = [f"fin-202610{d:02d}-0420.dump" for d in range(1, 21)]
+        self.seed("daily", old)
+        for n in old:
+            (self.root / "daily" / n).write_bytes(b"x" * 100000)
+        return old
+
+    def test_shrink_protection_survives_following_days(self):
+        # 회귀: PR #443 Codex P1 — 줄어든 덤프가 기준이 되어 다음 날 옛 덤프를 지웠다
+        old = self.seed_large_fin()
+        self.run_script(now="2026-11-02T04:20:00")
+        r = self.run_script(now="2026-11-03T04:20:00")
+        self.assertIn("크기 급감: fin", r.stdout)
+        names = self.dumps("daily", "fin-")
+        for n in old:
+            self.assertIn(n, names)
+        self.assertEqual(len(names), 22)
+
+    def test_recovered_size_resumes_pruning(self):
+        self.seed_large_fin()
+        self.run_script(now="2026-11-02T04:20:00")
+        r = self.run_script(now="2026-11-03T04:20:00", FAKE_SIZE="100000")
+        self.assertNotIn("크기 급감: fin", r.stdout)
+        self.assertEqual(len(self.dumps("daily", "fin-")), 14)
+
+    def test_accept_shrink_requires_explicit_app_and_resumes_pruning(self):
+        self.seed_large_fin()
+        self.run_script(now="2026-11-02T04:20:00")
+        self.assertEqual(self.run_script("--accept-shrink", "nope").returncode, 2)
+        self.assertEqual(self.run_script("--accept-shrink").returncode, 2)
+        r = self.run_script("--accept-shrink", "fin", now="2026-11-02T09:00:00")
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(stat.S_IMODE((self.root / ".accept-shrink-fin").stat().st_mode), 0o600)
+        self.assertEqual(len(self.dumps("daily", "fin-")), 21)
+        r = self.run_script(now="2026-11-03T04:20:00")
+        self.assertNotIn("크기 급감: fin", r.stdout)
+        self.assertEqual(len(self.dumps("daily", "fin-")), 14)
+
+    def test_accept_shrink_of_one_app_keeps_the_other_protected(self):
+        old = [f"fit-202610{d:02d}-0420.dump" for d in range(1, 21)]
+        self.seed("daily", old)
+        for n in old:
+            (self.root / "daily" / n).write_bytes(b"x" * 100000)
+        self.run_script("--accept-shrink", "fin", now="2026-11-02T09:00:00")
+        r = self.run_script(now="2026-11-03T04:20:00")
+        self.assertIn("크기 급감: fit", r.stdout)
+
     def test_missing_env_is_reported(self):
         (self.home / "pleiades-fin" / "apps" / "finance" / ".env").unlink()
         r = self.run_script()
