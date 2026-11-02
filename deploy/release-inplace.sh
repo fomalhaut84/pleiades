@@ -335,7 +335,7 @@ main() {
   read -r -a procs <<<"$(app_procs)"
   same=$(env_same); n_same=$(grep -c ' same$' <<<"$same"); n_bad=$(grep -cvE ' same$|^$' <<<"$same")
   form "   online ${procs[1]:-0}/3 · mcp $mcp_code · 409 $conflict · 재기동 same $n_same · DIFF/MISSING $n_bad"
-  form "   사람 확인: 웹 화면 · 텔레그램 $([[ $APP == fin ]] && echo '현황' || echo '/today') — 예/아니오 를 덧붙인다"
+  form "   사람 확인: 웹 화면 · Discord $([[ $APP == fin ]] && echo '현황' || echo '!today') — 예/아니오 를 덧붙인다"
   [[ "${procs[1]:-0}" == 3 && "$mcp_code" == 200 && "$conflict" == 0 && "$n_bad" == 0 ]] \
     || stop 4 "C5 — 확인 실패(위 줄) → $(recovery)"
   (umask 077; printf '%s\n' "$V" > "$LAST_OK_FILE") 2>>"$LOG" || true

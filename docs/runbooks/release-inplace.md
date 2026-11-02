@@ -13,7 +13,7 @@
 V=v1.0.2
 ~/pleiades-fin/deploy/release-inplace.sh fin "$V" --dry-run   # A·B·C1 검사만 — 바꾸지 않는다(먼저 한 번)
 ~/pleiades-fin/deploy/release-inplace.sh fin "$V"             # 확인 [y/N] 뒤 C2~C5 → 판정 양식
-#  fin 결과가 "결과: 통과" 이고 웹·텔레그램 현황 확인 뒤
+#  fin 결과가 "결과: 통과" 이고 웹·Discord 현황 확인 뒤
 ~/pleiades-fit/deploy/release-inplace.sh fit "$V"
 ```
 
@@ -69,7 +69,7 @@ bash ~/pleiades-private/release-inplace.sh fit "$V" --checkout ~/pleiades-fit
 - **창 안 오류 줄의 한계:** pm2 는 쓰기 덩어리마다 시각을 붙여 여러 줄 스택의 뒷줄은 세지 않는다(적게 센다) · 시각은 pm2 데몬 TZ 기준.
 - 봇 `409` 는 재기동 뒤의 텔레그램 getUpdates 충돌 줄만 센다(숫자 409 · 옛 줄 제외).
 - 스크립트가 멈추는 것(사람 판단 없이): 마이그레이션 · `mcp-config.json` 변경 · HEAD 가 태그가 아님 · 체크아웃 dirty · 플랫폼 설정 권한 ≠ 600 · 도는 프로세스의 `PLEIADES_ENV_FILE` 이 다름 · deploy.sh rc ≠ 0 · C5(3 online · mcp 200 · 409 0 · 재기동 `same`) 실패.
-- **사람이 하는 것:** C0 시각 고르기 · 양식의 "사람 확인" 줄(웹 화면 · 텔레그램 `현황`/`/today`) · 릴리즈별 확인(C6 처럼 그 릴리즈에 있으면).
+- **사람이 하는 것:** C0 시각 고르기 · 양식의 "사람 확인" 줄(웹 화면 · Discord `현황`/`!today`) · 릴리즈별 확인(C6 처럼 그 릴리즈에 있으면).
 - 아래 A~C5 절은 **스크립트가 하는 일의 설명**이자 스크립트가 없을 때의 수동 경로다. 둘이 다르면 스크립트가 정본이다(테스트 `python3 -m unittest discover -s deploy`).
 
 > **정정 (2026-10-26 · #278) — A 의 pathspec.** 아래 A 의 `'apps/*/prisma/migrations'` · `'apps/*/.env.example'` · `'apps/*/package-lock.json'` 은 **언제나 0 을 낸다** — 와일드카드 pathspec 은 디렉터리 접두로 맞지 않는다(실측: 이 저장소 이력에서 0 ↔ 앱 경로 직접 68). 스크립트 테스트가 잡았다. `v1.0.0 → v1.0.1` 은 앱 경로로 다시 재도 전부 0 — 그날 판정은 맞았다(`deploy.sh` 의 DB 대조도 2차로 막는다). 아래 명령은 앱 경로로 고쳤다. 되돌리기: 문구 (**즉시**).
@@ -195,7 +195,7 @@ pm2 logs "pleiades-$APP-bot" --lines 60 --nostream 2>&1 | grep -ciE '409|conflic
 pm2 jlist | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const l=JSON.parse(s.slice(s.indexOf("[")));for(const p of l.filter(x=>x.name.startsWith("pleiades-"))){const v=p.pm2_env.PLEIADES_ENV_FILE??(p.pm2_env.env||{}).PLEIADES_ENV_FILE;console.log(p.name,v===undefined?"MISSING":v===process.env.PLEIADES_ENV_FILE?"same":"DIFF")}})'
 ```
 
-그리고 사람이 확인한다: 웹 화면(fin 계좌 · fit 오늘) · 텔레그램 fin **`현황`**(슬래시 없이 · `portfolio.ts:150`) 또는 fit **`/today`**(`today.ts:5`) — 둘 다 등록된 명령이고 DB 읽기만(AI · 외부 시세 · 쓰기 없음). **`/브리핑` 은 쓰지 않는다** — fin 은 `/briefing`·`브리핑` 만 등록하고, 브리핑은 `askAdvisor` 를 거쳐(재시도 · 최대 15분) 봇 확인과 AI 확인(C6)이 섞인다(PR #249 Codex P2).
+그리고 사람이 확인한다: 웹 화면(fin 계좌 · fit 오늘) · Discord fin **`현황`**(슬래시 없이 · `discord/router.ts`) 또는 fit **`!today`**(`discord/router.ts`) — 둘 다 등록된 명령이고 DB 읽기만(AI · 외부 시세 · 쓰기 없음). **`/브리핑` 은 쓰지 않는다** — fin 은 `/briefing`·`브리핑` 만 등록하고, 브리핑은 `askAdvisor` 를 거쳐(재시도 · 최대 15분) 봇 확인과 AI 확인(C6)이 섞인다(PR #249 Codex P2).
 
 **fit 은 fin 이 C5 를 통과한 뒤 같은 셸에서 B(`APP=fit`)부터** 다시 — C1 은 unset·export 가 이미 됐으니 확인 줄만, C2 도 `APP=fit` 으로.
 
@@ -258,7 +258,7 @@ C1 셸 키 0 · platform 600 · 도는 6 same: 예/아니오
 C2 v1.0.1 · 깨끗: 예/아니오
 C4 plan rc <n> · 기본 실행 rc <n> · <초>s · 완료 안내: 예/아니오        (rc≠0 이면 이유 한 줄)
 C5 프로브 오류 응답 <수>(<처음 HH:MM:SS>~<마지막 HH:MM:SS>) · 창 안 오류 줄 web <n> bot <n> mcp <n>
-   3 online · mcp <코드> · 409 0 · 재기동 6 same: 예/아니오 · 웹: 예/아니오 · 현황|/today: 예/아니오
+   3 online · mcp <코드> · 409 0 · 재기동 6 same: 예/아니오 · 웹: 예/아니오 · 현황|!today: 예/아니오
 C6 (fit 뒤 한 번) 임시 완화 제거 · 남은 항목 <n> · fin AI 응답·비용 줄: 예/아니오 · fit AI 응답: 예/아니오 · TA 가이드 문구: 예/아니오/아직
    used 에 model 포함·고정 ID 만: 예/아니오 · 드리프트 fin <n> fit <n> · 웹 'AI 실패' 필터: 예/아니오 · 💸 알림: 없음/왔음(cost <$>)
    벤치마크 적재(06:15 뒤): 완료/일부 실패/아직 · 주간 리뷰 알파: 예/아니오/아직
