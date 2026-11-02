@@ -396,6 +396,7 @@ git ls-remote https://github.com/fomalhaut84/myFinance.git refs/heads/dev
 > **확정 (2026-10-01 · #120 · M-3 · 사용자 결정 — 둘 다 권고안).**
 > **Q52 → 서비스 CI 와 같은 단계만 필수.** `.github/workflows/apps-ci.yml` 의 `apps-fin`·`apps-fit` job(서비스 CI 단계 그대로 · 러너 postgres:16 · secrets 0 · 워크플로우 `paths` 필터 없음)을 dev·main ruleset 필수 체크에 더한다(머지 후 · 사용자 확인 뒤). 서비스 fin CI 에 없는 vitest 는 별 job `apps-fin-test` 로 **비필수**.
 > **Q57 → 고치지 않는다.** `apps/*` 의 서비스 결함은 수용으로 고쳐져 온다. pleiades CI 를 막으면 그 체크를 비필수로 내리고 pleiades 이슈에 기록한다. 예외는 M-5 대상 파일. `security-audit.yml` 은 이미 `apps/*` lock 을 포함하지 않는다(무변경).
+> **해제 (2026-11-02 · T-7 · 사용자 · #439).** 전환이 끝나 수용이 종료됐다 — `apps/*` 의 결함은 pleiades 가 고친다(007 §6). §4-S 정기 수용·Q54b 도 끝났다. 되돌리기: 문구 (**즉시**).
 > 되돌리기: 워크플로우 파일 삭제 · ruleset 에서 체크 제거 — **즉시**.
 
 > **정정 (2026-10-15 · #127 · 사용자).** **Q60 의 정의가 정해졌다 — 전환 = 두 서비스 종료 + pleiades 단독 서비스**(두 앱이 pleiades 모듈로 내재화된 뒤 · §0 정정). 그 안의 **002 Q2(독립 배포 포기)는 "포기한다"** 로 답을 받았다. 남은 미결은 **어떻게**(배포 경로 · DB 이전 · 서비스 저장소 보관 · 시점)뿐이고, 권고·우선(별도 스펙 007 · 첫 릴리즈 전 필수)은 그대로다. 되돌리기: 문구 (**즉시**).
