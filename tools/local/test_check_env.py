@@ -185,6 +185,15 @@ class RunSh(Base):
                 self.assertEqual(r.returncode, 1)
                 self.assertIn("run.sh: 중단", r.stderr)
 
+    def test_discord_allowlists_are_read_from_process_env(self):
+        hook = "https://discord.example/api/webhooks/1/verify"
+        (self.root / ".env").write_text(f"DISCORD_CHANNEL_ID_FITNESS=100\nDISCORD_WEBHOOK_FITNESS={hook}\n")
+        cmd = ("node", "-e", "console.log('ran')")
+        self.assertEqual(self.run_sh(*cmd).returncode, 1)
+        r = self.run_sh(*cmd, PLEIADES_VERIFY_DISCORD_IDS="100",
+                        PLEIADES_VERIFY_DISCORD_WEBHOOK_SHA256=c.token_hash(hook).upper())  # 대문자 해시도 같은 값이다
+        self.assertEqual((r.returncode, r.stdout.strip()), (0, "ran"), r.stderr)
+
     def test_violation_blocks(self):
         r = self.run_sh("node", "-e", "console.log('should-not-run')", GARMIN_EMAIL="me@x.com")
         self.assertEqual(r.returncode, 1)
@@ -318,6 +327,87 @@ class Discord(Base):
         self.root_env(f"DISCORD_BOT_TOKEN_FITNESS={self.VERIFY_FIT}\n")
         lines = c.discord_hash_lines({}, cwd=self.root / "apps/fitness", root=self.root)
         self.assertEqual(lines, [f"DISCORD_BOT_TOKEN_FITNESS {c.token_hash(self.VERIFY_FIT)}"])
+
+
+class DiscordTargets(Base):
+    """#359 · I-5′ — 실효 Discord 채널·사용자 ID 와 웹훅은 검증용 허용 목록에 있어야 한다 · 값은 출력하지 않는다."""
+
+    HOOK = "https://discord.example/api/webhooks/1/verify"
+    PROD_HOOK = "https://discord.example/api/webhooks/2/PROD-SECRET"
+    OPTS = {"discord_ids": {"100", "200"}, "webhook_hashes": {c.token_hash(HOOK)}}
+
+    def found(self, env=None, **opts):
+        return [p for p in self.problems("fit", {**GOOD_FIT, **(env or {})}, **{**self.OPTS, **opts}) if p.key != "claude"]
+
+    def dkeys(self, env=None, **opts):
+        return {p.key for p in self.found(env, **opts)}
+
+    def root_env(self, text):
+        (self.root / ".env").write_text(text)
+
+    def test_nothing_set_passes_without_allowlists(self):
+        self.assertEqual(self.dkeys(discord_ids=set(), webhook_hashes=set()), set())
+
+    def test_verify_ids_and_webhook_pass(self):
+        self.root_env(f"DISCORD_CHANNEL_ID_FITNESS=100\nDISCORD_ALLOWED_USER_IDS=200, 100\nDISCORD_WEBHOOK_FITNESS={self.HOOK}\n")
+        self.assertEqual(self.dkeys(), set())
+
+    def test_production_channel_is_refused(self):
+        self.root_env("DISCORD_CHANNEL_ID_FITNESS_CHAT=999\n")
+        self.assertEqual(self.dkeys(), {"DISCORD_CHANNEL_ID_FITNESS_CHAT"})
+
+    def test_one_unknown_user_in_list_is_refused_by_count_only(self):
+        self.root_env("DISCORD_ALLOWED_USER_IDS=100,888\n")
+        found = self.found()
+        self.assertEqual({p.key for p in found}, {"DISCORD_ALLOWED_USER_IDS"})
+        self.assertIn("1개", found[0].reason)
+        self.assertNotIn("888", found[0].reason)
+
+    def test_production_webhook_is_refused_without_printing_value(self):
+        self.root_env(f"DISCORD_WEBHOOK_ADMIN={self.PROD_HOOK}\n")
+        found = self.found()
+        self.assertEqual({p.key for p in found}, {"DISCORD_WEBHOOK_ADMIN"})
+        self.assertNotIn("PROD-SECRET", str(found[0]))
+
+    def test_empty_allowlists_refuse_set_values(self):
+        # 허용 목록을 export 하지 않으면 통과가 아니라 거부다 (fail-closed)
+        self.root_env(f"DISCORD_CHANNEL_ID_FITNESS=100\nDISCORD_WEBHOOK_FITNESS={self.HOOK}\n")
+        self.assertEqual(self.dkeys(discord_ids=set(), webhook_hashes=set()), {"DISCORD_CHANNEL_ID_FITNESS", "DISCORD_WEBHOOK_FITNESS"})
+
+    def test_blank_values_pass(self):
+        self.root_env("DISCORD_CHANNEL_ID_FITNESS=\nDISCORD_ALLOWED_USER_IDS= , \nDISCORD_WEBHOOK_FITNESS=\n")
+        self.assertEqual(self.dkeys(), set())
+
+    def test_shell_value_wins_over_file(self):
+        self.root_env("DISCORD_CHANNEL_ID_FITNESS=999\n")
+        self.assertEqual(self.dkeys({"DISCORD_CHANNEL_ID_FITNESS": "100"}), set())
+        self.root_env("DISCORD_CHANNEL_ID_FITNESS=100\n")
+        self.assertEqual(self.dkeys({"DISCORD_CHANNEL_ID_FITNESS": "999"}), {"DISCORD_CHANNEL_ID_FITNESS"})
+
+    def test_pleiades_env_file_is_the_one_checked(self):
+        self.root_env(f"DISCORD_WEBHOOK_FITNESS={self.HOOK}\n")
+        other = self.root / "other.env"
+        other.write_text(f"DISCORD_WEBHOOK_FITNESS={self.PROD_HOOK}\n")
+        self.assertEqual(self.dkeys({"PLEIADES_ENV_FILE": str(other)}), {"DISCORD_WEBHOOK_FITNESS"})
+
+    def test_commented_line_is_ignored(self):
+        self.root_env("# DISCORD_CHANNEL_ID_FITNESS_CHAT=999\n")
+        self.assertEqual(self.dkeys(), set())
+
+    def test_webhook_whitespace_variant_matches(self):
+        self.root_env(f'DISCORD_WEBHOOK_FITNESS="{self.HOOK} "\n')
+        self.assertEqual(self.dkeys(), set())
+
+    def test_unreadable_platform_file_reports_one_problem(self):
+        (self.root / "dir.env").mkdir()
+        keys = [p.key for p in self.found({"PLEIADES_ENV_FILE": str(self.root / "dir.env")})]
+        self.assertEqual(sorted(keys), ["DISCORD_*", "PLEIADES_ENV_FILE"])
+
+    def test_hash_lines_cover_webhooks_without_values(self):
+        self.root_env(f"DISCORD_WEBHOOK_FITNESS={self.PROD_HOOK}\n")
+        lines = c.discord_hash_lines({}, cwd=self.root / "apps/fitness", root=self.root)
+        self.assertEqual(lines, [f"DISCORD_WEBHOOK_FITNESS {c.token_hash(self.PROD_HOOK)}"])
+        self.assertNotIn("PROD-SECRET", "\n".join(lines))
 
 
 if __name__ == "__main__":

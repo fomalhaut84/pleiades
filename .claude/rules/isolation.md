@@ -34,6 +34,7 @@
 | **I-4** | 서비스 텔레그램 봇 토큰 | 어떤 `.env`·secret·명령줄에도 두지 않는다 · 로컬 기동은 검증 봇 토큰만(006 L-2·L-4) | 헬퍼(#104) |
 | **I-4′** | 운영 Discord 봇 토큰 (009 C-9 · #328) | **로컬 실효 env**(셸 · `PLEIADES_ENV_FILE` · 루트 `.env`)에 두지 않는다 — 운영 서버 gateway 와 같은 토큰 두 세션(009 R9) · 로컬 기동은 검증 Discord 봇만 · 서버 플랫폼 설정(`~/pleiades-platform.env`)은 범위 밖 | `check_env.py`(허용 목록 SHA-256) |
 | **I-5** | 텔레그램 수신자 | `ALLOWED/ADMIN_CHAT_IDS` = 검증 채팅만 | — |
+| **I-5′** | 로컬 Discord 대상 (#359 · 009 §7) | **로컬 실효 env** 의 `DISCORD_CHANNEL_ID_*`·`DISCORD_ALLOWED_USER_IDS`·`DISCORD_WEBHOOK_*` = 검증용만 · 비면 통과 · 웹훅은 SHA-256 허용 목록 · `run.sh` 경유일 때만 검사된다 | `check_env.py`(허용 목록) |
 | **I-6** | Garmin 계정 | `GARMIN_*` 비움 · `.garmin-tokens/` 반입 금지 (fit 웹은 기동만으로 싱크 cron 을 건다) | — |
 | **I-7** | 서비스 DB | 서비스 DB 접속 정보를 pleiades 어디에도 두지 않는다 · CI DB 는 러너 컨테이너 | — |
 | **I-8** | 외부 API·쿼터 | Whooing·MFDS 비움 · **advisor 차단**(fit `CLAUDE_BIN` 없는 경로 · fin PATH shim — 006 L-7) · M-1 PR 은 draft | shim(#104) |

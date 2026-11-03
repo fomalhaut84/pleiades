@@ -48,7 +48,7 @@ def render(template: str, *, pguser: str) -> str:
 
 
 def validate(app: str, text: str, root: Path) -> list[check_env.Problem]:
-    """파일만 본다 — 셸 env·봇 토큰 id 는 run.sh 가 실행 때 다시 본다."""
+    """파일만 본다 — 셸 env·봇 토큰 id·플랫폼 값은 run.sh 가 실행 때 다시 본다."""
     # 앱 디렉터리 밖 임시 파일로 파싱한다 — 안에 두면 check_env 의 `.env.*` 부재 검사에 걸린다
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d) / ".env"
@@ -56,7 +56,7 @@ def validate(app: str, text: str, root: Path) -> list[check_env.Problem]:
         env = check_env.parse_dotenv(tmp)
     env["PATH"] = str(root / "bin")  # fin advisor 검사는 run.sh 가 넣는 shim PATH 기준
     return check_env.problems(app, env, cwd=root / "apps" / check_env.APP_DIRS[app], root=root,
-                              bot_ids=set(), chat_ids=set(), other_token_id="")
+                              bot_ids=set(), chat_ids=set(), other_token_id="", check_platform=False)
 
 
 def main(argv: list[str] | None = None) -> int:

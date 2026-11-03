@@ -8,6 +8,7 @@
 #         · PM2_HOME = <root>/.pm2-local 고정(호출자 값 무시 — 로컬 pm2 는 전용 데몬만 · #171)
 #         → check_env.py 통과 시에만 실행.
 # Discord 봇 토큰이 실효 env 에 있으면 PLEIADES_VERIFY_DISCORD_TOKEN_SHA256=<hash,…> 도 필요하다(검증 봇만 · 009 D-G · #328).
+# Discord 채널·사용자 ID 는 PLEIADES_VERIFY_DISCORD_IDS=<id,…> · 웹훅은 PLEIADES_VERIFY_DISCORD_WEBHOOK_SHA256=<hash,…> (검증용만 · I-5′ · #359).
 # 선택 env: OTHER_TOKEN_ID(다른 앱 봇 id — 없으면 다른 앱 .env 에서 읽는다 · 같은 봇 금지) · PLEIADES_ROOT(테스트용)
 set -euo pipefail
 
