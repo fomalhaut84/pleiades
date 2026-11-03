@@ -10,12 +10,37 @@
 export type MessageRef = string;
 
 /**
- * 채널별 불투명 markup (§5-1 "components 옵션 · 텔레그램 구현만").
- * `TelegramTransport` 는 이 값을 `reply_markup` 으로 그대로 전달한다 — 예: grammY `InlineKeyboard` 인스턴스.
+ * 채널별 markup — `ButtonRows` 또는 텔레그램 `inline_keyboard`(grammY `InlineKeyboard` 인스턴스 포함 · 009 D-5 제거 전까지).
+ * `TelegramTransport` 는 `ButtonRows` 를 변환하고 그 밖의 값은 `reply_markup` 으로 그대로 전달한다.
  * `object` 인 이유: `Record<string, unknown>` 은 클래스 인스턴스(`InlineKeyboard`)를 받지 못한다 — TS 는 클래스에 암묵적
  * index signature 를 주지 않아 TS2322 (사전 리뷰 M-3 · fit grammy 1.42.0 프로브). 원시값은 여전히 거부된다.
  */
 export type Components = object;
+
+/**
+ * 채널 중립 버튼 (009 D-5 A4). `action` 은 눌렀을 때 돌아오는 값(Discord `custom_id` · 텔레그램 `callback_data`) · `url` 은 링크 버튼.
+ * `@pleiades/chat` 의 `Button` 과 같은 모양이다 — chat 이 notify 를 의존하므로 chat 타입을 가져오지 못한다.
+ */
+export interface NotifyButton {
+  label: string;
+  action?: string;
+  url?: string;
+}
+export type ButtonRows = readonly (readonly NotifyButton[])[];
+
+/**
+ * 중립 버튼 → 텔레그램 `inline_keyboard`. 배열이 아닌 행은 그대로 두어 받는 쪽 검증이 오류로 낸다.
+ * `action`·`url` 을 함께 주면 한쪽이 조용히 사라지므로 던진다(`@pleiades/chat` `toComponents` 와 같은 계약).
+ */
+export const toInlineKeyboardRows = (rows: readonly unknown[]): unknown[] =>
+  rows.map((row) => {
+    if (!Array.isArray(row)) return row;
+    return row.map((raw) => {
+      const b = raw as Partial<NotifyButton> | null;
+      if (b?.action !== undefined && b.url !== undefined) throw new Error('@pleiades/notify: 버튼은 action 과 url 중 하나만 갖는다');
+      return { text: b?.label, ...(b?.action === undefined ? {} : { callback_data: b.action }), ...(b?.url === undefined ? {} : { url: b.url }) };
+    });
+  });
 
 /**
  * 전송 본문 (1a-1 계획 D-1 · 003 은 이 타입을 참조만 하고 정의하지 않았다).
