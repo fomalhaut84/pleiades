@@ -53,6 +53,14 @@ class WriteEnvTest(unittest.TestCase):
                 if "SECRET" in k or k == "AUTH_PIN":
                     self.assertNotIn(v, out + err)
 
+    # 회귀: #359 사전 리뷰 major — 템플릿 검사가 루트 .env 의 Discord 값을 허용 목록 없이 대조해 멈췄다
+    def test_root_platform_values_do_not_block_template_check(self):
+        (self.root / ".env").write_text(
+            "DISCORD_WEBHOOK_FITNESS=https://discord.example/api/webhooks/1/x\n"
+            "DISCORD_CHANNEL_ID_FITNESS=100\nDISCORD_BOT_TOKEN_FITNESS=token\n")
+        rc, _, err = self.run_main("fit")
+        self.assertEqual(rc, 0, err)
+
     def test_secrets_differ_per_slot_and_run(self):
         text = "A=__SECRET__\nB=__SECRET__\nP=__PIN__\nU=__PGUSER__\n"
         r1, r2 = w.render(text, pguser="me"), w.render(text, pguser="me")
