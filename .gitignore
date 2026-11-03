@@ -15,6 +15,8 @@ __pycache__/
 tools/import/.venv/
 # pleiades 루트 .env — 플랫폼 키(NOTIFY_* · DISCORD_WEBHOOK_*) · 비밀 (#143). 앱 .env 는 각 앱 .gitignore 가 막는다
 /.env
+# 서버에서 사용자가 돌릴 임시 스크립트 — 커밋하지 않는다(비밀·서버 수치를 넣지 않는다)
+/.server-scripts/
 # 로컬 pm2 전용 데몬 (#171 · run.sh 가 PM2_HOME 으로 고정)
 /.pm2-local/
 # deploy.sh 준비 표지(서버 체크아웃 · #206)
