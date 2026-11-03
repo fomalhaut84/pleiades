@@ -71,6 +71,10 @@ echo "$ts: 매수 14090원 · id 4091" >> "$HOME/.pm2/logs/pleiades-fin-bot-out-
 [[ -n "${STUB_SLEEP:-}" ]] && sleep "$STUB_SLEEP"
 echo "$ts: ⚠ Warning: Next.js inferred your workspace root" >> "$HOME/.pm2/logs/pleiades-fin-web-error-108.log"
 echo "$ts: TypeError: boom" >> "$HOME/.pm2/logs/pleiades-fin-web-error-114.log"
+# 회귀: #373 — gateway 정상 기동 줄은 warn 이라 stderr 로 가지만 오류가 아니다
+echo "$ts: [discord-fin] gateway 준비 완료" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
+echo "$ts: [discord-fin] gateway 세션 이어받음" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
+[[ -n "${STUB_BOT_ERROR:-}" ]] && echo "$ts: [discord-fin] gateway 오류: boom" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
 echo "DATABASE_URL=postgresql://svc:DEPLOYSECRET@localhost/db"
 rc=${STUB_DEPLOY_RC:-0}
 if [[ $rc -eq 0 ]]; then echo "=== 완료: $1 · $(git describe --tags --exact-match HEAD) ==="; fi
@@ -218,6 +222,7 @@ class ReleaseInplace(unittest.TestCase):
         self.assertIn("online 3/3 · mcp 200 · 409 0", out)
         # 회귀: #276 — 오류 로그 파일명에 pm2 id 가 붙는다. 창 안 2줄(경고 1)을 두 파일에서 센다
         self.assertIn("web 2(경고 1)", out)
+        self.assertIn("bot 0(경고 0)", out)  # 회귀: #373 — 정상 기동 줄은 세지 않는다
         # 화면에는 홈 경로·로그 원문·셸 비밀이 없다
         self.assertNotIn(str(self.srv.home), out + r.stderr)
         self.assertNotIn("DEPLOYSECRET", out + r.stderr)
@@ -342,6 +347,13 @@ class ReleaseInplace(unittest.TestCase):
         self.assertEqual(r.returncode, 4)
         self.assertIn("mcp 502", r.stdout)
         self.assertIn("R-8: release-inplace.sh fin v1.0.0", r.stdout)
+
+    def test_c5_counts_real_bot_error_but_not_normal_gateway_lines(self):
+        # 회귀: #373 — 정상 기동 줄만 뺀다. 같은 파일의 진짜 오류는 그대로 센다
+        self.srv.release("v1.0.1")
+        r = self.srv.run("fin", "v1.0.1", "--yes", STUB_BOT_ERROR="1")
+        self.assertIn("bot 1(경고 0)", r.stdout)
+        self.assertEqual(r.returncode, 0, r.stdout)
 
     def test_c5_counts_409(self):
         # 회귀: M4 — 재기동 뒤 getUpdates 충돌만 센다(옛 409 줄 · 금액 14090 은 0)
