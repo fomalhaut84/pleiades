@@ -6,11 +6,12 @@
 #        db-offsite-pull.sh --accept-shrink <fin|fit>   DB 가 정말 줄었다고 사람이 인정한다
 #
 # 파이가 가져가는 방식이라 서버에는 파이 접속 정보가 없다. 복호화 키는 여기에도 두지 않는다.
+# 서버 쪽은 db-offsite-serve.sh 가 forced command 로 받는다(list · get).
 # 설정은 ~/pleiades-offsite/config: HOST · PORT · REMOTE_USER · SSH_KEY · DEST · DISCORD_WEBHOOK.
 # 실패 = 종료 코드 1 + Discord 알림(사유 코드만). 일요일 성공도 알린다 — 그 알림이 끊기면 파이가 멈춘 것이다.
 #
 # 침해된 서버도 파일을 보낼 수는 있다 — 받은 것으로 정상 사본이 밀려나지 않게 막는다(PR 전 리뷰 재현).
-#  - 날짜가 오늘 뒤인 이름은 거부하고 16일보다 옛 이름은 저장하지 않는다 · 한 번에 앱별 16개까지만 받는다
+#  - 날짜가 오늘 뒤인 이름은 거부하고 16일보다 옛 이름은 받지 않는다 · 한 번에 앱별 16개 · 총 600 MB 까지만 받는다
 #  - 지우는 수는 그 실행에서 새로 받은 수 이하 · 최대 2개 · 월별 첫 파일 12개는 30개와 별도로 남긴다
 #  - 새 파일이 보관분 최대의 절반 아래면 경고하고 그 앱은 지우지 않는다
 set -u
@@ -21,10 +22,12 @@ MAX_NEW=16
 MAX_DELETE=2
 MAX_AGE_DAYS=16
 MIN_BASELINE=1024
-# 전송 총량 상한 = 속도 × 시간(2 MB/s × 300 s = 600 MB). 파일 수·크기를 서버가 속여도 이 값을 넘지 못한다.
-# 여유 공간은 그보다 크게 요구한다 — 받는 중에 파이의 다른 서비스가 쓸 공간까지 채우지 않게
-TRANSFER_KBPS=2048
-TRANSFER_SECONDS=300
+# 한 실행의 전송 총량 상한. 여유 공간은 그보다 크게 요구한다 — 받는 중에 파이의 다른 서비스가 쓸 공간까지 채우지 않게
+TRANSFER_MAX_BYTES=$((600 * 1024 * 1024))
+[[ "${PLEIADES_TEST:-}" == 1 && -n "${PULL_MAX_BYTES:-}" ]] && TRANSFER_MAX_BYTES=$PULL_MAX_BYTES
+LIST_MAX_BYTES=65536
+LIST_SECONDS=60
+FILE_SECONDS=300
 MIN_FREE_KB=$((1024 * 1024))
 BASE="${PLEIADES_OFFSITE_BASE:-$HOME/pleiades-offsite}"
 export TZ=Asia/Seoul
@@ -126,46 +129,55 @@ mkdir -p "$INCOMING" || fail write
 free_kb=$(df -Pk "$DEST" | awk 'NR==2{print $4}')
 [[ "$free_kb" =~ ^[0-9]+$ && "$free_kb" -ge "$MIN_FREE_KB" ]] || fail disk
 
-# 이미 가진 파일은 받지 않는다 — 서버가 옛 사본을 바꿔치기할 수 없다. --delete 없음.
-# 규칙은 앞에서부터 먼저 맞는 것이 이긴다 — 가진 파일 제외를 허용 앞에 둔다. 받은 이름은 아래에서 다시 거른다
-ssh_cmd="ssh -i $SSH_KEY -p $PORT -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20"
-held=()
-for f in "$DEST"/*.dump.age; do [[ -e "$f" ]] && held+=("--exclude=/${f##*/}"); done
-timeout "$TRANSFER_SECONDS" rsync -r --timeout=60 --max-size=500M --bwlimit="$TRANSFER_KBPS" "${held[@]+"${held[@]}"}" --include='/fin-*.dump.age' --include='/fit-*.dump.age' --exclude='*' \
-  -e "$ssh_cmd" "$REMOTE_USER@$HOST:/" "$INCOMING/" >/dev/null 2>&1
-rc=$?
-((rc == 0)) || fail "rsync(rc=$rc)"
+# rsync 를 쓰지 않는다 — 지원 종료 OS 의 패치 없는 rsync 에 서버가 보낸 데이터를 맡기지 않는다.
+# ssh 로 목록을 받아 검사한 뒤 받을 개수를 정하고, 파일마다 남은 전송 한도까지만 읽는다
+ssh_args=(-n -i "$SSH_KEY" -p "$PORT" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ForwardAgent=no -o ForwardX11=no)
+LIST="$INCOMING/.list"
+timeout "$LIST_SECONDS" ssh "${ssh_args[@]}" "$REMOTE_USER@$HOST" list 2>/dev/null | head -c "$((LIST_MAX_BYTES + 1))" >"$LIST"
+rc=("${PIPESTATUS[@]}")
+(($(wc -c <"$LIST") <= LIST_MAX_BYTES)) || fail badfile
+((rc[1] == 0)) || fail write
+((rc[0] == 0)) || fail "ssh(rc=${rc[0]})"
 
 TODAY=$(day 0)
 YESTERDAY=$(day -1)
 OLDEST=$(day "-$MAX_AGE_DAYS")
 new_fin=0 new_fit=0 skipped=0
-# 전부 검사한 뒤에 옮긴다 — 나쁜 파일이 하나라도 있으면 그 실행에서는 아무것도 보관하지 않는다
-for f in "$INCOMING"/* "$INCOMING"/.[!.]*; do
-  [[ -e "$f" || -L "$f" ]] || continue
-  name=${f##*/}
-  [[ -f "$f" && ! -L "$f" && "$name" =~ ^(fin|fit)-([0-9]{4})(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])-([01][0-9]|2[0-3])[0-5][0-9]\.dump\.age$ ]] || fail badfile
-  app=${name%%-*}
+wanted=()
+# 받기 전에 목록 전체를 검사한다 — 나쁜 이름이 하나라도 있으면 그 실행에서는 아무것도 받지 않는다
+while IFS= read -r name; do
+  [[ -n "$name" ]] || continue
+  [[ "$name" =~ ^(fin|fit)-([0-9]{4})(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])-([01][0-9]|2[0-3])[0-5][0-9]\.dump\.age$ ]] || fail badfile
   d=${name:4:8}
   [[ "$d" > "$TODAY" ]] && fail badfile
   if [[ "$d" < "$OLDEST" ]]; then
-    rm -f "$f"
     skipped=$((skipped + 1))
     continue
   fi
-  if [[ -e "$DEST/$name" ]]; then
-    rm -f "$f"
-    continue
-  fi
-  [[ "$(head -c 21 "$f" | tr -d '\0')" == age-encryption.org/v1 ]] || fail badfile
-  if [[ "$app" == fin ]]; then new_fin=$((new_fin + 1)); else new_fit=$((new_fit + 1)); fi
-done
+  [[ -e "$DEST/$name" ]] && continue
+  if [[ "${name%%-*}" == fin ]]; then new_fin=$((new_fin + 1)); else new_fit=$((new_fit + 1)); fi
+  wanted+=("$name")
+done < <(LC_ALL=C sort -u "$LIST")
 ((new_fin <= MAX_NEW && new_fit <= MAX_NEW)) || fail toomany
 
-for f in "$INCOMING"/*.dump.age; do
-  [[ -e "$f" ]] || continue
-  chmod 600 "$f"
-  mv -n "$f" "$DEST/${f##*/}" || fail write
+remaining=$TRANSFER_MAX_BYTES
+for name in "${wanted[@]+"${wanted[@]}"}"; do
+  # 한도보다 1바이트 더 읽어 넘쳤는지 알아본다. 이름은 위 정규식을 통과한 값뿐이다
+  timeout "$FILE_SECONDS" ssh "${ssh_args[@]}" "$REMOTE_USER@$HOST" "get $name" 2>/dev/null | head -c "$((remaining + 1))" >"$INCOMING/$name"
+  rc=("${PIPESTATUS[@]}")
+  size=$(wc -c <"$INCOMING/$name" | tr -d ' ')
+  ((size <= remaining)) || fail toobig
+  # 쓰기 실패를 놓치면 잘린 파일이 보관되고, 이미 있는 이름이라 다시 받지도 않는다
+  ((rc[1] == 0)) || fail write
+  ((rc[0] == 0)) || fail "ssh(rc=${rc[0]})"
+  remaining=$((remaining - size))
+  [[ "$(head -c 21 "$INCOMING/$name" | tr -d '\0')" == age-encryption.org/v1 ]] || fail badfile
+done
+
+# 내용을 디스크에 내린 뒤에 이름을 준다 — 전원이 끊겨도 빈 파일이 정식 이름으로 남지 않게
+sync
+for name in "${wanted[@]+"${wanted[@]}"}"; do
+  mv -n "$INCOMING/$name" "$DEST/$name" || fail write
 done
 sync
 
