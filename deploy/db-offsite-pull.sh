@@ -131,7 +131,8 @@ free_kb=$(df -Pk "$DEST" | awk 'NR==2{print $4}')
 
 # rsync 를 쓰지 않는다 — 지원 종료 OS 의 패치 없는 rsync 에 서버가 보낸 데이터를 맡기지 않는다.
 # ssh 로 목록을 받아 검사한 뒤 받을 개수를 정하고, 파일마다 남은 전송 한도까지만 읽는다
-ssh_args=(-n -i "$SSH_KEY" -p "$PORT" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ForwardAgent=no -o ForwardX11=no)
+# CheckHostIP=no: 키는 서버 이름의 기록으로 검증한다. 같은 IP 에 다른 키 기록이 있어도 크론이 멈추지 않게 한다(2026-11-03 첫 설치 실측 · 왜 다른지는 미확인)
+ssh_args=(-n -i "$SSH_KEY" -p "$PORT" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o CheckHostIP=no -o ConnectTimeout=20 -o ForwardAgent=no -o ForwardX11=no)
 LIST="$INCOMING/.list"
 timeout "$LIST_SECONDS" ssh "${ssh_args[@]}" "$REMOTE_USER@$HOST" list 2>/dev/null | head -c "$((LIST_MAX_BYTES + 1))" >"$LIST"
 rc=("${PIPESTATUS[@]}")
