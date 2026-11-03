@@ -78,26 +78,60 @@ tail -1 ~/pleiades-private/db-backup.log | grep -o '[0-9]\{8\}-[0-9]\{4\} 결과
 
 **이것을 통과해야 "백업 있음" 이다.** 서버 안의 임시 DB 에 복원해 운영 DB 와 비교한 뒤 임시 DB 를 지운다. 운영 DB 에는 읽기만 한다. 서비스 DB 를 로컬로 가져오지 않는다(I-7).
 
+반복문을 터미널에 바로 붙이지 말고 **파일로 만들어 bash 로 실행한다.** 2026-11-03 첫 시험에서 zsh 에 붙인 반복문만 임시 DB 없음으로 실패했고, 같은 내용을 파일로 실행하면 통과했다(원인 미확인).
+
 ```bash
-FIN_DB='<fin DB 이름>'; FIT_DB='<fit DB 이름>'
+cat > ~/pleiades-private/restore-test.sh <<'SCRIPT_END'
+#!/bin/bash
+# 임시 — DB 백업 복원 시험(#441). 서버에서 사용자가 실행한다. 운영 DB 는 읽기만 하고 임시 DB 만 만들고 지운다.
+cd /tmp || exit 1
+dbname() { node -e 'const a=process.argv[1];const d=require(require.resolve("dotenv",{paths:[a]}));const e=d.parse(require("fs").readFileSync(a+"/.env"));console.log(decodeURIComponent(new URL(e.DATABASE_URL).pathname.slice(1)))' "$1" 2>/dev/null; }
+FIN_DB=$(dbname ~/pleiades-fin/apps/finance); FIT_DB=$(dbname ~/pleiades-fit/apps/fitness)
 T=pleiades_restore_test
+ERR=~/pleiades-private/restore-test.err
 q() { sudo -u postgres psql -X -At -d "$1" -c "$2"; }
 c="select count(*) from information_schema.tables where table_schema='public'"
 m="select count(*) from public._prisma_migrations"
+rows="select table_name, (xpath('/row/c/text()', query_to_xml(format('select count(*) c from public.%I', table_name), false, true, '')))[1]::text::bigint from information_schema.tables where table_schema='public' and table_type='BASE TABLE' order by 1"
 for p in "fin:$FIN_DB" "fit:$FIT_DB"; do
   n=${p%%:*}; d=${p#*:}
+  if [[ -z "$d" ]]; then echo "$n 중단 — DB 이름을 읽지 못했다"; continue; fi
   f=$(ls -t /backup/pleiades-db/daily/$n-*.dump | head -1)
   sudo -u postgres dropdb --if-exists "$T"
-  sudo -u postgres createdb "$T"
-  if sudo -u postgres pg_restore --no-owner --no-privileges --exit-on-error -d "$T" < "$f"; then r=통과; else r=실패; fi
+  sudo -u postgres createdb "$T"; rc_create=$?
+  has=$(q postgres "select count(*) from pg_database where datname='$T'")
+  echo "$n createdb rc=$rc_create · 임시 DB 존재 $has · 덤프 파일 $([ -s "$f" ] && echo 있음 || echo 없음)"
+  if [[ "$rc_create" != 0 || "$has" != 1 ]]; then echo "$n 중단 — 임시 DB 없음"; continue; fi
+  if sudo -u postgres pg_restore --no-owner --no-privileges --exit-on-error -d "$T" < "$f" 2>"$ERR"; then r=통과; else r=실패; head -3 "$ERR"; fi
   tr=$(q "$T" "$c"); to=$(q "$d" "$c"); mr=$(q "$T" "$m"); mo=$(q "$d" "$m")
   if [[ "$r" == 통과 && -n "$tr" && "$tr" == "$to" && -n "$mr" && "$mr" == "$mo" ]]; then v=일치; else v=불일치; fi
-  echo "$n 복원 $r · 비교 $v · 테이블 $tr/$to · 마이그레이션 $mr/$mo"
-  sudo -u postgres dropdb "$T"
+  a=$(q "$T" "$rows"); b=$(q "$d" "$rows")
+  total=$(printf '%s\n' "$b" | grep -c .)
+  same=$(comm -12 <(printf '%s\n' "$a" | LC_ALL=C sort) <(printf '%s\n' "$b" | LC_ALL=C sort) | grep -c .)
+  echo "$n 복원 $r · 비교 $v · 테이블 $tr/$to · 마이그레이션 $mr/$mo · 행 일치 테이블 $same/$total"
+  sudo -u postgres dropdb "$T"; echo "$n 정리 rc=$?"
 done
+SCRIPT_END
+chmod 700 ~/pleiades-private/restore-test.sh
+bash -n ~/pleiades-private/restore-test.sh && echo "문법 통과"
 ```
 
-**기대:** 두 줄 모두 `복원 통과 · 비교 일치`. 그 두 줄만 붙인다. 행 수까지 비교하지는 않는다 — 운영 DB 는 그 사이에도 바뀐다.
+`문법 통과` 가 나오면 실행한다. `sudo` 비밀번호를 물을 수 있다.
+
+```bash
+bash ~/pleiades-private/restore-test.sh
+```
+
+**기대:** 두 앱 모두 `복원 통과 · 비교 일치` · `정리 rc=0`. 그 결과 줄만 붙인다. 오류 줄에 경로나 접속 정보가 있으면 가린다.
+
+- `행 일치 테이블` 은 거의 전부여야 한다. 운영 DB 는 덤프 뒤에도 바뀌므로 몇 개 어긋나는 것은 먼저 그 탓으로 본다. 많이 어긋나면 Claude 에게 알린다.
+- `임시 DB 없음` 이나 `복원 실패` 면 통과가 아니다. 다시 돌리면 임시 DB 를 먼저 지우고 시작한다.
+
+끝나면 지운다.
+
+```bash
+rm ~/pleiades-private/restore-test.sh ~/pleiades-private/restore-test.err
+```
 
 ## 5. 크기 급감 경고를 받으면
 
