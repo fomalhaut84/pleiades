@@ -7,7 +7,7 @@
  *
  * 정본: fin `telegram.ts:64,68` (html 은 `parse_mode: 'HTML'` · plain 은 옵션 없음) · fit `send.ts:110-115` (`reply_markup` · `message_id`).
  */
-import type { Content, MessageRef, Transport } from './types';
+import { toInlineKeyboardRows, type Content, type MessageRef, type Transport } from './types';
 
 export interface TelegramApi {
   sendMessage(
@@ -34,7 +34,11 @@ export function createTelegramTransport(opts: TelegramTransportOptions): Transpo
     async send(target: string, content: Content): Promise<MessageRef> {
       const other: { parse_mode?: string; reply_markup?: unknown } = {};
       if (content.format === 'html') other.parse_mode = 'HTML';
-      if (content.components !== undefined) other.reply_markup = content.components;
+      if (content.components !== undefined) {
+        other.reply_markup = Array.isArray(content.components)
+          ? { inline_keyboard: toInlineKeyboardRows(content.components) }
+          : content.components;
+      }
       const msg = await getApi().sendMessage(target, content.text, other);
       return String(msg.message_id);
     },
