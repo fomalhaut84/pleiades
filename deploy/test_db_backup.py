@@ -63,7 +63,14 @@ for i in 1 2 3; do echo "$i; 0 0 TABLE DATA public t$i u"; done
 [ -n "${FAKE_LIST_EXIT:-}" ] && exit 1
 exit 0
 ''')
-        for n in ("pg_dump", "pg_restore"):
+        (self.bin / "age").write_text('''#!/bin/bash
+echo "age $*" >> "$CALLS"
+[ -n "${FAKE_AGE_FAIL:-}" ] && exit 1
+out=; in=; while [ $# -gt 0 ]; do case "$1" in -o) out=$2; shift ;; -R) shift ;; *) in=$1 ;; esac; shift; done
+[ -n "${FAKE_AGE_SHORT:-}" ] && { echo short > "$out"; exit 0; }
+{ echo age-encryption.org/v1; cat "$in"; } > "$out"
+''')
+        for n in ("pg_dump", "pg_restore", "age"):
             p = self.bin / n
             p.chmod(p.stat().st_mode | stat.S_IXUSR)
 
@@ -355,6 +362,66 @@ class Failures(Base):
         r = self.run_script(FAKE_FAIL="findb")
         self.assertEqual(r.returncode, 1)
         self.assertIn("알림 실패: 웹훅 없음", r.stdout)
+
+
+class Offsite(Base):
+    def turn_on(self):
+        ops = self.home / "pleiades-ops"
+        ops.mkdir(exist_ok=True)
+        (ops / "offsite-recipient.txt").write_text("age1public\n")
+
+    def test_off_without_recipient_file(self):
+        r = self.run_script()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse((self.root / "offsite").exists())
+        self.assertNotIn("age ", self.calls.read_text())
+
+    def test_encrypted_copy_is_private_and_uses_public_key_only(self):
+        self.turn_on()
+        r = self.run_script()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.dumps("offsite"), ["fin-20261102-0420.dump.age", "fit-20261102-0420.dump.age"])
+        f = self.root / "offsite" / "fin-20261102-0420.dump.age"
+        self.assertEqual(stat.S_IMODE(f.stat().st_mode), 0o600)
+        self.assertIn("age -R", self.calls.read_text())
+        self.assertNotIn("age -d", self.calls.read_text())
+        self.assertNotIn("-i ", self.calls.read_text().split("age -R", 1)[1].splitlines()[0])
+
+    def test_age_failure_alerts_but_keeps_the_daily_dump(self):
+        self.turn_on()
+        r = self.run_script(FAKE_AGE_FAIL="1")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("fin(offsite)", r.stdout)
+        self.assertIn("fit(offsite)", r.stdout)
+        self.assertIn("통과: fin", r.stdout)
+        self.assertEqual(self.dumps("daily"), ["fin-20261102-0420.dump", "fit-20261102-0420.dump"])
+        self.assertEqual(self.dumps("offsite"), [])
+
+    def test_truncated_encryption_is_rejected(self):
+        self.turn_on()
+        r = self.run_script(FAKE_AGE_SHORT="1")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("fin(offsite)", r.stdout)
+        self.assertEqual(self.dumps("offsite"), [])
+
+    def test_offsite_keeps_fourteen_and_foreign_files(self):
+        self.turn_on()
+        self.seed("offsite", [f"fin-202610{d:02d}-0420.dump.age" for d in range(1, 21)] + ["notes.txt"])
+        self.assertEqual(self.run_script().returncode, 0)
+        names = self.dumps("offsite", "fin-")
+        self.assertEqual(len(names), 14)
+        self.assertIn("fin-20261102-0420.dump.age", names)
+        self.assertIn("notes.txt", self.dumps("offsite"))
+
+    def test_shrink_keeps_offsite_copies(self):
+        self.turn_on()
+        old = [f"fin-202610{d:02d}-0420.dump" for d in range(1, 21)]
+        self.seed("daily", old)
+        for n in old:
+            (self.root / "daily" / n).write_bytes(b"x" * 100000)
+        self.seed("offsite", [f"{n}.age" for n in old])
+        self.assertIn("크기 급감", self.run_script().stdout)
+        self.assertEqual(len(self.dumps("offsite", "fin-")), 21)
 
 
 class _Hook(http.server.BaseHTTPRequestHandler):

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// db-backup.cjs — fin·fit DB 를 서버 안 백업 위치에 매일 뜬다 (#441). 서버 밖 보관은 다음 단계다.
+// db-backup.cjs — fin·fit DB 를 서버 안 백업 위치에 매일 뜬다 (#441).
 //
 // 사용:  node db-backup.cjs                백업 1회(crontab 이 부른다)
 //        node db-backup.cjs --test-alert   실패 알림 경로만 시험한다
@@ -12,6 +12,7 @@
 // 크기가 남아 있는 매일분 중 가장 큰 것의 절반 아래면 경고하고 옛 덤프를 지우지 않는다 — 비어 버린 DB 가 좋은 백업을 밀어내지 않게.
 // 직전 덤프와 비교하면 줄어든 덤프가 다음 날의 기준이 되어 보호가 하루 만에 풀린다(PR #443 Codex P1). 사람이 인정하거나 크기가 돌아올 때까지 매일 경고한다.
 // 덤프 전체를 읽어 검증하지만 실제 복원을 증명하지는 않는다 — 복원 시험은 런북.
+// 공개키 파일이 있으면 offsite/ 에 age 로 암호화한 사본을 둔다 — 라즈베리파이가 가져간다(db-offsite-pull.sh). 서버에는 복호화 키도 파이 접속 정보도 없다.
 'use strict'
 
 process.env.TZ = 'Asia/Seoul' // 파일 이름과 주간 요일은 서버 시간대와 무관하게 KST 다(crontab 시각은 런북에서 확인한다)
@@ -30,6 +31,8 @@ const APPS = {
 }
 const KEEP_DAILY = 14
 const KEEP_WEEKLY = 8
+const KEEP_OFFSITE = 14 // 파이가 며칠 꺼져 있어도 밀린 파일을 가져갈 수 있게 매일분과 같게 둔다
+const RECIPIENT = path.join(HOME, 'pleiades-ops', 'offsite-recipient.txt')
 const MIN_BYTES = 1024 // pg_dump 가 실패해도 빈 파일은 생긴다
 const MIN_FREE_MB = TEST && process.env.BACKUP_MIN_FREE_MB ? Number(process.env.BACKUP_MIN_FREE_MB) : 1024
 const STALE_LOCK_MS = 6 * 3600 * 1000
@@ -67,8 +70,8 @@ function libpqEnv(appDir) {
   return out
 }
 
-function prune(dir, app, keep) {
-  const re = new RegExp(`^${app}-\\d{8}-\\d{4}\\.dump$`) // 다른 이름의 파일은 건드리지 않는다
+function prune(dir, app, keep, ext = 'dump') {
+  const re = new RegExp(`^${app}-\\d{8}-\\d{4}\\.${ext.replace('.', '\\.')}$`) // 다른 이름의 파일은 건드리지 않는다
   const names = fs.readdirSync(dir).filter((n) => re.test(n)).sort().reverse()
   for (const n of names.slice(keep)) fs.unlinkSync(path.join(dir, n))
 }
@@ -97,6 +100,29 @@ function syncFile(p) {
     fs.fsyncSync(fd)
   } finally {
     fs.closeSync(fd)
+  }
+}
+
+// 실패해도 매일분은 이미 있다 — 그 앱의 백업을 실패로 돌리지 않고 사유만 따로 알린다
+function encryptOffsite(app, final, name, bytes) {
+  const offsite = path.join(ROOT, 'offsite')
+  const out = path.join(offsite, `${name}.age`)
+  const tmp = path.join(offsite, `.tmp-${app}-${process.pid}`)
+  try {
+    fs.mkdirSync(offsite, { recursive: true })
+    for (const n of fs.readdirSync(offsite)) {
+      if (n.startsWith(`.tmp-${app}-`)) fs.rmSync(path.join(offsite, n), { force: true })
+    }
+    const run = spawnSync('age', ['-R', RECIPIENT, '-o', tmp, final], { stdio: 'ignore', timeout: DUMP_TIMEOUT_MS })
+    if (run.error || run.status !== 0 || fs.statSync(tmp).size < bytes) throw new Error('age')
+    syncFile(tmp)
+    fs.renameSync(tmp, out)
+    syncFile(offsite)
+    return true
+  } catch (err) {
+    fs.rmSync(tmp, { force: true })
+    console.error(`[${app}] offsite: ${err && err.code ? err.code : 'error'}`)
+    return false
   }
 }
 
@@ -161,11 +187,14 @@ function backupApp(app, appDir) {
     if (NOW.getDay() === 0 && !fs.readdirSync(weekly).some((n) => n.startsWith(`${today}-`))) {
       fs.linkSync(final, path.join(weekly, name)) // 같은 디스크라 복사하지 않는다 — 매일분이 지워져도 남는다 · 날짜당 1개
     }
+    const offsiteOn = fs.existsSync(RECIPIENT)
+    const offsiteOk = !offsiteOn || encryptOffsite(app, final, name, bytes)
     if (!shrunk) {
       prune(daily, app, KEEP_DAILY)
       prune(weekly, app, KEEP_WEEKLY)
+      if (offsiteOn) prune(path.join(ROOT, 'offsite'), app, KEEP_OFFSITE, 'dump.age')
     }
-    return { ok: true, tables, bytes, shrunk }
+    return { ok: true, tables, bytes, shrunk, offsiteOk }
   } catch (err) {
     remove()
     console.error(`[${app}] ${err && err.code ? err.code : 'error'}`)
@@ -258,6 +287,7 @@ async function run() {
       const r = backupApp(app, dir)
       if (r.ok) lines.push(`${app} 테이블 ${r.tables} · ${mb(r.bytes)} MB`)
       else failed.push(`${app}(${r.reason})`)
+      if (r.ok && !r.offsiteOk) failed.push(`${app}(offsite)`)
       if (r.shrunk) shrunk.push(app)
     }
   }
