@@ -21,7 +21,11 @@ MAX_NEW=16
 MAX_DELETE=2
 MAX_AGE_DAYS=16
 MIN_BASELINE=1024
-MIN_FREE_KB=$((500 * 1024))
+# 전송 총량 상한 = 속도 × 시간(2 MB/s × 300 s = 600 MB). 파일 수·크기를 서버가 속여도 이 값을 넘지 못한다.
+# 여유 공간은 그보다 크게 요구한다 — 받는 중에 파이의 다른 서비스가 쓸 공간까지 채우지 않게
+TRANSFER_KBPS=2048
+TRANSFER_SECONDS=300
+MIN_FREE_KB=$((1024 * 1024))
 BASE="${PLEIADES_OFFSITE_BASE:-$HOME/pleiades-offsite}"
 export TZ=Asia/Seoul
 umask 077
@@ -127,7 +131,7 @@ free_kb=$(df -Pk "$DEST" | awk 'NR==2{print $4}')
 ssh_cmd="ssh -i $SSH_KEY -p $PORT -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20"
 held=()
 for f in "$DEST"/*.dump.age; do [[ -e "$f" ]] && held+=("--exclude=/${f##*/}"); done
-rsync -r --timeout=300 --max-size=2G "${held[@]+"${held[@]}"}" --include='/fin-*.dump.age' --include='/fit-*.dump.age' --exclude='*' \
+timeout "$TRANSFER_SECONDS" rsync -r --timeout=60 --max-size=500M --bwlimit="$TRANSFER_KBPS" "${held[@]+"${held[@]}"}" --include='/fin-*.dump.age' --include='/fit-*.dump.age' --exclude='*' \
   -e "$ssh_cmd" "$REMOTE_USER@$HOST:/" "$INCOMING/" >/dev/null 2>&1
 rc=$?
 ((rc == 0)) || fail "rsync(rc=$rc)"

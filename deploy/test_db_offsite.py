@@ -44,6 +44,12 @@ for name in os.listdir(src):
                 shutil.copy2(os.path.join(src, name), dest)
             break
 """
+TIMEOUT_STUB = """#!/bin/bash
+echo "timeout $1" >> "$CALLS"
+[ -n "${FAKE_TIMEOUT:-}" ] && exit 124
+shift
+exec "$@"
+"""
 CURL_STUB = """#!/bin/bash
 echo "curl $*" >> "$CALLS"
 cat >/dev/null
@@ -71,7 +77,7 @@ class Base(unittest.TestCase):
             f"HOST=server.invalid\nPORT=2222\nREMOTE_USER=svc\nSSH_KEY={key}\nDEST={self.dest}\n"
             "DISCORD_WEBHOOK=https://example.invalid/WEBHOOKSECRET\n"
         )
-        for n, body in (("rsync", RSYNC_STUB), ("curl", CURL_STUB)):
+        for n, body in (("rsync", RSYNC_STUB), ("curl", CURL_STUB), ("timeout", TIMEOUT_STUB)):
             p = self.bin / n
             p.write_text(body)
             p.chmod(p.stat().st_mode | stat.S_IXUSR)
@@ -161,6 +167,26 @@ class Pull(Base):
 
 class Hostile(Base):
     """회귀: PR 전 리뷰 critical — 침해된 서버가 보낸 파일로 정상 사본이 밀려났다."""
+
+    def test_transfer_total_is_bounded_below_required_free_space(self):
+        # 회귀: PR #447 Codex P2 — 파일별 상한뿐이라 서버가 파이 디스크를 채울 수 있었다
+        self.fresh_remote()
+        self.run_script()
+        call = self.calls.read_text()
+        self.assertIn("timeout 300", call)
+        self.assertIn("--bwlimit=2048", call)
+        self.assertIn("--max-size=500M", call)
+        src = SCRIPT.read_text()
+        self.assertIn("MIN_FREE_KB=$((1024 * 1024))", src)
+        self.assertLess(2048 * 300, 1024 * 1024)
+
+    def test_transfer_timeout_fails_and_keeps_copies(self):
+        good = self.put(self.dest, fname("fin", -1))
+        r = self.run_script(FAKE_TIMEOUT="1")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("rsync(rc=124)", r.stdout)
+        self.assertTrue(good.exists())
+        self.assertFalse((self.dest / ".incoming").exists())
 
     def seed_good(self, app="fin", count=20, start=1):
         return [self.put(self.dest, fname(app, -d)) for d in range(start, start + count)]
