@@ -85,7 +85,7 @@ cat > ~/pleiades-private/restore-test.sh <<'SCRIPT_END'
 #!/bin/bash
 # 임시 — DB 백업 복원 시험(#441). 서버에서 사용자가 실행한다. 운영 DB 는 읽기만 하고 임시 DB 만 만들고 지운다.
 cd /tmp || exit 1
-dbname() { node -e 'const a=process.argv[1];const d=require(require.resolve("dotenv",{paths:[a]}));const e=d.parse(require("fs").readFileSync(a+"/.env"));console.log(decodeURIComponent(new URL(e.DATABASE_URL).pathname.slice(1)))' "$1"; }
+dbname() { node -e 'const a=process.argv[1];const d=require(require.resolve("dotenv",{paths:[a]}));const e=d.parse(require("fs").readFileSync(a+"/.env"));console.log(decodeURIComponent(new URL(e.DATABASE_URL).pathname.slice(1)))' "$1" 2>/dev/null; }
 FIN_DB=$(dbname ~/pleiades-fin/apps/finance); FIT_DB=$(dbname ~/pleiades-fit/apps/fitness)
 T=pleiades_restore_test
 ERR=~/pleiades-private/restore-test.err
