@@ -240,7 +240,7 @@ chmod 600 ~/pleiades-offsite/config
 | `config` | 설정 파일 · 키 경로 · 포트 |
 | `locked` | 이전 실행이 아직 돈다 |
 | `disk` · `write` | 여유 1 GB 미만 · 저장 실패 |
-| `ssh(rc=N)` | `255` 접속 실패 · `124` 시간 초과 · `2` 서버가 거부 · `126`·`127` 서버의 전용 스크립트 설치 문제 |
+| `ssh(rc=N)` | `255` 접속·서버 키 검증 실패 · `124` 시간 초과 · `2` 서버가 거부 · `126`·`127` 서버의 전용 스크립트 설치 문제 |
 | `badfile` | 오늘 뒤 날짜 · 잘못된 이름 · 암호문이 아님 — **서버 침해일 수 있다.** 그 실행은 아무것도 보관하지 않았다 |
 | `toomany` · `toobig` | 앱별 16개 · 총 600 MB 초과 — 위와 같다. 덤프가 정말 커졌으면 Claude 에게 알린다 |
 | `fin(stale)` | 그 앱의 어제·오늘 파일 없음 — 서버 크론이나 암호화가 멈췄다 |
@@ -249,8 +249,8 @@ chmod 600 ~/pleiades-offsite/config
 파이 키로 셸과 다른 명령이 막혀 있는지 본다.
 
 ```bash
-ssh -i ~/.ssh/pleiades-offsite -p <SSH포트> -o IdentitiesOnly=yes '<서버 계정>@<서버주소>' true; echo "셸 시도 rc=$?"
-ssh -i ~/.ssh/pleiades-offsite -p <SSH포트> -o IdentitiesOnly=yes '<서버 계정>@<서버주소>' 'get ../db-backup.log'; echo "경로 시도 rc=$?"
+ssh -i ~/.ssh/pleiades-offsite -p <SSH포트> -o IdentitiesOnly=yes -o CheckHostIP=no '<서버 계정>@<서버주소>' true; echo "셸 시도 rc=$?"
+ssh -i ~/.ssh/pleiades-offsite -p <SSH포트> -o IdentitiesOnly=yes -o CheckHostIP=no '<서버 계정>@<서버주소>' 'get ../db-backup.log'; echo "경로 시도 rc=$?"
 ```
 
 **기대:** 둘 다 `거부` · `rc=2`. 아니면 등록을 멈추고 Claude 에게 알린다.

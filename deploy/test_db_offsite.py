@@ -138,6 +138,7 @@ class Pull(Base):
         self.assertIn("BatchMode=yes", call)
         self.assertIn("-p 2222", call)
         self.assertIn("IdentitiesOnly=yes", call)
+        self.assertIn("CheckHostIP=no", call)
         self.assertIn("ForwardAgent=no", call)
 
     def test_existing_copy_is_not_replaced_by_server(self):
