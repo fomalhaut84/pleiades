@@ -125,5 +125,6 @@ export async function decidePhotoFood(input: {
     lines.push("⚠️ Vision 분석 실패 — [🔢 kcal] 로 직접 입력하거나 [🗑️ 삭제] 후 다시 시도");
   }
 
+  // 버튼이 있는 응답 = 저장됨 — discord/photo.ts 가 전송 실패 안내를 이것으로 가른다(#368)
   return plainReply(lines.join("\n"), { buttons: foodLogButtons(log.id) });
 }
