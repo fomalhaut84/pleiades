@@ -40,6 +40,8 @@ env -i HOME="$HOME" PATH=/usr/bin:/bin "$NODE_BIN" ~/pleiades-ops/db-backup.cjs
 
 **`fin(pg_dump)` 처럼 실패하면** 앱 DB 롤의 권한 문제일 수 있다. 원문은 그대로 붙이지 말고 Claude 에게 사유 코드만 알린다.
 
+**`fin(exists)` 는** 같은 분에 이미 덤프가 있어 덮어쓰지 않았다는 뜻이다. 기존 덤프는 그대로 있다 — 1분 뒤 다시 돌린다.
+
 ## 3. 등록
 
 서버 시간대를 먼저 확인한다. crontab 은 서버 시간대를 따른다.

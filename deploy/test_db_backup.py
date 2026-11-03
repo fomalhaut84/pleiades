@@ -240,6 +240,18 @@ class Failures(Base):
         self.assertIn("크기 급감: fin", r.stdout)
         self.assertEqual(len(self.dumps("daily", "fin-")), 21)
 
+    def test_same_minute_retry_keeps_existing_dump(self):
+        # 회귀: PR #443 Codex P2 — 같은 분에 다시 돌면 줄어든 덤프가 건강한 덤프를 덮어써 크기 기준까지 사라졌다
+        healthy = "fin-20261102-0420.dump"
+        self.seed("daily", [healthy])
+        (self.root / "daily" / healthy).write_bytes(b"x" * 100000)
+        r = self.run_script()
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("fin(exists)", r.stdout)
+        self.assertEqual((self.root / "daily" / healthy).stat().st_size, 100000)
+        self.assertIn("fit-20261102-0420.dump", self.dumps())
+        self.assertEqual([n for n in self.dumps() if n.startswith(".tmp-")], [])
+
     def seed_large_fin(self):
         old = [f"fin-202610{d:02d}-0420.dump" for d in range(1, 21)]
         self.seed("daily", old)

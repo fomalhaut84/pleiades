@@ -147,7 +147,15 @@ function backupApp(app, appDir) {
 
     const name = `${app}-${stamp(NOW)}.dump`
     const final = path.join(daily, name)
-    fs.renameSync(tmp, final)
+    // rename 은 같은 분의 덤프를 말없이 덮어쓴다 — 건강한 덤프와 크기 기준을 잃는다(PR #443 Codex P2). link 는 있으면 EEXIST 로 멈춘다
+    try {
+      fs.linkSync(tmp, final)
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err
+      remove()
+      return { ok: false, reason: 'exists' }
+    }
+    remove()
     syncFile(daily)
     const today = name.slice(0, name.lastIndexOf('-'))
     if (NOW.getDay() === 0 && !fs.readdirSync(weekly).some((n) => n.startsWith(`${today}-`))) {
