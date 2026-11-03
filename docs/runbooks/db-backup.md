@@ -85,8 +85,8 @@ cat > ~/pleiades-private/restore-test.sh <<'SCRIPT_END'
 #!/bin/bash
 # 임시 — DB 백업 복원 시험(#441). 서버에서 사용자가 실행한다. 운영 DB 는 읽기만 하고 임시 DB 만 만들고 지운다.
 cd /tmp || exit 1
-dbname() { sed -n 's/^DATABASE_URL=.*\/\([^/?"]*\).*/\1/p' "$1" | head -1; }
-FIN_DB=$(dbname ~/pleiades-fin/apps/finance/.env); FIT_DB=$(dbname ~/pleiades-fit/apps/fitness/.env)
+dbname() { node -e 'const a=process.argv[1];const d=require(require.resolve("dotenv",{paths:[a]}));const e=d.parse(require("fs").readFileSync(a+"/.env"));console.log(decodeURIComponent(new URL(e.DATABASE_URL).pathname.slice(1)))' "$1"; }
+FIN_DB=$(dbname ~/pleiades-fin/apps/finance); FIT_DB=$(dbname ~/pleiades-fit/apps/fitness)
 T=pleiades_restore_test
 ERR=~/pleiades-private/restore-test.err
 q() { sudo -u postgres psql -X -At -d "$1" -c "$2"; }
@@ -95,6 +95,7 @@ m="select count(*) from public._prisma_migrations"
 rows="select table_name, (xpath('/row/c/text()', query_to_xml(format('select count(*) c from public.%I', table_name), false, true, '')))[1]::text::bigint from information_schema.tables where table_schema='public' and table_type='BASE TABLE' order by 1"
 for p in "fin:$FIN_DB" "fit:$FIT_DB"; do
   n=${p%%:*}; d=${p#*:}
+  if [[ -z "$d" ]]; then echo "$n 중단 — DB 이름을 읽지 못했다"; continue; fi
   f=$(ls -t /backup/pleiades-db/daily/$n-*.dump | head -1)
   sudo -u postgres dropdb --if-exists "$T"
   sudo -u postgres createdb "$T"; rc_create=$?
