@@ -1,0 +1,490 @@
+# 009 D-5 설계 — 텔레그램 제거 (최종 초안 · 3회차)
+
+작성 2026-11-03 · 상태 **최종 초안 — 사용자 결정 대기**(정본 아님 · 재감사 없이 마감 가능 판정) · 이슈 #438 · 기준 `b1c3e68`(`dev`) · 최신 태그 `v1.5.4`
+**계보:** 측정 `01_surveyor_d5.md`(**[S]** · M1~M12 · X1~X13) → 1회차 `02_writer_d5.md` → 감사 `03_auditor_d5.md`(**[A]** · D1~D15) → 2회차 `02_writer_d5_r2.md` → 재감사 `03_auditor_d5_r2.md`(**[A2]** · E1~E12 · 전부 문안 · 블로커 0) → **이 파일**. **[W]** = 작성자가 코드에서 직접 읽은 사실. 앞 회차는 지우지 않는다.
+숫자는 §2-1 대장 인용뿐이다. 시간 기록이 없어 소요는 되돌리기 등급으로 갈음한다. 서버 수치는 적지 않는다(판정만). 순서 판정은 정적 대조이고 실행하지 않았다.
+
+## 0. 한 줄 요약
+
+**대체를 먼저 올리고, 그다음 지운다.** R1(대체) → R2(제거) → 판정 뒤 토큰 삭제. **409 자동 판정은 대체되지 않는다** — 이중 세션은 표시와 사람 확인으로 낮춘다(권고 · §3-3 · Q2).
+
+| | PR | 릴리즈 | 서비스 영향 |
+|---|---|---|---|
+| **R1 묶음** | A1 I-5′ · A2 redact · A3 판정 표시줄 · A4 중립 버튼 | R1(minor · #441 파일 포함) · A1 은 로컬 | 재배포 1회 · 봇 재시작 · 동작 불변(권고안 기준 · §5-2) |
+| **R2 묶음** | B1 deploy+앱 `.env.example` → B2 fit → B3·B4 fin → B5 notify → B6 tools → B7 개명·앱 문서 → B8 런북·룰·정본·잔여 테스트 | R2(minor) | 재배포 1회 · 텔레그램 코드 0 · 라우트 스위치를 더 읽지 않는다 |
+| **서버(사용자)** | S0 판정(B1 머지 전 · R2 직전) · S1 배포 판정 · S2 토큰 삭제 | — | S2 는 기능상 재시작 불필요 · 메모리의 값은 다음 재시작까지 남는다 |
+
+**사용자 결정 5 — 이 파일 끝 §14.** 편도 없음(§6).
+
+---
+
+## 1. 무엇이 바뀌었나
+
+### 1-1. 009 §6 D-5 · §7 대비
+
+요구사항 5-2 · 5-4 · S-8 은 유지한다. **5-3 은 409 행을 Q2 로 축소한다**(E9) — 나머지 행은 유지. **5-1 수용 기준의 문구는 Q4 로 올린다**.
+
+| # | 009 전제 | 측정 | 처리 |
+|---|---|---|---|
+| Δ1 | 가드 대체가 있거나 끝났다(§7) | I-5′ 없음(X1) · 409 대체 없음(X2) · 최상위 redact 없음(X3) | R1 에서 먼저 · X2 는 **동등 대체가 불가능함을 적는다** |
+| Δ2 | 텔레그램 코드를 지우면 된다(5-1) | Discord 버튼이 `InlineKeyboard`·`inline_keyboard` 에 묶여 있다(X4) | A4 |
+| Δ3 | fin 웹 `getBot()` 3 · 봇 안 17곳 | `notifyBot()` 15 importer(정적 14 + 동적 1 `advisor-monitor.ts:293`) · 웹·MCP 를 명령 전체로 잇는다(X5) | B3·B4 |
+| Δ4 | 서버 `NOTIFY_*` 줄 유지(5-2) | `discord-switch off` 가 그 줄을 비운다(X10) | B1 — `check`·`state` 만 |
+| Δ5 | 잔여 = 이력·셸·DB(5-1) | 그 밖 후보(X11) · 코드에 남는 컬럼명·R11 설명 | §7 · Q4 |
+| Δ6 | — | **로컬 웹훅 직발송은 이미 있는 틈이다**(아래) | A1 |
+| Δ7 | — | fit 미검증 4행(#387)의 되돌리기 스크립트가 R2 태그에 없다 | Q5 |
+
+**Δ6.** 로컬 루트 `.env` 의 텍스트 스위치 2개는 이미 Discord 이고 웹훅 3개가 채워져 있으며 버튼 스위치만 비어 있다([A] D7 · 값 미출력). 뒤집기가 새로 여는 것은 버튼 경로뿐이고 G-1 토큰 가드 안이다. A1 웹훅 허용 목록의 근거는 **"지금도 열린 틈이고, 뒤집은 뒤에는 스위치로도 닫을 수 없다"** 이다. 웹훅 정체는 미측정. vitest 는 `PLEIADES_ENV_FILE` 을 없는 경로로 고정해 테스트 발송 위험이 없고 스모크는 `/dev/null` 이다.
+
+### 1-2. 정정 블록
+
+**1회차 → 2회차(D1~D15):** B1·B7 중간 커밋 실패(D1·D2) · 허용 목록 달성 불가(D3) · 플랫폼 수 대조의 창·실측·타입 비용(D4) · 프로세스 패턴·첫 실사용(D5) · fin 테스트 손실(D6) · Δ6 근거(D7) · R1 성격(D8) · 리뷰 등급(D9) · 길이 상수(D10) · 옛 배포 수(D11) · S2 메모리·pm2·`.bak`(D12) · R11 테스트(D13) · A4 호출 곳(D14) · 인용(D15). 내용은 `02_writer_d5_r2.md` §1-2.
+
+**2회차 → 3회차(E1~E12):**
+
+| E | 틀린 것 | 어디서 고쳤나 |
+|---|---|---|
+| E1 | `discord-switch.cjs:142` `telegram` 출력이 0 행에 걸린다 | B1 |
+| E2 | `test_release_inplace.py:177` 금지어 | §7 |
+| E3 | `test_deploy.py:251,265` 픽스처 배정 없음 | B1 |
+| E4 | fit `notifier.test.ts:377,378` 에 낱말이 함께 있다 | §7 · B2 |
+| E5 | 테스트 위치 `tools/` 는 8절이 안 돌린다 | `tools/local/test_residual.py` |
+| E6 | `:346` 접두 제약은 사라진다 · B1 테스트 범위 | B1 · §5-4 |
+| E7 | `deliver.ts:74` 는 테스트가 있다 | B5 — 분기 유지 |
+| E8 | A3 구현 조건 누락 | §3-3 |
+| E9 | "5-3 유지" 거짓 · 자동 판정 상실 · 재접속·008 제외 이유 | §1-1 · §3-3 · Q2 |
+| E10 | "#441 이 태그를 요구하면" 근거 없음 | Q1 |
+| E11 | 옛 체크아웃의 토큰 가능성 | §6 · Q3 |
+| E12 | R3 축소 시 S1 질의·런북 범위 | §12 |
+
+---
+
+## 2. 실측 근거
+
+### 2-1. 대장 ([S]·[A]·[A2] 인용)
+
+| # | 항목 | 값 | 출처 |
+|---|---|---|---|
+| N1 | grep 전수 | 430 파일 · 3,938 줄 · 경로 허용 239 + 나머지 191 | M1 · [A2] |
+| N2 | 통째 삭제 후보 | 23 파일 · 6,304 LOC(운영 11 · 1,251 / 테스트 12 · 5,053) | M12 |
+| N3 | 수정 후보 | 운영 110 · env 4 · 테스트 41 · 문서 2 | M12 |
+| N4 | 영역별 삭제 | fin 운영 3/297 · fin 테스트 7/3,310 · fit 운영 5/477 · fit 테스트 3/1,169 · notify 2/118 · deploy 3/933 | M12 |
+| N5 | 영역별 운영 수정 | fin 56(주석만 10) · fit 35(주석만 14) · notify 11(주석만 6) · deploy 6(주석만 1) · tools 2 | M12 |
+| N6 | `register*` 부분 삭제 | fin 17 파일 322 LOC · fit 10 파일 73 LOC | M2 |
+| N7 | M12 밖 | fin `bot/index.ts` 94 · `telegram-fake.ts` 101 · `vest-confirm.ts`(decideVest) | M12 |
+| N8 | grammy 만 끌어오는 lock 패키지 | 앱마다 8 · 코드 직접 import 0 | M9 · [A] |
+| N9 | 뒤집기 대상 테스트 | env 만지는 11 파일 · 그중 fin `alert-dispatcher`+`retry/route` 34 · fit `notifier` 30 · fin `notifier` 17 · 케이스별 실패 수 **미확인** | M4 · [A] D13 |
+| N10 | 웹 → `bot/*` 정적 도달 | fin 34 모듈 · fit 2 · fit MCP 0 | M2 |
+| N11 | 동작 차이 | 5 곳 · 텔레그램에서만 닿는 명령·콜백 0 | M3 |
+| N12 | 잔여 분류 | 이력 루트 117/2,094 · 이력 앱 102/372 · DB 3/10 · 앱 하네스 6/14 · 앱 옛 배포 5/43 · 소진 하네스 2/5 | M1 |
+| N13 | 지우는 특성 테스트 | fin `*-telegram` 6 파일 198 케이스(ai 52 · expense 45 · lookup 24 · manage 27 · special 28 · trade 22) · fit `telegram-handlers` 31 | [A] D6 · M4 |
+| N14 | 남는 테스트 | fin decide 42(12·9·9·12) · Discord 38(router 18 · reply 20) · fit `decide.test.ts` 22 + `discord-router.test.ts` | [A] D6 |
+| N15 | `v1.5.4..dev` 의 #441 파일 | 7(`deploy/` 만 · 앱 0) | [A] D8 |
+| N16 | fit 완료 응답 최악 길이 | 328자(`DESC_PREVIEW_MAX` 120) | [A2] |
+
+### 2-2. [W] 직접 확인 (감사 확인 포함)
+
+| 사실 | 위치 |
+|---|---|
+| `gatewayBot()` 은 `remaining`·`total`·`resetAfterMs` 를 돌려주고 IDENTIFY 직전에만 부른다 · RESUME 제외 | `rest.ts:276-281` · `chat.ts:317-320` · `gateway.ts:45,166` |
+| guard 공개 타입은 `check(remote?: {remaining, resetAfterMs})` · 판정 `:115` · 시도 기록 `:131-132` · `alertedAt` 은 차단 알림 중복 방지 | `identify-guard.ts:51,56` |
+| `app_procs` 는 이름으로만 거른다 · `pm2 jlist` 는 `nolock` | `release-inplace.sh:96,99` · 주석 `:30-34` |
+| 409 는 C5 게이트였다 · 양식을 기계로 읽는 곳은 셋(`기본 실행 rc`·`프로브 오류 응답`·`결과:`) | `release-inplace.sh:339` · `ssh-deploy.sh:58-60` |
+| `test_telegram_polling.py` 는 앱 소스를 읽는다 → B1 이 B2 앞 | `:430-438` |
+| `test_templates_cover_app_examples_and_ports` 는 앱 `.env.example` 활성 키가 템플릿에 있어야 통과 · 앱 코드·`write_env.py` 는 `.env.example` 을 읽지 않고 배포 A 는 표시만 | `test_deploy.py:825-827` · `release-inplace.sh:214` |
+| `test_deploy.py:762,772` 는 fin 고정 | `:738-739` |
+| 폴링은 상태가 `on` 이 아니면 밀린 업데이트를 버린다 | `telegram-polling.ts:109,118` |
+| `chat-live-check.cjs` 기록 경로는 앱당 하나 고정 | `:111` |
+| `telegram-polling.sh` 가 실행마다 앱 `.env` 를 `<app>-env-*.bak` 으로 복사 · pm2 env 에 키가 있으면 `.env` 변경이 소용없다 · 쓰기는 `real` 해석 뒤 rename | `.sh:96-112,269,276-277` · `.cjs:92-97` |
+| 스위치 값 조회 — `stateLine` 은 `check`·`state` 공용 | `discord-switch.cjs:6,142` · `.sh:176` |
+| fin 새 `.env` 는 옛 서비스 `.env` 에서 만들었다 | `007-t5-fin-cutover.md:85-86` · fit 은 `007-t9` 대조 |
+
+### 2-3. 미측정 ([A2] V1~V6 + 서버)
+
+V1 두 세션 이벤트 분배(U2) · V2 서버 `pm_exec_path` 끝 모양(필드 존재는 `t2-check.sh:117`) · V3 뒤집기 케이스별 실패 수 · V4 삭제↔잔여 분기 대응 · V5 로컬 웹훅 정체 · 번들 grammY · V6 서버 토큰 사본 실재 · offsite 스크립트 배치. 그 밖 서버 스위치 4 값 · `TELEGRAM_POLLING` · PDF 크기 · 운영 DB 행 · `total−remaining` 동작·창 의미(O1 에서만 필요).
+
+---
+
+## 3. 대체가 먼저 있어야 할 가드 (5-3)
+
+### 3-1. X1 I-5′ → A1 (#359)
+
+**요구:** 로컬 실효 Discord 채널·사용자 ID 와 웹훅이 검증용일 때만 기동한다.
+
+`effective_discord_tokens`(`check_env.py:104`)를 키 패턴 인자로 일반화 → `DISCORD_CHANNEL_ID_*`·`DISCORD_ALLOWED_USER_IDS` 는 ID 허용 목록(`PLEIADES_VERIFY_DISCORD_IDS`) · `DISCORD_WEBHOOK_*` 는 SHA-256 허용 목록(`PLEIADES_VERIFY_DISCORD_WEBHOOK_SHA256`) · 빈 값 통과 · 못 읽으면 거부 · 해시·개수만 출력. 한계는 D-G 와 같다(`run.sh` 경유만 · `tools/local/README.md:51`).
+
+| 안 | 내용 | 되돌리기 |
+|---|---|---|
+| **채택** | ID + 웹훅 | 검사 삭제(**즉시**) |
+| 채택 안 함 | ID 만(§7 문언) | 열린 틈(Δ6)이 그대로이고 뒤집은 뒤 스위치로도 못 닫는다 |
+
+**착수 전 사용자 확인(격리 경계):** 로컬 웹훅 3개의 정체 · 허용 목록 값. 운영 웹훅이면 비우거나 교체. 문서: `isolation.md` I-5′ · 006 §5 정정.
+
+### 3-2. X3 redact → A2
+
+fin `logger.ts:198` · fit `:183` 에 최상위 `DISCORD_BOT_TOKEN_FINANCE`·`_FITNESS`·`DISCORD_WEBHOOK_FINANCE`·`_FITNESS`·`_ADMIN`·`_DEPLOY`. `TELEGRAM_BOT_TOKEN` 항목은 B2·B4 에서 뺀다. 회귀 테스트 앱별 1. 되돌리기: 줄 삭제(**즉시**) · 배포 뒤 재배포(**중간**).
+
+### 3-3. X2 409 판정 → A3
+
+**사실.** Discord 는 같은 토큰 두 세션에 충돌 신호를 내지 않는다. **409 와 동등한 판정은 없다.**
+**잃는 것을 먼저 적는다.** 409 는 C5 게이트(`release-inplace.sh:339`)여서 이중 실행이면 배포가 스스로 실패했다. 아래 권고안의 표시는 판정을 바꾸지 않고, **Release 자동 배포에서는 아무도 답하지 않아도 통과한다.** 즉 자동 판정이 사라진다.
+**§7 이 적은 다른 관측에서 뺀 것.** 재접속 빈도 — 로그(`gateway.ts:151`)는 있으나 이중 세션이 재접속을 일으킨다는 근거가 없다. 008 모니터링 — 저장소에 코드 0.
+
+| | O1 플랫폼 수 대조 + 표시 | ★ **O2 표시만 + 한계 명시(권고)** | O3 프로세스 게이트 |
+|---|---|---|---|
+| **수단** | O2 + `total − remaining` 과 로컬 `attempts` 비교 | 양식에 `봇 프로세스(서버 전체) N · 기대 2` + 사람 확인 "답 1번" | O2 + `N ≠ 2` 면 `stop 4` |
+| **정의** | `attempts` 를 고정 창에 맞춰 `a > t − (windowMs − resetAfterMs)` 로 잘라 비교 · 차이 > 여유면 의심 · 여유 값은 실측 뒤 · 창 의미는 문서상 · 미측정 | `pm2 jlist`(**`nolock`**)에서 `pm_exec_path` 끝이 `dist/bot/standalone.cjs` 인 online 수 — **앱을 가리지 않는다**(fin 배포 중에도 fit 포함 2 · 옛 서비스 봇도 같은 끝) · 파싱 실패 = `?` · 게이트 `:339` 앞에서 `form` · 스텁 `test_release_inplace.py:41` 에 `pm_exec_path` 추가 | 같음 |
+| **잡는 것** | 기록 파일이 **다른** 곳이 창 안에 시작한 세션 | 같은 pm2 데몬의 남은 봇 · 답이 두 번이면 어느 세션이든(두 세션이 모두 받을 때) — **사람이 볼 때만** | 같음 + 자동 실패 |
+| **못 잡는 것** | **같은 체크아웃 이중 세션**(기록 공유 → 차이 0) · 창 전 시작해 붙어 있는 세션 · **이 프로세스가 IDENTIFY 할 때만 비교** · 오탐: 기록 소실 · 동시 쓰기 유실 | **다른 `PM2_HOME` · pm2 밖 `node` · 다른 머신** · 한쪽 분배면 답 이중도 없다 · 평상시 관측 없음 · **자동 실패 없음** | 다른 데몬 등은 같음 |
+| **비용** | `IdentifyGuard.check` 공개 타입에 `total` · 별도 필드 `foreignAlertedAt`(`alertedAt` 재사용 시 R5 차단 알림을 삼킨다) · chat·앱 2·테스트 · 도구 수정 · 새 로그·웹훅 알림 | `release-inplace.sh` · 테스트 · 런북 양식 | + 첫 실사용이 R2 |
+| **위험** | 거짓 양성 알림 | 조용히 지나감(위) | 모양이 어긋나면 N=0 → **R2 가 fin 에서 rc 4 · fit 건너뜀 → fin=R2·fit=R1 혼합** |
+| **실측** | `chat-live-check` 계열에 **기록 경로 인자를 더한 두 번째 세션** + `GET /gateway/bot` 을 IDENTIFY 앞뒤로 · `standalone` 두 번은 크론·`ensureDefaults` 가 돌아 쓰지 않는다 | `chat-live-check` 그대로 두 번(분배만 · 쓰기 없음) | S0 |
+| **되돌리기** | revert **즉시** · 배포 뒤 **중간** | 줄 삭제 **즉시** | 조건 삭제 **즉시** · 혼합 복구 **중간** |
+
+**권고 근거.** 현실 경로 셋: ① 서버의 남은 프로세스 → O2 표시에 나온다 ② 로컬에서 운영 토큰 → G-1 이 `run.sh` 경로를 막고 우회 경로는 답 이중으로만 보인다 ③ 다른 머신 → **미측정 · 서버 범위 밖**. O1 이 더 주는 것은 ②·③ 중 창 안에 시작된 경우를 이 프로세스가 재접속할 때뿐이다. 그래서 O1 은 §10 으로 내린다. 게이트는 R2 에서 표시로 두고, 기대값이 확인되면 다음 릴리즈 PR 에서 다시 판단한다 — **그때까지 자동 판정은 없다.**
+
+**순서 안전.** A3 줄은 R1 스크립트로 R2 배포에서 처음 돈다. 표시만이라 배포 결과를 바꾸지 않고 `ssh-deploy.sh:58-60` 패턴에 걸리지 않는다. S0 이 같은 수를 미리 읽는다. #373 은 별건.
+
+---
+
+## 4. grammY 의존 · 웹·MCP 경로 · 공유 파일 (X4 · X5)
+
+### 4-1. 키보드 — A4 (R1)
+
+| 안 | 형태 | 되돌리기 |
+|---|---|---|
+| **K-a 채택** | notify 에 `ButtonRows`(`{label, action?|url?}` · chat 과 같은 모양 · chat 이 notify 를 의존해 반대 import 불가) · `toDiscordComponents` 는 `ButtonRows`·`inline_keyboard` 둘 다 · `telegram.ts` 가 `inline_keyboard` 로 변환 · **생성 2곳 교체**(`rsu.ts:173` · `auto-adjust.ts:64`) · `auto-adjust-cron.ts` 무변경 | revert **즉시** · 배포 뒤 **중간** |
+| K-b | 헬퍼가 `{inline_keyboard}` 객체 반환 | 어휘가 공개 계약에 남아 B5 때 호출부 재수정 |
+| K-c | R2 에서 한 번에 | 실패 원인이 제거와 섞인다 |
+
+**확인([A]):** 페이로드 동일(`custom_id`·라벨 유지) · 소비처 3 전송 지점 · `rsu.ts` 호출자 `scheduler.ts` 뿐 · 옛 메시지 클릭 유지 · 웹훅은 `components` 를 원래 거부. **R2:** B5 가 `inline_keyboard` 분기를 지우기 전에 앱 테스트 픽스처를 B2·B4 가 바꾼다(fin `notifier.test.ts:104,118,138` · fit `:199,518,557`). **검증:** 두 앱 검증 봇으로 전송·클릭 로컬 실측.
+
+### 4-2. `notifyBot()` · 웹 경로
+
+| 단계 | 변경 | 끊기는 경로 |
+|---|---|---|
+| **B3** | fin `bot/index.ts` 에서 `createBot`·`register*` 제거 · `notifyBot()` 만 남겨 `BOT_PROCESS_WITHOUT_TELEGRAM` 반환 | 웹·MCP → 명령(N10 fin) |
+| **B4** | `notifierFor(bot)`·`interactiveNotifierFor(bot)` 인자 제거 · 호출열 · 15 importer(`advisor-monitor.ts:293` 동적 import 포함) · `bot/index.ts` 삭제 · `vi.mock('@/bot/index')` 3 파일(`active-review.test.ts:16` · `briefing-target.test.ts:11` · `news-rules.test.ts:9`) · `NotifyBot`·`telegramTokenSet`·`TELEGRAM_TARGETS`·`notifierForChat`·`telegramRecipients` 삭제 · `scheduler.ts:23` · `quarterly-report.ts:83-87` · `sendFileIfDiscord` → `sendFile` | 웹·MCP → grammY 0 |
+
+B3~B4 사이 `dev` 는 토큰이 있으면 크론이 수신자를 세고 0 건 보내는 틈이 있다 — 릴리즈 전이라 서버에 닿지 않는다.
+
+### 4-3. fit `!bot` (1-7 · S-7)
+
+`bot` 은 "봇 프로세스인가" 다(`admin-alerts.ts:183,189,196,236,271,292,314,337,370`). `NotifyBot` → `BotProcess` 표지(`BOT_PROCESS`) · 위 조건과 `lib/daily-report.ts` · `weekly-report.ts` · `garmin/sync.ts:321` 필드 유지. `notifierFor` 만 인자를 뺀다. 웹 재인증 alert 는 S-7 별건. 회귀 테스트: 웹 경로 alert 0. 되돌리기 revert **즉시** · 배포 뒤 **중간**.
+
+### 4-4. 개명 — B7 (코드 결정)
+
+| 지금 | 처분 |
+|---|---|
+| fin `utils/telegram.ts`(`escapeHtml`·`h` 25 importer) | `utils/html.ts` · `replyHtml` 등은 B3 삭제 |
+| fin `markdownToTelegramHtml`(6) | `markdownToHtml` |
+| fit `utils/telegram.ts`(`mdToHtml`) | `utils/html.ts` · `replyLong` 삭제 |
+| `alertArgsFromTelegram`(`router.ts:23,205`) | `alertArgsFromMatch` |
+| `core/state-key.ts` 텔레그램 함수 | B2·B3 삭제 · `verify-food-edit-pending.ts:28,34,37` 는 Discord 키로(B2) |
+| notify `TELEGRAM_MAX_LENGTH` | B5 개명 · 앱 소비 0 |
+| fin `briefing.ts:110` 기본값 · `scheduler.ts:207,220` | 기본값 `!ai` · 인자 삭제 · `briefing-target.test.ts:67` |
+| fin `formatter.ts:50` | 상수 개명 · **값 4096 유지**(`ai.ts:94` · `briefing.ts:134`) |
+
+**`TELEGRAM_MAX_MESSAGE_LENGTH`(B2):** 쓰임은 `verify-food-edit-pending.ts:23,271-272,278-279` 최악 길이 단언이다. **`MAX_SINGLE_MESSAGE_LENGTH = 2000` 으로 바꾸고 단언 유지** — 한 조각에 들어가는 쪽이 낫고 최악 N16 이라 통과한다. `verify-food-edit-pending.ts:257` · `food-edit-format.ts:5-10` 낱말도 함께 고친다.
+
+### 4-5. `register*` 삭제와 테스트 대조표 (B2·B3 수용 조건)
+
+- `register*`(N6) · 어댑터(`briefing.ts:155` 등) 삭제 · `decide*` 유지. `vest-confirm.ts` 파일 유지.
+- `telegram-fake.ts`: `flush` 만 `__tests__/test-utils.ts` 로 · 나머지 삭제(`ai-decide` = `flush` · `expense-trade-decide`·`lookup-manage-decide` = `captureBot` · `special-decide` = `captureBot`·`fakeCtx`·`flush`+`telegramOutput`). "정규식 등록" 대조는 Discord 라우터 테스트로 옮긴다. `core/__tests__/reply.test.ts:8` 어댑터 케이스 삭제.
+
+**대조표.** N13 은 `decide*` 를 텔레그램 어댑터로 고정해 온 특성 테스트이고 N14 가 같은 분기를 덮는지는 미측정이다. B2(fit 31 ↔ `decide` 22 + `discord-router`) · B3(fin 198 ↔ decide 42 + Discord 38) PR 본문에 싣는다:
+
+| 삭제 케이스(`describe` 단위) | 대응 잔여 테스트 | 판정 |
+|---|---|---|
+| … | 파일:케이스 | 덮임 / **텔레그램 전용(소실 무해)** / **빈 칸 → 이 PR 에서 테스트 추가** |
+
+빈 칸이 남으면 머지하지 않는다. 9-1 focus 에 고정한다. 되돌리기: 문구 **즉시** · 삭제는 revert.
+
+### 4-6. 동작 차이 5 + X12
+
+| 곳 | 처분 | 근거 |
+|---|---|---|
+| fin `start` 이름 | 그대로 — 늘 "사용자" | 표시 문구 |
+| plain 재전송 · 네트워크 재시도 | 그대로 | 11-02 부터 Discord 만 받는 상태로 관찰 중 |
+| fit 실패 원문 + #365 | 원문 분기·`staticErrors` 삭제(B2) | 호출자 0 · Discord 동작 무변경 · T-7 |
+| 파일 10 MiB | 그대로 + S0 판정 | 초과해도 실패 안내(`quarterly-report.ts` `failed`) |
+| fit `clearKeyboard` | 모델에서 삭제(B2) | Discord 무시 |
+
+---
+
+## 5. PR 분할 · 릴리즈 · 스크립트 교체
+
+### 5-1. PR 순서표
+
+squash 머지 · 되돌리기 단위 PR. `dev` 머지는 서비스 영향 0. **`deploy` 열 = 그 PR 머지 상태에서 `python3 -m unittest discover -s deploy` 가 통과하는 근거**(CI 미포함 · 로컬에서 반드시 돌린다).
+
+| 순서 | PR | 범위 | `deploy` 통과 근거 | 검증 · 리뷰(9-0) | 되돌리기 |
+|---|---|---|---|---|---|
+| 1 | **A1** | `check_env.py` · 테스트 · README · `isolation.md` · 006 | 무관 | `tools/` · 9-1 필수(가드) + 봇 | **즉시** |
+| 2 | **A2** | 앱 `logger.ts` 2 + 테스트 | 무관 | 두 앱 · 9-1 필수 + 봇 | 릴리즈 전 **즉시** · 뒤 **중간** |
+| 3 | **A3** | `release-inplace.sh`(표시줄 · 사람 확인 문구 · **409 칸 유지**) · 스텁 `:41`·테스트 · `release-inplace.md:261` | 같은 PR 에서 `test_release_inplace` 갱신 | `deploy/` · 9-1 필수(배포 판정) + 봇 | 같음 |
+| 4 | **A4** | notify 타입·`discord-bot.ts`·`telegram.ts` + 생성 2곳 + 테스트 | 무관 | pleiades + 두 앱 + 버튼 로컬 실측 · 9-1 필수(공개 인터페이스) + 봇 | 같음 |
+| — | **R1 PR** | `dev` → `main` · 노트에 #441 파일(N15) | | 봇 게이트 | R-8 → `v1.5.4` **중간** |
+| — | **S0** | §6 판정 — B1 머지 전 | | | 읽기뿐 |
+| 5 | **B1** | `telegram-polling.*`·테스트 삭제(N4) · `discord-switch` 축소(`on`·`off`·`set`·`revert` · `.cjs:5,147-148` · **`:142` 출력 낱말 `telegram` → `미설정`**) · `notify-deploy.cjs`·테스트 · `release-inplace.sh` 409 · `t2-check.sh` U13 · `deploy.sh:23` · `deploy/env/*` + **앱 `.env.example` 2** · `test_deploy.py:251,265` 픽스처 · `test_t2_check.py` · `test_release_inplace.py:65-68,218,346-355` · `test_discord_switch.py`: `on`·`off` 테스트 12(`:181,199,206,212,223,233,244,253,273,281,290,298`)와 클래스 `:323-367` 삭제 · `check` 계열(`:144,159,169,175`)·`:307`·`:311` 유지 | 템플릿과 `.env.example` 을 같은 PR 에서 지워 `test_templates_cover…` 통과 · 폴링 테스트가 사라져 앱 삭제 가능 | `deploy/` · 9-1 필수(배포 경로 · 200 LOC 이상) + 봇 | 릴리즈 전 **즉시** |
+| 6 | **B2** | fit: 삭제 N4 · `register*` · `standalone` · notifier · `BOT_PROCESS` · 상태 키 · verify 스크립트 · 원문 분기 · `clearKeyboard` · 길이 상수 · redact 줄 · 픽스처 · `notifier.test.ts:377,378` 재작성 · `package.json`·lock | `test_deploy:762,772` 는 fin 고정 · fit 무관 | fit + `deploy` · 9-1 필수 + 봇 · **대조표** | 같음 |
+| 7 | **B3** | fin 인바운드: 삭제 N4 · `register*` · `standalone` · `index.ts` 축소 · fake 축소 · `smoke-bot-bundle.mjs` | 같은 PR 에서 `test_deploy.py:762,772` 수정(`startTelegramPolling(`·`getBot(`·`TELEGRAM_BOT_TOKEN`) | fin + 테스트 잡 + `deploy` · 9-1 필수 + 봇 · **대조표** | 같음 |
+| 8 | **B4** | §4-2 · N9 fin 테스트 · **R11 재발송 테스트(필수)** · 픽스처 · `grammy`·`--external:grammy`·lock · 루트 `.env.example` · redact 줄 | 무관 | fin(.env 없는 CI 조건 · #355) · 9-1 필수 + 봇 | 같음 |
+| 9 | **B5** | notify: 삭제 N4 · export · `inline_keyboard` 분기 · **`deliver.ts:74` 폴백 분기 유지 · 주석만**(`deliver.test.ts:120` 근처가 시험 · 죽은 분기지만 동작 위험 없음) · `error.ts:33,82` 낱말만 · `platform-env` · README · 테스트 | 무관 | pleiades + 두 앱 · 9-1 필수 + 봇 | 같음 |
+| 10 | **B6** | `_check_telegram` · `run.sh:29-30` · `tools/local/env/*` · `test_check_env`·`test_write_env` · `README:32` | 무관 · B4 뒤(앱이 토큰을 안 읽은 뒤) | `tools/` · 9-1 필수(가드) + 봇 | **즉시** |
+| 11 | **B7** | §4-4 · 주석만 파일 · M11 줄 · 옛 배포 삭제(Q4) · 앱 문서(Q4) · 스키마 주석 | `apps/*/deploy` 는 훅 테스트에서 문자열뿐 | 전 행 · 9-1 필수 + 봇 | 릴리즈 전 **즉시** · 뒤 **중간** |
+| 12 | **B8** | 런북 · `isolation.md` · 009 정정 · `measured-facts` · **`tools/local/test_residual.py`(마지막 신설 · 이 커밋에서 처음 통과)** | 무관 | `tools/` · self-review + 봇 | **즉시** |
+| — | **S0 재확인 → R2 PR** | 11-05 오전 뒤 | | 봇 게이트 | R-8(§6) |
+
+**삭제 읽는 법:** 삭제 N2 는 B1·B2·B3·B5 에 흩어진다. 9-1 focus = "무엇이 import 했나 · 남은 코드가 여전히 닿는가" + 대조표. 주석만 파일은 B7 로 몰아 로직 PR 을 작게 둔다.
+
+### 5-2. 릴리즈
+
+| 안 | 구성 | 잃는 것 |
+|---|---|---|
+| 1회 | R2 하나 | R2 자신의 배포가 옛 판정 · 원인이 안 갈린다 |
+| ★ **2회** | R1 → R2 | 재배포 1회 더 |
+| 3회 이상 | 앱별 | 공유 notify 를 먼저 못 지운다 |
+
+**R1 성격.** O2 면 R1 의 앱 변경은 A2·A4 뿐이고 페이로드가 같아 동작 불변이지만 **봇 재시작이 있다.** O1 을 고르면 새 로그·웹훅 알림까지 더해 "무변경" 이 아니다. 시점은 Q1. R1 은 태그로는 #441 파일의 첫 릴리즈다(N15 · 노트에 적는다 · `db-backup.cjs` 는 커밋 고정 배치라 태그를 기다리지 않는다 `docs/runbooks/db-backup.md:9`).
+
+**버전(#199):** R1 = minor · R2 = minor · 일반 Release · 새 필수 키·마이그레이션 0. 노트: 앱별 변경 · 서버 조치 "없음 · 토큰 삭제는 후속" · `NOTIFY_*` 를 지우지 말 것.
+
+**동결(절차 약속 · 기계 차단 아님):** R1 발행 뒤 **B1 머지 ~ R2 발행 동안 릴리즈 PR 을 열지 않는다.** 다른 릴리즈(#437 등)는 B1 전에 내거나 `hotfix/` 로 낸다 — hotfix dev 백포트는 B7 개명 뒤 충돌할 수 있다. B 묶음은 **11-05 오전 뒤** 순차로 머지한다.
+
+### 5-3. 스크립트 교체 대입 (M5)
+
+| 배포 | `ssh`·`release-inplace` | `deploy.sh`·`notify` | 일어나는 일 | 판정 |
+|---|---|---|---|---|
+| `v1.5.4` → R1 | `v1.5.4` | R1 | 옛 양식 · `409 0` | 깨지지 않음 |
+| R1 → R2 | R1 | R2 | `count_409` 는 로그만 봐 0 · 새 표시줄이 처음 나온다(표시만) · `notify` 인자 형식 유지 · 실패 대체 없음 · rc 무관 · A: 마이그레이션 0 · `mcp-config` 0 · `deploy/` 표시만 | 깨지지 않음 · 혼합은 C5 실패 때만(일반 조건) |
+| R2 → 다음 | R2 | 다음 | 409 칸 없음 · 게이트 online 3 · mcp 200 · same | 깨지지 않음 |
+| R-8 R2 → R1·`v1.5.4` | R2 | 옛 태그 | 409 게이트 없음 — `TELEGRAM_POLLING=off` 가 있으면 폴링 없음 · 줄만 지우고 토큰을 남기면 폴링 부활(§6 원자적 삭제) | 깨지지 않음 · 전제 §6 |
+
+C2 깨끗함: 지운 파일은 checkout 이 처리 · 상태 파일은 무시 경로. 체크아웃 전 스크립트가 지워진 파일을 부르는 경로 없음.
+
+### 5-4. 기본값 뒤집기와 스크립트 처분 (L31)
+
+**구현:** 스위치를 읽지 않는다. `usesDiscord`·`allowedUsesDiscord`·`interactiveUsesDiscord` 삭제 → 늘 Discord · 설정이 비면 수신자 0. 서버 줄은 무효지만 남아 바닥을 지킨다(5-2). **서버 영향:** 4 = discord 면 변화 0 · 아니면 그 라우트가 이동하고 웹훅이 비면 조용히 0 → S0. CI 는 N9 를 테스트 안에서 채운다(#355 형식).
+
+| 스크립트 | 처분 | 이유 |
+|---|---|---|
+| `telegram-polling.*` | 삭제(B1) | R-8 하면 그 태그 파일이 돌아온다 · 앱 없이 키만 있어도 무해 |
+| `discord-switch` `off`·`on`·`set`·`revert` | 삭제 · `check`·`state` 유지 · 출력 낱말 `미설정` | X10 · E1 |
+| 앱의 `봇 토큰·채널 미설정` 문구 | **제약 없음** — 소비자는 `discord-switch.sh:126`(`on` 경로)뿐이라 B1 뒤 자유롭게 고친다 | E6 |
+| `notify-deploy.cjs` | 텔레그램 대체·`chatsKey` 삭제 · 인자 유지 · 웹훅 없으면 rc 0 | X13 |
+| `release-inplace.sh` | 409 제거(B1) · `:20` 유지 | 5-2 |
+| `t2-check.sh` | U13 · 토큰 읽기 삭제 | 일회 |
+| `deploy/env/*` · `ssh-deploy.sh:69` | 키 삭제 · 주석 수정 | M5 |
+
+---
+
+## 6. 서버 작업과 되돌리기 바닥
+
+전부 사용자 실행 · 판정 양식 출력(I-3) · 스크립트는 `.server-scripts/`(#445) · 값·경로·수치 비출력.
+
+| 시점 | 무엇 | 양식(판정만) | 멈추는 조건 | 되돌리기 |
+|---|---|---|---|---|
+| **S0** B1 머지 전 · R2 직전 재확인 | 읽기 전용: `discord-switch.cjs state` · `check --no-send` · `apps/finance/reports` 최대 파일 · 두 앱 `.env` 폴링 · `pm_exec_path` 기준 봇 수 | 스위치 4 = discord · 키 전부 · 상한 초과 파일 없음 · 폴링 off · 봇 수 = 기대 2 — 각 예/아니오 | 상한 초과 외 "아니오" → 원인 처리 전 진행 안 함 | 읽기(**즉시**) |
+| **R2 발행** | 자동 배포 · 크론 시각 회피(C0) | 판정 양식 | C5 → 재시도·R-8 | **중간** |
+| **S1** 직후 | 웹 · Discord 알림 1건 · 현황·`!today` **답 1번** · 앱 문서를 고쳤으면 fin 대표 질의 1(S-6 준용) | 예/아니오 | 이상 → R-8 | **중간** |
+| **S2** Q3 시점 | 두 앱 `.env` 의 `TELEGRAM_*` 전 줄을 한 번에(`real` 해석 뒤 같은 디렉터리 임시 파일 600 → rename) · `--dry-run` 먼저 · `NOTIFY_*` 무변경 | 지운 키 개수 · 남은 `TELEGRAM_` 0 · 권한 600 · **pm2 env 의 `TELEGRAM_` 키 개수**(`pm2_env`·`pm2_env.env` 둘 다 · 파이프 처리 · 값 없이 · `telegram-polling.sh:100-112` 선례) · **`fin-env-*.bak`·`fit-env-*.bak` 개수**(글롭 · `platform-env-*.bak` 은 세지 않는다) · 봇 online | 쓰기 실패 → 그대로 · pm2 키 ≠ 0 → 보고 | 재기입(**중간**) |
+
+**S2 근거.**
+- R2 코드는 그 키를 읽지 않아 기능상 재시작 불필요. 단 토큰은 도는 프로세스의 `process.env` 에 **다음 재시작까지 남는다**.
+- 토큰과 `TELEGRAM_POLLING` 을 따로 지우지 않는다(§5-3).
+- 상태 파일 `logs/telegram-polling-*.json` 은 둔다. `logs/identify-*.json` 은 **지우지 않는다**(R5).
+- **사본:** `.bak` 은 두 앱 모두 `off` 를 실행했으니 있다고 본다. fin 새 `.env` 는 옛 서비스 `.env` 에서 만들었고 T-8 전이라 **옛 체크아웃에도 같은 토큰이 있을 수 있다**(fit 은 `007-t9` 대조 · 서버 실재 미측정). `/backup` 도 미측정. 처리는 Q3.
+
+### 되돌리기 바닥
+
+| 상태 | 대상 | 결과 | 등급 · 행위 |
+|---|---|---|---|
+| 릴리즈 전 | — | PR revert(역순 · B7 뒤 충돌 가능) | **즉시 ~ 중간** |
+| R1 뒤 | `v1.5.4` | 그대로 | **중간** |
+| R2 뒤 · 토큰 있음 | R1 | 텔레그램 코드 복귀 · 폴링 off 유지 · 그 태그 스크립트 사용 가능 | **중간** |
+| R2 뒤 · 토큰 삭제 | R1 또는 `v1.5.4` | Discord 그대로 · 텔레그램 수신자 0 | **중간** |
+| 더 아래 | 기동 하한 `v1.2.0` | fit 수신 < `v1.3.0` · fin 수신 < `v1.5.0` · `v1.5.3` 미만은 쓰기 도구 기본값 복귀 | **실사용 하한 `v1.5.3`** |
+| 텔레그램 복귀 | R1 + 토큰·chat ID·폴링 + `discord-switch off` | 가능(C-12) | **높음** · revoke 했으면 새 토큰 |
+| `NOTIFY_*` 를 지웠다 | **R2 미만 전부(R1 포함)** | 내려간 순간 알림 조용히 0(R12) | 줄 복구 **즉시** — 그래서 지우지 않는다 |
+| 운영 DB | 쓰기 0(S-8) | | 해당 없음 |
+
+**편도 없음.**
+
+---
+
+## 7. 수용 기준과 잔여 정의 (X11)
+
+**판정:** 8절 전 행 · 잔여 고정 테스트 · S0·S1·S2 양식. 이 분류는 **009 5-1 문구를 바꾼다 → Q4**.
+
+**잔여 고정 테스트(B8 · `tools/local/test_residual.py` · 표준 라이브러리 · 8절 `tools/` 행이 돈다):** `git grep --text -il -E 'telegram|grammy|텔레그램'` 의 각 파일이 ① 경로 허용 또는 ② **줄 허용**(그 파일의 일치 줄이 전부 패턴에 맞음)이어야 통과. 되돌리기: 삭제 **즉시**.
+
+| 분류 | 허용 | 방식 | 근거 |
+|---|---|---|---|
+| 이력 | `_workspace/**` · `docs/specs/**` · `docs/research/**` · `docs/handoff/**` · `docs/artifacts/**` · `CLAUDE.md` · `README.md` · `apps/*/docs/**` | 경로 | N12 |
+| 일회 런북 | `docs/runbooks/007-t2`·`t4`·`t5`·`t9`·`t10` · 머리에 소진 블록 · t10 `off` 에 "R2 뒤 실행 금지" | 경로 | M10 |
+| 셸 정리 목록 | `deploy/release-inplace.sh` — 줄 `PLEIADES_KEYS=` · `docs/runbooks/release-inplace.md` — `KEYS` 줄 | 줄 | 5-2 |
+| DB 컬럼 — 코드 | `apps/fitness/**` 의 `telegramMessageId|telegramChatId` 줄(`auto-adjust-cron.ts:102-103` · `auto-adjust.ts:419-420` · `notifier.ts` 주석 · `notifier.test.ts:17,367,373,390,396,420,441,463`) · **그 줄에 다른 낱말이 있으면 실패**(`:377,378` 은 B2 에서 재작성) | 줄 | S-8 · E4 |
+| DB 스키마 | 두 `schema.prisma` · fit 마이그레이션 `20260716054043` | 경로 | S-8 |
+| R11 설명 | `packages/notify/src/discord-md.ts`(`:2,5,10,161,189`) · `apps/finance/src/app/alerts/history/client-utils.ts` — 옛 본문이 왜 HTML 인지 설명 · 동작·문구 무변경 | 경로 | 5-4 |
+| 금지어 테스트 | `packages/chat/src/contract.test.ts` · `apps/finance/src/lib/ai/__tests__/system-prompt.test.ts` · `tools/local/test_residual.py` 자신 — 경로 · `deploy/test_release_inplace.py:177` `assertNotIn("텔레그램", …)` — 줄 | 경로·줄 | M1 · E2 |
+| 룰 이력 | `.claude/rules/isolation.md` · `.claude/agents/dual-repo-operator.md` · `.claude/skills/dual-repo-change/SKILL.md` | 경로 | N12 |
+| 앱 하네스 | Q4 결과대로 | 경로 | M11 |
+| **0** | 위 밖 전부 — 명시: `apps/*/src`·`scripts` · `packages/*/src` · `packages/notify/README.md` · `deploy/*` · `tools/**` · `package.json`·lock · `.env.example` 전부 · `deploy/env/*` · `tools/local/env/*` · `ai-model-upgrade.md` | — | 5-1 |
+
+### 7-1. DB 주석 · R11 (X9)
+
+`schema.prisma:406` 주석을 "Discord 메시지 id·별칭도 저장 · 읽는 곳 없음(S-8)" 으로 · fin `:332,428` 도. `//` 주석은 마이그레이션을 만들지 않는다. `@map` 안 씀(S-8). 되돌리기 **즉시**.
+
+**R11:** `discord-md.ts` 경로 · `redispatchAlert` 무변경. `alert-dispatcher.test.ts`·`retry/__tests__/route.test.ts` 에 옛 HTML 재발송 → Discord 마크다운 케이스가 없다 → **B4 필수 추가**.
+
+---
+
+## 8. 사용자 결정
+
+**§14 로 옮겼다**(파일 끝). 코드로 정한 것: 개명 · 스크립트 처분 · 릴리즈 2회 · 대조표 · 테스트 위치.
+
+**사용자 작업(결정 아님):** A1 웹훅 정체 확인·허용 목록 값 · S0·S1·S2 · 릴리즈 PR 머지.
+
+---
+
+## 9. 009 정본 정정 후보
+
+| 위치 | 내용 | 근거 |
+|---|---|---|
+| §3 L12·L12′ | `notifyBot()` 15 importer · 웹·MCP 도달 | X5 |
+| §3 L13 · L21 · L30 | fin 4+1 · fit 3 · deploy 16/151 · runbooks 7/30 · tools 7/33 · `:118` 해소 | X7·X8·X6 |
+| §4-3 · 5-1 | Q4 결과 · X4 | X4·X11 |
+| 5-2 | `discord-switch off` 제거 · `TELEGRAM_*` 원자적 삭제 | X10 |
+| 5-3 | R1 선행 · 웹훅 허용 목록 · **409 행 축소** | X1·X3 · Δ6 · E9 |
+| §7 409 행 | **"동등 대체 없음 · 자동 판정 상실"** · Q2 수단과 못 잡는 것 · 재접속·008 제외 이유 | X2 · E9 |
+| §7 notify-deploy | R2 알림부터 새 코드 | X13 |
+| S-8 · L20 | Discord 값도 쓴다 · 읽기 0 · 코드에 컬럼명 잔여 | X9 |
+| §8 신규 | **R15** 로컬 웹훅 직발송은 있는 틈 · 뒤집은 뒤 스위치로 못 닫는다(A1) · **R16** 스위치 미설정 라우트 이동(S0) | Δ6 · §5-4 |
+| #365 | 원문 분기 B2 삭제 | X12 |
+
+`measured-facts.md`: [S] + [A] + [A2] 대장 + U2 실측.
+
+---
+
+## 10. 제외 · 별건
+
+| 제외 | 다시 열 조건 |
+|---|---|
+| 이력 문서 수정 | 없음 |
+| **플랫폼 수 대조(O1)** | 다른 체크아웃·머신 이중 세션이 실제로 생기거나 Q2 에서 고를 때 |
+| 슬래시(C-6) · #421 · #437 · S-7 · #333 · #137 · #96 · #157 · #373 · chat·notify 버튼 통합 · fit `--smoke` | 각 이슈 · #437 은 동결 전 또는 hotfix |
+| 봇 삭제 | C-12(토큰 revoke 는 Q3 안) |
+| DB 컬럼 개명 | 읽기 경로가 생길 때 |
+| `.claude/**` 통째 정리 | Q4 c |
+| 옛 `nginx`·`ci.yml`·`security-audit.yml` | 별도 정리 |
+
+---
+
+## 11. 위험
+
+| # | 위험 | 대응 |
+|---|---|---|
+| W1 | 스위치 미설정 라우트 이동 | S0 |
+| W2 | 로컬 앱이 운영 웹훅 발송 — 지금도 있는 틈 | A1 · 사용자 확인 |
+| W3 | **이중 세션이 자동 판정 없이 지나간다** — 표시는 배포를 막지 않고 다른 데몬·pm2 밖·다른 머신은 보이지 않는다 | §3-3 한계 명시 · 답 이중 · 다음 릴리즈 재판단 |
+| W4 | 동결 중 긴급 릴리즈 · 백포트 충돌 | hotfix |
+| W5 | 삭제 테스트만 덮던 분기 소실 | 대조표 |
+| W6 | fin CI 회귀(#355) | 비필수 체크 포함 · `.env` 없는 조건 |
+| W7 | 타입 전용 import 잔존 → `--external` 제거 뒤 빌드 실패 | typecheck + 빌드 · 서버면 재기동 전 rc 4 |
+| W8 | fin 앱 문서 변경이 AI 답을 바꾼다 | S1 질의 1 · 1회 표본 한계 |
+| W9 | `deploy` 테스트는 CI 밖 — 깨진 채 초록 | 각 PR 로컬 실행 · 본문에 결과 |
+
+---
+
+## 12. 스코프 축소안 — 발동하지 않음 (선택지로만)
+
+**발동 조건: 문안 외 정정이 나오면.** 재감사는 전부 문안이었으므로 **발동하지 않는다.** 사용자가 원하면 고를 수 있다.
+
+| | 지금 | 축소안 |
+|---|---|---|
+| **R2** | B1~B8 | B1~B6 + 운영 지시 런북(`release-inplace.md`·`isolation.md`) |
+| **R3 patch** | — | B7 + 잔여 고정 테스트 + 일회 런북 표기 |
+| 얻는 것 | | 동결이 짧아지고 개명이 hotfix 백포트와 겹치지 않는다 · R2 판정이 동작에 집중 |
+| 잃는 것 | | **5-1 완료 판정이 R3 로 밀린다** · 재배포 1회 더 · `apps/finance/CLAUDE.md` 낡은 문구가 R3 까지 모델 입력에 남고 **S1 fin 대표 질의(S-6)도 R3 로 간다** · `ai-model-upgrade.md` 는 R3 까지 낡음(운영 지시 런북에 넣을지 그때 판단) |
+| 되돌리기 | | 문구 **즉시** · R3 revert **중간** |
+
+---
+
+## 13. 유효기간
+
+**다시 연다:** U2 실측이 Q2 전제를 깼을 때 · S0 "아니오" · B 묶음 전 `apps/*`·`deploy/` 릴리즈로 줄 번호가 밀렸을 때(PR 착수 직전 재측정) · 마이그레이션 릴리즈가 R2 전에 들어올 때 · C-12 변경 · D-5 완료로 소진.
+
+---
+
+## 14. 사용자 결정
+
+정해 주실 것은 다섯 가지입니다. 모두 권고대로라면 **"권고대로"** 한마디면 됩니다.
+
+### Q1. 첫 릴리즈(R1)를 언제 낼까요
+
+R1 은 텔레그램을 지우지 않고 대체 수단만 올립니다. 봇이 한 번 재시작됩니다. 11-05 오전까지의 관찰은 제거 릴리즈만 막으므로 약속을 어기지는 않습니다.
+
+| 선택지 | 달라지는 것 | 되돌리기 |
+|---|---|---|
+| a. 11-05 전 | R1 이 R2 전에 더 오래 돕니다. 관찰 도중 재시작과 Discord 경로 코드 변경이 섞입니다 | 직전 태그로 재배포(**중간**) |
+| b. 11-05 오전 뒤 | 관찰이 깨끗하게 끝납니다. R2 가 그만큼 늦어집니다 | 같음 |
+
+**권고: b.** 버튼은 운영에서 드물게 쓰여 오래 돌려도 검증되지 않고, 로컬 실측이 그 몫을 합니다.
+
+### Q2. 텔레그램 409 판정이 사라지는 자리를 어떻게 할까요
+
+지금은 같은 토큰이 두 곳에서 돌면 409 가 나고 **배포가 스스로 실패합니다.** Discord 에는 그런 신호가 없어 **같은 수준의 자동 판정은 어떤 안으로도 되살리지 못합니다.**
+
+| 선택지 | 달라지는 것 | 되돌리기 |
+|---|---|---|
+| O2. 표시 + 사람 확인 | 양식에 서버 전체 봇 수와 "답이 한 번만 왔나" 줄이 생깁니다. **배포를 막지 않으므로, 자동 배포에서는 아무도 보지 않아도 통과합니다 — 자동 판정이 사라집니다.** 다른 pm2 데몬·pm2 밖 프로세스·다른 머신은 수에 나오지 않습니다. chat 패키지 변경은 없습니다 | 줄 삭제(**즉시**) |
+| O1. O2 + 플랫폼 수 대조 | 다른 체크아웃·머신에서 최근 시작한 세션을 재접속 때 경고로 잡습니다. 같은 체크아웃의 이중 세션과 오래 붙어 있는 세션은 못 잡고, 자동 실패도 아닙니다. 공개 타입 변경·새 알림·실측 2건이 듭니다 | revert(**즉시**) · 배포 뒤 재배포(**중간**) |
+| O3. O2 + 봇 수 게이트 | 같은 서버의 남은 봇은 배포가 실패로 알립니다(같은 데몬 안만). 서버 값 모양이 어긋나면 R2 가 fin 에서 멈춰 **fin 만 새 버전인 혼합 상태**가 됩니다 | 조건 삭제(**즉시**) · 혼합 복구(**중간**) |
+
+**추가 승인:** 검증 봇으로 같은 토큰 두 세션을 로컬에서 띄워, 메시지가 양쪽에 가는지 재도 될까요(쓰기 없음 · 서비스 영향 없음). 한쪽에만 가면 "답 한 번" 줄은 이중 세션을 드러내지 못하므로 문구를 고칩니다.
+
+**권고: O2 + 실측 승인.** 자동 판정을 잃는다는 점을 받아들이는 선택입니다. R2 에서 봇 수가 기대대로 나오면 다음 릴리즈 때 O3 로 올릴지 다시 묻겠습니다.
+
+### Q3. 서버 텔레그램 토큰을 언제 지우고, 사본은 어떻게 할까요
+
+새 코드는 토큰을 읽지 않으므로 지워도 기능은 그대로입니다. 값은 도는 프로세스 메모리에 다음 재시작까지 남습니다.
+
+**시점**
+
+| 선택지 | 달라지는 것 | 되돌리기 |
+|---|---|---|
+| a. R2 배포 확인 직후 | 안 쓰는 비밀이 바로 사라집니다. 텔레그램으로 돌아가는 비용이 곧바로 커집니다 | 토큰 다시 넣기(**중간**) |
+| b. 정기 크론 한 바퀴 정상 확인 뒤 | 며칠 더 서버에 남습니다. 그동안 복귀가 쉽습니다 | 같음 |
+| c. 분기 PDF(2027-01) 뒤 | 장주기 기능까지 대비합니다. 비밀이 가장 오래 남습니다 | 같음 |
+
+**사본** — `.bak` 은 있다고 보고, 옛 체크아웃의 `.env` 와 `/backup` 은 있는지 모릅니다.
+
+| 선택지 | 달라지는 것 | 되돌리기 |
+|---|---|---|
+| x. 스크립트가 `.bak` 을 지운다 | **`.bak` 만 사라지고 옛 `.env`·`/backup` 의 사본은 남습니다.** `.bak` 안의 다른 키 복구본도 사라집니다 | 복구 불가 — 값은 원본에서 다시 |
+| y. 개수만 보고 직접 처리 | 스크립트는 건드리지 않습니다. 남은 사본은 직접 찾아야 합니다 | 해당 없음 |
+| z. BotFather 에서 토큰 revoke | **어디 사본이 있든 값이 무효가 됩니다.** 봇은 남습니다. 복귀할 때는 새 토큰을 받습니다 | 새 토큰 발급·기입(**중간**) |
+
+**권고: b + z.** 사본 위치를 다 모르니 지우는 것보다 무효로 만드는 쪽이 확실합니다. revoke 는 사용자만 할 수 있고, 텔레그램 코드가 없는 태그가 돈 뒤에 합니다.
+
+### Q4. "텔레그램 0" 을 어떻게 정의할까요 (세 가지를 한 묶음으로)
+
+| 항목 | 선택지 | 달라지는 것 | 되돌리기 |
+|---|---|---|---|
+| (i) 수용 기준 | §7 분류로 고친다 / 009 원문대로 런북까지 0 | §7 은 일회 런북 5 · 컬럼명이 든 코드 줄 · 옛 HTML 설명 주석을 남깁니다. 원문대로면 일회 런북 기록을 고쳐 써야 합니다 | 문구(**즉시**) |
+| (ii) 앱 문서 | a. `apps/finance/CLAUDE.md`(`:20,54,75,87`) · `.claude/rules/workflow.md:87` 만 / b. 언급 전부 / c. `.claude/**` 16 파일 삭제 | a 는 AI 가 읽는 거짓 문구만 고치고 배포 뒤 질의 1건으로 확인합니다. b 는 옛 릴리즈 절차 스킬까지 고칩니다. c 는 AI 입력이 크게 줄어 따로 판정이 필요합니다 | 릴리즈 전 **즉시** · 뒤 **중간** |
+| (iii) 앱 안 옛 배포 파일 | 6 파일 삭제 / 언급 있는 5 / 남기고 허용 | 6 = `deploy.sh` 2 · `deploy.yml` 2 · `ecosystem.config.js` 2 이고 실행·참조하는 곳이 없습니다. 측정의 5 는 낱말 기준이라 fin 의 짝이 남습니다 | revert(**즉시**) |
+
+**권고: §7 분류 · a · 6 파일.** `nginx`·`ci.yml`·`security-audit.yml` 은 건드리지 않습니다.
+
+### Q5. fit 에서 아직 안 써 본 기능(#387)을 R2 전에 시험할까요
+
+편집 대기 입력 · 사진 · `food:` 버튼 · `auto_adjust` 버튼은 Discord 운영에서 한 번도 쓰지 않았습니다. 지금은 안 되면 텔레그램을 다시 켤 수 있는데, R2 태그에는 그 스크립트가 없습니다.
+
+| 선택지 | 달라지는 것 | 되돌리기 |
+|---|---|---|
+| a. R2 전에 앞 3개를 1회 시험 · `auto_adjust` 는 이월 | 결함이 제거 전에 드러납니다. 운영 DB 에 식단 행이 생기고 삭제 버튼으로 지웁니다 | 앱에서 삭제 |
+| b. 전부 이월(10-30 결정 유지) | 시험 비용이 없습니다. 결함이 나오면 고쳐서 내거나 직전 태그로 내립니다 | 문구(**즉시**) |
+
+**권고: a.** 다만 써 본 적 없는 기능이라 b 도 손해가 작습니다. `auto_adjust` 는 어느 쪽이든 A4 로컬 실측이 전송·클릭을 확인합니다.
