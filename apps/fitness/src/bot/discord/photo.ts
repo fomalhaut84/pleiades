@@ -31,6 +31,8 @@ export const PHOTO_TOO_LARGE_TEXT = "사진이 너무 큽니다(8 MiB 까지).";
 export const PHOTO_FIRST_ONLY_TEXT = "ℹ️ 여러 장을 받았습니다 — 첫 사진만 분석했습니다.";
 /** 텔레그램 판과 같은 문구. */
 export const PHOTO_FAILED_TEXT = "사진 처리 중 오류가 발생했습니다. 다시 시도해주세요.";
+/** 저장은 됐고 결과 답장만 못 보냈을 때 — 다시 보내면 같은 식사가 두 번 기록된다(#368). */
+export const PHOTO_SAVED_REPLY_FAILED_TEXT = "식단은 기록됐지만 결과를 다 보내지 못했습니다. 사진을 다시 보내면 중복으로 기록됩니다.";
 
 /** contentType → 확장자 — 허용 형식이 아니면 undefined(`image/jpeg; charset=…` 같은 매개변수는 뗀다). */
 export function photoExtension(contentType: string | undefined): string | undefined {
@@ -78,7 +80,12 @@ export async function handleDiscordAttachment(ctx: MessageContext, deps: PhotoDe
     return;
   }
   // 이미지가 아닌 첨부는 세지 않는다(사진 1 + PDF 1 이면 안내 없음 · PR-3 사전 리뷰 info 3)
-  if (images.length > 1) await ctx.reply(PHOTO_FIRST_ONLY_TEXT);
+  // 부가 안내다 — 실패가 chat 의 "다시 시도" 안내로 번지면 저장된 식사를 또 보내게 된다(#368 사전 리뷰 major)
+  if (images.length > 1) {
+    await ctx.reply(PHOTO_FIRST_ONLY_TEXT).catch((err: unknown) => {
+      console.warn(`[discord-fit] 여러 장 안내 실패: ${sanitizeError(err)}`);
+    });
+  }
 }
 
 async function analyzePhoto(ctx: MessageContext, photo: Attachment, tmpDir?: string): Promise<void> {
@@ -94,7 +101,14 @@ async function analyzePhoto(ctx: MessageContext, photo: Attachment, tmpDir?: str
       caption: ctx.text,
       sentAt: new Date(ctx.sentAt),
     });
-    await discordOutput(ctx).reply(result);
+    try {
+      await discordOutput(ctx).reply(result);
+    } catch (err) {
+      // 버튼이 없는 응답은 저장하지 않은 안내다(Vision 실패 + 캡션 없음) — 바깥의 "다시 시도" 안내가 맞다
+      if (result.buttons === undefined) throw err;
+      console.error(`[discord-fit] 저장 뒤 답장 실패: ${sanitizeError(err)}`);
+      await ctx.reply(PHOTO_SAVED_REPLY_FAILED_TEXT).catch(() => undefined);
+    }
   } finally {
     await ack?.delete().catch(() => undefined);
     // 쓰기 도중 실패해도 남은 조각을 지운다(없으면 무시)
