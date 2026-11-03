@@ -1,6 +1,6 @@
 # DB 일일 백업 런북 (#441)
 
-fin·fit DB 를 서버 안 백업 위치에 매일 뜬다. **서버를 잃으면 함께 잃는다** — 서버 밖 보관은 다음 단계다.
+fin·fit DB 를 서버 안 백업 위치에 매일 뜬다. 6절을 마치면 암호화한 사본을 라즈베리파이가 가져간다 — **그 전에는 서버를 잃으면 백업도 함께 잃는다.**
 
 실행은 전부 사용자가 서버에서 한다(Claude 서버 접근 금지 · I-3). 세션에는 판정 양식과 결과 줄만 붙인다. 오류 원문에 DB 이름·경로가 있으면 가린다.
 
@@ -144,8 +144,162 @@ rm ~/pleiades-private/restore-test.sh ~/pleiades-private/restore-test.err
 node ~/pleiades-ops/db-backup.cjs --accept-shrink fin
 ```
 
+## 6. 서버 밖 사본 (라즈베리파이)
+
+서버가 `age` 로 암호화한 파일을 `offsite/` 에 두고, 파이가 매일 가져가 앱별 최근 30개와 월별 첫 파일 12개를 보관한다.
+
+| 원칙 | 내용 |
+|---|---|
+| 복호화 키 | 서버·파이·저장소·세션 어디에도 두지 않는다. **잃으면 모든 사본을 못 읽는다** — 비밀번호 관리자와 오프라인 사본 두 곳에 둔다 |
+| 가져가는 방향 | 파이 → 서버. 서버에는 파이 접속 정보가 없어 서버가 파이의 사본을 직접 지우지 못한다 |
+| 침해된 서버 | 파일을 보낼 수는 있다. 오늘 뒤 날짜 거부 · 앱별 16개 제한 · 실행당 삭제 2개 이하 · 월별 12개 별도 보관 · 크기 급감 시 삭제 중단으로 밀어내기를 늦춘다. **가짜 파일이 매일 정상 크기로 오면 내용까지는 가려내지 못한다** |
+| 파이 키 | 서버의 `offsite/` 읽기만 된다(`rrsync -ro -no-del`). 유출돼도 암호문만 읽힌다 · 6-3 에서 삭제가 거부되는지 직접 확인한다 |
+| 저장 장치 | SD 카드 · 고장 나면 사본을 잃는다. 고장 알림은 없고 가져오기 실패 알림으로 드러난다 |
+
+되돌리기: 서버 `authorized_keys` 줄 · 공개키 파일 · 파이 crontab 줄 삭제(**즉시**) · 사본 삭제는 **편도**.
+
+### 6-1. 키 만들기 (맥 · 서버와 파이에서 하지 않는다)
+
+```bash
+brew install age
+age-keygen
+```
+
+`AGE-SECRET-KEY-…` 줄을 비밀번호 관리자와 오프라인 사본에 저장하고 터미널을 지운다. `age1…` 공개키만 다음 단계에 쓴다.
+
+### 6-2. 서버
+
+1절을 새 `<REF>`·`<SHA256>` 으로 다시 해 스크립트를 올린 뒤:
+
+```bash
+command -v rrsync python3 rsync
+sudo apt install -y age
+printf '%s\n' '<age1 공개키>' > ~/pleiades-ops/offsite-recipient.txt
+env -i HOME="$HOME" PATH=/usr/bin:/bin "$(command -v node)" ~/pleiades-ops/db-backup.cjs
+ls /backup/pleiades-db/offsite | sed 's/-[0-9].*//' | sort | uniq -c
+```
+
+**기대:** 첫 줄에 세 경로(`/usr/bin/rrsync` 가 아니면 멈추고 Claude 에게 알린다) · `결과: 통과` · fin·fit 각 1개 이상. 공개키 파일이 없으면 암호화를 하지 않는다. 암호화가 실패하면 매일분은 남고 `fin(offsite)` 로 알린다.
+
+### 6-3. 파이
+
+Claude 가 주는 `<REF>`·`<SHA256>` 으로 설치하고 키를 만든다.
+
+rsync 는 침해된 서버가 보낸 데이터를 처리하므로 보안 패치된 판을 쓴다.
+
+```bash
+sudo apt update && sudo apt install -y --only-upgrade rsync
+mkdir -p ~/pleiades-offsite ~/pleiades-offsite/store && chmod 700 ~/pleiades-offsite
+curl -fsSL https://raw.githubusercontent.com/fomalhaut84/pleiades/<REF>/deploy/db-offsite-pull.sh -o ~/pleiades-offsite/db-offsite-pull.sh.new \
+  && echo "<SHA256>  $HOME/pleiades-offsite/db-offsite-pull.sh.new" | sha256sum -c --quiet \
+  && mv ~/pleiades-offsite/db-offsite-pull.sh.new ~/pleiades-offsite/db-offsite-pull.sh && chmod 700 ~/pleiades-offsite/db-offsite-pull.sh && echo 설치 통과
+ssh-keygen -t ed25519 -N '' -C pleiades-offsite -f ~/.ssh/pleiades-offsite
+cat ~/.ssh/pleiades-offsite.pub
+```
+
+**서버에서** 그 공개키를 한 줄 더한다. 기존 줄은 건드리지 않는다.
+
+```bash
+printf '\n%s\n' 'restrict,command="/usr/bin/rrsync -ro -no-del /backup/pleiades-db/offsite" <파이 공개키 한 줄>' >> ~/.ssh/authorized_keys
+ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+**파이에서** 서버 지문을 먼저 대조한다. 아래 출력의 `SHA256:…` 이 방금 서버에서 본 값과 **같을 때만** 다음으로 간다 — 다르면 가로채기일 수 있으니 멈춘다.
+
+```bash
+ssh-keyscan -t ed25519 -p <SSH포트> <서버주소> > /tmp/offsite-host-key
+ssh-keygen -lf /tmp/offsite-host-key
+```
+
+같으면 등록하고 설정을 쓴다. 설정 파일은 비밀(웹훅)을 담으므로 세션에 붙이지 않는다.
+
+```bash
+cat /tmp/offsite-host-key >> ~/.ssh/known_hosts && rm /tmp/offsite-host-key
+cat > ~/pleiades-offsite/config <<'CONFIG_END'
+HOST=<서버주소>
+PORT=<SSH포트>
+REMOTE_USER=<서버 계정>
+SSH_KEY=$HOME/.ssh/pleiades-offsite
+DEST=$HOME/pleiades-offsite/store
+DISCORD_WEBHOOK=<배포 알림 채널 웹훅>
+CONFIG_END
+chmod 600 ~/pleiades-offsite/config
+~/pleiades-offsite/db-offsite-pull.sh --test-alert
+~/pleiades-offsite/db-offsite-pull.sh
+```
+
+**기대:** `알림 보냄` · `결과: 통과 — 새 파일 …`. 스크립트 테스트는 rsync 를 스텁으로 돌리므로 **이 첫 실행이 rrsync 실제 검증이다.** 실패하면 사유 코드만 알린다:
+
+| 코드 | 뜻 |
+|---|---|
+| `config` | 설정 파일 · 키 경로 · 포트 |
+| `locked` | 이전 실행이 아직 돈다 |
+| `disk` · `write` | 여유 1 GB 미만 · 저장 실패 |
+| `rsync(rc=N)` | 접속·전송 실패 · `124` 는 300초 안에 못 받았다는 뜻이다(전송 총량을 600 MB 로 묶는 상한) — 덤프가 그만큼 커졌거나 서버 침해일 수 있다 |
+| `badfile` | 오늘 뒤 날짜 · 잘못된 이름 · 암호문이 아님 — **서버 침해일 수 있다.** 그 실행은 아무것도 보관하지 않았다 |
+| `toomany` | 앱별 16개 초과 — 위와 같다 |
+| `fin(stale)` | 그 앱의 어제·오늘 파일 없음 — 서버 크론이나 암호화가 멈췄다 |
+| `fin(shrink)` | 새 파일이 보관분 최대의 절반 미만 — 옛 사본을 지우지 않았다. 5절처럼 원인을 먼저 본다. 일부러 줄인 것이 확실할 때만 `db-offsite-pull.sh --accept-shrink fin` |
+
+파이 키로 지우기와 셸이 막혀 있는지 본다. **서버에서** 빈 파일을 만들고:
+
+```bash
+touch /backup/pleiades-db/offsite/delete-probe
+```
+
+**파이에서:**
+
+```bash
+rsync -r --remove-source-files -e "ssh -i $HOME/.ssh/pleiades-offsite -p <SSH포트> -o IdentitiesOnly=yes" '<서버 계정>@<서버주소>:/delete-probe' /tmp/delete-probe; echo "삭제 시도 rc=$?"
+ssh -i ~/.ssh/pleiades-offsite -p <SSH포트> -o IdentitiesOnly=yes '<서버 계정>@<서버주소>' true; echo "셸 시도 rc=$?"
+```
+
+**서버에서** 파일이 남아 있어야 한다.
+
+```bash
+ls /backup/pleiades-db/offsite/delete-probe && rm /backup/pleiades-db/offsite/delete-probe
+```
+
+**기대:** 두 시도 모두 rc 가 0 이 아니고 서버에 파일이 남아 있다. 남아 있지 않으면 등록을 멈추고 Claude 에게 알린다.
+
+파이의 시간대를 `date +%z` 로 본다. `+0900` 이면 `30 5`, `+0000` 이면 `30 20` 이다(둘 다 05:30 KST · 서버 백업 뒤).
+
+```bash
+CRON_AT='30 5'
+if CUR=$(crontab -l 2>&1) || [[ "$CUR" == *"no crontab"* ]]; then
+  [[ "$CUR" == *"no crontab"* ]] && CUR=
+  { printf '%s\n' "$CUR" | grep -v db-offsite-pull.sh; echo "$CRON_AT * * * $HOME/pleiades-offsite/db-offsite-pull.sh >> $HOME/pleiades-offsite/pull.log 2>&1"; } | crontab -
+else
+  echo "!! crontab 을 읽지 못했다 — 바꾸지 않았다"
+fi
+crontab -l | grep -c db-offsite-pull.sh
+```
+
+마지막 줄은 `1` 이어야 한다.
+
+### 6-4. 복호화 확인 (맥)
+
+**이것을 통과해야 "서버 밖 사본 있음" 이다.** 4절이 덤프의 복원을 증명했으니, 여기서는 파이의 사본을 풀면 서버의 그 덤프와 같은지만 본다. 풀어낸 내용은 디스크에 쓰지 않는다.
+
+1. 파이에서 파일 하나를 맥으로 가져온다(암호문이다).
+2. 맥에서 키를 붙여 넣어(화면에 표시되지 않는다) 해시를 낸다.
+
+```bash
+read -rs AGE_KEY
+age -d -i <(printf '%s\n' "$AGE_KEY") <파일>.dump.age | shasum -a 256
+unset AGE_KEY
+```
+
+3. 서버에서 같은 이름의 덤프 해시를 낸다.
+
+```bash
+sha256sum /backup/pleiades-db/daily/<파일>.dump
+```
+
+**기대:** 두 해시가 같다. "일치"만 알린다. 끝나면 맥의 `.age` 파일을 지운다.
+
 ## 언제 다시 하나
 
-- 복원 시험: 분기마다 1회 · 스키마를 크게 바꾼 뒤.
+- 복원 시험·복호화 확인: 분기마다 1회 · 스키마를 크게 바꾼 뒤.
 - node 를 올렸을 때: crontab 의 node 경로 확인.
 - 스크립트를 고쳤을 때: 1번을 새 `<REF>` 로 다시.
