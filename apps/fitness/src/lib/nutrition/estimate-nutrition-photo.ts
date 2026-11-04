@@ -1,20 +1,23 @@
 // #309 (M14 Phase 2 #5): 음식 사진 → Claude Vision 으로 kcal + macros 추정.
 // 텍스트 estimator (estimate-nutrition.ts) 와 동일한 NutritionEstimate shape 반환.
-// Claude CLI 의 `@<path>` 문법으로 로컬 이미지 파일을 프롬프트에 참조 → Vision 처리.
+// #461: 이미지는 stream-json 본문으로 넘긴다 — `@<path>` 는 큰 사진이 모델에 닿지 않았다(운영 3회 · 로컬 재현).
 //
 // 응답 검증은 parseNutritionResponse 재사용 (item 별 4·4·9, macros null propagate).
 
 import { spawn } from "child_process";
+import fs from "node:fs/promises";
 import { parseNutritionResponse, type NutritionEstimate } from "./estimate-nutrition";
 import { CLAUDE_CLI_ISOLATION_ARGS } from "@/lib/ai/cli-isolation";
-import { claudeModelId, claudeSpawnEnv, warnModelDriftFromStdout } from "@/lib/ai/models";
+import { buildImageInputLine, parseStreamResult } from "@/lib/ai/cli-image-input";
+import { claudeModelId, claudeSpawnEnv, warnModelDrift } from "@/lib/ai/models";
+import { sniffImageType } from "@/lib/checkup/import/image-type";
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 // Vision 은 텍스트 estimator (18s) 보다 느림. 45s 여유 마진.
 const DEFAULT_TIMEOUT_MS = 45_000;
 
 export interface NutritionPhotoInput {
-  /** 절대 경로 (temp 파일). CLI 가 이 파일을 이미지 콘텐츠로 읽음. */
+  /** 절대 경로 (temp 파일). 이 함수가 읽어 본문으로 넘긴다 — 경로는 CLI 에 전달하지 않는다. */
   imagePath: string;
   /** 사용자 부가 설명 (봇 캡션 or 웹 텍스트). Vision 에 컨텍스트로 전달. */
   caption?: string;
@@ -42,11 +45,7 @@ function buildPhotoPrompt(input: NutritionPhotoInput): string {
   const captionLine = input.caption?.trim()
     ? `사용자 캡션: ${input.caption.trim()}\n`
     : "";
-  // Claude CLI 는 `@<path>` 를 파일 참조로 인식. 이미지 파일은 Vision 콘텐츠로 처리.
-  // path 는 프롬프트 최상단에 단독 위치해야 안정적으로 인식됨.
   return [
-    `@${input.imagePath}`,
-    "",
     "위 이미지는 한국인이 촬영한 음식 사진입니다. 각 항목의 이름·양·kcal·매크로 (P/C/F g) 를 추정하세요.",
     "",
     "규칙:",
@@ -78,10 +77,13 @@ function buildPhotoPrompt(input: NutritionPhotoInput): string {
     .join("\n");
 }
 
-interface CliResult {
-  result?: string;
-  is_error?: boolean;
-  subtype?: string;
+async function readPhoto(imagePath: string): Promise<Buffer | null> {
+  try {
+    return await fs.readFile(imagePath);
+  } catch (err) {
+    console.warn(`[nutrition-photo] 사진 읽기 실패: ${(err as NodeJS.ErrnoException).code ?? (err instanceof Error ? err.name : typeof err)}`);
+    return null;
+  }
 }
 
 export async function estimateNutritionFromPhoto(
@@ -89,19 +91,29 @@ export async function estimateNutritionFromPhoto(
   opts: EstimatePhotoOptions = {},
 ): Promise<NutritionEstimate | null> {
   if (!input.imagePath) return null;
+  const bytes = await readPhoto(input.imagePath);
+  if (!bytes) return null;
+  // MIME · 확장자는 믿지 않는다 — 텔레그램 경로는 늘 .jpg 이고 웹은 클라이언트가 정한다
+  const imageType = sniffImageType(bytes);
+  if (!imageType) {
+    console.warn("[nutrition-photo] 지원하지 않는 이미지 형식");
+    return null;
+  }
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const spawnFn = opts.spawnImpl ?? spawn;
-  const prompt = buildPhotoPrompt(input);
+  const inputLine = buildImageInputLine(bytes, imageType, buildPhotoPrompt(input));
 
   // Codex P1 (PR #310): `--tools "Read"` 는 caption/image 로 prompt-injection 되면 임의 서버
   // 파일 (예: .env) 을 읽어 items[].name / notes 에 실어 응답 가능 → API/봇이 그대로 노출.
-  // `--tools ""` 로 tool 차단. Claude CLI 는 `@<path>` 를 pre-process 해 이미지 콘텐츠로
-  // 삽입하므로 tool 없이도 Vision 작동.
+  // `--tools ""` 로 tool 차단. 이미지는 stdin 본문으로 가므로 도구 없이 Vision 이 동작한다.
   const args = [
     "-p",
-    prompt,
+    "--input-format",
+    "stream-json",
     "--output-format",
-    "json",
+    "stream-json",
+    // stream-json 출력은 --verbose 를 요구한다
+    "--verbose",
     "--model",
     // #255: 별칭이 아닌 고정 ID — CLI 업데이트로 모델이 조용히 바뀌지 않게
     claudeModelId("sonnet"),
@@ -120,11 +132,15 @@ export async function estimateNutritionFromPhoto(
       env: claudeSpawnEnv(),
       stdio: ["pipe", "pipe", "pipe"],
     });
-    child.stdin.end();
-    let stdout = "";
+    // CLI 가 먼저 죽으면 큰 본문 쓰기가 EPIPE 로 실패한다 — 처리하지 않으면 봇·웹 프로세스가 죽는다. 판정은 close 가 한다
+    child.stdin.on("error", (err: Error) => {
+      console.warn(`[nutrition-photo] stdin 쓰기 실패: ${err.message}`);
+    });
+    child.stdin.end(inputLine);
+    const stdoutChunks: Buffer[] = [];
     let stderr = "";
     child.stdout.on("data", (d: Buffer) => {
-      stdout += d.toString();
+      stdoutChunks.push(d);
     });
     child.stderr.on("data", (d: Buffer) => {
       stderr += d.toString();
@@ -134,21 +150,17 @@ export async function estimateNutritionFromPhoto(
       resolve(null);
     });
     child.on("close", (code: number | null) => {
+      const outer = parseStreamResult(Buffer.concat(stdoutChunks).toString("utf8"));
       // #255: 종료 코드·is_error 판정 전에 — 실패로 드러나는 모델 교체도 경고한다 (#258 Codex P2)
-      warnModelDriftFromStdout("nutrition-photo", stdout, "sonnet");
+      warnModelDrift("nutrition-photo", outer, "sonnet");
       if (code !== 0) {
         console.warn(
           `[nutrition-photo] CLI exit code=${code}: ${stderr.slice(0, 200) || "(no stderr)"}`,
         );
         return resolve(null);
       }
-      let outer: CliResult;
-      try {
-        outer = JSON.parse(stdout) as CliResult;
-      } catch (err) {
-        console.warn(
-          `[nutrition-photo] outer JSON parse 실패: ${err instanceof Error ? err.message : String(err)}`,
-        );
+      if (!outer) {
+        console.warn("[nutrition-photo] CLI 출력에 result 줄 없음");
         return resolve(null);
       }
       if (outer.is_error) {
