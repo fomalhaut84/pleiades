@@ -1,10 +1,8 @@
 // #532: 결과지 한 쪽 → 구조화 JSON 프롬프트. 보이는 것만 옮기고 해석 · 계산 · 추측은 하지 않는다. 순수.
 
-export function buildExtractPrompt(imagePath: string): string {
-  // `@<path>` 는 프롬프트 맨 앞 단독 줄이어야 이미지로 인식된다 (음식 사진 #309 와 같은 방식)
+export function buildExtractPrompt(): string {
+  // 이미지는 이 텍스트 앞의 stream-json 이미지 블록으로 간다 (#462)
   return [
-    `@${imagePath}`,
-    "",
     "위 이미지는 건강검진 결과지 (검진기관 온라인 결과 화면 캡처 · PDF 한 쪽 · 종이 결과지 사진) 의 한 쪽입니다.",
     "결과 표의 항목을 보이는 그대로 옮겨 JSON 으로 답하세요.",
     "",
