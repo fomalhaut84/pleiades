@@ -8,6 +8,7 @@ import { normalizeMarket } from '@/lib/market-hours'
 import { prisma } from '@/lib/prisma'
 import { collectNews } from './collect'
 import { formatNewsBlock, type NewsSection } from './format'
+import { fetchDisclosures, type DisclosureResult } from './opendart'
 import { NewsTargetError, queryTarget, resolveNewsTarget } from './resolve-target'
 import { sanitizeNewsText } from './sanitize'
 import type { NewsResult, NewsTarget } from './types'
@@ -20,7 +21,7 @@ export const PROMPT_NEWS_LIMITS = {
   maxHoldings: 12,
   perTarget: 3,
   maxChars: 8_000,
-  /** 새 대상을 시작하지 않는 시점. 진행 중인 대상은 조회 6 s + 소스 8 s 안에 끊겨, 보유 조회까지 더한 최악은 약 40 s 다 */
+  /** 새 대상을 시작하지 않는 시점. 진행 중인 대상은 조회 6 s + 공시 20 s(첫 고유번호 다운로드 포함 · 뉴스와 동시) 안에 끊겨, 보유 조회까지 더한 최악은 약 52 s 다 */
   overallMs: 20_000,
   /** DB·이름 조회 상한. 쿼리가 멈추면 시간 제한 없이는 AI 호출 전에 브리핑이 멈춘다 */
   lookupMs: 6_000,
@@ -76,7 +77,10 @@ export function selectHoldingTickers(
 export interface PromptNewsDeps {
   collect?: (target: NewsTarget, options: { days: number; limit: number }) => Promise<NewsResult>
   resolve?: (ticker: string) => Promise<NewsTarget>
+  disclosures?: (args: { ticker: string; days: number; limit: number }) => Promise<DisclosureResult>
   holdings?: () => Promise<HoldingRow[]>
+  /** 이름·6자리 코드 → Yahoo 티커. 없으면 null */
+  krxTicker?: (value: string) => Promise<string | null>
   clock?: () => number
 }
 
@@ -99,6 +103,7 @@ async function collectSections(
 ): Promise<{ sections: NewsSection[]; skipped: number }> {
   const collect = deps.collect ?? collectNews
   const resolve = deps.resolve ?? resolveNewsTarget
+  const disclosures = deps.disclosures ?? fetchDisclosures
   const clock = deps.clock ?? Date.now
   const deadline = clock() + PROMPT_NEWS_LIMITS.overallMs
   const sections: NewsSection[] = []
@@ -111,11 +116,16 @@ async function collectSections(
       sections.push({ label: sanitizeNewsText(ticker, 40) || '입력값', failure: '종목명을 찾지 못함' })
       continue
     }
-    try {
-      sections.push({ label: target.label, result: await collect(target, options) })
-    } catch {
-      sections.push({ label: target.label, failure: '조회 오류' })
-    }
+    // 함께 돈다 — 선택 기능인 공시가 뉴스의 시간 예산을 잠식하지 않게 한다(OpenDART 는 다른 호스트다)
+    const [news, filing] = await Promise.allSettled([
+      collect(target, options),
+      disclosures({ ticker, days: options.days, limit: options.limit }),
+    ])
+    sections.push({
+      label: target.label,
+      ...(news.status === 'fulfilled' ? { result: news.value } : { failure: '조회 오류' }),
+      disclosures: filing.status === 'fulfilled' ? filing.value : { status: 'failed', reason: '조회 오류' },
+    })
   }
   return { sections, skipped: 0 }
 }
@@ -161,9 +171,29 @@ export function gatherWeeklyNews(deps: PromptNewsDeps = {}): Promise<string> {
   return gatherForMarkets(['KR', 'US'], PROMPT_NEWS_LIMITS.weeklyDays, deps)
 }
 
-/** 종목 분석. 인자가 `/브리핑 삼성전자` 처럼 이름이면 티커로 못 찾으니 질의로 찾는다 */
-export async function gatherTickerNews(ticker: string, deps: PromptNewsDeps = {}): Promise<string> {
+async function loadKrxTicker(value: string): Promise<string | null> {
+  const stock = await prisma.krxStock.findFirst({
+    where: /^\d{6}$/.test(value) ? { code: value } : { name: { equals: value, mode: 'insensitive' } },
+    select: { yahooTicker: true },
+  })
+  return stock?.yahooTicker ?? null
+}
+
+/** `/브리핑 삼성전자` · `/브리핑 005930` 을 티커로 바꾼다. 못 바꾸면 입력 그대로다 — 던지지 않는다 */
+async function canonicalTicker(value: string, deps: PromptNewsDeps): Promise<string> {
+  if (/^\^|[.]|^[A-Z][A-Z0-9-]{0,14}$/.test(value)) return value
+  try {
+    return (await withNewsTimeout((deps.krxTicker ?? loadKrxTicker)(value), PROMPT_NEWS_LIMITS.lookupMs)) ?? value
+  } catch {
+    return value
+  }
+}
+
+/** 종목 분석. 이름은 티커로 바꿔 뉴스·공시를 함께 찾고, 못 바꾸면 질의로 뉴스만 찾는다 */
+export async function gatherTickerNews(rawTicker: string, deps: PromptNewsDeps = {}): Promise<string> {
   const days = PROMPT_NEWS_LIMITS.analysisDays
+  const ticker = await canonicalTicker(rawTicker, deps)
+  const unresolved = /^[A-Z0-9^.-]+$/.test(ticker) && !/^\d{6}$/.test(ticker) ? undefined : '이름으로 종목을 찾지 못해 공시는 모으지 않았다. 필요하면 티커로 get_disclosures 를 부른다.'
   const resolve = deps.resolve ?? resolveNewsTarget
   const resolveOrQuery = async (value: string): Promise<NewsTarget> => {
     const looksLikeTicker = /^\^?[A-Z0-9][A-Z0-9.-]{0,14}$/.test(value)
@@ -176,7 +206,7 @@ export async function gatherTickerNews(ticker: string, deps: PromptNewsDeps = {}
   }
   try {
     const { sections } = await collectSections([ticker], { days, limit: PROMPT_NEWS_LIMITS.analysisLimit }, { ...deps, resolve: resolveOrQuery })
-    return formatNewsBlock(sections, { days, maxChars: PROMPT_NEWS_LIMITS.maxChars, omitted: 0 })
+    return formatNewsBlock(sections, { days, maxChars: PROMPT_NEWS_LIMITS.maxChars, omitted: 0, notice: unresolved })
   } catch {
     console.error('[news] 종목 뉴스 수집 실패')
     return formatNewsBlock([], { days, maxChars: PROMPT_NEWS_LIMITS.maxChars, omitted: 0, notice: COLLECT_FAILED_NOTICE })
