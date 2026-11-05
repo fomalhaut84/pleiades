@@ -19,6 +19,7 @@ import { getPerformance } from './tools/performance'
 import { getGiftTaxStatus, getDividends } from './tools/tax'
 import { getSpendingSummary, getTransactions, createTransaction, updateTransaction, deleteTransaction } from './tools/spending'
 import { getPrices, getFxRate } from './tools/market'
+import { getNews, NEWS_DEFAULT_DAYS, NEWS_DEFAULT_LIMIT, NEWS_MAX_DAYS, NEWS_MAX_LIMIT } from './tools/news'
 import { simulateGrowth } from './tools/simulator'
 import { getTechnicalAnalysis } from './tools/ta'
 import { getHoldingStrategy, getAllStrategies, setHoldingStrategy } from './tools/strategy'
@@ -396,6 +397,18 @@ server.tool(
   '현재 원/달러(USD/KRW) 환율',
   {},
   async () => getFxRate()
+)
+
+server.tool(
+  'get_news',
+  '게시일이 확인된 최근 기사 목록 (제목에 대상 이름이 있는 기사 먼저 · 그 안에서 최신순). ticker(종목·지수 — 005930.KS, NVDA, ^KS11) 또는 query(자유 질의) 중 하나를 지정. 뉴스는 WebSearch 보다 이 도구를 먼저 쓴다',
+  {
+    ticker: z.string().max(20).optional().describe('Yahoo Finance 티커. 한국 종목은 한글명으로, 해외 종목은 영문으로 찾는다'),
+    query: z.string().max(200).optional().describe('자유 질의 (예: "반도체 수출"). ticker 와 함께 쓰지 않는다'),
+    days: z.number().int().min(1).max(NEWS_MAX_DAYS).optional().describe(`최근 며칠 (기본 ${NEWS_DEFAULT_DAYS}, 최대 ${NEWS_MAX_DAYS})`),
+    limit: z.number().int().min(1).max(NEWS_MAX_LIMIT).optional().describe(`최대 건수 (기본 ${NEWS_DEFAULT_LIMIT}, 최대 ${NEWS_MAX_LIMIT})`),
+  },
+  async (args) => getNews(args)
 )
 
 // --- 기술적 분석 ---

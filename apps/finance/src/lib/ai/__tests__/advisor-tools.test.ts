@@ -13,8 +13,8 @@ function argValue(args: readonly string[], flag: string): string | undefined {
 }
 
 describe('도구 목록', () => {
-  it('운영 MCP 57개를 읽기 23 · 쓰기 34 로 나눈다', () => {
-    expect(READ_TOOLS.filter((t) => t.startsWith('mcp__'))).toHaveLength(23)
+  it('운영 MCP 58개를 읽기 24 · 쓰기 34 로 나눈다', () => {
+    expect(READ_TOOLS.filter((t) => t.startsWith('mcp__'))).toHaveLength(24)
     expect(WRITE_TOOLS).toHaveLength(34)
     expect(new Set([...READ_TOOLS, ...WRITE_TOOLS]).size).toBe(READ_TOOLS.length + WRITE_TOOLS.length)
   })
@@ -27,7 +27,7 @@ describe('도구 목록', () => {
   it('MCP 서버의 도구는 전부 어느 한쪽에 있다 — 새 도구가 분류 없이 빠지지 않는다', () => {
     const server = readFileSync(join(SRC, 'mcp', 'server.ts'), 'utf8')
     const names = [...server.matchAll(/server\.tool\(\s*['"](\w+)['"]/g)].map((m) => `mcp__myfinance__${m[1]}`)
-    expect(names).toHaveLength(57)
+    expect(names).toHaveLength(58)
     const known = new Set<string>([...READ_TOOLS, ...WRITE_TOOLS])
     expect(names.filter((n) => !known.has(n))).toEqual([])
   })
