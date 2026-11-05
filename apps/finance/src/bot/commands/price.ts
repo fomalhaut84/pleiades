@@ -77,6 +77,14 @@ export async function decidePrice(text: string, out: ReplyOutput): Promise<void>
 
   // 2-c. 영문 종목명 → yahoo-finance2 search API
   const yahooResults = await searchYahooByName(query)
+  // #494: 환율(`=X`)·지수(`^`)를 뺀 첫 결과(Yahoo 관련도 1순위)가 질의와 같은 심볼이면 그것을 고른다
+  // (예: `amd` → AMD · 후보 목록 대신). 1순위만 보는 이유: `ford` 처럼 이름이 다른 회사의 티커(FORD)와 같을 때
+  // 1순위(F)가 아니면 후보 목록을 그대로 보여 준다 — 사전 리뷰 major.
+  const topEquity = yahooResults.find((r) => !r.symbol.endsWith('=X') && !r.symbol.startsWith('^'))
+  if (topEquity && topEquity.symbol.toUpperCase() === upperQuery) {
+    await fetchAndReply(out, topEquity.symbol)
+    return
+  }
   if (yahooResults.length === 1) {
     await fetchAndReply(out, yahooResults[0].symbol)
     return
@@ -127,12 +135,16 @@ async function resolveTickerFromCache(
   }
 
   // 부분 일치
+  // #494: 환율(`=X`)·지수(`^`) 행은 질의가 그것을 명시할 때(`=`·`^`·`/` 포함)만 부분 일치에 넣는다.
+  // 아니면 `amd` 가 캐시의 `AMD=X`(USD/AMD) 하나에 걸려 그 환율로 확정됐다.
+  const includeFxAndIndex = /[=^/]/.test(query)
   const partialMatches = await prisma.priceCache.findMany({
     where: {
       OR: [
         { displayName: { contains: query, mode: 'insensitive' } },
         { ticker: { contains: upperQuery, mode: 'insensitive' } },
       ],
+      ...(includeFxAndIndex ? {} : { NOT: [{ ticker: { endsWith: '=X' } }, { ticker: { startsWith: '^' } }] }),
     },
     select: { ticker: true, displayName: true },
     orderBy: { ticker: 'asc' },

@@ -212,6 +212,26 @@ describe('주가 · 환율', () => {
     expect(mocked.fetchQuote).toHaveBeenCalledWith('AAPL')
   })
 
+  // 회귀: #494 — `주가 amd` 가 캐시의 `AMD=X`(USD/AMD 환율) 하나에 부분 일치해 환율로 확정됐다.
+  it('주가 — 부분 일치는 환율·지수 행을 빼고 찾는다 · 질의가 명시하면 넣는다', async () => {
+    mocked.priceFind.mockResolvedValue(null as never)
+    mocked.priceMany.mockResolvedValue([] as never)
+    mocked.yahoo.mockResolvedValue([] as never)
+    await run(priceCmd(), '주가 amd')
+    // calls[0] = 이름 정확 일치 · calls[1] = 부분 일치
+    const where = (mocked.priceMany.mock.calls[1][0] as { where: Record<string, unknown> }).where
+    expect(where.OR).toEqual([
+      { displayName: { contains: 'amd', mode: 'insensitive' } },
+      { ticker: { contains: 'AMD', mode: 'insensitive' } },
+    ])
+    expect(where.NOT).toEqual([{ ticker: { endsWith: '=X' } }, { ticker: { startsWith: '^' } }])
+
+    mocked.priceMany.mockClear()
+    await run(priceCmd(), '주가 usd/amd')
+    const explicit = (mocked.priceMany.mock.calls[1][0] as { where: Record<string, unknown> }).where
+    expect(explicit.NOT).toBeUndefined()
+  })
+
   describe('캐시 미매칭', () => {
     beforeEach(() => {
       mocked.priceFind.mockResolvedValue(null as never)
@@ -251,6 +271,28 @@ describe('주가 · 환율', () => {
       mocked.yahoo.mockResolvedValueOnce([] as never)
       const none = await run(priceCmd(), '주가 Nothing')
       expect([one.calls, many.calls, none.calls]).toMatchSnapshot()
+    })
+
+    // 회귀: #494 — 소문자 티커는 이름 검색으로 가는데, 결과에 같은 심볼이 있으면 후보 목록 대신 그 종목.
+    it('영문 이름 → yahoo 검색에 같은 심볼이 있으면 그 종목(환율 심볼은 다르다)', async () => {
+      mocked.yahoo.mockResolvedValueOnce([
+        { symbol: 'AMD=X', shortname: 'USD/AMD', exchange: 'CCY' },
+        { symbol: 'AMD', shortname: 'Advanced Micro Devices, Inc.', exchange: 'NMS' },
+      ] as never)
+      mocked.fetchQuote.mockResolvedValueOnce({ ...QUOTE, ticker: 'AMD' } as never)
+      await run(priceCmd(), '주가 amd')
+      expect(mocked.fetchQuote).toHaveBeenCalledTimes(1)
+      expect(mocked.fetchQuote).toHaveBeenCalledWith('AMD')
+    })
+
+    it('영문 이름 → 같은 심볼이 1순위가 아니면 후보 목록(ford ≠ FORD)', async () => {
+      mocked.yahoo.mockResolvedValueOnce([
+        { symbol: 'F', shortname: 'Ford Motor Company', exchange: 'NYQ' },
+        { symbol: 'FORD', shortname: 'Forward Industries', exchange: 'NCM' },
+      ] as never)
+      const f = await run(priceCmd(), '주가 ford')
+      expect(mocked.fetchQuote).not.toHaveBeenCalled()
+      expect(JSON.stringify(f.calls)).toContain('여러 종목이 검색됩니다')
     })
   })
 
