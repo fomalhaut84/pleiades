@@ -199,6 +199,30 @@ describe('fetchDisclosures', () => {
     expect((out as Extract<DisclosureResult, { status: 'ok' }>).items.map((i) => i.title)).toEqual(['분기보고서'])
   })
 
+  // 회귀: PR #490 Codex P2 — 같은 정정 공시 3건이 상한을 채운 것으로 세어 다음 페이지를 읽지 않았다
+  it('중복을 뺀 건수로 더 읽을지 정한다', async () => {
+    const fetchImpl: DartFetch = async (url) => {
+      if (url.includes('corpCode')) return new Response(new Uint8Array(zip(CORP_XML)))
+      const page = new URL(url).searchParams.get('page_no')
+      return new Response(JSON.stringify({ status: '000', total_page: 2, list: page === '1' ? [row('[기재정정]신고'), row('[기재정정]신고'), row('[기재정정]신고')] : [row('분기보고서'), row('계약')] }))
+    }
+    const out = await fetchDisclosures({ ticker: '005930.KS', days: 30, limit: 3 }, { fetchImpl, apiKey: KEY, now: NOW })
+    expect((out as Extract<DisclosureResult, { status: 'ok' }>).items.map((i) => i.title)).toEqual(['[기재정정]신고', '분기보고서', '계약'])
+    expect(out).toMatchObject({ incomplete: false })
+  })
+
+  it('지분 보고는 회사 소식 건수에 들어가지 않아 다음 페이지를 읽는다', async () => {
+    const fetchImpl: DartFetch = async (url) => {
+      if (url.includes('corpCode')) return new Response(new Uint8Array(zip(CORP_XML)))
+      const page = new URL(url).searchParams.get('page_no')
+      return new Response(JSON.stringify({ status: '000', total_page: 2, list: page === '1'
+        ? [row('주식등의대량보유상황보고서(일반)'), row('최대주주등소유주식변동신고서'), row('주식매수선택권부여에관한신고')]
+        : [row('분기보고서')] }))
+    }
+    const out = await fetchDisclosures({ ticker: '005930.KS', days: 30, limit: 3 }, { fetchImpl, apiKey: KEY, now: NOW })
+    expect((out as Extract<DisclosureResult, { status: 'ok' }>).items[0].title).toBe('분기보고서')
+  })
+
   it('상한이 차면 더 읽지 않는다', async () => {
     const f = dartFetch({ status: '000', total_page: 5, list: [row('A'), row('B'), row('C')] })
     expect(await ask(f)).toMatchObject({ status: 'ok', incomplete: true })

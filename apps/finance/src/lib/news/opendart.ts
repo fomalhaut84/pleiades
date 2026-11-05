@@ -336,7 +336,9 @@ export async function fetchDisclosures(
       }), deps)
       rows.push(...fetched.rows)
       totalPage = fetched.totalPage
-      material = rows.map(mapDisclosure).filter((item) => item && !ROUTINE_REPORT.test(item.title) && !OWNERSHIP_REPORT.test(item.title)).length
+      // 돌려줄 목록과 같은 기준으로 센다 — 중복까지 세면 뒤 페이지의 다른 공시를 놓친다(PR #490 Codex P2)
+      material = rankDisclosures(rows.map(mapDisclosure).filter((item): item is Disclosure => item !== null))
+        .filter((item) => !ROUTINE_REPORT.test(item.title) && !OWNERSHIP_REPORT.test(item.title)).length
     }
     const all = rows.map(mapDisclosure).filter((item): item is Disclosure => item !== null)
     // 받은 행을 하나도 못 읽었으면 형식이 바뀐 것이다 — 0건으로 읽히면 실패가 숨는다
