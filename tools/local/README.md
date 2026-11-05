@@ -12,6 +12,7 @@
 ## 처음 한 번 (M-2 · M-4)
 
 ```bash
+# 루트 .env 에 Discord 값이 있으면 run.sh 앞에 허용 목록을 export 한다 — 아래 "Discord 봇 토큰 가드" 항목 (I-4′ · I-5′)
 python3 tools/local/write_env.py fin && python3 tools/local/write_env.py fit
 python3 tools/local/db.py create fin && python3 tools/local/db.py create fit
 tools/local/run.sh fin -- npm ci && tools/local/run.sh fit -- npm ci
@@ -42,6 +43,7 @@ pleiades 가 소유한 설정(알림 채널 스위치 `NOTIFY_*` · Discord 웹�
 ```bash
 export PLEIADES_VERIFY_BOT_IDS=<fin 봇 id>,<fit 봇 id> PLEIADES_VERIFY_CHAT_IDS=<검증 채팅 id,…>
 export PLEIADES_VERIFY_DISCORD_TOKEN_SHA256=<fin 검증 봇 해시>,<fit 검증 봇 해시>   # Discord 토큰이 있을 때 (009 D-G · #328)
+export PLEIADES_VERIFY_DISCORD_IDS=<검증 채널·사용자 id,…> PLEIADES_VERIFY_DISCORD_WEBHOOK_SHA256=<검증 웹훅 해시,…>   # Discord ID·웹훅이 있을 때 (I-5′ · #359)
 tools/local/run.sh fin -- npm run start -- -p 4610      # 웹 — Next 는 .env 의 PORT 를 쓰지 않는다 → -p 필수
 tools/local/run.sh fit -- npm run start -- -p 4620
 tools/local/run.sh fin -- node dist/bot/standalone.cjs  # 봇 — long polling · 크론·알림 스케줄러 등록
@@ -49,6 +51,7 @@ tools/local/run.sh fit -- node dist/bot/standalone.cjs
 ```
 
 - **Discord 봇 토큰 가드(009 D-G · #328):** 실효 `DISCORD_BOT_TOKEN_*`(셸 env → `PLEIADES_ENV_FILE` → 루트 `.env` — 앱의 `platformEnv` 와 같은 순서 · 셸의 빈 값도 이긴다)가 **검증 봇 허용 목록**에 없으면 `run.sh` 가 멈춘다 — 운영 봇 토큰이면 서버 gateway 와 같은 토큰 두 세션이 된다(I-4′). 두 앱이 같은 토큰이어도 멈춘다. 허용 목록은 토큰 SHA-256(토큰 → 봇 ID 도출은 공식 문서 미확인 · 009 U-9). 해시 구하기(값은 출력하지 않는다): `cd apps/fitness && python3 ../../tools/local/check_env.py fit --discord-hashes`. 토큰을 비워 두면 gateway 를 열지 않으므로 통과한다.
+  - **대상 가드(I-5′ · #359):** 실효 `DISCORD_CHANNEL_ID_*`·`DISCORD_ALLOWED_USER_IDS` 는 `PLEIADES_VERIFY_DISCORD_IDS` 에, 모든 `DISCORD_WEBHOOK_*`(앱이 읽지 않는 `DEPLOY` 포함)는 `PLEIADES_VERIFY_DISCORD_WEBHOOK_SHA256` 에 있어야 한다. `run.sh` 를 거치는 모든 명령(`npm ci`·테스트·빌드·pm2 정리 포함)에 적용된다. 허용 목록을 export 하지 않으면 거부한다 · 값이 비면 통과한다 · 출력은 키 이름과 개수뿐이다. 웹훅 해시는 위 `--discord-hashes` 가 함께 낸다. 값이 검증용인지는 **넣는 사람이 확인한다** — 해시는 정체를 알려 주지 않는다.
   - **한계:** `run.sh` 밖 기동(`npm run dev` · 직접 `node`)은 검사하지 않는다(G-3 — M-6a 의 `check_env` 한계와 같다).
   - 기동 **뒤** 플랫폼 파일을 고치면 다시 검사하지 않는다(웹은 수정 시각으로 다시 읽는다) — 토큰을 바꿨으면 `run.sh` 로 다시 띄운다. `PLEIADES_ENV_FILE` 은 앱 `.env` 에 두지 않고(셸·pm2 env 로만) · 가리키는 파일이 없으면 멈춘다.
 - 포트: 4100·4200·4210·4301·3000 금지(L-3). MCP 서버는 띄우지 않는다(fin `mcp-config.json` 이 4210 하드코딩).

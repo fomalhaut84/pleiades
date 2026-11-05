@@ -258,7 +258,7 @@ async function handleJsonPost(request: Request) {
 }
 
 // #309 (M14 Phase 2 #5): 사진 업로드 처리. Vision 응답 파싱 후 FoodLog 저장.
-// 이미지는 temp 파일로 저장 (Claude CLI @-reference 필요) → 처리 후 즉시 삭제 (spec: 저장 안 함).
+// 이미지는 temp 파일로 저장 (estimator 가 읽어 CLI 본문으로 넘긴다 · #461) → 처리 후 즉시 삭제 (spec: 저장 안 함).
 async function handlePhotoPost(request: Request) {
   // Codex P2 (PR #310 6회차): formData() 는 전체 body 를 메모리에 파싱한 뒤에야 image.size 로
   // 검증 → 악의적 client 가 무제한 payload 로 메모리 exhaust 시킬 수 있음. Content-Length 를

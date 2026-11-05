@@ -1,13 +1,9 @@
 // #532: 결과지 이미지 1장 → 추출 결과 (저장하지 않는다 — 확인 화면이 고친 뒤 /api/checkups/import).
-// 이미지는 temp 파일 (0600 · mfp-photo- 접두사 → 기존 sweep 이 남은 파일도 정리) → 처리 후 즉시 삭제.
+// 이미지는 디스크에 쓰지 않는다 — 메모리에서 CLI 본문으로 넘긴다 (#462).
 // 로그에 결과지 내용을 남기지 않는다.
 import { NextResponse } from "next/server";
-import fs from "fs/promises";
-import os from "os";
-import path from "path";
-import { randomBytes } from "crypto";
 import { extractCheckupPage, type ExtractFailure } from "@/lib/checkup/import/extract";
-import { IMAGE_EXT, sniffImageType } from "@/lib/checkup/import/image-type";
+import { sniffImageType } from "@/lib/checkup/import/image-type";
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 /** multipart 경계 · 헤더 여유 — 이미지 자체 상한은 MAX_IMAGE_BYTES */
@@ -30,7 +26,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `이미지는 ${MAX_IMAGE_BYTES / (1024 * 1024)}MB 까지입니다` }, { status: 413 });
   }
 
-  let tempPath: string | null = null;
   try {
     const form = await request.formData().catch(() => null);
     const image = form?.get("image");
@@ -42,11 +37,8 @@ export async function POST(request: Request) {
     const type = sniffImageType(bytes);
     if (!type) return NextResponse.json({ error: "JPEG · PNG · WebP 이미지만 읽을 수 있습니다" }, { status: 415 });
 
-    tempPath = path.join(os.tmpdir(), `mfp-photo-${Date.now()}-${randomBytes(6).toString("hex")}${IMAGE_EXT[type]}`);
-    await fs.writeFile(tempPath, bytes, { mode: 0o600, flag: "wx" });
-
     const started = Date.now();
-    const result = await extractCheckupPage(tempPath);
+    const result = await extractCheckupPage({ bytes, type });
     if (!result.ok) {
       return NextResponse.json({ error: FAILURE_MESSAGE[result.reason] }, { status: result.reason === "timeout" ? 504 : 502 });
     }
@@ -55,7 +47,5 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[api/checkups/extract] error:", error instanceof Error ? error.name : typeof error);
     return NextResponse.json({ error: "결과지를 읽지 못했습니다" }, { status: 500 });
-  } finally {
-    if (tempPath) await fs.unlink(tempPath).catch(() => {});
   }
 }

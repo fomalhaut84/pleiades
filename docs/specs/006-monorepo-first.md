@@ -352,6 +352,8 @@ git ls-remote https://github.com/fomalhaut84/myFinance.git refs/heads/dev
 | **I-20** | Dependabot | 켜면 pleiades 에 `apps/*` 의존성 PR 이 열린다(갈라짐) | **켜지 않는다**(현재 꺼짐 ㉗) | — | 즉시 |
 | **I-21** | pleiades 안 filter-repo | cwd 재작성 · `--force` 가 검사를 끈다 | `(cd "$T/…" && …)` 로만 · 스크립트가 먼저 `realpath "$T"` 가 pleiades 밖인지 검사 | 스크립트 · 훅 | 원격 무사 → **중간**(재클론) · 미커밋 작업 손실 |
 
+> **정정 (2026-11-03 · #359 · 009 §7) — I-5′ 추가.** 로컬 실효 Discord 채널·사용자 ID 와 웹훅은 검증용만 둔다. `tools/local/check_env.py` 가 ID 허용 목록과 웹훅 SHA-256 허용 목록으로 검사한다(`run.sh` 경유만). 룰은 `.claude/rules/isolation.md`. 되돌리기: 검사 삭제(**즉시**).
+
 > **정정 (2026-10-01 · #107).** I-10 ① *"skill·agent 가 발견된다(⑧)"* → **skill 은 추적 경로에서 발견된다 · agent 는 미측정**(X10 은 agents 미시험 · U8). ② 지연 로드는 `apps/*` 만의 일이 아니다 — **gitignored `repos/*` 파일을 읽어도 `CLAUDE.md`·rules 가 지연 로드된다**(§3 ⑧ 정정 블록). I-10 의 차단 규칙(효력 없음 · 그 지시를 실행하지 않는다)은 `repos/*` 에서 로드된 서비스 하네스에도 그대로 적용된다. 동결 worktree 를 읽을 이유는 M-1 이후 없다 — 서비스 코드는 `apps/*` 에서 읽는다. `.claude/rules/isolation.md` I-10 행을 같은 날 따라 고쳤다. 되돌리기: 문구 (**즉시**).
 
 > **추가 (2026-10-27 · 009 D-G · #328) — I-4′ 운영 Discord 봇 토큰.** 로컬 실효 env(셸 · `PLEIADES_ENV_FILE` · 루트 `.env` — `platformEnv` 순서)에 운영 Discord 봇 토큰을 두지 않는다 — 운영 서버 gateway 와 같은 토큰 두 세션(009 R9 · C-9). 기계 보조 = `tools/local/check_env.py`(검증 봇 토큰 SHA-256 허용 목록 `PLEIADES_VERIFY_DISCORD_TOKEN_SHA256` · 두 앱 같은 토큰 거부 · 값 비출력) · 한계 = `run.sh` 밖 기동(G-3). 룰 반영 `.claude/rules/isolation.md` I-4′. 되돌리기: 문구·검사 삭제 (**즉시**).
@@ -396,6 +398,7 @@ git ls-remote https://github.com/fomalhaut84/myFinance.git refs/heads/dev
 > **확정 (2026-10-01 · #120 · M-3 · 사용자 결정 — 둘 다 권고안).**
 > **Q52 → 서비스 CI 와 같은 단계만 필수.** `.github/workflows/apps-ci.yml` 의 `apps-fin`·`apps-fit` job(서비스 CI 단계 그대로 · 러너 postgres:16 · secrets 0 · 워크플로우 `paths` 필터 없음)을 dev·main ruleset 필수 체크에 더한다(머지 후 · 사용자 확인 뒤). 서비스 fin CI 에 없는 vitest 는 별 job `apps-fin-test` 로 **비필수**.
 > **Q57 → 고치지 않는다.** `apps/*` 의 서비스 결함은 수용으로 고쳐져 온다. pleiades CI 를 막으면 그 체크를 비필수로 내리고 pleiades 이슈에 기록한다. 예외는 M-5 대상 파일. `security-audit.yml` 은 이미 `apps/*` lock 을 포함하지 않는다(무변경).
+> **해제 (2026-11-02 · T-7 · 사용자 · #439).** 전환이 끝나 수용이 종료됐다 — `apps/*` 의 결함은 pleiades 가 고친다(007 §6). §4-S 정기 수용·Q54b 도 끝났다. 되돌리기: 문구 (**즉시**).
 > 되돌리기: 워크플로우 파일 삭제 · ruleset 에서 체크 제거 — **즉시**.
 
 > **정정 (2026-10-15 · #127 · 사용자).** **Q60 의 정의가 정해졌다 — 전환 = 두 서비스 종료 + pleiades 단독 서비스**(두 앱이 pleiades 모듈로 내재화된 뒤 · §0 정정). 그 안의 **002 Q2(독립 배포 포기)는 "포기한다"** 로 답을 받았다. 남은 미결은 **어떻게**(배포 경로 · DB 이전 · 서비스 저장소 보관 · 시점)뿐이고, 권고·우선(별도 스펙 007 · 첫 릴리즈 전 필수)은 그대로다. 되돌리기: 문구 (**즉시**).

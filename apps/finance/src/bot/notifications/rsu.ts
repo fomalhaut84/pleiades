@@ -10,7 +10,7 @@
  * callback 처리는 src/bot/commands/vest-confirm.ts(텔레그램) · notifications/discord-interactions.ts(Discord · #155).
  */
 
-import { InlineKeyboard } from 'grammy'
+import type { ButtonRows } from '@pleiades/notify'
 import { prisma } from '@/lib/prisma'
 import { notifyBot } from '@/bot/index'
 import { formatKRWFull } from '@/bot/utils/formatter'
@@ -33,6 +33,14 @@ function diffDays(target: Date): number {
   kstTarget.setHours(0, 0, 0, 0)
 
   return Math.round((kstTarget.getTime() - kstNow.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+/** D-day RSU 확정 버튼. 받는 쪽은 `decideVest` 다. */
+export function buildVestButtons(rsuId: string): ButtonRows {
+  return [[
+    { label: '✅ 확정', action: `vest:confirm:${rsuId}` },
+    { label: '✖️ 취소', action: `vest:cancel:${rsuId}` },
+  ]]
 }
 
 /**
@@ -170,9 +178,7 @@ export async function sendRSUVestConfirmations(): Promise<void> {
       `${autoSellLine}\n\n` +
       `<i>아래 [확정] 한 번 탭으로 BUY/SELL Trade + Holding 자동 반영됩니다.</i>`
 
-    const keyboard = new InlineKeyboard()
-      .text('✅ 확정', `vest:confirm:${rsu.id}`)
-      .text('✖️ 취소', `vest:cancel:${rsu.id}`)
+    const keyboard = buildVestButtons(rsu.id)
 
     // 003 Q27 흡수(사용자 2026-10-15): 재시도·plain 폴백을 파사드가 소유 — 키보드는 폴백에도 유지된다.
     // 중복 전송 시 버튼을 두 번 눌러도 rsu-vest-service 의 ALREADY_VESTED 가 이중 반영을 막는다.

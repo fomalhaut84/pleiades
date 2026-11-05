@@ -27,6 +27,18 @@ describe('createTelegramTransport', () => {
     expect(sendMessage).toHaveBeenCalledWith('123', '<b>x</b>', { parse_mode: 'HTML' });
   });
 
+  // 회귀: 009 D-5 A4 — 중립 버튼은 텔레그램 형태로 바뀌어 나간다
+  it('ButtonRows 는 inline_keyboard 로 변환한다', async () => {
+    const { api, sendMessage } = fakeApi();
+    const t = createTelegramTransport({ api });
+    const rows = [[{ label: 'A', action: 'x:1' }, { label: 'L', url: 'https://e.test' }]];
+    await t.send('123', html('m', rows));
+    expect(sendMessage).toHaveBeenCalledWith('123', 'm', {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: [[{ text: 'A', callback_data: 'x:1' }, { text: 'L', url: 'https://e.test' }]] },
+    });
+  });
+
   it('plain 은 parse_mode 를 넣지 않는다 (fin :68 · fit :53)', async () => {
     const { api, sendMessage } = fakeApi();
     await createTelegramTransport({ api }).send('1', { text: 'x', format: 'plain' });

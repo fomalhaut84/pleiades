@@ -277,7 +277,7 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 > **공통 선행:** 앱별 `npm ci`(앱별 lock · workspaces 없음 · 006 U97-12). **M-5 이후에는 두 행 모두 루트 `npm ci` 가 먼저다** — `prepare` 가 `packages/notify/dist` 를 만들지 않으면 fit typecheck·test·build 가 연쇄 실패한다(006 ㉒).
 > **DB 는 `pleiades_` 접두 로컬 DB 만** · 실효 env 사전 검사 후(`isolation.md` I-14 · 006 L-1·L-2). 되돌리기: 문구 (**즉시**).
 >
-> **실행 방법 (2026-10-01 · M-2 · #118).** `apps/*` 행의 명령은 전부 **`tools/local/run.sh <fin|fit> -- <명령>`** 으로 돌린다(cwd · 실효 env 검사 · claude shim). 처음 한 번: `python3 tools/local/write_env.py <fin|fit>`(루트 템플릿 → `apps/<app>/.env` · 덮어쓰지 않음) · fin 은 `python3 tools/local/db.py create fin`(삭제는 `db.py drop fin --confirm pleiades_fin`). 첫 통과 실측은 `measured-facts.md` *2026-10-01 — M-2*. 되돌리기: 문구 (**즉시**).
+> **실행 방법 (2026-10-01 · M-2 · #118).** `apps/*` 행의 명령은 전부 **`tools/local/run.sh <fin|fit> -- <명령>`** 으로 돌린다(cwd · 실효 env 검사 · claude shim). 처음 한 번: `python3 tools/local/write_env.py <fin|fit>`(루트 템플릿 → `apps/<app>/.env` · 덮어쓰지 않음) · fin 은 `python3 tools/local/db.py create fin`(삭제는 `db.py drop fin --confirm pleiades_fin`). 첫 통과 실측은 `measured-facts.md` *2026-10-01 — M-2*. **루트 `.env` 에 Discord 값이 있으면 `run.sh` 앞에 허용 목록을 export 한다**(`tools/local/README.md` · I-4′ · I-5′ · #359). 되돌리기: 문구 (**즉시**).
 >
 > **정정 (2026-10-27 · 009 D-0 · #332) — `packages/chat` 추가.** 루트 `typecheck`·`typecheck:test`·`test`·`build` 가 `packages/chat` 도 돈다. **선행이 하나 늘었다:** 루트 `npm ci`(prepare → `packages/notify/dist`) → `npm --prefix packages/notify install` → **`npm --prefix packages/chat ci`**(chat 은 `@pleiades/notify` 를 `file:../notify` 로 링크한다 — notify dist 가 먼저 있어야 타입·테스트가 그것을 찾는다 · CI `ci.yml` 순서와 같다). 없으면 `vitest: command not found` · TS2307. `packages/chat/.npmrc` 의 `legacy-peer-deps=true` 는 npm 10 arborist 의 `file:` 링크 결함(`null.edgesOut`) 우회다. 서버 배포는 루트 `npm ci`(prepare = notify 만)라 영향 없음 — 앱이 chat 을 쓰는 D-1 에서 서버 설치 경로를 다시 정한다. 되돌리기: 문구 (**즉시**).
 >
@@ -349,6 +349,8 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 > 그리고 규모 행은 **실행 코드에만** 적용된다 — 문서 3파일이 규모 행과 self-review 행에
 > 동시에 걸려 **어느 행을 고르느냐로 게이트가 달라지는** 모호함이 있었다.
 
+> **정정 (2026-11-02 · T-7 · #439).** 수용이 끝나 위 `apps/**` 행의 **수용 PR** 예외와 M-1 범위는 더 쓰이지 않는다. `apps/**` 변경은 전부 에이전트 필수다. 되돌리기: 문구 (**즉시**).
+>
 > **정정 (2026-09-30 · 006 · #101).** "대상 저장소 변경" 행은 소진이다 — pleiades 는 서비스 저장소·원본·worktree 에 쓰지 않는다(`isolation.md` I-1·I-11). 그 자리를 **`apps/**` 행**이 잇는다. 수용 PR 의 diff 는 서비스에서 이미 리뷰·머지된 코드라 전체 리뷰 대상이 아니고, **M-1 가져오기 PR** 도 같은 범위(머지 위생 = 트리 동일성 · 루트 무변경 · `.github` 비활성 · 게이트·가드 로그 + 8절 pleiades 행)다(006 §4-2). 되돌리기: 문구 (**즉시**).
 
 self-review 시에도 검증(8절) 필수이고, PR body 초안에 `self-review (변경 성격: <카테고리>)` 를 명시한다.

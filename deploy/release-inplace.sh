@@ -102,9 +102,11 @@ app_procs() {
       console.log(mine.length, online, inside)
     })'
 }
-count_window() {  # <glob 접두> <T0> <T1> — 창 안 줄 수 · 그중 경고(⚠ · Warning) 수
-  cat "$1"*.log 2>/dev/null | awk -v s="$2" -v e="$3" '
-    substr($0,1,19)>=s && substr($0,1,19)<=e { n++; if ($0 ~ /⚠|[Ww]arning/) w++ }
+# 오류 로그에 들어가지만 오류가 아닌 줄 — chat 이 gateway 정상 기동을 warn 으로 찍는다(#373). 그 문자열은 판정 계약이라 바꾸지 않는다
+NORMAL_GATEWAY_LINE='\\] gateway (준비 완료|세션 이어받음)$'
+count_window() {  # <glob 접두> <T0> <T1> — 창 안 줄 수 · 그중 경고(⚠ · Warning) 수 · 정상 gateway 줄은 세지 않는다
+  cat "$1"*.log 2>/dev/null | awk -v s="$2" -v e="$3" -v normal="$NORMAL_GATEWAY_LINE" '
+    substr($0,1,19)>=s && substr($0,1,19)<=e && $0 !~ normal { n++; if ($0 ~ /⚠|[Ww]arning/) w++ }
     END { printf "%d %d", n, w }'
 }
 # 봇 409 — 재기동 뒤(T0~) 줄만 · 텔레그램 getUpdates 충돌 문구만(M4 — 아무 숫자 409·옛 줄이 R-8 을 부르지 않게)

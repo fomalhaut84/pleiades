@@ -7,6 +7,32 @@ import { html } from './types';
 const TOKEN = ['MTIz' + '0'.repeat(20), 'Gabc' + 'DE', 'x'.repeat(30)].join('.');
 const ok = (id: string): FetchResponseLike => ({ ok: true, status: 200, json: async () => ({ id }), text: async () => '' });
 
+describe('toDiscordComponents — ButtonRows (009 D-5 A4)', () => {
+  it('중립 버튼과 inline_keyboard 의 결과가 같다', () => {
+    const neutral = [[{ label: '✅ 확정', action: 'vest:confirm:r1' }, { label: '링크', url: 'https://e.test' }], []];
+    const telegram = {
+      inline_keyboard: [[{ text: '✅ 확정', callback_data: 'vest:confirm:r1' }, { text: '링크', url: 'https://e.test' }], []],
+    };
+    expect(toDiscordComponents(neutral)).toEqual(toDiscordComponents(telegram));
+    expect(toDiscordComponents(neutral)).toEqual([
+      {
+        type: 1,
+        components: [
+          { type: 2, style: 2, label: '✅ 확정', custom_id: 'vest:confirm:r1' },
+          { type: 2, style: 5, label: '링크', url: 'https://e.test' },
+        ],
+      },
+    ]);
+  });
+
+  it('잘못된 중립 버튼은 조용히 버리지 않고 오류다', () => {
+    expect(() => toDiscordComponents([[{ label: 'x' }]])).toThrow('callback_data');
+    expect(() => toDiscordComponents([[{ action: 'c' }]])).toThrow('버튼 이름');
+    expect(() => toDiscordComponents([{ label: 'x', action: 'c' }])).toThrow('배열이 아니다');
+    expect(() => toDiscordComponents([[{ label: 'x', action: 'c', url: 'https://e.test' }]])).toThrow('하나만');
+  });
+});
+
 describe('toDiscordComponents — 텔레그램 inline_keyboard → Discord 버튼', () => {
   it('callback_data → Secondary(custom_id) · url → Link · 행 유지', () => {
     expect(

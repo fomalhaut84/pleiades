@@ -1,9 +1,6 @@
-// #532: 업로드 바이트의 실제 이미지 형식 (magic bytes). MIME · 확장자는 클라이언트가 정한다 — 이미지가 아닌 파일을
-// `@path` 로 넘기면 CLI 가 텍스트로 프롬프트에 넣는다. 순수.
+// #532: 업로드 바이트의 실제 이미지 형식 (magic bytes). MIME · 확장자는 클라이언트가 정한다. 순수.
 
 export type ImageType = "jpeg" | "png" | "webp";
-
-export const IMAGE_EXT: Record<ImageType, string> = { jpeg: ".jpg", png: ".png", webp: ".webp" };
 
 export function sniffImageType(bytes: Uint8Array): ImageType | null {
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpeg";

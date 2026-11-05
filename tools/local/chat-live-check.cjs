@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // chat-live-check.cjs — @pleiades/chat 를 로컬 **검증** Discord 봇으로 한 번 띄워 수신·응답·첨부를 실측한다 (009 D-0 · #332).
 //
-// 사용(앱 cwd · run.sh 가 check_env 로 검증 봇 토큰만 허용한다 — I-4′):
+// 사용(앱 cwd · run.sh 가 check_env 로 검증 봇 토큰·채널·사용자·웹훅만 허용한다 — I-4′ · I-5′):
 //   npm run build                                   # pleiades 루트 — packages/notify · packages/chat dist
 //   tools/local/run.sh fit -- node ../../tools/local/chat-live-check.cjs fit
 // 검증 서버의 채널(DISCORD_CHANNEL_ID_<APP> · 있으면 DISCORD_CHANNEL_ID_<APP>_CHAT 도)에서 아래 말을 보낸다. `끝` 이면 종료 · 15분 뒤 자동 종료.

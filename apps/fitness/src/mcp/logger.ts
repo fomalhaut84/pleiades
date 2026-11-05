@@ -157,6 +157,28 @@ function buildStreams(): pino.StreamEntry[] {
   return streams;
 }
 
+export const LOG_REDACT_PATHS = [
+  "args.password",
+  "args.token",
+  "args.secret",
+  "args.apiKey",
+  "*.password",
+  "*.token",
+  "*.secret",
+  "*.apiKey",
+  "*.jwt",
+  "args.body.password",
+  "args.body.token",
+  "DATABASE_URL",
+  "TELEGRAM_BOT_TOKEN",
+  "DISCORD_BOT_TOKEN_FINANCE",
+  "DISCORD_BOT_TOKEN_FITNESS",
+  "DISCORD_WEBHOOK_FINANCE",
+  "DISCORD_WEBHOOK_FITNESS",
+  "DISCORD_WEBHOOK_ADMIN",
+  "DISCORD_WEBHOOK_DEPLOY",
+] as const;
+
 export const logger = pino(
   {
     base: { pid: process.pid, service: "mcp" },
@@ -167,21 +189,7 @@ export const logger = pino(
     // Sensitive path — MCP 도구는 대부분 내부용이라 실제 노출 위험은 낮지만 defensive.
     // 최상위 args.* 및 중첩 *.password 형태 모두 커버.
     redact: {
-      paths: [
-        "args.password",
-        "args.token",
-        "args.secret",
-        "args.apiKey",
-        "*.password",
-        "*.token",
-        "*.secret",
-        "*.apiKey",
-        "*.jwt",
-        "args.body.password",
-        "args.body.token",
-        "DATABASE_URL",
-        "TELEGRAM_BOT_TOKEN",
-      ],
+      paths: [...LOG_REDACT_PATHS],
       censor: "[REDACTED]",
       remove: false,
     },

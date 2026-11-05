@@ -32,7 +32,7 @@ Bash: ls docs/handoff/ && git log --oneline -5
 
 `docs/research/measured-facts.md` 는 숫자가 실제로 필요할 때만 읽는다. **재측정 전에 반드시 이 파일부터 확인한다.**
 
-### Step 2 — pleiades · 수용 상태 확인
+### Step 2 — pleiades 상태 확인
 
 두 서비스는 이 세션 밖에서 계속 움직인다. pleiades 는 그것을 **https 로 읽기만** 한다(`isolation.md` I-1·I-13).
 
@@ -56,19 +56,9 @@ if env_json=$(gh api repos/fomalhaut84/pleiades/environments/production 2>/dev/n
 else
   echo "production: environment 없음(자동 배포 설정 전) 또는 조회 실패"
 fi
-# 정기 수용 판정 (006 §4-S · Q54b) — 서비스 dev tip(ls-remote · 읽기) ↔ 마지막 수용 머지 커밋의 Service-Dev 트레일러
-for r in myFinance myFitness; do
-  # --exit-code: ref 가 없으면 2 · 접근 불가면 128 — 빈 SHA 로 판정을 이어가지 않는다 (PR #105 Codex P2)
-  svc=$(git ls-remote --exit-code https://github.com/fomalhaut84/$r.git refs/heads/dev) && svc=${svc%%[[:space:]]*} || svc=
-  if [ -z "$svc" ]; then echo "$r: ls-remote 실패 — 판정 불가 (재시도·우회하지 않고 브리핑에 적는다)"; continue; fi
-  last=$(git log origin/dev --grep "^Service-Repo: $r\$" -1 --format=%B | sed -n 's/^Service-Dev: //p')
-  if [ -z "$last" ]; then echo "$r: 미수용 (M-1 전) · dev ${svc:0:12}"
-  elif [ "$svc" = "$last" ]; then echo "$r: 최신 (${svc:0:12})"
-  else echo "$r: 뒤처짐 — 수용 ${last:0:12} → dev ${svc:0:12}"; fi
-done
 ```
 
-**뒤처짐이면 브리핑의 후보 액션에 수용을 올린다** — M-5a·M-5b 착수 직전에는 **필수 0** 이다(006 Q54b). 수용 절차는 006 §4-S · `tools/import/`(#104).
+> **소진 (2026-11-02 · T-7 · #439).** 수용이 끝나 수용 판정(`ls-remote`)을 하지 않는다. 옛 명령은 git 이력에 있다. 되돌리기: 즉시.
 `ls-remote` 가 실패하면(서비스 저장소가 PRIVATE 으로 바뀌었을 수 있다 — 006 §10) **재시도·우회하지 않고** 브리핑에 적는다.
 
 > **정정 (2026-09-30 · 006 · #101 · M-0).** 옛 Step 2 — 체크아웃 4개(`repos/*` worktree 2 + 원본 2)의 브랜치·dirty 확인 · 원본↔worktree 하네스 드리프트 · 서비스 저장소의 `label:pleiades` 이관 이슈 수 · worktree behind · `integration/pleiades` behind dev — 는 **전부 소진**이다. `repos/*`·원본에서는 git 명령을 하지 않고(I-11 · `status` 도 index 를 갱신할 수 있다), 이관 이슈는 동결(#82)이며, 서비스 dev 는 pleiades 안 `apps/*` 로 수용한다(006 §4-S). 옛 명령은 git 이력(이 정정 직전 커밋)에 있다. 되돌리기: 즉시.
@@ -81,7 +71,6 @@ done
 **단계:** {0~4 중 어디} — {실행 전 / 진행 중 / 완료}
 **M 단계:** M-{0~6} (006 §4) — {진행 중 / 완료}
 **pleiades:** dev {clean/ahead} · 열린 PR {n} · Actions secrets 저장소 {0} · production {허용 목록 안/밖}
-**수용:** fin {미수용/최신/뒤처짐} · fit {…}
 **미결:** 006 §7 중 다음 단계를 막는 것 · 002 Q7·Q3 는 전환 이후 (Q2 는 답을 받았다 — 독립 배포 포기 · #127)
 
 **다음 후보 액션:**

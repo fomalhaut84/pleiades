@@ -64,6 +64,7 @@ import {
   FIT_ATTACHMENT_POLICY,
   PHOTO_ACK_TEXT,
   PHOTO_FAILED_TEXT,
+  PHOTO_SAVED_REPLY_FAILED_TEXT,
   PHOTO_FIRST_ONLY_TEXT,
   PHOTO_NOT_IMAGE_TEXT,
   PHOTO_TOO_LARGE_TEXT,
@@ -378,6 +379,66 @@ describe("사진(P)", () => {
     const { ctx, texts } = msg("점심", [attachment({ contentType: "image/jpeg" }), attachment({ id: "a9", contentType: "application/pdf" })]);
     await handleDiscordAttachment(ctx, { handleText, tmpDir: tmp });
     expect(texts()).not.toContain(PHOTO_FIRST_ONLY_TEXT);
+  });
+
+  // 회귀: #368 — 저장 뒤 답장만 실패했는데 "다시 시도" 로 안내해 같은 식사가 두 번 기록될 수 있었다
+  it("저장 뒤 답장 실패 → 저장됐다고 안내 · 다시 시도를 권하지 않는다", async () => {
+    vi.mocked(estimateNutritionFromPhoto).mockResolvedValueOnce(null as never);
+    db.foodLog.create.mockResolvedValueOnce({ id: "p4" });
+    const err = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { ctx, sent, texts } = msg("점심 국밥", [attachment({ contentType: "image/jpeg" })]);
+    const reply = ctx.reply.bind(ctx);
+    let calls = 0;
+    ctx.reply = (async (m: never) => {
+      calls += 1;
+      if (calls === 2) throw new Error("응답 500");
+      return reply(m);
+    }) as typeof ctx.reply;
+    await handleDiscordAttachment(ctx, { handleText, tmpDir: tmp });
+    expect(texts()).toEqual([PHOTO_ACK_TEXT, PHOTO_SAVED_REPLY_FAILED_TEXT]);
+    expect(texts()).not.toContain(PHOTO_FAILED_TEXT);
+    expect(sent[0].deleted).toBe(true);
+    expect(fs.readdirSync(tmp)).toEqual([]);
+    err.mockRestore();
+  });
+
+  // 회귀: #368 사전 리뷰 major — 여러 장 안내의 실패가 chat 의 "다시 시도" 로 번지면 안 된다
+  it("여러 장 + 저장 뒤 전송이 계속 실패 → 던지지 않는다", async () => {
+    vi.mocked(estimateNutritionFromPhoto).mockResolvedValueOnce(null as never);
+    db.foodLog.create.mockResolvedValueOnce({ id: "p5" });
+    const err = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const images = [attachment({ contentType: "image/jpeg" }), attachment({ id: "a2", contentType: "image/png" })];
+    const { ctx, texts } = msg("점심 국밥", images);
+    const reply = ctx.reply.bind(ctx);
+    let calls = 0;
+    ctx.reply = (async (m: never) => {
+      calls += 1;
+      if (calls >= 2) throw new Error("응답 500");
+      return reply(m);
+    }) as typeof ctx.reply;
+    await expect(handleDiscordAttachment(ctx, { handleText, tmpDir: tmp })).resolves.toBeUndefined();
+    expect(texts()).toEqual([PHOTO_ACK_TEXT]);
+    err.mockRestore();
+    warn.mockRestore();
+  });
+
+  it("저장하지 않은 응답의 전송 실패 → 다시 시도 안내(저장했다고 하지 않는다)", async () => {
+    vi.mocked(estimateNutritionFromPhoto).mockResolvedValueOnce(null as never);
+    const created = db.foodLog.create.mock.calls.length;
+    const err = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { ctx, texts } = msg("", [attachment({ contentType: "image/jpeg" })]);
+    const reply = ctx.reply.bind(ctx);
+    let calls = 0;
+    ctx.reply = (async (m: never) => {
+      calls += 1;
+      if (calls === 2) throw new Error("응답 500");
+      return reply(m);
+    }) as typeof ctx.reply;
+    await handleDiscordAttachment(ctx, { handleText, tmpDir: tmp });
+    expect(db.foodLog.create.mock.calls.length).toBe(created);
+    expect(texts()).toEqual([PHOTO_ACK_TEXT, PHOTO_FAILED_TEXT]);
+    err.mockRestore();
   });
 
   it("내려받기 실패 → 텔레그램과 같은 안내 · ack 삭제 · 임시파일 없음", async () => {

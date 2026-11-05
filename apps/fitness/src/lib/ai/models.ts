@@ -50,7 +50,7 @@ export function detectModelDrift(modelUsage: unknown, expectedId: string): Model
   return { used, unexpected, missingExpected, drift: missingExpected || unexpected.length > 0 };
 }
 
-/** CLI JSON 출력(`--output-format json`)에서 드리프트를 보고 경고만 남긴다 — 동작은 바꾸지 않는다. */
+/** CLI JSON 출력(`--output-format json` · stream-json 의 result 줄)에서 드리프트를 보고 경고만 남긴다 — 동작은 바꾸지 않는다. */
 export function warnModelDrift(tag: string, cliOutput: unknown, tier: ClaudeModelTier): void {
   const usage =
     cliOutput && typeof cliOutput === "object" ? (cliOutput as { modelUsage?: unknown }).modelUsage : undefined;

@@ -6,6 +6,8 @@
 export type {
   BroadcastResult,
   Components,
+  ButtonRows,
+  NotifyButton,
   Content,
   Delivery,
   Logger,

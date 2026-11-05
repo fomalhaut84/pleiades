@@ -56,7 +56,7 @@ echo "actions secrets: $(gh api repos/fomalhaut84/pleiades/actions/secrets --jq 
 ### 3. 주의사항에 반드시 넣을 것
 
 - **서비스 영향 0 원칙**(`isolation.md`) — 이번 세션의 서비스 영향과 로컬 격리 자원 상태
-- **세션 시작 시 관측한 상태**(pleiades `dev` · 수용 판정 fin/fit). 인계 노트보다 현재 상태를 신뢰하라는 단서와 함께
+- **세션 시작 시 관측한 상태**(pleiades `dev`). 인계 노트보다 현재 상태를 신뢰하라는 단서와 함께
 - **이번 세션에서 정정된 기록** — 옛 문서를 읽고 그 전제로 움직이면 안 되는 지점
 - stale 한 것으로 확인된 표기 (예: 다른 저장소 CLAUDE.md 의 버전 표기)
 - 한도에 근접한 것 (예: `MEMORY.md` 줄 수)

@@ -6,7 +6,6 @@
 // 이력 저장 + Accept 시 TrainingWorkout 실제 update + Snooze DB 재전송 flow 추가.
 
 import type { NotifyBot } from "./notifier";
-import { InlineKeyboard } from "grammy";
 import prisma from "@/lib/prisma";
 import { recommendTodayWorkout } from "@/mcp/tools/recommend-today-workout";
 import { getInjuryRiskScore } from "@/mcp/tools/injury-risk";
@@ -17,7 +16,7 @@ import {
   notifyAdminIfKnownFailure,
 } from "@/lib/monitoring/admin-alerts";
 import { sanitizeError } from "../utils/error";
-import { Route, html, type BroadcastResult } from "@pleiades/notify";
+import { Route, html, type BroadcastResult, type ButtonRows } from "@pleiades/notify";
 import { BOT_NOTIFY_CTX, interactiveNotifierFor, notifierFor } from "./notifier";
 
 /** M13 Phase 2 callback_data prefix. 형식: `auto_adjust:<action>:<adjustmentId>` */
@@ -60,11 +59,14 @@ function extractProposedPaceSec(
 }
 
 /** Phase 2: Accept/Reject/Snooze 3-way inline keyboard 구성. */
-export function buildAutoAdjustKeyboard(adjustmentId: string): InlineKeyboard {
-  return new InlineKeyboard()
-    .text("✅ Accept", `${CALLBACK_PREFIX}:accept:${adjustmentId}`)
-    .text("❌ Reject", `${CALLBACK_PREFIX}:reject:${adjustmentId}`)
-    .text("💤 Snooze 1h", `${CALLBACK_PREFIX}:snooze:${adjustmentId}`);
+export function buildAutoAdjustKeyboard(adjustmentId: string): ButtonRows {
+  return [
+    [
+      { label: "✅ Accept", action: `${CALLBACK_PREFIX}:accept:${adjustmentId}` },
+      { label: "❌ Reject", action: `${CALLBACK_PREFIX}:reject:${adjustmentId}` },
+      { label: "💤 Snooze 1h", action: `${CALLBACK_PREFIX}:snooze:${adjustmentId}` },
+    ],
+  ];
 }
 
 interface InjuryPayload {
