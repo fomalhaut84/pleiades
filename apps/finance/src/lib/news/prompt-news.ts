@@ -11,7 +11,7 @@ import { formatNewsBlock, type NewsSection } from './format'
 import { fetchDisclosures, type DisclosureResult } from './opendart'
 import { NewsTargetError, queryTarget, resolveNewsTarget } from './resolve-target'
 import { sanitizeNewsText } from './sanitize'
-import type { NewsResult, NewsTarget } from './types'
+import { newsFailureReason, type NewsResult, type NewsTarget } from './types'
 import { withNewsTimeout } from './yahoo-news'
 
 type SessionMarket = 'KR' | 'US'
@@ -21,8 +21,9 @@ export const PROMPT_NEWS_LIMITS = {
   maxHoldings: 12,
   perTarget: 3,
   maxChars: 8_000,
-  /** 새 대상을 시작하지 않는 시점. 진행 중인 대상은 조회 6 s + 공시 20 s(첫 고유번호 다운로드 포함 · 뉴스와 동시) 안에 끊겨, 보유 조회까지 더한 최악은 약 52 s 다 */
+  /** 새 대상을 시작하지 않는 시점. 진행 중인 대상은 조회 6 s + 소스 8 s 안에 끊기고 공시는 시한 뒤 3 s 까지만 기다려, 보유 조회까지 더한 최악은 약 40 s 다 */
   overallMs: 20_000,
+  disclosureGraceMs: 3_000,
   /** DB·이름 조회 상한. 쿼리가 멈추면 시간 제한 없이는 AI 호출 전에 브리핑이 멈춘다 */
   lookupMs: 6_000,
   briefingDays: 7,
@@ -95,7 +96,10 @@ async function resolveForPrompt(ticker: string, resolve: (ticker: string) => Pro
   }
 }
 
-/** 차례로 수집한다. 동시 호출은 빈도 제한을 재 본 적이 없다 — 0.5초 간격 연속 호출만 실측 통과했다 */
+/**
+ * 뉴스는 차례로 수집한다. 동시 호출은 빈도 제한을 재 본 적이 없다 — 0.5초 간격 연속 호출만 실측 통과했다.
+ * 공시는 순회 밖에서 함께 돈다 — 선택 기능이 느려도 다음 대상의 뉴스 시작을 밀지 않는다(PR #487 Codex P2).
+ */
 async function collectSections(
   tickers: readonly string[],
   options: { days: number; limit: number },
@@ -106,28 +110,43 @@ async function collectSections(
   const disclosures = deps.disclosures ?? fetchDisclosures
   const clock = deps.clock ?? Date.now
   const deadline = clock() + PROMPT_NEWS_LIMITS.overallMs
-  const sections: NewsSection[] = []
+  const started: { section: NewsSection; filing?: Promise<DisclosureResult> }[] = []
+  let skipped = 0
   for (let i = 0; i < tickers.length; i += 1) {
-    if (clock() >= deadline) return { sections, skipped: tickers.length - i }
+    if (clock() >= deadline) {
+      skipped = tickers.length - i
+      break
+    }
     const ticker = tickers[i]
     const target = await resolveForPrompt(ticker, resolve)
     if (!target) {
       // 종목 분석의 인자는 사용자 입력이다 — 블록 안에 그대로 찍지 않는다
-      sections.push({ label: sanitizeNewsText(ticker, 40) || '입력값', failure: '종목명을 찾지 못함' })
+      started.push({ section: { label: sanitizeNewsText(ticker, 40) || '입력값', failure: '종목명을 찾지 못함' } })
       continue
     }
-    // 함께 돈다 — 선택 기능인 공시가 뉴스의 시간 예산을 잠식하지 않게 한다(OpenDART 는 다른 호스트다)
-    const [news, filing] = await Promise.allSettled([
-      collect(target, options),
-      disclosures({ ticker, days: options.days, limit: options.limit }),
-    ])
-    sections.push({
-      label: target.label,
-      ...(news.status === 'fulfilled' ? { result: news.value } : { failure: '조회 오류' }),
-      disclosures: filing.status === 'fulfilled' ? filing.value : { status: 'failed', reason: '조회 오류' },
-    })
+    // 뉴스를 기다리는 동안 거부되면 unhandledRejection 이 된다 — 만드는 자리에서 결과로 바꾼다
+    const filing: Promise<DisclosureResult> = Promise.resolve()
+      .then(() => disclosures({ ticker, days: options.days, limit: options.limit }))
+      .catch((error: unknown) => ({ status: 'failed', reason: newsFailureReason(error) }))
+    let section: NewsSection
+    try {
+      section = { label: target.label, result: await collect(target, options) }
+    } catch {
+      section = { label: target.label, failure: '조회 오류' }
+    }
+    started.push({ section, filing })
   }
-  return { sections, skipped: 0 }
+  // 뉴스가 일찍 끝나면 전체 시한까지, 시한을 넘겼으면 짧게만 더 기다린다
+  const waitMs = Math.max(deadline - clock(), PROMPT_NEWS_LIMITS.disclosureGraceMs)
+  const sections = await Promise.all(started.map(async ({ section, filing }) => {
+    if (!filing) return section
+    try {
+      return { ...section, disclosures: await withNewsTimeout(filing, waitMs) }
+    } catch (error) {
+      return { ...section, disclosures: { status: 'failed' as const, reason: newsFailureReason(error) } }
+    }
+  }))
+  return { sections, skipped }
 }
 
 async function gatherForMarkets(

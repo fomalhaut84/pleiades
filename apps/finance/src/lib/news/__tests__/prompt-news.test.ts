@@ -134,6 +134,24 @@ describe('gather — 던지지 않는다', () => {
     expect(on).toContain('공시 0건')
   })
 
+  it('뉴스를 기다리는 동안 공시가 거부돼도 처리되지 않은 거부가 생기지 않는다', async () => {
+    const seen: unknown[] = []
+    const onUnhandled = (reason: unknown) => seen.push(reason)
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const collect = async (t: NewsTarget) => {
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        return okResult(t.label)
+      }
+      const block = await gatherBriefingNews('KR', deps([], { collect, disclosures: async () => { throw new Error('x') } }))
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      expect(seen).toEqual([])
+      expect(block).toContain('공시 수집 실패(조회 오류)')
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
+  })
+
   it('공시가 던져도 뉴스는 나간다', async () => {
     const block = await gatherBriefingNews('KR', deps([kr('A')], { disclosures: async () => { throw new Error('secret') } }))
     expect(block).toContain('[A.KS] 1건')
@@ -155,6 +173,23 @@ describe('gather — 던지지 않는다', () => {
     const disclosures = async () => { order.push('disclosure'); release(); return { status: 'disabled' as const } }
     await gatherBriefingNews('KR', deps([], { collect, disclosures }))
     expect(order).toEqual(['news', 'disclosure'])
+  })
+
+  // 회귀: PR #487 Codex P2 — 공시 대기가 다음 대상의 뉴스 시작을 밀었다
+  it('공시가 응답하지 않아도 모든 대상의 뉴스가 시작되고 공시만 시간 초과로 적는다', async () => {
+    vi.useFakeTimers()
+    try {
+      const collect = vi.fn(async (t: NewsTarget, _options: { days: number; limit: number }) => okResult(t.label))
+      const pending = gatherBriefingNews('KR', deps([kr('A', 2), kr('B', 1)], { collect, disclosures: () => new Promise<never>(() => undefined) }))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(collect.mock.calls.map((c) => c[0].label)).toEqual(['^KS11', 'A.KS', 'B.KS'])
+      await vi.advanceTimersByTimeAsync(PROMPT_NEWS_LIMITS.overallMs)
+      const block = await pending
+      expect(block).toContain('[B.KS] 1건')
+      expect(block).toContain('공시 수집 실패(시간 초과)')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   // 회귀: PR-3 사전 리뷰 major — 이름 인자면 공시가 조용히 빠졌다
