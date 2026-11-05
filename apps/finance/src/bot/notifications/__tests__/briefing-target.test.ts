@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const BOT = { api: { tag: 'bot' } }
 vi.mock('@/bot/index', () => ({ notifyBot: vi.fn(() => BOT) }))
+vi.mock('@/lib/news/prompt-news', () => ({ gatherBriefingNews: vi.fn(async () => '수집 블록') }))
 vi.mock('@/lib/ai/claude-advisor', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ai/claude-advisor')>()),
   askAdvisor: vi.fn(),
@@ -36,6 +37,13 @@ beforeEach(() => {
 })
 
 describe('sendBriefing 응답 대상', () => {
+  // pleiades#280: 코드가 모은 뉴스가 모델 프롬프트까지 간다
+  it('수집한 뉴스를 프롬프트에 넣어 부른다', async () => {
+    vi.mocked(askAdvisor).mockResolvedValueOnce({ response: 'x' } as never)
+    await sendBriefing('KR', () => ({ notify: vi.fn(async () => undefined) }) as never)
+    expect(vi.mocked(askAdvisor).mock.calls[0][0]).toContain('수집 블록')
+  })
+
   it('대상이 있으면 notifyBot() 의 봇으로 대상 notifier 를 만들어 보낸다 · 크론 notifier 는 만들지 않는다', async () => {
     vi.mocked(askAdvisor).mockResolvedValueOnce({ response: '**브리핑**' } as never)
     const notifier = fakeNotifier()

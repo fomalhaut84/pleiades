@@ -14,6 +14,7 @@ import { notifierFor, Route, htmlContent } from './notifier'
 import { sanitizeError } from '@/bot/utils/error'
 import { formatKstDate } from '@/lib/kst-date'
 import { newsSearchRules } from '@/lib/ai/news-rules'
+import { gatherClosingNews, gatherWeeklyNews } from '@/lib/news/prompt-news'
 
 type MarketSession = 'KR' | 'US'
 
@@ -64,8 +65,9 @@ const CLOSING_INDEX_TICKERS: Record<MarketSession, string[]> = {
 /**
  * 클로징 리뷰 프롬프트 생성.
  * `now` 는 테스트 고정을 위한 주입점 (기본값 = 현재 시각).
+ * `newsBlock` 은 코드가 미리 모은 뉴스 (pleiades#280 · 외부 텍스트).
  */
-export function buildClosingPrompt(session: MarketSession, now: Date = new Date()): string {
+export function buildClosingPrompt(session: MarketSession, now: Date = new Date(), newsBlock = ''): string {
   const sessionLabel = session === 'KR' ? '🇰🇷 한국장' : '🇺🇸 미국장'
   // KR 클로징 (15:40 KST): 방금 마감한 세션 = 오늘 (KST). 다음 세션 = 내일.
   // US 클로징 (07:15 KST 화-토): 방금 마감한 세션 = 지난밤 미국장 (KST 어제 밤 개장 ~ 오늘 이른 아침 마감).
@@ -82,7 +84,7 @@ export function buildClosingPrompt(session: MarketSession, now: Date = new Date(
     '1. get_all_strategies로 전체 종목 전략 확인',
     '2. get_portfolio(전체)로 현재 보유 상태 (평가금액, 손익)',
     `3. get_prices([${indexArgs}])로 ${closedSession} 주요 지수 마감치 확인 — 지수 수치는 반드시 이 도구값을 출처로 사용`,
-    `4. WebSearch로 ${closedSession} 관련 뉴스/이슈 보조 검색 (뉴스는 배경 설명용, 지수 수치 출처로 쓰지 말 것)`,
+    `4. ${closedSession} 뉴스/이슈는 아래 "수집된 뉴스" 를 먼저 쓰고, 부족하면 get_news, 그래도 없을 때만 WebSearch (뉴스는 배경 설명용, 지수 수치 출처로 쓰지 말 것)`,
     `5. ${marketCurrency} 종목 중 ${closedSession} 에서 유의미한 움직임 있는 것만 get_technical_analysis로 재확인`,
     '',
     '리뷰 구성 (총 6~8줄, 간결하게):',
@@ -97,24 +99,25 @@ export function buildClosingPrompt(session: MarketSession, now: Date = new Date(
     ...(session === 'US'
       ? ['- 단, 미국장 기사는 미국 현지 날짜 기준이라 KST 로는 어제 날짜인 것이 정상 — 해당 세션 기사면 그대로 인용']
       : []),
-    '- 도구로 수치를 받았으면 "데이터 부족"·"확인 불가" 라고 쓰지 말 것. 뉴스만 못 찾은 경우엔 "당일 뉴스 미확인" 으로 표현',
+    '- 도구로 수치를 받았으면 "데이터 부족"·"확인 불가" 라고 쓰지 말 것. 뉴스 표기는 아래 뉴스 규칙을 따른다',
     '',
     // pleiades#279: 다른 뉴스 경로와 같은 공통 규칙 (위 표기 규칙이 클로징 고유분)
     ...newsSearchRules('briefing', now, { missingLabel: '당일 뉴스 미확인' }),
     '',
     '주의: 매매 결정은 사용자 몫이라 참고만. 손절 없음 전략 (stock-trading-method 스킬 참조).',
+    ...(newsBlock ? ['', newsBlock] : []),
   ].join('\n')
 }
 
-/** `now` 는 테스트 고정을 위한 주입점 (기본값 = 현재 시각) */
-export function buildWeeklyPrompt(now: Date = new Date()): string {
+/** `now` 는 테스트 고정을 위한 주입점 (기본값 = 현재 시각). `newsBlock` 은 코드가 미리 모은 뉴스 (pleiades#280) */
+export function buildWeeklyPrompt(now: Date = new Date(), newsBlock = ''): string {
   return [
     `지난주 (월-금) 포트폴리오 회고 + 다음주 관찰 캘린더를 작성해줘. (오늘: ${formatKstDate(now)} KST 기준)\n`,
     '다음 단계:',
     '1. get_networth로 순자산 스냅샷',
     '2. get_performance(전체, 1M)로 지난 1개월 TWR + 알파',
     '3. get_all_strategies + get_portfolio(전체)로 전략별 종목 상태',
-    '4. 관심종목/보유종목 중 지난주 유의미한 이벤트 (전략 태그별 요약)',
+    '4. 관심종목/보유종목 중 지난주 유의미한 이벤트 (전략 태그별 요약) — 뉴스는 아래 "수집된 뉴스" 를 먼저 쓰고, 부족하면 get_news',
     '5. WebSearch로 다음주 주요 이벤트 (미국 FOMC, 실적, 한국 지표 발표 등)',
     '',
     '리뷰 구성 (총 10~14줄, 섹션 구분):',
@@ -127,6 +130,7 @@ export function buildWeeklyPrompt(now: Date = new Date()): string {
     '',
     // pleiades#279
     ...newsSearchRules('briefing', now),
+    ...(newsBlock ? ['', newsBlock] : []),
   ].join('\n')
 }
 
@@ -178,7 +182,7 @@ export async function sendClosingReview(
   const label = session === 'KR' ? '🇰🇷 한국장 클로징' : '🇺🇸 미국장 클로징'
   await sendReview(
     label,
-    buildClosingPrompt(session),
+    buildClosingPrompt(session, new Date(), await gatherClosingNews(session)),
     '웹 AI 분석(/ai)에서 직접 질문해주세요.',
   )
 }
@@ -190,7 +194,7 @@ export async function sendWeeklyReview(): Promise<void> {
   }
   await sendReview(
     '📅 주간 리뷰',
-    buildWeeklyPrompt(),
+    buildWeeklyPrompt(new Date(), await gatherWeeklyNews()),
     '웹 AI 분석 페이지에서 회고를 확인해주세요.',
   )
 }
