@@ -15,6 +15,7 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 vi.mock('@/bot/notifications/briefing', () => ({ sendBriefing: vi.fn() }))
+vi.mock('@/lib/news/prompt-news', () => ({ gatherTickerNews: vi.fn(async () => '수집 블록') }))
 vi.mock('@/lib/ai/claude-advisor', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ai/claude-advisor')>()),
   askAdvisor: vi.fn(),
@@ -161,7 +162,7 @@ describe('브리핑', () => {
     it('안내 → advisor(프롬프트 · 옵션) → html 4096 이하면 html 한 번', async () => {
       m.ask.mockResolvedValueOnce({ response: '**NVDA** 요약 & <x>' } as never)
       const f = await run(hears(briefing, 0), '브리핑 nvda')
-      expect(m.ask).toHaveBeenCalledWith(buildTickerAnalysisPrompt('NVDA'), {
+      expect(m.ask).toHaveBeenCalledWith(buildTickerAnalysisPrompt('NVDA', new Date(), '수집 블록'), {
         model: 'sonnet', timeout: 300_000, maxBudgetUsd: 1.0, caller: 'bot:brief_command', expectsTools: true,
         retryOnNoToolUsed: 5, overallTimeoutMs: 900_000,
       })

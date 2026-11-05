@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/prisma', () => ({ prisma: { customStrategy: {}, alertConfig: {} } }))
 vi.mock('@/bot/notifications/briefing', () => ({ sendBriefing: vi.fn(async () => undefined) }))
+vi.mock('@/lib/news/prompt-news', () => ({ gatherTickerNews: vi.fn(async () => '수집 블록') }))
 vi.mock('@/lib/ai/claude-advisor', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ai/claude-advisor')>()),
   askAdvisor: vi.fn(),

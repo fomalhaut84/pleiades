@@ -13,11 +13,15 @@ import { notifierFor, Route, htmlContent, type NotifyBot } from './notifier'
 import { sanitizeError } from '@/bot/utils/error'
 import { formatKstDate } from '@/lib/kst-date'
 import { newsSearchRules } from '@/lib/ai/news-rules'
+import { gatherBriefingNews } from '@/lib/news/prompt-news'
 
 type MarketSession = 'KR' | 'US'
 
-/** `now` 는 테스트 고정을 위한 주입점 (기본값 = 현재 시각) */
-export function buildBriefingPrompt(session: MarketSession, now: Date = new Date()): string {
+/**
+ * `now` 는 테스트 고정을 위한 주입점 (기본값 = 현재 시각).
+ * `newsBlock` 은 코드가 미리 모은 뉴스 (pleiades#280 · 외부 텍스트 · `gatherBriefingNews`).
+ */
+export function buildBriefingPrompt(session: MarketSession, now: Date = new Date(), newsBlock = ''): string {
   const sessionLabel = session === 'KR' ? '🇰🇷 한국장' : '🇺🇸 미국장'
 
   return [
@@ -28,7 +32,7 @@ export function buildBriefingPrompt(session: MarketSession, now: Date = new Date
     session === 'US'
       ? '3. 미국주(USD) 종목 중 스윙/모멘텀/단타 전략은 get_technical_analysis로 TA 확인'
       : '3. 한국주(KRW) 종목 중 스윙/모멘텀/단타 전략은 get_technical_analysis로 TA 확인',
-    '4. WebSearch로 보유 종목 관련 뉴스 검색 — 아래 뉴스 규칙대로 (회사명 + 연·월 · 게시일 확인)',
+    '4. 뉴스는 아래 "수집된 뉴스" 를 먼저 쓴다. 없거나 부족한 종목만 get_news 로 더 찾고, 그래도 없을 때만 WebSearch — 아래 뉴스 규칙대로',
     '',
     '브리핑 구성:',
     '- 시장 동향 요약 (주요 지수, 이슈)',
@@ -41,6 +45,7 @@ export function buildBriefingPrompt(session: MarketSession, now: Date = new Date
     '',
     // pleiades#279: 게시일 없는 검색 결과에서 옛 기사가 "최신 뉴스" 로 인용됐다
     ...newsSearchRules('briefing', now),
+    ...(newsBlock ? ['', newsBlock] : []),
   ].join('\n')
 }
 
@@ -68,7 +73,7 @@ export async function sendBriefing(
 ): Promise<void> {
   const bot = notifyBot()
   const notifier = target === undefined ? notifierFor(bot) : target(bot)
-  const prompt = buildBriefingPrompt(session)
+  const prompt = buildBriefingPrompt(session, new Date(), await gatherBriefingNews(session))
 
   try {
     const result = await askAdvisor(prompt, {
