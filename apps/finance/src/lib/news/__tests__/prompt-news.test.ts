@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/prisma', () => ({ prisma: { holding: { findMany: vi.fn() } } }))
+vi.mock('@/lib/prisma', () => ({ prisma: { holding: { findMany: vi.fn() }, krxStock: { findFirst: vi.fn(async () => null) } } }))
 
 import { formatNewsBlock } from '../format'
 import { gatherBriefingNews, gatherClosingNews, gatherTickerNews, gatherWeeklyNews, PROMPT_NEWS_LIMITS, selectHoldingTickers, type HoldingRow, type PromptNewsDeps } from '../prompt-news'
@@ -25,6 +25,7 @@ function deps(rows: HoldingRow[], extra: PromptNewsDeps = {}): PromptNewsDeps {
     holdings: async () => rows,
     resolve: async (ticker) => target(ticker),
     collect: async (t) => okResult(t.label),
+    disclosures: async () => ({ status: 'disabled' }),
     ...extra,
   }
 }
@@ -114,10 +115,96 @@ describe('gather — 던지지 않는다', () => {
   it('종목 분석은 이름 인자를 질의로 찾는다', async () => {
     const collect = vi.fn(async (t: NewsTarget, _options: { days: number; limit: number }) => okResult(t.label))
     const resolve = vi.fn(async (ticker: string) => target(ticker))
-    await gatherTickerNews('삼성전자', { collect, resolve })
+    await gatherTickerNews('삼성전자', { collect, resolve, krxTicker: async () => null })
     expect(resolve).not.toHaveBeenCalled()
     expect(collect.mock.calls[0][0]).toMatchObject({ rssQuery: '삼성전자', filterTitles: false })
     expect(collect.mock.calls[0][1]).toEqual({ days: PROMPT_NEWS_LIMITS.analysisDays, limit: PROMPT_NEWS_LIMITS.analysisLimit })
+  })
+
+  it('공시를 같은 대상 아래에 넣고 꺼짐은 적지 않는다 · 실패와 0건은 적는다', async () => {
+    const off = await gatherBriefingNews('KR', deps([kr('A')]))
+    expect(off).not.toMatch(/\[공시\]|공시 0건|공시 수집 실패/)
+    const disclosures = async ({ ticker }: { ticker: string }) => ticker === 'A.KS'
+      ? { status: 'ok' as const, routine: 0, truncated: 2, incomplete: false, items: [{ date: '2026-11-04', title: '분기보고서', url: 'u' }] }
+      : ticker === 'B.KS' ? { status: 'failed' as const, reason: '시간 초과' } : { status: 'ok' as const, routine: 0, truncated: 0, incomplete: false, items: [] }
+    const on = await gatherBriefingNews('KR', deps([kr('A', 3), kr('B', 2), kr('C', 1)], { disclosures }))
+    expect(on).toContain('- [공시] 2026-11-04 · 분기보고서')
+    expect(on).toContain('공시 더 있음(get_disclosures)')
+    expect(on).toContain('공시 수집 실패(시간 초과)')
+    expect(on).toContain('공시 0건')
+  })
+
+  it('뉴스를 기다리는 동안 공시가 거부돼도 처리되지 않은 거부가 생기지 않는다', async () => {
+    const seen: unknown[] = []
+    const onUnhandled = (reason: unknown) => seen.push(reason)
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const collect = async (t: NewsTarget) => {
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        return okResult(t.label)
+      }
+      const block = await gatherBriefingNews('KR', deps([], { collect, disclosures: async () => { throw new Error('x') } }))
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      expect(seen).toEqual([])
+      expect(block).toContain('공시 수집 실패(조회 오류)')
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
+  })
+
+  it('공시가 던져도 뉴스는 나간다', async () => {
+    const block = await gatherBriefingNews('KR', deps([kr('A')], { disclosures: async () => { throw new Error('secret') } }))
+    expect(block).toContain('[A.KS] 1건')
+    expect(block).toContain('공시 수집 실패(조회 오류)')
+    expect(block).not.toContain('secret')
+  })
+
+  it('ETF 등(no_corp)은 공시 줄을 적지 않는다', async () => {
+    const block = await gatherBriefingNews('KR', deps([kr('A')], { disclosures: async () => ({ status: 'no_corp' }) }))
+    expect(block).not.toMatch(/\[공시\]|공시 0건|공시 수집 실패/)
+  })
+
+  // 회귀: PR-3 사전 리뷰 major — 공시가 뉴스 시간 예산을 잠식했다
+  it('뉴스와 공시는 함께 돈다', async () => {
+    const order: string[] = []
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const collect = async (t: NewsTarget) => { order.push('news'); await gate; return okResult(t.label) }
+    const disclosures = async () => { order.push('disclosure'); release(); return { status: 'disabled' as const } }
+    await gatherBriefingNews('KR', deps([], { collect, disclosures }))
+    expect(order).toEqual(['news', 'disclosure'])
+  })
+
+  // 회귀: PR #487 Codex P2 — 공시 대기가 다음 대상의 뉴스 시작을 밀었다
+  it('공시가 응답하지 않아도 모든 대상의 뉴스가 시작되고 공시만 시간 초과로 적는다', async () => {
+    vi.useFakeTimers()
+    try {
+      const collect = vi.fn(async (t: NewsTarget, _options: { days: number; limit: number }) => okResult(t.label))
+      const pending = gatherBriefingNews('KR', deps([kr('A', 2), kr('B', 1)], { collect, disclosures: () => new Promise<never>(() => undefined) }))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(collect.mock.calls.map((c) => c[0].label)).toEqual(['^KS11', 'A.KS', 'B.KS'])
+      await vi.advanceTimersByTimeAsync(PROMPT_NEWS_LIMITS.overallMs)
+      const block = await pending
+      expect(block).toContain('[B.KS] 1건')
+      expect(block).toContain('공시 수집 실패(시간 초과)')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // 회귀: PR-3 사전 리뷰 major — 이름 인자면 공시가 조용히 빠졌다
+  it('종목 분석의 이름·6자리 코드는 티커로 바꿔 공시까지 찾는다', async () => {
+    for (const input of ['삼성전자', '005930']) {
+      const disclosures = vi.fn(async () => ({ status: 'disabled' as const }))
+      await gatherTickerNews(input, deps([], { krxTicker: async () => '005930.KS', disclosures }))
+      expect(disclosures).toHaveBeenCalledWith({ ticker: '005930.KS', days: PROMPT_NEWS_LIMITS.analysisDays, limit: PROMPT_NEWS_LIMITS.analysisLimit })
+    }
+  })
+
+  it('이름을 못 찾으면 질의로 뉴스를 찾고 공시를 모으지 않았다고 적는다', async () => {
+    const block = await gatherTickerNews('없는회사', { collect: async (t) => okResult(t.label), krxTicker: async () => null, disclosures: async () => ({ status: 'unsupported' }) })
+    expect(block).toContain('[없는회사] 1건')
+    expect(block).toContain('공시는 모으지 않았다')
   })
 
   it('클로징은 2일 창이다', async () => {
@@ -142,7 +229,7 @@ describe('gather — 던지지 않는다', () => {
   // 회귀: PR-2 사전 리뷰 major — 빈 질의면 무관한 기사가 확인된 뉴스처럼 들어온다
   it('정리하면 비는 인자는 수집하지 않고 실패로 적는다', async () => {
     const collect = vi.fn(async (t: NewsTarget, _options: { days: number; limit: number }) => okResult(t.label))
-    const block = await gatherTickerNews('<>', { collect })
+    const block = await gatherTickerNews('<>', { collect, krxTicker: async () => null })
     expect(collect).not.toHaveBeenCalled()
     expect(block).toContain('[입력값] 수집 실패')
   })
