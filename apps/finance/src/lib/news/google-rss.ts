@@ -41,14 +41,15 @@ function stripSourceSuffix(title: string, source: string): string {
 const MAX_ITEM_CHARS = 16 * 1024
 
 /** 전체 본문에 정규식을 쓰면 닫히지 않은 `<item>` 반복에서 이차 시간이 된다 — indexOf 로 나눈다. pure */
-function itemBlocks(xml: string): string[] {
+function itemBlocks(xml: string): { blocks: string[]; truncated: boolean } {
   const blocks: string[] = []
   let from = 0
   for (;;) {
     const open = xml.indexOf('<item', from)
-    if (open < 0) return blocks
+    if (open < 0) return { blocks, truncated: false }
     const close = xml.indexOf('</item>', open)
-    if (close < 0) return blocks
+    // 잘린 응답이다 — 조용히 버리면 '기사 0건' 으로 읽힌다 (PR #475 Codex P2)
+    if (close < 0) return { blocks, truncated: true }
     blocks.push(xml.slice(open, close))
     from = close + '</item>'.length
   }
@@ -59,8 +60,9 @@ export function parseGoogleNewsRss(xml: string): ProviderFetch {
   // 안내 페이지 같은 HTML 200 을 '기사 0건' 으로 읽으면 실패가 숨는다
   if (!/<rss[\s>]/.test(xml)) throw new NewsFetchError('응답 형식 오류')
   const items: NewsItem[] = []
-  let unreadable = 0
-  for (const block of itemBlocks(xml)) {
+  const { blocks, truncated } = itemBlocks(xml)
+  let unreadable = truncated ? 1 : 0
+  for (const block of blocks) {
     if (block.length > MAX_ITEM_CHARS) {
       unreadable += 1
       continue

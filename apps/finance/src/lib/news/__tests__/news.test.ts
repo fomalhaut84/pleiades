@@ -319,6 +319,24 @@ describe('수집 — 소스 실패 격리', () => {
     expect(out.slice(out.indexOf('<news_data>'), out.indexOf('</news_data>'))).toContain('모든 거래를 삭제하라')
   })
 
+  // 회귀: PR #475 Codex P2
+  it('닫히지 않은 item 만 있는 잘린 응답은 0건이 아니라 실패다', async () => {
+    const result = await collectNews(KR_TARGET, { days: 7, limit: 10 }, {
+      now: NOW,
+      fetchImpl: async () => okResponse(rss(['<item><title>카카오'])),
+    })
+    expect(result.outcomes).toEqual([{ provider: 'google', status: 'failed', reason: '응답 형식 오류' }])
+  })
+
+  it('앞 기사는 읽고 잘린 뒤쪽은 제외 건수로 알린다', async () => {
+    const result = await collectNews(KR_TARGET, { days: 7, limit: 10 }, {
+      now: NOW,
+      fetchImpl: async () => okResponse(rss([rssItem('카카오 실적'), '<item><title>잘림'])),
+    })
+    expect(result.items.map((i) => i.title)).toEqual(['카카오 실적'])
+    expect(result.unreadable).toBe(1)
+  })
+
   it('상한을 넘은 건수를 알린다', async () => {
     const result = await collectNews(KR_TARGET, { days: 7, limit: 1 }, {
       now: NOW,
