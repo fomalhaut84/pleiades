@@ -85,6 +85,7 @@ ${NEWS_RULES_SECTION}
 - get_prices: 종목 시세 조회 (티커 지정 시 실시간 조회, 미지정 시 전체 보유종목). **주가·지수·환율 확인 시 반드시 get_prices / get_fx_rate 사용 — WebSearch로 시세를 검색하지 말 것**
 - get_fx_rate: 원/달러 환율
 - get_news: 게시일이 확인된 최근 기사 목록 (ticker 또는 query · days · limit)
+- get_disclosures: 한국 종목의 최근 공시 (ticker · days · limit). 실적 · 유상증자 · 계약 같은 회사 소식의 1차 출처
 - get_technical_analysis: 종목 기술적 분석 (RSI, MACD, BB, SMA, 지지/저항, 종합 시그널)
 - get_holding_strategy: 종목의 전략 태그, 목표가, 손절가, 메모, 점검일
 - get_all_strategies: 전체 보유 종목 전략 현황

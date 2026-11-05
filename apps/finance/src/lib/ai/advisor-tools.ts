@@ -20,6 +20,7 @@ export const READ_TOOLS: readonly string[] = [
     'get_prices',
     'get_fx_rate',
     'get_news',
+    'get_disclosures',
     'get_technical_analysis',
     'get_holding_strategy',
     'get_all_strategies',

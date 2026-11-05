@@ -19,6 +19,7 @@ import { getPerformance } from './tools/performance'
 import { getGiftTaxStatus, getDividends } from './tools/tax'
 import { getSpendingSummary, getTransactions, createTransaction, updateTransaction, deleteTransaction } from './tools/spending'
 import { getPrices, getFxRate } from './tools/market'
+import { DISCLOSURE_DEFAULT_DAYS, DISCLOSURE_DEFAULT_LIMIT, DISCLOSURE_MAX_DAYS, DISCLOSURE_MAX_LIMIT, getDisclosures } from './tools/disclosure'
 import { getNews, NEWS_DEFAULT_DAYS, NEWS_DEFAULT_LIMIT, NEWS_MAX_DAYS, NEWS_MAX_LIMIT } from './tools/news'
 import { simulateGrowth } from './tools/simulator'
 import { getTechnicalAnalysis } from './tools/ta'
@@ -409,6 +410,17 @@ server.tool(
     limit: z.number().int().min(1).max(NEWS_MAX_LIMIT).optional().describe(`최대 건수 (기본 ${NEWS_DEFAULT_LIMIT}, 최대 ${NEWS_MAX_LIMIT})`),
   },
   async (args) => getNews(args)
+)
+
+server.tool(
+  'get_disclosures',
+  '한국 종목의 최근 공시 목록 (접수일 · 보고서명 · 원문 링크). 임원·주요주주 소유 보고는 뺀다',
+  {
+    ticker: z.string().max(20).describe('Yahoo Finance 티커 (예: 005930.KS, 035720.KQ)'),
+    days: z.number().int().min(1).max(DISCLOSURE_MAX_DAYS).optional().describe(`최근 며칠 (기본 ${DISCLOSURE_DEFAULT_DAYS}, 최대 ${DISCLOSURE_MAX_DAYS})`),
+    limit: z.number().int().min(1).max(DISCLOSURE_MAX_LIMIT).optional().describe(`최대 건수 (기본 ${DISCLOSURE_DEFAULT_LIMIT}, 최대 ${DISCLOSURE_MAX_LIMIT})`),
+  },
+  async (args) => getDisclosures(args)
 )
 
 // --- 기술적 분석 ---
