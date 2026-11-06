@@ -59,7 +59,7 @@ const m = {
   parse: vi.mocked(parseStrategyText),
 }
 
-/** 요청 chat 의 응답 대상 자리 — 판단은 받은 대상을 sendBriefing 에 그대로 넘기기만 한다(텔레그램 notifierForChat 은 어댑터 몫). */
+/** 요청 chat 의 응답 대상 자리 — 판단은 받은 대상을 sendBriefing 에 그대로 넘기기만 한다(Discord 요청 채널 notifier 는 router 몫). */
 const TARGET: BriefingTarget = vi.fn() as unknown as BriefingTarget
 
 async function run(decide: (out: ReplyOutput) => Promise<void>) {

@@ -301,7 +301,7 @@ describe('브리핑 — 요청 채널 · !ai (D2)', () => {
     expect(args).toBe('미국')
     expect(options).toEqual({ aiCommand: DISCORD_AI_COMMAND })
     expect(DISCORD_AI_COMMAND).toBe('!ai')
-    expect(target?.({})).toEqual({ tag: 'req-notifier' })
+    expect(target?.()).toEqual({ tag: 'req-notifier' })
     expect(notifierForDiscordChannel).toHaveBeenCalledWith('c1')
   })
 })

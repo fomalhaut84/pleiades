@@ -7,7 +7,6 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { notifyBot } from '@/bot/index'
 import { askAdvisor, describeAdvisorError } from '@/lib/ai/claude-advisor'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 import { notifierFor, Route, htmlContent } from './notifier'
@@ -139,7 +138,6 @@ async function sendReview(
   prompt: string,
   fallbackHint: string,
 ): Promise<void> {
-  const bot = notifyBot()
 
   try {
     const result = await askAdvisor(prompt, {
@@ -157,7 +155,7 @@ async function sendReview(
 
     const html = markdownToTelegramHtml(result.response)
 
-    await notifierFor(bot).notify(Route.ALLOWED, htmlContent(html), { label: 'active-review' })
+    await notifierFor().notify(Route.ALLOWED, htmlContent(html), { label: 'active-review' })
 
     console.log(`[active-review] ${label} 발송 완료`)
   } catch (error) {
@@ -168,7 +166,7 @@ async function sendReview(
     const advisorMsg =
       error instanceof Error && ('code' in error) ? describeAdvisorError(error) : ''
     const fallback = `📊 ${label} 리뷰 생성에 실패했습니다.\n${advisorMsg || fallbackHint}`
-    await notifierFor(bot).notify(Route.ALLOWED, htmlContent(fallback), { label: 'active-review' })
+    await notifierFor().notify(Route.ALLOWED, htmlContent(fallback), { label: 'active-review' })
   }
 }
 

@@ -4,7 +4,6 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { notifyBot } from '@/bot/index'
 import {
   calcCostKRW,
   calcCurrentValueKRW,
@@ -27,7 +26,6 @@ function getQuarterLabel(month: number): string {
 }
 
 export async function sendQuarterlyReminder(): Promise<void> {
-  const bot = notifyBot()
 
   const accounts = await prisma.account.findMany({
     include: {
@@ -103,7 +101,7 @@ export async function sendQuarterlyReminder(): Promise<void> {
 
   const fullMessage = lines.join('\n')
 
-  await notifierFor(bot).notify(Route.ALLOWED, htmlContent(fullMessage), NOTIFY_CTX)
+  await notifierFor().notify(Route.ALLOWED, htmlContent(fullMessage), NOTIFY_CTX)
 
   console.log('[notification] 분기 점검 리마인더 발송 완료')
 }

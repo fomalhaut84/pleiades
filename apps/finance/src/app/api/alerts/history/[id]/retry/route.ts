@@ -5,9 +5,7 @@
  * - `deliveryStatus === 'failed'` 인 row 만 대상. 그 외는 400 (이미 성공/부분성공).
  * - 원본 row 는 mutate 하지 않고 새 AlertHistory row 를 append (`retriedFrom` 마커).
  * - Rate limit: 동일 id 5분내 재시도 금지 (스팸 방지). 프로세스 in-memory.
- * - 봇 핸들은 `notifyBot()` — 늘 텔레그램 없는 핸들(Discord 라우트만 · 009 D-5 B3b · pleiades#508)이며,
- *   `alert-dispatcher` 의 `redispatchAlert` 내부에서 호출된다. static import 는 안전 —
- *   `alert-dispatcher` 모듈 로드가 곧 Bot 초기화는 아니기 때문이다.
+ * - 전송은 `alert-dispatcher` 의 `redispatchAlert` → `#finance` 웹훅(009 D-5 B4 · pleiades#512). 봇 프로세스가 아니어도 보낸다.
  */
 
 import { NextRequest } from 'next/server'
@@ -58,9 +56,9 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     }
 
     if (recipients.targetCount(Route.ALLOWED) === 0) {
-      // 재발송 대상 chat 이 없으면 실패로 취급 (mark 하지 않아 재시도 여지 유지 —
+      // 재발송 대상(#finance 웹훅)이 없으면 실패로 취급 (mark 하지 않아 재시도 여지 유지 —
       // 환경변수 재설정 직후 즉시 눌러도 rate limit 걸리지 않도록).
-      return fail('발송 대상 chat 이 설정되지 않았습니다.', 500)
+      return fail('발송 대상(Discord 웹훅)이 설정되지 않았습니다.', 500)
     }
 
     // 실제 시도 직전에 mark — 성공/실패 무관하게 cooldown 시작. 원본 id 로 mark.

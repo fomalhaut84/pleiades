@@ -8,7 +8,6 @@
 import { prisma } from '@/lib/prisma'
 import { generateTAReport } from '@/lib/ta/engine'
 import { askAdvisor } from '@/lib/ai/claude-advisor'
-import { notifyBot } from '@/bot/index'
 import { escapeHtml } from '@/bot/utils/telegram'
 import { notifierFor, recipients, Route, htmlContent, lastErrorOf } from './notifier'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
@@ -333,10 +332,9 @@ async function doCheckTASignals(): Promise<void> {
     lines.push('')
   }
 
-  const bot = notifyBot()
   const message = lines.join('\n')
 
-  const delivery = await notifierFor(bot).notify(Route.ALLOWED, htmlContent(message), { label: 'ta-signal' })
+  const delivery = await notifierFor().notify(Route.ALLOWED, htmlContent(message), { label: 'ta-signal' })
   const sendSuccess = delivery.sent
   const lastError = lastErrorOf(delivery)
 

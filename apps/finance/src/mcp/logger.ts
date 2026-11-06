@@ -185,7 +185,7 @@ export const LOG_REDACT_PATHS = [
   'args.password', 'args.token', 'args.secret', 'args.apiKey',
   '*.password', '*.token', '*.secret', '*.apiKey', '*.jwt',
   'args.body.password', 'args.body.token',
-  'DATABASE_URL', 'TELEGRAM_BOT_TOKEN', 'OPENDART_API_KEY',
+  'DATABASE_URL', 'OPENDART_API_KEY',
   'DISCORD_BOT_TOKEN_FINANCE', 'DISCORD_BOT_TOKEN_FITNESS',
   'DISCORD_WEBHOOK_FINANCE', 'DISCORD_WEBHOOK_FITNESS', 'DISCORD_WEBHOOK_ADMIN', 'DISCORD_WEBHOOK_DEPLOY',
 ] as const

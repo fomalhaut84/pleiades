@@ -36,13 +36,11 @@ vi.mock('@/bot/notifications/alert-dispatcher', async () => {
 })
 
 describe('POST /api/alerts/history/[id]/retry', () => {
-  const OLD_ENV = process.env.TELEGRAM_ALLOWED_CHAT_IDS
-  const OLD_TOKEN = process.env.TELEGRAM_BOT_TOKEN
+  const WEBHOOK = 'https://discord.com/api/webhooks/1/fin-token'
 
   beforeEach(async () => {
-    // pleiades 009 D-1 (#350): 토큰이 없으면 텔레그램 수신자 0 — 실제 설정처럼 토큰을 넣는다(CI 에는 앱 .env 가 없다 · #354)
-    process.env.TELEGRAM_BOT_TOKEN = '1:x'
-    process.env.TELEGRAM_ALLOWED_CHAT_IDS = '111'
+    // 수신자는 #finance 웹훅(009 D-5 B4 · pleiades#512) — CI 에는 앱 .env 가 없다(#354) · 테스트 안에서 채운다
+    vi.stubEnv('DISCORD_WEBHOOK_FINANCE', WEBHOOK)
     const { prisma } = await import('@/lib/prisma')
     vi.mocked(prisma.alertHistory.findUnique).mockReset()
 
@@ -52,9 +50,7 @@ describe('POST /api/alerts/history/[id]/retry', () => {
   })
 
   afterEach(() => {
-    process.env.TELEGRAM_ALLOWED_CHAT_IDS = OLD_ENV
-    if (OLD_TOKEN === undefined) delete process.env.TELEGRAM_BOT_TOKEN
-    else process.env.TELEGRAM_BOT_TOKEN = OLD_TOKEN
+    vi.unstubAllEnvs()
   })
 
   const buildReq = () => new Request('http://x/api/alerts/history/x/retry', { method: 'POST' })
@@ -201,8 +197,10 @@ describe('POST /api/alerts/history/[id]/retry', () => {
     expect((await POST(buildReq() as never, { params: Promise.resolve({ id: 'B' }) })).status).toBe(200)
   })
 
-  it('chat 목록이 비어있으면 500 (cooldown 미마킹 — 환경변수 재설정 후 즉시 재시도 가능)', async () => {
-    process.env.TELEGRAM_ALLOWED_CHAT_IDS = ''
+  it('웹훅이 비어있으면 500 (cooldown 미마킹 — 환경변수 재설정 후 즉시 재시도 가능) · 옛 텔레그램 env 는 대신하지 않는다', async () => {
+    vi.stubEnv('DISCORD_WEBHOOK_FINANCE', '')
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', '1:x')
+    vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '111')
     const { prisma } = await import('@/lib/prisma')
     vi.mocked(prisma.alertHistory.findUnique).mockResolvedValue({
       id: 'a1',
@@ -220,7 +218,7 @@ describe('POST /api/alerts/history/[id]/retry', () => {
     expect(res.status).toBe(500)
 
     // 환경변수 복구 후 즉시 재시도 → cooldown 안걸림 → 200
-    process.env.TELEGRAM_ALLOWED_CHAT_IDS = '111'
+    vi.stubEnv('DISCORD_WEBHOOK_FINANCE', WEBHOOK)
     const res2 = await POST(buildReq() as never, { params: Promise.resolve({ id: 'a1' }) })
     expect(res2.status).toBe(200)
   })

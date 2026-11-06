@@ -9,7 +9,6 @@
  */
 
 import 'dotenv/config'
-import { notifyBot } from './index'
 import { schedulePriceUpdates, scheduleSnapshots, scheduleKrxSync, scheduleRecurring, scheduleVestingStatusUpdate, scheduleEarningsScan, scheduleBenchmarkRefresh } from '@/lib/cron'
 import { scheduleNotifications } from './notifications/scheduler'
 import { startDiscordInteractions } from './notifications/discord-interactions'
@@ -37,7 +36,7 @@ async function main(): Promise<void> {
   console.log('[bot] cron + 알림 스케줄러 등록 완료')
 
   // pleiades M-6b-4 (pleiades#155): Discord 수신(gateway) — 봇 토큰·채널이 있을 때만
-  const discordGateway = startDiscordInteractions(notifyBot())
+  const discordGateway = startDiscordInteractions()
 
   // graceful shutdown
   const shutdown = async () => {
