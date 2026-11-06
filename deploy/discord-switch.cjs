@@ -3,7 +3,7 @@
 //
 // 사용:  node deploy/discord-switch.cjs check <파일> [--no-send]   필요한 키 · 형식 · (기본) 웹훅·봇 채널에 시험 메시지 1건씩
 //        node deploy/discord-switch.cjs state <파일>                    스위치 4줄의 지금 값(discord 가 아니면 미설정)
-// 스위치를 바꾸는 set 은 009 D-5 B1(#502)에서 지웠다 — 텔레그램으로 돌아갈 곳이 없다. 옛 on·off 는 그 이전 태그에 있다.
+// 스위치를 바꾸는 set 은 009 D-5 B1(#502)에서 지웠다 — 옛 채널로 돌아갈 곳이 없다. 옛 on·off 는 그 이전 태그에 있다.
 // 출력: 판정 양식 줄("F <줄>")과 마지막 "RESULT ok|fail". 값(웹훅 URL · 토큰 · ID)은 내지 않는다 — 키 이름과 개수만.
 // 의존성 없음 — 해석은 packages/notify platform-env 와 같은 규칙(따옴표 값 · 따옴표 없는 값은 " #" 앞까지)으로 플랫폼 키만.
 'use strict'

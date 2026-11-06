@@ -2,7 +2,7 @@
 
 실행: python3 -m unittest discover -s deploy
 Discord 에는 보내지 않는다(PLEIADES_TEST=1 NOTIFY_DRY_RUN=1 · fetch 스텁). 핵심 계약: 웹훅을 출력하지 않는다 ·
-늘 Discord 배포 채널(스위치를 읽지 않는다 · 텔레그램 대체 없음) · 웹훅이 비면 보내지 않고 0 · ssh-deploy 는 앱마다 결과를 넘긴다.
+늘 Discord 배포 채널(스위치를 읽지 않는다 · 옛 채널 대체 없음) · 웹훅이 비면 보내지 않고 0 · ssh-deploy 는 앱마다 결과를 넘긴다.
 """
 
 import json
@@ -70,8 +70,8 @@ class NotifyDeploy(unittest.TestCase):
         self.assertIn("소요 129s", r.stdout)
         self.assertNotIn("Actions 실행 요약", r.stdout)
 
-    # 회귀: #502 — 스위치를 읽지 않는다(R2 뒤 앱과 같다) · 텔레그램 키가 있어도 텔레그램으로 가지 않는다
-    def test_switch_is_ignored_and_telegram_is_never_used(self):
+    # 회귀: #502 — 스위치를 읽지 않는다(R2 뒤 앱과 같다) · 옛 채널 키가 있어도 옛 채널로 가지 않는다
+    def test_switch_is_ignored_and_legacy_channel_is_never_used(self):
         self.env_file("finance", "TELEGRAM_BOT_TOKEN=1:SECRETTOKEN\nTELEGRAM_ADMIN_CHAT_IDS=9\n")
         r = self.run_notify("fin", "ok", "v1.0.7", "x", PLEIADES_ENV_FILE=self.platform('NOTIFY_DEPLOY_CHANNEL=""\n' + self.HOOK))
         self.assertIn("(dry-run) Discord 배포 채널", r.stdout)

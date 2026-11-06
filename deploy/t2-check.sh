@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# t2-check.sh — T-2 서버 확인(U1~U12 · U13 텔레그램 수신 방식은 009 D-5 B1 #502 에서 지웠다)을 한 번에 돌려 원본을 저장소 밖 파일에 남긴다 (007 §8 · #186).
+# t2-check.sh — T-2 서버 확인(U1~U12 · U13 옛 채널 수신 방식은 009 D-5 B1 #502 에서 지웠다)을 한 번에 돌려 원본을 저장소 밖 파일에 남긴다 (007 §8 · #186).
 #
 # 사용:  bash t2-check.sh [--fin-dir DIR] [--fit-dir DIR] [--fin-db NAME] [--fit-db NAME] [--out FILE]
 #   서비스 계정으로 서버에서 사용자가 실행한다 — Claude 세션은 서버에 닿지 않는다(I-3). 로컬(Darwin)은 거부

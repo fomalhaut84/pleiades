@@ -274,7 +274,7 @@ class FullRun(unittest.TestCase):
         self.assertIn("45 4 * * *\t/srv/myFitness ./scripts/rel.sh /dev/null", text)
         self.assertIn("0 3 * jan-mar MON,WED\t/old/path/scripts/backup-db.sh", text)
 
-    # 회귀: #502 — U13(텔레그램 getWebhookInfo)을 지웠다 · 옛 .env 의 토큰은 U7 키 목록에 이름만 나온다
+    # 회귀: #502 — U13(옛 채널 getWebhookInfo)을 지웠다 · 옛 .env 의 토큰은 U7 키 목록에 이름만 나온다
     def test_bot_token_listed_by_name_only_and_never_sent(self):
         self.srv.close()
         self.srv = FakeServer(tg_token=True)

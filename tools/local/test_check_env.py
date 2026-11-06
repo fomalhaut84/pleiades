@@ -75,7 +75,7 @@ class Fit(Base):
                 self.assertIn(key, self.keys("fit", {**GOOD_FIT, **patch}))
 
     # 009 D-5 B6 (pleiades#517): 앱이 TELEGRAM_* 를 읽지 않는다 — 남은 줄(서비스 토큰 모양이어도)은 검사 대상이 아니다
-    def test_leftover_telegram_keys_are_not_checked(self):
+    def test_leftover_legacy_channel_keys_are_not_checked(self):
         leftover = {"TELEGRAM_BOT_TOKEN": "999:x", "TELEGRAM_ALLOWED_CHAT_IDS": "-100,555", "TELEGRAM_ADMIN_CHAT_IDS": "777"}
         self.assertEqual(self.problems("fit", {**GOOD_FIT, **leftover}), [])
         (self.root / "apps/finance/.env").write_text("TELEGRAM_BOT_TOKEN=999:other\n")  # 옛 '같은 봇' 검사도 없다

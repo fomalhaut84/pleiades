@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""로컬 기동·migrate 전 실효 env 검사 (#104 · 006 §4-5 L-1~L-7 · isolation.md I-4′·I-5′·I-6·I-7·I-8·I-12·I-14 · 텔레그램 I-4·I-5 검사는 009 D-5 B6 에서 지웠다).
+"""로컬 기동·migrate 전 실효 env 검사 (#104 · 006 §4-5 L-1~L-7 · isolation.md I-4′·I-5′·I-6·I-7·I-8·I-12·I-14 · 옛 채널 I-4·I-5 검사는 009 D-5 B6 에서 지웠다).
 
 `.env` 만으로는 부족하다 — 셸 export 가 이긴다(006 ㉕). 그래서 **실효 env**(apps/<app>/.env 위에 현재 환경을 덮은 것)를 본다.
 값은 출력하지 않는다(비밀) — 키 이름과 이유만.
@@ -33,7 +33,7 @@ MUST_BE_EMPTY = {
     "fin": ("WHOOING_WEBHOOK_URL",),  # 실제 가계부에 기록된다 (L-6)
     "fit": ("GARMIN_EMAIL", "GARMIN_PASSWORD", "MFDS_API_KEY"),  # 서비스 Garmin 세션 · 외부 API (L-5 · L-6)
 }
-# 009 D-5 B6 (pleiades#517): 텔레그램 검사(검증 봇 id · 앱 간 같은 봇 · CHAT_ID 키 대조)는 지웠다 — 두 앱이 TELEGRAM_* 를
+# 009 D-5 B6 (pleiades#517): 옛 채널 검사(검증 봇 id · 앱 간 같은 봇 · CHAT_ID 키 대조)는 지웠다 — 두 앱이 옛 채널 키를
 # 읽지 않아 로컬에 서비스 토큰이 있어도 폴링·409 가 생기지 않는다. 로컬 봇 가드는 Discord 판(I-4′ · I-5′ · 아래 _check_platform).
 # dotenv 동작을 바꾸는 셸 변수 — prisma.config 의 `dotenv/config` 가 다른 파일을 읽거나 셸 값을 덮게 된다
 DOTENV_CONTROL = ("DOTENV_CONFIG_PATH", "DOTENV_CONFIG_OVERRIDE", "DOTENV_CONFIG_ENCODING", "DOTENV_KEY")

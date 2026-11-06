@@ -770,7 +770,7 @@ class SmokeIsolation(unittest.TestCase):
         self.assertIn("DISCORD_BOT_TOKEN_FITNESS: ''", self.SMOKE)
         self.assertRegex(self.SMOKE, r"DATABASE_URL: DUMMY_DATABASE_URL")
         self.assertIn("@127.0.0.1:1/", self.SMOKE)
-        self.assertNotIn("TELEGRAM", self.SMOKE)  # 009 D-5 B3b — 봇이 텔레그램을 읽지 않는다(토큰 겹 제거)
+        self.assertNotIn("TELEGRAM", self.SMOKE)  # 009 D-5 B3b — 봇이 옛 채널 토큰을 읽지 않는다(토큰 겹 제거)
         self.assertIn("env: smokeEnv(process.env)", self.SMOKE)
 
 

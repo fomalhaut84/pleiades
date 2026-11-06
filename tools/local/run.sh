@@ -9,7 +9,7 @@
 #         → check_env.py 통과 시에만 실행.
 # Discord 봇 토큰이 실효 env 에 있으면 PLEIADES_VERIFY_DISCORD_TOKEN_SHA256=<hash,…> 도 필요하다(검증 봇만 · 009 D-G · #328).
 # Discord 채널·사용자 ID 는 PLEIADES_VERIFY_DISCORD_IDS=<id,…> · 웹훅은 PLEIADES_VERIFY_DISCORD_WEBHOOK_SHA256=<hash,…> (검증용만 · I-5′ · #359).
-# 선택 env: PLEIADES_ROOT(테스트용) · 009 D-5 B6(#517): 텔레그램 봇 id 허용 목록(PLEIADES_VERIFY_BOT_IDS·_CHAT_IDS)은 지웠다
+# 선택 env: PLEIADES_ROOT(테스트용) · 009 D-5 B6(#517): 옛 채널 봇 id 허용 목록(PLEIADES_VERIFY_BOT_IDS·_CHAT_IDS)은 지웠다
 set -euo pipefail
 
 die() { echo "run.sh: 중단 — $*" >&2; exit 1; }

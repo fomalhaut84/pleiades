@@ -4,7 +4,7 @@
 // 사용:  node deploy/notify-deploy.cjs <fin|fit> <ok|fail> <tag> <요약 한 줄>
 //   웹훅: 플랫폼 설정의 DISCORD_WEBHOOK_DEPLOY(ADMIN 과 같은 채널이어도 된다 · #321). 플랫폼 설정 = PLEIADES_ENV_FILE 또는
 //   ~/pleiades-platform.env (ssh-deploy 는 그 변수를 넘기지 않는다 — release-inplace.sh C1 과 같은 위치). GitHub secrets 에 두지 않는다(I-9).
-//   스위치(NOTIFY_DEPLOY_CHANNEL)는 읽지 않는다 — 늘 Discord. 텔레그램 대체 전송은 B1 에서 지웠다(돌아갈 텔레그램이 없다).
+//   스위치(NOTIFY_DEPLOY_CHANNEL)는 읽지 않는다 — 늘 Discord. 옛 채널 대체 전송은 B1 에서 지웠다(돌아갈 옛 채널이 없다).
 // 출력: 보낸 결과 한 줄. 웹훅은 내지 않는다. 알림 실패·웹훅 없음은 종료 코드 0(배포 결과를 바꾸지 않는다) + 사유 한 줄.
 // 테스트: PLEIADES_TEST=1 NOTIFY_DRY_RUN=1 이면 보내지 않고 본문만 낸다.
 // 인자 형식은 직전 판 ssh-deploy.sh 와 호환을 유지한다 — 도는 ssh-deploy 는 한 판 뒤처진 채 새 체크아웃의 이 파일을 부른다.
