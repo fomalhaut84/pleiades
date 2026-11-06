@@ -58,8 +58,8 @@ export interface ReplyOutput {
   /** 보내고 그 메시지의 키를 돌려준다. 실패는 던진다. */
   reply(message: BotReply): Promise<MessageKey>
   /**
-   * HTML 본문 — 길 수 있다(조회 결과 · 목록). 텔레그램은 지금의 `replyHtml`(4096 분할 · 네트워크 재시도 · HTML 파싱 실패 시
-   * 태그를 뗀 plain 재전송) · Discord 는 chat 이 변환·분할한다(PR-3). 버튼을 달지 않으므로 메시지 키를 돌려주지 않는다.
+   * HTML 본문 — 길 수 있다(조회 결과 · 목록). Discord 는 chat 이 변환·분할한다(PR-3 · 텔레그램 `replyHtml` 은
+   * 009 D-5 B3b 에서 지웠다). 버튼을 달지 않으므로 메시지 키를 돌려주지 않는다.
    * pleiades 009 D-3 PR-2a (pleiades#392) — fit `BotReply.long` 과 같은 뜻을 메서드로 둔다(`reply` 가 키를 돌려주는 계약 유지).
    */
   replyLong(html: string): Promise<void>

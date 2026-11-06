@@ -11,7 +11,6 @@ import { modelReply, plainReply, type ReplyOutput } from '../core/reply'
  * pleiades 009 D-3 PR-2b (pleiades#394 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 D2 · A2 · Q · H2): 브리핑 · 종목 심층 분석.
  * 판단(decideBriefing)은 인자 · 응답 대상(`BriefingTarget` — 없으면 대상 불명) · 중립 응답 모델만 안다.
  * Discord 어댑터(PR-3 · pleiades#398)는 요청 채널 notifier 와 `{ aiCommand: '!ai' }` 를 넘긴다 · 모델 출력은 `modelReply`(명령 표기 변환 없음).
- * 텔레그램 어댑터는 요청 chat 의 `notifierForChat` 을 대상으로 넘긴다(지금 `sendBriefing(session, chatId)` 와 같은 notifier).
  * 판단 흐름은 `__tests__/special-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
