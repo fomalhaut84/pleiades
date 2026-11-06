@@ -267,6 +267,31 @@ describe('정적 안내 감싸기 — 텔레그램 등록부와 같은 문구', 
     expect(c.reply).toHaveBeenCalledWith('⚠️ 포트폴리오 조회에 실패했습니다.')
     err.mockRestore()
   })
+
+  // pleiades 009 D-5 B3a (pleiades#509) — 텔레그램 등록부의 catch 문구를 고정하던 특성 테스트(`*-telegram.test.ts`)의 Discord 짝
+  it.each([
+    ['계좌 세진', portfolio.decideAccountDetail, '⚠️ 계좌 조회에 실패했습니다.'],
+    ['주가 NVDA', price.decidePrice, '⚠️ 주가 조회에 실패했습니다.'],
+    ['환율', price.decideFxRate, '⚠️ 환율 조회에 실패했습니다.'],
+    ['매수 소담 NVDA 1 100', trade.decideTrade, '⚠️ 매수 기록에 실패했습니다.'],
+    ['매도 소담 NVDA 1 100', trade.decideTrade, '⚠️ 매도 기록에 실패했습니다.'],
+    ['수입 월급 3000000', expense.decideExpenseInput, '⚠️ 수입 기록에 실패했습니다.'],
+    ['소비', budget.decideTransactionSummary, '⚠️ 소비 조회에 실패했습니다.'],
+    ['수입', budget.decideTransactionSummary, '⚠️ 수입 조회에 실패했습니다.'],
+    ['예산', budget.decideBudgetStatus, '⚠️ 예산 조회에 실패했습니다.'],
+    ['예산설정 1000000', budget.decideBudgetSet, '⚠️ 예산 설정에 실패했습니다.'],
+    ['알림설정 급락 -3', alert.decideAlertConfig, '⚠️ 알림 설정에 실패했습니다.'],
+    ['!alertconfig 급락 -3', alert.decideAlertConfig, '⚠️ 알림 설정에 실패했습니다.'],
+    ['점심 12000', expense.decideExpenseInput, '⚠️ 소비 기록에 실패했습니다.'],
+  ] as const)('%s 실패 → 로그 + 안내(원문 없음)', async (text, decide, failText) => {
+    vi.mocked(decide).mockRejectedValueOnce(new Error('db down secret'))
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const c = await send(text)
+    expect(c.reply).toHaveBeenCalledTimes(1)
+    expect(c.reply).toHaveBeenCalledWith(failText)
+    expect(err).toHaveBeenCalledTimes(1)
+    err.mockRestore()
+  })
 })
 
 describe('브리핑 — 요청 채널 · !ai (D2)', () => {
