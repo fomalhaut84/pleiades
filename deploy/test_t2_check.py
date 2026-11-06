@@ -1,4 +1,4 @@
-"""deploy/t2-check.sh — T-2 서버 확인(U1~U13)을 한 번에 돌리는 읽기 전용 스크립트 (#186 · 007 §8).
+"""deploy/t2-check.sh — T-2 서버 확인(U1~U12)을 한 번에 돌리는 읽기 전용 스크립트 (#186 · 007 §8).
 
 실행: python3 -m unittest discover -s deploy
 서버 명령(pm2·sudo·psql·nginx·ss·systemctl·curl·git ls-remote)은 PATH 스텁으로 바꾼다 — 실제 서버·네트워크를 쓰지 않는다.
@@ -83,10 +83,6 @@ echo '45 4 * * * cd /srv/myFitness && ./scripts/rel.sh > /dev/null 2>&1'
 echo '0 3 * jan-mar MON,WED /old/path/scripts/backup-db.sh'
 """
 
-# https.get 이 토큰 URL 을 담은 오류를 던진다 — U13 이 그 메시지를 싣지 않는지 (#186 사전 리뷰 info)
-HTTPS_THROW = """require('https').get = (url) => { const e = new Error('boom ' + url); throw e }
-"""
-
 GIT_STUB = f"""#!/bin/bash
 echo "git $*" >> "$STUB/log"
 for a in "$@"; do [[ "$a" == ls-remote ]] && {{ echo "abc123	refs/heads/dev"; exit 0; }}; done
@@ -146,7 +142,7 @@ class FakeServer:
         self.stub = self.home / "_stub"
         self.stub.mkdir()
         stubs = {"pm2": PM2_STUB, "sudo": SUDO_STUB, "git": GIT_STUB, "crontab": CRONTAB_STUB,
-                 "uname": "#!/bin/sh\necho Linux\n", "https-throw.js": HTTPS_THROW}
+                 "uname": "#!/bin/sh\necho Linux\n"}
         for name in ("psql", "pg_dump", "nginx", "ss", "systemctl", "curl", "claude"):
             stubs[name] = LOGGING_STUB
         for name, body in stubs.items():
@@ -207,7 +203,7 @@ class FullRun(unittest.TestCase):
         r, text = self.run_ok()
         out = self.srv.outputs()[0]
         self.assertEqual(stat.S_IMODE(out.stat().st_mode), 0o600)
-        self.assertIn("U13", text)
+        self.assertIn("U11", text)
         self.assertEqual(text.strip(), r.stdout.strip())
 
     def test_detects_dirs_from_pm2_and_db_names_from_env(self):
@@ -246,7 +242,7 @@ class FullRun(unittest.TestCase):
         r, text = self.run_ok(STUB_SUDO="no")
         self.assertIn("건너뜀", text)
         self.assertNotRegex(self.srv.log(), r"(?m)^psql .*-d ")
-        self.assertIn("U13", text)
+        self.assertIn("U11", text)
 
     def test_with_sudo_queries_both_service_dbs(self):
         self.run_ok(STUB_SUDO="ok")
@@ -278,12 +274,15 @@ class FullRun(unittest.TestCase):
         self.assertIn("45 4 * * *\t/srv/myFitness ./scripts/rel.sh /dev/null", text)
         self.assertIn("0 3 * jan-mar MON,WED\t/old/path/scripts/backup-db.sh", text)
 
-    def test_bot_token_never_printed_even_when_request_throws(self):
+    # 회귀: #502 — U13(옛 채널 getWebhookInfo)을 지웠다 · 옛 .env 의 토큰은 U7 키 목록에 이름만 나온다
+    def test_bot_token_listed_by_name_only_and_never_sent(self):
         self.srv.close()
         self.srv = FakeServer(tg_token=True)
-        r, text = self.run_ok(NODE_OPTIONS=f"--require {self.srv.stub / 'https-throw.js'}")
+        r, text = self.run_ok()
         self.assertNotIn("TGSECRET", r.stdout + r.stderr + text)
-        self.assertIn("요청 실패", text)
+        self.assertRegex(text, r"TELEGRAM_BOT_TOKEN\t값있음")
+        self.assertNotIn("U13", text)
+        self.assertNotIn("api.telegram.org", (HERE / "t2-check.sh").read_text())
 
     def test_detected_db_name_out_of_format_is_reported(self):
         self.srv.close()
@@ -439,11 +438,6 @@ class ScriptText(unittest.TestCase):
         self.assertTrue(lines)
         for l in lines:
             self.assertIn("--no-optional-locks", l)
-
-    def test_u13_raises_family_autoselection_attempt_timeout(self):
-        # #191 — 서버 node 기본 250 ms 에서 getWebhookInfo 가 ETIMEDOUT(T-2 U13 첫 실행)
-        u13 = self.TEXT[self.TEXT.index("u13() {"):self.TEXT.index("report() {")]
-        self.assertIn("autoSelectFamilyAttemptTimeout: 2000", u13)
 
     def test_raw_jlist_only_goes_to_field_filter(self):
         # 명령으로 쓰인 줄만 — 메시지 문자열 안의 "pm2 jlist" 는 제외

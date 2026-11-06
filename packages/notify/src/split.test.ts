@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TELEGRAM_MAX_LENGTH, splitMessage } from './split';
+import { splitMessage } from './split';
 
 // 정본: myFinance src/bot/utils/formatter.ts:50-78 (003 §3-1 "길이 초과 처리 — myFinance 분할")
 
@@ -15,10 +15,10 @@ describe('splitMessage', () => {
     expect(splitMessage('abc', 10)).toEqual(['abc']);
     expect(splitMessage('', 10)).toEqual(['']);
   });
-  it('기본 한도는 4096', () => {
-    expect(TELEGRAM_MAX_LENGTH).toBe(4096);
-    expect(splitMessage('x'.repeat(4096))).toEqual(['x'.repeat(4096)]);
-    expect(splitMessage('x'.repeat(4097))).toHaveLength(2);
+  // 009 D-5 B5: 기본 한도(4096)를 지웠다 — 한도는 늘 인자다. 경계는 그대로 본다
+  it('한도와 같으면 1청크 · 1자 넘으면 2청크', () => {
+    expect(splitMessage('x'.repeat(4096), 4096)).toEqual(['x'.repeat(4096)]);
+    expect(splitMessage('x'.repeat(4097), 4096)).toHaveLength(2);
   });
   it('줄 경계에서 나눈다 — 줄 사이 개행 1자를 예산에 포함', () => {
     // "aaa\nbbb\nccc" 한도 7: "aaa\nbbb"(7) 가 딱 맞고 ccc 는 다음 청크

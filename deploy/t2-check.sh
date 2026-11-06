@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# t2-check.sh — T-2 서버 확인(U1~U13)을 한 번에 돌려 원본을 저장소 밖 파일에 남긴다 (007 §8 · #186).
+# t2-check.sh — T-2 서버 확인(U1~U12 · U13 옛 채널 수신 방식은 009 D-5 B1 #502 에서 지웠다)을 한 번에 돌려 원본을 저장소 밖 파일에 남긴다 (007 §8 · #186).
 #
 # 사용:  bash t2-check.sh [--fin-dir DIR] [--fit-dir DIR] [--fin-db NAME] [--fit-db NAME] [--out FILE]
 #   서비스 계정으로 서버에서 사용자가 실행한다 — Claude 세션은 서버에 닿지 않는다(I-3). 로컬(Darwin)은 거부
@@ -242,33 +242,6 @@ u11() {
   echo "서버 밖에서 확인한다 — 각 서비스 저장소 Settings → Secrets and variables → Actions 의 secret 이름 · deploy.yml workflow 활성 여부"
 }
 
-u13() {
-  local d
-  for d in "$FIN_DIR" "$FIT_DIR"; do
-    [[ -n "$d" ]] || continue
-    # getWebhookInfo 는 polling 을 방해하지 않는다(getUpdates 는 409). 토큰은 node 안에서만 쓴다 — 오류에도 URL 을 싣지 않는다
-    node -e "$DOTENV_JS"'
-      const https = require("https")
-      const dir = process.argv[1]
-      let token = ""
-      try { token = readEnv(dir + "/.env").TELEGRAM_BOT_TOKEN || "" } catch { console.log(dir, ".env 읽기 실패"); process.exit(0) }
-      if (!token) { console.log(dir, "TELEGRAM_BOT_TOKEN 없음"); process.exit(0) }
-      try {
-        // 서버 node 기본 시도 제한 250 ms 는 ~250 ms 연결을 끊는다(#191)
-        https.get("https://api.telegram.org/bot" + token + "/getWebhookInfo", { autoSelectFamilyAttemptTimeout: 2000 }, (res) => {
-          let s = ""; res.on("data", (c) => (s += c)).on("end", () => {
-            let j
-            try { j = JSON.parse(s) } catch { console.log(dir, "응답 해석 실패 HTTP", res.statusCode); return }
-            if (!j.ok) { console.log(dir, "응답 실패", j.error_code, j.description); return }
-            const r = j.result
-            console.log(dir, "webhook=" + (r.url ? "set" : "none"), "pending=" + r.pending_update_count, "last_error=" + (r.last_error_message || "-"))
-          })
-        }).on("error", (e) => console.log(dir, "요청 실패", e.code))
-      } catch (e) { console.log(dir, "요청 실패", e.code || "?") }
-    ' "$d"
-  done
-}
-
 report() {
   echo "t2-check.sh (#186) · $(date -u '+%Y-%m-%dT%H:%MZ') · 원본: $OUT"
   echo "FIN_DIR=${FIN_DIR:-} ($FIN_DIR_FROM)"; [[ -n "$FIN_DIR" ]] || echo "FIN_DIR 없음 — --fin-dir 로 다시 돌리면 그 앱 항목이 채워진다"
@@ -285,7 +258,6 @@ report() {
   section "U9 — 영속 디렉터리" u9
   section "U10 — 서버에서 pleiades 접근" u10
   section "U11 — 서비스 배포 경로(서버 밖)" u11
-  section "U13 — 서비스 봇 수신 방식" u13
   echo
   echo "끝. 원본은 $OUT — 저장소에도 세션에도 넣지 않는다. 세션에는 런북 '공개 기록 양식'(판정만)을 채워 준다."
 }

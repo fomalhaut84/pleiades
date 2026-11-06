@@ -248,7 +248,7 @@ class DeployDryRun(unittest.TestCase):
 
     def test_refuses_platform_env_readable_by_other_accounts(self):
         shared = self.root / "shared.env"
-        shared.write_text("NOTIFY_ALLOWED_CHANNEL=telegram\n")
+        shared.write_text("NOTIFY_ALLOWED_CHANNEL=discord\n")
         shared.chmod(0o644)
         r = deploy(self.root, "fin", "--dry-run", env={"PLEIADES_ENV_FILE": str(shared)})
         self.assertNotEqual(r.returncode, 0)
@@ -262,7 +262,7 @@ class DeployDryRun(unittest.TestCase):
                 self.assertNotEqual(r.returncode, 0)
                 self.assertIn("절대경로", r.stderr)
         root_env = self.root / ".env"  # PLEIADES_ENV_FILE 이 없으면 루트 .env 가 플랫폼 설정이다(#143)
-        root_env.write_text("NOTIFY_ALLOWED_CHANNEL=telegram\n")
+        root_env.write_text("NOTIFY_ALLOWED_CHANNEL=discord\n")
         root_env.chmod(0o664)
         r = deploy(self.root, "fin", "--dry-run")
         self.assertNotEqual(r.returncode, 0)
@@ -759,7 +759,8 @@ class SmokeIsolation(unittest.TestCase):
         self.assertIn("const SMOKE_ARG = '--smoke'", self.ENTRY)
         check = self.ENTRY.index("process.argv.includes(SMOKE_ARG)")
         self.assertLess(self.ENTRY.index("'[bot] standalone 프로세스 시작...'"), check)  # 스모크 READY_MARKER 가 먼저
-        for first in ("schedulePriceUpdates()", "scheduleNotifications()", "startDiscordInteractions(", "startTelegramPolling(", "getBot("):
+        # 009 D-5 B4 — notifyBot() 은 지웠다(startDiscordInteractions() 인자 없음)
+        for first in ("schedulePriceUpdates()", "scheduleNotifications()", "startDiscordInteractions("):
             self.assertLess(check, self.ENTRY.index(first, self.ENTRY.index("async function main")), first)
 
     def test_smoke_child_env_overrides_operational_values(self):
@@ -769,7 +770,7 @@ class SmokeIsolation(unittest.TestCase):
         self.assertIn("DISCORD_BOT_TOKEN_FITNESS: ''", self.SMOKE)
         self.assertRegex(self.SMOKE, r"DATABASE_URL: DUMMY_DATABASE_URL")
         self.assertIn("@127.0.0.1:1/", self.SMOKE)
-        self.assertIn("TELEGRAM_BOT_TOKEN: INVALID_TOKEN", self.SMOKE)
+        self.assertNotIn("TELEGRAM", self.SMOKE)  # 009 D-5 B3b — 봇이 옛 채널 토큰을 읽지 않는다(토큰 겹 제거)
         self.assertIn("env: smokeEnv(process.env)", self.SMOKE)
 
 

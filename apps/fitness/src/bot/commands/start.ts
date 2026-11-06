@@ -1,6 +1,4 @@
-import type { Bot } from "grammy";
 import { htmlReply, plainReply, type BotReply } from "../core/reply";
-import { sendTelegramReply } from "../utils/telegram-reply";
 
 /** /start — 도움말(판단 · pleiades#364). */
 export function decideStart(): BotReply {
@@ -24,11 +22,4 @@ export function decideStart(): BotReply {
 /** /help — /start 안내(판단 · pleiades#364). */
 export function decideHelp(): BotReply {
   return plainReply("/start 참조");
-}
-
-export function registerStartCommands(bot: Bot) {
-  bot.command("start", (ctx) => sendTelegramReply(ctx, decideStart()));
-
-  // 텔레그램은 리팩터 전과 같이 api.sendMessage(chat.id) 로 보낸다(ctx.reply 와 경로가 다르다 — 무변경 기준)
-  bot.command("help", (ctx) => ctx.api.sendMessage(ctx.chat.id, decideHelp().text));
 }

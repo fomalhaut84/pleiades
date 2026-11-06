@@ -9,7 +9,7 @@
 import { formatQuoteValue } from '@/lib/format'
 import type { QuoteResult } from '@/lib/price-fetcher'
 import { formatUSD, formatPercent } from '../utils/formatter'
-import { escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/html'
 
 /**
  * 통화 표기. 봇은 원화를 `₩1,234` 로 쓴다 (웹/MCP 의 `1,234원` 과 다른 봇 전용 스타일).

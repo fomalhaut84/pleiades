@@ -30,7 +30,7 @@ export function sanitizeMessage(msg: string): string {
 }
 
 /**
- * Error.cause + grammy HttpError.error 체인을 깊이 5까지 순회하며 message 추출 + 토큰 마스킹.
+ * Error.cause + `.error`(옛 HTTP 클라이언트 오류 모양) 체인을 깊이 5까지 순회하며 message 추출 + 토큰 마스킹.
  * console.error(err) 가 inner FetchError 까지 dump 하는 문제 차단.
  */
 export function sanitizeError(err: unknown): string {
@@ -75,11 +75,11 @@ export function getErrorCode(err: unknown): string | undefined {
   return undefined;
 }
 
-const GRAMMY_TIMEOUT_RE = /Request to '.+' timed out after \d+ seconds/i;
+const CLIENT_TIMEOUT_RE = /Request to '.+' timed out after \d+ seconds/i;
 const ABORT_NAME_RE = /^AbortError$/i;
 
 /**
- * 네트워크 에러 판별 — ETIMEDOUT/ECONNRESET 등 + grammy client.timeoutSeconds 발동
+ * 네트워크 에러 판별 — ETIMEDOUT/ECONNRESET 등 + 클라이언트 타임아웃 문구(`Request to '…' timed out after N seconds`)
  * (code 없는 plain Error) + fetch abort (AbortError · type='aborted') 모두 포착.
  */
 export function isNetworkError(err: unknown): boolean {
@@ -89,7 +89,7 @@ export function isNetworkError(err: unknown): boolean {
   let depth = 0;
   while (cur != null && depth < MAX_DEPTH) {
     if (cur instanceof Error) {
-      if (GRAMMY_TIMEOUT_RE.test(cur.message)) return true;
+      if (CLIENT_TIMEOUT_RE.test(cur.message)) return true;
       if (ABORT_NAME_RE.test(cur.name)) return true;
       const obj = cur as { type?: unknown; error?: unknown; cause?: unknown };
       if (obj.type === 'aborted') return true;
@@ -103,7 +103,7 @@ export function isNetworkError(err: unknown): boolean {
 }
 
 /**
- * 텔레그램 HTML 파싱 실패 판별 (fit 공유 정규식 · 003 §3-1 정본).
+ * HTML 파싱 실패 판별 (fit 공유 정규식 · 003 §3-1 정본).
  * fin 로컬 `isParseError` 의 "error_code === 400 전체" 는 승계하지 않는다 — 비-파싱 400 은 폴백하지 않고 그대로 올라간다
  * (관측 변경 후보 · 빈도 미측정 · 003 §5-2 정정 ①).
  */

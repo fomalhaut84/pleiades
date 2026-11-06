@@ -174,7 +174,7 @@ export function isCommandLikeDescription(description: string): boolean {
 
 /**
  * 식단 텍스트(`점심 김치찌개 밥`) → FoodLog 저장 → kcal 추정 → 기록 완료 + [kcal][설명][삭제] 버튼(판단 · pleiades#364).
- * 플랫폼 중립 — 응답은 `out` 으로(텔레그램 어댑터 · Discord 어댑터).
+ * 플랫폼 중립 — 응답은 `out` 으로(Discord 어댑터).
  */
 export async function decideFoodInput(
   text: string,
@@ -194,7 +194,7 @@ export async function decideFoodInput(
   // 리포트 감지 안 됨. 리포트 감지를 켜는 `/ai <원문>` 을 안내.
   // Codex P2 (#289): 사용자가 '조식/석식/중식/야식' 같은 alias 를 썼으면 parseReportRequest 가
   // 인식 못 함 (아침/모닝, 저녁/이브닝 만). 정규화된 mealLabel 로 재구성해 안내.
-  // Codex P2 (#289): 매우 긴 입력 (수천자) 은 응답이 Telegram 4096자 제한 초과.
+  // Codex P2 (#289): 매우 긴 입력 (수천자) 은 응답이 옛 4096자 제한 초과.
   // - description 을 preview 로 짧게 자르되 (표시용 확인), retry 예시에는 embed 하지 않음
   //   → 사용자가 preview 를 그대로 복사하면 원문이 잘려 나가는 문제 회피.
   // - 대신 alias 정규화 안내와 /ai 접두사 사용법만 전달.
@@ -408,7 +408,7 @@ export async function decideFoodInput(
 
 /**
  * `/food_kcal <id> <kcal>` — 이전 로그의 kcal 을 사용자 지정 값으로 갱신(판단 · pleiades#364).
- * id 는 decideFoodInput 응답에 노출된 것. `raw` 는 `/food_kcal` 로 시작하는 원문(텔레그램 `@봇이름` 허용 —
+ * id 는 decideFoodInput 응답에 노출된 것. `raw` 는 `/food_kcal` 로 시작하는 원문(`@봇이름` 접미 허용 —
  * 다른 플랫폼 어댑터는 접두를 `/food_kcal` 로 맞춰 넘긴다).
  */
 export async function decideFoodKcal(

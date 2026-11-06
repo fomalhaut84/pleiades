@@ -1,15 +1,15 @@
 // pleiades 009 D-2 PR-2 (pleiades#364 · 설계 H2): 자유 텍스트 4 분기 — 옛 bot/index.ts `message:text` 본문.
-// 순서가 판단이다: ① /food_kcal → ② 편집 대기 입력 → ③ 식단 → ④ AI. 텔레그램 · Discord 가 같은 순서를 쓴다.
+// 순서가 판단이다: ① /food_kcal → ② 편집 대기 입력 → ③ 식단 → ④ AI. Discord 라우터가 이 순서를 쓴다.
 
 import type { ReplyOutput } from "../core/reply";
 import type { StateKey } from "../core/state-key";
-import type { NotifyBot } from "../notifications/notifier";
+import type { BotProcess } from "../notifications/notifier";
 import { decideAiQuestion } from "./ai";
 import { decideFoodInput, decideFoodKcal, isFoodInput } from "./food";
 import { decideFoodEditInput } from "./food-edit-callback";
 import { shouldConsumeAsEditInput } from "./food-edit-state";
 
-/** /food_kcal 로 시작하는 텍스트 — 텔레그램 `@봇이름` 접미 허용(정규식 명령 · 등록 명령이 아니다). */
+/** /food_kcal 로 시작하는 텍스트 — `@봇이름` 접미 허용(정규식 명령 · 등록 명령이 아니다). */
 export const FOOD_KCAL_RE = /^\/food_kcal(?:@\S+)?\b/;
 
 export interface FreeTextOptions {
@@ -18,7 +18,7 @@ export interface FreeTextOptions {
   /** AI 세션 채널(플랫폼별). */
   aiChannel: string;
   /** 인증 만료 admin alert 경로(lib 의 `!bot` = 웹). */
-  bot?: NotifyBot;
+  bot?: BotProcess;
 }
 
 /** 텍스트 1건 처리. `text` 는 앞뒤 공백을 뗀 원문. */

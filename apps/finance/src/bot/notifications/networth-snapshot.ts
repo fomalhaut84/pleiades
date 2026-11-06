@@ -6,17 +6,15 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { notifyBot } from '@/bot/index'
 import {
   calcCurrentValueKRW,
   DEFAULT_FX_RATE_USD_KRW,
 } from '@/lib/format'
 import { formatKRWCompact } from '@/bot/utils/formatter'
-import { h } from '@/bot/utils/telegram'
+import { h } from '@/bot/utils/html'
 import { notifierFor, recipients, Route, htmlContent } from './notifier'
 
 export async function takeNetWorthSnapshot(): Promise<void> {
-  const bot = notifyBot()
 
   // 환율
   const fxCache = await prisma.priceCache.findUnique({ where: { ticker: 'USDKRW=X' } })
@@ -82,7 +80,7 @@ export async function takeNetWorthSnapshot(): Promise<void> {
 
   console.log(`[networth] 순자산 스냅샷 저장: ${snapshotDate.toISOString().slice(0, 10)} = ${netWorthKRW}`)
 
-  // 텔레그램 알림
+  // 알림
   if (recipients.targetCount(Route.ALLOWED) > 0) {
     const message =
       `📸 ${h.b('순자산 스냅샷 저장 완료')}\n\n` +
@@ -91,6 +89,6 @@ export async function takeNetWorthSnapshot(): Promise<void> {
       (liabilityKRW > 0 ? `🏦 부채: -${formatKRWCompact(liabilityKRW)}\n` : '') +
       `\n💰 ${h.b('순자산')}: ${formatKRWCompact(netWorthKRW)}`
 
-    await notifierFor(bot).notify(Route.ALLOWED, htmlContent(message), { label: 'networth' })
+    await notifierFor().notify(Route.ALLOWED, htmlContent(message), { label: 'networth' })
   }
 }

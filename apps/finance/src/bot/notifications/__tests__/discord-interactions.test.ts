@@ -1,5 +1,5 @@
 /**
- * pleiades M-6b-4 (pleiades#155) — Discord 버튼 → decideVest(텔레그램과 같은 판단) → 원본 수정 또는 본인 안내.
+ * pleiades M-6b-4 (pleiades#155) — Discord 버튼 → decideVest → 원본 수정 또는 본인 안내.
  * pleiades 009 D-1 (pleiades#349) — gateway 를 @pleiades/chat 으로(action · notice · edit 는 plain 그대로 · 버튼 제거는 edit 기본).
  * pleiades 009 D-3 PR-3 (pleiades#398) — 대화 채널 키 스위치 · intents · 기동 로그 · 4014 강등 → ADMIN · 요청 채널 notifier.
  */
@@ -27,7 +27,6 @@ import {
   startDiscordInteractions,
 } from '../discord-interactions'
 import * as notifier from '../notifier'
-import { BOT_PROCESS_WITHOUT_TELEGRAM } from '../notifier'
 
 function ctx(action: string) {
   return {
@@ -105,7 +104,7 @@ describe('startDiscordInteractions', () => {
     vi.stubEnv('DISCORD_BOT_TOKEN_FINANCE', '')
     vi.stubEnv('DISCORD_CHANNEL_ID_FINANCE', '')
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    expect(startDiscordInteractions(BOT_PROCESS_WITHOUT_TELEGRAM)).toBeUndefined()
+    expect(startDiscordInteractions()).toBeUndefined()
     log.mockRestore()
   })
 
@@ -118,7 +117,7 @@ describe('startDiscordInteractions', () => {
     vi.stubEnv('DISCORD_CHANNEL_ID_FINANCE_CHAT', '')
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    expect(startDiscordInteractions(BOT_PROCESS_WITHOUT_TELEGRAM)).toBeDefined()
+    expect(startDiscordInteractions()).toBeDefined()
     expect(chatStart).toHaveBeenCalledTimes(1)
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('DISCORD_ALLOWED_USER_IDS 비어 있음'))
     const opts = vi.mocked(createChat).mock.calls[0][0]
@@ -142,7 +141,7 @@ describe('startDiscordInteractions', () => {
     vi.stubEnv('DISCORD_ALLOWED_USER_IDS', '111111')
     vi.stubEnv('DISCORD_CHANNEL_ID_FINANCE_CHAT', '223456789012345678')
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    startDiscordInteractions(BOT_PROCESS_WITHOUT_TELEGRAM)
+    startDiscordInteractions()
     const opts = vi.mocked(createChat).mock.calls[0][0]
     expect(opts.intents).toBe(MESSAGE_INTENTS)
     expect(opts.fallbackIntents).toBe(0)
@@ -173,7 +172,7 @@ describe('notifyIntentsFallback — 4014 강등 알림 (F)', () => {
     const notify = vi.fn(async () => ({ sent: 0, failed: 0, total: 0, deliveries: [] }))
     vi.spyOn(notifier, 'notifierFor').mockReturnValue({ notify, targetCount: () => 0, targets: () => [] })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    await notifyIntentsFallback(BOT_PROCESS_WITHOUT_TELEGRAM)
+    await notifyIntentsFallback()
     expect(notify).toHaveBeenCalledTimes(1)
     expect((notify.mock.calls[0] as unknown[])[0]).toBe('ADMIN')
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('4014 강등 알림 미전송'))

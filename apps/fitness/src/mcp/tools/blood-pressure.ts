@@ -26,8 +26,8 @@ function daysAgo(n: number): Date {
  *
  * #364: 이전 주석은 "서버 로컬 기준이라 toISOString 의 UTC 어긋남을 방지한다" 고 했으나
  * **전제가 틀렸다** — 로컬 TZ 포맷은 호스트가 KST 일 때만 맞고, 호스트가 UTC 면 KST 자정
- * instant 인 BloodPressure.date 가 그대로 하루 앞으로 밀린다. ecosystem.config.js 는 TZ 를
- * 고정하지 않는다. 호스트 TZ 와 무관하게 정확한 ymdKST 로 통일.
+ * instant 인 BloodPressure.date 가 그대로 하루 앞으로 밀린다. pm2 정의(`deploy/pleiades.config.cjs`)가 TZ 를 주더라도
+ * 실행 방식에 따라 다를 수 있다. 호스트 TZ 와 무관하게 정확한 ymdKST 로 통일.
  */
 function fmtDate(date: Date): string {
   return ymdKST(date);

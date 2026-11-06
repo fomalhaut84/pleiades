@@ -202,13 +202,15 @@ function backupApp(app, appDir) {
   }
 }
 
+// 배포 알림과 같은 웹훅 — 스위치(NOTIFY_DEPLOY_CHANNEL)는 읽지 않는다(009 D-5 B8 · #523 · notify-deploy.cjs 와 같다).
+// 그 줄을 지워도 알림이 조용히 0 이 되지 않는다. 웹훅이 비면 보내지 않는다('웹훅 없음').
 function webhook() {
   const file = process.env.PLEIADES_ENV_FILE || (TEST ? '' : path.join(HOME, 'pleiades-platform.env'))
   if (!file) return ''
   for (const dir of Object.values(APPS)) {
     try {
       const env = dotenvFor(dir).parse(fs.readFileSync(file))
-      return env.NOTIFY_DEPLOY_CHANNEL === 'discord' ? env.DISCORD_WEBHOOK_DEPLOY || '' : ''
+      return env.DISCORD_WEBHOOK_DEPLOY || ''
     } catch {
       // 다음 앱의 dotenv 로 다시 해 본다
     }

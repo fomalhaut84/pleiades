@@ -2,12 +2,12 @@
 // scripts/verify-food-edit-pending.ts 에서 길이 상한을 회귀 검증한다.
 //
 // `FoodLog.description` 은 스키마에 길이 제한이 없다 (PATCH API 만 500자 제한, 생성·Vision
-// 경로는 무제한). 긴 설명을 그대로 실으면 Telegram 한도(4096자)를 넘겨 sendMessage 가
-// 거부되는데, 특히 이전/새 설명을 함께 싣는 설명 변경 완료 응답에서 터진다. 그 시점엔 DB
-// update 가 이미 커밋된 뒤라 사용자는 복구 안내를 잃고 수정이 실패한 것으로 오인하게 된다.
+// 경로는 무제한). 긴 설명을 그대로 실으면 메시지 한 건 한도를 넘겨 쪼개지는데, 특히 이전/새 설명을
+// 함께 싣는 설명 변경 완료 응답에서 그렇다. 그 시점엔 DB update 가 이미 커밋된 뒤라 응답 한 건이
+// 온전히 가야 사용자가 복구 안내를 잃지 않는다.
 
-/** Telegram sendMessage 본문 한도. */
-export const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
+/** 응답 한 건 한도 — Discord 메시지 2000자(009 D-5 B2 #504 · 옛 한도 4096). */
+export const MAX_SINGLE_MESSAGE_LENGTH = 2000;
 
 /** 메시지에 삽입할 설명 미리보기 길이. */
 export const DESC_PREVIEW_MAX = 120;

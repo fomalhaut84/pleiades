@@ -17,8 +17,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **TA Engine**: trading-signals (RSI, MACD, BB, SMA/EMA — 로컬 계산)
 - **AI**: Claude Code CLI (`claude -p`, Max 플랜) — `--resume`으로 봇 대화 세션 유지
 - **MCP**: 자체 myFinance MCP 서버 (포트폴리오/세금/관심종목/RSU/스톡옵션/가계부 조회 도구)
-- **Bot**: grammY (텔레그램 봇, standalone 프로세스로 분리 운영)
-- **Deploy**: PM2 + Nginx on Ubuntu (`myfinance` 웹 + `myfinance-bot` standalone 2개 프로세스)
+- **Bot**: Discord (`@pleiades/chat` gateway 수신 · `@pleiades/notify` 알림 — standalone 프로세스로 분리 운영)
+- **Deploy**: pleiades 루트 `deploy/`(PM2 + Nginx on Ubuntu · `pleiades-fin-web` · `pleiades-fin-bot` · `pleiades-fin-mcp` 3개 프로세스 · `deploy/pleiades.config.cjs`)
 
 ## Commands
 
@@ -40,10 +40,7 @@ npx prisma studio        # DB 브라우저 GUI
 npm run lint && npx tsc --noEmit && npm run test:run && npm run build
 ```
 
-배포 (서버):
-```bash
-./deploy/deploy.sh dev   # dev 브랜치 배포 (웹 + 봇 standalone 양쪽 reload)
-```
+배포: pleiades Release 발행 → Actions 가 서버의 루트 `deploy/release-inplace.sh` 를 부른다(pleiades `.claude/rules/workflow.md` 릴리즈 전략). 이 앱 디렉터리 안의 옛 배포 스크립트는 지웠다(009 D-5 B7b).
 
 ## Project Structure
 
@@ -51,7 +48,7 @@ npm run lint && npx tsc --noEmit && npm run test:run && npm run build
 src/app/              → 페이지 + API routes (App Router)
 src/components/       → React 컴포넌트 (ui/, dashboard/, expense/, asset/, tax/, watchlist/, …)
 src/lib/              → 비즈니스 로직 (prisma.ts, price-fetcher.ts, market-hours.ts, tax/, ai/, ta/)
-src/bot/              → 텔레그램 봇 (commands/, notifications/, utils/, standalone.ts)
+src/bot/              → 봇 (commands/ 판단 · discord/ 수신 · notifications/ · utils/ · standalone.ts)
 src/mcp/              → myFinance MCP 서버 (server.ts + tools/)
 src/types/            → TypeScript 타입
 prisma/               → schema.prisma + seed + migrations
@@ -61,20 +58,21 @@ docs/specs/           → 기능별 상세 스펙 (이슈 번호별)
 docs/implementation_plans/ → 구현 계획 (이슈 번호별)
 .claude/rules/        → Claude Code용 도메인/워크플로우 규칙
 assets/fonts/         → PDF 리포트용 한글 폰트 (Noto Sans KR)
-ecosystem.config.js   → PM2 설정 (myfinance + myfinance-bot 2개 프로세스)
 ```
 
 ## Architecture
 
 ```
-PM2 ──► myfinance (Next.js 웹)            ┐
+PM2 ──► pleiades-fin-web (Next.js 웹)     ┐
         ├─ Frontend SSR/CSR               │
         └─ API Routes ──► Prisma ─► PostgreSQL
                                            │
-PM2 ──► myfinance-bot (standalone)        │
-        ├─ grammY long polling             │
+PM2 ──► pleiades-fin-bot (standalone)     │
+        ├─ Discord gateway(@pleiades/chat) │
         ├─ Cron (price/snapshot/TA/recurring/vesting)
         └─ Notification Scheduler (daily/briefing/RSU/…)
+                                           │
+PM2 ──► pleiades-fin-mcp (MCP HTTP 서버)  │
                                            │
                   Claude Code CLI (claude -p, --resume 세션 유지)
                   └─ MCP: myFinance (자체)
@@ -84,7 +82,7 @@ PM2 ──► myfinance-bot (standalone)        │
 
 **핵심 설계 결정:**
 - PostgreSQL 선택 이유: 동시 쓰기 채널 다수(웹+봇+cron+AI). SQLite write lock 병목 회피.
-- 봇 분리 운영: Next.js webhook 대신 standalone long polling 프로세스 → 응답 지연 해소, 웹/봇 자원 격리. cron + 알림 스케줄러도 봇 프로세스에서 실행.
+- 봇 분리 운영: standalone 프로세스가 Discord gateway 로 명령·버튼을 받는다 → 웹/봇 자원 격리. cron + 알림 스케줄러도 봇 프로세스에서 실행. 알림은 Discord 웹훅·봇(`@pleiades/notify`).
 - AI 어드바이저: Claude API 대신 서버 Claude Code CLI(`claude -p`) subprocess 호출. Max 플랜에 포함. 봇 대화별 `--resume`으로 대화 컨텍스트 유지(`!reset`로 초기화).
 - 주가 갱신: node-cron으로 장중 10분, 장외 1시간 간격. PriceCache 테이블에 upsert. 보유 종목 + 관심종목 모두 갱신.
 - 거래시간 필터: `src/lib/market-hours.ts`로 한국장(KS/KQ)·미국장(DST 반영) 판별. 장외 시간대 급등락 알림 차단(허위 알림 방지).

@@ -1,20 +1,18 @@
-import type { Bot, Context } from 'grammy'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { generateReportPDF } from '@/lib/report/pdf-generator'
-import { h } from '../utils/telegram'
+import { h } from '../utils/html'
 import { plainReply, type ReplyOutput } from '../core/reply'
-import { telegramOutput } from '../utils/telegram-reply'
 
 /*
  * pleiades 009 D-3 PR-2b (pleiades#394 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · D · H2): 분기 리포트.
  * 판단(decideReport)은 인자와 중립 응답 모델만 안다 — PDF 는 응답 모델의 파일 단계(`replyFile`)로 보낸다.
- * 특성 테스트 `__tests__/special-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ * 판단 흐름은 `__tests__/special-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
 export const REPORT_RE = /^리포트(?:\s+.*)?$/
 
-/** 텔레그램 원문 → 인자 — `/report[@bot]` · `리포트` 를 벗기고 trim(대소문자 무시). */
+/** 원문 → 인자 — `/report[@bot]` · `리포트` 를 벗기고 trim(대소문자 무시). */
 export function reportArgsFromText(text: string): string {
   return text.replace(/^(\/report(?:@\w+)?|리포트)\s*/i, '').trim()
 }
@@ -76,11 +74,4 @@ export async function decideReport(args: string, out: ReplyOutput): Promise<void
       console.error(`[bot] 리포트 생성 실패:`, error)
       await out.reply(plainReply(`⚠️ 리포트 생성에 실패했습니다.`))
     })
-}
-
-export function registerReportCommands(bot: Bot): void {
-  // 등록에 try/catch 가 없다 — 판단 밖으로 던진 오류는 지금처럼 grammY bot.catch 로 간다
-  const handle = (ctx: Context) => decideReport(reportArgsFromText(ctx.message?.text ?? ''), telegramOutput(ctx))
-  bot.command('report', handle)
-  bot.hears(REPORT_RE, handle)
 }

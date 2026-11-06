@@ -1,17 +1,16 @@
 /**
  * 전략 기반 TA 시그널 알림
  *
- * 스윙/모멘텀/단타 전략 종목에 대해 TA 조건 충족 시 텔레그램 알림.
+ * 스윙/모멘텀/단타 전략 종목에 대해 TA 조건 충족 시 알림.
  * 시세 갱신(refreshPrices) 후 호출.
  */
 
 import { prisma } from '@/lib/prisma'
 import { generateTAReport } from '@/lib/ta/engine'
 import { askAdvisor } from '@/lib/ai/claude-advisor'
-import { notifyBot } from '@/bot/index'
-import { escapeHtml } from '@/bot/utils/telegram'
+import { escapeHtml } from '@/bot/utils/html'
 import { notifierFor, recipients, Route, htmlContent, lastErrorOf } from './notifier'
-import { markdownToTelegramHtml } from '@/bot/utils/markdown'
+import { markdownToHtml } from '@/bot/utils/markdown'
 import { isMarketOpenFor } from '@/lib/market-hours'
 import {
   computeDeliveryStatus,
@@ -326,17 +325,16 @@ async function doCheckTASignals(): Promise<void> {
     }
     const guide = aiGuides.get(r.ticker)
     if (guide) {
-      const guideHtml = markdownToTelegramHtml(guide.slice(0, 300))
+      const guideHtml = markdownToHtml(guide.slice(0, 300))
       lines.push('')
       lines.push(`  💡 ${guideHtml}`)
     }
     lines.push('')
   }
 
-  const bot = notifyBot()
   const message = lines.join('\n')
 
-  const delivery = await notifierFor(bot).notify(Route.ALLOWED, htmlContent(message), { label: 'ta-signal' })
+  const delivery = await notifierFor().notify(Route.ALLOWED, htmlContent(message), { label: 'ta-signal' })
   const sendSuccess = delivery.sent
   const lastError = lastErrorOf(delivery)
 

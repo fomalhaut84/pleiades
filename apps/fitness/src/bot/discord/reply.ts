@@ -1,7 +1,6 @@
 // pleiades 009 D-2 PR-3 (pleiades#367 · 설계 H2): 중립 응답 모델(`../core/reply`) → `@pleiades/chat` 컨텍스트.
-// 텔레그램 어댑터(`../utils/telegram-reply`)의 Discord 짝 — 그 모듈과 달리 grammY 를 끌고 오지 않는다.
 //   format · buttons → `reply({ text, format, buttons })`(html 변환 · 2000자 분할 · 버튼은 마지막 조각 = chat)
-//   clearKeyboard → 무시(Discord 에 reply 키보드 개념이 없다) · long → chat 분할에 맡긴다(텔레그램 plain 재전송 분기는 옮기지 않는다)
+//   long → chat 분할에 맡긴다 · 명령 표기를 바꾸지 않는다
 //   버튼 컨텍스트: notice → 본인 전용 안내(text 없으면 무표시 — chat 이 이미 지연 응답했다) · removeButtons → setButtons([]) · reply → 같은 채널 새 메시지
 
 import type { ButtonContext, MessageContext, OutgoingMessage } from "@pleiades/chat";
@@ -10,7 +9,7 @@ import type { BotReply, ButtonOutput, ReplyOutput } from "../core/reply";
 /** Discord 명령 접두 — 입력창이 `/` 를 앱 명령 검색으로 가로챈다(X-1 실측 · 사용자 2026-10-28 UQ-3). */
 export const DISCORD_COMMAND_PREFIX = "!";
 
-/** 판단 함수가 안내문에 쓰는 텔레그램 명령 이름 — Discord 응답에서는 `!` 로 바꿔 보인다. */
+/** 판단 함수가 안내문에 `/` 로 쓰는 명령 이름 — Discord 응답에서는 `!` 로 바꿔 보인다. */
 const COMMAND_NAMES = ["start", "help", "today", "run", "sleep", "weight", "sync", "report", "ai", "reset", "food_kcal"];
 const SLASH_COMMAND_RE = new RegExp(`(^|[\\s('"“])/(${COMMAND_NAMES.join("|")})(?![\\w/])`, "g");
 

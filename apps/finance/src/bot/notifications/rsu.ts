@@ -7,14 +7,13 @@
  *   inline keyboard ([✅ 확정] [✖️ 취소]) 첨부 → 한 번 탭으로 vest 처리.
  *   → KRX 마감(15:30) + 안전 마진 후라 yahoo historical 종가 확정 시점.
  *
- * callback 처리는 src/bot/commands/vest-confirm.ts(텔레그램) · notifications/discord-interactions.ts(Discord · #155).
+ * callback 처리는 notifications/discord-interactions.ts(Discord gateway · #155) → 판단 src/bot/commands/vest-confirm.ts(decideVest).
  */
 
 import type { ButtonRows } from '@pleiades/notify'
 import { prisma } from '@/lib/prisma'
-import { notifyBot } from '@/bot/index'
 import { formatKRWFull } from '@/bot/utils/formatter'
-import { escapeHtml, h } from '@/bot/utils/telegram'
+import { escapeHtml, h } from '@/bot/utils/html'
 import { interactiveNotifierFor, notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
 import { getRsuVestPreview } from '@/lib/rsu-vest-service'
 import { sanitizeError } from '@/bot/utils/error'
@@ -48,7 +47,6 @@ export function buildVestButtons(rsuId: string): ButtonRows {
  * D-day 처리 키보드는 마감 후 sendRSUVestConfirmations 가 발송.
  */
 export async function sendRSUReminders(): Promise<void> {
-  const bot = notifyBot()
   const lines: string[] = []
 
   // D-7 ~ D-1 범위 (KST 기준 오늘 + 1일 ~ 오늘 + 7일)
@@ -117,7 +115,7 @@ export async function sendRSUReminders(): Promise<void> {
   }
 
   const fullMessage = `🔔 ${h.b('RSU/스톡옵션 리마인더')}\n\n${lines.join('\n\n')}`
-  await notifierFor(bot).notify(Route.ALLOWED, htmlContent(fullMessage), NOTIFY_CTX)
+  await notifierFor().notify(Route.ALLOWED, htmlContent(fullMessage), NOTIFY_CTX)
   console.log('[notification] RSU/스톡옵션 리마인더 발송 완료')
 }
 
@@ -128,7 +126,6 @@ export async function sendRSUReminders(): Promise<void> {
  * 사용자는 [✅ 확정] 한 번 탭으로 처리 — 종가는 자동 조회.
  */
 export async function sendRSUVestConfirmations(): Promise<void> {
-  const bot = notifyBot()
 
   // D-day (KST 기준 오늘)
   const now = new Date()
@@ -182,10 +179,10 @@ export async function sendRSUVestConfirmations(): Promise<void> {
 
     // 003 Q27 흡수(사용자 2026-10-15): 재시도·plain 폴백을 파사드가 소유 — 키보드는 폴백에도 유지된다.
     // 중복 전송 시 버튼을 두 번 눌러도 rsu-vest-service 의 ALREADY_VESTED 가 이중 반영을 막는다.
-    const r = await interactiveNotifierFor(bot).notify(Route.ALLOWED, htmlContent(msg, keyboard), NOTIFY_CTX)
+    const r = await interactiveNotifierFor().notify(Route.ALLOWED, htmlContent(msg, keyboard), NOTIFY_CTX)
     if (r.total === 0) {
-      // 버튼 채널은 NOTIFY_INTERACTIVE_CHANNEL — 텔레그램이면 chat id, Discord 면 fin 봇 토큰·채널이 비었다(#155)
-      console.warn(`[notification] D-day RSU 확정 알림 수신자 0 — TELEGRAM_ALLOWED_CHAT_IDS 또는 Discord 봇 설정 미비 (${rsu.id})`)
+      // 버튼은 fin Discord 봇으로 — 봇 토큰·채널이 비었다(#155)
+      console.warn(`[notification] D-day RSU 확정 알림 수신자 0 — Discord 봇 설정 미비 (${rsu.id})`)
     }
   }
   console.log(`[notification] D-day RSU 확정 알림 발송 완료 (${todayRsus.length}건)`)

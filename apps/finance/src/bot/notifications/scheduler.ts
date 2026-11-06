@@ -1,5 +1,5 @@
 /**
- * 텔레그램 알림 스케줄러
+ * 알림 스케줄러
  * cron.ts에서 호출하여 알림 cron job 등록.
  */
 
@@ -17,10 +17,10 @@ import { sendMonthlyReport } from './monthly-report'
 import { sendBriefing } from './briefing'
 import { takeNetWorthSnapshot } from './networth-snapshot'
 import { sendQuarterlyReport } from './quarterly-report'
-import { interactiveRecipientCount, recipients, Route, telegramRecipients } from './notifier'
+import { interactiveRecipientCount, recipients, Route } from './notifier'
 
 function hasAllowedRecipients(): boolean {
-  return recipients.targetCount(Route.ALLOWED) > 0 || telegramRecipients(Route.ALLOWED).length > 0
+  return recipients.targetCount(Route.ALLOWED) > 0
 }
 
 let scheduled = false
@@ -28,14 +28,11 @@ let scheduled = false
 export function scheduleNotifications(): void {
   if (scheduled) return
 
-  // pleiades 009 D-1 (pleiades#349): 텔레그램 토큰 게이트는 없앴다 — 토큰이 없으면 텔레그램 수신자가 0 이라(notifier
-  // `TELEGRAM_TARGETS`) 아래 실행 판정이 그대로 건너뛰고, Discord 라우트면 토큰 없이도 돈다.
-
   // 수신자가 0 이어도 등록은 한다 — 루트 .env(Discord)를 나중에 채우면 재시작 없이 다음 실행부터 반영된다(#143 · PR #144 Codex P2).
   // 대신 실행마다 확인해 0 이면 건너뛴다(구 동작 "수신자 없으면 아무 작업도 안 함" 보존 — AI 생성·스냅샷 포함).
-  // 키보드(RSU 확정)는 INTERACTIVE 라우트 · 분기 PDF 는 ALLOWED 라우트를 따른다 — 수신자가 하나라도 있으면 실행한다.
+  // 키보드(RSU 확정)는 fin Discord 봇 · 분기 PDF 는 ALLOWED 웹훅을 따른다 — 수신자가 하나라도 있으면 실행한다.
   if (!hasAllowedRecipients()) {
-    console.log('[notification] ALLOWED 수신자 0 (TELEGRAM_ALLOWED_CHAT_IDS · Discord 웹훅 모두 비어 있음) — 스케줄은 등록하고 실행 때마다 건너뜀')
+    console.log('[notification] ALLOWED 수신자 0 (DISCORD_WEBHOOK_FINANCE 비어 있음) — 스케줄은 등록하고 실행 때마다 건너뜀')
   }
   const guarded = (hasRecipients: () => boolean): typeof cron.schedule => (expression, task, options) =>
     cron.schedule(
@@ -47,7 +44,7 @@ export function scheduleNotifications(): void {
       options,
     )
   const schedule = guarded(hasAllowedRecipients)
-  // RSU D-day 확정(키보드)은 NOTIFY_INTERACTIVE_CHANNEL 을 따른다 — 텍스트 수신자 0 · Discord 버튼만 설정해도 실행한다(#155 · PR #156 Codex P1)
+  // RSU D-day 확정(키보드)은 fin Discord 봇을 따른다 — 텍스트 수신자 0 · 봇만 설정해도 실행한다(#155 · PR #156 Codex P1)
   const scheduleInteractive = guarded(() => hasAllowedRecipients() || interactiveRecipientCount() > 0)
 
   // active_review AlertConfig 키를 배포 직후 즉시 upsert — 첫 클로징/주간 cron 실행
@@ -204,7 +201,7 @@ export function scheduleNotifications(): void {
       '30 8 * * 1-5',
       async () => {
         try {
-          await sendBriefing('KR', undefined, { aiCommand: '!ai' })
+          await sendBriefing('KR')
         } catch (error) {
           console.error('[notification] 한국장 브리핑 실패:', error)
         }
@@ -217,7 +214,7 @@ export function scheduleNotifications(): void {
       '0 23 * * 1-5',
       async () => {
         try {
-          await sendBriefing('US', undefined, { aiCommand: '!ai' })
+          await sendBriefing('US')
         } catch (error) {
           console.error('[notification] 미국장 브리핑 실패:', error)
         }

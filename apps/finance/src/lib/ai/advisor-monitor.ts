@@ -1,7 +1,7 @@
 /**
  * Phase 40-A (#468) — AI 어드바이저 실패 감지 + 관리자 alert.
  *
- * `askAdvisor` 가 연속으로 실패하면 관리자 텔레그램 chat 에 alert 발송.
+ * `askAdvisor` 가 연속으로 실패하면 관리자 채널(`#admin`)에 alert 발송.
  * 지금까지는 사용자가 브리핑 fallback 안내를 받아야만 관리자가 발견 → detect/
  * recover 사이클 단축을 위해 백그라운드 감시 도입.
  *
@@ -90,7 +90,7 @@ export function buildFailureAlert(state: AdvisorMonitorState, caller?: string): 
   // 이미 stderr **끝** 1KB. slice(0, 300) 로 앞을 자르면 오래된 output 만 남고 정말
   // actionable 한 마지막 에러 라인 (예: `Error: session expired`) 이 잘림.
   // 뒤 300자 (`slice(-300)`) 로 tail 을 유지.
-  const detail = err?.detail ? `\n<code>${escapeForTelegram(err.detail.slice(-300))}</code>` : ''
+  const detail = err?.detail ? `\n<code>${escapeForHtml(err.detail.slice(-300))}</code>` : ''
   const budget = err?.code !== undefined && IMMEDIATE_ALERT_CODES.has(err.code)
   // pleiades#269: 예산 초과는 재시도로 풀리지 않는다 — 첫 실패에 오고, 진단도 한도부터
   const title = budget
@@ -103,7 +103,7 @@ export function buildFailureAlert(state: AdvisorMonitorState, caller?: string): 
   return (
     `${title}\n\n` +
     callerLine +
-    `<b>마지막 에러:</b> ${escapeForTelegram(errMsg)}${detail}\n\n` +
+    `<b>마지막 에러:</b> ${escapeForHtml(errMsg)}${detail}\n\n` +
     `<b>진단 후보 (우선순위):</b>\n` +
     budgetHint +
     `1. <code>claude</code> CLI 인증 만료 → 서버 shell 에서 <code>claude</code> 대화형 재실행\n` +
@@ -122,8 +122,8 @@ export function buildRecoveryAlert(previousFailures: number, caller?: string): s
   )
 }
 
-/** 텔레그램 HTML parse 방어 (`<`, `>`, `&`). */
-function escapeForTelegram(s: string): string {
+/** HTML 본문 방어 (`<`, `>`, `&`). */
+function escapeForHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
@@ -266,38 +266,34 @@ let productionMonitor: AdvisorMonitor | null = null
  * Production 용 lazy singleton. bot 프로세스에서 최초 호출 시 초기화.
  * 봇 모듈에 대한 의존성을 lazy require 로 해결 → 순환 참조 방지.
  *
- * **Alert 대상 (Codex #473 P2):** `TELEGRAM_ADMIN_CHAT_IDS` (관리자 전용, 콤마 구분).
- * `TELEGRAM_ALLOWED_CHAT_IDS` (봇 사용자 화이트리스트, 가족 chat 포함) 는 alert
- * 대상으로 사용 금지 — alert 본문에 `AdvisorError.detail` (stderr tail) 이 포함되며
- * claude-advisor.ts 는 이를 "사용자 노출 불가 디버깅 정보" 로 명시. 관리자가 아닌
- * 가족 chat 에 internal 진단이 노출되면 안 됨.
+ * **Alert 대상 (Codex #473 P2):** ADMIN 라우트 = `#admin` 웹훅(`DISCORD_WEBHOOK_ADMIN` · 관리자 전용 · 009 D-5 B4).
+ * ALLOWED(`#finance` · 가족 포함) 는 alert 대상으로 사용 금지 — alert 본문에 `AdvisorError.detail` (stderr tail) 이
+ * 포함되며 claude-advisor.ts 는 이를 "사용자 노출 불가 디버깅 정보" 로 명시. 관리자가 아닌 채널에 internal 진단이
+ * 노출되면 안 됨.
  *
- * 미설정 시 alert 스킵 (console.warn) — 조용히 fallback 하지 않음 (`TELEGRAM_ALLOWED_
- * CHAT_IDS` 첫 값 재사용 같은 heuristic 은 secure default 원칙 위반).
+ * 미설정 시 alert 스킵 (console.warn) — 조용히 ALLOWED 로 fallback 하지 않음 (secure default).
  */
 export function getGlobalAdvisorMonitor(): AdvisorMonitor {
   if (productionMonitor === null) {
     productionMonitor = createAdvisorMonitor(async (message) => {
-      // pleiades#136 (003 Q25 ADMIN A): 수신자 해석은 파사드(Route.ADMIN = TELEGRAM_ADMIN_CHAT_IDS · fin 숫자 규칙).
+      // pleiades#136 (003 Q25 ADMIN A): 수신자 해석은 파사드(Route.ADMIN = `#admin` 웹훅).
       if (recipients.targetCount(Route.ADMIN) === 0) {
         console.warn(
-          '[advisor-monitor] TELEGRAM_ADMIN_CHAT_IDS 미설정 → 관리자 alert 발송 스킵. ' +
-            '이 env 는 봇 사용자 화이트리스트 (TELEGRAM_ALLOWED_CHAT_IDS) 와 분리 관리해야 함 ' +
+          '[advisor-monitor] DISCORD_WEBHOOK_ADMIN 미설정 → 관리자 alert 발송 스킵. ' +
+            '이 웹훅은 #finance (DISCORD_WEBHOOK_FINANCE) 와 분리 관리해야 함 ' +
             '(alert 본문에 stderr detail 포함, non-admin 노출 금지).',
         )
         return false
       }
-      // Lazy require — advisor-monitor 는 lib/ 아래 있어 web/bot 양쪽에서 load 됨.
-      // web 프로세스는 bot 인스턴스 없어서 require 자체를 지연.
+      // Lazy import — advisor-monitor 는 lib/ 아래 있어 web/bot 양쪽에서 load 됨(순환 참조 방지).
       try {
-        const { notifyBot } = await import('@/bot')
         const { notifierFor, htmlContent } = await import('@/bot/notifications/notifier')
-        const delivery = await notifierFor(notifyBot()).notify(Route.ADMIN, htmlContent(message), {
+        const delivery = await notifierFor().notify(Route.ADMIN, htmlContent(message), {
           label: 'advisor-monitor',
         })
         return delivery.sent > 0
       } catch (err) {
-        console.error('[advisor-monitor] bot 모듈 로드 실패 (web 프로세스에서 호출됨?):', err)
+        console.error('[advisor-monitor] notifier 로드·전송 실패:', err)
         return false
       }
     }, {

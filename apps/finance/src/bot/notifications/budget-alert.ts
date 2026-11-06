@@ -6,15 +6,14 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { notifyBot } from '@/bot/index'
 import { calcGiftTaxSummary } from '@/lib/tax/gift-tax'
 import { formatKRWFull } from '@/bot/utils/formatter'
-import { escapeHtml, h } from '@/bot/utils/telegram'
+import { escapeHtml, h } from '@/bot/utils/html'
 import { notifierFor, recipients, Route, htmlContent, NOTIFY_CTX } from './notifier'
 
 /**
  * 소비 기록 후 예산 사용률 체크
- * 임계값 초과 시 텔레그램 알림 발송
+ * 임계값 초과 시 알림 발송(Discord)
  */
 export async function checkBudgetUsage(): Promise<void> {
   if (recipients.targetCount(Route.ALLOWED) === 0) return
@@ -61,7 +60,6 @@ export async function checkBudgetUsage(): Promise<void> {
   const usagePct = (totalSpent / totalBudget) * 100
   if (usagePct < warnPct) return
 
-  const bot = notifyBot()
   const emoji = usagePct >= 100 ? '🚨' : '⚠️'
   const message =
     `${emoji} ${h.b('예산 경고')} (${year}년 ${month}월)\n\n` +
@@ -69,12 +67,12 @@ export async function checkBudgetUsage(): Promise<void> {
     `소비: ${h.b(formatKRWFull(totalSpent))} (${usagePct.toFixed(0)}%)\n` +
     `남은 예산: ${formatKRWFull(totalBudget - totalSpent)}`
 
-  await notifierFor(bot).notify(Route.ALLOWED, htmlContent(message), NOTIFY_CTX)
+  await notifierFor().notify(Route.ALLOWED, htmlContent(message), NOTIFY_CTX)
 }
 
 /**
  * 증여 입금 후 비과세 한도 체크
- * 사용률 80% 초과 시 텔레그램 알림 발송
+ * 사용률 80% 초과 시 알림 발송(Discord)
  */
 export async function checkGiftTaxLimit(accountId: string): Promise<void> {
   if (recipients.targetCount(Route.ALLOWED) === 0) return
@@ -93,7 +91,6 @@ export async function checkGiftTaxLimit(accountId: string): Promise<void> {
   const summary = calcGiftTaxSummary(deposits, true)
   if (summary.usageRate < 0.8) return
 
-  const bot = notifyBot()
   const emoji = summary.usageRate >= 1.0 ? '🚨' : '⚠️'
   const pct = (summary.usageRate * 100).toFixed(0)
   const message =
@@ -103,5 +100,5 @@ export async function checkGiftTaxLimit(accountId: string): Promise<void> {
     `잔여 한도: ${formatKRWFull(summary.remaining)}\n\n` +
     `${h.i('※ 참고용이며 법적 조언이 아닙니다.')}`
 
-  await notifierFor(bot).notify(Route.ALLOWED, htmlContent(message), NOTIFY_CTX)
+  await notifierFor().notify(Route.ALLOWED, htmlContent(message), NOTIFY_CTX)
 }

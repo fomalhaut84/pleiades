@@ -13,7 +13,6 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/prisma', () => ({ prisma: { alertConfig: { upsert: vi.fn() } } }))
-vi.mock('@/bot/index', () => ({ getBot: vi.fn() }))
 vi.mock('@/lib/ai/claude-advisor', () => ({
   askAdvisor: vi.fn(),
   describeAdvisorError: vi.fn(() => ''),

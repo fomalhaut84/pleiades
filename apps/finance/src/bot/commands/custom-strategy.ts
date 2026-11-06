@@ -1,16 +1,14 @@
-import type { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { parseStrategyText } from '@/lib/custom-strategy/parser'
 import { conditionToString, type Condition } from '@/lib/custom-strategy/types'
-import { escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/html'
 import { plainReply, type ReplyOutput } from '../core/reply'
-import { telegramOutput } from '../utils/telegram-reply'
 import { knownUserMessage } from '../utils/error'
 
 /*
  * pleiades 009 D-3 PR-2b (pleiades#394 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 커스텀전략 등록 · 목록 · 삭제.
- * 판단(decide*)은 인자와 중립 응답 모델만 안다 · 텔레그램 원문 벗기기는 `*ArgsFromText`(지금 식 그대로).
- * 특성 테스트 `__tests__/special-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ * 판단(decide*)은 인자와 중립 응답 모델만 안다 · 원문 벗기기는 `*ArgsFromText`(옛 식 그대로).
+ * 판단 흐름은 `__tests__/special-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
 /** 파서가 사용자용으로 쓴 안내의 접두(`lib/custom-strategy/parser.ts`) — 그 밖의 오류 원문은 보이지 않는다(PR-2c · UQ-3) */
@@ -22,12 +20,12 @@ export const CUSTOM_STRATEGY_REGISTER_RE = /^커스텀전략등록(?:\s+.*)?$/
 export const CUSTOM_STRATEGY_LIST_RE = /^커스텀전략목록\s*$/
 export const CUSTOM_STRATEGY_DELETE_RE = /^커스텀전략삭제(?:\s+.*)?$/
 
-/** 텔레그램 원문 → 인자 — `/customstrategy` · `커스텀전략등록` 을 벗기고 trim(대소문자 무시 · `@bot` 은 벗기지 않는다 — 현재 동작). */
+/** 원문 → 인자 — `/customstrategy` · `커스텀전략등록` 을 벗기고 trim(대소문자 무시 · `@bot` 은 벗기지 않는다 — 현재 동작). */
 export function customStrategyRegisterArgsFromText(text: string): string {
   return text.replace(/^(\/customstrategy|커스텀전략등록)\s*/i, '').trim()
 }
 
-/** 텔레그램 원문 → 인자 — `/customstrategydelete` · `커스텀전략삭제` 를 벗기고 trim(대소문자 무시). */
+/** 원문 → 인자 — `/customstrategydelete` · `커스텀전략삭제` 를 벗기고 trim(대소문자 무시). */
 export function customStrategyDeleteArgsFromText(text: string): string {
   return text.replace(/^(\/customstrategydelete|커스텀전략삭제)\s*/i, '').trim()
 }
@@ -159,22 +157,4 @@ export async function decideCustomStrategyDelete(arg: string, out: ReplyOutput):
   const target = candidates[0]
   await prisma.customStrategy.delete({ where: { id: target.id } })
   await out.reply(plainReply(`🗑️ 삭제됨: ${target.name} (${target.ticker})`))
-}
-
-export function registerCustomStrategyCommands(bot: Bot): void {
-  // 등록에 try/catch 가 없다 — 판단 밖으로 던진 오류는 지금처럼 grammY bot.catch 로 간다
-  const register = (ctx: Context) =>
-    decideCustomStrategyRegister(customStrategyRegisterArgsFromText(ctx.message?.text ?? ''), telegramOutput(ctx))
-  const list = (ctx: Context) => decideCustomStrategyList(telegramOutput(ctx))
-  const remove = (ctx: Context) =>
-    decideCustomStrategyDelete(customStrategyDeleteArgsFromText(ctx.message?.text ?? ''), telegramOutput(ctx))
-
-  bot.command('customstrategy', register)
-  bot.hears(CUSTOM_STRATEGY_REGISTER_RE, register)
-
-  bot.command('customstrategylist', list)
-  bot.hears(CUSTOM_STRATEGY_LIST_RE, list)
-
-  bot.command('customstrategydelete', remove)
-  bot.hears(CUSTOM_STRATEGY_DELETE_RE, remove)
 }

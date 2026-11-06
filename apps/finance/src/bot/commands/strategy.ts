@@ -1,20 +1,18 @@
-import type { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
-import { escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/html'
 import { plainReply, type ReplyOutput } from '../core/reply'
-import { telegramOutput } from '../utils/telegram-reply'
 
 /*
  * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 전략 · 전략목록.
- * 판단(decide*)은 인자(`args`)와 중립 응답 모델만 안다 · 텔레그램 원문 벗기기는 `strategyArgsFromText`(지금 식 그대로).
- * 특성 테스트 `__tests__/manage-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ * 판단(decide*)은 인자(`args`)와 중립 응답 모델만 안다 · 원문 벗기기는 `strategyArgsFromText`(옛 식 그대로).
+ * 판단 흐름은 `__tests__/manage-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
 export const STRATEGY_RE = /^전략(?:\s+.*)?$/
 export const STRATEGY_LIST_RE = /^전략목록\s*$/
 
 /**
- * 텔레그램 원문 → 인자 — `/strategy` · `전략` 을 벗기고 trim.
+ * 원문 → 인자 — `/strategy` · `전략` 을 벗기고 trim.
  * 현재 동작: `/strategy@bot` 의 `@bot` 은 벗기지 않는다(서비스 유래 · 특성 테스트가 고정).
  */
 export function strategyArgsFromText(text: string): string {
@@ -295,16 +293,4 @@ export async function decideStrategyList(out: ReplyOutput): Promise<void> {
   }
 
   await out.replyLong(lines.join('\n'))
-}
-
-export function registerStrategyCommands(bot: Bot): void {
-  // 등록에 try/catch 가 없다 — 판단 밖으로 던진 오류는 지금처럼 grammY bot.catch 로 간다
-  const strategy = (ctx: Context) => decideStrategy(strategyArgsFromText(ctx.message?.text ?? ''), telegramOutput(ctx))
-  const list = (ctx: Context) => decideStrategyList(telegramOutput(ctx))
-
-  bot.command('strategy', strategy)
-  bot.hears(STRATEGY_RE, strategy)
-
-  bot.command('strategylist', list)
-  bot.hears(STRATEGY_LIST_RE, list)
 }

@@ -1,7 +1,7 @@
 /**
  * #350 회귀 검증 — 식단 편집 pending 상태 머신.
  *
- * 배경: force_reply 는 Telegram 클라이언트 상태라 답장 안 된 프롬프트가 채팅방을 열 때마다
+ * 배경: force_reply 는 메신저 클라이언트 상태라 답장 안 된 프롬프트가 채팅방을 열 때마다
  * 답장 입력폼을 영구 재무장시켰다. chat 단위 pending 으로 전환하며 이 스크립트로 상태 머신을
  * 검증한다. 프로젝트에 테스트 프레임워크가 없어 workflow.md 8-5 에 따라 스크립트로 대체.
  *
@@ -20,21 +20,22 @@ import {
 } from "../src/bot/commands/food-edit-state";
 import {
   DESC_PREVIEW_MAX,
-  TELEGRAM_MAX_MESSAGE_LENGTH,
+  MAX_SINGLE_MESSAGE_LENGTH,
   buildDescChangeMessage,
   buildKcalChangeMessage,
   descPreview,
 } from "../src/bot/commands/food-edit-format";
-import { discordStateKey, telegramStateKey } from "../src/bot/core/state-key";
+import { discordStateKey } from "../src/bot/core/state-key";
 
 const ACTIVE_TTL_MS = 5 * 60 * 1000;
 const MAX_RETRIES = 3;
 
-// pleiades 009 D-2 PR-2 (pleiades#364 · 설계 S): pending 키는 문자열 상태 키 — 텔레그램 chat 단위 · Discord 채널+사용자 단위.
-const CHAT_A = telegramStateKey(1001); // "telegram:1001"
+// pleiades 009 D-2 PR-2 (pleiades#364 · 설계 S): pending 키는 문자열 상태 키 — Discord 채널+사용자 단위.
+// (009 D-5 B2 #504: 옛 플랫폼 키를 지워 C6b 는 플랫폼 교차 대신 채널 교차를 본다)
+const CHAT_A = discordStateKey("1001", "1"); // "discord:1001:1"
 const CHAT_B = discordStateKey("2002", "9"); // "discord:2002:9"
-// C6b — 같은 숫자의 다른 플랫폼 키
-const TG_SAME = telegramStateKey(2002);
+// C6b — 같은 사용자 · 다른 채널 키
+const OTHER_CHANNEL = discordStateKey("2003", "9");
 const DC_SAME = discordStateKey("1001", "1001");
 
 let failed = 0;
@@ -62,7 +63,7 @@ function withClockAdvancedBy<T>(offsetMs: number, fn: () => T): T {
 function reset(): void {
   deletePendingEdit(CHAT_A);
   deletePendingEdit(CHAT_B);
-  deletePendingEdit(TG_SAME);
+  deletePendingEdit(OTHER_CHANNEL);
   deletePendingEdit(DC_SAME);
 }
 
@@ -166,27 +167,27 @@ check("CHAT_B 는 log-b", peekPendingEdit(CHAT_B)?.logId === "log-b");
 deletePendingEdit(CHAT_A);
 check("CHAT_A 삭제해도 CHAT_B 유지", isPendingEdit(CHAT_B) === true);
 
-// C6b: 플랫폼 교차 격리 — 같은 숫자의 telegram/discord 키가 서로를 소비하지 않는다 (pleiades#364)
-console.log("C6b: 플랫폼 교차 격리 (telegram ↔ discord)");
+// C6b: 채널 교차 격리 — 같은 사용자라도 다른 채널 키가 서로를 소비하지 않는다 (pleiades#364 · #504)
+console.log("C6b: 채널 교차 격리");
 reset();
-check("키 문자열 형식 telegram", CHAT_A === "telegram:1001");
-check("키 문자열 형식 discord", CHAT_B === "discord:2002:9");
-markPendingEdit(TG_SAME, "log-tg", "kcal");
-check("telegram:2002 대기 중에도 discord:2002:* 는 소비 안 함", shouldConsumeAsEditInput(CHAT_B, "650") === false);
-check("discord 쪽 peek null", peekPendingEdit(CHAT_B) === null);
+check("키 문자열 형식 A", CHAT_A === "discord:1001:1");
+check("키 문자열 형식 B", CHAT_B === "discord:2002:9");
+markPendingEdit(OTHER_CHANNEL, "log-tg", "kcal");
+check("discord:2003:9 대기 중에도 discord:2002:9 는 소비 안 함", shouldConsumeAsEditInput(CHAT_B, "650") === false);
+check("B 쪽 peek null", peekPendingEdit(CHAT_B) === null);
 markPendingEdit(DC_SAME, "log-dc", "desc");
-check("discord:1001:1001 대기가 telegram:1001 에 보이지 않음", isPendingEdit(CHAT_A) === false);
+check("discord:1001:1001 대기가 discord:1001:1 에 보이지 않음", isPendingEdit(CHAT_A) === false);
 // 같은 숫자(2002)·같은 logId 로 양쪽에 걸고 한쪽만 지운다 — logId 불일치로 우연히 통과하지 않게 (PR-2 사전 리뷰 info 1)
 reset();
-markPendingEdit(TG_SAME, "log-same", "kcal");
+markPendingEdit(OTHER_CHANNEL, "log-same", "kcal");
 markPendingEdit(CHAT_B, "log-same", "desc");
 check("discord 취소(같은 logId)가 성공", clearPendingEditFor(CHAT_B, "log-same") === true);
-check("discord 취소 뒤 telegram 대기 유지", peekPendingEdit(TG_SAME)?.logId === "log-same");
+check("B 취소 뒤 다른 채널 대기 유지", peekPendingEdit(OTHER_CHANNEL)?.logId === "log-same");
 markPendingEdit(CHAT_B, "log-same", "desc");
-deletePendingEdit(TG_SAME);
-check("telegram 삭제 뒤 discord 대기 유지", peekPendingEdit(CHAT_B)?.action === "desc");
+deletePendingEdit(OTHER_CHANNEL);
+check("다른 채널 삭제 뒤 B 대기 유지", peekPendingEdit(CHAT_B)?.action === "desc");
 
-// C7: 라우팅 판단 — bot/index.ts message:text 가 이 텍스트를 편집 입력으로 소비할지
+// C7: 라우팅 판단 — 자유 텍스트(free-text.ts)가 이 텍스트를 편집 입력으로 소비할지
 //   (사전 리뷰 P0: index.ts 인라인 조건이면 검증 불가라 함수로 추출)
 console.log("C7: shouldConsumeAsEditInput 라우팅 규칙");
 reset();
@@ -218,7 +219,7 @@ async function main(): Promise<void> {
   console.log("C9: armPendingEdit 발송/등록 순서");
   const sendOk = async (): Promise<void> => {};
   const sendFail = async (): Promise<void> => {
-    throw new Error("Telegram 5xx");
+    throw new Error("send 5xx");
   };
 
   reset();
@@ -250,11 +251,11 @@ async function main(): Promise<void> {
   await armPendingEdit(CHAT_A, "log-1", "kcal", sendOk);
   check("재무장 시 재시도 카운터 리셋", registerRetry(CHAT_A) === true);
 
-  // C8: 응답 메시지 길이 — Telegram 4096자 한도 (Codex P2 PR #351 회귀)
+  // C8: 응답 메시지 길이 — 메시지 한 건 2000자 한도 (Codex P2 PR #351 회귀 · #504 에서 4096 → 2000)
   //   description 컬럼에 길이 제한이 없어, 이전 설명과 새 설명을 함께 실으면 완료 응답이
   //   한도를 넘어 sendMessage 가 거부됐다. 그 시점엔 DB update 가 이미 커밋된 뒤라
   //   사용자는 복구 안내를 잃고 수정이 실패한 것으로 오인한다.
-  console.log("C8: 완료 응답이 Telegram 메시지 한도 이내");
+  console.log("C8: 완료 응답이 메시지 한 건 한도 이내");
   const HUGE = "가".repeat(10_000);
   check(
     `descPreview 가 ${DESC_PREVIEW_MAX}자 + 말줄임표로 절단`,
@@ -268,15 +269,15 @@ async function main(): Promise<void> {
 
   const worstDesc = buildDescChangeMessage(HUGE, HUGE);
   check(
-    `설명 변경 완료 응답 최악값 ${worstDesc.length}자 < ${TELEGRAM_MAX_MESSAGE_LENGTH}`,
-    worstDesc.length < TELEGRAM_MAX_MESSAGE_LENGTH,
+    `설명 변경 완료 응답 최악값 ${worstDesc.length}자 < ${MAX_SINGLE_MESSAGE_LENGTH}`,
+    worstDesc.length < MAX_SINGLE_MESSAGE_LENGTH,
   );
   check("이전 설명이 응답에 포함 (복구 경로 F10)", worstDesc.includes("이전 설명"));
 
   const worstKcal = buildKcalChangeMessage(HUGE, 10_000);
   check(
-    `kcal 완료 응답 최악값 ${worstKcal.length}자 < ${TELEGRAM_MAX_MESSAGE_LENGTH}`,
-    worstKcal.length < TELEGRAM_MAX_MESSAGE_LENGTH,
+    `kcal 완료 응답 최악값 ${worstKcal.length}자 < ${MAX_SINGLE_MESSAGE_LENGTH}`,
+    worstKcal.length < MAX_SINGLE_MESSAGE_LENGTH,
   );
 
   reset();

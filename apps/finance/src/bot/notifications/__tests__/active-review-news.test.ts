@@ -5,7 +5,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/prisma', () => ({ prisma: { alertConfig: { upsert: vi.fn(async () => ({ value: 'on' })) } } }))
-vi.mock('@/bot/index', () => ({ notifyBot: vi.fn(() => ({ api: {} })) }))
 vi.mock('@/lib/news/prompt-news', () => ({
   gatherClosingNews: vi.fn(async () => '클로징 블록'),
   gatherWeeklyNews: vi.fn(async () => '주간 블록'),

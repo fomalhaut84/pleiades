@@ -4,15 +4,14 @@
  * refreshPrices() 직후 호출. 활성 전략을 ticker 단위로 그루핑하고:
  *   1) priceCache 에서 PriceSnapshot 조회
  *   2) TA 필요 조건이 있을 때만 generateTAReport 호출 (비싸므로 캐시)
- *   3) evaluator 로 조건 평가 → satisfied 시 텔레그램 발송
+ *   3) evaluator 로 조건 평가 → satisfied 시 알림 발송
  *   4) frequency (once/daily/always) 로 dedup + DB.lastTriggeredAt 갱신
  *
  * `AlertConfig.custom_strategy_alerts` = 'off' 시 스캔 자체 skip.
  */
 
 import { prisma } from '@/lib/prisma'
-import { notifyBot } from '@/bot/index'
-import { escapeHtml } from '@/bot/utils/telegram'
+import { escapeHtml } from '@/bot/utils/html'
 import { notifierFor, recipients, Route, htmlContent, lastErrorOf } from './notifier'
 import { generateTAReport } from '@/lib/ta/engine'
 import type { TAReport } from '@/lib/ta/types'
@@ -137,7 +136,7 @@ function shouldFire(
 let scanRunning = false
 
 /**
- * 활성 커스텀 전략을 모두 스캔 → 만족 조건 텔레그램 발송.
+ * 활성 커스텀 전략을 모두 스캔 → 만족 조건 알림 발송.
  * refreshPrices() 직후 호출.
  */
 export async function checkCustomStrategies(): Promise<void> {
@@ -159,7 +158,6 @@ async function runScan(): Promise<void> {
   if (!(await isCustomStrategyAlertsEnabled())) return
 
   // 봇 초기화 실패 시 DB 상태 갱신 전에 fail-fast — "발동 기록만 남고 발송은 안 됨" 방지
-  const bot = notifyBot()
 
   const strategies = await prisma.customStrategy.findMany({
     where: { isActive: true },
@@ -311,7 +309,7 @@ async function runScan(): Promise<void> {
 
   // 최소 1개 chatId 에 발송 성공한 뒤에만 DB 상태 갱신 — 실패 시 다음 tick 에서 재시도.
   const message = `🧠 <b>커스텀 전략 발동</b> (${todayKST()})\n\n${alerts.join('\n\n')}`
-  const delivery = await notifierFor(bot).notify(Route.ALLOWED, htmlContent(message), { label: 'custom-strategy' })
+  const delivery = await notifierFor().notify(Route.ALLOWED, htmlContent(message), { label: 'custom-strategy' })
   const sentCount = delivery.sent
   const lastError = lastErrorOf(delivery)
 

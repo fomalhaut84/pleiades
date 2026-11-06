@@ -18,11 +18,10 @@ import check_env as c  # noqa: E402
 GOOD_FIT = {
     "DATABASE_URL": "postgresql://u:p@localhost:5432/pleiades_fit?schema=public",
     "PORT": "4600", "MCP_PORT": "4601",
-    "TELEGRAM_BOT_TOKEN": "111:secret", "TELEGRAM_ALLOWED_CHAT_IDS": "-100",
     "CLAUDE_BIN": "/nonexistent/claude-disabled",
     "GARMIN_EMAIL": "", "GARMIN_PASSWORD": "", "MFDS_API_KEY": "",
 }
-OPTS = {"bot_ids": {"111", "222"}, "chat_ids": {"-100"}}
+OPTS: dict = {}
 
 
 class Base(unittest.TestCase):
@@ -63,8 +62,6 @@ class Fit(Base):
             ({"PORT": ""}, "PORT"),
             ({"MCP_PORT": "4301"}, "MCP_PORT"),
             ({"MCP_PORT": "4600"}, "MCP_PORT"),
-            ({"TELEGRAM_BOT_TOKEN": "999:x"}, "TELEGRAM_BOT_TOKEN"),
-            ({"TELEGRAM_ALLOWED_CHAT_IDS": "-100,555"}, "TELEGRAM_ALLOWED_CHAT_IDS"),
             ({"GARMIN_EMAIL": "me@x.com"}, "GARMIN_EMAIL"),
             ({"MFDS_API_KEY": "k"}, "MFDS_API_KEY"),
             ({"CLAUDE_BIN": ""}, "CLAUDE_BIN"),
@@ -77,18 +74,12 @@ class Fit(Base):
             with self.subTest(patch=patch):
                 self.assertIn(key, self.keys("fit", {**GOOD_FIT, **patch}))
 
-    def test_other_app_same_bot(self):
-        self.assertIn("TELEGRAM_BOT_TOKEN", self.keys("fit", GOOD_FIT, other_token_id="111"))
-
-    def test_other_app_same_bot_from_its_env_file(self):
-        """PR #110 Codex P2 — OTHER_TOKEN_ID 를 넘기지 않아도 다른 앱 .env 의 봇과 비교한다."""
-        (self.root / "apps/finance/.env").write_text("TELEGRAM_BOT_TOKEN=111:other\n")
-        self.assertIn("TELEGRAM_BOT_TOKEN", self.keys("fit", GOOD_FIT))
-        (self.root / "apps/finance/.env").write_text("TELEGRAM_BOT_TOKEN=222:other\n")
-        self.assertEqual(self.problems("fit", GOOD_FIT), [])
-
-    def test_no_token_is_allowed(self):
-        self.assertEqual(self.problems("fit", {**GOOD_FIT, "TELEGRAM_BOT_TOKEN": ""}), [])
+    # 009 D-5 B6 (pleiades#517): 앱이 TELEGRAM_* 를 읽지 않는다 — 남은 줄(서비스 토큰 모양이어도)은 검사 대상이 아니다
+    def test_leftover_legacy_channel_keys_are_not_checked(self):
+        leftover = {"TELEGRAM_BOT_TOKEN": "999:x", "TELEGRAM_ALLOWED_CHAT_IDS": "-100,555", "TELEGRAM_ADMIN_CHAT_IDS": "777"}
+        self.assertEqual(self.problems("fit", {**GOOD_FIT, **leftover}), [])
+        (self.root / "apps/finance/.env").write_text("TELEGRAM_BOT_TOKEN=999:other\n")  # 옛 '같은 봇' 검사도 없다
+        self.assertEqual(self.problems("fit", {**GOOD_FIT, "TELEGRAM_BOT_TOKEN": "999:x"}), [])
 
     def test_wrong_cwd(self):
         self.assertIn("cwd", self.keys("fit", GOOD_FIT, cwd=self.root))
@@ -99,15 +90,16 @@ class Fit(Base):
         self.assertEqual(self.keys("fit", GOOD_FIT), {".env.local"})
 
     def test_secret_values_never_printed(self):
-        text = "\n".join(str(p) for p in self.problems("fit", {**GOOD_FIT, "TELEGRAM_BOT_TOKEN": "999:topsecret",
+        text = "\n".join(str(p) for p in self.problems("fit", {**GOOD_FIT, "MFDS_API_KEY": "topsecret",
                                                                   "GARMIN_PASSWORD": "hunter2"}))
+        self.assertIn("MFDS_API_KEY", text)  # 위반은 잡히되 값은 나오지 않는다
         self.assertNotIn("topsecret", text)
         self.assertNotIn("hunter2", text)
 
 
 class Fin(Base):
     GOOD = {"DATABASE_URL": "postgresql://u:p@127.0.0.1:5432/pleiades_fin", "PORT": "4500",
-            "TELEGRAM_BOT_TOKEN": "", "WHOOING_WEBHOOK_URL": ""}
+            "WHOOING_WEBHOOK_URL": ""}
 
     def test_good_with_shim_first(self):
         env = {**self.GOOD, "PATH": f"{self.root}/bin:/usr/bin:/bin"}
@@ -117,18 +109,9 @@ class Fin(Base):
         env = {**self.GOOD, "PATH": "/usr/bin:/bin"}
         self.assertIn("claude", self.keys("fin", env))
 
-    def test_whooing_and_admin_chat(self):
-        env = {**self.GOOD, "PATH": f"{self.root}/bin", "WHOOING_WEBHOOK_URL": "https://x",
-               "TELEGRAM_BOT_TOKEN": "222:s", "TELEGRAM_ADMIN_CHAT_IDS": "777"}
-        self.assertEqual(self.keys("fin", env), {"WHOOING_WEBHOOK_URL", "TELEGRAM_ADMIN_CHAT_IDS"})
-
-    def test_any_chat_id_key_checked(self):
-        """회귀: #104 사전 리뷰 major 1 — fin 이 읽는 키는 TELEGRAM_ADMIN_CHAT_IDS 다. 이름을 맞히지 말고 *CHAT_ID* 전부."""
-        env = {**self.GOOD, "PATH": f"{self.root}/bin", "TELEGRAM_BOT_TOKEN": "222:s"}
-        for key in ("TELEGRAM_ADMIN_CHAT_IDS", "ADMIN_CHAT_IDS", "REPORT_CHAT_ID", "TELEGRAM_ALLOWED_CHAT_IDS"):
-            with self.subTest(key=key):
-                self.assertIn(key, self.keys("fin", {**env, key: "777"}))
-                self.assertNotIn(key, self.keys("fin", {**env, key: "-100"}))
+    def test_whooing_must_be_empty(self):
+        env = {**self.GOOD, "PATH": f"{self.root}/bin", "WHOOING_WEBHOOK_URL": "https://x"}
+        self.assertEqual(self.keys("fin", env), {"WHOOING_WEBHOOK_URL"})
 
 
 class RunSh(Base):

@@ -1,8 +1,7 @@
-// M13 Phase 2 (#249): auto-adjust 제안에 대한 Telegram callback 처리.
+// M13 Phase 2 (#249): auto-adjust 제안에 대한 버튼 처리.
 // Accept/Reject/Snooze 3-way inline keyboard callback → decision update + Accept 시
 // TrainingWorkout 실제 반영.
 
-import type { Bot } from "grammy";
 import prisma from "@/lib/prisma";
 import { todayKST, ymdKST } from "@/lib/garmin/utils";
 import { sanitizeError } from "../utils/error";
@@ -222,7 +221,7 @@ async function handleSnooze(adj: Adjustment): Promise<string> {
   return `💤 1시간 뒤 (~${kstStr}) 재알림합니다.`;
 }
 
-/** 버튼 1회 처리 결과 — 채널 중립(텔레그램 answerCallbackQuery · Discord ephemeral 안내 공통). */
+/** 버튼 1회 처리 결과 — 채널 중립(Discord ephemeral 안내). */
 export interface AutoAdjustDecision {
   /** 누른 사람에게 보여 줄 짧은 안내. */
   notice: string;
@@ -231,7 +230,7 @@ export interface AutoAdjustDecision {
 }
 
 /**
- * pleiades M-6b-3 (pleiades#151): 텔레그램 콜백 본문을 채널 중립 함수로 꺼냈다 — Discord 버튼(gateway)도 같은 판단을 쓴다.
+ * pleiades M-6b-3 (pleiades#151): 옛 콜백 본문을 채널 중립 함수로 꺼냈다 — Discord 버튼(gateway)이 이 판단을 쓴다.
  * 동작은 구 `registerAutoAdjustCallback` 본문과 같다(idempotent · TTL · 최종 상태 no-op). 오류는 기록하고 안내로 돌려준다.
  */
 export async function decideAutoAdjust(data: string): Promise<AutoAdjustDecision> {
@@ -302,25 +301,4 @@ export async function decideAutoAdjust(data: string): Promise<AutoAdjustDecision
     );
     return keep("처리 중 오류가 발생했습니다. 잠시 후 다시 시도하세요.");
   }
-}
-
-/**
- * grammy bot 에 callback handler 등록. `bot.callbackQuery(/^auto_adjust:/, ...)` 로 매칭.
- * decision 이 이미 결정된 상태면 no-op (idempotent — 중복 클릭 안전). 판단은 `decideAutoAdjust`.
- */
-export function registerAutoAdjustCallback(bot: Bot): void {
-  bot.callbackQuery(new RegExp(`^${CALLBACK_PREFIX}:`), async (ctx) => {
-    const { notice, removeKeyboard } = await decideAutoAdjust(ctx.callbackQuery.data ?? "");
-    await ctx.answerCallbackQuery({ text: notice });
-    if (!removeKeyboard) return;
-    try {
-      // Accept/Reject 시 keyboard 제거 (중복 클릭 방지). Snooze 는 유지 (재알림 후 재결정).
-      await ctx.editMessageReplyMarkup({ reply_markup: undefined });
-    } catch (editErr) {
-      // 오래된 메시지는 편집 실패 — 무시.
-      console.warn(
-        `[auto-adjust-callback] keyboard 편집 실패 (무시): ${sanitizeError(editErr)}`,
-      );
-    }
-  });
 }

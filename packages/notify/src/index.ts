@@ -1,5 +1,6 @@
 /**
- * @pleiades/notify — 아웃바운드 알림 포트(`Transport`) + 파사드(`Notifier`) + `TelegramTransport`.
+ * @pleiades/notify — 아웃바운드 알림 포트(`Transport`) + 파사드(`Notifier`) + Discord transport(웹훅 · 봇).
+ * 009 D-5 B5 (pleiades#515): 옛 채널 transport 는 지웠다.
  * 설계 정본: pleiades `docs/specs/003-notify-package.md` §4 (L3 · 2층). 1a-1 (#47).
  */
 
@@ -21,8 +22,6 @@ export type {
 export { Route, html } from './types';
 
 export { createNotifier } from './notifier';
-export { createTelegramTransport, TELEGRAM_CHANNEL } from './telegram';
-export type { TelegramApi, TelegramTransportOptions } from './telegram';
 export {
   createDiscordTransport,
   DiscordWebhookError,
@@ -74,7 +73,7 @@ export type { DeliveryPolicy } from './deliver';
 
 export { csvEnv } from './targets';
 export type { CsvEnvOptions } from './targets';
-export { splitMessage, TELEGRAM_MAX_LENGTH } from './split';
+export { splitMessage } from './split';
 export { toPlain } from './plain';
 export { escapeHtml } from './escape';
 export { getErrorCode, isHtmlParseError, isNetworkError, sanitizeError, sanitizeMessage } from './error';

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { deliverOne, type DeliveryPolicy } from './deliver';
 import { html, type Content, type Transport } from './types';
 
-// 정본: fit send.ts:39-75 (attempt-- 예산 보존 · 네트워크만 백오프) + fin telegram.ts:61-73 (청크 단위 재시도·폴백)
+// 정본: fit send.ts:39-75 (attempt-- 예산 보존 · 네트워크만 백오프) + fin 이전 발송 유틸 (청크 단위 재시도·폴백)
 
 type Call = { target: string; content: Content };
 
@@ -118,7 +118,7 @@ describe('deliverOne — 단일 청크', () => {
   });
 
   it('components 는 폴백 시에도 유지된다', async () => {
-    const kb = { inline_keyboard: [[{ text: 'ok', callback_data: 'x' }]] };
+    const kb = [[{ label: 'ok', action: 'x' }]];
     const { transport, calls } = fakeTransport([parse(), 'ok']);
     await deliverOne(transport, 't', html('<b>x</b>', kb), policy());
     expect(calls[1].content).toEqual({ text: 'x', format: 'plain', components: kb });
@@ -140,7 +140,7 @@ describe('deliverOne — 분할 (maxLength 유한 · 코어 소유)', () => {
   });
 
   it('components 는 마지막 청크에만 붙는다', async () => {
-    const kb = { inline_keyboard: [] };
+    const kb = [[{ label: 'ok', action: 'x' }]];
     const { transport, calls } = fakeTransport([], 5);
     await deliverOne(transport, 't', html('aaa\nbbb', kb), policy());
     expect(calls[0].content.components).toBeUndefined();

@@ -17,7 +17,7 @@ import type { ReportJob } from "@/generated/prisma/client";
  * #256: notifyBot 이 있으면 Garmin 재인증 실패 자동 감지 → 관리자 alert.
  */
 export async function preSyncForReport(
-  options?: { notifyBot?: import("@/bot/notifications/notifier").NotifyBot },
+  options?: { notifyBot?: import("@/bot/notifications/notifier").BotProcess },
 ): Promise<void> {
   try {
     console.log("[report] 리포트 전 데이터 싱크 시작");
@@ -41,7 +41,7 @@ async function generateReport(
   category: DailyCategory,
   force = false,
   reportDate?: string,
-  notifyBot?: import("@/bot/notifications/notifier").NotifyBot,
+  notifyBot?: import("@/bot/notifications/notifier").BotProcess,
 ): Promise<string> {
   const dateStr = kstDateStr();
   // reportDate 명시됐으면 그것 사용 (UI 재생성 버튼 등 자정 넘김 케이스).
@@ -104,7 +104,7 @@ async function runReportViaJob(params: {
   force: boolean;
   reportDate: string;
   background: boolean;
-  notifyBot?: import("@/bot/notifications/notifier").NotifyBot;
+  notifyBot?: import("@/bot/notifications/notifier").BotProcess;
 }): Promise<{ job: ReportJob; result: string | null }> {
   const { category, force, reportDate, background, notifyBot } = params;
 
@@ -134,7 +134,7 @@ async function runReportViaJob(params: {
     }
   } else if (!background && (job.status === "pending" || job.status === "running")) {
     // P1: cron 이 web 과 겹친 경우 — 완료까지 poll 대기 후 결과 반환. 대기 없이
-    // null 반환하면 텔레그램 알림 누락 (하루치 손실).
+    // null 반환하면 봇 알림 누락 (하루치 손실).
     console.log(
       `[report] ${category} ${reportDate} 이미 진행중 (${job.status}) — 완료 대기`,
     );
@@ -176,7 +176,7 @@ export async function startReportJob(params: {
 
 /**
  * #200: result=null 시 finalJob.status/errorMessage 를 담아 실제 원인 노출.
- * 텔레그램/UI 에서 "record 부재" 대신 askAdvisor 실패 원인 확인 가능.
+ * 봇 알림/UI 에서 "record 부재" 대신 askAdvisor 실패 원인 확인 가능.
  */
 function buildReportError(category: string, job: ReportJob): Error {
   const parts = [`${category} 실패 (job status=${job.status})`];
@@ -187,7 +187,7 @@ function buildReportError(category: string, job: ReportJob): Error {
 export async function generateMorningReport(
   force = false,
   reportDate?: string,
-  options?: { notifyBot?: import("@/bot/notifications/notifier").NotifyBot },
+  options?: { notifyBot?: import("@/bot/notifications/notifier").BotProcess },
 ): Promise<string> {
   const { result, job } = await runReportViaJob({
     category: "morning_report",
@@ -203,7 +203,7 @@ export async function generateMorningReport(
 export async function generateEveningReport(
   force = false,
   reportDate?: string,
-  options?: { notifyBot?: import("@/bot/notifications/notifier").NotifyBot },
+  options?: { notifyBot?: import("@/bot/notifications/notifier").BotProcess },
 ): Promise<string> {
   const { result, job } = await runReportViaJob({
     category: "evening_report",

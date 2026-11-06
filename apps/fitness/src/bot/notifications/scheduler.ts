@@ -1,10 +1,10 @@
 import cron from "node-cron";
-import type { NotifyBot } from "./notifier";
+import type { BotProcess } from "./notifier";
 import { generateMorningReport, generateEveningReport } from "../../lib/daily-report";
 import { generateWeeklyReport } from "../../lib/weekly-report";
 import { runAutoAdjustProposal } from "./auto-adjust";
 import { runAutoAdjustMaintenance } from "./auto-adjust-cron";
-import { mdToHtml } from "../utils/telegram";
+import { mdToHtml } from "../utils/html";
 import { sanitizeError } from "../utils/error";
 import {
   formatUserFriendlyError,
@@ -13,9 +13,9 @@ import {
 import { Route, html as htmlContent } from "@pleiades/notify";
 import { BOT_NOTIFY_CTX, notifierFor } from "./notifier";
 
-/** 리포트 cron 콜백 공통 처리: 단계별 로그 + 실패 시 텔레그램 알림 (조용한 실패 차단) */
+/** 리포트 cron 콜백 공통 처리: 단계별 로그 + 실패 시 Discord 알림 (조용한 실패 차단) */
 async function runReportCron(
-  bot: NotifyBot,
+  bot: BotProcess,
   label: string,
   emoji: string,
   generate: () => Promise<string>
@@ -24,10 +24,10 @@ async function runReportCron(
   try {
     const report = await generate();
     const html = `${emoji} <b>${label}</b>\n\n${mdToHtml(report)}`;
-    const r = await notifierFor(bot).notify(Route.ALLOWED, htmlContent(html), BOT_NOTIFY_CTX);
+    const r = await notifierFor().notify(Route.ALLOWED, htmlContent(html), BOT_NOTIFY_CTX);
     if (r.total === 0) {
       console.warn(
-        `[bot-cron] ${label} 전송 대상 없음 (TELEGRAM_ALLOWED_CHAT_IDS 미설정?)`
+        `[bot-cron] ${label} 전송 대상 없음 (DISCORD_WEBHOOK_FITNESS 미설정?)`
       );
     } else if (r.sent === 0) {
       // 모든 채팅 전송 실패 → 조용한 실패 차단을 위해 명시적 throw
@@ -49,7 +49,7 @@ async function runReportCron(
     // 조용한 실패 차단: 사용자에게 카테고리 매핑 문구 (기존 raw msg 대체).
     try {
       const friendly = formatUserFriendlyError(error);
-      await notifierFor(bot).notify(
+      await notifierFor().notify(
         Route.ALLOWED,
         htmlContent(`❌ ${label} 생성 실패\n${friendly}`),
         BOT_NOTIFY_CTX,
@@ -60,7 +60,7 @@ async function runReportCron(
   }
 }
 
-export function startBotScheduler(bot: NotifyBot) {
+export function startBotScheduler(bot: BotProcess) {
   // 모닝 리포트 (08:00 KST)
   const morningSchedule = process.env.MORNING_REPORT_CRON ?? "0 8 * * *";
   cron.schedule(

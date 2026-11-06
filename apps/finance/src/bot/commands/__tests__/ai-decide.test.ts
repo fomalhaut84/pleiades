@@ -1,9 +1,9 @@
 /**
  * pleiades 009 D-3 PR-1b (pleiades#385) — AI 판단 함수 계약(설계 §4 Q · S).
  *
- * 텔레그램 호출열은 `ai-telegram.test.ts` 가 고정한다. 여기서는 플랫폼을 모르는 판단 함수가
- * 상태 키 · 메시지 키 · 요청자만으로 동작하는지 본다 — 같은 숫자의 telegram/discord 키가 서로의
- * 세션 · 동시 1건 · 버튼 대기 상태를 소비하지 않는다(2-2 · 구조상 0 · UQ-4 플랫폼별).
+ * 판단 흐름 전체는 `ai-flow.test.ts` 가 고정한다(009 D-5 B3a). 여기서는 플랫폼을 모르는 판단 함수가
+ * 상태 키 · 메시지 키 · 요청자만으로 동작하는지 본다 — 다른 키(채널이 다른 같은 사용자 번호 등)가 서로의
+ * 세션 · 동시 1건 · 버튼 대기 상태를 소비하지 않는다(2-2). 옛 채널 키는 B3b(pleiades#508)에서 지웠다.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -25,8 +25,8 @@ import { prisma } from '@/lib/prisma'
 import { askAdvisor } from '@/lib/ai/claude-advisor'
 import { aiFallbackRoute, decideAiQuestion, decideAiTradeButton, decideReset, decideTradeParse } from '../ai'
 import type { BotReply, ButtonOutput, ReplyOutput, Requester } from '../../core/reply'
-import { discordMessageKey, discordStateKey, telegramMessageKey, telegramStateKey } from '../../core/state-key'
-import { flush } from './telegram-fake'
+import { discordMessageKey, discordStateKey } from '../../core/state-key'
+import { flush } from './test-utils'
 
 const ask = vi.mocked(askAdvisor)
 
@@ -98,21 +98,21 @@ describe('대화 상태 키 격리', () => {
     expect(ask).not.toHaveBeenCalled()
   })
 
-  it('같은 숫자의 telegram 키와 discord 키는 서로 처리 중을 막지 않는다', async () => {
+  it('채널이 다른 키는 같은 사용자 번호여도 서로 처리 중을 막지 않는다', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
     ask.mockImplementation(() => new Promise(() => undefined) as never)
     const id = fresh()
-    const tg = fakeOut(String)
+    const other = fakeOut(String)
     const dc = fakeOut(String)
-    decideAiQuestion('하나 어때?', telegramStateKey(id), tg.out)
+    decideAiQuestion('하나 어때?', discordStateKey(`other-${id}`, String(id)), other.out)
     decideAiQuestion('둘 어때?', discordStateKey(String(id), String(id)), dc.out)
     await flush()
-    expect(texts(tg.sent)).toEqual(['🤔 생각 중...'])
+    expect(texts(other.sent)).toEqual(['🤔 생각 중...'])
     expect(texts(dc.sent)).toEqual(['🤔 생각 중...'])
     expect(ask).toHaveBeenCalledTimes(2)
 
     const again = fakeOut(String)
-    decideAiQuestion('셋 어때?', telegramStateKey(id), again.out)
+    decideAiQuestion('셋 어때?', discordStateKey(`other-${id}`, String(id)), again.out)
     expect(texts(again.sent)).toEqual(['⏳ 이전 질문을 처리 중입니다. 잠시 후 다시 시도해주세요.'])
   })
 
@@ -129,10 +129,10 @@ describe('대화 상태 키 격리', () => {
 
   it('세션은 키별 · reset 은 자기 키만 지운다', async () => {
     const id = fresh()
-    const tgKey = telegramStateKey(id)
+    const otherKey = discordStateKey(`other-${id}`, String(id))
     const dcKey = discordStateKey(String(id), String(id))
-    ask.mockResolvedValueOnce({ response: '1', sessionId: 's-tg' } as never)
-    decideAiQuestion('하나 어때?', tgKey, fakeOut(String).out)
+    ask.mockResolvedValueOnce({ response: '1', sessionId: 's-other' } as never)
+    decideAiQuestion('하나 어때?', otherKey, fakeOut(String).out)
     await flush()
     ask.mockResolvedValueOnce({ response: '1', sessionId: 's-dc' } as never)
     decideAiQuestion('하나 어때?', dcKey, fakeOut(String).out)
@@ -140,14 +140,14 @@ describe('대화 상태 키 격리', () => {
     expect(ask.mock.calls[1][1]).toMatchObject({ sessionId: undefined })
 
     const reset = fakeOut(String)
-    await decideReset(tgKey, reset.out)
+    await decideReset(otherKey, reset.out)
     expect(texts(reset.sent)).toEqual(['🔄 AI 대화 세션이 초기화되었습니다.'])
 
     ask.mockResolvedValueOnce({ response: '2' } as never)
     decideAiQuestion('둘 어때?', dcKey, fakeOut(String).out)
     await flush()
     ask.mockResolvedValueOnce({ response: '2' } as never)
-    decideAiQuestion('둘 어때?', tgKey, fakeOut(String).out)
+    decideAiQuestion('둘 어때?', otherKey, fakeOut(String).out)
     await flush()
     expect(ask.mock.calls[2][1]).toMatchObject({ sessionId: 's-dc' })
     expect(ask.mock.calls[3][1]).toMatchObject({ sessionId: undefined })
@@ -173,7 +173,7 @@ describe('대화 상태 키 격리', () => {
       typing: async () => undefined,
       typingIntervalMs: 60_000,
     }
-    decideAiQuestion('설명 어때?', telegramStateKey(fresh()), out)
+    decideAiQuestion('설명 어때?', discordStateKey(String(fresh()), 'u1'), out)
     await flush()
     expect(sent.map((m) => [m.format, m.text])).toEqual([
       ['plain', '🤔 생각 중...'],
@@ -203,7 +203,7 @@ describe('aitrade: 대기 상태 — 메시지 키 · 요청자', () => {
   }
 
   it('확인 메시지는 plain · 버튼 한 행(확인 · 취소)', async () => {
-    const { preview, tradeId } = await startTrade((i) => telegramMessageKey(1, i), { userId: '7', dbUserId: '7' })
+    const { preview, tradeId } = await startTrade((i) => discordMessageKey('c1', String(i)), { userId: '7', dbUserId: '7' })
     expect(preview.format).toBe('plain')
     expect(preview.buttons).toEqual([[
       { label: '✅ 확인', action: `aitrade:confirm:${tradeId}` },
@@ -211,15 +211,15 @@ describe('aitrade: 대기 상태 — 메시지 키 · 요청자', () => {
     ]])
   })
 
-  it('같은 채널·메시지 번호라도 플랫폼이 다르면 다른 거래다', async () => {
+  it('같은 메시지 번호라도 채널이 다르면 다른 거래다', async () => {
     const id = fresh()
-    const { tradeId } = await startTrade(() => telegramMessageKey(id, 42), { userId: '7', dbUserId: '7' })
+    const { tradeId } = await startTrade(() => discordMessageKey(`other-${id}`, '42'), { userId: '7', dbUserId: '7' })
     const b = fakeButtons()
     await decideAiTradeButton(`aitrade:cancel:${tradeId}`, { messageKey: discordMessageKey(String(id), '42'), clickerId: '7' }, b.out)
     expect(b.steps).toEqual([['toast', '⚠️ 만료된 거래입니다.'], ['removeButtons']])
 
     const owner = fakeButtons()
-    await decideAiTradeButton(`aitrade:cancel:${tradeId}`, { messageKey: telegramMessageKey(id, 42), clickerId: '7' }, owner.out)
+    await decideAiTradeButton(`aitrade:cancel:${tradeId}`, { messageKey: discordMessageKey(`other-${id}`, '42'), clickerId: '7' }, owner.out)
     expect(owner.steps).toEqual([['toast', '취소되었습니다.'], ['removeButtons'], ['edit', '❌ 거래가 취소되었습니다.']])
   })
 

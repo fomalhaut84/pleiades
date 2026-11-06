@@ -1,21 +1,18 @@
-"""deploy/discord-switch.sh · discord-switch.cjs — T-10 Discord 승계 스위치 (#314).
+"""deploy/discord-switch.sh · discord-switch.cjs — Discord 플랫폼 설정 점검 (#314 · 009 D-5 B1 #502).
 
 실행: python3 -m unittest discover -s deploy
 Discord 에는 보내지 않는다(로컬 HTTP 스텁 · PLEIADES_DISCORD_BASE) · pm2 는 스텁. 핵심 계약: 값(웹훅 · 토큰 · ID)을
-출력하지 않는다 · 점검이 실패하면 아무것도 바꾸지 않는다 · on 은 스위치 4줄만 discord 로 · gateway 판정 실패면 텔레그램으로
-되돌린다 · off 는 4줄을 비운다 · 파일 권한 600 유지 · 백업은 비공개 위치에.
+출력하지 않는다 · 파일을 바꾸지 않는다 · 봇을 재시작하지 않는다 · 도는 프로세스가 이 파일을 읽어야 통과.
+옛 on·off(스위치 쓰기 · 봇 재시작 · 옛 채널 되돌리기)는 B1 에서 지웠다.
 """
-
 import http.server
 import json
-import re
 import os
 import shutil
 import stat
 import subprocess
 import tempfile
 import threading
-import time
 import unittest
 from pathlib import Path
 
@@ -43,20 +40,10 @@ FULL = "\n".join([
 ])
 SECRETS = ("SECRETHOOK", "BOTSECRET", "123456789012345678", "223456789012345678", "323456789012345678")
 
-# pm2 스텁 — restart 때 봇 로그에 gateway 줄을 쓴다(STUB_GATEWAY=ok|fatal|none) · jlist 는 STUB_ONLINE 에 따라
+# pm2 스텁 — jlist 만(점검은 봇을 재시작하지 않는다 · restart 가 불리면 STUB_CALLS 에 남는다)
 PM2_STUB = r"""#!/usr/bin/env bash
 case "$1" in
-  restart)
-    app=${2#pleiades-}; app=${app%-bot}
-    # STUB_FAIL_AFTER=n — n 번째 이후 restart 는 실패(첫 봇만 뜨고 나머지·되돌리기 재시작이 실패하는 경우)
-    n=$(( $(wc -l < "$STUB_CALLS" 2>/dev/null || echo 0) + 1 ))
-    if [[ -n "${STUB_FAIL_AFTER:-}" && $n -gt $STUB_FAIL_AFTER ]]; then echo "restart-fail $2" >> "$STUB_CALLS"; exit 1; fi
-    ts=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "restart $2" >> "$STUB_CALLS"
-    case "${STUB_GATEWAY:-ok}" in
-      ok) echo "$ts: [discord-$app] gateway 준비 완료" >> "$PLEIADES_PM2_LOGS/$2-error.log" ;;
-      fatal) echo "$ts: [discord-$app] gateway 종료 코드 4004 — 다시 접속하지 않는다(토큰·권한 확인)" >> "$PLEIADES_PM2_LOGS/$2-error.log" ;;
-    esac ;;
+  restart) echo "restart $2" >> "$STUB_CALLS" ;;
   jlist)
     s=${STUB_ONLINE:-online}
     echo "[PM2][WARN] 경고 줄"
@@ -98,8 +85,6 @@ class DiscordSwitch(unittest.TestCase):
         t = Path(self._tmp.name)
         self.home = t / "home"
         self.home.mkdir()
-        self.logs = t / "logs"
-        self.logs.mkdir()
         self.bin = t / "bin"
         self.bin.mkdir()
         (self.bin / "pm2").write_text(PM2_STUB)
@@ -120,10 +105,7 @@ class DiscordSwitch(unittest.TestCase):
             "PATH": f"{self.bin}:{NODE_DIR}:{BASE_PATH}",
             "HOME": str(self.home),
             "PLEIADES_TEST": "1",
-            "PLEIADES_LOCK": "mkdir",
-            "PLEIADES_PM2_LOGS": str(self.logs),
             "PLEIADES_DISCORD_BASE": f"http://127.0.0.1:{self.server.server_port}",
-            "PLEIADES_READY_WAIT": "6",
             "STUB_CALLS": str(self.calls),
             "STUB_ENV_FILE": str(self.env_file),
             **extra,
@@ -178,125 +160,34 @@ class DiscordSwitch(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("권한이 600 이 아니다", r.stdout)
 
-    def test_on_sets_four_switches_restarts_bots_and_judges_gateway(self):
-        r = self.run_sh("on", "--no-send")
+    def test_check_does_not_change_file_or_restart(self):
+        before = self.env_file.read_bytes()
+        r = self.run_sh("check", "--no-send")
         self.assertEqual(r.returncode, 0, r.stdout)
-        self.assertIn("결과: 통과 — Discord 승계", r.stdout)
-        self.assertIn("fin 봇 gateway 준비 1 · 종료 코드 0 · 미설정 0", r.stdout)
-        self.assertIn("되돌리기: deploy/discord-switch.sh off", r.stdout)
-        sw = self.switches()
-        for k in ("NOTIFY_ALLOWED_CHANNEL", "NOTIFY_ADMIN_CHANNEL", "NOTIFY_INTERACTIVE_CHANNEL", "NOTIFY_DEPLOY_CHANNEL"):
-            self.assertEqual(sw[k], '"discord"', k)
+        self.assertIn("시험 전송 생략(--no-send)", r.stdout)
+        self.assertEqual(self.env_file.read_bytes(), before)
         self.assertEqual(stat.S_IMODE(self.env_file.stat().st_mode), 0o600)
-        self.assertIn("SECRETHOOK444", self.env_file.read_text(), "다른 줄은 그대로")
-        self.assertIn("# 플랫폼 설정", self.env_file.read_text())
-        self.assertEqual(self.calls.read_text().split(), ["restart", "pleiades-fin-bot", "restart", "pleiades-fit-bot"])
-        backups = list((self.home / "pleiades-private").glob("platform-env-*.bak"))
-        self.assertEqual(len(backups), 1)
-        self.assertEqual(stat.S_IMODE((self.home / "pleiades-private").stat().st_mode), 0o700)
-        self.assertNotIn('"discord"', backups[0].read_text(), "백업은 바꾸기 전 것")
+        self.assertFalse(self.calls.exists(), "점검은 봇을 재시작하지 않는다")
+        self.assertEqual(Stub.calls, [])
 
-    def test_on_reverts_to_telegram_when_gateway_fails(self):
-        r = self.run_sh("on", "--no-send", STUB_GATEWAY="fatal")
-        self.assertEqual(r.returncode, 3, r.stdout)
-        self.assertIn("종료 코드 1", r.stdout)
-        self.assertIn("텔레그램으로 되돌렸다", r.stdout)
-        self.assertTrue(all(v == '""' for v in self.switches().values()))
-
-    def test_on_reverts_when_bots_not_online(self):
-        r = self.run_sh("on", "--no-send", STUB_ONLINE="errored")
-        self.assertEqual(r.returncode, 3, r.stdout)
-        self.assertTrue(all(v == '""' for v in self.switches().values()))
-
-    # 회귀: 사전 리뷰 major — 재시작 전에 있던 "준비 완료" 줄(시각이 미래여도)로 통과하지 않는다(바이트 오프셋)
-    def test_old_ready_line_does_not_pass(self):
-        for b in ("pleiades-fin-bot", "pleiades-fit-bot"):
-            app = b.split("-")[1]
-            (self.logs / f"{b}-error.log").write_text(f"2099-01-01 00:00:00: [discord-{app}] gateway 준비 완료\n")
-        r = self.run_sh("on", "--no-send", STUB_GATEWAY="none")
-        self.assertEqual(r.returncode, 3, r.stdout)
-        self.assertIn("fin 봇 gateway 준비 0", r.stdout)
-        self.assertTrue(all(v == '""' for v in self.switches().values()))
-
-    # 회귀: 서버 첫 on(2026-10-27) — 봇 로그가 error·out 둘이면 grep -q 가 첫 파일에서 끝나 다음 tail 이 SIGPIPE →
-    # pipefail 로 준비를 못 보고 상한까지 기다려 판정 실패했다
-    def test_ready_found_with_out_log_after_error_log(self):
-        stub = (self.bin / "pm2").read_text().replace(
-            '    case "${STUB_GATEWAY:-ok}" in',
-            '    head -c 2000000 /dev/zero | tr "\\0" "x" >> "$PLEIADES_PM2_LOGS/$2-out.log"; echo >> "$PLEIADES_PM2_LOGS/$2-out.log"\n'
-            '    case "${STUB_GATEWAY:-ok}" in')
-        (self.bin / "pm2").write_text(stub)
-        r = self.run_sh("on", "--no-send", PLEIADES_READY_WAIT="9")
+    # 회귀: #502 — S0(.server-scripts) 가 state 출력의 `=discord` 개수를 센다 · discord 가 아니면 `미설정`(옛 채널 이름이 아니다)
+    def test_state_prints_discord_or_unset_never_legacy_channel(self):
+        self.write_env(FULL.replace('NOTIFY_ADMIN_CHANNEL=""', 'NOTIFY_ADMIN_CHANNEL="discord"'))
+        r = subprocess.run(["node", str(HERE / "discord-switch.cjs"), "state", str(self.env_file)], capture_output=True, text=True, timeout=30)
         self.assertEqual(r.returncode, 0, r.stdout)
-        self.assertIn("대기 0s", r.stdout)
+        self.assertIn("F 스위치 ALLOWED=미설정 ADMIN=discord INTERACTIVE=미설정 DEPLOY=미설정", r.stdout)
+        self.assertNotIn("telegram", r.stdout)
+        self.assertEqual(r.stdout.count("=discord"), 1)
 
-    def test_rotated_log_is_read_from_start(self):
-        big = "x" * 5000 + "\n"
-        for b in ("pleiades-fin-bot", "pleiades-fit-bot"):
-            (self.logs / f"{b}-error.log").write_text(big)
-        # 스텁이 restart 때 로그를 비우고(로테이션) 새 줄만 쓴다
-        stub = (self.bin / "pm2").read_text().replace('    case "${STUB_GATEWAY:-ok}" in', '    : > "$PLEIADES_PM2_LOGS/$2-error.log"\n    case "${STUB_GATEWAY:-ok}" in')
-        (self.bin / "pm2").write_text(stub)
-        r = self.run_sh("on", "--no-send")
-        self.assertEqual(r.returncode, 0, r.stdout)
+    def test_cjs_has_no_set_command(self):
+        before = self.env_file.read_bytes()
+        r = subprocess.run(["node", str(HERE / "discord-switch.cjs"), "set", str(self.env_file), "discord"], capture_output=True, text=True, timeout=30)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("사용법: <check|state>", r.stdout)
+        self.assertEqual(self.env_file.read_bytes(), before)
 
-    # 회귀: 사전 리뷰 major — 되돌린 뒤 재시작도 실패하면 "되돌렸다" 로 덮지 않는다
-    def test_revert_restart_failure_is_reported(self):
-        r = self.run_sh("on", "--no-send", STUB_FAIL_AFTER="1")
-        self.assertEqual(r.returncode, 3, r.stdout)
-        self.assertIn("되돌림 · 봇 online: 아니오", r.stdout)
-        self.assertIn("앞서 뜬 봇은 discord 설정일 수 있다", r.stdout)
-        self.assertNotIn("텔레그램으로 되돌렸다", r.stdout)
-        self.assertTrue(all(v == '""' for v in self.switches().values()))
-
-    # 회귀: PR #315 Codex P2 — 스위치를 쓴 뒤 신호로 끊기면 텔레그램으로 되돌린다
-    def test_signal_after_switch_reverts(self):
-        env = {
-            "PATH": f"{self.bin}:{NODE_DIR}:{BASE_PATH}", "HOME": str(self.home), "PLEIADES_TEST": "1",
-            "PLEIADES_LOCK": "mkdir", "PLEIADES_PM2_LOGS": str(self.logs), "PLEIADES_READY_WAIT": "30",
-            "STUB_CALLS": str(self.calls), "STUB_GATEWAY": "none", "STUB_ENV_FILE": str(self.env_file),
-        }
-        p = subprocess.Popen(["bash", str(SH), "on", "--no-send"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
-        for _ in range(100):   # 판정 대기에 들어설 때까지(스위치 discord · 재시작 끝)
-            if self.calls.exists() and len(self.calls.read_text().split()) >= 4:
-                break
-            time.sleep(0.1)
-        time.sleep(1)
-        self.assertEqual(self.switches()["NOTIFY_ALLOWED_CHANNEL"], '"discord"')
-        p.terminate()
-        out, _ = p.communicate(timeout=30)
-        self.assertEqual(p.returncode, 3, out)
-        self.assertIn("중단 신호 — 텔레그램으로 되돌렸다", out)
-        self.assertTrue(all(v == '""' for v in self.switches().values()))
-        self.assertFalse((self.home / "pleiades-private" / "deploy.lock.d").exists(), "락은 풀린다")
-
-    def test_on_does_nothing_when_check_fails(self):
-        self.write_env(FULL.replace('DISCORD_ALLOWED_USER_IDS="323456789012345678"', 'DISCORD_ALLOWED_USER_IDS=""'))
-        r = self.run_sh("on", "--no-send")
-        self.assertEqual(r.returncode, 1, r.stdout)
-        self.assertIn("바꾸지 않았다", r.stdout)
-        self.assertFalse(self.calls.exists())
-        self.assertFalse(list((self.home / "pleiades-private").glob("*.bak")))
-
-    def test_off_clears_switches_and_appends_missing_deploy_switch(self):
-        self.write_env(FULL.replace('NOTIFY_ALLOWED_CHANNEL=""', 'NOTIFY_ALLOWED_CHANNEL="discord"'))
-        r = self.run_sh("off")
-        self.assertEqual(r.returncode, 0, r.stdout)
-        self.assertIn("텔레그램으로 돌아왔다", r.stdout)
-        sw = self.switches()
-        self.assertEqual(len(sw), 4, "없던 NOTIFY_DEPLOY_CHANNEL 줄을 더한다")
-        self.assertTrue(all(v == '""' for v in sw.values()))
-
-    def test_lock_held_by_deploy_stops_before_change(self):
-        (self.home / "pleiades-private" / "deploy.lock.d").mkdir(parents=True)
-        r = self.run_sh("on", "--no-send")
-        self.assertEqual(r.returncode, 1, r.stdout)
-        self.assertIn("배포가 이 서버에서 진행 중", r.stdout)
-        self.assertEqual(self.switches()["NOTIFY_ALLOWED_CHANNEL"], '""')
-
-    # 회귀: PR #318 Codex P2 — 도는 프로세스가 다른 플랫폼 파일을 읽으면 바꾸기 전에 거부한다
     def test_running_processes_must_read_this_file(self):
-        r = self.run_sh("on", "--no-send", STUB_ENV_FILE="/elsewhere/pleiades-platform.env")
+        r = self.run_sh("check", "--no-send", STUB_ENV_FILE="/elsewhere/pleiades-platform.env")
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("DIFF/MISSING 4", r.stdout)
         self.assertIn("PLEIADES_ENV_FILE 이 이 파일과 다르거나", r.stdout)
@@ -305,8 +196,10 @@ class DiscordSwitch(unittest.TestCase):
         self.assertFalse(self.calls.exists())
 
     def test_usage(self):
-        self.assertEqual(self.run_sh("off", "--no-send").returncode, 2)
-        self.assertEqual(self.run_sh("bogus").returncode, 2)
+        for args in (("on",), ("off",), ("on", "--no-send"), ("bogus",), ()):
+            with self.subTest(args=args):
+                self.assertEqual(self.run_sh(*args).returncode, 2)
+        self.assertFalse(self.calls.exists())
 
     def test_refuses_on_darwin_outside_tests(self):
         if os.uname().sysname != "Darwin":
@@ -315,61 +208,6 @@ class DiscordSwitch(unittest.TestCase):
         r = subprocess.run(["bash", str(SH), "check", "--no-send"], capture_output=True, text=True, env=env, timeout=30)
         self.assertEqual(r.returncode, 1)
         self.assertIn("서버 전용", r.stdout)
-
-
-class JudgeStringContract(unittest.TestCase):
-    """discord-switch.sh 판정 문자열 ↔ 실제로 그 줄을 찍는 파일 (009 D-1 · #347 · L16′ · N10).
-
-    스위치는 봇 로그에서 세 가지를 grep 한다 — 준비 완료 · 종료 코드 · 미설정 2문구. 앞 둘은 gateway 패키지가,
-    미설정 문구는 앱 파일이 찍는다. 어느 한쪽만 바뀌면 운영 판정이 조용히 깨지므로(준비를 못 보면 자동 off) 함께 고정한다.
-    """
-
-    REPO = HERE.parent
-    SWITCH = SH.read_text()
-    APPS = {"fin": "finance", "fit": "fitness"}
-    UNSET = ("봇 토큰·채널 미설정", "DISCORD_ALLOWED_USER_IDS 비어 있음")
-
-    def test_switch_greps_the_three_lines(self):
-        for needle in ("gateway 준비 완료", "gateway 종료 코드", *self.UNSET):
-            with self.subTest(needle=needle):
-                self.assertIn(needle, self.SWITCH)
-
-    def test_gateway_packages_print_ready_and_fatal_with_label(self):
-        for pkg in ("packages/chat/src/gateway.ts", "packages/notify/src/discord-gateway.ts"):
-            text = (self.REPO / pkg).read_text()
-            with self.subTest(pkg=pkg):
-                self.assertIn("`[${label}] gateway 준비 완료`", text)
-                self.assertIn("`[${label}] gateway 종료 코드 ${code}", text)
-
-    def test_apps_print_unset_lines_literally_and_use_switch_label(self):
-        for app, d in self.APPS.items():
-            text = (self.REPO / f"apps/{d}/src/bot/notifications/discord-interactions.ts").read_text()
-            with self.subTest(app=app):
-                for needle in self.UNSET:
-                    self.assertIn(f"[discord-{app}] {needle}", text)
-                self.assertRegex(text, rf"""(label: ['"]discord-{app}['"]|LABEL = ['"]discord-{app}['"])""")
-
-    # 009 D-2 PR-3 (#367 · [A]C2 · W12): 메시지 수신 줄 2 · 4014 강등 줄 · 강등 알림 경고는 스위치 판정을 건드리지 않는다 —
-    # `gateway 종료 코드`(자동 off) · 미설정 2문구 grep 에 걸리지 않는다(버튼은 살아 있다)
-    def test_inbound_lines_do_not_trip_switch_greps(self):
-        fit = (self.REPO / "apps/fitness/src/bot/notifications/discord-interactions.ts").read_text()
-        gateway = (self.REPO / "packages/chat/src/gateway.ts").read_text()
-        lines = [
-            "[discord-fit] 메시지 수신 켜짐(대화 채널)",
-            "[discord-fit] 메시지 수신 꺼짐(버튼만)",
-            "4014 강등 알림 미전송",
-        ]
-        for line in lines:
-            self.assertIn(line, fit)
-        degrade = "MESSAGE CONTENT 미허용(4014) — intents ${intents} 로 낮춰 다시 접속한다(메시지 수신 꺼짐) · 포털 토글을 켠다"
-        self.assertIn(degrade, gateway)
-        lines.append(f"[discord-fit] {degrade.replace('${intents}', '0')}")
-        unset_re = re.compile(r"\[discord-fit\] (봇 토큰·채널 미설정|DISCORD_ALLOWED_USER_IDS 비어 있음)")
-        for line in lines:
-            with self.subTest(line=line):
-                self.assertNotIn("gateway 종료 코드", line)
-                self.assertNotIn("gateway 준비 완료", line)
-                self.assertIsNone(unset_re.search(line))
 
 
 if __name__ == "__main__":

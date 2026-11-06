@@ -1,6 +1,4 @@
-import type { Bot } from "grammy";
 import { htmlReply, plainReply, type BotReply } from "../core/reply";
-import { sendTelegramReply } from "../utils/telegram-reply";
 import prisma from "../prisma";
 import { formatDateKST } from "../../lib/format";
 import { fmtSleepTime, fmtTime } from "../utils/formatter";
@@ -33,10 +31,4 @@ export async function decideSleep(): Promise<BotReply> {
   if (recent.bodyBatteryChange !== null) lines.push(`🔋 배터리 충전: +${recent.bodyBatteryChange}`);
 
   return htmlReply(lines.join("\n"));
-}
-
-export function registerSleepCommand(bot: Bot) {
-  bot.command("sleep", async (ctx) => {
-    await sendTelegramReply(ctx, await decideSleep());
-  });
 }

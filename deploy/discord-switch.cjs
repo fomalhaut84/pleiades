@@ -1,17 +1,16 @@
 #!/usr/bin/env node
-// discord-switch.cjs — discord-switch.sh 의 노드 쪽 (#314 · 007 T-10). 플랫폼 설정 파일을 읽고·점검하고·스위치 줄만 고친다.
+// discord-switch.cjs — discord-switch.sh 의 노드 쪽 (#314 · 007 T-10). 플랫폼 설정 파일을 읽고 점검한다(쓰지 않는다).
 //
 // 사용:  node deploy/discord-switch.cjs check <파일> [--no-send]   필요한 키 · 형식 · (기본) 웹훅·봇 채널에 시험 메시지 1건씩
-//        node deploy/discord-switch.cjs set <파일> <discord|telegram>   스위치 4줄만 바꾼다(나머지 줄·주석·권한 그대로)
-//        node deploy/discord-switch.cjs state <파일>                    스위치 4줄의 지금 값
+//        node deploy/discord-switch.cjs state <파일>                    스위치 4줄의 지금 값(discord 가 아니면 미설정)
+// 스위치를 바꾸는 set 은 009 D-5 B1(#502)에서 지웠다 — 옛 채널로 돌아갈 곳이 없다. 옛 on·off 는 그 이전 태그에 있다.
 // 출력: 판정 양식 줄("F <줄>")과 마지막 "RESULT ok|fail". 값(웹훅 URL · 토큰 · ID)은 내지 않는다 — 키 이름과 개수만.
 // 의존성 없음 — 해석은 packages/notify platform-env 와 같은 규칙(따옴표 값 · 따옴표 없는 값은 " #" 앞까지)으로 플랫폼 키만.
 'use strict'
 
 const fs = require('fs')
-const path = require('path')
 
-// 라우트 스위치 — 텍스트 2 · 버튼 1 · 배포 알림 1(#304). 켤 때·끌 때 넷을 함께 바꾼다(동시 모드 없음 · 사용자 2026-10-22)
+// 라우트 스위치 — 텍스트 2 · 버튼 1 · 배포 알림 1(#304). 읽기만 한다(S0 판정 · 009 D-5)
 const SWITCHES = ['NOTIFY_ALLOWED_CHANNEL', 'NOTIFY_ADMIN_CHANNEL', 'NOTIFY_INTERACTIVE_CHANNEL', 'NOTIFY_DEPLOY_CHANNEL']
 const WEBHOOKS = { FINANCE: 'DISCORD_WEBHOOK_FINANCE', FITNESS: 'DISCORD_WEBHOOK_FITNESS', ADMIN: 'DISCORD_WEBHOOK_ADMIN', DEPLOY: 'DISCORD_WEBHOOK_DEPLOY' }
 const BOTS = { FINANCE: ['DISCORD_BOT_TOKEN_FINANCE', 'DISCORD_CHANNEL_ID_FINANCE'], FITNESS: ['DISCORD_BOT_TOKEN_FITNESS', 'DISCORD_CHANNEL_ID_FITNESS'] }
@@ -139,64 +138,21 @@ async function check(file, send) {
 }
 
 function stateLine(values) {
-  return SWITCHES.map((k) => `${k.replace(/^NOTIFY_|_CHANNEL$/g, '')}=${values[k] === 'discord' ? 'discord' : 'telegram'}`).join(' ')
-}
-
-// 스위치 줄만 바꾼다 — 같은 디렉터리 임시 파일(600)에 쓰고 rename(중간 상태를 앱이 읽지 않게 · mtime 이 바뀌어 웹은 다음 호출부터 반영)
-function set(file, to) {
-  if (to !== 'discord' && to !== 'telegram') {
-    out('사용법: set <파일> <discord|telegram>')
-    return finish(false)
-  }
-  const value = to === 'discord' ? 'discord' : ''
-  let text
-  try {
-    text = fs.readFileSync(file, 'utf8')
-  } catch {
-    out('플랫폼 설정을 읽지 못했다')
-    return finish(false)
-  }
-  const seen = new Set()
-  const lines = text.split('\n').map((line) => {
-    const m = LINE_RE.exec(line)
-    if (/^\s*#/.test(line) || m === null || !SWITCHES.includes(m[1])) return line
-    seen.add(m[1])
-    return `${m[1]}="${value}"`
-  })
-  const missing = SWITCHES.filter((k) => !seen.has(k))
-  if (missing.length) {
-    if (lines.length && lines[lines.length - 1] === '') lines.pop()
-    lines.push(...missing.map((k) => `${k}="${value}"`), '')
-  }
-  const tmp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.tmp`)
-  try {
-    fs.writeFileSync(tmp, lines.join('\n'), { mode: 0o600 })
-    fs.chmodSync(tmp, 0o600)
-    fs.renameSync(tmp, file)
-  } catch {
-    try {
-      fs.unlinkSync(tmp)
-    } catch {}
-    out('플랫폼 설정을 쓰지 못했다')
-    return finish(false)
-  }
-  out(`스위치 ${stateLine(read(file).values)}${missing.length ? ` (줄 추가 ${missing.length})` : ''}`)
-  return finish(true)
+  return SWITCHES.map((k) => `${k.replace(/^NOTIFY_|_CHANNEL$/g, '')}=${values[k] === 'discord' ? 'discord' : '미설정'}`).join(' ')
 }
 
 function main() {
   const [cmd, file, ...rest] = process.argv.slice(2)
   if (!file) {
-    out('사용법: <check|set|state> <파일> …')
+    out('사용법: <check|state> <파일> …')
     return finish(false)
   }
   if (cmd === 'check') return check(file, !rest.includes('--no-send'))
-  if (cmd === 'set') return set(file, rest[0])
   if (cmd === 'state') {
     out(`스위치 ${stateLine(read(file).values)}`)
     return finish(true)
   }
-  out('사용법: <check|set|state> <파일> …')
+  out('사용법: <check|state> <파일> …')
   return finish(false)
 }
 

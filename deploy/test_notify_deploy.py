@@ -1,10 +1,11 @@
-"""deploy/notify-deploy.cjs · ssh-deploy.sh 알림 연결 — 자동 배포 완료·중단 알림 (#304).
+"""deploy/notify-deploy.cjs · ssh-deploy.sh 알림 연결 — 자동 배포 완료·중단 알림 (#304 · 009 D-5 B1 #502).
 
 실행: python3 -m unittest discover -s deploy
-텔레그램에는 보내지 않는다(PLEIADES_TEST=1 NOTIFY_DRY_RUN=1). 핵심 계약: 토큰·채팅 ID 를 출력하지 않는다 ·
-fin = 관리자 경로 · fit = ALLOWED · 설정이 비면 보내지 않고 0 · ssh-deploy 는 앱마다 결과를 넘긴다.
+Discord 에는 보내지 않는다(PLEIADES_TEST=1 NOTIFY_DRY_RUN=1 · fetch 스텁). 핵심 계약: 웹훅을 출력하지 않는다 ·
+늘 Discord 배포 채널(스위치를 읽지 않는다 · 옛 채널 대체 없음) · 웹훅이 비면 보내지 않고 0 · ssh-deploy 는 앱마다 결과를 넘긴다.
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -45,109 +46,90 @@ class NotifyDeploy(unittest.TestCase):
         return subprocess.run(["node", str(self.root / "deploy" / "notify-deploy.cjs"), *args],
                               capture_output=True, text=True, env=env, timeout=30)
 
-    def test_fin_goes_to_admin_route_and_hides_secrets(self):
-        self.env_file("finance", 'TELEGRAM_BOT_TOKEN="123:SECRETTOKEN"\nTELEGRAM_ALLOWED_CHAT_IDS=111,222\nTELEGRAM_ADMIN_CHAT_IDS=999\n')
-        r = self.run_notify("fin", "ok", "v1.0.5", "소요 129s · 프로브 오류 응답 0")
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertIn("수신자 1", r.stdout)
-        self.assertIn("✅ <b>fin v1.0.5 배포 완료</b>", r.stdout)
-        self.assertIn("소요 129s", r.stdout)
-        self.assertIn("https://github.com/fomalhaut84/pleiades/releases/tag/v1.0.5", r.stdout)
-        for secret in ("SECRETTOKEN", "999", "111"):
-            self.assertNotIn(secret, r.stdout + r.stderr)
-
-    def test_fit_uses_allowed_route(self):
-        self.env_file("fitness", 'TELEGRAM_BOT_TOKEN=1:X\nTELEGRAM_ALLOWED_CHAT_IDS=" 555 , 666 "\n')
-        r = self.run_notify("fit", "fail", "v1.0.5", "rc 4 · 중단 — C5 <확인 실패>")
-        self.assertIn("수신자 2", r.stdout)
-        self.assertIn("⚠️ <b>fit v1.0.5 배포 중단</b>", r.stdout)
-        self.assertIn("&lt;확인 실패&gt;", r.stdout)   # HTML 이스케이프
-        self.assertIn("Actions 실행 요약", r.stdout)
-
-    def test_missing_config_does_not_fail_the_deploy(self):
-        self.env_file("finance", "TELEGRAM_BOT_TOKEN=1:X\nTELEGRAM_ADMIN_CHAT_IDS=\n")
-        r = self.run_notify("fin", "ok", "v1.0.5", "x")
-        self.assertEqual(r.returncode, 0)
-        self.assertIn("수신자(TELEGRAM_ADMIN_CHAT_IDS)가 비어 있다", r.stdout)
-        r = self.run_notify("fit", "ok", "v1.0.5", "x")   # .env 없음
-        self.assertEqual(r.returncode, 0)
-        self.assertIn(".env 를 읽지 못했다", r.stdout)
-
-    def test_bad_arguments_send_nothing(self):
-        self.env_file("finance", "TELEGRAM_BOT_TOKEN=1:X\nTELEGRAM_ADMIN_CHAT_IDS=9\n")
-        for args in (("xxx", "ok", "v1.0.5"), ("fin", "maybe", "v1.0.5"), ("fin", "ok", "1.0.5"), ("fin", "ok", "v1.0.5; rm")):
-            r = self.run_notify(*args)
-            self.assertEqual(r.returncode, 0)
-            self.assertIn("보내지 않았다", r.stdout)
-
-    # T-10(#314) — 배포 알림 Discord 별도 채널 · 동시 모드 없음 · 실패 시 텔레그램으로 대신
     def platform(self, text: str) -> str:
         f = self.root / "platform.env"
         f.write_text(text)
         return str(f)
 
-    def test_discord_switch_on_sends_only_to_deploy_webhook(self):
-        self.env_file("finance", "TELEGRAM_BOT_TOKEN=1:X\nTELEGRAM_ADMIN_CHAT_IDS=9\n")
-        pf = self.platform('NOTIFY_DEPLOY_CHANNEL="discord"\nDISCORD_WEBHOOK_DEPLOY="https://discord.com/api/webhooks/1/SECRETHOOK"\n')
-        r = self.run_notify("fin", "fail", "v1.0.7", "rc 1 · 중단 — C4 *빌드* 실패", PLEIADES_ENV_FILE=pf)
+    HOOK = 'DISCORD_WEBHOOK_DEPLOY="https://discord.com/api/webhooks/1/SECRETHOOK"\n'
+
+    def test_sends_to_deploy_webhook_and_hides_it(self):
+        r = self.run_notify("fin", "fail", "v1.0.7", "rc 1 · 중단 — C4 *빌드* <확인 실패>", PLEIADES_ENV_FILE=self.platform(self.HOOK))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("(dry-run) Discord 배포 채널", r.stdout)
         self.assertIn("⚠️ **fin v1.0.7 배포 중단**", r.stdout)
         self.assertIn("\\*빌드\\*", r.stdout)   # 마크다운 escape
-        self.assertNotIn("수신자", r.stdout, "텔레그램으로는 보내지 않는다")
+        self.assertIn("\\<확인 실패\\>", r.stdout)
+        self.assertIn("Actions 실행 요약", r.stdout)
+        self.assertIn("https://github.com/fomalhaut84/pleiades/releases/tag/v1.0.7", r.stdout)
         self.assertNotIn("SECRETHOOK", r.stdout + r.stderr)
 
-    def test_discord_webhook_without_switch_stays_on_telegram(self):
-        self.env_file("finance", "TELEGRAM_BOT_TOKEN=1:X\nTELEGRAM_ADMIN_CHAT_IDS=9\n")
-        pf = self.platform('NOTIFY_DEPLOY_CHANNEL=""\nDISCORD_WEBHOOK_DEPLOY="https://discord.com/api/webhooks/1/S"\n')
-        r = self.run_notify("fin", "ok", "v1.0.7", "x", PLEIADES_ENV_FILE=pf)
-        self.assertIn("수신자 1", r.stdout)
+    def test_ok_message(self):
+        r = self.run_notify("fit", "ok", "v1.0.5", "소요 129s · 프로브 오류 응답 0", PLEIADES_ENV_FILE=self.platform(self.HOOK))
+        self.assertIn("✅ **fit v1.0.5 배포 완료**", r.stdout)
+        self.assertIn("소요 129s", r.stdout)
+        self.assertNotIn("Actions 실행 요약", r.stdout)
 
-    def test_discord_failure_falls_back_to_telegram(self):
+    # 회귀: #502 — 스위치를 읽지 않는다(R2 뒤 앱과 같다) · 옛 채널 키가 있어도 옛 채널로 가지 않는다
+    def test_switch_is_ignored_and_legacy_channel_is_never_used(self):
         self.env_file("finance", "TELEGRAM_BOT_TOKEN=1:SECRETTOKEN\nTELEGRAM_ADMIN_CHAT_IDS=9\n")
-        pf = self.platform('NOTIFY_DEPLOY_CHANNEL=discord\nDISCORD_WEBHOOK_DEPLOY=https://discord.com/api/webhooks/1/SECRETHOOK\n')
-        (self.root / "split.cjs").write_text(
-            "globalThis.fetch = async (u, o) => { require('fs').appendFileSync(process.env.CALLS, JSON.parse(o.body).content ? 'discord\\n' : 'telegram\\n');"
-            " return u.includes('discord') ? { ok: false, status: 404, body: null } : { ok: true, status: 200, body: null } }\n")
-        calls = self.root / "calls"
-        r = self.run_notify("fin", "ok", "v1.0.7", "x", dry=False, PLEIADES_ENV_FILE=pf, CALLS=str(calls),
-                            NODE_OPTIONS="--require=" + str(self.root / "split.cjs"))
-        self.assertEqual(r.returncode, 0)
-        self.assertIn("보냄 1/1 (Discord 실패 HTTP 404 — 텔레그램으로 대신)", r.stdout)
-        self.assertEqual(calls.read_text().split(), ["discord", "telegram"])
-        self.assertNotIn("SECRET", r.stdout + r.stderr)
+        r = self.run_notify("fin", "ok", "v1.0.7", "x", PLEIADES_ENV_FILE=self.platform('NOTIFY_DEPLOY_CHANNEL=""\n' + self.HOOK))
+        self.assertIn("(dry-run) Discord 배포 채널", r.stdout)
+        self.assertNotIn("수신자", r.stdout)
+        self.assertNotIn("SECRETTOKEN", r.stdout + r.stderr)
+        self.assertNotIn("telegram", (self.root / "deploy" / "notify-deploy.cjs").read_text().lower())
+
+    # 회귀: #502 사전 리뷰 info — 읽기 실패와 키 없음을 다른 문구로
+    def test_missing_webhook_does_not_fail_the_deploy(self):
+        cases = (({"PLEIADES_ENV_FILE": self.platform("DISCORD_WEBHOOK_DEPLOY=\n")}, "DISCORD_WEBHOOK_DEPLOY 가 비어 있다"),
+                 ({"PLEIADES_ENV_FILE": str(self.root / "none.env")}, "플랫폼 설정을 읽지 못했다"),
+                 ({}, "플랫폼 설정 위치가 없다"))
+        for pf, why in cases:
+            with self.subTest(env=pf):
+                r = self.run_notify("fin", "ok", "v1.0.5", "x", **pf)
+                self.assertEqual(r.returncode, 0)
+                self.assertIn(f"보내지 않았다 — {why}", r.stdout)
+
+    def test_bad_arguments_send_nothing(self):
+        pf = self.platform(self.HOOK)
+        for args in (("xxx", "ok", "v1.0.5"), ("fin", "maybe", "v1.0.5"), ("fin", "ok", "1.0.5"), ("fin", "ok", "v1.0.5; rm")):
+            r = self.run_notify(*args, PLEIADES_ENV_FILE=pf)
+            self.assertEqual(r.returncode, 0)
+            self.assertIn("보내지 않았다", r.stdout)
 
     def test_test_mode_never_reads_home_platform_file(self):
         home = self.root / "home"
         home.mkdir()
-        (home / "pleiades-platform.env").write_text("NOTIFY_DEPLOY_CHANNEL=discord\nDISCORD_WEBHOOK_DEPLOY=https://discord.com/api/webhooks/1/S\n")
-        self.env_file("finance", "TELEGRAM_BOT_TOKEN=1:X\nTELEGRAM_ADMIN_CHAT_IDS=9\n")
+        (home / "pleiades-platform.env").write_text(self.HOOK)
         r = self.run_notify("fin", "ok", "v1.0.7", "x", HOME=str(home))
-        self.assertIn("수신자 1", r.stdout)
+        self.assertIn("플랫폼 설정 위치가 없다", r.stdout)
+
+    def run_real(self, stub: str) -> subprocess.CompletedProcess:
+        (self.root / "stub.cjs").write_text(stub)
+        env = {"PATH": f"{NODE_DIR}:{BASE_PATH}", "NODE_OPTIONS": "--require=" + str(self.root / "stub.cjs"),
+               "PLEIADES_ENV_FILE": self.platform(self.HOOK), "CALLS": str(self.root / "calls")}
+        return subprocess.run(["node", str(self.root / "deploy" / "notify-deploy.cjs"), "fin", "ok", "v1.0.5", "x"],
+                              capture_output=True, text=True, env=env, timeout=30)
+
+    def test_real_send_posts_once_without_mentions(self):
+        r = self.run_real("globalThis.fetch = async (u, o) => { require('fs').appendFileSync(process.env.CALLS, o.body + '\\n'); return { ok: true, status: 204, body: null } }\n")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("fin 보냄 Discord 배포 채널", r.stdout)
+        bodies = (self.root / "calls").read_text().splitlines()
+        self.assertEqual(len(bodies), 1)
+        self.assertEqual(json.loads(bodies[0])["allowed_mentions"], {"parse": []})
 
     def test_http_error_reports_status_only(self):
-        # 비-2xx — 상태 코드만 · 토큰 없음(비출력 계약의 나머지 반쪽 · 사전 리뷰 info)
-        self.env_file("finance", "TELEGRAM_BOT_TOKEN=1:SECRETTOKEN\nTELEGRAM_ADMIN_CHAT_IDS=9\n")
-        (self.root / "http401.cjs").write_text("globalThis.fetch = async () => ({ ok: false, status: 401, body: null })\n")
-        env = {"PATH": f"{NODE_DIR}:{BASE_PATH}", "NODE_OPTIONS": "--require=" + str(self.root / "http401.cjs"),
-               "PLEIADES_ENV_FILE": str(self.root / "none.env")}
-        r = subprocess.run(["node", str(self.root / "deploy" / "notify-deploy.cjs"), "fin", "ok", "v1.0.5", "x"],
-                           capture_output=True, text=True, env=env, timeout=30)
+        r = self.run_real("globalThis.fetch = async () => ({ ok: false, status: 404, body: null })\n")
         self.assertEqual(r.returncode, 0)
-        self.assertIn("실패 HTTP 401", r.stdout)
-        self.assertNotIn("SECRETTOKEN", r.stdout + r.stderr)
+        self.assertIn("Discord 배포 채널 실패 HTTP 404", r.stdout)
+        self.assertNotIn("SECRETHOOK", r.stdout + r.stderr)
 
-    def test_real_send_failure_hides_token(self):
-        # 실제 전송 경로 — 접속이 실패해도 토큰이 담긴 URL 을 내지 않고 0 으로 끝난다(네트워크 없이 · 잘못된 프록시로 실패시킨다)
-        self.env_file("finance", "TELEGRAM_BOT_TOKEN=1:SECRETTOKEN\nTELEGRAM_ADMIN_CHAT_IDS=9\n")
-        env = {"PATH": f"{NODE_DIR}:{BASE_PATH}", "NODE_OPTIONS": "--require=" + str(self.root / "nofetch.cjs"),
-               "PLEIADES_ENV_FILE": str(self.root / "none.env")}
-        (self.root / "nofetch.cjs").write_text("globalThis.fetch = async (u) => { throw new TypeError('fetch failed ' + u) }\n")
-        r = subprocess.run(["node", str(self.root / "deploy" / "notify-deploy.cjs"), "fin", "ok", "v1.0.5", "x"],
-                           capture_output=True, text=True, env=env, timeout=30)
+    def test_real_send_failure_hides_webhook(self):
+        r = self.run_real("globalThis.fetch = async (u) => { throw new TypeError('fetch failed ' + u) }\n")
         self.assertEqual(r.returncode, 0)
-        self.assertIn("보냄 0/1 · 실패 TypeError", r.stdout)
-        self.assertNotIn("SECRETTOKEN", r.stdout + r.stderr)
+        self.assertIn("실패 TypeError", r.stdout)
+        self.assertNotIn("SECRETHOOK", r.stdout + r.stderr)
 
 
 class SshDeployNotifies(unittest.TestCase):

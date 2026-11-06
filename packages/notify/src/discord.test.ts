@@ -107,7 +107,7 @@ describe('createDiscordTransport', () => {
 
   it('components 는 지원하지 않는다 — 버튼을 조용히 버리지 않는다 (1b-2)', async () => {
     const { transport, fetch } = setup([]);
-    await expect(transport.send('finance', html('x', { inline_keyboard: [] }))).rejects.toThrow('components');
+    await expect(transport.send('finance', html('x', [[{ label: 'ok', action: 'c' }]]))).rejects.toThrow('components');
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -251,20 +251,23 @@ describe('Notifier + DiscordTransport (어댑터 소유 모드)', () => {
     expect(String(logger.error.mock.calls[0][0])).toContain('[fin] 메시지 전송 실패 (finance)');
   });
 
-  it('텔레그램과 Discord 를 Route 별로 섞어 쓸 수 있다 (Q11 혼합 운영)', async () => {
-    const fetch = vi.fn<FetchLike>(async () => res(200, { id: 'd1' }));
-    const sendMessage = vi.fn(async () => ({ message_id: 7 }));
-    const { createTelegramTransport } = await import('./telegram');
+  // 009 D-5 B5: 혼합은 웹훅 · 봇 두 Discord transport 다(Q11 Route → Transport 맵은 그대로)
+  it('Route 별로 다른 Discord transport(웹훅 · 봇)를 쓸 수 있다', async () => {
+    const fetch = vi.fn<FetchLike>(async (url) => res(200, { id: String(url).includes('/channels/') ? 'b1' : 'd1' }));
+    const { createDiscordBotTransport } = await import('./discord-bot');
     const notifier = createNotifier({
       transport: {
         ALLOWED: createDiscordTransport({ webhooks: { finance: URL_FIN }, fetch }),
-        ADMIN: createTelegramTransport({ api: { sendMessage } }),
+        ADMIN: createDiscordBotTransport({ token: 'tok', channels: { admin: '123456789012345678' }, fetch }),
       },
-      targets: { ALLOWED: () => ['finance'], ADMIN: () => ['42'] },
+      targets: { ALLOWED: () => ['finance'], ADMIN: () => ['admin'] },
     });
     await expect(notifier.notify(Route.ALLOWED, html('<b>a</b>'))).resolves.toMatchObject({ sent: 1, first: { ref: 'd1' } });
-    await expect(notifier.notify(Route.ADMIN, html('<b>a</b>'))).resolves.toMatchObject({ sent: 1, first: { ref: '7' } });
-    expect(sendMessage).toHaveBeenCalledWith('42', '<b>a</b>', { parse_mode: 'HTML' });
+    await expect(notifier.notify(Route.ADMIN, html('<b>a</b>'))).resolves.toMatchObject({ sent: 1, first: { ref: 'b1' } });
+    expect(fetch.mock.calls.map((c) => c[0])).toEqual([
+      `${URL_FIN}?wait=true`,
+      'https://discord.com/api/v10/channels/123456789012345678/messages',
+    ]);
   });
 });
 

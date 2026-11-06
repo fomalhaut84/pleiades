@@ -1,14 +1,14 @@
 /**
  * pleiades 009 D-3 PR-3 (pleiades#398 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 H2 · B · P · D): 중립 응답 모델(`../core/reply`) → `@pleiades/chat`.
  *
- * 텔레그램 어댑터(`../utils/telegram-reply`)의 Discord 짝 — grammY 를 끌고 오지 않는다. fit `discord/reply.ts` 를 본떴다(앱 사이 import 없음).
+ * 판단 응답 모델(`../core/reply`)의 Discord 어댑터(옛 채널 어댑터는 009 D-5 B3b 에서 지웠다). fit `discord/reply.ts` 를 본떴다(앱 사이 import 없음).
  *   reply     → `ctx.reply({ text, format, buttons })`(html 변환 · 2000자 분할 · 버튼은 마지막 조각 = chat) · 키 = 마지막 조각의 메시지
- *   replyLong → 같은 `reply`(html · 분할은 chat — 텔레그램 plain 재전송 분기는 옮기지 않는다)
+ *   replyLong → 같은 `reply`(html · 분할은 chat — 옛 plain 재전송 분기는 옮기지 않는다)
  *   replyFile → `ctx.replyFile` · 10 MiB 초과는 보내기 전에 정적 안내(chat 이 던지기 전 · 설계 D)
  *   typing    → `ctx.typing()` · 주기 9 s(Discord 표시 약 10 s · 설계 Q)
  * 버튼: toast 는 모았다가 그 결정에서 본문 교체(`edit`)가 한 번도 없었을 때만 본인 전용 안내로(설계 B 토스트 규칙) ·
  *       removeButtons → `setButtons([])` · edit → `ButtonContext.edit`(버튼을 안 주면 지운다).
- * 버튼 행: 텔레그램 키보드(2열)를 그대로 받고, Discord 한도(행 5 · 행당 5)를 넘으면 마지막 행을 두고 나머지를 행당 5 로 다시 묶는다(설계 B N18).
+ * 버튼 행: 판단의 2열 키보드를 그대로 받고, Discord 한도(행 5 · 행당 5)를 넘으면 마지막 행을 두고 나머지를 행당 5 로 다시 묶는다(설계 B N18).
  *          그래도 넘으면 버튼 대신 정적 안내(무표시 0).
  * 안내문 표기: 영어 명령 `/name` → `!name` · 한글 명령 `/알림설정` → `알림설정`(Discord 입력창이 `/` 를 가로챈다 · 설계 P N20).
  *          모델 출력(`verbatim`)은 바꾸지 않는다.
@@ -21,7 +21,7 @@ import { discordMessageKey } from '../core/state-key'
 /** Discord 명령 접두 — 입력창이 `/` 를 앱 명령 검색으로 가로챈다(009 D-2 X-1 실측). */
 export const DISCORD_COMMAND_PREFIX = '!'
 
-/** 텔레그램 영어 명령 21 — 안내문에서 `!` 로 바꿔 보인다. 등록(`router.ts`)과 같은 목록. */
+/** 영어 명령 21 — 안내문의 `/명령` 을 `!명령` 으로 바꿔 보인다. 등록(`router.ts`)과 같은 목록. */
 export const ENGLISH_COMMANDS = [
   'start', 'help', 'ai', 'reset', 'alertconfig',
   'strategy', 'strategylist', 'customstrategy', 'customstrategylist', 'customstrategydelete',
@@ -53,7 +53,7 @@ const DISCORD_MAX_ROWS = 5
 const DISCORD_ROW_WIDTH = 5
 
 /**
- * 버튼 행 → Discord 행. 빈 행은 버린다(텔레그램 키보드 끝의 빈 행).
+ * 버튼 행 → Discord 행. 빈 행은 버린다(판단 키보드 끝의 빈 행).
  * 한도 안이면 그대로 · 넘으면 마지막 행(취소 · 전체 카테고리)을 두고 앞의 버튼을 행당 5 로 다시 묶는다 — 용량 = 4 행 × 5.
  * 그래도 넘으면 undefined(호출부가 정적 안내로 바꾼다).
  */
@@ -143,7 +143,7 @@ export function discordButtonSession(ctx: Pick<ButtonContext, 'edit' | 'setButto
   }
 }
 
-/** 요청자 — 본인 확인 = Discord 사용자 ID · DB `Transaction.userId` = `discord:<id>`(UQ-2 · 텔레그램 행과 출처가 갈린다). */
+/** 요청자 — 본인 확인 = Discord 사용자 ID · DB `Transaction.userId` = `discord:<id>`(UQ-2 · 접두 없는 옛 행과 출처가 갈린다). */
 export function discordRequester(ctx: Pick<MessageContext, 'userId'>): Requester {
   return { userId: ctx.userId, dbUserId: `discord:${ctx.userId}` }
 }

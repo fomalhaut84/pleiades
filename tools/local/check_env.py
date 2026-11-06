@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""로컬 기동·migrate 전 실효 env 검사 (#104 · 006 §4-5 L-1~L-7 · isolation.md I-4·I-5·I-6·I-7·I-8·I-12·I-14).
+"""로컬 기동·migrate 전 실효 env 검사 (#104 · 006 §4-5 L-1~L-7 · isolation.md I-4′·I-5′·I-6·I-7·I-8·I-12·I-14 · 옛 채널 I-4·I-5 검사는 009 D-5 B6 에서 지웠다).
 
 `.env` 만으로는 부족하다 — 셸 export 가 이긴다(006 ㉕). 그래서 **실효 env**(apps/<app>/.env 위에 현재 환경을 덮은 것)를 본다.
 값은 출력하지 않는다(비밀) — 키 이름과 이유만.
 
 사용 (cwd = apps/<app> · 보통 tools/local/run.sh 가 부른다):
-  PLEIADES_VERIFY_BOT_IDS=<id,id> PLEIADES_VERIFY_CHAT_IDS=<id,…> PLEIADES_VERIFY_DISCORD_TOKEN_SHA256=<hash,hash> \
+  PLEIADES_VERIFY_DISCORD_TOKEN_SHA256=<hash,hash> \
   PLEIADES_VERIFY_DISCORD_IDS=<채널·사용자 id,…> PLEIADES_VERIFY_DISCORD_WEBHOOK_SHA256=<hash,hash> \
-    python3 ../../tools/local/check_env.py <fin|fit> [--other-token-id ID]
+    python3 ../../tools/local/check_env.py <fin|fit>
   해시 구하기: python3 ../../tools/local/check_env.py <fin|fit> --discord-hashes   (실효 Discord 봇 토큰·웹훅의 SHA-256 만 출력)
 종료 코드: 0 통과 · 1 위반 · 2 사용 오류
 """
@@ -33,9 +33,8 @@ MUST_BE_EMPTY = {
     "fin": ("WHOOING_WEBHOOK_URL",),  # 실제 가계부에 기록된다 (L-6)
     "fit": ("GARMIN_EMAIL", "GARMIN_PASSWORD", "MFDS_API_KEY"),  # 서비스 Garmin 세션 · 외부 API (L-5 · L-6)
 }
-# 수신자 키 이름을 맞히지 않는다 — fin 은 TELEGRAM_ADMIN_CHAT_IDS 를 읽는다(006 L-4 의 "ADMIN_CHAT_IDS" 는 약칭).
-# 이름에 CHAT_ID 가 든 키 전부를 검증 채팅과 대조한다 (회귀: #104 사전 리뷰 major 1)
-CHAT_KEY = re.compile(r"CHAT_IDS?$|CHAT_ID_", re.IGNORECASE)
+# 009 D-5 B6 (pleiades#517): 옛 채널 검사(검증 봇 id · 앱 간 같은 봇 · CHAT_ID 키 대조)는 지웠다 — 두 앱이 옛 채널 키를
+# 읽지 않아 로컬에 서비스 토큰이 있어도 폴링·409 가 생기지 않는다. 로컬 봇 가드는 Discord 판(I-4′ · I-5′ · 아래 _check_platform).
 # dotenv 동작을 바꾸는 셸 변수 — prisma.config 의 `dotenv/config` 가 다른 파일을 읽거나 셸 값을 덮게 된다
 DOTENV_CONTROL = ("DOTENV_CONFIG_PATH", "DOTENV_CONFIG_OVERRIDE", "DOTENV_CONFIG_ENCODING", "DOTENV_KEY")
 LINE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
@@ -217,24 +216,6 @@ def _check_ports(env: dict[str, str]) -> list[Problem]:
     return out
 
 
-def _check_telegram(app: str, env: dict[str, str], bot_ids: set[str], chat_ids: set[str],
-                    other_token_id: str | None) -> list[Problem]:
-    token = env.get("TELEGRAM_BOT_TOKEN", "")
-    if not token:
-        return []  # 봇 미기동 — 검증 토큰 준비 전 (L-4)
-    out = []
-    bot_id = token.split(":", 1)[0]
-    if bot_id not in bot_ids:
-        out.append(Problem("TELEGRAM_BOT_TOKEN", "검증 봇 id 허용 목록에 없다 — 서비스 봇이면 409 로 서비스 수신이 끊긴다 (I-4)"))
-    elif other_token_id and bot_id == other_token_id:
-        out.append(Problem("TELEGRAM_BOT_TOKEN", "다른 앱과 같은 봇이다 — 로컬끼리 409 (L-4)"))
-    for key in sorted(k for k in env if CHAT_KEY.search(k)):
-        extra = _ids(env.get(key, "")) - chat_ids
-        if extra:
-            out.append(Problem(key, f"검증 채팅이 아닌 id {len(extra)}개 (I-5)"))
-    return out
-
-
 def _check_advisor(app: str, env: dict[str, str], root: Path) -> list[Problem]:
     if app == "fit":
         path = env.get("CLAUDE_BIN", "")
@@ -248,8 +229,7 @@ def _check_advisor(app: str, env: dict[str, str], root: Path) -> list[Problem]:
     return []
 
 
-def problems(app: str, env: dict[str, str], *, cwd: Path, root: Path = ROOT, bot_ids: set[str],
-             chat_ids: set[str], other_token_id: str | None = None,
+def problems(app: str, env: dict[str, str], *, cwd: Path, root: Path = ROOT,
              discord_hashes: set[str] = frozenset(), discord_ids: set[str] = frozenset(),
              webhook_hashes: set[str] = frozenset(), check_platform: bool = True) -> list[Problem]:
     """check_platform=False — 템플릿만 볼 때(write_env). 플랫폼 값과 그 허용 목록은 실행 때 run.sh 가 다시 본다."""
@@ -265,11 +245,6 @@ def problems(app: str, env: dict[str, str], *, cwd: Path, root: Path = ROOT, bot
     out += [Problem(k, "dotenv 동작을 바꾼다 — 셸에서 지운다 (L-2)") for k in DOTENV_CONTROL if k in env]
     out += _check_db(app, env.get("DATABASE_URL", ""))
     out += _check_ports(env)
-    if other_token_id is None:  # 다른 앱 .env 에서 자동으로 — 넘기지 않아도 같은 봇 둘을 잡는다 (PR #110 Codex P2)
-        other = {"fin": "fit", "fit": "fin"}[app]
-        other_token = parse_dotenv(root / "apps" / APP_DIRS[other] / ".env").get("TELEGRAM_BOT_TOKEN", "")
-        other_token_id = other_token.split(":", 1)[0] or None
-    out += _check_telegram(app, env, bot_ids, chat_ids, other_token_id)
     if check_platform:
         out += _check_platform(env, cwd, root, discord_hashes, discord_ids, webhook_hashes)
     out += [Problem(k, "비워야 한다") for k in MUST_BE_EMPTY[app] if env.get(k)]
@@ -299,7 +274,6 @@ def _check_platform(env: dict[str, str], cwd: Path, root: Path, discord_hashes: 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("app", choices=sorted(APP_DIRS))
-    ap.add_argument("--other-token-id", default=None)
     ap.add_argument("--root", default=str(ROOT), help="pleiades 루트 (run.sh 가 넘긴다)")
     ap.add_argument("--discord-hashes", action="store_true", help="실효 Discord 봇 토큰·웹훅의 SHA-256 만 출력하고 끝낸다")
     args = ap.parse_args()
@@ -308,9 +282,7 @@ def main() -> int:
     if args.discord_hashes:
         print("\n".join(discord_hash_lines(env, cwd=cwd, root=Path(args.root))) or "Discord 봇 토큰·웹훅 없음")
         return 0
-    found = problems(args.app, env, cwd=cwd, root=Path(args.root), bot_ids=_ids(os.environ.get("PLEIADES_VERIFY_BOT_IDS", "")),
-                     chat_ids=_ids(os.environ.get("PLEIADES_VERIFY_CHAT_IDS", "")),
-                     other_token_id=args.other_token_id,
+    found = problems(args.app, env, cwd=cwd, root=Path(args.root),
                      discord_hashes=_ids(os.environ.get("PLEIADES_VERIFY_DISCORD_TOKEN_SHA256", "")),
                      discord_ids=_ids(os.environ.get("PLEIADES_VERIFY_DISCORD_IDS", "")),
                      webhook_hashes=_ids(os.environ.get("PLEIADES_VERIFY_DISCORD_WEBHOOK_SHA256", "")))

@@ -1,24 +1,22 @@
-import type { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { isToggleKey } from '@/lib/alert-config/categories'
-import { escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/html'
 import { plainReply, type ReplyOutput } from '../core/reply'
-import { telegramOutput } from '../utils/telegram-reply'
 
 /*
  * pleiades 009 D-3 PR-2b (pleiades#394 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 알림설정.
- * 판단(decideAlertConfig)은 인자와 중립 응답 모델만 안다 · 텔레그램 인자 추출은 `alertArgsFromTelegram`(지금 식 그대로).
- * 특성 테스트 `__tests__/special-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ * 판단(decideAlertConfig)은 인자와 중립 응답 모델만 안다 · 인자 추출은 `alertArgsFromMatch`(옛 식 그대로).
+ * 판단 흐름은 `__tests__/special-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
 export const ALERT_CONFIG_RE = /^알림설정(?:\s+.*)?$/
 
 /**
- * 텔레그램 → 인자 — `/alertconfig` 명령의 `ctx.match`(명령 뒤 문자열)를 쓰고, 그 밖에는 원문에서 벗긴다.
+ * 매치 → 인자 — 명령 뒤 문자열(`match`)이 있으면 쓰고, 그 밖에는 원문에서 `/alertconfig`·`알림설정` 을 벗긴다.
  * pleiades 009 D-3 PR-2c (pleiades#396 · UQ-3): `hears` 의 `ctx.match` 는 정규식 매치 배열이라 예전에는 `"알림설정 급락 -3"`
  * 원문 전체가 인자가 됐다(항목 = "알림설정" · `알림설정` 만 치면 현황 대신 인자 부족 — 로컬 실측 `measured-facts.md` 2026-10-30).
  */
-export function alertArgsFromTelegram(match: string | RegExpMatchArray | null | undefined, text: string): string {
+export function alertArgsFromMatch(match: string | RegExpMatchArray | null | undefined, text: string): string {
   if (typeof match === 'string' && match.trim()) return match.trim()
   return text.replace(/^(\/alertconfig|알림설정)\s*/, '').trim()
 }
@@ -45,21 +43,6 @@ function isValidValue(key: string, value: string): boolean {
     return v === 'on' || v === 'off'
   }
   return /^-?\d+(\.\d+)?$/.test(value)
-}
-
-export function registerAlertCommands(bot: Bot): void {
-  // 텔레그램 커맨드는 영문만 지원하므로 /alertconfig + 한글 "알림설정" 모두 매칭
-  bot.command('alertconfig', handler)
-  bot.hears(ALERT_CONFIG_RE, handler)
-}
-
-async function handler(ctx: Context) {
-  try {
-    await decideAlertConfig(alertArgsFromTelegram(ctx.match, ctx.message?.text ?? ''), telegramOutput(ctx))
-  } catch (error) {
-    console.error('[bot] 알림설정 실패:', error)
-    await ctx.reply('⚠️ 알림 설정에 실패했습니다.')
-  }
 }
 
 /** `알림설정` 판단 — 인자 없음 = 현황 · `[항목] [값]` = 변경. */

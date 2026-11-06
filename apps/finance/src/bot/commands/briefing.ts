@@ -1,28 +1,24 @@
-import type { Bot, Context } from 'grammy'
 import { sendBriefing, type BriefingOptions, type BriefingTarget } from '@/bot/notifications/briefing'
-import { notifierForChat } from '@/bot/notifications/notifier'
 import { askAdvisor, AdvisorError, describeAdvisorError } from '@/lib/ai/claude-advisor'
 import { splitMessage } from '@/bot/utils/formatter'
-import { markdownToTelegramHtml } from '@/bot/utils/markdown'
+import { markdownToHtml } from '@/bot/utils/markdown'
 import { formatKstDate } from '@/lib/kst-date'
 import { newsSearchRules } from '@/lib/ai/news-rules'
 import { gatherTickerNews } from '@/lib/news/prompt-news'
 import { modelReply, plainReply, type ReplyOutput } from '../core/reply'
-import { telegramOutput } from '../utils/telegram-reply'
 
 /*
  * pleiades 009 D-3 PR-2b (pleiades#394 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 D2 · A2 · Q · H2): 브리핑 · 종목 심층 분석.
  * 판단(decideBriefing)은 인자 · 응답 대상(`BriefingTarget` — 없으면 대상 불명) · 중립 응답 모델만 안다.
  * Discord 어댑터(PR-3 · pleiades#398)는 요청 채널 notifier 와 `{ aiCommand: '!ai' }` 를 넘긴다 · 모델 출력은 `modelReply`(명령 표기 변환 없음).
- * 텔레그램 어댑터는 요청 chat 의 `notifierForChat` 을 대상으로 넘긴다(지금 `sendBriefing(session, chatId)` 와 같은 notifier).
- * 특성 테스트 `__tests__/special-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ * 판단 흐름은 `__tests__/special-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
 const SESSION_KEYWORDS = new Set(['한국', '미국', 'kr', 'KR', 'us', 'US'])
 
 export const BRIEFING_RE = /^브리핑(?:\s+.*)?$/
 
-/** 텔레그램 원문 → 인자 — `/briefing[@bot]` · `브리핑` 을 벗기고 trim(대소문자 무시). */
+/** 원문 → 인자 — `/briefing[@bot]` · `브리핑` 을 벗기고 trim(대소문자 무시). */
 export function briefingArgsFromText(text: string): string {
   return text.replace(/^(\/briefing(?:@\w+)?|브리핑)\s*/i, '').trim()
 }
@@ -68,7 +64,7 @@ export async function decideBriefing(
     session = kstHour >= 6 && kstHour < 15 ? 'KR' : 'US'
   }
 
-  // 텔레그램은 지금과 같은 두 인자 · Discord 는 실패 안내의 AI 명령 표기(`!ai`)를 넘긴다(설계 D2 · PR-3)
+  // options 가 없으면 두 인자 · Discord 는 실패 안내의 AI 명령 표기(`!ai`)를 넘긴다(설계 D2 · PR-3)
   const sending = options === undefined ? sendBriefing(session, target) : sendBriefing(session, target, options)
   sending.catch((e) =>
     console.error('[bot] 브리핑 발송 실패:', e)
@@ -124,8 +120,8 @@ function fireTickerAnalysis(out: ReplyOutput, ticker: string): void {
       overallTimeoutMs: 900_000,
     }))
     .then(async (result) => {
-      // 4096 경계·plain 분할은 텔레그램 시절 그대로다(Discord 는 chat 이 2000 으로 다시 나눈다 — 무해 · 설계 D)
-      const html = markdownToTelegramHtml(result.response)
+      // 4096 경계·plain 분할은 옛 채널 시절 그대로다(Discord 는 chat 이 2000 으로 다시 나눈다 — 무해 · 설계 D)
+      const html = markdownToHtml(result.response)
       if (html.length <= 4096) {
         try {
           await out.reply(modelReply(html, 'html'))
@@ -151,18 +147,4 @@ function fireTickerAnalysis(out: ReplyOutput, ticker: string): void {
     })
     .catch((e) => console.error('[bot] 분석 응답 전송 실패:', e))
     .finally(() => clearInterval(typingInterval))
-}
-
-/** 요청 chat 의 응답 대상 — chat 이 없으면 undefined(판단이 안내한다 · 지금 `if (!chatId)` 와 같다). */
-function telegramBriefingTarget(ctx: Context): BriefingTarget | undefined {
-  const chatId = ctx.chat?.id
-  return chatId ? (bot) => notifierForChat(bot, chatId) : undefined
-}
-
-export function registerBriefingCommands(bot: Bot): void {
-  // 등록에 try/catch 가 없다 — 판단 밖으로 던진 오류는 지금처럼 grammY bot.catch 로 간다
-  const handle = (ctx: Context) =>
-    decideBriefing(briefingArgsFromText(ctx.message?.text ?? ''), telegramBriefingTarget(ctx), telegramOutput(ctx))
-  bot.command('briefing', handle)
-  bot.hears(BRIEFING_RE, handle)
 }

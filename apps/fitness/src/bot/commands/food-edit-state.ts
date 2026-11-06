@@ -2,7 +2,7 @@
 //
 // #350: force_reply 폐기 → chat 단위 pending 으로 전환.
 //   기존에는 key 가 (chatId, promptMessageId) 였고 라우팅을 reply_to_message.message_id 로
-//   했다. force_reply 는 Telegram **클라이언트** 상태라 해당 메시지에 실제 답장하거나 그
+//   했다. force_reply 는 메신저 **클라이언트** 상태라 해당 메시지에 실제 답장하거나 그
 //   메시지가 사라질 때까지 해제되지 않고, Bot API 에 회수 수단이 없다. 답장 안 된 프롬프트가
 //   채팅방에 남으면 채팅방을 열 때마다 답장 입력폼이 영구 재무장된다.
 //   → 프롬프트를 일반 메시지로 보내고, 해당 chat 의 다음 텍스트를 편집 입력으로 라우팅한다.
@@ -43,8 +43,8 @@ interface PendingEdit {
   retries: number;
 }
 
-// pleiades 009 D-2 PR-2 (pleiades#364 · 설계 S): 키는 문자열 상태 키(`../core/state-key`) — 텔레그램 `telegram:<chatId>` ·
-// Discord `discord:<channelId>:<userId>`. 이 모듈은 키의 모양을 보지 않는다(접두가 플랫폼을 가른다).
+// pleiades 009 D-2 PR-2 (pleiades#364 · 설계 S): 키는 문자열 상태 키(`../core/state-key`) — Discord
+// `discord:<channelId>:<userId>`. 이 모듈은 키의 모양을 보지 않는다(접두가 플랫폼을 가른다).
 const pending = new Map<StateKey, PendingEdit>();
 
 /** 만료된 entry 를 제거하고 유효한 것만 반환 (lazy delete). */
@@ -117,7 +117,7 @@ export function peekPendingEdit(
  * 사전 리뷰 P0 (#350): index.ts 인라인 조건이면 회귀 스크립트가 커버할 수 없어 추출.
  *
  * 슬래시로 시작하는 텍스트는 소비하지 않는다 — pending 중 미등록 명령(`/foo`)이 kcal 값으로
- * 먹히는 것을 방지. 등록된 명령은 grammy command 핸들러가 먼저 잡아 여기까지 오지 않는다.
+ * 먹히는 것을 방지. 등록된 명령은 Discord 라우터가 먼저 잡아 여기까지 오지 않는다.
  */
 export function shouldConsumeAsEditInput(key: StateKey, text: string): boolean {
   if (text.startsWith("/")) return false;
