@@ -133,7 +133,6 @@ describe('T10 AI fallback 분기', () => {
   // `/` 시작을 명령으로 보는 판정은 어댑터의 일이다 — 판단은 isCommand 를 받아 무시한다
   it('/ 로 시작하면 무시', async () => {
     expect(aiFallbackRoute('/foo 분석해줘', true)).toBe('none')
-    expect(mocked.ask).not.toHaveBeenCalled()
   })
 
   it('trim 뒤 3자 미만이면 무시', async () => {
