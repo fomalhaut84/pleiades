@@ -3,7 +3,7 @@
  *
  * 채널 웹훅은 `custom_id` 버튼을 보낼 수 없다 — 봇 토큰으로 `POST /channels/{id}/messages` 를 부른다.
  * target = 채널 별칭(예 `finance`) → 옵션 맵의 채널 ID. 토큰·채널 ID 는 target·로그·오류에 나오지 않는다.
- * `components` 는 `ButtonRows` 또는 텔레그램 `inline_keyboard`(009 D-5 제거 전까지)를 받아 Discord 버튼으로 바꾼다.
+ * `components` 는 `ButtonRows` 를 받아 Discord 버튼으로 바꾼다(009 D-5 B5 · 텔레그램 `inline_keyboard` 는 지웠다).
  * 어댑터 소유 모드(`maxLength: Infinity`) · 버튼은 마지막 청크에만.
  */
 import { escapeDiscordMarkdown, htmlToDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
@@ -15,7 +15,7 @@ import {
   type PostConfig,
 } from './discord';
 import { DEFAULT_RETRY_DELAYS_MS } from './deliver';
-import { toInlineKeyboardRows, type Content, type Logger, type MessageRef, type Transport } from './types';
+import type { Content, Logger, MessageRef, NotifyButton, Transport } from './types';
 
 export const DISCORD_BOT_CHANNEL = 'discord-bot';
 export const DISCORD_API_BASE = 'https://discord.com/api/v10';
@@ -39,25 +39,17 @@ const MAX_BUTTONS_PER_ROW = 5;
 const MAX_CUSTOM_ID = 100;
 const MAX_LABEL = 80;
 
-interface TelegramButtonLike {
-  text?: unknown;
-  callback_data?: unknown;
-  url?: unknown;
-}
-
 /**
- * `ButtonRows` 또는 텔레그램 인라인 키보드 → Discord 액션 행. `action`(`callback_data`) → Secondary 버튼(`custom_id`) · `url` → Link 버튼.
+ * `ButtonRows` → Discord 액션 행. `action` → Secondary 버튼(`custom_id`) · `url` → Link 버튼.
  * Discord 한도(행 5 · 행당 5 · custom_id 100자 · label 80자)를 넘으면 조용히 자르지 않고 오류 — 버튼을 잃으면 할 일을 잃는다.
+ * 인자는 `unknown` 으로 받아 실행 중에 모양을 검사한다(타입 밖 값이 와도 조용히 버리지 않는다).
  */
 export function toDiscordComponents(components: unknown): DiscordActionRow[] {
-  const rows = Array.isArray(components)
-    ? toInlineKeyboardRows(components)
-    : (components as { inline_keyboard?: unknown } | null)?.inline_keyboard;
-  if (!Array.isArray(rows)) throw new Error('@pleiades/notify: 알 수 없는 components 형태 — ButtonRows 또는 텔레그램 inline_keyboard 만 지원');
+  if (!Array.isArray(components)) throw new Error('@pleiades/notify: 알 수 없는 components 형태 — ButtonRows(버튼 행 배열)만 지원');
   // 빈 행([])만 건너뛴다 — 배열이 아닌 행은 조용히 버리지 않고 오류(버튼을 잃지 않게 · PR #150 Codex P2)
-  const bad = rows.findIndex((r) => !Array.isArray(r));
-  if (bad >= 0) throw new Error(`@pleiades/notify: inline_keyboard 의 ${bad}번째 행이 배열이 아니다`);
-  const nonEmpty = (rows as unknown[][]).filter((r) => r.length > 0);
+  const bad = components.findIndex((r) => !Array.isArray(r));
+  if (bad >= 0) throw new Error(`@pleiades/notify: 버튼 ${bad}번째 행이 배열이 아니다`);
+  const nonEmpty = (components as unknown[][]).filter((r) => r.length > 0);
   if (nonEmpty.length > MAX_ROWS) throw new Error(`@pleiades/notify: Discord 버튼 행은 ${MAX_ROWS}개까지 (${nonEmpty.length})`);
   return nonEmpty.map((row) => {
     if (row.length > MAX_BUTTONS_PER_ROW) {
@@ -66,17 +58,19 @@ export function toDiscordComponents(components: unknown): DiscordActionRow[] {
     return {
       type: 1,
       components: row.map((raw) => {
-        const b = raw as TelegramButtonLike;
-        const label = typeof b.text === 'string' ? b.text : '';
+        const b = (raw ?? {}) as Partial<Record<keyof NotifyButton, unknown>>;
+        const label = typeof b.label === 'string' ? b.label : '';
         if (label === '' || label.length > MAX_LABEL) throw new Error(`@pleiades/notify: 버튼 이름은 1~${MAX_LABEL}자 (${label.length})`);
-        if (typeof b.callback_data === 'string') {
-          if (b.callback_data === '' || b.callback_data.length > MAX_CUSTOM_ID) {
-            throw new Error(`@pleiades/notify: 버튼 custom_id 는 1~${MAX_CUSTOM_ID}자 (${b.callback_data.length})`);
+        // 둘 다 주면 한쪽이 조용히 사라진다 — `@pleiades/chat` `toComponents` 와 같은 계약
+        if (b.action !== undefined && b.url !== undefined) throw new Error('@pleiades/notify: 버튼은 action 과 url 중 하나만 갖는다');
+        if (typeof b.action === 'string') {
+          if (b.action === '' || b.action.length > MAX_CUSTOM_ID) {
+            throw new Error(`@pleiades/notify: 버튼 custom_id 는 1~${MAX_CUSTOM_ID}자 (${b.action.length})`);
           }
-          return { type: 2, style: 2, label, custom_id: b.callback_data };
+          return { type: 2, style: 2, label, custom_id: b.action };
         }
         if (typeof b.url === 'string' && /^https?:\/\//i.test(b.url)) return { type: 2, style: 5, label, url: b.url };
-        throw new Error('@pleiades/notify: 버튼에 callback_data 나 http(s) url 이 없다');
+        throw new Error('@pleiades/notify: 버튼에 action 이나 http(s) url 이 없다');
       }),
     };
   });

@@ -1,14 +1,22 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createNotifier, createTelegramTransport, Route } from './index';
+import * as api from './index';
+import { createDiscordBotTransport, createDiscordTransport, createNotifier, Route } from './index';
 
 // 스모크: 패키지가 "존재"하는 것이 아니라 공개 표면이 건너오는지 (1a-0 초안 1-7)
 describe('@pleiades/notify smoke', () => {
   it('공개 팩토리와 Route 가 export 된다', () => {
     expect(typeof createNotifier).toBe('function');
-    expect(typeof createTelegramTransport).toBe('function');
+    expect(typeof createDiscordTransport).toBe('function');
+    expect(typeof createDiscordBotTransport).toBe('function');
     expect(Object.keys(Route).length).toBeGreaterThan(0);
+  });
+
+  // 009 D-5 B5 (pleiades#515): 텔레그램 표면은 지웠다
+  it('텔레그램 export 가 없다', () => {
+    const names = Object.keys(api);
+    expect(names.filter((n) => /telegram/i.test(n))).toEqual([]);
   });
 });
 
@@ -29,5 +37,24 @@ describe('버전 단일 출처', () => {
       expect(lock.version).toBe(notify);
       expect(lock.packages?.['']?.version).toBe(notify);
     }
+  });
+});
+
+// 009 D-5 B5: telegram.test.ts 를 지우며 옮겼다 — 소비자 `prepare`(임시 클론 · 의존성 없이 tsc)가 안전하려면 그대로 참이어야 한다
+describe('패키지는 외부 런타임 의존성이 없다 (S-2 · 소비자 prepare 안전)', () => {
+  it('src/*.ts (테스트 제외) 어디에도 "grammy" import 가 없다', () => {
+    const dir = __dirname;
+    const files = readdirSync(dir).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'));
+    expect(files.length).toBeGreaterThan(5);
+    for (const f of files) {
+      const src = readFileSync(join(dir, f), 'utf8');
+      expect(src, f).not.toMatch(/from\s+['"]grammy['"]/);
+      expect(src, f).not.toMatch(/import\s*\(\s*['"]grammy['"]\s*\)/);
+    }
+  });
+  it('package.json 에 dependencies · peerDependencies 가 없다', () => {
+    const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8')) as Record<string, unknown>;
+    expect(pkg.dependencies).toBeUndefined();
+    expect(pkg.peerDependencies).toBeUndefined();
   });
 });

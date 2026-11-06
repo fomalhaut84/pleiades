@@ -118,7 +118,7 @@ describe('deliverOne — 단일 청크', () => {
   });
 
   it('components 는 폴백 시에도 유지된다', async () => {
-    const kb = { inline_keyboard: [[{ text: 'ok', callback_data: 'x' }]] };
+    const kb = [[{ label: 'ok', action: 'x' }]];
     const { transport, calls } = fakeTransport([parse(), 'ok']);
     await deliverOne(transport, 't', html('<b>x</b>', kb), policy());
     expect(calls[1].content).toEqual({ text: 'x', format: 'plain', components: kb });
@@ -140,7 +140,7 @@ describe('deliverOne — 분할 (maxLength 유한 · 코어 소유)', () => {
   });
 
   it('components 는 마지막 청크에만 붙는다', async () => {
-    const kb = { inline_keyboard: [] };
+    const kb = [[{ label: 'ok', action: 'x' }]];
     const { transport, calls } = fakeTransport([], 5);
     await deliverOne(transport, 't', html('aaa\nbbb', kb), policy());
     expect(calls[0].content.components).toBeUndefined();

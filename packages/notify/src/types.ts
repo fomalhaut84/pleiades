@@ -10,15 +10,7 @@
 export type MessageRef = string;
 
 /**
- * 채널별 markup — `ButtonRows` 또는 텔레그램 `inline_keyboard`(grammY `InlineKeyboard` 인스턴스 포함 · 009 D-5 제거 전까지).
- * `TelegramTransport` 는 `ButtonRows` 를 변환하고 그 밖의 값은 `reply_markup` 으로 그대로 전달한다.
- * `object` 인 이유: `Record<string, unknown>` 은 클래스 인스턴스(`InlineKeyboard`)를 받지 못한다 — TS 는 클래스에 암묵적
- * index signature 를 주지 않아 TS2322 (사전 리뷰 M-3 · fit grammy 1.42.0 프로브). 원시값은 여전히 거부된다.
- */
-export type Components = object;
-
-/**
- * 채널 중립 버튼 (009 D-5 A4). `action` 은 눌렀을 때 돌아오는 값(Discord `custom_id` · 텔레그램 `callback_data`) · `url` 은 링크 버튼.
+ * 채널 중립 버튼 (009 D-5 A4). `action` 은 눌렀을 때 돌아오는 값(Discord `custom_id`) · `url` 은 링크 버튼.
  * `@pleiades/chat` 의 `Button` 과 같은 모양이다 — chat 이 notify 를 의존하므로 chat 타입을 가져오지 못한다.
  */
 export interface NotifyButton {
@@ -29,25 +21,18 @@ export interface NotifyButton {
 export type ButtonRows = readonly (readonly NotifyButton[])[];
 
 /**
- * 중립 버튼 → 텔레그램 `inline_keyboard`. 배열이 아닌 행은 그대로 두어 받는 쪽 검증이 오류로 낸다.
- * `action`·`url` 을 함께 주면 한쪽이 조용히 사라지므로 던진다(`@pleiades/chat` `toComponents` 와 같은 계약).
+ * 메시지에 붙는 버튼 — 중립 `ButtonRows` 만 받는다(009 D-5 B5 · pleiades#515 · 텔레그램 `inline_keyboard` 는 지웠다).
+ * 웹훅 transport 는 버튼을 거부하고, Discord 봇 transport 가 Discord 액션 행으로 바꾼다(`toDiscordComponents`).
  */
-export const toInlineKeyboardRows = (rows: readonly unknown[]): unknown[] =>
-  rows.map((row) => {
-    if (!Array.isArray(row)) return row;
-    return row.map((raw) => {
-      const b = raw as Partial<NotifyButton> | null;
-      if (b?.action !== undefined && b.url !== undefined) throw new Error('@pleiades/notify: 버튼은 action 과 url 중 하나만 갖는다');
-      return { text: b?.label, ...(b?.action === undefined ? {} : { callback_data: b.action }), ...(b?.url === undefined ? {} : { url: b.url }) };
-    });
-  });
+export type Components = ButtonRows;
 
 /**
  * 전송 본문 (1a-1 계획 D-1 · 003 은 이 타입을 참조만 하고 정의하지 않았다).
  * `format` 은 코어가 만든다 — 파싱 실패 폴백이 같은 본문을 `'plain'` 으로 재전송한다 (003 §4-1(b) "폴백은 채널 무관 로직").
+ * Discord transport 는 html 을 마크다운으로 바꾼다(`htmlToDiscordMarkdown`).
  */
 export interface Content {
-  /** 본문. `format === 'html'` 이면 텔레그램 HTML 부분집합. */
+  /** 본문. `format === 'html'` 이면 HTML 부분집합(b · i · u · s · code · pre · a · blockquote — `discord-md` 지원 태그). */
   text: string;
   format: 'html' | 'plain';
   components?: Components;
@@ -77,9 +62,9 @@ export interface Transport {
 export type TransportRef = Transport | (() => Transport);
 
 /**
- * 라우트 — 등급 축 (003 §4-4). 값은 기존 env 를 그대로 읽는다:
- *   fin: ALLOWED → TELEGRAM_ALLOWED_CHAT_IDS · ADMIN → TELEGRAM_ADMIN_CHAT_IDS
- *   fit: ALLOWED → TELEGRAM_ALLOWED_CHAT_IDS · ADMIN 은 매핑하지 않는다 → targetCount(ADMIN) === 0
+ * 라우트 — 등급 축 (003 §4-4). 대상 해석은 앱이 정한다(009 D-5 · 늘 Discord):
+ *   fin: ALLOWED → `#finance` 웹훅 · ADMIN → `#admin` 웹훅
+ *   fit: ALLOWED → `#fitness` 웹훅 · ADMIN 은 매핑하지 않는다 → targetCount(ADMIN) === 0
  * 도메인 축은 `NotifierConfig.domain` 에 자리만 둔다.
  */
 export const Route = { ALLOWED: 'ALLOWED', ADMIN: 'ADMIN' } as const;
@@ -97,7 +82,7 @@ export interface Delivery {
   ref?: MessageRef;
   /**
    * 실패 시 raw `error.message` (Q19 C). 파사드는 sanitize 하지 않는다 — 로그만 별도로 sanitize 된다.
-   * **봇 토큰이 포함될 수 있다** (grammy `HttpError` 는 `https://api.telegram.org/bot<token>/…` 을 message 에 담는다).
+   * **비밀이 포함될 수 있다** (undici 는 잘못된 웹훅 URL 을 `Failed to parse URL from <url>` 로 message 에 담는다 · 옛 텔레그램 봇 토큰 모양도 마스킹한다).
    * 로그·DB·API 응답·UI 에 쓰기 전 반드시 `sanitizeMessage`(또는 `sanitizeError`)를 통과시킨다 — 상속 컨벤션
    * "catch 블록에서 `error.message` 원문 노출 금지" · 003 §10 Q19 `sensitiveLogs` 단서. (사전 리뷰 M-4)
    */
