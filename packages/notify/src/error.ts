@@ -30,7 +30,7 @@ export function sanitizeMessage(msg: string): string {
 }
 
 /**
- * Error.cause + grammy HttpError.error 체인을 깊이 5까지 순회하며 message 추출 + 토큰 마스킹.
+ * Error.cause + `.error`(옛 HTTP 클라이언트 오류 모양) 체인을 깊이 5까지 순회하며 message 추출 + 토큰 마스킹.
  * console.error(err) 가 inner FetchError 까지 dump 하는 문제 차단.
  */
 export function sanitizeError(err: unknown): string {
@@ -79,7 +79,7 @@ const GRAMMY_TIMEOUT_RE = /Request to '.+' timed out after \d+ seconds/i;
 const ABORT_NAME_RE = /^AbortError$/i;
 
 /**
- * 네트워크 에러 판별 — ETIMEDOUT/ECONNRESET 등 + grammy client.timeoutSeconds 발동
+ * 네트워크 에러 판별 — ETIMEDOUT/ECONNRESET 등 + 클라이언트 타임아웃 문구(옛 grammy `timeoutSeconds` 모양)
  * (code 없는 plain Error) + fetch abort (AbortError · type='aborted') 모두 포착.
  */
 export function isNetworkError(err: unknown): boolean {

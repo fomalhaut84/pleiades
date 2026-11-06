@@ -1,5 +1,7 @@
 /**
- * 플랫폼 설정 — pleiades 루트 `.env` 의 `NOTIFY_*` · `DISCORD_WEBHOOK_*` (M-6a-2 #143 · 사용자 2026-10-15).
+ * 플랫폼 설정 — pleiades 루트 `.env` 의 `DISCORD_*` · `NOTIFY_*` (M-6a-2 #143 · 사용자 2026-10-15).
+ * 009 D-5 B5: 두 앱은 라우트 스위치(`NOTIFY_*_CHANNEL`)를 더 읽지 않는다 — `NOTIFY_*` 는 키 집합에 남아 앱 `.env` 에 두지 못하게
+ * 막는 쪽(`tools/local/check_env.py` 와 같은 정규식)으로만 쓰인다.
  *
  * 앱이 어떻게 떠도(`run.sh` · `npm run dev` · `next start` · pm2) 같은 값을 읽도록 **앱이 직접** 루트 파일을 읽는다.
  *   1순위 프로세스 env(셸 export · pm2 `env`) → 2순위 루트 `.env`. 플랫폼 키는 앱 `.env` 에 두지 않는다(check_env 가 막는다).
@@ -23,7 +25,7 @@ interface PathLike {
   dirname(p: string): string;
 }
 
-/** 플랫폼 키 — 알림 스위치 · 웹훅 · 봇(M-6b-2 #149: 토큰 · 채널 ID · 허용 사용자). 앱 고유 키는 여기에 없다. */
+/** 플랫폼 키 — 스위치(`NOTIFY_*` · 앱은 안 읽음) · 웹훅 · 봇(M-6b-2 #149: 토큰 · 채널 ID · 허용 사용자). 앱 고유 키는 여기에 없다. */
 export const PLATFORM_KEY_RE =
   /^(?:NOTIFY_[A-Z0-9_]+|DISCORD_WEBHOOK_[A-Z0-9_]+|DISCORD_BOT_TOKEN_[A-Z0-9_]+|DISCORD_CHANNEL_ID_[A-Z0-9_]+|DISCORD_ALLOWED_USER_IDS)$/;
 const LINE_RE = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/;
@@ -106,7 +108,7 @@ function searchRoot(node: { fs: FsLike; path: PathLike }, start: string): string
 
 /**
  * 파일 내용 캐시 — 수정 시각(mtime)이 같을 때만 재사용한다. 파일을 고치거나 지우거나 새로 만들면 **다음 호출부터** 반영된다
- * (재시작 없이 Discord ↔ 텔레그램 전환·되돌리기 · #143 사전 리뷰 major). 없는 파일은 mtime -1.
+ * (재시작 없이 웹훅·봇 설정 변경·되돌리기 · #143 사전 리뷰 major). 없는 파일은 mtime -1.
  */
 const cache = new Map<string, { mtimeMs: number; values: Record<string, string> }>();
 
@@ -130,12 +132,12 @@ function loadFile(file: string): Record<string, string> {
       const parsed = parsePlatformEnv(node.fs.readFileSync(file, 'utf8'));
       values = parsed.values;
       if (parsed.invalid.length > 0) {
-        // 조용히 텔레그램으로 떨어지지 않게 파일 버전마다 한 번 알린다 — 키 이름만(값은 비밀)
+        // 조용히 수신자 0 으로 떨어지지 않게 파일 버전마다 한 번 알린다 — 키 이름만(값은 비밀)
         console.warn(`[notify] 루트 .env 값을 해석할 수 없어 무시한다 — ${parsed.invalid.join(', ')} (따옴표 짝 · 닫는 따옴표 뒤 글자)`);
       }
     }
   } catch {
-    console.warn('[notify] 루트 .env 를 읽을 수 없다 — 플랫폼 설정 없이 진행(알림은 텔레그램)');
+    console.warn('[notify] 루트 .env 를 읽을 수 없다 — 플랫폼 설정 없이 진행(Discord 수신자 0)');
   }
   cache.set(file, { mtimeMs, values });
   return values;

@@ -3,9 +3,8 @@
  * 줄 경계 우선 · 한도보다 긴 한 줄은 하드 슬라이스. 분할 위치는 코어(§4-3 제약 2 둘째 형태 — `Transport.maxLength`).
  */
 
-export const TELEGRAM_MAX_LENGTH = 4096;
-
-export function splitMessage(text: string, maxLength = TELEGRAM_MAX_LENGTH): string[] {
+// 009 D-5 B5 (pleiades#515): 기본값 `TELEGRAM_MAX_LENGTH`(4096)를 지웠다 — 코어는 늘 `Transport.maxLength` 를 넘기고 앱 소비는 0.
+export function splitMessage(text: string, maxLength: number): string[] {
   // maxLength 는 이제 어댑터가 채우는 공개 포트 필드다 — 0·음수는 아래 for 가 무한 루프(배열 무한 증식), NaN 은 비교가 전부 false.
   // 회귀: 사전 리뷰 M-2 · info(NaN)
   if (!(maxLength >= 1)) throw new RangeError(`splitMessage: maxLength 는 1 이상이어야 한다 (${maxLength})`);
