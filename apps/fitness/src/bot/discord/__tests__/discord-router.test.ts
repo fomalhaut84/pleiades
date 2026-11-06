@@ -60,6 +60,7 @@ import { decideAutoAdjust } from "../../notifications/auto-adjust-callback";
 import { discordStateKey } from "../../core/state-key";
 import { deletePendingEdit, isPendingEdit, markPendingEdit } from "../../commands/food-edit-state";
 import { createDiscordRouter } from "../router";
+import { BOT_PROCESS } from "../../notifications/notifier";
 import {
   FIT_ATTACHMENT_POLICY,
   PHOTO_ACK_TEXT,
@@ -76,7 +77,7 @@ import { discordButtonOutput, toDiscordCommandText, toOutgoing, withTyping } fro
 
 const CH = "423456789012345678";
 const USER = "323456789012345678";
-const bot = { api: undefined };
+const bot = BOT_PROCESS;
 
 type Sent = { msg: OutgoingMessage | string; deleted: boolean };
 
@@ -454,8 +455,8 @@ describe("사진(P)", () => {
 });
 
 describe("어댑터", () => {
-  it("응답 모델 → chat 메시지 · clearKeyboard 무시 · long 은 명령 표기 그대로", () => {
-    expect(toOutgoing({ text: "a", format: "plain", clearKeyboard: true })).toEqual({ text: "a", format: "plain" });
+  it("응답 모델 → chat 메시지 · long 은 명령 표기 그대로", () => {
+    expect(toOutgoing({ text: "a", format: "plain" })).toEqual({ text: "a", format: "plain" });
     expect(toOutgoing({ text: "/sync 해보세요", format: "html", long: true }).text).toBe("/sync 해보세요");
     expect(toOutgoing({ text: "b", format: "html", buttons: [[{ label: "x", action: "food:delete:1" }]] })).toEqual({
       text: "b",

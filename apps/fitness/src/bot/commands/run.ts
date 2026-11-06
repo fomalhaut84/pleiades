@@ -1,6 +1,4 @@
-import type { Bot } from "grammy";
 import { htmlReply, plainReply, type BotReply } from "../core/reply";
-import { sendTelegramReply } from "../utils/telegram-reply";
 import prisma from "../prisma";
 import { fmtDistance, fmtPace, fmtDuration } from "../utils/formatter";
 import { formatDateKST } from "../../lib/format";
@@ -39,10 +37,4 @@ export async function decideRun(): Promise<BotReply> {
   }
 
   return htmlReply(lines.filter(Boolean).join("\n"));
-}
-
-export function registerRunCommand(bot: Bot) {
-  bot.command("run", async (ctx) => {
-    await sendTelegramReply(ctx, await decideRun());
-  });
 }

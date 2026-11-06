@@ -9,7 +9,6 @@
 // 프롬프트를 일반 메시지 + [✕ 취소] inline 버튼으로 보내고, chat 단위 pending 으로 다음
 // 텍스트를 라우팅한다. 상세: docs/specs/350-food-edit-force-reply-fix.md
 
-import type { Bot } from "grammy";
 import prisma from "../prisma";
 import { withHistoryCacheBump } from "../../lib/history/cache";
 import { Prisma } from "@/generated/prisma/client";
@@ -29,9 +28,8 @@ import {
   buildKcalChangeMessage,
   descPreview,
 } from "./food-edit-format";
-import { telegramStateKeyOf, type StateKey } from "../core/state-key";
+import type { StateKey } from "../core/state-key";
 import { plainReply, type ButtonOutput, type ReplyButton, type ReplyOutput } from "../core/reply";
-import { telegramButtonOutput } from "../utils/telegram-reply";
 
 export const CALLBACK_PREFIX = "food";
 
@@ -60,13 +58,6 @@ function cancelButtons(logId: string): ReplyButton[][] {
   return [[{ label: "✕ 취소", action: `${CALLBACK_PREFIX}:edit-cancel:${logId}` }]];
 }
 
-/**
- * #350: 편집 흐름의 종료 메시지 표시 — 텔레그램 어댑터가 `{ reply_markup: { remove_keyboard: true } }` 로 옮긴다.
- * ReplyKeyboardRemove 는 클라이언트의 reply markup 슬롯을 초기화하므로, 이 수정 이전에
- * 이미 박혀버린 force_reply 상태를 정리할 여지가 있다 (best-effort — 클라이언트 구현 의존).
- * 아무것도 떠 있지 않으면 no-op. 개념이 없는 플랫폼(Discord)은 무시한다(pleiades#364).
- */
-const CLEAR_REPLY_MARKUP = { clearKeyboard: true } as const;
 
 
 /** kcal 응답에 붙일 버튼 1행. logId 를 action(텔레그램 callback_data) 에 embed.
@@ -81,16 +72,6 @@ export function foodLogButtons(logId: string): ReplyButton[][] {
   ];
 }
 
-/** grammy bot 에 callback handler 등록. bot.callbackQuery(/^food:/, ...) 로 매칭. 판단은 decideFoodButton. */
-export function registerFoodEditCallback(bot: Bot): void {
-  bot.callbackQuery(new RegExp(`^${CALLBACK_PREFIX}:`), async (ctx) => {
-    await decideFoodButton(
-      ctx.callbackQuery.data ?? "",
-      telegramStateKeyOf(ctx.chat),
-      telegramButtonOutput(ctx),
-    );
-  });
-}
 
 /**
  * `food:` 버튼 1회 처리(판단 · pleiades#364) — 수정 kcal · 수정 설명 · 삭제 · 취소.
@@ -133,7 +114,7 @@ export async function decideFoodButton(
     }
     if (cleared) {
       try {
-        await out.reply(plainReply("✕ 편집을 취소했습니다.", CLEAR_REPLY_MARKUP));
+        await out.reply(plainReply("✕ 편집을 취소했습니다."));
       } catch {
         // ignore
       }
@@ -340,7 +321,7 @@ export async function decideFoodEditInput(
   const reissueForRetry = async (message: string): Promise<void> => {
     if (!registerRetry(key)) {
       await out.reply(plainReply(`${message}\n\n입력이 여러 번 형식에 맞지 않아 편집을 종료했습니다. ` +
-          `다시 [🔢 kcal] 버튼을 눌러주세요.`, CLEAR_REPLY_MARKUP));
+          `다시 [🔢 kcal] 버튼을 눌러주세요.`));
       return;
     }
     await out.reply(plainReply(message, { buttons: cancelButtons(logId) }));
@@ -363,7 +344,7 @@ export async function decideFoodEditInput(
     if (!correction.ok) {
       if (correction.reason === "not-found") {
         deletePendingEdit(key);
-        await out.reply(plainReply("이미 삭제된 로그입니다.", CLEAR_REPLY_MARKUP));
+        await out.reply(plainReply("이미 삭제된 로그입니다."));
       } else {
         await out.reply(plainReply("동시 수정 감지, 잠시 후 다시 시도해주세요."));
       }
@@ -375,7 +356,7 @@ export async function decideFoodEditInput(
     });
     if (!updated) {
       deletePendingEdit(key);
-      await out.reply(plainReply("이미 삭제된 로그입니다.", CLEAR_REPLY_MARKUP));
+      await out.reply(plainReply("이미 삭제된 로그입니다."));
       return true;
     }
     // #403 (사전 리뷰 major 2): bump 는 재계산 **뒤** — 재계산 전 값이 새 키로 캐시되지 않게
@@ -407,7 +388,7 @@ export async function decideFoodEditInput(
     ) {
       // 로그 자체가 삭제 — entry 도 무효, 삭제.
       deletePendingEdit(key);
-      await out.reply(plainReply("이미 삭제된 로그입니다.", CLEAR_REPLY_MARKUP));
+      await out.reply(plainReply("이미 삭제된 로그입니다."));
       return true;
     }
     console.error("[food-edit] update 실패:", err);
@@ -415,7 +396,7 @@ export async function decideFoodEditInput(
     // update 실패 — entry 유지, 재입력 가능.
   }
   if (successMessage) {
-    await out.reply(plainReply(successMessage, CLEAR_REPLY_MARKUP));
+    await out.reply(plainReply(successMessage));
   }
   return true;
 }
@@ -435,7 +416,7 @@ async function handleDescReply(
   const reissueForRetry = async (message: string): Promise<void> => {
     if (!registerRetry(key)) {
       await out.reply(plainReply(`${message}\n\n입력이 여러 번 형식에 맞지 않아 편집을 종료했습니다. ` +
-          `다시 [📝 설명] 버튼을 눌러주세요.`, CLEAR_REPLY_MARKUP));
+          `다시 [📝 설명] 버튼을 눌러주세요.`));
       return;
     }
     await out.reply(plainReply(message, { buttons: cancelButtons(logId) }));
@@ -459,12 +440,12 @@ async function handleDescReply(
     });
     if (!existing) {
       deletePendingEdit(key);
-      await out.reply(plainReply("이미 삭제된 로그입니다.", CLEAR_REPLY_MARKUP));
+      await out.reply(plainReply("이미 삭제된 로그입니다."));
       return true;
     }
     if (existing.description === trimmed) {
       deletePendingEdit(key);
-      await out.reply(plainReply(`ℹ️ 이미 "${descPreview(trimmed)}" 로 저장되어 있습니다 (변경 없음).`, CLEAR_REPLY_MARKUP));
+      await out.reply(plainReply(`ℹ️ 이미 "${descPreview(trimmed)}" 로 저장되어 있습니다 (변경 없음).`));
       return true;
     }
     // update 이후에는 조회할 수 없으므로 미리 보관 (성공 응답에 복구용으로 노출).
@@ -517,7 +498,7 @@ async function handleDescReply(
       err.code === "P2025"
     ) {
       deletePendingEdit(key);
-      await out.reply(plainReply("이미 삭제된 로그입니다.", CLEAR_REPLY_MARKUP));
+      await out.reply(plainReply("이미 삭제된 로그입니다."));
       return true;
     }
     console.error("[food-edit-desc] update 실패:", err);
@@ -525,7 +506,7 @@ async function handleDescReply(
     // entry 유지, 재입력 가능.
   }
   if (successMessage) {
-    await out.reply(plainReply(successMessage, CLEAR_REPLY_MARKUP));
+    await out.reply(plainReply(successMessage));
   }
   return true;
 }

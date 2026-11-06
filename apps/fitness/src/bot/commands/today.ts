@@ -1,6 +1,4 @@
-import type { Bot } from "grammy";
 import { htmlReply, plainReply, type BotReply } from "../core/reply";
-import { sendTelegramReply } from "../utils/telegram-reply";
 import prisma from "../prisma";
 
 /** /today — 오늘 요약(판단 · pleiades#364). */
@@ -38,10 +36,4 @@ export async function decideToday(now: Date = new Date()): Promise<BotReply> {
   }
 
   return htmlReply(lines.join("\n"));
-}
-
-export function registerTodayCommand(bot: Bot) {
-  bot.command("today", async (ctx) => {
-    await sendTelegramReply(ctx, await decideToday());
-  });
 }

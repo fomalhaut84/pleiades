@@ -1,6 +1,4 @@
-import type { Bot } from "grammy";
 import { htmlReply, plainReply, type BotReply } from "../core/reply";
-import { sendTelegramReply } from "../utils/telegram-reply";
 import prisma from "../prisma";
 import { formatDateKST } from "../../lib/format";
 
@@ -24,10 +22,4 @@ export async function decideWeight(): Promise<BotReply> {
   }
 
   return htmlReply(lines.join("\n"));
-}
-
-export function registerWeightCommand(bot: Bot) {
-  bot.command("weight", async (ctx) => {
-    await sendTelegramReply(ctx, await decideWeight());
-  });
 }
