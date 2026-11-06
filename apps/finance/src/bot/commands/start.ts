@@ -59,7 +59,7 @@ const COMMANDS_HELP =
   `백테스트 [종목] [전략] [기간] — 과거 전략 시뮬레이션\n` +
   `전략: rsi, 골든크로스, bb, sma`
 
-/** 봇 소개 — 이름이 없으면 "사용자"(Discord 표시 이름 · PR-3). */
+/** 봇 소개 — 이름이 없으면 "사용자"(Discord 라우터는 이름을 넘기지 않는다 — 늘 "사용자"). */
 export async function decideStart(firstName: string | undefined, out: ReplyOutput): Promise<void> {
   const name = escapeHtml(firstName ?? '사용자')
   await out.replyLong(

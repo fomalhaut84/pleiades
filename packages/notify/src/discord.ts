@@ -60,7 +60,7 @@ export class DiscordWebhookError extends Error {
   }
 }
 
-/** undici `fetch` 의 연결 실패 코드 — 공용 `isNetworkError` 는 node 코드·클라이언트 타임아웃 문구만 안다. */
+/** undici `fetch` 의 연결 실패 코드 — 공용 `isNetworkError` 는 node 코드·클라이언트 타임아웃 문구·abort 만 안다. */
 const UNDICI_NETWORK_CODES = new Set(['UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET', 'UND_ERR_HEADERS_TIMEOUT']);
 
 /**

@@ -18,7 +18,7 @@ export interface ReplyButton {
 }
 
 /**
- * 버튼 행들. **빈 행이 있을 수 있다** — 옛 키보드 모양을 그대로 옮긴 것이다(Discord 어댑터가 버린다 · 히스토리 추천 키보드 끝의 빈 행 · 특성 테스트 T4).
+ * 버튼 행들. **빈 행이 있을 수 있다** — 옛 키보드 모양을 그대로 옮긴 것이다(히스토리 추천 키보드 끝의 빈 행 · 특성 테스트 T4).
  * 빈 행을 표현할 수 없는 플랫폼(Discord)의 어댑터가 버린다.
  */
 export type ReplyButtonRows = readonly (readonly ReplyButton[])[]

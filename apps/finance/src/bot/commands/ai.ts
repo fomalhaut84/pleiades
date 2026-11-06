@@ -493,7 +493,7 @@ export async function decideReset(stateKey: StateKey | undefined, out: ReplyOutp
 
 /**
  * AI fallback 경로 — 앞 핸들러(소비 입력 등)가 넘긴 텍스트.
- * 명령 모양 판정은 어댑터가 넘긴다(Discord = 접두 `!` · PR-3).
+ * 명령 모양 판정은 어댑터가 넘긴다(Discord = `!` 또는 `/` 시작 · `discord/router.ts` · PR-3).
  */
 export function aiFallbackRoute(text: string, isCommand: boolean): 'trade' | 'question' | 'none' {
   if (isCommand) return 'none'

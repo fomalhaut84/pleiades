@@ -94,7 +94,7 @@ const BUDGET_ALONE_RE = /^(소비|예산)\s*$/i
 
 /**
  * 자유 텍스트가 소비 입력인지 — 아니면 다음 fallback(AI 거래 · AI 질문)으로 넘긴다.
- * `isCommand` 는 어댑터가 정한다(Discord `!` 시작 — 설계 P).
+ * `isCommand` 는 어댑터가 정한다(Discord = `!` 또는 `/` 시작 · `discord/router.ts` — 설계 P).
  */
 export function expenseFallbackRoute(text: string, isCommand: boolean): 'expense' | 'next' {
   // 명령은 무시 → 다음 핸들러로
