@@ -56,7 +56,7 @@ def validate(app: str, text: str, root: Path) -> list[check_env.Problem]:
         env = check_env.parse_dotenv(tmp)
     env["PATH"] = str(root / "bin")  # fin advisor 검사는 run.sh 가 넣는 shim PATH 기준
     return check_env.problems(app, env, cwd=root / "apps" / check_env.APP_DIRS[app], root=root,
-                              bot_ids=set(), chat_ids=set(), other_token_id="", check_platform=False)
+                              check_platform=False)
 
 
 def main(argv: list[str] | None = None) -> int:

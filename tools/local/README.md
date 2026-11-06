@@ -20,18 +20,18 @@ tools/local/run.sh fin -- npx prisma migrate deploy && tools/local/run.sh fit --
 tools/local/run.sh fin -- npm run build && tools/local/run.sh fit -- npm run build
 ```
 
-검증 봇(L-4): 사용자가 BotFather 로 **앱마다 다른** 검증 봇을 만들고 토큰·검증 채팅 id 를 `apps/<app>/.env` 에 **직접** 넣는다(채팅·저장소에 토큰을 남기지 않는다). 기동 때 봇 id(토큰 `:` 앞 숫자 · 공개값)와 채팅 id 를 허용 목록으로 넘긴다 — 없으면 `check_env` 가 막는다.
+검증 봇: 로컬 봇은 **Discord 검증 봇**만 쓴다(아래 Discord 봇 토큰 가드 · I-4′). 009 D-5 B6(#517) 뒤 두 앱은 `TELEGRAM_*` 를 읽지 않는다 — 텔레그램 봇 id·채팅 허용 목록(`PLEIADES_VERIFY_BOT_IDS`·`_CHAT_IDS`)은 더 넘기지 않는다.
 
 ## 플랫폼 설정 — 루트 `.env` (M-6a-2 · #143)
 
-pleiades 가 소유한 설정(알림 채널 스위치 `NOTIFY_*` · Discord 웹훅 `DISCORD_WEBHOOK_*`)은 **pleiades 루트 `.env`** 에 둔다 — 앱이 늘어도 한 곳에서 관리한다. 템플릿은 `.env.example`(`cp .env.example .env` 후 값 직접 기입 · gitignore).
+pleiades 가 소유한 설정(Discord 웹훅 `DISCORD_WEBHOOK_*` · 봇 `DISCORD_BOT_TOKEN_*`·`DISCORD_CHANNEL_ID_*` · `DISCORD_ALLOWED_USER_IDS`)은 **pleiades 루트 `.env`** 에 둔다 — 앱이 늘어도 한 곳에서 관리한다. 템플릿은 `.env.example`(`cp .env.example .env` 후 값 직접 기입 · gitignore).
 
 - **앱이 직접 읽는다** — `@pleiades/notify` 의 `platformEnv` 가 cwd 에서 위로 `package.json` 의 name 이 `pleiades` 인 곳의 `.env` 를 찾는다. 그래서 `run.sh` · `npm run dev` · `next start` · pm2 어느 쪽으로 띄워도 같다. 디렉터리 구조가 다르면(서버 배포 등) `PLEIADES_ENV_FILE=<경로>` 로 지정한다.
 - `run.sh` 밖(`npm run dev` · pm2)으로 띄우면 `check_env` 가 돌지 않는다 — 앱 `.env` 에 플랫폼 키를 두지 않았는지 스스로 확인한다.
 - **플랫폼 키만 읽는다** — 루트 `.env` 에 다른 키(봇 토큰 · DB URL)가 있어도 앱으로 가지 않는다. 앱 고유 설정은 계속 `apps/<app>/.env`.
 - 우선순위: 프로세스 env(셸 `export` · pm2 `env`) → 루트 `.env`. **플랫폼 키를 앱 `.env` 에 두면 루트 값을 가리므로 `check_env` 가 막는다.**
-- 비워 두면 알림은 텔레그램(지금과 같다). `NOTIFY_ALLOWED_CHANNEL=discord` 면 fin → `#finance` · fit → `#fitness`(분기 PDF 포함) · fin `NOTIFY_ADMIN_CHANNEL=discord` 면 관리자 알림 → `#admin`. `브리핑` 응답은 요청한 곳으로.
-- **버튼(M-6b)**: `NOTIFY_INTERACTIVE_CHANNEL=discord` 면 키보드 메시지를 앱별 Discord 봇(`DISCORD_BOT_TOKEN_<APP>` · `DISCORD_CHANNEL_ID_<APP>`)이 보낸다. 클릭은 그 앱 봇 프로세스의 gateway 가 받고 **`DISCORD_ALLOWED_USER_IDS` 의 사용자가 그 채널에서 누른 것만** 처리한다(비면 전부 거부). 봇 토큰·채널이 있으면 gateway 는 스위치와 무관하게 접속한다. 연결된 버튼: fit 자동조정(#151) · fin RSU 베스팅 확정·취소(#155 — 확정은 종가 조회·트랜잭션 뒤 원본을 고친다). 키 전체는 `.env.example`.
+- 알림은 늘 Discord 다(009 D-5 · 라우트 스위치 `NOTIFY_*_CHANNEL` 은 읽지 않는다 — 앱 `.env` 에 두면 `check_env` 가 여전히 막는다). fin → `#finance`(분기 PDF 포함) · 관리자 알림 → `#admin` · fit → `#fitness`. 웹훅을 비우면 그 알림은 수신자 0. `브리핑` 응답은 요청한 곳으로.
+- **버튼(M-6b)**: 키보드 메시지는 앱별 Discord 봇(`DISCORD_BOT_TOKEN_<APP>` · `DISCORD_CHANNEL_ID_<APP>`)이 보낸다(비면 수신자 0). 클릭은 그 앱 봇 프로세스의 gateway 가 받고 **`DISCORD_ALLOWED_USER_IDS` 의 사용자가 그 채널에서 누른 것만** 처리한다(비면 전부 거부). 봇 토큰·채널이 있으면 gateway 가 접속한다. 연결된 버튼: fit 자동조정(#151) · fin RSU 베스팅 확정·취소(#155 — 확정은 종가 조회·트랜잭션 뒤 원본을 고친다). 키 전체는 `.env.example`.
 - 값을 해석할 수 없으면(따옴표 짝 · 닫는 따옴표 뒤 글자) 앱 로그에 `[notify] 루트 .env 값을 해석할 수 없어 무시한다 — <키>` 가 한 번 찍히고 그 키는 없는 것으로 친다. 웹훅 URL 형식이 틀려도 그 채널 수신자는 0 이다 — Discord 에 안 오면 이 둘부터 본다.
 - 앱 테스트(vitest)는 `PLEIADES_ENV_FILE` 을 없는 경로로 고정한다 — 개발 PC 의 루트 `.env` 가 테스트로 새지 않는다.
 - 되돌리기: 루트 `.env` 의 키를 지우거나 비운다(**즉시** — 파일 수정 시각이 바뀌면 실행 중인 웹·봇도 다음 알림부터 다시 읽는다 · 재시작 불필요).
@@ -41,12 +41,11 @@ pleiades 가 소유한 설정(알림 채널 스위치 `NOTIFY_*` · Discord 웹�
 **네 명령은 모두 끝나지 않는 프로세스다** — 터미널 4개에서 각각 돌리고 **터미널마다 `export` 를 다시 한다**(또는 같은 셸에서 `&` 로 백그라운드 · 로그는 파일로). 위에서부터 그대로 붙이면 첫 줄에서 멈춘다(PR #123 Codex P2).
 
 ```bash
-export PLEIADES_VERIFY_BOT_IDS=<fin 봇 id>,<fit 봇 id> PLEIADES_VERIFY_CHAT_IDS=<검증 채팅 id,…>
 export PLEIADES_VERIFY_DISCORD_TOKEN_SHA256=<fin 검증 봇 해시>,<fit 검증 봇 해시>   # Discord 토큰이 있을 때 (009 D-G · #328)
 export PLEIADES_VERIFY_DISCORD_IDS=<검증 채널·사용자 id,…> PLEIADES_VERIFY_DISCORD_WEBHOOK_SHA256=<검증 웹훅 해시,…>   # Discord ID·웹훅이 있을 때 (I-5′ · #359)
 tools/local/run.sh fin -- npm run start -- -p 4610      # 웹 — Next 는 .env 의 PORT 를 쓰지 않는다 → -p 필수
 tools/local/run.sh fit -- npm run start -- -p 4620
-tools/local/run.sh fin -- node dist/bot/standalone.cjs  # 봇 — long polling · 크론·알림 스케줄러 등록
+tools/local/run.sh fin -- node dist/bot/standalone.cjs  # 봇 — 크론·알림 스케줄러 · Discord gateway(토큰·채널이 있을 때)
 tools/local/run.sh fit -- node dist/bot/standalone.cjs
 ```
 
@@ -58,7 +57,7 @@ tools/local/run.sh fit -- node dist/bot/standalone.cjs
 - advisor 는 막혀 있다(L-7) — fit `CLAUDE_BIN=/nonexistent/…` → `ENOENT` 로그 · fin 은 `run.sh` 의 PATH shim.
 - `next start` 는 **모든 인터페이스(`*:<port>`)** 에서 받는다 — 같은 LAN 에서 접근 가능하다.
 - 정지: 프로세스 kill. 되돌리기: `db.py drop <app> --confirm pleiades_<app>` · `rm apps/<app>/.env`.
-- 409 가 나면 같은 토큰이 다른 곳에서 polling 중이다 — **즉시 정지**(서비스 토큰이면 서비스 수신이 끊긴다 · ⑮).
+- Discord gateway 가 재접속을 되풀이하거나 IDENTIFY 보호 알림이 오면 같은 봇 토큰이 다른 곳에서도 접속 중일 수 있다 — **즉시 정지**(운영 토큰이면 서버 gateway 와 두 세션 · I-4′ · 009 R9). 옛 텔레그램 409 는 앱이 텔레그램을 쓰지 않아 더 생기지 않는다(009 D-5).
 
 첫 기동 실측: `docs/research/measured-facts.md` *2026-10-01 — M-4*.
 
