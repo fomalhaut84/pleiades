@@ -4,8 +4,8 @@ import { discordStateKey } from "../../core/state-key";
 import { BOT_PROCESS } from "../../notifications/notifier";
 
 // pleiades 009 D-2 PR-2 (pleiades#364 · 설계 H2 · T): 플랫폼 중립 판단 함수 — 입력(텍스트 · 인자 · 상태 키 · 시각)과
-// 중립 응답 모델(본문 · 형식 · 버튼 · long)만 본다. 009 D-5 B2(#504)에서 텔레그램 특성 테스트(telegram-handlers 31)를 지우며
-// 남는 테스트가 덮지 않던 케이스를 맨 아래 "텔레그램 특성 테스트 이관" 블록으로 옮겼다(대조표는 PR 본문).
+// 중립 응답 모델(본문 · 형식 · 버튼 · long)만 본다. 009 D-5 B2(#504)에서 옛 특성 테스트(31건)를 지우며
+// 남는 테스트가 덮지 않던 케이스를 맨 아래 "특성 테스트 이관" 블록으로 옮겼다(대조표는 PR 본문).
 
 const db = vi.hoisted(() => ({
   dailySummary: { findUnique: vi.fn() },
@@ -355,9 +355,9 @@ describe("사진 판단", () => {
   });
 });
 
-// 009 D-5 B2 (#504): 텔레그램 특성 테스트(telegram-handlers)에서 이관 — 남는 decide·discord-router 테스트가 덮지 않던 분기.
-// 본문·형식만 본다(텔레그램 호출열은 사라졌다). 실패 안내는 원문 대신 정적 문구다(#365 — 원문 분기는 이 PR 에서 지웠다).
-describe("텔레그램 특성 테스트 이관 — 명령", () => {
+// 009 D-5 B2 (#504): 옛 특성 테스트에서 이관 — 남는 decide·discord-router 테스트가 덮지 않던 분기.
+// 본문·형식만 본다(옛 어댑터 호출열은 사라졌다). 실패 안내는 원문 대신 정적 문구다(#365 — 원문 분기는 이 PR 에서 지웠다).
+describe("특성 테스트 이관 — 명령", () => {
   const view = (log: Array<BotReply | string>) =>
     log.map((m) => (typeof m === "string" ? m : { text: m.text, format: m.format }));
 
@@ -525,7 +525,7 @@ describe("텔레그램 특성 테스트 이관 — 명령", () => {
   });
 });
 
-describe("텔레그램 특성 테스트 이관 — 자유 텍스트 · food: 버튼", () => {
+describe("특성 테스트 이관 — 자유 텍스트 · food: 버튼", () => {
   const key = discordStateKey("31", "31");
   const opts = { stateKey: key, aiChannel: "discord", bot: BOT_PROCESS };
   beforeEach(() => deletePendingEdit(key));
@@ -626,7 +626,7 @@ describe("텔레그램 특성 테스트 이관 — 자유 텍스트 · food: 버
   });
 });
 
-describe("텔레그램 특성 테스트 이관 — 사전 리뷰 빈 칸", () => {
+describe("특성 테스트 이관 — 사전 리뷰 빈 칸", () => {
   const view = (log: Array<BotReply | string>) =>
     log.map((m) => (typeof m === "string" ? m : { text: m.text, format: m.format }));
 

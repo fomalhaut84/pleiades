@@ -315,7 +315,7 @@ export async function syncAll(
      */
     minHistoryDays?: number;
     /**
-     * #256: 각 dataType 실패 시 관리자에게 Telegram alert 발송 시도용 Bot 참조.
+     * #256: 각 dataType 실패 시 관리자에게 alert 발송 시도용 Bot 참조.
      * 미제공 시 알림 skip (서버 로그만). Garmin 재인증 실패 자동 감지 목적.
      */
     notifyBot?: BotProcess;

@@ -31,7 +31,7 @@ import { briefingArgsFromText, decideBriefing } from '../briefing'
 import { decideReport, reportArgsFromText } from '../report'
 import { backtestArgsFromText } from '../backtest'
 import { CUSTOM_STRATEGY_LIST_RE, customStrategyDeleteArgsFromText, customStrategyRegisterArgsFromText } from '../custom-strategy'
-import { ALERT_CONFIG_RE, alertArgsFromTelegram } from '../alert'
+import { ALERT_CONFIG_RE, alertArgsFromMatch } from '../alert'
 import { flush } from './test-utils'
 
 function fakeOut() {
@@ -69,14 +69,14 @@ describe('원문 → 인자 (A2)', () => {
   ])('%#', (fn, text, args) => expect(fn(text)).toBe(args))
 
   it('알림설정 — command 는 ctx.match 문자열 · 비면 원문에서 벗긴다', () => {
-    expect(alertArgsFromTelegram('급락 -3 ', '/alertconfig 급락 -3')).toBe('급락 -3')
-    expect(alertArgsFromTelegram('', '/alertconfig')).toBe('')
-    expect(alertArgsFromTelegram(undefined, '알림설정 급락 -3')).toBe('급락 -3')
+    expect(alertArgsFromMatch('급락 -3 ', '/alertconfig 급락 -3')).toBe('급락 -3')
+    expect(alertArgsFromMatch('', '/alertconfig')).toBe('')
+    expect(alertArgsFromMatch(undefined, '알림설정 급락 -3')).toBe('급락 -3')
   })
 
   it('알림설정 hears 의 매치 배열은 쓰지 않고 원문에서 벗긴다(PR-2c · UQ-3)', () => {
-    expect(alertArgsFromTelegram('알림설정 급락 -3'.match(ALERT_CONFIG_RE), '알림설정 급락 -3')).toBe('급락 -3')
-    expect(alertArgsFromTelegram('알림설정'.match(ALERT_CONFIG_RE), '알림설정')).toBe('')
+    expect(alertArgsFromMatch('알림설정 급락 -3'.match(ALERT_CONFIG_RE), '알림설정 급락 -3')).toBe('급락 -3')
+    expect(alertArgsFromMatch('알림설정'.match(ALERT_CONFIG_RE), '알림설정')).toBe('')
   })
 })
 

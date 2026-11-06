@@ -15,7 +15,7 @@ describe('splitMessage', () => {
     expect(splitMessage('abc', 10)).toEqual(['abc']);
     expect(splitMessage('', 10)).toEqual(['']);
   });
-  // 009 D-5 B5: 기본 한도(텔레그램 4096)를 지웠다 — 한도는 늘 인자다. 경계는 그대로 본다
+  // 009 D-5 B5: 기본 한도(4096)를 지웠다 — 한도는 늘 인자다. 경계는 그대로 본다
   it('한도와 같으면 1청크 · 1자 넘으면 2청크', () => {
     expect(splitMessage('x'.repeat(4096), 4096)).toEqual(['x'.repeat(4096)]);
     expect(splitMessage('x'.repeat(4097), 4096)).toHaveLength(2);

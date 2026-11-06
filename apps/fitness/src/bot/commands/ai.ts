@@ -8,7 +8,7 @@ import {
   formatUserFriendlyError,
   notifyAdminIfKnownFailure,
 } from "../../lib/monitoring/admin-alerts";
-import { mdToHtml } from "../utils/telegram";
+import { mdToHtml } from "../utils/html";
 import { htmlReply, plainReply, type BotReply, type ReplyOutput } from "../core/reply";
 import type { BotProcess } from "../notifications/notifier";
 
@@ -71,7 +71,7 @@ async function runReportFromAiCommand(
   return generateWeeklyReport(true, { notifyBot });
 }
 
-/** AI 질문 옵션 — `channel` 은 세션 채널(플랫폼별 · 텔레그램 "telegram"). `bot` 은 인증 만료 admin alert 경로. */
+/** AI 질문 옵션 — `channel` 은 세션 채널(플랫폼별 · Discord "discord"). `bot` 은 인증 만료 admin alert 경로. */
 export interface AiQuestionOptions {
   channel: string;
   detectReportRequest?: boolean;
@@ -116,7 +116,7 @@ export async function decideAiQuestion(
   }
 
   // isProcessing 보호: 모든 await 를 try 안에 두어 finally에서 무조건 false로 reset.
-  // 기존 코드는 "분석 중..." reply가 try 밖이라 grammY/Telegram 에러로 throw 시
+  // 기존 코드는 "분석 중..." reply가 try 밖이라 발송 에러로 throw 시
   // isProcessing 영구 true → 이후 모든 AI 질문 차단되는 버그가 있었음.
   isProcessing = true;
   try {

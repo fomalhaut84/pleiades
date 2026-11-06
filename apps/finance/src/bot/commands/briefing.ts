@@ -1,7 +1,7 @@
 import { sendBriefing, type BriefingOptions, type BriefingTarget } from '@/bot/notifications/briefing'
 import { askAdvisor, AdvisorError, describeAdvisorError } from '@/lib/ai/claude-advisor'
 import { splitMessage } from '@/bot/utils/formatter'
-import { markdownToTelegramHtml } from '@/bot/utils/markdown'
+import { markdownToHtml } from '@/bot/utils/markdown'
 import { formatKstDate } from '@/lib/kst-date'
 import { newsSearchRules } from '@/lib/ai/news-rules'
 import { gatherTickerNews } from '@/lib/news/prompt-news'
@@ -18,7 +18,7 @@ const SESSION_KEYWORDS = new Set(['한국', '미국', 'kr', 'KR', 'us', 'US'])
 
 export const BRIEFING_RE = /^브리핑(?:\s+.*)?$/
 
-/** 텔레그램 원문 → 인자 — `/briefing[@bot]` · `브리핑` 을 벗기고 trim(대소문자 무시). */
+/** 원문 → 인자 — `/briefing[@bot]` · `브리핑` 을 벗기고 trim(대소문자 무시). */
 export function briefingArgsFromText(text: string): string {
   return text.replace(/^(\/briefing(?:@\w+)?|브리핑)\s*/i, '').trim()
 }
@@ -64,7 +64,7 @@ export async function decideBriefing(
     session = kstHour >= 6 && kstHour < 15 ? 'KR' : 'US'
   }
 
-  // 텔레그램은 지금과 같은 두 인자 · Discord 는 실패 안내의 AI 명령 표기(`!ai`)를 넘긴다(설계 D2 · PR-3)
+  // options 가 없으면 두 인자 · Discord 는 실패 안내의 AI 명령 표기(`!ai`)를 넘긴다(설계 D2 · PR-3)
   const sending = options === undefined ? sendBriefing(session, target) : sendBriefing(session, target, options)
   sending.catch((e) =>
     console.error('[bot] 브리핑 발송 실패:', e)
@@ -120,8 +120,8 @@ function fireTickerAnalysis(out: ReplyOutput, ticker: string): void {
       overallTimeoutMs: 900_000,
     }))
     .then(async (result) => {
-      // 4096 경계·plain 분할은 텔레그램 시절 그대로다(Discord 는 chat 이 2000 으로 다시 나눈다 — 무해 · 설계 D)
-      const html = markdownToTelegramHtml(result.response)
+      // 4096 경계·plain 분할은 옛 채널 시절 그대로다(Discord 는 chat 이 2000 으로 다시 나눈다 — 무해 · 설계 D)
+      const html = markdownToHtml(result.response)
       if (html.length <= 4096) {
         try {
           await out.reply(modelReply(html, 'html'))

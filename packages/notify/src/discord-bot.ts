@@ -3,7 +3,7 @@
  *
  * 채널 웹훅은 `custom_id` 버튼을 보낼 수 없다 — 봇 토큰으로 `POST /channels/{id}/messages` 를 부른다.
  * target = 채널 별칭(예 `finance`) → 옵션 맵의 채널 ID. 토큰·채널 ID 는 target·로그·오류에 나오지 않는다.
- * `components` 는 `ButtonRows` 를 받아 Discord 버튼으로 바꾼다(009 D-5 B5 · 텔레그램 `inline_keyboard` 는 지웠다).
+ * `components` 는 `ButtonRows` 를 받아 Discord 버튼으로 바꾼다(009 D-5 B5 · 옛 `inline_keyboard` 객체는 지웠다).
  * 어댑터 소유 모드(`maxLength: Infinity`) · 버튼은 마지막 청크에만.
  */
 import { escapeDiscordMarkdown, htmlToDiscordMarkdown, splitDiscordMarkdown } from './discord-md';

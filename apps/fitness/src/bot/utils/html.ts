@@ -1,4 +1,4 @@
-/** 마크다운을 텔레그램 HTML로 간단 변환 */
+/** 마크다운을 HTML 부분집합으로 간단 변환 */
 export function mdToHtml(md: string): string {
   return md
     .replace(/### (.+)/g, "<b>$1</b>")

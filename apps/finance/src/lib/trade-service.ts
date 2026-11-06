@@ -1,5 +1,5 @@
 /**
- * Trade 생성 서비스 — API route와 텔레그램 봇 공유.
+ * Trade 생성 서비스 — API route와 봇 공유.
  * Prisma transaction으로 Trade 생성 + Holding 재계산을 원자적으로 수행.
  */
 

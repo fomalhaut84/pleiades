@@ -1,13 +1,13 @@
 import { prisma } from '@/lib/prisma'
 import { fetchQuote, InvalidTickerError, searchYahooByName, type QuoteResult } from '@/lib/price-fetcher'
 import { searchKrxByName } from '@/lib/krx-stocks'
-import { escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/html'
 import { buildQuoteMessage, formatChange, formatChangePercent } from './price-format'
 import { plainReply, type ReplyOutput } from '../core/reply'
 
 /*
  * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 주가 · 환율.
- * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말한다(수신은 `../discord/router` · 009 D-5 B3b 에서 텔레그램 등록부 삭제).
+ * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말한다(수신은 `../discord/router` · 009 D-5 B3b 에서 옛 채널 등록부 삭제).
  * 판단 흐름은 `__tests__/lookup-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 

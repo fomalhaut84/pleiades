@@ -8,7 +8,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { askAdvisor, describeAdvisorError } from '@/lib/ai/claude-advisor'
-import { markdownToTelegramHtml } from '@/bot/utils/markdown'
+import { markdownToHtml } from '@/bot/utils/markdown'
 import { notifierFor, Route, htmlContent } from './notifier'
 import { sanitizeError } from '@/bot/utils/error'
 import { formatKstDate } from '@/lib/kst-date'
@@ -153,7 +153,7 @@ async function sendReview(
       overallTimeoutMs: 900_000,
     })
 
-    const html = markdownToTelegramHtml(result.response)
+    const html = markdownToHtml(result.response)
 
     await notifierFor().notify(Route.ALLOWED, htmlContent(html), { label: 'active-review' })
 

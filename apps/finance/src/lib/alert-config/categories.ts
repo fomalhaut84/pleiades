@@ -115,7 +115,7 @@ export function categoryOf(key: string): AlertCategoryKey {
 
 /**
  * 토글 (on/off) 키 여부.
- * `ALERT_KEY_INPUT_TYPE` 를 단일 진실로 삼아 텔레그램 봇 커맨드 / MCP 도구 / 웹 UI
+ * `ALERT_KEY_INPUT_TYPE` 를 단일 진실로 삼아 봇 명령 / MCP 도구 / 웹 UI
  * 세 곳이 일관되게 on/off 검증 하도록. 신규 토글 키 추가 시 `ALERT_KEY_INPUT_TYPE`
  * 에 `'toggle'` 로만 매핑하면 세 경로 모두 자동 반영.
  */

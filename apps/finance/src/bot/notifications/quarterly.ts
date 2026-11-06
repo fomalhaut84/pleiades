@@ -15,7 +15,7 @@ import {
   formatKRWFull,
   formatKRWCompact,
 } from '@/bot/utils/formatter'
-import { escapeHtml, h } from '@/bot/utils/telegram'
+import { escapeHtml, h } from '@/bot/utils/html'
 import { notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
 
 function getQuarterLabel(month: number): string {

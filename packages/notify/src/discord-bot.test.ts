@@ -45,7 +45,7 @@ describe('toDiscordComponents — ButtonRows (009 D-5 A4 · B5)', () => {
     expect(() => toDiscordComponents([[{ label: 'x', action: 'c'.repeat(101) }]])).toThrow('custom_id');
   });
 
-  // 009 D-5 B5 (pleiades#515): 옛 텔레그램 inline_keyboard 객체는 더 받지 않는다 — 조용히 버튼 없이 가지 않고 오류
+  // 009 D-5 B5 (pleiades#515): 옛 채널의 inline_keyboard 객체는 더 받지 않는다 — 조용히 버튼 없이 가지 않고 오류
   it('ButtonRows 가 아닌 모양은 오류 — inline_keyboard 객체 · 배열이 아닌 행', () => {
     expect(() => toDiscordComponents({ inline_keyboard: [[{ text: 'a', callback_data: 'a' }]] })).toThrow('ButtonRows');
     expect(() => toDiscordComponents({ foo: 1 })).toThrow('ButtonRows');

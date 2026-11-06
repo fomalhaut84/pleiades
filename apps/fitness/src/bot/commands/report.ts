@@ -1,5 +1,5 @@
 import prisma from "../prisma";
-import { mdToHtml } from "../utils/telegram";
+import { mdToHtml } from "../utils/html";
 import { generateMorningReport, generateEveningReport } from "../../lib/daily-report";
 import { htmlReply, plainReply, type ReplyOutput } from "../core/reply";
 import type { BotProcess } from "../notifications/notifier";
@@ -11,7 +11,7 @@ export const REPORT_REGENERATE_FAILED_STATIC = "❌ 재생성 실패 — 잠시 
 /**
  * /report [regenerate morning|evening] — 최근 리포트 표시 또는 재생성(판단 · pleiades#364).
  * `arg` 는 명령 뒤 인자(플랫폼 접두를 뗀 문자열 · 없으면 undefined). `bot` 은 preSync Garmin 실패 admin alert 경로.
- * 재생성 실패는 원문을 내지 않고 정적 안내만(pleiades#367 · 텔레그램 원문 분기는 009 D-5 B2 #504 에서 지웠다).
+ * 재생성 실패는 원문을 내지 않고 정적 안내만(pleiades#367 · 원문 분기는 009 D-5 B2 #504 에서 지웠다).
  */
 export async function decideReport(
   arg: string | undefined,

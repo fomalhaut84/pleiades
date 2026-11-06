@@ -1,19 +1,19 @@
 import { runBacktest } from '@/lib/backtest/engine'
 import { PRESET_STRATEGIES, STRATEGY_ALIASES } from '@/lib/backtest/presets'
-import { escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/html'
 import { formatPercent } from '../utils/formatter'
 import { plainReply, type ReplyOutput } from '../core/reply'
 import { knownUserMessage } from '../utils/error'
 
 /*
  * pleiades 009 D-3 PR-2b (pleiades#394 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · Q · H2): 백테스트.
- * 판단(decideBacktest)은 인자와 중립 응답 모델만 안다 · typing 주기는 `out.typingIntervalMs`(텔레그램 5 s 그대로).
+ * 판단(decideBacktest)은 인자와 중립 응답 모델만 안다 · typing 주기는 `out.typingIntervalMs`(어댑터 값).
  * 판단 흐름은 `__tests__/special-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
 export const BACKTEST_RE = /^백테스트(?:\s+.*)?$/
 
-/** 텔레그램 원문 → 인자 — `/backtest[@bot]` · `백테스트` 를 벗기고 trim(대소문자 무시). */
+/** 원문 → 인자 — `/backtest[@bot]` · `백테스트` 를 벗기고 trim(대소문자 무시). */
 export function backtestArgsFromText(text: string): string {
   return text.replace(/^(\/backtest(?:@\w+)?|백테스트)\s*/i, '').trim()
 }

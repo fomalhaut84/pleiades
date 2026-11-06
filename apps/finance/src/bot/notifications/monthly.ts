@@ -6,7 +6,7 @@
 import { prisma } from '@/lib/prisma'
 import { isGiftSource } from '@/lib/tax/gift-tax'
 import { accountEmoji, formatKRWFull } from '@/bot/utils/formatter'
-import { escapeHtml, h } from '@/bot/utils/telegram'
+import { escapeHtml, h } from '@/bot/utils/html'
 import { notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
 
 export async function sendMonthlyReminder(): Promise<void> {

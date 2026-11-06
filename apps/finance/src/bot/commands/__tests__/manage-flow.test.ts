@@ -1,10 +1,10 @@
 /**
- * pleiades 009 D-5 B3a (pleiades#509) — manage-telegram.test.ts 를 판단 단위로 옮겼다(어댑터 없음).
+ * pleiades 009 D-5 B3a (pleiades#509) — 옛 채널 특성 테스트(manage)를 판단 단위로 옮겼다(어댑터 없음).
  *
  * 전략·전략목록 · 관심·관심삭제·관심목록 · 순자산·자산목록·자산추가·자산수정 · 소비·수입·예산·예산설정.
  * 옛 핸들러가 하던 대로 원문을 `*ArgsFromText` 로 벗긴 뒤 decide* 를 부른다(예산설정은 원문 그대로).
  * 인자 벗기기와 DB 쓰기 인자는 명시 단언으로 고정한다. 날짜가 들어가는 명령은 시계를 고정한다.
- * 빠진 것: 등록(명령·정규식 · 순서 — 텔레그램 전용) · 예산 명령의 정적 실패 안내(텔레그램 등록의 try/catch — 판단은 던지기만 한다).
+ * 빠진 것: 등록(명령·정규식 · 순서 — 옛 채널 전용) · 예산 명령의 정적 실패 안내(옛 등록의 try/catch — 판단은 던지기만 한다 · Discord 짝은 router.test).
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -379,7 +379,7 @@ describe('소비 · 수입 · 예산', () => {
     expect([usage.steps, bare.steps, zero.steps, created.steps, updated.steps]).toMatchSnapshot()
   })
 
-  // 정적 안내 문구(⚠️ 소비·수입·예산 조회 / 예산 설정에 실패했습니다.)는 텔레그램 등록의 try/catch 였다 — 판단은 던지기만 한다
+  // 정적 안내 문구(⚠️ 소비·수입·예산 조회 / 예산 설정에 실패했습니다.)는 옛 등록의 try/catch 였다 — 판단은 던지기만 한다
   // (Discord 는 라우터 감싸기가 문구를 낸다 · 그 테스트는 라우터 쪽에서)
   it('각 명령 — 처리 중 던지면 정적 안내', async () => {
     p.transaction.groupBy.mockRejectedValue(new Error('db'))

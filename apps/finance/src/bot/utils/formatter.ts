@@ -47,9 +47,9 @@ export function formatUSD(amount: number): string {
   return `$${amount.toFixed(2)}`
 }
 
-const TELEGRAM_MAX_LENGTH = 4096
+const MAX_MESSAGE_LENGTH = 4096
 
-export function splitMessage(text: string, maxLength = TELEGRAM_MAX_LENGTH): string[] {
+export function splitMessage(text: string, maxLength = MAX_MESSAGE_LENGTH): string[] {
   if (text.length <= maxLength) return [text]
 
   const lines = text.split('\n')

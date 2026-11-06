@@ -1,4 +1,4 @@
-// #253/#256: 실패 카테고리 분류 + 관리자 rate-limited Telegram alert + 사용자용 short 문구.
+// #253/#256: 실패 카테고리 분류 + 관리자 rate-limited alert + 사용자용 short 문구.
 //
 // v2.16.1 (#253) 은 Claude 인증만 대상. #256 로 Garmin 재인증 실패 + MCP transport 다운 확장.
 //

@@ -79,7 +79,7 @@ const CLIENT_TIMEOUT_RE = /Request to '.+' timed out after \d+ seconds/i;
 const ABORT_NAME_RE = /^AbortError$/i;
 
 /**
- * 네트워크 에러 판별 — ETIMEDOUT/ECONNRESET 등 + 클라이언트 타임아웃 문구(옛 grammy `timeoutSeconds` 모양)
+ * 네트워크 에러 판별 — ETIMEDOUT/ECONNRESET 등 + 클라이언트 타임아웃 문구(`Request to '…' timed out after N seconds`)
  * (code 없는 plain Error) + fetch abort (AbortError · type='aborted') 모두 포착.
  */
 export function isNetworkError(err: unknown): boolean {
@@ -103,7 +103,7 @@ export function isNetworkError(err: unknown): boolean {
 }
 
 /**
- * 텔레그램 HTML 파싱 실패 판별 (fit 공유 정규식 · 003 §3-1 정본).
+ * HTML 파싱 실패 판별 (fit 공유 정규식 · 003 §3-1 정본).
  * fin 로컬 `isParseError` 의 "error_code === 400 전체" 는 승계하지 않는다 — 비-파싱 400 은 폴백하지 않고 그대로 올라간다
  * (관측 변경 후보 · 빈도 미측정 · 003 §5-2 정정 ①).
  */

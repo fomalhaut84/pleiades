@@ -1,4 +1,4 @@
-// M13 Phase 2 (#249): auto-adjust 제안에 대한 Telegram callback 처리.
+// M13 Phase 2 (#249): auto-adjust 제안에 대한 버튼 처리.
 // Accept/Reject/Snooze 3-way inline keyboard callback → decision update + Accept 시
 // TrainingWorkout 실제 반영.
 
@@ -221,7 +221,7 @@ async function handleSnooze(adj: Adjustment): Promise<string> {
   return `💤 1시간 뒤 (~${kstStr}) 재알림합니다.`;
 }
 
-/** 버튼 1회 처리 결과 — 채널 중립(텔레그램 answerCallbackQuery · Discord ephemeral 안내 공통). */
+/** 버튼 1회 처리 결과 — 채널 중립(Discord ephemeral 안내). */
 export interface AutoAdjustDecision {
   /** 누른 사람에게 보여 줄 짧은 안내. */
   notice: string;
@@ -230,7 +230,7 @@ export interface AutoAdjustDecision {
 }
 
 /**
- * pleiades M-6b-3 (pleiades#151): 텔레그램 콜백 본문을 채널 중립 함수로 꺼냈다 — Discord 버튼(gateway)도 같은 판단을 쓴다.
+ * pleiades M-6b-3 (pleiades#151): 옛 콜백 본문을 채널 중립 함수로 꺼냈다 — Discord 버튼(gateway)이 이 판단을 쓴다.
  * 동작은 구 `registerAutoAdjustCallback` 본문과 같다(idempotent · TTL · 최종 상태 no-op). 오류는 기록하고 안내로 돌려준다.
  */
 export async function decideAutoAdjust(data: string): Promise<AutoAdjustDecision> {

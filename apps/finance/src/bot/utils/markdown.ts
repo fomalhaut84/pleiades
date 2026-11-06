@@ -1,10 +1,10 @@
 /**
- * 마크다운 → 텔레그램 HTML 변환
+ * 마크다운 → HTML 변환
  *
- * 텔레그램 Bot API는 HTML parse_mode에서 다음 태그만 지원:
+ * 판단 응답의 HTML 부분집합(Discord 어댑터가 마크다운으로 바꾼다)은 다음 태그만 쓴다:
  * <b>, <i>, <u>, <s>, <code>, <pre>, <a>, <blockquote>
  *
- * 마크다운 표, 헤더 등 미지원 문법을 텔레그램 호환 HTML로 변환.
+ * 마크다운 표, 헤더 등 미지원 문법을 그 부분집합 HTML 로 변환.
  */
 
 /**
@@ -46,15 +46,15 @@ function convertTables(text: string): string {
 }
 
 /**
- * 마크다운 → 텔레그램 HTML 변환
+ * 마크다운 → HTML 변환
  */
-export function markdownToTelegramHtml(text: string): string {
+export function markdownToHtml(text: string): string {
   let result = text
 
   // 표 → 리스트 변환 (다른 변환 전에)
   result = convertTables(result)
 
-  // HTML 특수문자 이스케이프 (텔레그램 HTML parse_mode 필수)
+  // HTML 특수문자 이스케이프 (HTML 본문 필수)
   result = result
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

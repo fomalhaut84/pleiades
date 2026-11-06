@@ -1,7 +1,7 @@
 /**
  * Phase 40-A (#468) — AI 어드바이저 실패 감지 + 관리자 alert.
  *
- * `askAdvisor` 가 연속으로 실패하면 관리자 텔레그램 chat 에 alert 발송.
+ * `askAdvisor` 가 연속으로 실패하면 관리자 채널(`#admin`)에 alert 발송.
  * 지금까지는 사용자가 브리핑 fallback 안내를 받아야만 관리자가 발견 → detect/
  * recover 사이클 단축을 위해 백그라운드 감시 도입.
  *
@@ -90,7 +90,7 @@ export function buildFailureAlert(state: AdvisorMonitorState, caller?: string): 
   // 이미 stderr **끝** 1KB. slice(0, 300) 로 앞을 자르면 오래된 output 만 남고 정말
   // actionable 한 마지막 에러 라인 (예: `Error: session expired`) 이 잘림.
   // 뒤 300자 (`slice(-300)`) 로 tail 을 유지.
-  const detail = err?.detail ? `\n<code>${escapeForTelegram(err.detail.slice(-300))}</code>` : ''
+  const detail = err?.detail ? `\n<code>${escapeForHtml(err.detail.slice(-300))}</code>` : ''
   const budget = err?.code !== undefined && IMMEDIATE_ALERT_CODES.has(err.code)
   // pleiades#269: 예산 초과는 재시도로 풀리지 않는다 — 첫 실패에 오고, 진단도 한도부터
   const title = budget
@@ -103,7 +103,7 @@ export function buildFailureAlert(state: AdvisorMonitorState, caller?: string): 
   return (
     `${title}\n\n` +
     callerLine +
-    `<b>마지막 에러:</b> ${escapeForTelegram(errMsg)}${detail}\n\n` +
+    `<b>마지막 에러:</b> ${escapeForHtml(errMsg)}${detail}\n\n` +
     `<b>진단 후보 (우선순위):</b>\n` +
     budgetHint +
     `1. <code>claude</code> CLI 인증 만료 → 서버 shell 에서 <code>claude</code> 대화형 재실행\n` +
@@ -122,8 +122,8 @@ export function buildRecoveryAlert(previousFailures: number, caller?: string): s
   )
 }
 
-/** 텔레그램 HTML parse 방어 (`<`, `>`, `&`). */
-function escapeForTelegram(s: string): string {
+/** HTML 본문 방어 (`<`, `>`, `&`). */
+function escapeForHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 

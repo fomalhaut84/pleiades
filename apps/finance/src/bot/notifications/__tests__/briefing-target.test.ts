@@ -60,16 +60,16 @@ describe('sendBriefing 응답 대상', () => {
     expect(notifier.notify).toHaveBeenCalledTimes(1)
   })
 
-  it('실패 안내 — 기본 /ai · aiCommand 로 바꿀 수 있다', async () => {
+  it('실패 안내 — 기본 !ai(009 D-5 B7a) · aiCommand 로 바꿀 수 있다', async () => {
     const tg = fakeNotifier()
     vi.mocked(askAdvisor).mockRejectedValueOnce(new Error('boom'))
     await sendBriefing('KR', () => tg as never)
     const dc = fakeNotifier()
     vi.mocked(askAdvisor).mockRejectedValueOnce(new Error('boom'))
-    await sendBriefing('US', () => dc as never, { aiCommand: '!ai' })
+    await sendBriefing('US', () => dc as never, { aiCommand: '/ask' })
     const text = (n: ReturnType<typeof fakeNotifier>) => (n.notify.mock.calls[0] as unknown[])[1] as { text: string }
-    expect(text(tg).text.endsWith('\n/ai 에서 직접 질문해주세요.')).toBe(true)
+    expect(text(tg).text.endsWith('\n!ai 에서 직접 질문해주세요.')).toBe(true)
     expect(text(tg).text.startsWith('📊 🇰🇷 한국장 모닝 브리핑 생성에 실패했습니다.')).toBe(true)
-    expect(text(dc).text.endsWith('\n!ai 에서 직접 질문해주세요.')).toBe(true)
+    expect(text(dc).text.endsWith('\n/ask 에서 직접 질문해주세요.')).toBe(true)
   })
 })

@@ -21,7 +21,7 @@ export interface NotifyButton {
 export type ButtonRows = readonly (readonly NotifyButton[])[];
 
 /**
- * 메시지에 붙는 버튼 — 중립 `ButtonRows` 만 받는다(009 D-5 B5 · pleiades#515 · 텔레그램 `inline_keyboard` 는 지웠다).
+ * 메시지에 붙는 버튼 — 중립 `ButtonRows` 만 받는다(009 D-5 B5 · pleiades#515 · 옛 `inline_keyboard` 객체는 지웠다).
  * 웹훅 transport 는 버튼을 거부하고, Discord 봇 transport 가 Discord 액션 행으로 바꾼다(`toDiscordComponents`).
  */
 export type Components = ButtonRows;
@@ -82,7 +82,7 @@ export interface Delivery {
   ref?: MessageRef;
   /**
    * 실패 시 raw `error.message` (Q19 C). 파사드는 sanitize 하지 않는다 — 로그만 별도로 sanitize 된다.
-   * **비밀이 포함될 수 있다** (undici 는 잘못된 웹훅 URL 을 `Failed to parse URL from <url>` 로 message 에 담는다 · 옛 텔레그램 봇 토큰 모양도 마스킹한다).
+   * **비밀이 포함될 수 있다** (undici 는 잘못된 웹훅 URL 을 `Failed to parse URL from <url>` 로 message 에 담는다 · 옛 `bot<id>:<token>` 봇 토큰 모양도 마스킹한다).
    * 로그·DB·API 응답·UI 에 쓰기 전 반드시 `sanitizeMessage`(또는 `sanitizeError`)를 통과시킨다 — 상속 컨벤션
    * "catch 블록에서 `error.message` 원문 노출 금지" · 003 §10 Q19 `sensitiveLogs` 단서. (사전 리뷰 M-4)
    */

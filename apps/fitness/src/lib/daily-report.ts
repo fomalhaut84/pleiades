@@ -134,7 +134,7 @@ async function runReportViaJob(params: {
     }
   } else if (!background && (job.status === "pending" || job.status === "running")) {
     // P1: cron 이 web 과 겹친 경우 — 완료까지 poll 대기 후 결과 반환. 대기 없이
-    // null 반환하면 텔레그램 알림 누락 (하루치 손실).
+    // null 반환하면 봇 알림 누락 (하루치 손실).
     console.log(
       `[report] ${category} ${reportDate} 이미 진행중 (${job.status}) — 완료 대기`,
     );
@@ -176,7 +176,7 @@ export async function startReportJob(params: {
 
 /**
  * #200: result=null 시 finalJob.status/errorMessage 를 담아 실제 원인 노출.
- * 텔레그램/UI 에서 "record 부재" 대신 askAdvisor 실패 원인 확인 가능.
+ * 봇 알림/UI 에서 "record 부재" 대신 askAdvisor 실패 원인 확인 가능.
  */
 function buildReportError(category: string, job: ReportJob): Error {
   const parts = [`${category} 실패 (job status=${job.status})`];

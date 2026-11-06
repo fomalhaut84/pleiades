@@ -1,11 +1,11 @@
 /**
  * 월간 리포트 자동 발송
  *
- * 매월 지정일에 askAdvisor로 전월 리포트를 생성하여 텔레그램 발송.
+ * 매월 지정일에 askAdvisor로 전월 리포트를 생성하여 알림 발송.
  */
 
 import { askAdvisor } from '@/lib/ai/claude-advisor'
-import { markdownToTelegramHtml } from '@/bot/utils/markdown'
+import { markdownToHtml } from '@/bot/utils/markdown'
 import { notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
 import { sanitizeError } from '@/bot/utils/error'
 
@@ -46,7 +46,7 @@ export async function sendMonthlyReport(): Promise<void> {
       overallTimeoutMs: 900_000,
     })
 
-    const html = markdownToTelegramHtml(result.response)
+    const html = markdownToHtml(result.response)
 
     await notifierFor().notify(Route.ALLOWED, htmlContent(html), NOTIFY_CTX)
 

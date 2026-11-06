@@ -60,12 +60,12 @@ export class DiscordWebhookError extends Error {
   }
 }
 
-/** undici `fetch` 의 연결 실패 코드 — 공용 `isNetworkError` 는 grammy·node 코드만 안다. */
+/** undici `fetch` 의 연결 실패 코드 — 공용 `isNetworkError` 는 node 코드·클라이언트 타임아웃 문구·abort 만 안다. */
 const UNDICI_NETWORK_CODES = new Set(['UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET', 'UND_ERR_HEADERS_TIMEOUT']);
 
 /**
  * 재시도할 네트워크 오류. 응답 대기 중 끊김(타임아웃·abort)은 Discord 가 이미 받았을 수 있어 중복 전송이 날 수 있다 —
- * 텔레그램 경로(코어 재시도)와 같은 성질이고, 누락보다 중복이 낫다는 원본 판단(fin `telegram.ts` withRetry 주석)을 따른다.
+ * 코어 재시도와 같은 성질이고, 누락보다 중복이 낫다는 원본 판단(fin 이전 발송 유틸 withRetry 주석)을 따른다.
  */
 function isRetryableNetworkError(err: unknown): boolean {
   if (isNetworkError(err)) return true;
@@ -107,7 +107,7 @@ export function createDiscordTransport(opts: DiscordTransportOptions): Transport
     maxLength: Number.POSITIVE_INFINITY,
     async send(target: string, content: Content): Promise<MessageRef> {
       if (content.components !== undefined) {
-        // 텔레그램 인라인 키보드 같은 인터랙션은 1b-2 범위 — 버튼 없이 보내면 사용자가 할 일을 잃는다
+        // 버튼 같은 인터랙션은 1b-2 범위(봇 transport) — 버튼 없이 보내면 사용자가 할 일을 잃는다
         throw new Error('@pleiades/notify: DiscordTransport 는 components(인터랙션)를 지원하지 않는다 — 1b-2');
       }
       const url = webhookFor(opts.webhooks, target);

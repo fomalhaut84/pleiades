@@ -197,7 +197,7 @@ describe('POST /api/alerts/history/[id]/retry', () => {
     expect((await POST(buildReq() as never, { params: Promise.resolve({ id: 'B' }) })).status).toBe(200)
   })
 
-  it('웹훅이 비어있으면 500 (cooldown 미마킹 — 환경변수 재설정 후 즉시 재시도 가능) · 옛 텔레그램 env 는 대신하지 않는다', async () => {
+  it('웹훅이 비어있으면 500 (cooldown 미마킹 — 환경변수 재설정 후 즉시 재시도 가능) · 옛 채널 env 는 대신하지 않는다', async () => {
     vi.stubEnv('DISCORD_WEBHOOK_FINANCE', '')
     vi.stubEnv('TELEGRAM_BOT_TOKEN', '1:x')
     vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '111')

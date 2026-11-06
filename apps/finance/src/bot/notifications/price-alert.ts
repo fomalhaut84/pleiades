@@ -2,13 +2,13 @@
  * 급등락 / 환율 변동 알림
  *
  * refreshPrices() 후 호출.
- * AlertConfig 임계값 초과 시 텔레그램 알림.
+ * AlertConfig 임계값 초과 시 알림.
  * 중복 방지: 동일 종목 당일 1회만 발송.
  */
 
 import { prisma } from '@/lib/prisma'
 import { formatPercent } from '@/bot/utils/formatter'
-import { escapeHtml } from '@/bot/utils/telegram'
+import { escapeHtml } from '@/bot/utils/html'
 import { notifierFor, recipients, Route, htmlContent, lastErrorOf, NOTIFY_CTX } from './notifier'
 import { isMarketOpenFor } from '@/lib/market-hours'
 import {

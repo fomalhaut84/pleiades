@@ -1,18 +1,18 @@
 import { generateTAReport } from '@/lib/ta/engine'
 import { formatPercent } from '../utils/formatter'
-import { escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/html'
 import { plainReply, type ReplyOutput } from '../core/reply'
 import { knownUserMessage } from '../utils/error'
 
 /*
  * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 기술적 분석.
- * 판단(decideAnalysis)은 인자(`args`)와 중립 응답 모델만 안다 · 텔레그램 원문 벗기기는 `analysisArgsFromText`(지금 식 그대로).
+ * 판단(decideAnalysis)은 인자(`args`)와 중립 응답 모델만 안다 · 원문 벗기기는 `analysisArgsFromText`(옛 식 그대로).
  * 판단 흐름은 `__tests__/lookup-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
 export const ANALYSIS_RE = /^분석(?:\s+.*)?$/
 
-/** 텔레그램 원문 → 인자 — `/analysis[@bot]` · `/분석` · `분석` 을 벗기고 trim(대소문자 무시). */
+/** 원문 → 인자 — `/analysis[@bot]` · `/분석` · `분석` 을 벗기고 trim(대소문자 무시). */
 export function analysisArgsFromText(text: string): string {
   return text.replace(/^(\/analysis(?:@\w+)?|\/분석|분석)\s*/i, '').trim()
 }

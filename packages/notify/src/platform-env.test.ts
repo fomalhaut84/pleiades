@@ -34,7 +34,7 @@ describe('parsePlatformEnv', () => {
       [
         'NOTIFY_ALLOWED_CHANNEL="discord"',
         'export DISCORD_WEBHOOK_FINANCE=https://discord.com/api/webhooks/1/t',
-        'TELEGRAM_BOT_TOKEN=111:secret',
+        'APP_BOT_TOKEN=111:secret',
         'DATABASE_URL=postgresql://svc/prod',
         '# NOTIFY_ADMIN_CHANNEL=discord',
         'notify_lower=1',
@@ -48,7 +48,7 @@ describe('parsePlatformEnv', () => {
   });
 
   it('해석할 수 없는 플랫폼 키는 invalid 로 — 값은 담지 않는다', () => {
-    expect(parsePlatformEnv('NOTIFY_ALLOWED_CHANNEL="discord\nTELEGRAM_BOT_TOKEN="x')).toEqual({
+    expect(parsePlatformEnv('NOTIFY_ALLOWED_CHANNEL="discord\nAPP_BOT_TOKEN="x')).toEqual({
       values: {},
       invalid: ['NOTIFY_ALLOWED_CHANNEL'],
     });
@@ -96,7 +96,7 @@ describe('platformEnv — 루트 .env 와 프로세스 env', () => {
     expect(platformEnv('DISCORD_WEBHOOK_FITNESS')).toBe('https://discord.com/api/webhooks/2/t');
   });
 
-  it('루트 .env 가 없거나 루트를 못 찾으면 undefined (텔레그램 기본)', () => {
+  it('루트 .env 가 없거나 루트를 못 찾으면 undefined', () => {
     expect(platformEnv('NOTIFY_ALLOWED_CHANNEL')).toBeUndefined();
     cwd.mockReturnValue(tmpdir());
     resetPlatformEnvCache();
@@ -104,7 +104,7 @@ describe('platformEnv — 루트 .env 와 프로세스 env', () => {
   });
 
   it('해석할 수 없는 값은 경고 한 번 · 키 이름만', () => {
-    writeFileSync(join(root, '.env'), 'NOTIFY_ALLOWED_CHANNEL="disc\nTELEGRAM_BOT_TOKEN=111:topsecret\n');
+    writeFileSync(join(root, '.env'), 'NOTIFY_ALLOWED_CHANNEL="disc\nAPP_BOT_TOKEN=111:topsecret\n');
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect(platformEnv('NOTIFY_ALLOWED_CHANNEL')).toBeUndefined();
     platformEnv('NOTIFY_ADMIN_CHANNEL');
@@ -140,6 +140,6 @@ describe('platformEnv — 루트 .env 와 프로세스 env', () => {
   });
 
   it('플랫폼 키가 아닌 이름은 거부한다 — 봇 토큰을 이 경로로 읽지 못한다', () => {
-    expect(() => platformEnv('TELEGRAM_BOT_TOKEN')).toThrow('플랫폼 키가 아니다');
+    expect(() => platformEnv('APP_BOT_TOKEN')).toThrow('플랫폼 키가 아니다');
   });
 });

@@ -57,7 +57,7 @@ describe('scheduleNotifications — 수신자 확인은 실행 시점에', () =>
   it.each([
     ['KR', '30 8 * * 1-5'],
     ['US', '0 23 * * 1-5'],
-  ])('크론 브리핑(%s)은 실패 안내에 !ai 를 넘긴다', async (session, expr) => {
+  ])('크론 브리핑(%s)은 기본 실패 안내(!ai)를 쓴다 — 인자를 넘기지 않는다(009 D-5 B7a)', async (session, expr) => {
     const { scheduleNotifications } = await import('../scheduler')
     scheduleNotifications()
     const job = vi.mocked(cron.schedule).mock.calls.find((c) => c[0] === expr)
@@ -66,7 +66,7 @@ describe('scheduleNotifications — 수신자 확인은 실행 시점에', () =>
     const { sendBriefing } = await import('../briefing')
     vi.mocked(sendBriefing).mockClear()
     await (job![1] as unknown as () => Promise<void>)()
-    expect(sendBriefing).toHaveBeenCalledWith(session, undefined, { aiCommand: '!ai' })
+    expect(sendBriefing).toHaveBeenCalledWith(session)
   })
 
   it('수신자 0 으로 떠도 작업은 등록된다 — 실행 때 0 이면 건너뛴다', async () => {
@@ -83,9 +83,9 @@ describe('scheduleNotifications — 수신자 확인은 실행 시점에', () =>
     expect(sendRSUReminders).toHaveBeenCalledTimes(1)
   })
 
-  // 회귀: 009 D-1 감사 [A]#5 · D-5 B3~B4 틈 — 옛 텔레그램 env(토큰 · chat ID · 스위치)만 남아 있으면 생성 뒤 버리지 않고
-  // 아예 실행하지 않는다. 009 D-5 B4(pleiades#512): 텔레그램 수신자는 더 없다 — 판정은 웹훅만 본다.
-  it('옛 텔레그램 env 만 있고 웹훅이 비면 실행하지 않는다(생성 호출 0)', async () => {
+  // 회귀: 009 D-1 감사 [A]#5 · D-5 B3~B4 틈 — 옛 채널 env(토큰 · chat ID · 스위치)만 남아 있으면 생성 뒤 버리지 않고
+  // 아예 실행하지 않는다. 009 D-5 B4(pleiades#512): 옛 채널 수신자는 더 없다 — 판정은 웹훅만 본다.
+  it('옛 채널 env 만 있고 웹훅이 비면 실행하지 않는다(생성 호출 0)', async () => {
     vi.stubEnv('TELEGRAM_BOT_TOKEN', '1:x')
     vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '11')
     vi.stubEnv('NOTIFY_ALLOWED_CHANNEL', 'telegram')

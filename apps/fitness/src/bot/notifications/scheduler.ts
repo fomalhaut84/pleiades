@@ -4,7 +4,7 @@ import { generateMorningReport, generateEveningReport } from "../../lib/daily-re
 import { generateWeeklyReport } from "../../lib/weekly-report";
 import { runAutoAdjustProposal } from "./auto-adjust";
 import { runAutoAdjustMaintenance } from "./auto-adjust-cron";
-import { mdToHtml } from "../utils/telegram";
+import { mdToHtml } from "../utils/html";
 import { sanitizeError } from "../utils/error";
 import {
   formatUserFriendlyError,
@@ -13,7 +13,7 @@ import {
 import { Route, html as htmlContent } from "@pleiades/notify";
 import { BOT_NOTIFY_CTX, notifierFor } from "./notifier";
 
-/** 리포트 cron 콜백 공통 처리: 단계별 로그 + 실패 시 텔레그램 알림 (조용한 실패 차단) */
+/** 리포트 cron 콜백 공통 처리: 단계별 로그 + 실패 시 Discord 알림 (조용한 실패 차단) */
 async function runReportCron(
   bot: BotProcess,
   label: string,

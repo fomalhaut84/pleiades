@@ -1,13 +1,13 @@
 import { prisma } from '@/lib/prisma'
 import { parseStrategyText } from '@/lib/custom-strategy/parser'
 import { conditionToString, type Condition } from '@/lib/custom-strategy/types'
-import { escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/html'
 import { plainReply, type ReplyOutput } from '../core/reply'
 import { knownUserMessage } from '../utils/error'
 
 /*
  * pleiades 009 D-3 PR-2b (pleiades#394 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 커스텀전략 등록 · 목록 · 삭제.
- * 판단(decide*)은 인자와 중립 응답 모델만 안다 · 텔레그램 원문 벗기기는 `*ArgsFromText`(지금 식 그대로).
+ * 판단(decide*)은 인자와 중립 응답 모델만 안다 · 원문 벗기기는 `*ArgsFromText`(옛 식 그대로).
  * 판단 흐름은 `__tests__/special-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
@@ -20,12 +20,12 @@ export const CUSTOM_STRATEGY_REGISTER_RE = /^커스텀전략등록(?:\s+.*)?$/
 export const CUSTOM_STRATEGY_LIST_RE = /^커스텀전략목록\s*$/
 export const CUSTOM_STRATEGY_DELETE_RE = /^커스텀전략삭제(?:\s+.*)?$/
 
-/** 텔레그램 원문 → 인자 — `/customstrategy` · `커스텀전략등록` 을 벗기고 trim(대소문자 무시 · `@bot` 은 벗기지 않는다 — 현재 동작). */
+/** 원문 → 인자 — `/customstrategy` · `커스텀전략등록` 을 벗기고 trim(대소문자 무시 · `@bot` 은 벗기지 않는다 — 현재 동작). */
 export function customStrategyRegisterArgsFromText(text: string): string {
   return text.replace(/^(\/customstrategy|커스텀전략등록)\s*/i, '').trim()
 }
 
-/** 텔레그램 원문 → 인자 — `/customstrategydelete` · `커스텀전략삭제` 를 벗기고 trim(대소문자 무시). */
+/** 원문 → 인자 — `/customstrategydelete` · `커스텀전략삭제` 를 벗기고 trim(대소문자 무시). */
 export function customStrategyDeleteArgsFromText(text: string): string {
   return text.replace(/^(\/customstrategydelete|커스텀전략삭제)\s*/i, '').trim()
 }

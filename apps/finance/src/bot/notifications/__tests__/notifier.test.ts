@@ -1,6 +1,6 @@
 /**
  * fin notifier 배선 — 라우트 → Discord(M-6a-2 #143 · M-6b-1 #147 · M-6b-4 #155).
- * pleiades 009 D-5 B4 (pleiades#512): 텔레그램을 지웠다 — 라우트 스위치(`NOTIFY_*_CHANNEL`)와 텔레그램 env 를 읽지 않고 늘 Discord.
+ * pleiades 009 D-5 B4 (pleiades#512): 옛 채널 전송을 지웠다 — 라우트 스위치(`NOTIFY_*_CHANNEL`)와 옛 채널 env 를 읽지 않고 늘 Discord.
  * 재시도·분할·변환 baseline 은 packages/notify 테스트가 덮는다. 이 파일은 fin 의 배선(라우트 → 웹훅·봇 · 실행 판정)만 고정한다.
  */
 
@@ -22,8 +22,8 @@ const WEBHOOK_FIN = 'https://discord.com/api/webhooks/1/fin-token'
 const WEBHOOK_ADMIN = 'https://discord.com/api/webhooks/2/admin-token'
 const CHANNEL = '123456789012345678'
 
-/** 옛 텔레그램 · 스위치 env — 남아 있어도 읽지 않는다(서버 `.env` 에 줄이 남는 경우 · 009 §5-2). */
-function stubLegacyTelegramEnv(): void {
+/** 옛 채널 · 스위치 env — 남아 있어도 읽지 않는다(서버 `.env` 에 줄이 남는 경우 · 009 §5-2). */
+function stubLegacyChannelEnv(): void {
   vi.stubEnv('TELEGRAM_BOT_TOKEN', '1:x')
   vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '11,22')
   vi.stubEnv('TELEGRAM_ADMIN_CHAT_IDS', '99')
@@ -67,9 +67,9 @@ describe('fin notifier — 늘 Discord', () => {
     expect(recipients.targetCount(Route.ADMIN)).toBe(1)
   })
 
-  // 회귀: 009 D-5 B3~B4 틈 — 스위치가 telegram 이고 토큰이 있으면 크론이 수신자를 세고 0 건 보냈다
-  it('옛 텔레그램 env · 스위치가 남아 있어도 읽지 않는다 — 웹훅으로 보낸다', async () => {
-    stubLegacyTelegramEnv()
+  // 회귀: 009 D-5 B3~B4 틈 — 스위치가 옛 채널이고 토큰이 있으면 크론이 수신자를 세고 0 건 보냈다
+  it('옛 채널 env · 스위치가 남아 있어도 읽지 않는다 — 웹훅으로 보낸다', async () => {
+    stubLegacyChannelEnv()
     expect(recipients.targetCount(Route.ALLOWED)).toBe(1)
     expect(recipients.targetCount(Route.ADMIN)).toBe(1)
     expect(fileRecipientCount(Route.ALLOWED)).toBe(1)
@@ -78,8 +78,8 @@ describe('fin notifier — 늘 Discord', () => {
     expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([`${WEBHOOK_FIN}?wait=true`, `${WEBHOOK_ADMIN}?wait=true`])
   })
 
-  it('웹훅이 비면 수신자 0 — 가드가 건너뛴다 · 텔레그램 env 가 있어도 0', async () => {
-    stubLegacyTelegramEnv()
+  it('웹훅이 비면 수신자 0 — 가드가 건너뛴다 · 옛 채널 env 가 있어도 0', async () => {
+    stubLegacyChannelEnv()
     vi.stubEnv('DISCORD_WEBHOOK_FINANCE', '')
     vi.stubEnv('DISCORD_WEBHOOK_ADMIN', '')
     expect(recipients.targetCount(Route.ALLOWED)).toBe(0)
@@ -102,7 +102,7 @@ describe('fin notifier — 늘 Discord', () => {
 
   // M-6b-4 (#155) — 키보드 메시지는 fin 봇
   it('interactiveNotifierFor — fin 봇으로 #finance 채널 · 버튼 변환 · 스위치를 읽지 않는다', async () => {
-    stubLegacyTelegramEnv()
+    stubLegacyChannelEnv()
     vi.stubEnv('DISCORD_BOT_TOKEN_FINANCE', 'fake-token')
     vi.stubEnv('DISCORD_CHANNEL_ID_FINANCE', CHANNEL)
     const buttons = [[
@@ -121,7 +121,7 @@ describe('fin notifier — 늘 Discord', () => {
   })
 
   it('봇 설정이 없으면 키보드 수신자 0 — 웹훅으로 우회하지 않는다', async () => {
-    stubLegacyTelegramEnv()
+    stubLegacyChannelEnv()
     vi.stubEnv('DISCORD_BOT_TOKEN_FINANCE', '')
     vi.stubEnv('DISCORD_CHANNEL_ID_FINANCE', 'not-an-id')
     const r = await interactiveNotifierFor().notify(Route.ALLOWED, htmlContent('rsu', [[{ label: 'ok', action: 'c' }]]))
@@ -154,8 +154,8 @@ describe('fin notifier — 늘 Discord', () => {
     })
 
     // 회귀: PR #148 Codex P2 — 생성 전 수신자 확인은 웹훅 기준
-    it('fileRecipientCount — 웹훅 유무(0/1) · 텔레그램 chat 이 남아 있어도 0', () => {
-      stubLegacyTelegramEnv()
+    it('fileRecipientCount — 웹훅 유무(0/1) · 옛 채널 chat 이 남아 있어도 0', () => {
+      stubLegacyChannelEnv()
       expect(fileRecipientCount('ALLOWED')).toBe(1)
       vi.stubEnv('DISCORD_WEBHOOK_FINANCE', '')
       expect(fileRecipientCount('ALLOWED')).toBe(0)

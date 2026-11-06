@@ -9,7 +9,7 @@ import { createTrade } from '@/lib/trade-service'
 import { splitMessage, formatKRWFull, formatUSD } from '../utils/formatter'
 import { isAiQuestion } from '../utils/ai-trigger'
 import { isTradeMessage } from '../utils/trade-trigger'
-import { markdownToTelegramHtml } from '../utils/markdown'
+import { markdownToHtml } from '../utils/markdown'
 import { sanitizeError } from '../utils/error'
 import { buildTickerCheckLines } from '../utils/trade-price-check'
 import {
@@ -26,7 +26,7 @@ import { pendingKey, type StateKey } from '../core/state-key'
 
 /*
  * pleiades 009 D-3 PR-1b (pleiades#385 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 H2 · Q · S):
- * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말한다(수신은 `../discord/router` · 009 D-5 B3b 에서 텔레그램 등록부 삭제).
+ * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말한다(수신은 `../discord/router` · 009 D-5 B3b 에서 옛 채널 등록부 삭제).
  * 대화 상태(세션 · 동시 1건)의 키는 상태 키(`discord:<채널>:<사용자>` · UQ-4).
  * 판단 흐름은 `__tests__/ai-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
@@ -52,7 +52,7 @@ function cleanExpiredSessions(): void {
 
 /**
  * AI 대화 — 진행 안내 뒤 곧 돌아가고(fire-and-forget) 답은 나중에 보낸다.
- * 상태 키가 없으면(텔레그램 chat 없음) 무응답 · 같은 키에 진행 중인 질문이 있으면 처리 중 안내.
+ * 상태 키가 없으면(대화 위치 불명) 무응답 · 같은 키에 진행 중인 질문이 있으면 처리 중 안내.
  */
 export function decideAiQuestion(question: string, stateKey: StateKey | undefined, out: ReplyOutput): void {
   if (!stateKey) return
@@ -85,7 +85,7 @@ export function decideAiQuestion(question: string, stateKey: StateKey | undefine
       if (result.sessionId) chatSessions.set(stateKey, { sessionId: result.sessionId, lastUsed: Date.now() })
       const chunks = splitMessage(result.response)
       for (const chunk of chunks) {
-        const chunkHtml = markdownToTelegramHtml(chunk)
+        const chunkHtml = markdownToHtml(chunk)
         try {
           await out.reply(modelReply(chunkHtml, 'html'))
         } catch {
@@ -125,7 +125,7 @@ interface ParsedTrade {
 }
 
 interface PendingAiTrade {
-  /** 본인 확인 값 — `Requester.userId`(텔레그램 `String(from?.id ?? 0)`) */
+  /** 본인 확인 값 — `Requester.userId`(Discord 사용자 ID) */
   requestedByUserId: string
   parsed: ParsedTrade
   accountId: string
@@ -493,7 +493,7 @@ export async function decideReset(stateKey: StateKey | undefined, out: ReplyOutp
 
 /**
  * AI fallback 경로 — 앞 핸들러(소비 입력 등)가 넘긴 텍스트.
- * 명령 모양 판정은 어댑터가 넘긴다(텔레그램 = `/` 시작 · Discord = 접두 `!` 는 PR-3).
+ * 명령 모양 판정은 어댑터가 넘긴다(Discord = `!` 또는 `/` 시작 · `discord/router.ts` · PR-3).
  */
 export function aiFallbackRoute(text: string, isCommand: boolean): 'trade' | 'question' | 'none' {
   if (isCommand) return 'none'

@@ -1,10 +1,10 @@
 /**
- * pleiades 009 D-5 B3a (pleiades#509) — ai-telegram.test.ts 를 판단 단위로 옮겼다(어댑터 없음).
+ * pleiades 009 D-5 B3a (pleiades#509) — 옛 채널 특성 테스트(ai)를 판단 단위로 옮겼다(어댑터 없음).
  *
  * 옛 특성 테스트(pleiades#385 · T8 · T9 · T10 · T13 · T14 · T17 · T18)의 호출열을 판단 함수(decide*)가 부르는 단계로 옮긴다.
  * fallback 경로는 옛 핸들러와 같게 `aiFallbackRoute` → `decideTradeParse` / `decideAiQuestion` 순으로 부른다.
  * 대화 상태 키는 Discord 모양(`discord:<채널>:<사용자>`)을 쓰고 옛 테스트처럼 테스트마다 새 키를 쓴다.
- * 빠진 것(텔레그램 등록 · `next` · 바깥 try/catch 안내)은 `scratchpad/b3/map-ai.md` 에 적었다.
+ * 빠진 것(옛 등록 · `next` · 바깥 try/catch 안내)은 `scratchpad/b3/map-ai.md` 에 적었다.
  * "현재 동작" 이라 적은 테스트는 서비스 유래 결함을 그대로 고정한다(UQ-3 — 고칠 때 별도 커밋).
  */
 
@@ -31,7 +31,7 @@ import { aiFallbackRoute, decideAiCommand, decideAiQuestion, decideAiTradeButton
 import type { BotReply, ButtonOutput, MessageKey, ReplyOutput } from '../../core/reply'
 import { discordMessageKey, discordStateKey, type StateKey } from '../../core/state-key'
 import { splitMessage } from '../../utils/formatter'
-import { markdownToTelegramHtml } from '../../utils/markdown'
+import { markdownToHtml } from '../../utils/markdown'
 import { buildTickerCheckLines } from '../../utils/trade-price-check'
 import {
   FLOW_CHANNEL,
@@ -220,7 +220,7 @@ describe('T13 /ai · /reset · 동시 1건 · 세션', () => {
     expect(mocked.ask.mock.calls[0][0]).toBe('안녕')
     expect(rec.steps).toEqual([
       ['reply', '🤔 생각 중...', 'plain'],
-      ['reply', markdownToTelegramHtml('답'), 'html'],
+      ['reply', markdownToHtml('답'), 'html'],
     ])
   })
 
@@ -347,7 +347,7 @@ describe('T14 AI 대화 응답 — 분할 · 조각별 HTML · 실패 시 원문
     expect(chunks.length).toBe(2)
     expect(rec.steps).toEqual([
       ['reply', '🤔 생각 중...', 'plain'],
-      ...chunks.map((c) => ['reply', markdownToTelegramHtml(c), 'html']),
+      ...chunks.map((c) => ['reply', markdownToHtml(c), 'html']),
     ])
   })
 
@@ -369,9 +369,9 @@ describe('T14 AI 대화 응답 — 분할 · 조각별 HTML · 실패 시 원문
     const chunks = splitMessage(longResponse)
     expect(base.steps).toEqual([
       ['reply', '🤔 생각 중...', 'plain'],
-      ['reply', markdownToTelegramHtml(chunks[0]), 'html'],
+      ['reply', markdownToHtml(chunks[0]), 'html'],
       ['reply', chunks[0], 'plain'],
-      ['reply', markdownToTelegramHtml(chunks[1]), 'html'],
+      ['reply', markdownToHtml(chunks[1]), 'html'],
     ])
   })
 })
@@ -649,7 +649,7 @@ describe('T9 aitrade: 버튼', () => {
     expect(owner.steps[0]).toEqual(['toast', '취소되었습니다.'])
   })
 
-  // 옛 텔레그램 요청자 `from` 없음 = '0' · 누른 사람 `from` 없음 = undefined — 판단 규칙(undefined = 거부)만 옮긴다
+  // 옛 어댑터 요청자 없음 = '0' · 누른 사람 없음 = undefined — 판단 규칙(undefined = 거부)만 옮긴다
   it('T17 누른 사람 from 없음 → 거부(요청자 from 도 없어 0 이어도)', async () => {
     const { tradeId, messageKey } = await startAiTrade({ userId: '0' })
     const r = await click(`aitrade:confirm:${tradeId}`, messageKey, undefined)

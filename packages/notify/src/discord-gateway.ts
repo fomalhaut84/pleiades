@@ -1,7 +1,7 @@
 /**
  * Discord gateway 수신기 — 버튼 클릭(INTERACTION_CREATE · message component)만 받는다 (M-6b-2 #149 · 003 §6 1b-2a).
  *
- * 텔레그램 롱폴링과 같은 모델: 봇 프로세스가 **아웃바운드 WebSocket** 하나를 유지한다(공개 URL 불필요).
+ * 봇 프로세스가 **아웃바운드 WebSocket** 하나를 유지한다(공개 URL 불필요).
  * 프로토콜(v10 · JSON): HELLO → heartbeat 주기 · IDENTIFY(intents 0 — 인터랙션은 intent 없이 온다) · READY(session · resume URL) ·
  * HEARTBEAT_ACK 누락 = 좀비 연결 → 끊고 RESUME · RECONNECT(7) · INVALID_SESSION(9) · 치명 close 코드(인증 실패 등)는 멈춘다.
  *
@@ -45,16 +45,16 @@ const EPHEMERAL = 64;
 
 /** 버튼 클릭 컨텍스트 — 핸들러는 이것만 본다(Discord 프로토콜 비노출). */
 export interface DiscordButtonContext {
-  /** 버튼의 custom_id (= 텔레그램 callback_data). */
+  /** 버튼의 custom_id. */
   customId: string;
   userId: string;
   channelId: string;
   messageId: string;
-  /** 원본 메시지 본문을 바꾼다(HTML · 텔레그램 editMessageText 대응). `keepButtons` 가 아니면 버튼을 지운다. */
+  /** 원본 메시지 본문을 바꾼다(HTML). `keepButtons` 가 아니면 버튼을 지운다. */
   edit(html: string, opts?: { keepButtons?: boolean }): Promise<void>;
-  /** 누른 사람에게만 보이는 짧은 안내(텔레그램 answerCallbackQuery 토스트·알림 대응). */
+  /** 누른 사람에게만 보이는 짧은 안내. */
   reply(text: string): Promise<void>;
-  /** 본문은 그대로 두고 버튼만 지운다(텔레그램 editMessageReplyMarkup 대응 · M-6b-3). */
+  /** 본문은 그대로 두고 버튼만 지운다(M-6b-3). */
   removeButtons(): Promise<void>;
 }
 

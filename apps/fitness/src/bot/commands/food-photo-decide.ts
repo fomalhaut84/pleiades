@@ -1,6 +1,6 @@
-// pleiades 009 D-2 PR-3 (pleiades#367 · PR-2 사전 리뷰 info 2): 사진 판단만 — 텔레그램 모듈 그래프(grammy 다운로드 ·
-// https Agent · bot/index.ts)를 끌고 오지 않게 food-photo.ts 에서 떼었다. 텔레그램 어댑터(food-photo.ts)와
-// Discord 첨부 경로(discord/photo.ts)가 같은 판단을 쓴다. 본문은 옮기기만 했다(동작 무변경).
+// pleiades 009 D-2 PR-3 (pleiades#367 · PR-2 사전 리뷰 info 2): 사진 판단만 — 옛 어댑터 모듈 그래프(다운로드 ·
+// https Agent · bot/index.ts)를 끌고 오지 않게 food-photo.ts 에서 떼었다. Discord 첨부 경로(discord/photo.ts)가
+// 이 판단을 쓴다. 본문은 옮기기만 했다(동작 무변경).
 
 import prisma from "../prisma";
 import { withHistoryCacheBump } from "../../lib/history/cache";
@@ -36,7 +36,7 @@ function extractMealFromCaption(caption?: string): { mealType: string; residual:
 /**
  * 다운로드된 음식 사진 1장 → Vision → FoodLog 저장 → 응답 모델(판단 · pleiades#364).
  * `caption` 은 사진 설명 원문(식사 접두 `점심 …` 이면 mealType) · `sentAt` 은 메시지 시각(끼니 추정 · 저장 날짜 기준).
- * 길이 절단은 하지 않는다 — 텔레그램 4096 은 어댑터 · Discord 2000 분할은 chat 이 한다(설계 C 표).
+ * 길이 절단은 하지 않는다 — Discord 2000 분할은 chat 이 한다(설계 C 표).
  */
 export async function decidePhotoFood(input: {
   imagePath: string;

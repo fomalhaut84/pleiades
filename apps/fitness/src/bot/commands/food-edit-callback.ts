@@ -4,7 +4,7 @@
 //   food:edit-cancel:<logId> → 편집 대기 취소 — #350
 //   food:delete:<logId>      → 즉시 삭제 + 원본 메시지 편집 + 재계산
 //
-// #350: force_reply 폐기. Telegram 클라이언트가 force_reply 상태를 영구 보관해 답장 안 된
+// #350: force_reply 폐기. 옛 메신저 클라이언트가 force_reply 상태를 영구 보관해 답장 안 된
 // 프롬프트가 채팅방을 열 때마다 답장 입력폼을 재무장시켰다 (Bot API 에 회수 수단 없음).
 // 프롬프트를 일반 메시지 + [✕ 취소] inline 버튼으로 보내고, chat 단위 pending 으로 다음
 // 텍스트를 라우팅한다. 상세: docs/specs/350-food-edit-force-reply-fix.md
@@ -60,7 +60,7 @@ function cancelButtons(logId: string): ReplyButton[][] {
 
 
 
-/** kcal 응답에 붙일 버튼 1행. logId 를 action(텔레그램 callback_data) 에 embed.
+/** kcal 응답에 붙일 버튼 1행. logId 를 action(Discord custom_id) 에 embed.
  *  #309: 설명 정정 버튼 추가 → 3 버튼 (kcal · 설명 · 삭제). */
 export function foodLogButtons(logId: string): ReplyButton[][] {
   return [
@@ -76,7 +76,7 @@ export function foodLogButtons(logId: string): ReplyButton[][] {
 /**
  * `food:` 버튼 1회 처리(판단 · pleiades#364) — 수정 kcal · 수정 설명 · 삭제 · 취소.
  * `key` 는 누른 사람의 상태 키(`../core/state-key`) — 없으면 편집 대기를 건드리지 않는다(옛 chat id 가드).
- * 각 출력 호출은 따로 실패를 삼킨다(텔레그램 callback timeout 등 — 리팩터 전과 같다).
+ * 각 출력 호출은 따로 실패를 삼킨다(버튼 응답 timeout 등 — 리팩터 전과 같다).
  */
 export async function decideFoodButton(
   data: string,
@@ -104,7 +104,7 @@ export async function decideFoodButton(
     try {
       await out.notice(cleared ? "편집을 취소했습니다." : "이미 종료된 요청입니다.");
     } catch {
-      // ignore (Telegram callback timeout 등)
+      // ignore (버튼 응답 timeout 등)
     }
     // 취소 버튼 제거 — inline keyboard 라 editMessageReplyMarkup 으로 회수 가능.
     try {
@@ -182,7 +182,7 @@ export async function decideFoodButton(
     try {
       await out.notice("삭제되었습니다.");
     } catch {
-      // ignore (Telegram callback timeout 등)
+      // ignore (버튼 응답 timeout 등)
     }
     try {
       await out.removeButtons();
@@ -308,7 +308,7 @@ export async function decideFoodEditInput(
   const raw = text.trim();
 
   // #309: 설명 정정 분기.
-  // Codex P1 (PR #310 2회차): grammY ctx.reply 는 bound 로 불러야 한다 — 텔레그램 어댑터(telegramOutput)가 closure 로 감싼다.
+  // Codex P1 (PR #310 2회차): ctx.reply 는 bound 로 불러야 한다 — 어댑터(discordOutput)가 closure 로 감싼다.
   if (action === "desc") {
     return handleDescReply(key, logId, raw, out);
   }

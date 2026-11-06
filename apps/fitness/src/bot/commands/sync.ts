@@ -10,7 +10,7 @@ export const SYNC_FAILED_STATIC = "❌ 싱크 실패 — 잠시 후 다시 시�
 /**
  * /sync — 어제·오늘 Garmin 싱크(판단 · pleiades#364). 시작 안내 → 결과 안내 순으로 보낸다.
  * `bot` 은 Garmin 재인증 실패 admin alert 경로(lib 의 `!bot` = 웹 · 보내지 않는다 — 넘기지 않으면 alert 가 빠진다).
- * 실패는 원문을 내지 않고 정적 안내만(pleiades#367 · 텔레그램 원문 분기는 009 D-5 B2 #504 에서 지웠다).
+ * 실패는 원문을 내지 않고 정적 안내만(pleiades#367 · 원문 분기는 009 D-5 B2 #504 에서 지웠다).
  */
 export async function decideSync(
   out: ReplyOutput,

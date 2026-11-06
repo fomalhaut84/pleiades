@@ -10,7 +10,7 @@ import { runAutoAdjustProposal } from "../auto-adjust";
 import { runAutoAdjustMaintenance } from "../auto-adjust-cron";
 import { notifyClaudeAuthExpiredIfNeeded } from "@/lib/monitoring/admin-alerts";
 
-// pleiades 009 D-5 B2 (pleiades#504): 텔레그램을 지웠다 — 텍스트는 #fitness 웹훅, 키보드는 fit Discord 봇.
+// pleiades 009 D-5 B2 (pleiades#504): 옛 채널을 지웠다 — 텍스트는 #fitness 웹훅, 키보드는 fit Discord 봇.
 // 스위치(NOTIFY_ALLOWED_CHANNEL · NOTIFY_INTERACTIVE_CHANNEL)는 읽지 않는다(009 §5-4). 재시도·분할·폴백 baseline 은
 // 패키지 코어의 몫이라 packages/notify 테스트가 덮는다. 이 파일은 fit 의 배선만 고정한다 — 라우트 · label 'bot' ·
 // first.ref 를 telegramMessageId 로 저장(D-a · 컬럼명 S-8) · admin alert 의 `!bot`(웹은 보내지 않는다 · 1-7).
@@ -70,7 +70,7 @@ function expectBotLabelOnly(expectedFailures: number) {
 }
 
 beforeEach(() => {
-  // 셸 env 가 새지 않게 — 텔레그램 키는 있어도 쓰이지 않는다는 것을 아래 케이스가 본다
+  // 셸 env 가 새지 않게 — 옛 채널 키는 있어도 쓰이지 않는다는 것을 아래 케이스가 본다
   vi.stubEnv("NOTIFY_ALLOWED_CHANNEL", "");
   vi.stubEnv("NOTIFY_INTERACTIVE_CHANNEL", "");
   vi.stubEnv("DISCORD_WEBHOOK_FITNESS", WEBHOOK);
@@ -96,8 +96,8 @@ describe("notifierFor — #fitness 웹훅", () => {
     expect(JSON.parse(calls()[0][1].body).content).toBe("**리포트**");
   });
 
-  // 회귀: #504 — 스위치를 읽지 않는다. 옛 기본값(빈 값 = 텔레그램)·`telegram` 이어도 Discord 로 가고 텔레그램을 부르지 않는다
-  it("스위치 값과 텔레그램 키에 상관없이 Discord 로만 보낸다", async () => {
+  // 회귀: #504 — 스위치를 읽지 않는다. 옛 기본값(빈 값)·옛 채널 값이어도 Discord 로만 간다
+  it("스위치 값과 옛 채널 키에 상관없이 Discord 로만 보낸다", async () => {
     vi.stubEnv("TELEGRAM_BOT_TOKEN", "123:SECRET");
     vi.stubEnv("TELEGRAM_ALLOWED_CHAT_IDS", "1,2");
     for (const v of ["", "telegram", "discord"]) {
@@ -122,7 +122,7 @@ describe("notifierFor — #fitness 웹훅", () => {
 });
 
 describe("interactiveNotifierFor — fit Discord 봇", () => {
-  // 회귀: #504 — 스위치가 비어도(옛 기본 = 텔레그램) 봇으로 간다
+  // 회귀: #504 — 스위치가 비어도(옛 기본값) 봇으로 간다
   it("스위치 없이도 봇 REST 로 · 버튼은 components", async () => {
     const { calls } = stubFetch(200, "d55");
     const buttons = [[{ label: "ok", action: "c" }]];

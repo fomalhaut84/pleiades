@@ -1,14 +1,14 @@
 /**
  * pleiades 009 D-3 PR-3 (pleiades#398 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 P · A · B · D · H): fin Discord 라우터.
  *
- * 판단은 텔레그램과 같은 decide* 를 쓴다(PR-1a~2c). 등록은 텔레그램 등록 순서(`bot/index.ts`) 그대로:
+ * 판단은 decide* 를 쓴다(PR-1a~2c). 등록 순서는 옛 채널 등록부(009 D-5 B3b 에서 삭제) 그대로:
  *   영어 이름 21 = `!` 접두 명령(접두 필수 — `report 2026` 같은 자연어는 명령이 아니다) · 인자 = 라우터 args
- *   한글 28 = 텔레그램과 **같은 정규식 상수**(같은 텍스트 = 같은 의미) · 인자 = 텔레그램과 같은 원문 벗기기 식(이름이 첫 단어라 결과가 같다)
+ *   한글 28 = 명령 모듈의 **정규식 상수**(같은 텍스트 = 같은 의미) · 인자 = 명령 모듈의 원문 벗기기 식(이름이 첫 단어라 결과가 같다)
  *   나머지 = 자유 텍스트 fallback 하나(소비 → AI 거래 → AI 질문 → 무응답) — `!` 로 시작하면 명령 모양이라 소비·AI 로 보내지 않는다
  *            첨부만 있는 메시지는 빈 텍스트로 여기 온다 → 무응답(첨부 경로 없음 · 설계 H [A]#6)
  *   버튼 = `tx:` · `multi:` · `trade:` · `aitrade:` · `vest:` → 마지막에 알 수 없는 접두 안내
  * 답은 받은 채널로만(C-4) · 상태 키 `discord:<채널>:<사용자>` · DB `Transaction.userId` = `discord:<사용자>`(UQ-2).
- * 텔레그램 등록부가 정적 안내로 감싼 명령은 같은 안내로 감싼다 — 그 밖의 예외는 chat 의 실패 안내(본인 전용)로 간다.
+ * 옛 등록부가 정적 안내로 감싼 명령은 같은 안내로 감싼다 — 그 밖의 예외는 chat 의 실패 안내(본인 전용)로 간다.
  */
 
 import { createRouter, type ButtonContext, type MessageContext, type Router } from '@pleiades/chat'
@@ -20,7 +20,7 @@ import {
   decideReset,
   decideTradeParse,
 } from '../commands/ai'
-import { ALERT_CONFIG_RE, alertArgsFromTelegram, decideAlertConfig } from '../commands/alert'
+import { ALERT_CONFIG_RE, alertArgsFromMatch, decideAlertConfig } from '../commands/alert'
 import { ANALYSIS_RE, analysisArgsFromText, decideAnalysis } from '../commands/analysis'
 import { BACKTEST_RE, backtestArgsFromText, decideBacktest } from '../commands/backtest'
 import { BRIEFING_RE, briefingArgsFromText, decideBriefing } from '../commands/briefing'
@@ -96,7 +96,7 @@ export const DISCORD_AI_COMMAND = `${DISCORD_COMMAND_PREFIX}ai`
 const out = (ctx: MessageContext): ReplyOutput => discordOutput(ctx)
 const stateKey = (ctx: MessageContext): StateKey => discordStateKey(ctx.channelId, ctx.userId)
 
-/** 텔레그램 등록부와 같은 정적 안내 — 판단이 던지면 로그 1줄 + 안내(원문 노출 없음). */
+/** 옛 등록부와 같은 정적 안내 — 판단이 던지면 로그 1줄 + 안내(원문 노출 없음). */
 function guarded(label: string, failText: string, task: (ctx: MessageContext) => Promise<void>) {
   return async (ctx: MessageContext): Promise<void> => {
     try {
@@ -133,9 +133,9 @@ function briefing(ctx: MessageContext, args: string): Promise<void> {
 }
 
 /**
- * 자유 텍스트 — 텔레그램 두 fallback(소비 → AI)을 한 핸들러로, 같은 순서로.
+ * 자유 텍스트 — 두 fallback(소비 → AI)을 한 핸들러로, 같은 순서로.
  * 명령 모양(`!` · `/` 시작)은 소비·AI 로 보내지 않는다 — 등록되지 않은 `!foo 3` 이 숫자 때문에 소비 기록이 되지 않게.
- * AI 거래 파싱·AI 질문은 텔레그램처럼 기다리지 않는다(진행 안내 뒤 백그라운드 · 채널 대기열이 AI 를 기다리지 않는다 · 설계 Q).
+ * AI 거래 파싱·AI 질문은 기다리지 않는다(진행 안내 뒤 백그라운드 · 채널 대기열이 AI 를 기다리지 않는다 · 설계 Q).
  */
 export async function handleDiscordText(ctx: MessageContext): Promise<void> {
   const text = ctx.text
@@ -151,7 +151,7 @@ export async function handleDiscordText(ctx: MessageContext): Promise<void> {
 
 /**
  * 버튼 판단 하나 — 판단이 끝나면 모아 둔 토스트를 처리한다(본문을 바꾸지 않은 결정만 본인 안내). 예외는 chat 의 실패 안내로.
- * 판단이 던져도 토스트는 처리한다 — 텔레그램은 그 시점에 이미 토스트를 보냈다(예: 취소 버튼 제거 뒤 본문 교체 실패 · 9-1 리뷰 info).
+ * 판단이 던져도 토스트는 처리한다 — 옛 어댑터는 그 시점에 이미 토스트를 보냈다(예: 취소 버튼 제거 뒤 본문 교체 실패 · 9-1 리뷰 info).
  */
 function button(decide: (data: string, press: ButtonPress, out: ButtonOutput) => Promise<void>) {
   return async (ctx: ButtonContext): Promise<void> => {
@@ -168,7 +168,7 @@ function button(decide: (data: string, press: ButtonPress, out: ButtonOutput) =>
 export function createDiscordRouter(): Router {
   return (
     createRouter({ commandPrefix: DISCORD_COMMAND_PREFIX })
-      // 영어 이름 21 — 텔레그램 등록 순
+      // 영어 이름 21 — 옛 등록 순
       .command('start', (c) => decideStart(undefined, out(c)))
       .command('help', (c) => decideHelp(out(c)))
       .command('ai', (c, args) => decideAiCommand(args, stateKey(c), out(c)))
@@ -190,7 +190,7 @@ export function createDiscordRouter(): Router {
       .command('assetupdate', (c, args) => decideAssetUpdate(args, out(c)))
       .command('report', (c, args) => decideReport(args, out(c)))
       .command('backtest', (c, args) => decideBacktest(args, out(c)))
-      // 한글 28 — 텔레그램 등록 순(`bot/index.ts` 모듈 순서)
+      // 한글 28 — 옛 등록 순(모듈 순서)
       .hears(PORTFOLIO_SUMMARY_RE, portfolioSummary)
       .hears(ACCOUNT_DETAIL_RE, accountDetail)
       .hears(PRICE_RE, price)
@@ -202,7 +202,7 @@ export function createDiscordRouter(): Router {
       .hears(INCOME_SUMMARY_RE, incomeSummary)
       .hears(BUDGET_STATUS_RE, budgetStatus)
       .hears(BUDGET_SET_RE, budgetSet)
-      .hears(ALERT_CONFIG_RE, (c) => alertConfig(alertArgsFromTelegram(undefined, c.text))(c))
+      .hears(ALERT_CONFIG_RE, (c) => alertConfig(alertArgsFromMatch(undefined, c.text))(c))
       .hears(STRATEGY_RE, (c) => decideStrategy(strategyArgsFromText(c.text), out(c)))
       .hears(STRATEGY_LIST_RE, (c) => decideStrategyList(out(c)))
       .hears(CUSTOM_STRATEGY_REGISTER_RE, (c) => decideCustomStrategyRegister(customStrategyRegisterArgsFromText(c.text), out(c)))
@@ -220,7 +220,7 @@ export function createDiscordRouter(): Router {
       .hears(REPORT_RE, (c) => decideReport(reportArgsFromText(c.text), out(c)))
       .hears(BACKTEST_RE, (c) => decideBacktest(backtestArgsFromText(c.text), out(c)))
       .fallback(handleDiscordText)
-      // 버튼 — 텔레그램 콜백 접두 그대로
+      // 버튼 — 옛 콜백 접두 그대로
       .action('trade:', button(decideTradeButton))
       .action('tx:', button(decideExpenseButton))
       .action('multi:', button(decideMultiExpenseButton))
