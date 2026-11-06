@@ -40,7 +40,7 @@ ssh-keygen -lf /tmp/pleiades_known_hosts      # 지문을 서버의 `ssh-keygen 
 5) **GitHub** — Settings → Environments → `production`(없으면 New) → *Deployment branches and tags* = **Selected branches and tags** · **Add rule → Tag → `v*`** 하나만(브랜치 규칙은 두지 않는다 — 이 규칙이 키를 지킨다 · `pleiades-resume` 이 매 세션 점검) → *Environment secrets* 에 `DEPLOY_SSH_KEY`(= 서버 `deploy_key` 내용) · `DEPLOY_HOST` · `DEPLOY_USER` · `DEPLOY_KNOWN_HOSTS`(= 4 의 파일 내용) · `DEPLOY_PORT`(22 가 아니면). **저장소 수준 secrets 는 0 그대로**(I-9). Claude 는 secrets 를 만들지도 읽지도 않는다.
 6) 서버 — `rm ~/pleiades-private/deploy_key`(개인 키는 GitHub 에만 · 공개 키는 authorized_keys 에 남는다). 실제 배포 확인은 다음 Release.
 
-- **배포 알림(#304)** — 앱마다 끝나면 그 앱의 봇이 관리자에게 보낸다(fin `TELEGRAM_ADMIN_CHAT_IDS` · fit `TELEGRAM_ALLOWED_CHAT_IDS` · 서버 `.env` 의 토큰 · GitHub secrets 아님): "✅ <app> <tag> 배포 완료 · 소요 · 프로브" 또는 "⚠️ … 배포 중단 · rc · 결과 줄" + 릴리즈 링크. 알림 실패는 배포 결과를 바꾸지 않는다. 자동 배포에서만 보낸다(손 실행은 보내지 않는다). `ssh-deploy.sh` 는 실행 중인 판으로 돈다 — 이 알림이 든 태그의 **다음** 자동 배포부터 온다. Discord 별도 채널은 T-10(사용자).
+- **배포 알림(#304 · 009 D-5 B1 #502)** — 앱마다 끝나면 `deploy/notify-deploy.cjs` 가 Discord 배포 채널로 보낸다(플랫폼 설정의 `DISCORD_WEBHOOK_DEPLOY` · 비면 보내지 않는다 · GitHub secrets 아님): "✅ <app> <tag> 배포 완료 · 소요 · 프로브" 또는 "⚠️ … 배포 중단 · rc · 결과 줄" + 릴리즈 링크. 알림 실패는 배포 결과를 바꾸지 않는다. 자동 배포에서만 보낸다(손 실행은 보내지 않는다). `ssh-deploy.sh` 는 실행 중인 판으로 돈다 — 이 알림이 든 태그의 **다음** 자동 배포부터 온다. 배포 채널은 ADMIN 채널과 같아도 된다(#321).
 - **두 배포가 겹치지 않는다** — `release-inplace.sh` 가 `~/pleiades-private/deploy.lock` 에 flock 을 잡는다(손 실행 포함 · 프로세스가 끝나면 커널이 푼다 · 지우지 않는다).
 - **R-8 로 #242 이전 태그(`v1.0.2` 이하)에 가면** fin 체크아웃에서 `ssh-deploy.sh` 가 사라진다 — 그동안 자동 배포는 실패로 닫힌다(안전 쪽). 다시 #242 이후 태그를 손으로 배포하면 돌아온다.
 - 마이그레이션 릴리즈는 prerelease 로 발행돼 건너뛴다 · 서버 조치 릴리즈는 draft → 조치 뒤 Publish(`workflow.md` 릴리즈 절).
@@ -67,8 +67,8 @@ bash ~/pleiades-private/release-inplace.sh fit "$V" --checkout ~/pleiades-fit
 - **종료 코드:** 0 통과 · **1 서비스·체크아웃 그대로 중단**(A·B·C1 · 빌드 전 실패면 스크립트가 직전 태그로 checkout 을 되돌린 뒤) · 3 deploy.sh exit 3(옛 서비스 online) · **4 빌드·재기동 뒤 실패**(또는 되돌리기 실패) → 양식의 R-8 줄 그대로(`release-inplace.sh <app> <직전 태그>` · 직전 배포가 중간에 멈춰 프로세스가 3 개 미만이어도 돈다).
 - `--dry-run` 은 서비스·체크아웃을 바꾸지 않는다 — 원본 로그 파일을 만들고 새 태그를 fetch 할 뿐이다(백업 없음).
 - **창 안 오류 줄의 한계:** pm2 는 쓰기 덩어리마다 시각을 붙여 여러 줄 스택의 뒷줄은 세지 않는다(적게 센다) · 시각은 pm2 데몬 TZ 기준. · `gateway 준비 완료`·`세션 이어받음`은 정상 줄이라 세지 않는다(#373).
-- 봇 `409` 는 재기동 뒤의 텔레그램 getUpdates 충돌 줄만 센다(숫자 409 · 옛 줄 제외).
-- 스크립트가 멈추는 것(사람 판단 없이): 마이그레이션 · `mcp-config.json` 변경 · HEAD 가 태그가 아님 · 체크아웃 dirty · 플랫폼 설정 권한 ≠ 600 · 도는 프로세스의 `PLEIADES_ENV_FILE` 이 다름 · deploy.sh rc ≠ 0 · C5(3 online · mcp 200 · 409 0 · 재기동 `same`) 실패.
+- 봇 `409` 칸·게이트는 009 D-5 B1(#502)에서 지웠다 — 옛 채널 폴링 충돌 신호라 함께 사라졌다(대체 없음 · 009 §7 정정 · 같은 봇 이중 실행이 실제로 생기면 #250).
+- 스크립트가 멈추는 것(사람 판단 없이): 마이그레이션 · `mcp-config.json` 변경 · HEAD 가 태그가 아님 · 체크아웃 dirty · 플랫폼 설정 권한 ≠ 600 · 도는 프로세스의 `PLEIADES_ENV_FILE` 이 다름 · deploy.sh rc ≠ 0 · C5(3 online · mcp 200 · 재기동 `same`) 실패.
 - **사람이 하는 것:** C0 시각 고르기 · 양식의 "사람 확인" 줄(웹 화면 · Discord `현황`/`!today`) · 릴리즈별 확인(C6 처럼 그 릴리즈에 있으면).
 - 아래 A~C5 절은 **스크립트가 하는 일의 설명**이자 스크립트가 없을 때의 수동 경로다. 둘이 다르면 스크립트가 정본이다(테스트 `python3 -m unittest discover -s deploy`).
 
@@ -141,7 +141,7 @@ DB 백업은 하지 않는다 — A 에서 마이그레이션 0 을 확인했고
 # 셸 값이 .env 를 가리고, pm2 --update-env 는 이 셸의 env 를 재기동 프로세스에 넘긴다(전환 C1 · PR #219 Codex P2)
 KEYS='DATABASE_URL|PORT|MCP_PORT|MCP_TRANSPORT|TELEGRAM_[A-Z_]*|DISCORD_[A-Z_]*|NOTIFY_[A-Z_]*|GARMIN_[A-Z_]*|OMRON_[A-Z_]*|MFDS_[A-Z_]*|WHOOING_[A-Z_]*|CLAUDE_BIN|NODE_ENV|PLEIADES_ENV_FILE|AUTH_[A-Z_]*|NEXTAUTH_[A-Z_]*|BASE_URL|FIRECRAWL_[A-Z_]*|MYFINANCE_ROOT|MCP_CONFIG_PATH'
 for k in $(env | grep -oE "^($KEYS)=" | tr -d =); do unset "$k"; done; env | grep -cE "^($KEYS)=" || true   # 0
-# 플랫폼 설정 — deploy/pleiades.config.cjs 는 이 값을 셸에서만 받는다. 빠뜨리면 재기동 프로세스가 플랫폼 설정을 잃는다(T-10 뒤면 Discord 라우팅이 조용히 텔레그램으로)
+# 플랫폼 설정 — deploy/pleiades.config.cjs 는 이 값을 셸에서만 받는다. 빠뜨리면 재기동 프로세스가 플랫폼 설정을 잃는다(Discord 웹훅·봇 설정을 잃어 알림이 조용히 0 이 된다)
 export PLEIADES_ENV_FILE="$HOME/pleiades-platform.env"; stat -c '%a %U' "$PLEIADES_ENV_FILE"   # 600 <계정>
 # 도는 프로세스와 같은 값인지 — 값은 출력하지 않는다
 pm2 jlist | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const l=JSON.parse(s.slice(s.indexOf("[")));for(const p of l.filter(x=>x.name.startsWith("pleiades-"))){const v=p.pm2_env.PLEIADES_ENV_FILE??(p.pm2_env.env||{}).PLEIADES_ENV_FILE;console.log(p.name,v===undefined?"MISSING":v===process.env.PLEIADES_ENV_FILE?"same":"DIFF")}})'
@@ -190,7 +190,6 @@ for r in web bot mcp; do printf '%s ' "$r"; cat ~/.pm2/logs/pleiades-$APP-$r-err
 pm2 ls | grep -E "pleiades-$APP"                                               # 3 online
 case $APP in fin) MP=4210 ;; fit) MP=4301 ;; esac
 curl -sS -o /dev/null -w 'mcp %{http_code}\n' "http://127.0.0.1:$MP/health"   # 200
-pm2 logs "pleiades-$APP-bot" --lines 60 --nostream 2>&1 | grep -ciE '409|conflict' || true   # 0
 # 재기동 프로세스가 플랫폼 설정을 받았는지 — C1 의 같은 줄
 pm2 jlist | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const l=JSON.parse(s.slice(s.indexOf("[")));for(const p of l.filter(x=>x.name.startsWith("pleiades-"))){const v=p.pm2_env.PLEIADES_ENV_FILE??(p.pm2_env.env||{}).PLEIADES_ENV_FILE;console.log(p.name,v===undefined?"MISSING":v===process.env.PLEIADES_ENV_FILE?"same":"DIFF")}})'
 ```
@@ -216,7 +215,7 @@ fs.writeFileSync(f, JSON.stringify(next, null, 2) + "\n")
 console.log("남은 항목", rest.length)' "$F"                  # 남은 항목 0 (#247 전에 다른 항목이 없었다면)
 ```
 
-- **확인 1 (fin):** 텔레그램에서 AI 질문 1건 → 응답 · 봇 로그에 그 호출의 비용 줄(#247 C 로깅)이 남고 컨텍스트가 전환 전 수준이다. 다음 TA 시그널 알림에 가이드 문구가 붙는다(알림이 와야 볼 수 있다).
+- **확인 1 (fin):** Discord 대화 채널에서 AI 질문 1건 → 응답 · 봇 로그에 그 호출의 비용 줄(#247 C 로깅)이 남고 컨텍스트가 전환 전 수준이다. 다음 TA 시그널 알림에 가이드 문구가 붙는다(알림이 와야 볼 수 있다).
 - **확인 2 (fit):** AI 질문 1건 → 응답.
 - **혼동 주의:** 이제 앱 cwd 에서 맨 `claude -p "ping"` 을 치면 다시 ~107k 가 나온다 — 정상이다. 수정은 앱이 CLI 를 부르는 인자에 있고, 손으로 친 CLI 에는 없다.
 - 이상하면 백업(`$F.bak-247`)이 아니라 **위 4항목을 다시 넣는다**(그 사이 다른 설정이 바뀌었을 수 있다 — #247 첫 완화 명령 그대로) · 판정 양식에.
@@ -258,7 +257,7 @@ C1 셸 키 0 · platform 600 · 도는 6 same: 예/아니오
 C2 v1.0.1 · 깨끗: 예/아니오
 C4 plan rc <n> · 기본 실행 rc <n> · <초>s · 완료 안내: 예/아니오        (rc≠0 이면 이유 한 줄)
 C5 프로브 오류 응답 <수>(<처음 HH:MM:SS>~<마지막 HH:MM:SS>) · 창 안 오류 줄 web <n> bot <n> mcp <n>
-   3 online · mcp <코드> · 409 0 · 재기동 6 same: 예/아니오 · 웹: 예/아니오 · 현황|!today: 예/아니오
+   3 online · mcp <코드> · 재기동 6 same: 예/아니오 · 웹: 예/아니오 · 현황|!today: 예/아니오
 C6 (fit 뒤 한 번) 임시 완화 제거 · 남은 항목 <n> · fin AI 응답·비용 줄: 예/아니오 · fit AI 응답: 예/아니오 · TA 가이드 문구: 예/아니오/아직
    used 에 model 포함·고정 ID 만: 예/아니오 · 드리프트 fin <n> fit <n> · 웹 'AI 실패' 필터: 예/아니오 · 💸 알림: 없음/왔음(cost <$>)
    벤치마크 적재(06:15 뒤): 완료/일부 실패/아직 · 주간 리뷰 알파: 예/아니오/아직

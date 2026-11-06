@@ -216,7 +216,7 @@ class ReleaseInplace(unittest.TestCase):
         self.assertIn("C2 v1.0.1 · 깨끗: 예", out)
         self.assertRegex(out, r"C4 plan rc 0 · 기본 실행 rc 0 · \d+s · 완료 안내: 예")
         self.assertIn("online 3/3 · mcp 200 · 재기동", out)
-        self.assertNotIn("409", out)  # 회귀: #502 — 409 칸·게이트는 텔레그램과 함께 지웠다(009 D-5 §5-3)
+        self.assertNotIn("409", out)  # 회귀: #502 — 409 칸·게이트는 옛 채널 폴링과 함께 지웠다(009 D-5 §5-3)
         # 회귀: #276 — 오류 로그 파일명에 pm2 id 가 붙는다. 창 안 2줄(경고 1)을 두 파일에서 센다
         self.assertIn("web 2(경고 1)", out)
         self.assertIn("bot 0(경고 0)", out)  # 회귀: #373 — 정상 기동 줄은 세지 않는다

@@ -46,7 +46,7 @@ class WriteEnvTest(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
             env = check_env.parse_dotenv(target)
             self.assertTrue(env["DATABASE_URL"].endswith(f"/pleiades_{app}"))
-            self.assertEqual([k for k in env if k.startswith("TELEGRAM_")], [])  # 009 D-5 B6 — 템플릿에 텔레그램 줄 없음
+            self.assertEqual([k for k in env if k.startswith("TELEGRAM_")], [])  # 009 D-5 B6 — 템플릿에 옛 채널 줄 없음
             for tok in ("__PGUSER__", "__SECRET__", "__PIN__"):
                 self.assertNotIn(tok, target.read_text())
             for k, v in env.items():  # 값은 출력하지 않는다

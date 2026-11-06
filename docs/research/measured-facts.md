@@ -4543,3 +4543,45 @@ ls -d apps/<app>/prisma/migrations/*/ | wc -l                                   
 - `release-inplace.sh:338` 사람 확인 줄 고정 테스트 0 · 판정 문자열 고정은 C 에만 있다(A·B 0).
 - 앱 PR 은 squash 로 들어온다(`git log --merges --since=2026-10-22 -- apps` 0 · PR #397 커밋 6 → 1). 앱 하네스 파일 변경 10-22 이후 0 · `apps/finance/src` 14커밋.
 
+## 2026-11-03 — 009 D-5 설계 대장 ([S] `_workspace/009/d5/01_surveyor_d5.md` · [A] `03_auditor_d5.md` · [A2] `03_auditor_d5_r2.md` · 2026-11-06 #523 에 옮김)
+
+설계 `02_writer_d5_r4.md` §2-1 그대로(측정 시점 HEAD 는 D-5 착수 전 — 지금 값이 아니다). 측정 명령은 [S] 각 절.
+
+| # | 항목 | 값 | 출처 |
+|---|---|---|---|
+| N1 | grep 전수 | 430 파일 · 3,938 줄 · 경로 허용 239 + 나머지 191 | M1 · [A2] |
+| N2 | 통째 삭제 후보 | 23 파일 · 6,304 LOC(운영 11 · 1,251 / 테스트 12 · 5,053) | M12 |
+| N3 | 수정 후보 | 운영 110 · env 4 · 테스트 41 · 문서 2 | M12 |
+| N4 | 영역별 삭제 | fin 운영 3/297 · fin 테스트 7/3,310 · fit 운영 5/477 · fit 테스트 3/1,169 · notify 2/118 · deploy 3/933 | M12 |
+| N5 | 영역별 운영 수정 | fin 56(주석만 10) · fit 35(주석만 14) · notify 11(주석만 6) · deploy 6(주석만 1) · tools 2 | M12 |
+| N6 | `register*` 부분 삭제 | fin 17 파일 322 LOC · fit 10 파일 73 LOC | M2 |
+| N7 | M12 밖 | fin `bot/index.ts` 94 · `telegram-fake.ts` 101 · `vest-confirm.ts`(decideVest) | M12 |
+| N8 | grammy 만 끌어오는 lock 패키지 | 앱마다 8 · 코드 직접 import 0 | M9 · [A] |
+| N9 | 뒤집기 대상 테스트 | env 만지는 11 파일 · 그중 fin `alert-dispatcher`+`retry/route` 34 · fit `notifier` 30 · fin `notifier` 17 · 케이스별 실패 수 **미확인** | M4 · [A] D13 |
+| N10 | 웹 → `bot/*` 정적 도달 | fin 34 모듈 · fit 2 · fit MCP 0 | M2 |
+| N11 | 동작 차이 | 5 곳 · 텔레그램에서만 닿는 명령·콜백 0 | M3 |
+| N12 | 잔여 분류 | 이력 루트 117/2,094 · 이력 앱 102/372 · DB 3/10 · 앱 하네스 6/14 · 앱 옛 배포 5/43(언급 기준) · 소진 하네스 2/5 | M1 |
+| N13 | 지우는 특성 테스트 | fin `*-telegram` 6 파일 198 케이스(ai 52 · expense 45 · lookup 24 · manage 27 · special 28 · trade 22) · fit `telegram-handlers` 31 | [A] D6 · M4 |
+| N14 | 남는 테스트 | fin decide 42(12·9·9·12) · Discord 38(router 18 · reply 20) · fit `decide.test.ts` 22 + `discord-router.test.ts` | [A] D6 |
+| N15 | `v1.5.4..dev` 의 #441 파일 | 7(`deploy/` 만 · 앱 0) | [A] D8 |
+| N16 | fit 완료 응답 최악 길이 | 328자(`DESC_PREVIEW_MAX` 120) | [A2] |
+
+## 2026-11-06 — 009 D-5 R2 뒤 잔여 (HEAD `fbd163f` + B8 · #523 · 이 절을 더하기 전)
+
+```bash
+git grep --text -il -E 'telegram|grammy|텔레그램' | wc -l    # 270 파일
+git grep --text -i  -E 'telegram|grammy|텔레그램' | wc -l    # 2,976 줄
+python3 -m unittest discover -s tools/local                  # test_residual 이 분류를 고정한다
+```
+
+| 분류(`tools/local/test_residual.py`) | 파일 | 줄 |
+|---|---|---|
+| 이력 경로(`_workspace` · `docs/specs`·`research`·`handoff`·`artifacts` · 루트 `CLAUDE.md`·`README.md` · `apps/*/docs`) | 231 | 2,844 |
+| 명시 경로(DB 2 · R11 2 · 금지어 테스트 3 · 룰 이력 3 · 앱 하네스 잔여 5) | 15 | 49 |
+| 일회 런북(소진 블록) | 5 | 24 |
+| 줄 허용(셸 정리 목록 · redact · fit 컬럼명 · 테스트의 옛 env 픽스처·금지어 단언) | 18 | 46 |
+| 테스트 자신 | 1 | 13 |
+
+- N1(430 파일 · 3,938 줄) 대비 −160 파일 · −962 줄. 허용 밖 0.
+- `apps/*/src` 의 남은 줄은 전부 줄 허용(옛 env stub · fit DB 컬럼 · fin logger redact) 또는 명시 경로(`client-utils.ts` · `system-prompt.test.ts`).
+

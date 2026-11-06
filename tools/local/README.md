@@ -20,7 +20,7 @@ tools/local/run.sh fin -- npx prisma migrate deploy && tools/local/run.sh fit --
 tools/local/run.sh fin -- npm run build && tools/local/run.sh fit -- npm run build
 ```
 
-검증 봇: 로컬 봇은 **Discord 검증 봇**만 쓴다(아래 Discord 봇 토큰 가드 · I-4′). 009 D-5 B6(#517) 뒤 두 앱은 `TELEGRAM_*` 를 읽지 않는다 — 텔레그램 봇 id·채팅 허용 목록(`PLEIADES_VERIFY_BOT_IDS`·`_CHAT_IDS`)은 더 넘기지 않는다.
+검증 봇: 로컬 봇은 **Discord 검증 봇**만 쓴다(아래 Discord 봇 토큰 가드 · I-4′). 009 D-5 B6(#517) 뒤 두 앱은 옛 채널 키를 읽지 않는다 — 옛 채널 봇 id·채팅 허용 목록(`PLEIADES_VERIFY_BOT_IDS`·`_CHAT_IDS`)은 더 넘기지 않는다.
 
 ## 플랫폼 설정 — 루트 `.env` (M-6a-2 · #143)
 
@@ -57,7 +57,7 @@ tools/local/run.sh fit -- node dist/bot/standalone.cjs
 - advisor 는 막혀 있다(L-7) — fit `CLAUDE_BIN=/nonexistent/…` → `ENOENT` 로그 · fin 은 `run.sh` 의 PATH shim.
 - `next start` 는 **모든 인터페이스(`*:<port>`)** 에서 받는다 — 같은 LAN 에서 접근 가능하다.
 - 정지: 프로세스 kill. 되돌리기: `db.py drop <app> --confirm pleiades_<app>` · `rm apps/<app>/.env`.
-- Discord gateway 가 재접속을 되풀이하거나 IDENTIFY 보호 알림이 오면 같은 봇 토큰이 다른 곳에서도 접속 중일 수 있다 — **즉시 정지**(운영 토큰이면 서버 gateway 와 두 세션 · I-4′ · 009 R9). 옛 텔레그램 409 는 앱이 텔레그램을 쓰지 않아 더 생기지 않는다(009 D-5).
+- Discord gateway 가 재접속을 되풀이하거나 IDENTIFY 보호 알림이 오면 같은 봇 토큰이 다른 곳에서도 접속 중일 수 있다 — **즉시 정지**(운영 토큰이면 서버 gateway 와 두 세션 · I-4′ · 009 R9). 옛 채널의 409 는 앱이 그 채널을 쓰지 않아 더 생기지 않는다(009 D-5).
 
 첫 기동 실측: `docs/research/measured-facts.md` *2026-10-01 — M-4*.
 

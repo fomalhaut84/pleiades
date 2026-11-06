@@ -3,7 +3,7 @@
 실행: python3 -m unittest discover -s deploy
 Discord 에는 보내지 않는다(로컬 HTTP 스텁 · PLEIADES_DISCORD_BASE) · pm2 는 스텁. 핵심 계약: 값(웹훅 · 토큰 · ID)을
 출력하지 않는다 · 파일을 바꾸지 않는다 · 봇을 재시작하지 않는다 · 도는 프로세스가 이 파일을 읽어야 통과.
-옛 on·off(스위치 쓰기 · 봇 재시작 · 텔레그램 되돌리기)는 B1 에서 지웠다.
+옛 on·off(스위치 쓰기 · 봇 재시작 · 옛 채널 되돌리기)는 B1 에서 지웠다.
 """
 import http.server
 import json
@@ -170,8 +170,8 @@ class DiscordSwitch(unittest.TestCase):
         self.assertFalse(self.calls.exists(), "점검은 봇을 재시작하지 않는다")
         self.assertEqual(Stub.calls, [])
 
-    # 회귀: #502 — S0(.server-scripts) 가 state 출력의 `=discord` 개수를 센다 · discord 가 아니면 `미설정`(텔레그램이 아니다)
-    def test_state_prints_discord_or_unset_never_telegram(self):
+    # 회귀: #502 — S0(.server-scripts) 가 state 출력의 `=discord` 개수를 센다 · discord 가 아니면 `미설정`(옛 채널 이름이 아니다)
+    def test_state_prints_discord_or_unset_never_legacy_channel(self):
         self.write_env(FULL.replace('NOTIFY_ADMIN_CHANNEL=""', 'NOTIFY_ADMIN_CHANNEL="discord"'))
         r = subprocess.run(["node", str(HERE / "discord-switch.cjs"), "state", str(self.env_file)], capture_output=True, text=True, timeout=30)
         self.assertEqual(r.returncode, 0, r.stdout)

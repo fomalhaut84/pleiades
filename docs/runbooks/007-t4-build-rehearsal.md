@@ -1,5 +1,7 @@
 # T-4 서버 build-only 리허설 (#209)
 
+> **소진 (2026-11-06 · 009 D-5 B8 · #523) — 일회 런북.** T-4 리허설은 끝났다(007 T-4). 아래 셸 정리 목록(`KEYS`)의 옛 채널 키 줄은 그 시점 사본이다 — 지금 정본은 `deploy/release-inplace.sh` 의 `PLEIADES_KEYS`. 다시 쓰지 않는다. 되돌리기: 문구 (**즉시**).
+
 **누가:** 사용자가 서버에서 서비스 계정으로 실행한다. Claude 세션은 서버에 닿지 않는다(`isolation.md` I-3 · 007 Q81).
 **무엇:** 007 T-4 — 앱별 새 체크아웃(S-a)을 만들고 첫 릴리즈 `v0.2.0` 으로 **설치·빌드만** 해 본다. pm2 · 서비스 포트 바인딩 · 서비스 DB · 서비스 봇 · 외부 계정은 **건드리지 않는다**(실값 없음 — 정정 6).
 **결정(사용자 2026-10-21 · #209):** 체크아웃 `~/pleiades-fin` · `~/pleiades-fit`(각각 모노레포 전체 clone — fin 은 `~/pleiades-fin/apps/finance`, fit 은 `~/pleiades-fit/apps/fitness` 에서 돈다) · 플랫폼 설정 `~/pleiades-platform.env`. 기존 `~/pleiades`(dev) 는 배포에 쓰지 않는다.
