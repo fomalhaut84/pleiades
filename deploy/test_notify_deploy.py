@@ -79,13 +79,16 @@ class NotifyDeploy(unittest.TestCase):
         self.assertNotIn("SECRETTOKEN", r.stdout + r.stderr)
         self.assertNotIn("telegram", (self.root / "deploy" / "notify-deploy.cjs").read_text().lower())
 
+    # 회귀: #502 사전 리뷰 info — 읽기 실패와 키 없음을 다른 문구로
     def test_missing_webhook_does_not_fail_the_deploy(self):
-        for pf in ({"PLEIADES_ENV_FILE": self.platform("DISCORD_WEBHOOK_DEPLOY=\n")},
-                   {"PLEIADES_ENV_FILE": str(self.root / "none.env")}, {}):
+        cases = (({"PLEIADES_ENV_FILE": self.platform("DISCORD_WEBHOOK_DEPLOY=\n")}, "DISCORD_WEBHOOK_DEPLOY 가 비어 있다"),
+                 ({"PLEIADES_ENV_FILE": str(self.root / "none.env")}, "플랫폼 설정을 읽지 못했다"),
+                 ({}, "플랫폼 설정 위치가 없다"))
+        for pf, why in cases:
             with self.subTest(env=pf):
                 r = self.run_notify("fin", "ok", "v1.0.5", "x", **pf)
                 self.assertEqual(r.returncode, 0)
-                self.assertIn("DISCORD_WEBHOOK_DEPLOY 가 비어 있다", r.stdout)
+                self.assertIn(f"보내지 않았다 — {why}", r.stdout)
 
     def test_bad_arguments_send_nothing(self):
         pf = self.platform(self.HOOK)
@@ -99,7 +102,7 @@ class NotifyDeploy(unittest.TestCase):
         home.mkdir()
         (home / "pleiades-platform.env").write_text(self.HOOK)
         r = self.run_notify("fin", "ok", "v1.0.7", "x", HOME=str(home))
-        self.assertIn("비어 있다", r.stdout)
+        self.assertIn("플랫폼 설정 위치가 없다", r.stdout)
 
     def run_real(self, stub: str) -> subprocess.CompletedProcess:
         (self.root / "stub.cjs").write_text(stub)

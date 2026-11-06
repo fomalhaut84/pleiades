@@ -32,15 +32,19 @@ function readEnv(file, from) {
   return dotenv.parse(fs.readFileSync(file))
 }
 
-// 배포 알림 Discord 웹훅. 테스트는 PLEIADES_ENV_FILE 이 없으면 홈 파일을 읽지 않는다
+// 배포 알림 Discord 웹훅. 테스트는 PLEIADES_ENV_FILE 이 없으면 홈 파일을 읽지 않는다.
+// 읽기 실패(파일 없음 · 권한 · dotenv 없음)와 키 없음을 나눠 알린다 — 서버에서 원인을 잘못 짚지 않게(#502 사전 리뷰 info)
 function deployWebhook(appDir) {
   const file = process.env.PLEIADES_ENV_FILE || (process.env.PLEIADES_TEST === '1' ? '' : path.join(os.homedir(), 'pleiades-platform.env'))
-  if (!file) return ''
+  if (!file) return { webhook: '', why: '플랫폼 설정 위치가 없다' }
+  let env
   try {
-    return readEnv(file, appDir).DISCORD_WEBHOOK_DEPLOY || ''
+    env = readEnv(file, appDir)
   } catch {
-    return ''
+    return { webhook: '', why: '플랫폼 설정을 읽지 못했다' }
   }
+  const webhook = env.DISCORD_WEBHOOK_DEPLOY || ''
+  return { webhook, why: webhook ? '' : 'DISCORD_WEBHOOK_DEPLOY 가 비어 있다(플랫폼 설정)' }
 }
 
 // 요약의 마크다운 기호는 escape(멘션은 allowed_mentions 로 막는다)
@@ -80,8 +84,8 @@ async function main() {
   const summary = rest.join(' ').trim() || (status === 'ok' ? '통과' : '중단')
 
   const text = buildText(app, status, tag, summary)
-  const webhook = deployWebhook(path.join(ROOT, 'apps', dir))
-  if (!webhook) fail('DISCORD_WEBHOOK_DEPLOY 가 비어 있다(플랫폼 설정)')
+  const { webhook, why } = deployWebhook(path.join(ROOT, 'apps', dir))
+  if (!webhook) fail(why)
   if (process.env.PLEIADES_TEST === '1' && process.env.NOTIFY_DRY_RUN === '1') {
     console.log('notify-deploy: (dry-run) Discord 배포 채널')
     console.log(text)

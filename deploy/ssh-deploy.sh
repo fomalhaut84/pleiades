@@ -50,7 +50,7 @@ main() {
   return 0
 }
 
-# 앱마다 끝난 뒤 그 앱의 봇으로 관리자에게(#304 · 옛 fin·fit 의 배포 완료 메시지). 알림 실패는 배포 결과를 바꾸지 않는다.
+# 앱마다 끝난 뒤 Discord 배포 채널로(#304 · 옛 fin·fit 의 배포 완료 메시지 · #502). 알림 실패는 배포 결과를 바꾸지 않는다.
 # 요약은 판정 양식에서만 뽑는다(결과 줄 · 소요 · 프로브) — 이미 홈 경로를 가린 출력이다
 notify() {  # <base> <app> <tag> <rc> <양식 파일>
   local script="$1/pleiades-$2/deploy/notify-deploy.cjs" status summary secs probe result
@@ -66,7 +66,7 @@ notify() {  # <base> <app> <tag> <rc> <양식 파일>
     status=fail; summary="rc $4${result:+ · $result}"
     [[ $2 == fin ]] && summary+=" · fit 은 하지 않았다"
   fi
-  # pm2 프로세스와 같은 주소 선택 타임아웃 — 서버는 IPv6 경로가 없고 IPv4 연결이 ~250 ms 라 기본값이면 텔레그램 연결이
+  # pm2 프로세스와 같은 주소 선택 타임아웃 — 서버는 IPv6 경로가 없고 IPv4 연결이 ~250 ms 라 기본값이면 외부 연결이
   # 실패한다(#191 · deploy/pleiades.config.cjs NET_ARGS · PR #305 Codex P2)
   node --network-family-autoselection-attempt-timeout=2000 "$script" "$2" "$status" "$3" "$summary" </dev/null 2>&1 | sed -E "s#$HOME#~#g; s#/(home|Users)/[^/[:space:]]+#~#g" || true
 }
