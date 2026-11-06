@@ -1,6 +1,6 @@
-// pleiades M-6b-3 (pleiades#151 · 003 §6 1b-2b): Discord 버튼 클릭을 받는 gateway — 봇 프로세스에서 텔레그램 롱폴링과 함께 돈다.
+// pleiades M-6b-3 (pleiades#151 · 003 §6 1b-2b): Discord 버튼 클릭을 받는 gateway — 봇 프로세스에서 크론과 함께 돈다.
 // 토큰·채널이 설정돼 있으면 스위치(NOTIFY_INTERACTIVE_CHANNEL)와 무관하게 접속한다 — 스위치를 나중에 켜도(루트 .env)
-// 재시작 없이 버튼이 동작하게. 허용 = DISCORD_ALLOWED_USER_IDS AND 그 채널(#147 결정). 판단은 텔레그램과 같은 decideAutoAdjust.
+// 재시작 없이 버튼이 동작하게. 허용 = DISCORD_ALLOWED_USER_IDS AND 그 채널(#147 결정). 판단은 decideAutoAdjust.
 //
 // pleiades 009 D-1 (pleiades#347): gateway 를 `@pleiades/chat` 으로 옮겼다 — IDENTIFY 보호(0-5)가 chat 에만 있다.
 // intents 0(버튼만 · 포털 MESSAGE CONTENT 토글 불필요) · IDENTIFY 기록 `logs/identify-fit.json`(cwd = apps/fitness · 모든 태그에서 무시).
@@ -38,7 +38,7 @@ const LABEL = "discord-fit";
 export const IDENTIFY_RECORD = path.join("logs", "identify-fit.json");
 
 /**
- * 기본 라우터 — 버튼은 notifyBot 을 쓰지 않으므로 테스트·호환용으로 텔레그램 없는 핸들로 만든다.
+ * 기본 라우터 — 버튼은 notifyBot 을 쓰지 않으므로 봇 프로세스 표지로 만든다.
  * 기동 경로(startDiscordInteractions)는 standalone 의 notifyBot 으로 새로 만든다.
  */
 export const discordRouter = createDiscordRouter(BOT_PROCESS);
@@ -70,13 +70,13 @@ export async function notifyIntentsFallback(notifyBot: BotProcess): Promise<void
 }
 
 /**
- * 설정이 갖춰졌으면 gateway 를 시작해 돌려준다. 아니면 undefined(로그 1줄 · 텔레그램은 그대로).
- * `notifyBot` 은 IDENTIFY 차단 알림 경로 — Discord 봇 토큰과 무관한 notifier(웹훅 · 텔레그램)로 보낸다.
+ * 설정이 갖춰졌으면 gateway 를 시작해 돌려준다. 아니면 undefined(로그 1줄).
+ * `notifyBot` 은 IDENTIFY 차단 알림 경로 — Discord 봇 토큰과 무관한 notifier(웹훅)로 보낸다.
  */
 export function startDiscordInteractions(notifyBot: BotProcess): Chat | undefined {
   const cfg = discordBotConfig();
   if (!cfg.ready) {
-    console.log("[discord-fit] 봇 토큰·채널 미설정 — Discord 버튼 수신 안 함(텔레그램 버튼은 그대로)");
+    console.log("[discord-fit] 봇 토큰·채널 미설정 — Discord 버튼·메시지 수신 안 함");
     return undefined;
   }
   if (cfg.allowedUserIds.length === 0) {

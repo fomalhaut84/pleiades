@@ -117,7 +117,7 @@ export function peekPendingEdit(
  * 사전 리뷰 P0 (#350): index.ts 인라인 조건이면 회귀 스크립트가 커버할 수 없어 추출.
  *
  * 슬래시로 시작하는 텍스트는 소비하지 않는다 — pending 중 미등록 명령(`/foo`)이 kcal 값으로
- * 먹히는 것을 방지. 등록된 명령은 grammy command 핸들러가 먼저 잡아 여기까지 오지 않는다.
+ * 먹히는 것을 방지. 등록된 명령은 Discord 라우터가 먼저 잡아 여기까지 오지 않는다.
  */
 export function shouldConsumeAsEditInput(key: StateKey, text: string): boolean {
   if (text.startsWith("/")) return false;

@@ -54,6 +54,7 @@ import { askAdvisor, resetSession } from "@/lib/ai/claude-advisor";
 import { notifyAdminIfKnownFailure } from "@/lib/monitoring/admin-alerts";
 import { applyKcalCorrection } from "@/lib/nutrition/scale-macros";
 import { estimateNutritionFromPhoto } from "@/lib/nutrition/estimate-nutrition-photo";
+import { estimateNutritionFromMfds } from "@/lib/nutrition/estimate-nutrition-mfds";
 import { decideHelp, decideStart } from "../start";
 import { decideToday } from "../today";
 import { decideRun } from "../run";
@@ -66,7 +67,7 @@ import { decideFoodKcal } from "../food";
 import { decideFoodButton, foodLogButtons } from "../food-edit-callback";
 import { decidePhotoFood } from "../food-photo-decide";
 import { decideFreeText } from "../free-text";
-import { deletePendingEdit, markPendingEdit } from "../food-edit-state";
+import { deletePendingEdit, isPendingEdit, markPendingEdit } from "../food-edit-state";
 
 /** 가짜 출력 — 모델과 버튼 동작을 한 줄 로그로. */
 function sink() {
@@ -137,6 +138,7 @@ describe("명령 판단 11", () => {
     ]);
     const arg = vi.mocked(syncAll).mock.calls.at(-1)![0]!;
     expect(arg.notifyBot).toBe(discordBot);
+    expect(arg.activityRecheckDays).toBe(30); // #414 · 이관 31-#9
     expect(arg.startDate).toEqual(new Date(2026, 9, 27));
     expect(arg.endDate).toEqual(new Date(2026, 9, 28));
   });
@@ -171,7 +173,7 @@ describe("명령 판단 11", () => {
     let release!: (v: unknown) => void;
     vi.mocked(askAdvisor).mockImplementationOnce(() => new Promise((r) => (release = r)) as never);
     const first = sink();
-    const p = decideAiQuestion("하나", first.out, { channel: "telegram" });
+    const p = decideAiQuestion("하나", first.out, { channel: "other" });
     const second = sink();
     await decideAiQuestion("둘", second.out, { channel: "discord" });
     expect(second.log).toEqual([{ text: "⏳ 이전 질문 처리 중입니다. 잠시 후 다시 시도해주세요.", format: "plain" }]);
@@ -274,6 +276,7 @@ describe("food: 버튼 4 경로", () => {
     const next = sink();
     await decideFreeText("400", next.out, { stateKey: key, aiChannel: "discord" });
     expect(next.log).toEqual([{ text: '✏️ "김밥" → 400 kcal 로 수정됨', format: "plain" }]);
+    expect(isPendingEdit(key)).toBe(false); // 성공하면 대기를 소비한다 — 이관 31-#18
   });
 
   it("수정 설명 — 상태 키 없으면 응답만(대기 없음)", async () => {
@@ -578,6 +581,7 @@ describe("텔레그램 특성 테스트 이관 — 자유 텍스트 · food: 버
         format: "plain",
       },
     ]);
+    expect(isPendingEdit(key)).toBe(false); // 이관 31-#25
   });
 
   it("수정 — 로그 없음", async () => {
@@ -619,5 +623,88 @@ describe("텔레그램 특성 테스트 이관 — 자유 텍스트 · food: 버
     const b = sink();
     await decideFoodButton("food:edit-cancel:log5", key, b.out);
     expect(b.log).toEqual(["notice:이미 종료된 요청입니다.", "removeButtons"]);
+  });
+});
+
+describe("텔레그램 특성 테스트 이관 — 사전 리뷰 빈 칸", () => {
+  const view = (log: Array<BotReply | string>) =>
+    log.map((m) => (typeof m === "string" ? m : { text: m.text, format: m.format }));
+
+  // 이관 31-#12 — /ai 명시 진입에서만 리포트 감지(#212)
+  it("ai — 리포트 요청이면 생성 · 저장 안내 · notifyBot 을 lib 에", async () => {
+    vi.mocked(generateMorningReport).mockResolvedValueOnce("리포트");
+    const { out, log } = sink();
+    await decideAi("모닝 리포트 만들어줘", out, { channel: "discord", bot: BOT_PROCESS });
+    expect(view(log)).toEqual([
+      { text: "📝 모닝 리포트 생성 중...", format: "plain" },
+      { text: "리포트", format: "html" },
+      { text: "✅ 모닝 리포트 저장 완료", format: "plain" },
+    ]);
+    expect(generateMorningReport).toHaveBeenLastCalledWith(true, undefined, { notifyBot: BOT_PROCESS });
+    expect(askAdvisor).not.toHaveBeenCalled();
+  });
+
+  // 이관 31-#10 — 인자 대소문자 무시
+  it("report — Regenerate Morning 도 재생성", async () => {
+    vi.mocked(generateMorningReport).mockResolvedValueOnce("본문");
+    const { out, log } = sink();
+    await decideReport("Regenerate Morning", out, { bot: BOT_PROCESS });
+    expect(view(log)).toEqual([
+      { text: "🔄 모닝 리포트 재생성 중...", format: "plain" },
+      { text: "✅ 재생성 완료\n\n본문", format: "html" },
+    ]);
+  });
+
+  // 이관 31-#20 — MFDS 추정 성공 분기
+  it("③ 식단 — MFDS 추정 성공이면 kcal · 신뢰도 · 매크로 줄과 버튼", async () => {
+    db.foodLog.create.mockResolvedValueOnce({ id: "f2" });
+    db.foodLog.updateMany.mockResolvedValueOnce({ count: 1 });
+    vi.mocked(estimateNutritionFromMfds).mockResolvedValueOnce({
+      kcal: 500,
+      proteinG: 20,
+      carbsG: 60,
+      fatG: 10,
+      confidence: "high",
+      notes: null,
+      items: null,
+    } as never);
+    const { out, log } = sink();
+    await decideFreeText("점심 김치찌개", out, { stateKey: undefined, aiChannel: "discord" });
+    expect(log[1]).toEqual({
+      text: "✅ 점심 기록 완료\n📝 김치찌개\n📊 약 500 kcal (신뢰도 높음)\n🥩 P 20g · C 60g · F 10g",
+      format: "plain",
+      buttons: foodLogButtons("f2"),
+    });
+    expect(db.foodLog.updateMany.mock.calls.at(-1)![0].data).toMatchObject({ estimatedKcal: 500, proteinG: 20 });
+  });
+
+  // 이관 31-#24 — kcal 미측정
+  it("수정 kcal — 추정값이 없으면 '미측정'", async () => {
+    db.foodLog.findUnique.mockResolvedValueOnce({ description: "김밥", mealType: "lunch", estimatedKcal: null });
+    const { out, log } = sink();
+    const k = discordStateKey("41", "41");
+    await decideFoodButton("food:edit:n1", k, out);
+    deletePendingEdit(k);
+    expect((log[1] as BotReply).text).toBe('🔢 "김밥" 의 새 kcal 을 숫자로만 입력해주세요 (0~10000, 5분 이내).\n현재 값: 미측정');
+  });
+
+  // 이관 31-#30 — 캡션이 없으면 끼니를 보낸 시각(KST)으로
+  it("사진 — 캡션 없음이면 KST 시각으로 끼니(12시 → 점심)", async () => {
+    vi.mocked(estimateNutritionFromPhoto).mockResolvedValueOnce({
+      kcal: 600,
+      proteinG: null,
+      carbsG: null,
+      fatG: null,
+      confidence: "medium",
+      notes: null,
+      items: [],
+    } as never);
+    db.foodLog.create.mockResolvedValueOnce({ id: "ph2" });
+    await decidePhotoFood({ imagePath: "/tmp/y.png", caption: undefined, sentAt: new Date("2026-10-28T03:00:00Z") });
+    expect(vi.mocked(estimateNutritionFromPhoto).mock.calls.at(-1)![0]).toEqual({
+      imagePath: "/tmp/y.png",
+      caption: undefined,
+      mealType: "lunch",
+    });
   });
 });

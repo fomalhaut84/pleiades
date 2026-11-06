@@ -1,6 +1,6 @@
 // M13 Phase 1 (#243) + Phase 2 (#249): auto-adjust 사전 알림.
 // 아침 이른 시각 cron 이 recommendTodayWorkout() 을 실행 → 조정 필요 시 (recommendation.adjusted)
-// Telegram push 로 사용자에게 사전 안내.
+// Discord 봇 메시지(버튼)로 사용자에게 사전 안내.
 //
 // Phase 1 은 read-only. Phase 2 부터 inline keyboard (Accept/Reject/Snooze) + WorkoutAdjustment
 // 이력 저장 + Accept 시 TrainingWorkout 실제 update + Snooze DB 재전송 flow 추가.
@@ -239,7 +239,7 @@ export function formatAutoAdjustMessage(
  * auto-adjust 사전 알림 실행 (cron 진입점).
  * - UserProfile.autoAdjustEnabled === false → skip
  * - recommendation.adjusted === false → skip (조용, 정상 컨디션)
- * - adjusted === true → Telegram push + AIAdvice 로그
+ * - adjusted === true → Discord 봇 메시지 + AIAdvice 로그
  * 조용한 실패 방지: 오류 시 notifier 로 사용자 알림.
  */
 export async function runAutoAdjustProposal(bot: BotProcess): Promise<void> {
