@@ -20,7 +20,7 @@
 #     다른 프로세스가 포트를 잡고 있으면 중단. 같은 포트라 옛 프로세스가 health 에 대신 응답한다(정정 4 의 거울상 · #176 사전 리뷰).
 #     빌드 전이 아닌 이유: 빌드는 S-a 새 체크아웃이라 옛 서비스와 무관하고, T-5c ③ 은 옛 서비스가 도는 동안 빌드한다 —
 #     빌드 전에 멈추면 설치·빌드 내내 서비스가 내려가고 빌드 실패 시 내려간 채로 남는다(PR #203 Codex P1 · #206)
-#   - 웹도 restart — reload 겹침 구간의 고아 prompt_run(#170)을 없앤다. 봇은 delete + start(409 · 옵션 반영)
+#   - 웹도 restart — reload 겹침 구간의 고아 prompt_run(#170)을 없앤다. 봇은 delete + start(같은 봇 두 개가 겹치지 않게 · 옵션 반영)
 #     startOrRestart 는 이미 등록된 앱의 args(포트)·script 를 바꾸지 않는다 — 포트를 바꾸면 그 앱을 먼저 delete
 #   - fin mcp-config bootstrap 은 이식하지 않는다(4-1 조건 (i)·(ii)) — 대신 MCP_PORT 와 그 파일의 url 포트를 대조한다
 set -euo pipefail

@@ -109,12 +109,6 @@ count_window() {  # <glob 접두> <T0> <T1> — 창 안 줄 수 · 그중 경고
     substr($0,1,19)>=s && substr($0,1,19)<=e && $0 !~ normal { n++; if ($0 ~ /⚠|[Ww]arning/) w++ }
     END { printf "%d %d", n, w }'
 }
-# 봇 409 — 재기동 뒤(T0~) 줄만 · 텔레그램 getUpdates 충돌 문구만(M4 — 아무 숫자 409·옛 줄이 R-8 을 부르지 않게)
-count_409() {  # <app> <T0>
-  cat "$HOME/.pm2/logs/pleiades-$1-bot-"*.log 2>/dev/null | awk -v s="$2" '
-    substr($0,1,19)>=s && /409[^0-9].*([Cc]onflict|getUpdates)|terminated by other getUpdates/ { n++ }
-    END { printf "%d", n }'
-}
 # 빌드 전 실패 — 직전 태그로 checkout 만 되돌린다(재기동 없음 · M6). 못 되돌리면 4
 revert_checkout() {  # <이유>
   kill_probe
@@ -331,14 +325,13 @@ main() {
     lines+=" $r ${nw[0]}(경고 ${nw[1]})"
   done
   form "C5 프로브 오류 응답 $bad${first:+ ($first~$last)} · 창 안 오류 줄$lines"
-  local mcp_code conflict
+  local mcp_code
   mcp_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:${new_mcp_port:-$mcp_port}/health")
-  conflict=$(count_409 "$APP" "$t0")
   read -r -a procs <<<"$(app_procs)"
   same=$(env_same); n_same=$(grep -c ' same$' <<<"$same"); n_bad=$(grep -cvE ' same$|^$' <<<"$same")
-  form "   online ${procs[1]:-0}/3 · mcp $mcp_code · 409 $conflict · 재기동 same $n_same · DIFF/MISSING $n_bad"
+  form "   online ${procs[1]:-0}/3 · mcp $mcp_code · 재기동 same $n_same · DIFF/MISSING $n_bad"
   form "   사람 확인: 웹 화면 · Discord $([[ $APP == fin ]] && echo '현황' || echo '!today') — 예/아니오 를 덧붙인다"
-  [[ "${procs[1]:-0}" == 3 && "$mcp_code" == 200 && "$conflict" == 0 && "$n_bad" == 0 ]] \
+  [[ "${procs[1]:-0}" == 3 && "$mcp_code" == 200 && "$n_bad" == 0 ]] \
     || stop 4 "C5 — 확인 실패(위 줄) → $(recovery)"
   (umask 077; printf '%s\n' "$V" > "$LAST_OK_FILE") 2>>"$LOG" || true
   rm -f "$PENDING_FILE"

@@ -62,10 +62,6 @@ if [[ " $* " == *" --dry-run "* ]]; then
 fi
 ts=$(date '+%F %T')
 mkdir -p "$HOME/.pm2/logs"
-# 회귀: M4 — 금액 같은 숫자 409 는 세지 않는다 · 재기동 전(옛) 409 줄도
-echo "2020-01-01 00:00:00: 409 Conflict: terminated by other getUpdates" >> "$HOME/.pm2/logs/pleiades-fin-bot-out-109.log"
-echo "$ts: 매수 14090원 · id 4091" >> "$HOME/.pm2/logs/pleiades-fin-bot-out-114.log"
-[[ -n "${STUB_409:-}" ]] && echo "$ts: GrammyError: Call to 'getUpdates' failed! (409: Conflict: terminated by other getUpdates request)" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-114.log"
 # 회귀: I10 — 실행 중인 스크립트를 같은 inode 에 덮어쓴다(truncate + write). 보호가 없으면 bash 가 새 내용을 읽는다
 [[ -n "${STUB_SELF_OVERWRITE:-}" ]] && printf '%s\n' '#!/usr/bin/env bash' "$(printf '# pad%.0s\n' $(seq 4000))" 'echo SELFCHANGED; exit 99' > "$ROOT_DIR/deploy/release-inplace.sh"
 [[ -n "${STUB_SLEEP:-}" ]] && sleep "$STUB_SLEEP"
@@ -219,7 +215,8 @@ class ReleaseInplace(unittest.TestCase):
         self.assertIn("C1 셸 키 0 · platform 600 · 도는 pleiades-* same 6 · DIFF/MISSING 0", out)
         self.assertIn("C2 v1.0.1 · 깨끗: 예", out)
         self.assertRegex(out, r"C4 plan rc 0 · 기본 실행 rc 0 · \d+s · 완료 안내: 예")
-        self.assertIn("online 3/3 · mcp 200 · 409 0", out)
+        self.assertIn("online 3/3 · mcp 200 · 재기동", out)
+        self.assertNotIn("409", out)  # 회귀: #502 — 409 칸·게이트는 텔레그램과 함께 지웠다(009 D-5 §5-3)
         # 회귀: #276 — 오류 로그 파일명에 pm2 id 가 붙는다. 창 안 2줄(경고 1)을 두 파일에서 센다
         self.assertIn("web 2(경고 1)", out)
         self.assertIn("bot 0(경고 0)", out)  # 회귀: #373 — 정상 기동 줄은 세지 않는다
@@ -354,17 +351,6 @@ class ReleaseInplace(unittest.TestCase):
         r = self.srv.run("fin", "v1.0.1", "--yes", STUB_BOT_ERROR="1")
         self.assertIn("bot 1(경고 0)", r.stdout)
         self.assertEqual(r.returncode, 0, r.stdout)
-
-    def test_c5_counts_409(self):
-        # 회귀: M4 — 재기동 뒤 getUpdates 충돌만 센다(옛 409 줄 · 금액 14090 은 0)
-        self.srv.release("v1.0.1")
-        r = self.srv.run("fin", "v1.0.1", "--yes")
-        self.assertIn("409 0", r.stdout)
-        self.assertEqual(r.returncode, 0, r.stdout)
-        git(self.srv.root, "checkout", "-q", "v1.0.0")
-        r = self.srv.run("fin", "v1.0.1", "--yes", STUB_409="1")
-        self.assertEqual(r.returncode, 4)
-        self.assertIn("409 1", r.stdout)
 
     def test_done_line_comes_from_the_real_run_only(self):
         # 회귀: M2 — dry-run 의 완료 줄로 "완료 안내: 예" 가 되면 안 된다
