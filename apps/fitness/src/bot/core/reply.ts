@@ -18,12 +18,7 @@ export interface BotReply {
   readonly format: ReplyFormat;
   /** 버튼 행들 — 없으면 버튼 없음. */
   readonly buttons?: readonly (readonly ReplyButton[])[];
-  /**
-   * 편집 흐름 종료 표시 — 텔레그램은 reply 키보드 슬롯을 비운다(`remove_keyboard` · 옛 force_reply 잔여 정리 · #350).
-   * 개념이 없는 플랫폼(Discord)은 무시한다. `buttons` 와 함께 쓰지 않는다.
-   */
-  readonly clearKeyboard?: boolean;
-  /** 길 수 있는 본문(AI 답 · 리포트) — 텔레그램은 4096 분할 + HTML 실패 시 plain 재전송(replyLong) · Discord 는 chat 분할. `buttons`·`clearKeyboard` 와 함께 쓰지 않는다(텔레그램 어댑터가 무시한다 · PR-2 사전 리뷰 info 3). */
+  /** 길 수 있는 본문(AI 답 · 리포트) — chat 이 분할하고 명령 표기(`/`→`!`)를 바꾸지 않는다. `buttons` 와 함께 쓰지 않는다. */
   readonly long?: boolean;
 }
 

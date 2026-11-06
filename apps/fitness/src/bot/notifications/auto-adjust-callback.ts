@@ -2,7 +2,6 @@
 // Accept/Reject/Snooze 3-way inline keyboard callback → decision update + Accept 시
 // TrainingWorkout 실제 반영.
 
-import type { Bot } from "grammy";
 import prisma from "@/lib/prisma";
 import { todayKST, ymdKST } from "@/lib/garmin/utils";
 import { sanitizeError } from "../utils/error";
@@ -302,25 +301,4 @@ export async function decideAutoAdjust(data: string): Promise<AutoAdjustDecision
     );
     return keep("처리 중 오류가 발생했습니다. 잠시 후 다시 시도하세요.");
   }
-}
-
-/**
- * grammy bot 에 callback handler 등록. `bot.callbackQuery(/^auto_adjust:/, ...)` 로 매칭.
- * decision 이 이미 결정된 상태면 no-op (idempotent — 중복 클릭 안전). 판단은 `decideAutoAdjust`.
- */
-export function registerAutoAdjustCallback(bot: Bot): void {
-  bot.callbackQuery(new RegExp(`^${CALLBACK_PREFIX}:`), async (ctx) => {
-    const { notice, removeKeyboard } = await decideAutoAdjust(ctx.callbackQuery.data ?? "");
-    await ctx.answerCallbackQuery({ text: notice });
-    if (!removeKeyboard) return;
-    try {
-      // Accept/Reject 시 keyboard 제거 (중복 클릭 방지). Snooze 는 유지 (재알림 후 재결정).
-      await ctx.editMessageReplyMarkup({ reply_markup: undefined });
-    } catch (editErr) {
-      // 오래된 메시지는 편집 실패 — 무시.
-      console.warn(
-        `[auto-adjust-callback] keyboard 편집 실패 (무시): ${sanitizeError(editErr)}`,
-      );
-    }
-  });
 }

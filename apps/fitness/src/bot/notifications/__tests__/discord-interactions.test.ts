@@ -28,7 +28,7 @@ import {
   notifyIntentsFallback,
   startDiscordInteractions,
 } from "../discord-interactions";
-import { BOT_PROCESS_WITHOUT_TELEGRAM, notifierFor } from "../notifier";
+import { BOT_PROCESS, notifierFor } from "../notifier";
 
 function ctx(action: string) {
   return {
@@ -104,7 +104,7 @@ describe("startDiscordInteractions", () => {
     vi.stubEnv("DISCORD_BOT_TOKEN_FITNESS", "");
     vi.stubEnv("DISCORD_CHANNEL_ID_FITNESS", "");
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    expect(startDiscordInteractions(BOT_PROCESS_WITHOUT_TELEGRAM)).toBeUndefined();
+    expect(startDiscordInteractions(BOT_PROCESS)).toBeUndefined();
     log.mockRestore();
   });
 });
@@ -128,7 +128,7 @@ describe("대화 채널 스위치(Kb1 · Ka3)", () => {
   });
 
   const started = (): ChatOptions => {
-    expect(startDiscordInteractions(BOT_PROCESS_WITHOUT_TELEGRAM)).toBeDefined();
+    expect(startDiscordInteractions(BOT_PROCESS)).toBeDefined();
     return vi.mocked(createChat).mock.calls.at(-1)![0];
   };
 
@@ -187,11 +187,11 @@ describe("대화 채널 스위치(Kb1 · Ka3)", () => {
     vi.stubEnv("DISCORD_CHANNEL_ID_FITNESS_CHAT", CHAT_CH);
     notify.mockClear();
     vi.mocked(notifierFor).mockClear();
-    const bot = { api: undefined };
+    const bot = BOT_PROCESS;
     expect(startDiscordInteractions(bot)).toBeDefined();
     const o = vi.mocked(createChat).mock.calls.at(-1)![0];
     await o.onIntentsFallback!();
-    expect(notifierFor).toHaveBeenCalledWith(bot);
+    expect(notifierFor).toHaveBeenCalledWith();
     expect(notify).toHaveBeenCalledTimes(1);
     expect((notify.mock.calls[0] as unknown[])[0]).toBe(Route.ALLOWED);
   });
@@ -201,7 +201,7 @@ describe("notifyIntentsFallback(F1)", () => {
   it("sent=0 이면 경고 줄 — gateway 종료 코드 문자열을 쓰지 않는다", async () => {
     notify.mockResolvedValueOnce({ sent: 0, total: 0 });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    await notifyIntentsFallback(BOT_PROCESS_WITHOUT_TELEGRAM);
+    await notifyIntentsFallback(BOT_PROCESS);
     expect(warn).toHaveBeenCalledWith("[discord-fit] 4014 강등 알림 미전송 (sent=0/total=0)");
     expect(String(warn.mock.calls[0][0])).not.toContain("gateway 종료 코드");
     warn.mockRestore();
@@ -210,7 +210,7 @@ describe("notifyIntentsFallback(F1)", () => {
   it("보냈으면 경고 없음", async () => {
     notify.mockResolvedValueOnce({ sent: 1, total: 1 });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    await notifyIntentsFallback(BOT_PROCESS_WITHOUT_TELEGRAM);
+    await notifyIntentsFallback(BOT_PROCESS);
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });

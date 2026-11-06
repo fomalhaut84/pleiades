@@ -170,7 +170,6 @@ export const LOG_REDACT_PATHS = [
   "args.body.password",
   "args.body.token",
   "DATABASE_URL",
-  "TELEGRAM_BOT_TOKEN",
   "DISCORD_BOT_TOKEN_FINANCE",
   "DISCORD_BOT_TOKEN_FITNESS",
   "DISCORD_WEBHOOK_FINANCE",

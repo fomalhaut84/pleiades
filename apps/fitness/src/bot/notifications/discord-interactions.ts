@@ -23,11 +23,11 @@ import { createDiscordRouter } from "../discord/router";
 import { FIT_ATTACHMENT_POLICY } from "../discord/photo";
 import {
   BOT_NOTIFY_CTX,
-  BOT_PROCESS_WITHOUT_TELEGRAM,
+  BOT_PROCESS,
   discordBotConfig,
   discordChatChannelId,
   notifierFor,
-  type NotifyBot,
+  type BotProcess,
 } from "./notifier";
 
 // 버튼 핸들러는 discord/auto-adjust-button.ts(pleiades#367) — 기존 import 경로를 지킨다
@@ -41,7 +41,7 @@ export const IDENTIFY_RECORD = path.join("logs", "identify-fit.json");
  * 기본 라우터 — 버튼은 notifyBot 을 쓰지 않으므로 테스트·호환용으로 텔레그램 없는 핸들로 만든다.
  * 기동 경로(startDiscordInteractions)는 standalone 의 notifyBot 으로 새로 만든다.
  */
-export const discordRouter = createDiscordRouter(BOT_PROCESS_WITHOUT_TELEGRAM);
+export const discordRouter = createDiscordRouter(BOT_PROCESS);
 
 /** 기동 로그 — deploy/discord-inbound.sh 판정 문자열(009 D-2 Kb1 · pleiades#367). 바꾸지 않는다(deploy/test_discord_inbound.py). */
 export const INBOUND_ON_LOG = "[discord-fit] 메시지 수신 켜짐(대화 채널)";
@@ -60,11 +60,11 @@ export function buttonChannels(): string[] {
 }
 
 /** 4014 강등 알림 1회(F1) — IDENTIFY 차단 알림과 같은 경로(Route.ALLOWED · 봇 토큰과 무관한 notifier). */
-export async function notifyIntentsFallback(notifyBot: NotifyBot): Promise<void> {
+export async function notifyIntentsFallback(notifyBot: BotProcess): Promise<void> {
   const msg =
     "⚠️ <b>fit Discord 메시지 수신 꺼짐</b>\n개발자 포털 MESSAGE CONTENT 토글이 꺼져 있어(4014) 버튼만 받는다. " +
     "토글을 켠 뒤 봇을 재시작하거나 deploy/discord-inbound.sh fit off 로 끈다.";
-  const r = await notifierFor(notifyBot).notify(Route.ALLOWED, html(msg), BOT_NOTIFY_CTX);
+  const r = await notifierFor().notify(Route.ALLOWED, html(msg), BOT_NOTIFY_CTX);
   // chat 은 콜백 실패를 삼킨다 — 안 나갔으면 여기서 남긴다
   if (r.sent === 0) console.warn(`[${LABEL}] 4014 강등 알림 미전송 (sent=0/total=${r.total})`);
 }
@@ -73,7 +73,7 @@ export async function notifyIntentsFallback(notifyBot: NotifyBot): Promise<void>
  * 설정이 갖춰졌으면 gateway 를 시작해 돌려준다. 아니면 undefined(로그 1줄 · 텔레그램은 그대로).
  * `notifyBot` 은 IDENTIFY 차단 알림 경로 — Discord 봇 토큰과 무관한 notifier(웹훅 · 텔레그램)로 보낸다.
  */
-export function startDiscordInteractions(notifyBot: NotifyBot): Chat | undefined {
+export function startDiscordInteractions(notifyBot: BotProcess): Chat | undefined {
   const cfg = discordBotConfig();
   if (!cfg.ready) {
     console.log("[discord-fit] 봇 토큰·채널 미설정 — Discord 버튼 수신 안 함(텔레그램 버튼은 그대로)");
@@ -102,7 +102,7 @@ export function startDiscordInteractions(notifyBot: NotifyBot): Chat | undefined
           `⚠️ <b>fit Discord 봇 접속 중단</b>\nIDENTIFY 보호(${info.reason} · 24시간 ${info.count}/${info.limit}) — ` +
           `${new Date(info.retryAt).toISOString()} 이후 다시 시도한다. 재시작 루프가 있는지 확인한다.`;
         console.error(`[${LABEL}] IDENTIFY 보호 — ${info.reason} · ${info.count}/${info.limit}`);
-        const r = await notifierFor(notifyBot).notify(Route.ALLOWED, html(msg), BOT_NOTIFY_CTX);
+        const r = await notifierFor().notify(Route.ALLOWED, html(msg), BOT_NOTIFY_CTX);
         // chat 의 guard 는 onBlocked 의 실패를 삼킨다 — 안 나갔으면 여기서 남긴다(PR-2 사전 리뷰 info 4)
         if (r.sent === 0) console.warn(`[${LABEL}] IDENTIFY 차단 알림 미전송 (sent=0/total=${r.total})`);
       },

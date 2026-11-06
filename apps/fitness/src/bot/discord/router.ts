@@ -19,7 +19,7 @@ import { decideWeight } from "../commands/weight";
 import { discordStateKey } from "../core/state-key";
 import type { BotReply } from "../core/reply";
 import { CALLBACK_PREFIX as AUTO_ADJUST_PREFIX } from "../notifications/auto-adjust";
-import type { NotifyBot } from "../notifications/notifier";
+import type { BotProcess } from "../notifications/notifier";
 import { UNKNOWN_BUTTON_TEXT, handleDiscordButton } from "./auto-adjust-button";
 import { handleDiscordAttachment } from "./photo";
 import { DISCORD_COMMAND_PREFIX, discordButtonOutput, discordOutput, withTyping } from "./reply";
@@ -30,14 +30,14 @@ const send = (ctx: MessageContext, message: BotReply) => out(ctx).reply(message)
 const slow = (ctx: MessageContext, task: () => Promise<void>) => withTyping(() => ctx.typing(), task);
 
 /** 자유 텍스트 — 텔레그램 `message:text` 와 같은 4 분기. 등록되지 않은 `!foo` 는 편집 입력으로 먹지 않는다(텔레그램 `/foo` 와 같다). */
-export async function handleDiscordText(ctx: MessageContext, bot: NotifyBot): Promise<void> {
+export async function handleDiscordText(ctx: MessageContext, bot: BotProcess): Promise<void> {
   const text = ctx.text.trim();
   const stateKey = text.startsWith(DISCORD_COMMAND_PREFIX) ? undefined : discordStateKey(ctx.channelId, ctx.userId);
   await slow(ctx, () => decideFreeText(text, out(ctx), { stateKey, aiChannel: DISCORD_AI_CHANNEL, bot }));
 }
 
 /** 텍스트 경로(명령 + 자유 텍스트) — 첨부 경로가 이미지 0 일 때 이리로 넘긴다. */
-function textRouter(bot: NotifyBot): Router {
+function textRouter(bot: BotProcess): Router {
   return createRouter({ commandPrefix: DISCORD_COMMAND_PREFIX })
     .command("start", (ctx) => send(ctx, decideStart()))
     .command("help", (ctx) => send(ctx, decideHelp()))
@@ -45,9 +45,9 @@ function textRouter(bot: NotifyBot): Router {
     .command("run", async (ctx) => send(ctx, await decideRun()))
     .command("sleep", async (ctx) => send(ctx, await decideSleep()))
     .command("weight", async (ctx) => send(ctx, await decideWeight()))
-    .command("sync", (ctx) => slow(ctx, () => decideSync(out(ctx), { bot, staticErrors: true })))
+    .command("sync", (ctx) => slow(ctx, () => decideSync(out(ctx), { bot })))
     .command("report", (ctx, args) =>
-      slow(ctx, () => decideReport(args === "" ? undefined : args, out(ctx), { bot, staticErrors: true })),
+      slow(ctx, () => decideReport(args === "" ? undefined : args, out(ctx), { bot })),
     )
     .command("ai", (ctx, args) => slow(ctx, () => decideAi(args, out(ctx), { channel: DISCORD_AI_CHANNEL, bot })))
     .command("reset", (ctx) => send(ctx, decideReset(DISCORD_AI_CHANNEL)))
@@ -57,7 +57,7 @@ function textRouter(bot: NotifyBot): Router {
 }
 
 /** fit Discord 라우터 — 메시지(명령 · 자유 텍스트 · 사진)와 버튼. */
-export function createDiscordRouter(bot: NotifyBot): Router {
+export function createDiscordRouter(bot: BotProcess): Router {
   const text = textRouter(bot);
   return text
     .attachment((ctx) =>

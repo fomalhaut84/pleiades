@@ -3,7 +3,7 @@
 
 import type { ReplyOutput } from "../core/reply";
 import type { StateKey } from "../core/state-key";
-import type { NotifyBot } from "../notifications/notifier";
+import type { BotProcess } from "../notifications/notifier";
 import { decideAiQuestion } from "./ai";
 import { decideFoodInput, decideFoodKcal, isFoodInput } from "./food";
 import { decideFoodEditInput } from "./food-edit-callback";
@@ -18,7 +18,7 @@ export interface FreeTextOptions {
   /** AI 세션 채널(플랫폼별). */
   aiChannel: string;
   /** 인증 만료 admin alert 경로(lib 의 `!bot` = 웹). */
-  bot?: NotifyBot;
+  bot?: BotProcess;
 }
 
 /** 텍스트 1건 처리. `text` 는 앞뒤 공백을 뗀 원문. */

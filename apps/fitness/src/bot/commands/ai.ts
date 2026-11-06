@@ -1,4 +1,3 @@
-import type { Bot } from "grammy";
 import { askAdvisor, resetSession } from "../../lib/ai/claude-advisor";
 import {
   generateMorningReport,
@@ -11,15 +10,12 @@ import {
 } from "../../lib/monitoring/admin-alerts";
 import { mdToHtml } from "../utils/telegram";
 import { htmlReply, plainReply, type BotReply, type ReplyOutput } from "../core/reply";
-import type { NotifyBot } from "../notifications/notifier";
-import { telegramOutput } from "../utils/telegram-reply";
+import type { BotProcess } from "../notifications/notifier";
 
 // 전역 락 — 플랫폼 공유(009 D-2 설계 S · AI 락 공유 유지).
 let isProcessing = false;
 
-/** 텔레그램 AI 세션 채널 — askAdvisor · resetSession 의 채널 키(pleiades#364 · 플랫폼별 세션). */
-export const TELEGRAM_AI_CHANNEL = "telegram";
-/** Discord AI 세션 채널 — 텔레그램 세션과 따로(설계 S · R10 · pleiades#367). */
+/** Discord AI 세션 채널 — askAdvisor · resetSession 의 채널 키(pleiades#364 · 플랫폼별 세션 · 설계 S · R10 · pleiades#367). */
 export const DISCORD_AI_CHANNEL = "discord";
 
 type ReportType = "morning" | "evening" | "weekly";
@@ -63,7 +59,7 @@ const REPORT_LABEL: Record<ReportType, string> = {
 
 async function runReportFromAiCommand(
   type: ReportType,
-  notifyBot?: NotifyBot,
+  notifyBot?: BotProcess,
 ): Promise<string> {
   // force=true: /ai 로 명시 요청은 항상 새로 생성. 기존 record 는 $transaction 안
   // deleteMany + create 로 update-like 처리 (사용자 요구 사항 그대로).
@@ -79,7 +75,7 @@ async function runReportFromAiCommand(
 export interface AiQuestionOptions {
   channel: string;
   detectReportRequest?: boolean;
-  bot?: NotifyBot;
+  bot?: BotProcess;
 }
 
 /**
@@ -107,18 +103,6 @@ export function decideReset(channel: string): BotReply {
   return plainReply("🔄 AI 세션이 초기화되었습니다.");
 }
 
-export function registerAiCommands(bot: Bot) {
-  bot.command("ai", async (ctx) => {
-    await decideAi(ctx.match?.toString(), telegramOutput(ctx), {
-      channel: TELEGRAM_AI_CHANNEL,
-      bot,
-    });
-  });
-
-  bot.command("reset", async (ctx) => {
-    await telegramOutput(ctx).reply(decideReset(TELEGRAM_AI_CHANNEL));
-  });
-}
 
 /** AI 질문 1건 — 전역 락 · 리포트 감지(옵션) · askAdvisor · 실패 안내(판단 · pleiades#364). */
 export async function decideAiQuestion(

@@ -5,7 +5,7 @@
 // Phase 1 은 read-only. Phase 2 부터 inline keyboard (Accept/Reject/Snooze) + WorkoutAdjustment
 // 이력 저장 + Accept 시 TrainingWorkout 실제 update + Snooze DB 재전송 flow 추가.
 
-import type { NotifyBot } from "./notifier";
+import type { BotProcess } from "./notifier";
 import prisma from "@/lib/prisma";
 import { recommendTodayWorkout } from "@/mcp/tools/recommend-today-workout";
 import { getInjuryRiskScore } from "@/mcp/tools/injury-risk";
@@ -242,7 +242,7 @@ export function formatAutoAdjustMessage(
  * - adjusted === true → Telegram push + AIAdvice 로그
  * 조용한 실패 방지: 오류 시 notifier 로 사용자 알림.
  */
-export async function runAutoAdjustProposal(bot: NotifyBot): Promise<void> {
+export async function runAutoAdjustProposal(bot: BotProcess): Promise<void> {
   try {
     const profile = await prisma.userProfile.findFirst({
       select: { autoAdjustEnabled: true },
@@ -395,7 +395,7 @@ export async function runAutoAdjustProposal(bot: NotifyBot): Promise<void> {
     });
 
     const keyboard = buildAutoAdjustKeyboard(adjustment.id);
-    const sendResult: BroadcastResult = await interactiveNotifierFor(bot).notify(
+    const sendResult: BroadcastResult = await interactiveNotifierFor().notify(
       Route.ALLOWED,
       html(message, keyboard),
       BOT_NOTIFY_CTX,
@@ -404,7 +404,7 @@ export async function runAutoAdjustProposal(bot: NotifyBot): Promise<void> {
     // 조용한 실패 방지 (기존 runReportCron 패턴): 전송 대상 없음 or 전부 실패 시 escalate.
     if (sendResult.total === 0) {
       console.warn(
-        "[auto-adjust] 전송 대상 없음 (TELEGRAM_ALLOWED_CHAT_IDS 미설정?)",
+        "[auto-adjust] 전송 대상 없음 (DISCORD_BOT_TOKEN_FITNESS·DISCORD_CHANNEL_ID_FITNESS 미설정?)",
       );
     } else if (sendResult.sent === 0) {
       throw new Error(
@@ -455,7 +455,7 @@ export async function runAutoAdjustProposal(bot: NotifyBot): Promise<void> {
     void notifyAdminIfKnownFailure(bot, error).catch(() => {});
     try {
       const friendly = formatUserFriendlyError(error);
-      await notifierFor(bot).notify(
+      await notifierFor().notify(
         Route.ALLOWED,
         html(`❌ Auto-adjust 알림 실패\n${friendly}`),
         BOT_NOTIFY_CTX,
