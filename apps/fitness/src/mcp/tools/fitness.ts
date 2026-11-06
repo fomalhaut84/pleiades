@@ -36,8 +36,8 @@ function daysAgo(n: number): Date {
   return d;
 }
 
-// #364: 서버 로컬 TZ getter 는 호스트가 KST 일 때만 맞다. ecosystem.config.js 가 TZ 를
-// 고정하지 않으므로 (세 앱 모두) 호스트 TZ 변경 한 번에 라벨이 하루 밀린다. KST 고정.
+// #364: 서버 로컬 TZ getter 는 호스트가 KST 일 때만 맞다. pm2 정의가 TZ 를 주더라도 실행 방식(run.sh · 직접 기동)에 따라
+// 다를 수 있어 호스트 TZ 변경 한 번에 라벨이 하루 밀린다. KST 고정.
 function fmt(date: Date): string {
   return ymdKST(date);
 }

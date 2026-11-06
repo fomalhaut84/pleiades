@@ -23,7 +23,7 @@ const ACTIVE_REVIEW_LABEL = '능동 AI 리뷰 (on/off)'
 /**
  * `active_review` 키 존재 보장 — 봇 스케줄러 등록 시 호출.
  *
- * 이유: `deploy/deploy.sh` 는 `prisma migrate deploy` 만 실행 (seed 재실행 X).
+ * 이유: 배포(`deploy/release-inplace.sh` · 마이그레이션 릴리즈는 따로 적용)는 seed 를 다시 돌리지 않는다.
  * seed 재실행 없이 기존 배포에서 첫 cron 실행 전에 row 를 만들어 두어야
  * 사용자가 `PUT /api/alerts/config` 로 off 로 설정 가능 (라우트가 존재하지 않는 key 는 404).
  * 봇 프로세스 시작 시 실행되므로 배포 직후 즉시 row 존재.

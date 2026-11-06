@@ -403,7 +403,7 @@ model WorkoutAdjustment {
   reason               Json?
   rejectReason         String?
 
-  // Telegram callback 매칭용.
+  // 보낸 알림 메시지 참조 — Discord 메시지 id · 채널 별칭도 저장한다 · 읽는 곳 없음(009 S-8 · 컬럼 이름은 옛 채널 그대로).
   telegramMessageId    String?
   telegramChatId       String?
 
