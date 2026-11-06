@@ -1,8 +1,8 @@
 /**
- * pleiades 009 D-5 B3a (pleiades#509) — special-telegram.test.ts 를 판단 단위로 옮겼다(어댑터 없음).
+ * pleiades 009 D-5 B3a (pleiades#509) — 옛 채널 특성 테스트(special)를 판단 단위로 옮겼다(어댑터 없음).
  *
  * 브리핑(종목 심층 분석 포함) · 리포트(PDF) · 백테스트 · 커스텀전략 · 알림설정. describe·it 제목은 옛 파일과 같다.
- * 등록 핸들러가 계산하던 인자(`*ArgsFromText` · `alertArgsFromTelegram`)를 그대로 만들어 `decide*` 를 직접 부른다.
+ * 등록 핸들러가 계산하던 인자(`*ArgsFromText` · `alertArgsFromMatch`)를 그대로 만들어 `decide*` 를 직접 부른다.
  * fire-and-forget(종목 심층 분석 · 리포트 PDF · 백테스트)은 끝까지 흘린 뒤 본다. typing 은 steps 밖에서 센다(`typing` mock).
  * 옛 `replyHtml`(`ctx.reply(html, {parse_mode})`) 은 여기서 `['long', html]` 단계다.
  */
@@ -44,9 +44,9 @@ import {
   customStrategyDeleteArgsFromText, customStrategyRegisterArgsFromText,
   decideCustomStrategyDelete, decideCustomStrategyList, decideCustomStrategyRegister,
 } from '../custom-strategy'
-import { ALERT_CONFIG_RE, alertArgsFromTelegram, decideAlertConfig } from '../alert'
+import { ALERT_CONFIG_RE, alertArgsFromMatch, decideAlertConfig } from '../alert'
 import { splitMessage } from '../../utils/formatter'
-import { markdownToTelegramHtml } from '../../utils/markdown'
+import { markdownToHtml } from '../../utils/markdown'
 import { flush, recordingOutput, type Step } from './test-utils'
 
 const p = vi.mocked(prisma, { deep: true })
@@ -76,9 +76,9 @@ const backtestRun = (text: string) => run((out) => decideBacktest(backtestArgsFr
 const registerRun = (text: string) => run((out) => decideCustomStrategyRegister(customStrategyRegisterArgsFromText(text), out))
 const deleteRun = (text: string) => run((out) => decideCustomStrategyDelete(customStrategyDeleteArgsFromText(text), out))
 /** `/alertconfig` 명령 — 옛 runCmd 처럼 ctx.match = 명령 뒤 문자열(앞 공백 제거). */
-const alertCmd = (text: string) => run((out) => decideAlertConfig(alertArgsFromTelegram(text.replace(/^\/\S+\s*/, ''), text), out))
+const alertCmd = (text: string) => run((out) => decideAlertConfig(alertArgsFromMatch(text.replace(/^\/\S+\s*/, ''), text), out))
 /** 한글 `알림설정` — 옛 runHears 처럼 ctx.match = 정규식 매치 배열. */
-const alertHears = (text: string) => run((out) => decideAlertConfig(alertArgsFromTelegram(text.match(ALERT_CONFIG_RE), text), out))
+const alertHears = (text: string) => run((out) => decideAlertConfig(alertArgsFromMatch(text.match(ALERT_CONFIG_RE), text), out))
 
 function resetAll(obj: unknown): void {
   for (const v of Object.values(obj as Record<string, unknown>)) {
@@ -140,7 +140,7 @@ describe('브리핑', () => {
       })
       expect(f.steps).toEqual([
         ['reply', '🔍 NVDA 심층 분석 중... (통상 1~2분, 최대 10분 이상 걸릴 수 있어요)', 'plain'],
-        ['reply', markdownToTelegramHtml('**NVDA** 요약 & <x>'), 'html'],
+        ['reply', markdownToHtml('**NVDA** 요약 & <x>'), 'html'],
       ])
       expect(m.briefing).not.toHaveBeenCalled()
     })
@@ -159,7 +159,7 @@ describe('브리핑', () => {
       await flush()
       expect(r.steps).toEqual([
         ['reply', '🔍 A 심층 분석 중... (통상 1~2분, 최대 10분 이상 걸릴 수 있어요)', 'plain'],
-        ['reply', markdownToTelegramHtml('**A**'), 'html'],
+        ['reply', markdownToHtml('**A**'), 'html'],
         ['reply', '**A**', 'plain'],
       ])
     })
@@ -446,7 +446,7 @@ describe('알림설정', () => {
   it('처리 중 던지면 정적 안내', async () => {
     p.alertConfig.findMany.mockRejectedValueOnce(new Error('db'))
     const r = recordingOutput()
-    await expect(decideAlertConfig(alertArgsFromTelegram('', '/alertconfig'), r.out)).rejects.toThrow('db')
+    await expect(decideAlertConfig(alertArgsFromMatch('', '/alertconfig'), r.out)).rejects.toThrow('db')
     expect(r.steps).toEqual([])
   })
 })

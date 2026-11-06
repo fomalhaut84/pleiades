@@ -5,7 +5,7 @@
  * - cron 작업 (주가갱신, 스냅샷, KRX, 반복거래)
  * - 알림 스케줄러 (일일요약, 브리핑, 분기점검 등)
  * - Discord gateway(메시지·버튼 수신 — `./discord/router`)
- * 텔레그램 폴링은 지웠다(009 D-5 B3b · pleiades#508).
+ * 옛 채널 폴링은 지웠다(009 D-5 B3b · pleiades#508).
  */
 
 import 'dotenv/config'

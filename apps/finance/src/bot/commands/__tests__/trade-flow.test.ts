@@ -1,5 +1,5 @@
 /**
- * pleiades 009 D-5 B3a (pleiades#509) — trade-telegram.test.ts 를 판단 단위로 옮겼다(어댑터 없음).
+ * pleiades 009 D-5 B3a (pleiades#509) — 옛 채널 특성 테스트(trade)를 판단 단위로 옮겼다(어댑터 없음).
  *
  * 매수·매도 `decideTrade` · `trade:` 버튼 `decideTradeButton` 을 직접 부른다(T6 파싱·검증 · T7 `trade:` · T17 경계).
  * 옛 등록부(hears 정규식 · 콜백 next · 등록부 catch 문구)는 어댑터 몫이라 옮기지 않았다 — 대응표 `map-trade.md`.

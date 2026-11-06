@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { generateReportPDF } from '@/lib/report/pdf-generator'
-import { h } from '../utils/telegram'
+import { h } from '../utils/html'
 import { plainReply, type ReplyOutput } from '../core/reply'
 
 /*
@@ -12,7 +12,7 @@ import { plainReply, type ReplyOutput } from '../core/reply'
 
 export const REPORT_RE = /^리포트(?:\s+.*)?$/
 
-/** 텔레그램 원문 → 인자 — `/report[@bot]` · `리포트` 를 벗기고 trim(대소문자 무시). */
+/** 원문 → 인자 — `/report[@bot]` · `리포트` 를 벗기고 trim(대소문자 무시). */
 export function reportArgsFromText(text: string): string {
   return text.replace(/^(\/report(?:@\w+)?|리포트)\s*/i, '').trim()
 }

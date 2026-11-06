@@ -2,7 +2,7 @@
  * MCP tools — Phase 29-E 커스텀 전략 CRUD.
  *
  * 사용자 자연어 → parseStrategyText → CustomStrategy 저장.
- * cron 이 evaluator 로 순수 코드 평가 → 조건 만족 시 텔레그램 알림.
+ * cron 이 evaluator 로 순수 코드 평가 → 조건 만족 시 알림.
  */
 
 import { prisma } from '@/lib/prisma'

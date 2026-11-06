@@ -4,7 +4,7 @@
  * 정본 조합 (003 §3-1):
  *   - 재시도 백오프 `[2000, 8000, 30000]`ms × 총 4회 — 양쪽 동일. 네트워크 오류(`isNetworkError`)만.
  *   - 파싱 실패 폴백 판정 `isHtmlParseError` (fit 공유 정규식). 폴백 시 재시도 예산 보존 — fit `send.ts:59-62` 의 `attempt--`.
- *   - 길이 분할 fin `splitMessage` — 청크 단위 재시도·폴백은 fin `telegram.ts:61-73`.
+ *   - 길이 분할 fin `splitMessage` — 청크 단위 재시도·폴백은 fin 이전 발송 유틸.
  * 009 D-5 B5 (pleiades#515): 지금 transport 는 전부 Discord(`maxLength: Infinity` · 어댑터 소유)라 아래 분할·폴백 경로는 운영에서 타지
  * 않는다. 유한 `maxLength` transport 를 위한 포트 계약으로 남긴다(설계 §5-1 B5 — 폴백 분기 유지 · `deliver.test.ts` 가 시험한다).
  *

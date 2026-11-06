@@ -1,9 +1,9 @@
 // pleiades 009 D-2 PR-2 (pleiades#364 · 설계 H2): 봇 판단 함수의 중립 응답 모델.
-// 판단 함수(decide*)는 플랫폼을 모른다 — 본문 · 형식 · 버튼(라벨 · action)만 정하고, 텔레그램 어댑터(`../telegram-reply`)와
+// 판단 함수(decide*)는 플랫폼을 모른다 — 본문 · 형식 · 버튼(라벨 · action)만 정하고,
 // Discord 어댑터(PR-3 · chat `reply({ format, buttons })`)가 이 모델을 그대로 옮긴다.
-// 버튼 action 은 텔레그램 callback data 와 같은 문자열(`food:` · `auto_adjust:` 접두 — Discord custom_id 한도 100자 안).
+// 버튼 action 은 옛 메시지와 같은 문자열(`food:` · `auto_adjust:` 접두 — Discord custom_id 한도 100자 안).
 
-/** 본문 형식 — `html` 은 텔레그램 HTML 부분집합(<b> <i> <code>) · `plain` 은 그대로. */
+/** 본문 형식 — `html` 은 HTML 부분집합(<b> <i> <code> · chat 이 Discord 마크다운으로 바꾼다) · `plain` 은 그대로. */
 export type ReplyFormat = "html" | "plain";
 
 /** 인라인 버튼 하나 — 누르면 `action` 이 같은 판단 함수(decideFoodButton 등)로 돌아온다. */
@@ -31,7 +31,7 @@ export interface ReplyOutput {
 
 /** 버튼 응답 출력 — 누른 사람에게 짧은 안내 · 그 메시지의 버튼 제거 · 새 메시지. */
 export interface ButtonOutput extends ReplyOutput {
-  /** 버튼 응답 — `text` 없으면 표시 없이 응답만(텔레그램 answerCallbackQuery()). */
+  /** 버튼 응답 — `text` 없으면 표시 없이 응답만(chat 이 이미 지연 응답했다). */
   notice(text?: string): Promise<void>;
   /** 누른 메시지의 버튼을 지운다. */
   removeButtons(): Promise<void>;

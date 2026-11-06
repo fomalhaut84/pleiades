@@ -1,6 +1,6 @@
 /**
  * pleiades M-6b-4 (pleiades#155) — vest 버튼 판단(decideVest)을 채널 중립으로 분리한 회귀 테스트.
- * Discord 버튼 핸들러는 `notifications/__tests__/discord-interactions.test.ts`(텔레그램 핸들러는 009 D-5 B3b · pleiades#508 에서 지웠다).
+ * Discord 버튼 핸들러는 `notifications/__tests__/discord-interactions.test.ts`(옛 채널 핸들러는 009 D-5 B3b · pleiades#508 에서 지웠다).
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'

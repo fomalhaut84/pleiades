@@ -1,13 +1,13 @@
 import { prisma } from '@/lib/prisma'
 import { fetchQuote } from '@/lib/price-fetcher'
 import { formatWatchlistPriceInfo } from './price-format'
-import { escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/html'
 import { sanitizeError } from '../utils/error'
 import { plainReply, type ReplyOutput } from '../core/reply'
 
 /*
  * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 관심 · 관심삭제 · 관심목록.
- * 판단(decide*)은 인자(`args`)와 중립 응답 모델만 안다 · 텔레그램 원문 벗기기는 `*ArgsFromText`(지금 식 그대로).
+ * 판단(decide*)은 인자(`args`)와 중립 응답 모델만 안다 · 원문 벗기기는 `*ArgsFromText`(옛 식 그대로).
  * 판단 흐름은 `__tests__/manage-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
@@ -15,12 +15,12 @@ export const WATCH_RE = /^관심(?!삭제|목록)(?:\s+.*)?$/
 export const UNWATCH_RE = /^관심삭제(?:\s+.*)?$/
 export const WATCHLIST_RE = /^관심목록\s*$/
 
-/** 텔레그램 원문 → 인자 — `/watch[@bot]` · `관심` 다음 공백(또는 끝)까지 벗기고 trim(대소문자 무시). */
+/** 원문 → 인자 — `/watch[@bot]` · `관심` 다음 공백(또는 끝)까지 벗기고 trim(대소문자 무시). */
 export function watchArgsFromText(text: string): string {
   return text.replace(/^(\/watch(?:@\w+)?|관심)(\s|$)/i, '').trim()
 }
 
-/** 텔레그램 원문 → 인자 — `/unwatch[@bot]` · `관심삭제` 를 벗기고 trim(대소문자 무시). */
+/** 원문 → 인자 — `/unwatch[@bot]` · `관심삭제` 를 벗기고 trim(대소문자 무시). */
 export function unwatchArgsFromText(text: string): string {
   return text.replace(/^(\/unwatch(?:@\w+)?|관심삭제)\s*/i, '').trim()
 }

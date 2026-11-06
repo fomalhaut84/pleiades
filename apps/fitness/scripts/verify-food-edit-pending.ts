@@ -1,7 +1,7 @@
 /**
  * #350 회귀 검증 — 식단 편집 pending 상태 머신.
  *
- * 배경: force_reply 는 Telegram 클라이언트 상태라 답장 안 된 프롬프트가 채팅방을 열 때마다
+ * 배경: force_reply 는 메신저 클라이언트 상태라 답장 안 된 프롬프트가 채팅방을 열 때마다
  * 답장 입력폼을 영구 재무장시켰다. chat 단위 pending 으로 전환하며 이 스크립트로 상태 머신을
  * 검증한다. 프로젝트에 테스트 프레임워크가 없어 workflow.md 8-5 에 따라 스크립트로 대체.
  *
@@ -31,7 +31,7 @@ const ACTIVE_TTL_MS = 5 * 60 * 1000;
 const MAX_RETRIES = 3;
 
 // pleiades 009 D-2 PR-2 (pleiades#364 · 설계 S): pending 키는 문자열 상태 키 — Discord 채널+사용자 단위.
-// (009 D-5 B2 #504: 텔레그램 키를 지워 C6b 는 플랫폼 교차 대신 채널 교차를 본다)
+// (009 D-5 B2 #504: 옛 플랫폼 키를 지워 C6b 는 플랫폼 교차 대신 채널 교차를 본다)
 const CHAT_A = discordStateKey("1001", "1"); // "discord:1001:1"
 const CHAT_B = discordStateKey("2002", "9"); // "discord:2002:9"
 // C6b — 같은 사용자 · 다른 채널 키
@@ -219,7 +219,7 @@ async function main(): Promise<void> {
   console.log("C9: armPendingEdit 발송/등록 순서");
   const sendOk = async (): Promise<void> => {};
   const sendFail = async (): Promise<void> => {
-    throw new Error("Telegram 5xx");
+    throw new Error("send 5xx");
   };
 
   reset();

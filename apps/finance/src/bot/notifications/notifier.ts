@@ -2,7 +2,7 @@
  * pleiades M-5b (pleiades#136 · 003 §5-1 1a-4): 아웃바운드 알림을 @pleiades/notify 파사드로 보낸다.
  * 재시도 [2000, 8000, 30000] · HTML 변환 · 길이 분할은 패키지 코어가 소유한다.
  *
- * pleiades 009 D-5 B4 (pleiades#512): 텔레그램을 지웠다 — 라우트 스위치(`NOTIFY_ALLOWED_CHANNEL`·`NOTIFY_ADMIN_CHANNEL`·
+ * pleiades 009 D-5 B4 (pleiades#512): 옛 채널 전송을 지웠다 — 라우트 스위치(`NOTIFY_ALLOWED_CHANNEL`·`NOTIFY_ADMIN_CHANNEL`·
  * `NOTIFY_INTERACTIVE_CHANNEL`)를 읽지 않고 늘 Discord 로 보낸다(009 §5-4 · fit B2 와 같은 형태).
  *   ALLOWED → `#finance` 웹훅(`DISCORD_WEBHOOK_FINANCE`) · ADMIN → `#admin` 웹훅(`DISCORD_WEBHOOK_ADMIN`)
  *   키보드 메시지(rsu D-day 확정 버튼) → fin Discord 봇(`DISCORD_BOT_TOKEN_FINANCE`·`DISCORD_CHANNEL_ID_FINANCE`)

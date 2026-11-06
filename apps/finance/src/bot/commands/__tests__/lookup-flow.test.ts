@@ -1,7 +1,7 @@
 /**
- * pleiades 009 D-5 B3a (pleiades#509) — lookup-telegram.test.ts 를 판단 단위로 옮겼다(어댑터 없음).
+ * pleiades 009 D-5 B3a (pleiades#509) — 옛 채널 특성 테스트(lookup)를 판단 단위로 옮겼다(어댑터 없음).
  *
- * 조회 명령: start·help · 현황·계좌 · 주가·환율 · 분석. 옛 grammY 호출열은 기록 출력(`./test-utils`)의 `steps` 로 바뀌었다 —
+ * 조회 명령: start·help · 현황·계좌 · 주가·환율 · 분석. 옛 어댑터 호출열은 기록 출력(`./test-utils`)의 `steps` 로 바뀌었다 —
  * `replyHtml` → `['long', html]` · 일반 응답 → `['reply', text, 'plain']`.
  * 등록(명령·정규식·순서)과 register 의 try/catch 정적 안내는 어댑터 몫이라 옮기지 않았다(오류 경우는 판단이 던지는 것만 고정).
  * "현재 동작" 이라 적은 테스트는 서비스 유래 결함을 그대로 고정한다.
@@ -72,7 +72,7 @@ beforeEach(() => {
 })
 
 describe('start · help', () => {
-  // 이름을 `from.first_name` 에서 읽는 것은 텔레그램 어댑터 몫 — 판단은 받은 이름을 escape 하고 없으면 "사용자"
+  // 이름을 읽는 것은 어댑터 몫 — 판단은 받은 이름을 escape 하고 없으면 "사용자"
   it('start — 이름 escape · 없으면 "사용자"', async () => {
     const named = await record((out) => decideStart('A<b>', out))
     expect(named.steps).toMatchSnapshot()

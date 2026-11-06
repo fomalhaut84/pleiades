@@ -13,7 +13,7 @@
 import type { ButtonRows } from '@pleiades/notify'
 import { prisma } from '@/lib/prisma'
 import { formatKRWFull } from '@/bot/utils/formatter'
-import { escapeHtml, h } from '@/bot/utils/telegram'
+import { escapeHtml, h } from '@/bot/utils/html'
 import { interactiveNotifierFor, notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
 import { getRsuVestPreview } from '@/lib/rsu-vest-service'
 import { sanitizeError } from '@/bot/utils/error'

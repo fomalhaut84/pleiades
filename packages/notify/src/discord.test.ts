@@ -251,7 +251,7 @@ describe('Notifier + DiscordTransport (어댑터 소유 모드)', () => {
     expect(String(logger.error.mock.calls[0][0])).toContain('[fin] 메시지 전송 실패 (finance)');
   });
 
-  // 009 D-5 B5: 텔레그램이 빠져 혼합은 웹훅 · 봇 두 Discord transport 다(Q11 Route → Transport 맵은 그대로)
+  // 009 D-5 B5: 혼합은 웹훅 · 봇 두 Discord transport 다(Q11 Route → Transport 맵은 그대로)
   it('Route 별로 다른 Discord transport(웹훅 · 봇)를 쓸 수 있다', async () => {
     const fetch = vi.fn<FetchLike>(async (url) => res(200, { id: String(url).includes('/channels/') ? 'b1' : 'd1' }));
     const { createDiscordBotTransport } = await import('./discord-bot');

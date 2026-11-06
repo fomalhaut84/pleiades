@@ -11,7 +11,7 @@ import {
   DEFAULT_FX_RATE_USD_KRW,
 } from '@/lib/format'
 import { formatKRWCompact } from '@/bot/utils/formatter'
-import { h } from '@/bot/utils/telegram'
+import { h } from '@/bot/utils/html'
 import { notifierFor, recipients, Route, htmlContent } from './notifier'
 
 export async function takeNetWorthSnapshot(): Promise<void> {
@@ -80,7 +80,7 @@ export async function takeNetWorthSnapshot(): Promise<void> {
 
   console.log(`[networth] 순자산 스냅샷 저장: ${snapshotDate.toISOString().slice(0, 10)} = ${netWorthKRW}`)
 
-  // 텔레그램 알림
+  // 알림
   if (recipients.targetCount(Route.ALLOWED) > 0) {
     const message =
       `📸 ${h.b('순자산 스냅샷 저장 완료')}\n\n` +

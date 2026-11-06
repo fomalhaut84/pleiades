@@ -93,7 +93,7 @@ export async function estimateNutritionFromPhoto(
   if (!input.imagePath) return null;
   const bytes = await readPhoto(input.imagePath);
   if (!bytes) return null;
-  // MIME · 확장자는 믿지 않는다 — 텔레그램 경로는 늘 .jpg 이고 웹은 클라이언트가 정한다
+  // MIME · 확장자는 믿지 않는다 — 봇 경로는 첨부 content type 으로 정하고 웹은 클라이언트가 정한다
   const imageType = sniffImageType(bytes);
   if (!imageType) {
     console.warn("[nutrition-photo] 지원하지 않는 이미지 형식");

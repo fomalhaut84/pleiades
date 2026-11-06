@@ -2,8 +2,8 @@
  * 봇 에러 처리 유틸 — 토큰 마스킹 · 사용자에게 보여도 되는 안내 추출.
  *
  * 참조: docs/specs/354-bot-ipv6-token-fix.md
- * pleiades 009 D-5 B4 (pleiades#512): 텔레그램 전송 전용 분류(`isNetworkError`·`getErrorCode`·`isHtmlParseError`)는 소비자 0 이라 지웠다.
- * `TOKEN_RE` 는 옛 텔레그램 봇 토큰 모양이다 — 남은 로그·기록 문자열에 섞여 있을 수 있어 마스킹은 남긴다.
+ * pleiades 009 D-5 B4 (pleiades#512): 옛 채널 전송 전용 분류(`isNetworkError`·`getErrorCode`·`isHtmlParseError`)는 소비자 0 이라 지웠다.
+ * `TOKEN_RE` 는 옛 봇 토큰 모양(`bot<id>:<secret>`)이다 — 남은 로그·기록 문자열에 섞여 있을 수 있어 마스킹은 남긴다.
  */
 
 const TOKEN_RE = /bot\d+:[A-Za-z0-9_-]+/g

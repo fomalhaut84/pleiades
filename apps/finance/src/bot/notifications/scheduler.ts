@@ -201,7 +201,7 @@ export function scheduleNotifications(): void {
       '30 8 * * 1-5',
       async () => {
         try {
-          await sendBriefing('KR', undefined, { aiCommand: '!ai' })
+          await sendBriefing('KR')
         } catch (error) {
           console.error('[notification] 한국장 브리핑 실패:', error)
         }
@@ -214,7 +214,7 @@ export function scheduleNotifications(): void {
       '0 23 * * 1-5',
       async () => {
         try {
-          await sendBriefing('US', undefined, { aiCommand: '!ai' })
+          await sendBriefing('US')
         } catch (error) {
           console.error('[notification] 미국장 브리핑 실패:', error)
         }

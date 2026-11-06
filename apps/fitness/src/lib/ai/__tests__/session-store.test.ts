@@ -17,8 +17,8 @@ describe("session-store 시스템 프롬프트 버전", () => {
   });
 
   it("폴백 (null) ↔ DB 버전 전환도 새 세션", () => {
-    setSession("telegram", "s1", 10, null);
-    expect(getSession("telegram", "pv1")).toBeNull();
+    setSession("discord", "s1", 10, null);
+    expect(getSession("discord", "pv1")).toBeNull();
   });
 
   it("버전을 넘기지 않는 조회 (getSessionId) 는 버전을 보지 않는다", () => {

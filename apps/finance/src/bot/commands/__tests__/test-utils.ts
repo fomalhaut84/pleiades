@@ -7,7 +7,7 @@
  * 버튼은 `[label, action]` 행 배열이다(빈 행도 그대로 — 버리는 것은 Discord 어댑터의 일이다).
  * typing 은 타이머로 끼어들므로 `steps` 밖에서 센다(`typing` mock).
  *
- * 옛 텔레그램 특성 테스트(`*-telegram.test.ts`)의 호출열을 같은 순서 · 같은 본문으로 옮긴 것이다 — 어댑터만 빠졌다.
+ * 옛 채널 특성 테스트의 호출열을 같은 순서 · 같은 본문으로 옮긴 것이다 — 어댑터만 빠졌다.
  */
 
 import { vi } from 'vitest'
@@ -16,7 +16,7 @@ import { discordMessageKey } from '../../core/state-key'
 
 export type Step = [string, ...unknown[]]
 
-/** 판단의 기본 typing 주기 — 옛 텔레그램 테스트의 5 s 를 그대로 쓴다(주기는 출력이 정한다). */
+/** 판단의 기본 typing 주기 — 옛 특성 테스트의 5 s 를 그대로 쓴다(주기는 출력이 정한다). */
 export const FLOW_TYPING_INTERVAL_MS = 5000
 
 /** 기록 채널 — 메시지 키 `discord:<채널>:<번호>`. */

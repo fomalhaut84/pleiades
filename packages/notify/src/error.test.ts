@@ -6,8 +6,8 @@ const TOKEN = 'bot123456789:AAHfoo_bar-baz';
 
 describe('sanitizeMessage', () => {
   it('봇 토큰을 마스킹한다', () => {
-    expect(sanitizeMessage(`GET https://api.telegram.org/${TOKEN}/sendMessage`)).toBe(
-      'GET https://api.telegram.org/bot<REDACTED>/sendMessage',
+    expect(sanitizeMessage(`GET https://api.example.com/${TOKEN}/sendMessage`)).toBe(
+      'GET https://api.example.com/bot<REDACTED>/sendMessage',
     );
   });
   it('토큰이 없으면 원문 그대로', () => {
@@ -30,7 +30,7 @@ describe('sanitizeError', () => {
     const outer = Object.assign(new Error('outer'), { cause: inner });
     expect(sanitizeError(outer)).toBe('Error: outer | Error: inner bot<REDACTED>');
   });
-  it('grammy HttpError 의 .error 필드도 따라간다', () => {
+  it('HttpError 모양의 .error 필드도 따라간다', () => {
     const http = Object.assign(new Error('http'), { error: new Error('fetch failed') });
     expect(sanitizeError(http)).toBe('Error: http | Error: fetch failed');
   });
@@ -72,7 +72,7 @@ describe('isNetworkError', () => {
       expect(isNetworkError(Object.assign(new Error('n'), { code }))).toBe(true);
     },
   );
-  it('grammy timeout 메시지 · AbortError · type=aborted 를 잡는다', () => {
+  it('클라이언트 timeout 메시지 · AbortError · type=aborted 를 잡는다', () => {
     expect(isNetworkError(new Error("Request to 'sendMessage' timed out after 30 seconds"))).toBe(true);
     const abort = new Error('aborted');
     abort.name = 'AbortError';

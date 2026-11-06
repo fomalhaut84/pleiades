@@ -49,7 +49,7 @@ interface ClaudeResponse {
 }
 
 export interface AskOptions {
-  /** 세션 격리 채널. web/telegram/cron-morning/cron-evening/cron-weekly/default 등. */
+  /** 세션 격리 채널. web/discord/cron-morning/cron-evening/cron-weekly/default 등. */
   channel?: string;
   /**
    * #197: num_turns < minTurns 이면 tool 호출 없이 답변한 것으로 간주.

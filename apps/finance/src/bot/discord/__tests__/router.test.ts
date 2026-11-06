@@ -1,10 +1,10 @@
 /**
  * pleiades 009 D-3 PR-3 (pleiades#398) — Discord 라우팅 표(설계 §4 P · A · B · D · H · T "Discord 라우팅 표").
  *
- * 판단 함수는 텔레그램 특성 테스트·판단 계약 테스트가 이미 고정했다 — 여기서는 판단을 가짜로 바꾸고
+ * 판단 함수는 판단 흐름 테스트(`commands/__tests__/*-flow`)·판단 계약 테스트가 이미 고정했다 — 여기서는 판단을 가짜로 바꾸고
  * ① 어느 텍스트가 어느 판단으로 · 어떤 인자로 가는가 ② 명령 모양 · 첨부만 · 정확 일치 명령의 "이름 + 다른 말" 은 fallback
  * ③ 버튼 접두 5 + 알 수 없는 접두 ④ 정적 안내 감싸기 ⑤ 브리핑 응답 대상 = 요청 채널 · `!ai` — 를 본다.
- * 정규식 상수와 원문 벗기기 식은 진짜를 쓴다(텔레그램과 같은 객체).
+ * 정규식 상수와 원문 벗기기 식은 진짜를 쓴다(명령 모듈과 같은 객체).
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -173,7 +173,7 @@ describe('영어 이름 21 — `!` 명령 · 인자 = 라우터 args', () => {
   })
 })
 
-describe('한글 28 — 텔레그램과 같은 정규식 · 같은 인자', () => {
+describe('한글 28 — 명령 모듈의 정규식 · 같은 인자', () => {
   it.each([
     ['현황', portfolio.decidePortfolioSummary, undefined],
     ['계좌 소담', portfolio.decideAccountDetail, '계좌 소담'],
@@ -210,7 +210,7 @@ describe('한글 28 — 텔레그램과 같은 정규식 · 같은 인자', () =
     else expect(arg).toBe(first)
   })
 
-  it('매수 · 매도 — 텔레그램 벗기기 식 · 요청자 discord', async () => {
+  it('매수 · 매도 — 명령 모듈의 벗기기 식 · 요청자 discord', async () => {
     await send('매수 소담 NVDA 1 100')
     await send('매도 소담 NVDA 1 100')
     const calls = vi.mocked(trade.decideTrade).mock.calls
@@ -221,7 +221,7 @@ describe('한글 28 — 텔레그램과 같은 정규식 · 같은 인자', () =
     expect(calls[0][3]).toEqual({ userId: 'u1', dbUserId: 'discord:u1' })
   })
 
-  it('`!현황` 은 명령이 아니고 소비·AI 로도 가지 않는다(텔레그램 `/현황` 과 같다)', async () => {
+  it('`!현황` 은 명령이 아니고 소비·AI 로도 가지 않는다(옛 `/현황` 과 같다)', async () => {
     await send('!현황')
     expect(called()).toEqual([])
   })
@@ -259,7 +259,7 @@ describe('자유 텍스트 fallback', () => {
   })
 })
 
-describe('정적 안내 감싸기 — 텔레그램 등록부와 같은 문구', () => {
+describe('정적 안내 감싸기 — 옛 등록부와 같은 문구', () => {
   it('현황 실패 → 로그 + 안내(원문 없음)', async () => {
     vi.mocked(portfolio.decidePortfolioSummary).mockRejectedValueOnce(new Error('db down secret'))
     const err = vi.spyOn(console, 'error').mockImplementation(() => undefined)
@@ -268,7 +268,7 @@ describe('정적 안내 감싸기 — 텔레그램 등록부와 같은 문구', 
     err.mockRestore()
   })
 
-  // pleiades 009 D-5 B3a (pleiades#509) — 텔레그램 등록부의 catch 문구를 고정하던 특성 테스트(`*-telegram.test.ts`)의 Discord 짝
+  // pleiades 009 D-5 B3a (pleiades#509) — 옛 등록부의 catch 문구를 고정하던 특성 테스트의 Discord 짝
   it.each([
     ['계좌 세진', portfolio.decideAccountDetail, '⚠️ 계좌 조회에 실패했습니다.'],
     ['주가 NVDA', price.decidePrice, '⚠️ 주가 조회에 실패했습니다.'],

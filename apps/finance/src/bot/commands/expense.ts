@@ -21,9 +21,9 @@ import {
 import { pendingKey } from '../core/state-key'
 
 // pleiades 009 D-3 PR-1a (pleiades#382 · 설계 §4 H2 · B · S): 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말한다.
-// 수신은 `../discord/router`(PR-3). 텔레그램 등록부는 009 D-5 B3b(pleiades#508)에서 지웠다 — 판단 흐름은 `__tests__/expense-flow.test.ts`.
+// 수신은 `../discord/router`(PR-3). 옛 채널 등록부는 009 D-5 B3b(pleiades#508)에서 지웠다 — 판단 흐름은 `__tests__/expense-flow.test.ts`.
 
-/** `수입 …` 명시적 prefix — 인자 필수("수입" 단독은 budget 핸들러). grammY 와 chat(PR-3)이 같은 객체를 쓴다(설계 P). */
+/** `수입 …` 명시적 prefix — 인자 필수("수입" 단독은 budget 핸들러). chat 라우터(PR-3)가 이 객체를 쓴다(설계 P). */
 export const INCOME_RE = /^수입\s+.+$/
 
 interface PendingTransaction {
@@ -55,7 +55,7 @@ function cleanExpired(): void {
 
 /**
  * 카테고리 선택 버튼 행.
- * 2열 그리드 + 마지막 행 `취소`(지금 텔레그램 키보드 모양 그대로 — 행 재배치는 Discord 어댑터 몫 · 설계 B).
+ * 2열 그리드 + 마지막 행 `취소`(옛 키보드 모양 그대로 — 행 재배치는 Discord 어댑터 몫 · 설계 B).
  */
 /**
  * 단건 기록 화면(확인 · 카테고리 선택 · 완료)의 "내용" 표시 — 길면 줄여 보인다(DB 에는 원문 그대로 기록한다).
@@ -94,7 +94,7 @@ const BUDGET_ALONE_RE = /^(소비|예산)\s*$/i
 
 /**
  * 자유 텍스트가 소비 입력인지 — 아니면 다음 fallback(AI 거래 · AI 질문)으로 넘긴다.
- * `isCommand` 는 어댑터가 정한다(텔레그램 `/` 시작 · Discord `!` 시작 — 설계 P).
+ * `isCommand` 는 어댑터가 정한다(Discord `!` 시작 — 설계 P).
  */
 export function expenseFallbackRoute(text: string, isCommand: boolean): 'expense' | 'next' {
   // 명령은 무시 → 다음 핸들러로
@@ -223,7 +223,7 @@ export async function decideExpenseInput(text: string, out: ReplyOutput, who: Re
 
   const rows = buildCategoryRows(categories, txId)
   if (suggestionSource === 'history') {
-    // 취소 옆에 "전체 카테고리" · 끝의 빈 행은 지금 텔레그램 키보드 모양(InlineKeyboard `.row()`) 그대로
+    // 취소 옆에 "전체 카테고리" · 끝의 빈 행은 옛 키보드 모양 그대로(Discord 어댑터가 버린다)
     rows[rows.length - 1].push({ label: '📋 전체 카테고리', action: `tx:allcat:${txId}` })
     rows.push([])
   }
@@ -381,7 +381,7 @@ async function createTransaction(
     return
   }
 
-  // 후잉 웹훅 전송 (별도 try-catch, 실패해도 거래 기록·텔레그램 응답에 영향 없음)
+  // 후잉 웹훅 전송 (별도 try-catch, 실패해도 거래 기록·봇 응답에 영향 없음)
   try {
     await sendToWhooing({
       amount: created.amount,

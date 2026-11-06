@@ -107,7 +107,7 @@ interface RecommendationPayload {
 }
 
 /**
- * Telegram HTML parse mode 에서 안전한 escape (Codex bot PR #250 재리뷰 P2).
+ * HTML 형식 본문에서 안전한 escape (Codex bot PR #250 재리뷰 P2).
  * dynamic 값 (rationale, factor detail, workout notes 등) 에 < > & 가 있으면 parse
  * 실패 → 메시지 전체 전송 실패 → 사용자에게 keyboard 도달 X. 모든 사용자 노출 문자열을
  * escape 후 조합.
@@ -162,7 +162,7 @@ const FACTOR_KO: Record<string, string> = {
 };
 
 /**
- * recommendTodayWorkout payload → Telegram HTML 메시지 문자열.
+ * recommendTodayWorkout payload → HTML 형식 메시지 문자열.
  * factors + 원 계획 vs 조정 제안 대비 + rationale 요약.
  * topFactors 는 별도 인자로 받아 스펙 F6 (Top 3 factors) 반영.
  */

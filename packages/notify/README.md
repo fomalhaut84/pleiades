@@ -44,7 +44,7 @@ await buttons.notify(Route.ALLOWED, html('확정할까요?', [[{ label: '✅ 확
 - **Route → Transport** — `transport` 에 단일 값 대신 `{ ALLOWED: …, ADMIN: … }` 맵을 주면 라우트별로 다른 transport(웹훅 · 봇)를 쓴다.
 - **플랫폼 설정** — 앱은 `platformEnv(name)` 으로 pleiades 루트 `.env` 의 `DISCORD_*` 를 읽는다(프로세스 env 우선).
 
-009 D-5 B5 (pleiades#515): `TelegramTransport` · 텔레그램 `inline_keyboard` 는 지웠다.
+009 D-5 B5 (pleiades#515): 옛 채널 transport 와 그 버튼 객체(`inline_keyboard`)는 지웠다.
 
 ## 어댑터 계약 (`Transport`)
 

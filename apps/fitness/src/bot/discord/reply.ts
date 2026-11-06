@@ -9,7 +9,7 @@ import type { BotReply, ButtonOutput, ReplyOutput } from "../core/reply";
 /** Discord 명령 접두 — 입력창이 `/` 를 앱 명령 검색으로 가로챈다(X-1 실측 · 사용자 2026-10-28 UQ-3). */
 export const DISCORD_COMMAND_PREFIX = "!";
 
-/** 판단 함수가 안내문에 쓰는 텔레그램 명령 이름 — Discord 응답에서는 `!` 로 바꿔 보인다. */
+/** 판단 함수가 안내문에 `/` 로 쓰는 명령 이름 — Discord 응답에서는 `!` 로 바꿔 보인다. */
 const COMMAND_NAMES = ["start", "help", "today", "run", "sleep", "weight", "sync", "report", "ai", "reset", "food_kcal"];
 const SLASH_COMMAND_RE = new RegExp(`(^|[\\s('"“])/(${COMMAND_NAMES.join("|")})(?![\\w/])`, "g");
 

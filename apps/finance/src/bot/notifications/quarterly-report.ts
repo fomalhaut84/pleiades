@@ -8,7 +8,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { generateReportPDF } from '@/lib/report/pdf-generator'
 import { sanitizeError } from '@/bot/utils/error'
-import { h } from '@/bot/utils/telegram'
+import { h } from '@/bot/utils/html'
 import { fileRecipientCount, notifierFor, Route, htmlContent, sendFile } from './notifier'
 
 const REPORTS_DIR = path.join(process.cwd(), 'reports')

@@ -10,7 +10,7 @@ import {
   startPhotoTempSweeper,
 } from "@/lib/nutrition/photo-temp-cleanup";
 
-// pleiades 009 D-5 B2 (pleiades#504): 텔레그램 폴링·토큰을 지웠다 — 봇 프로세스 = 크론·스케줄러 + Discord gateway.
+// pleiades 009 D-5 B2 (pleiades#504): 옛 폴링·토큰을 지웠다 — 봇 프로세스 = 크론·스케줄러 + Discord gateway.
 
 async function main() {
   console.log("[bot] myFitness 봇 시작...");

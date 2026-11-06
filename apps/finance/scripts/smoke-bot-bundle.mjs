@@ -7,7 +7,7 @@
  * 빈 값 → `TypeError: Invalid URL`) 는 lint/typecheck/test/build 를 모두 통과하고 배포 후
  * PM2 재시작 루프로만 드러났다.
  *
- * 부작용 차단 — 2겹 (pleiades 009 D-1 · pleiades#349 · 텔레그램 토큰 겹은 009 D-5 B3b · pleiades#508 에서 뺐다 — 봇이 텔레그램을 읽지 않는다). 서버에서는 운영자 셸 env(운영 플랫폼 설정 경로 포함)로 돈다:
+ * 부작용 차단 — 2겹 (pleiades 009 D-1 · pleiades#349 · 옛 채널 토큰 겹은 009 D-5 B3b · pleiades#508 에서 뺐다 — 봇이 그 토큰을 읽지 않는다). 서버에서는 운영자 셸 env(운영 플랫폼 설정 경로 포함)로 돈다:
  *   ① `--smoke` 인자 — 진입 로그 직후 어떤 등록·토큰·DB·gateway 보다 먼저 exit 0. 인자라 운영 pm2 프로세스로 새지 않는다
  *      (deploy/pleiades.config.cjs 봇 정의에 args 없음 · deploy/ 정적 테스트)
  *   ② 운영 접속값을 **덮는다** — Discord 토큰·웹훅 빈 값 · `PLEIADES_ENV_FILE=/dev/null`(빈 문자열이면 루트 .env 탐색으로

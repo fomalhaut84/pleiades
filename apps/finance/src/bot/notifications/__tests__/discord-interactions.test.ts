@@ -1,5 +1,5 @@
 /**
- * pleiades M-6b-4 (pleiades#155) — Discord 버튼 → decideVest(텔레그램과 같은 판단) → 원본 수정 또는 본인 안내.
+ * pleiades M-6b-4 (pleiades#155) — Discord 버튼 → decideVest → 원본 수정 또는 본인 안내.
  * pleiades 009 D-1 (pleiades#349) — gateway 를 @pleiades/chat 으로(action · notice · edit 는 plain 그대로 · 버튼 제거는 edit 기본).
  * pleiades 009 D-3 PR-3 (pleiades#398) — 대화 채널 키 스위치 · intents · 기동 로그 · 4014 강등 → ADMIN · 요청 채널 notifier.
  */

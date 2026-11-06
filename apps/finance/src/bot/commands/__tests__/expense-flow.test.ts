@@ -1,11 +1,11 @@
 /**
- * pleiades 009 D-5 B3a (pleiades#509) — expense-telegram.test.ts 를 판단 단위로 옮겼다(어댑터 없음).
+ * pleiades 009 D-5 B3a (pleiades#509) — 옛 채널 특성 테스트(expense)를 판단 단위로 옮겼다(어댑터 없음).
  *
- * 옛 텔레그램 등록부가 하던 계산을 그대로 따라 판단 함수를 직접 부른다:
+ * 옛 등록부가 하던 계산을 그대로 따라 판단 함수를 직접 부른다:
  *   자유 텍스트 = `expenseFallbackRoute(text, text.startsWith('/'))` → 'expense' 면 `decideExpenseInput(text, out, who)`
  *   `수입 …` hears = `decideExpenseInput(text, out, who)`(거름 없음)
  *   콜백 = `tx:` → `decideExpenseButton` · `multi:` → `decideMultiExpenseButton`
- * 등록 모양 · grammY 호출 모양 · 등록부 try/catch 의 정적 안내 · 텔레그램 `from` 없음 → 요청자 "0" 은 옮기지 않았다(대응표 map-expense.md).
+ * 등록 모양 · 옛 호출 모양 · 등록부 try/catch 의 정적 안내 · 옛 어댑터의 요청자 없음 → "0" 은 옮기지 않았다(대응표 map-expense.md).
  * "현재 동작" 이라 적은 테스트는 서비스 유래 결함을 그대로 고정한다(D3-R2 · UQ-3 — 고칠 때 별도 커밋).
  */
 
@@ -64,7 +64,7 @@ const mocked = {
   budget: vi.mocked(checkBudgetUsage),
 }
 
-/** 자유 텍스트 — 옛 fallback 등록부의 거름(텔레그램 명령 = `/` 시작) 뒤 판단. */
+/** 자유 텍스트 — 옛 fallback 등록부의 거름(명령 = `/` 시작) 뒤 판단. */
 async function sendText(text: string, who: Requester = requester()) {
   const r = recordingOutput()
   const route = expenseFallbackRoute(text, text.startsWith('/'))
@@ -316,7 +316,7 @@ describe('T5 tx: 콜백', () => {
     expect(r.steps).toEqual([['toast', '⚠️ 본인만 확인/취소할 수 있습니다.']])
   })
 
-  // 텔레그램 `from` 없음 → 요청자 "0" 은 어댑터 규칙 — 판단 쪽 규칙(요청자 "0" 을 실제 누른 사람·누른 사람 없음이 맞출 수 없다)만 옮긴다
+  // 요청자 없음 → "0" 은 옛 어댑터 규칙 — 판단 쪽 규칙(요청자 "0" 을 실제 누른 사람·누른 사람 없음이 맞출 수 없다)만 옮긴다
   it('T17 요청에 from 이 없었으면(요청자 0) 아무도 확정할 수 없다', async () => {
     const { messageKey, txId } = await startSingle('점심 12000', requester('0'))
     const r = await click(`tx:cancel:${txId}`, messageKey)
@@ -627,7 +627,7 @@ describe('T15 복수 파싱(fire-and-forget) · T6 multi: 콜백', () => {
     expect(fail.steps).toEqual([['toast', '⚠️ 기록에 실패했습니다.'], ['removeButtons'], ['edit', '⚠️ 거래 기록에 실패했습니다.', 'plain']])
   })
 
-  // 텔레그램 `from` 없음 → 요청자 "0" 은 어댑터 규칙 — 판단 쪽 규칙만 옮긴다
+  // 요청자 없음 → "0" 은 옛 어댑터 규칙 — 판단 쪽 규칙만 옮긴다
   it('T17 요청에 from 이 없었으면 아무도 확정할 수 없다', async () => {
     const a = await multiReady(requester('0'))
     const own = await click(`multi:confirm:${a.tx}`, a.messageKey)

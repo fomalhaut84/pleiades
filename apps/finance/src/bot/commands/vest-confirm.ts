@@ -6,8 +6,8 @@
  * confirm 시: vest-preview 재호출 → 최신 종가로 vest 트랜잭션 → 결과 메시지 갱신
  * cancel 시: 알림 메시지를 "취소됨" 으로 갱신 (실제 schedule 상태는 변경 없음)
  *
- * pleiades M-6b-4 (pleiades#155): 판단은 채널 중립 `decideVest` — 텔레그램 핸들러와 Discord gateway
- * (`notifications/discord-interactions.ts`)가 같은 결정을 쓴다.
+ * pleiades M-6b-4 (pleiades#155): 판단은 채널 중립 `decideVest` — Discord gateway
+ * (`notifications/discord-interactions.ts` → `discord/vest-button.ts`)가 이 결정을 쓴다.
  */
 
 import {

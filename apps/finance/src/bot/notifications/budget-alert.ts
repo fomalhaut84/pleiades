@@ -8,12 +8,12 @@
 import { prisma } from '@/lib/prisma'
 import { calcGiftTaxSummary } from '@/lib/tax/gift-tax'
 import { formatKRWFull } from '@/bot/utils/formatter'
-import { escapeHtml, h } from '@/bot/utils/telegram'
+import { escapeHtml, h } from '@/bot/utils/html'
 import { notifierFor, recipients, Route, htmlContent, NOTIFY_CTX } from './notifier'
 
 /**
  * 소비 기록 후 예산 사용률 체크
- * 임계값 초과 시 텔레그램 알림 발송
+ * 임계값 초과 시 알림 발송(Discord)
  */
 export async function checkBudgetUsage(): Promise<void> {
   if (recipients.targetCount(Route.ALLOWED) === 0) return
@@ -72,7 +72,7 @@ export async function checkBudgetUsage(): Promise<void> {
 
 /**
  * 증여 입금 후 비과세 한도 체크
- * 사용률 80% 초과 시 텔레그램 알림 발송
+ * 사용률 80% 초과 시 알림 발송(Discord)
  */
 export async function checkGiftTaxLimit(accountId: string): Promise<void> {
   if (recipients.targetCount(Route.ALLOWED) === 0) return

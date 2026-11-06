@@ -1,4 +1,4 @@
-// pleiades 009 D-2 PR-3 (pleiades#367 · 설계 P): Discord 첨부 → 음식 사진 판단(decidePhotoFood · 텔레그램과 같은 판단).
+// pleiades 009 D-2 PR-3 (pleiades#367 · 설계 P): Discord 첨부 → 음식 사진 판단(decidePhotoFood).
 // 정책은 웹 업로드와 같다(8 MiB · jpeg/png/webp — gif 제외). 형식은 download() 전에 contentType 으로 본다(이유를 안내한다).
 // 임시파일 = os.tmpdir()/mfp-photo-<ts>-<rand>.<MIME 확장자>(0o600 · wx · 처리 뒤 삭제 · 접두가 같아 기존 sweeper 가 남은 것을 치운다).
 
@@ -29,7 +29,7 @@ export const PHOTO_ACK_TEXT = "🖼️ 사진 분석 중… (약 20~40초 소요
 export const PHOTO_NOT_IMAGE_TEXT = "jpeg · png · webp 사진만 분석합니다.";
 export const PHOTO_TOO_LARGE_TEXT = "사진이 너무 큽니다(8 MiB 까지).";
 export const PHOTO_FIRST_ONLY_TEXT = "ℹ️ 여러 장을 받았습니다 — 첫 사진만 분석했습니다.";
-/** 텔레그램 판과 같은 문구. */
+/** 사진 처리 실패 안내. */
 export const PHOTO_FAILED_TEXT = "사진 처리 중 오류가 발생했습니다. 다시 시도해주세요.";
 /** 저장은 됐고 결과 답장만 못 보냈을 때 — 다시 보내면 같은 식사가 두 번 기록된다(#368). */
 export const PHOTO_SAVED_REPLY_FAILED_TEXT = "식단은 기록됐지만 결과를 다 보내지 못했습니다. 사진을 다시 보내면 중복으로 기록됩니다.";
@@ -89,7 +89,7 @@ export async function handleDiscordAttachment(ctx: MessageContext, deps: PhotoDe
 }
 
 async function analyzePhoto(ctx: MessageContext, photo: Attachment, tmpDir?: string): Promise<void> {
-  // 진행 안내 — 실패해도 분석은 계속(텔레그램과 같다)
+  // 진행 안내 — 실패해도 분석은 계속
   const ack = await ctx.reply(PHOTO_ACK_TEXT).catch(() => undefined);
   const tempPath = photoTempPath(photoExtension(photo.contentType) ?? "jpg", Date.now(), tmpDir);
   try {

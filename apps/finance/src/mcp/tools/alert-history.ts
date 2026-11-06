@@ -1,6 +1,6 @@
 /**
  * Phase 33-A (#416) — MCP tool: `list_alert_history`.
- * 텔레그램 AI 에서 최근 알림 발동 이력 조회.
+ * 봇 AI 대화에서 최근 알림 발동 이력 조회.
  */
 
 import { prisma } from '@/lib/prisma'
@@ -110,7 +110,7 @@ export async function listAlertHistory(args: ListAlertHistoryArgs = {}) {
 }
 
 /**
- * contextJson 을 한 줄 요약으로 변환 (AI/텔레그램 표시용).
+ * contextJson 을 한 줄 요약으로 변환 (AI·봇 표시용).
  * 알 수 없는 shape 이면 null → 라인 스킵.
  */
 function summarizeContext(raw: unknown): string | null {

@@ -7,7 +7,7 @@
  * 자동 재시도 (exponential backoff) 은 스코프 밖 (스펙 §6 명시).
  */
 
-import { escapeHtml } from '@/bot/utils/telegram'
+import { escapeHtml } from '@/bot/utils/html'
 import { notifierFor, Route, htmlContent, lastErrorOf } from './notifier'
 import { computeDeliveryStatus, recordAlertHistory, type AlertKind } from './alert-history'
 import type { AlertHistoryContext } from '@/lib/alert-history/context'

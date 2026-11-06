@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// pleiades M-6b-3 (pleiades#151) — Discord 버튼 → decideAutoAdjust(텔레그램과 같은 판단) → 본인 안내 · 수락/거절은 버튼 제거
+// pleiades M-6b-3 (pleiades#151) — Discord 버튼 → decideAutoAdjust → 본인 안내 · 수락/거절은 버튼 제거
 // pleiades 009 D-1 (pleiades#347) — gateway 를 @pleiades/chat 으로(action · notice · setButtons([]))
 vi.mock("../auto-adjust-callback", () => ({ decideAutoAdjust: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({ default: {} }));
@@ -63,7 +63,7 @@ describe("handleDiscordButton", () => {
     expect(c.setButtons).not.toHaveBeenCalled();
   });
 
-  it("버튼 제거 실패는 무시(텔레그램과 같이)", async () => {
+  it("버튼 제거 실패는 무시", async () => {
     vi.mocked(decideAutoAdjust).mockResolvedValue({ notice: "ok", removeKeyboard: true });
     const c = ctx("auto_adjust:reject:adj1");
     c.setButtons.mockRejectedValue(new Error("404"));

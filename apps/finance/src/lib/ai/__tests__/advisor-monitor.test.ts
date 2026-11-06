@@ -138,7 +138,7 @@ describe('createAdvisorMonitor — 실패 카운트 + alert', () => {
   })
 
   // Self-review P1 회귀 방지 — sender false 리턴 (web 프로세스 getBot 실패,
-  // TELEGRAM_ALLOWED_CHAT_IDS 미설정, 모든 chat 발송 실패 등) 은 미발송으로 취급.
+  // 관리자 웹훅 미설정, 발송 실패 등) 은 미발송으로 취급.
   // 이전 코드는 boolean 무시하고 lastAlertAt 세팅 → 30분 억제 + 관리자 알림 0건.
   it('sender false 리턴 → lastAlertAt 원복 → 다음 실패에서 재시도', async () => {
     const sender = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true)

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { escapeHtml, mdToHtml } from "../telegram";
+import { escapeHtml, mdToHtml } from "../html";
 
-// 1a-2 회귀 baseline (pleiades 003 §5-2 · pleiades#58). replyLong 은 009 D-5 B2(#504)에서 텔레그램 어댑터와 함께 지웠다(분할은 chat).
+// 1a-2 회귀 baseline (pleiades 003 §5-2 · pleiades#58). replyLong 은 009 D-5 B2(#504)에서 옛 어댑터와 함께 지웠다(분할은 chat).
 
 describe("mdToHtml", () => {
   it("헤더 · 굵게 · 기울임 · 코드 · 불릿을 변환한다", () => {

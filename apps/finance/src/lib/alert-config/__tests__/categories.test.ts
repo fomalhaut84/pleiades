@@ -106,7 +106,7 @@ describe('ALERT_KEY_CATEGORY 완전성', () => {
 
 describe('isToggleKey (bot 커맨드 / MCP 툴 단일 진실)', () => {
   it('토글 매핑된 키는 true (활성/비활성 알림 정책)', () => {
-    // Codex #422 P2: 이 목록이 곧 텔레그램 봇 커맨드 / MCP updateAlertConfig 에서
+    // Codex #422 P2: 이 목록이 곧 봇 명령 / MCP updateAlertConfig 에서
     // on/off 허용 여부를 결정. 새 토글 추가 시 반드시 여기 포함되어야 회귀 방지.
     expect(isToggleKey('active_review')).toBe(true)
     expect(isToggleKey('ta_ai_guide')).toBe(true)

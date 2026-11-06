@@ -46,7 +46,7 @@ export interface AdvisorOptions {
   allowWriteTools?: boolean
   /** 기존 세션 이어가기 */
   sessionId?: string
-  /** 세션을 디스크에 저장 (기본: false). 텔레그램 AI만 true */
+  /** 세션을 디스크에 저장 (기본: false). 봇 대화 AI만 true */
   persist?: boolean
   /**
    * Phase 40-A (#468) — 호출 위치 라벨. 실패 시 관리자 alert 에 caller 표시로

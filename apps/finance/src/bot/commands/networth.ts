@@ -4,12 +4,12 @@ import {
   DEFAULT_FX_RATE_USD_KRW,
 } from '@/lib/format'
 import { formatKRWCompact, formatPercent } from '../utils/formatter'
-import { escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/html'
 import { plainReply, type ReplyOutput } from '../core/reply'
 
 /*
  * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 순자산 · 자산목록 · 자산추가 · 자산수정.
- * 판단(decide*)은 인자(`args`)와 중립 응답 모델만 안다 · 텔레그램 원문 벗기기는 `*ArgsFromText`(지금 식 그대로).
+ * 판단(decide*)은 인자(`args`)와 중립 응답 모델만 안다 · 원문 벗기기는 `*ArgsFromText`(옛 식 그대로).
  * 판단 흐름은 `__tests__/manage-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
@@ -18,12 +18,12 @@ export const ASSET_LIST_RE = /^자산목록\s*$/
 export const ASSET_ADD_RE = /^자산추가(?:\s+.*)?$/
 export const ASSET_UPDATE_RE = /^자산수정(?:\s+.*)?$/
 
-/** 텔레그램 원문 → 인자 — `/assetadd[@bot]` · `자산추가` 를 벗기고 trim(대소문자 무시). */
+/** 원문 → 인자 — `/assetadd[@bot]` · `자산추가` 를 벗기고 trim(대소문자 무시). */
 export function assetAddArgsFromText(text: string): string {
   return text.replace(/^(\/assetadd(?:@\w+)?|자산추가)\s*/i, '').trim()
 }
 
-/** 텔레그램 원문 → 인자 — `/assetupdate[@bot]` · `자산수정` 을 벗기고 trim(대소문자 무시). */
+/** 원문 → 인자 — `/assetupdate[@bot]` · `자산수정` 을 벗기고 trim(대소문자 무시). */
 export function assetUpdateArgsFromText(text: string): string {
   return text.replace(/^(\/assetupdate(?:@\w+)?|자산수정)\s*/i, '').trim()
 }

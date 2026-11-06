@@ -1,5 +1,5 @@
 /**
- * pleiades M-6b-4 (pleiades#155): RSU vest 확정 버튼(`vest:`) — 판단은 텔레그램과 같은 decideVest.
+ * pleiades M-6b-4 (pleiades#155): RSU vest 확정 버튼(`vest:`) — 판단은 decideVest.
  * pleiades 009 D-3 PR-3 (pleiades#398): `notifications/discord-interactions.ts` 에서 옮겼다 — 라우터(`./router`)가 부르고
  * gateway 모듈은 다시 내보낸다(기존 import 경로 유지 · 두 모듈이 서로를 import 하지 않게).
  */
@@ -19,7 +19,7 @@ export async function handleDiscordButton(ctx: ButtonContext): Promise<void> {
   }
   const decision = await decideVest(ctx.action)
   if (decision.kind === 'alert') {
-    // 원본·버튼은 그대로 — 다시 누를 수 있다(텔레그램 show_alert 와 같다)
+    // 원본·버튼은 그대로 — 다시 누를 수 있다(본인 안내만)
     await ctx.notice(decision.text)
     return
   }

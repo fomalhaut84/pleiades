@@ -1,6 +1,6 @@
 /**
  * pleiades 009 D-3 PR-1a (pleiades#382 · 설계 §4 S · B): 상태 키 형식 · 본인 확인 경계 · 응답 생성기.
- * 텔레그램 어댑터 케이스는 009 D-5 B3b(pleiades#508)에서 어댑터와 함께 지웠다 — Discord 짝은 `discord/__tests__/reply.test.ts`.
+ * 옛 채널 어댑터 케이스는 009 D-5 B3b(pleiades#508)에서 어댑터와 함께 지웠다 — Discord 짝은 `discord/__tests__/reply.test.ts`.
  */
 
 import { describe, expect, it } from 'vitest'

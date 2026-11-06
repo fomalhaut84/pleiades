@@ -442,7 +442,7 @@ describe("사진(P)", () => {
     err.mockRestore();
   });
 
-  it("내려받기 실패 → 텔레그램과 같은 안내 · ack 삭제 · 임시파일 없음", async () => {
+  it("내려받기 실패 → 실패 안내 · ack 삭제 · 임시파일 없음", async () => {
     const a = attachment({ download: vi.fn(async () => Promise.reject(new Error("응답 500"))) });
     const err = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { ctx, sent, texts } = msg("", [a]);

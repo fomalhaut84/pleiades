@@ -33,7 +33,7 @@ describe("sanitizeError", () => {
     expect(sanitizeError(outer)).toBe("Error: outer | TypeError: inner");
   });
 
-  it("error 속성(grammy HttpError 형태)도 따라간다", () => {
+  it("error 속성(HttpError 형태)도 따라간다", () => {
     const outer = Object.assign(new Error("outer"), {
       error: new Error("bot123:abc timed out"),
     });
@@ -101,7 +101,7 @@ describe("isNetworkError", () => {
     expect(isNetworkError({ code: "ENOTFOUND" })).toBe(false);
   });
 
-  it("grammy timeoutSeconds 메시지 · AbortError · type=aborted 를 잡는다", () => {
+  it("요청 timeout 메시지 · AbortError · type=aborted 를 잡는다", () => {
     expect(
       isNetworkError(
         new Error("Request to 'sendMessage' timed out after 30 seconds"),
@@ -127,7 +127,7 @@ describe("isNetworkError", () => {
 });
 
 describe("isHtmlParseError", () => {
-  it("텔레그램 entity 파싱 오류 메시지를 판정한다", () => {
+  it("entity 파싱 오류 메시지를 판정한다", () => {
     expect(isHtmlParseError(new Error("Bad Request: can't parse entities: Unsupported start tag"))).toBe(true);
     expect(isHtmlParseError(new Error("Bad Request: can't find end of the entity starting at byte offset 3"))).toBe(true);
     expect(isHtmlParseError("can't parse entities")).toBe(true);

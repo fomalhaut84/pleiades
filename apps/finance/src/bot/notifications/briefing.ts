@@ -6,7 +6,7 @@
  */
 
 import { askAdvisor, describeAdvisorError } from '@/lib/ai/claude-advisor'
-import { markdownToTelegramHtml } from '@/bot/utils/markdown'
+import { markdownToHtml } from '@/bot/utils/markdown'
 import type { Notifier } from '@pleiades/notify'
 import { notifierFor, Route, htmlContent } from './notifier'
 import { sanitizeError } from '@/bot/utils/error'
@@ -55,15 +55,18 @@ export function buildBriefingPrompt(session: MarketSession, now: Date = new Date
  */
 export type BriefingTarget = () => Notifier
 
+/** 실패 안내의 기본 AI 명령 표기 — Discord `!ai`(009 D-5 B7a · 크론도 이 값). */
+export const DEFAULT_AI_COMMAND = '!ai'
+
 export interface BriefingOptions {
-  /** 실패 안내의 AI 명령 표기 — 기본 텔레그램 `/ai` · Discord 는 `!ai`(PR-3 · 설계 D2 "문구를 인자로") */
+  /** 실패 안내의 AI 명령 표기 — 기본 `DEFAULT_AI_COMMAND`(PR-3 · 설계 D2 "문구를 인자로") */
   readonly aiCommand?: string
 }
 
 /**
  * 모닝 브리핑을 만들어 보낸다.
  * @param target 있으면 그 대상에만(봇 `/브리핑` 명령 — 요청한 곳) · 없으면 ALLOWED 라우트 전체(cron).
- * @param options.aiCommand 실패 안내의 AI 명령 표기(기본 `/ai`).
+ * @param options.aiCommand 실패 안내의 AI 명령 표기(기본 `!ai` — Discord 명령 · 009 D-5 B7a).
  */
 export async function sendBriefing(
   session: MarketSession,
@@ -93,7 +96,7 @@ export async function sendBriefing(
       overallTimeoutMs: 900_000,
     })
 
-    const html = markdownToTelegramHtml(result.response)
+    const html = markdownToHtml(result.response)
 
     await notifier.notify(Route.ALLOWED, htmlContent(html), { label: 'briefing' })
 
@@ -105,12 +108,12 @@ export async function sendBriefing(
     // Phase 40-B (#469, Codex #478 P2): AdvisorError code 별 fallback (auth/quota/
     // server 원인 힌트). describeAdvisorError 는 AdvisorError/AdvisorTimeoutError/
     // Error 모두 받아 code 없는 일반 Error 는 unknown 으로 처리. 이 경우 기존
-    // hint (`/ai 에서 직접 질문해주세요`) 를 붙여 사용자 액션 제시.
+    // hint (`!ai 에서 직접 질문해주세요`) 를 붙여 사용자 액션 제시.
     const label = session === 'KR' ? '🇰🇷 한국장' : '🇺🇸 미국장'
     const advisorMsg = error instanceof Error ? describeAdvisorError(error) : ''
     const fallback =
       `📊 ${label} 모닝 브리핑 생성에 실패했습니다.\n` +
-      `${advisorMsg}\n${options.aiCommand ?? '/ai'} 에서 직접 질문해주세요.`
+      `${advisorMsg}\n${options.aiCommand ?? DEFAULT_AI_COMMAND} 에서 직접 질문해주세요.`
     await notifier.notify(Route.ALLOWED, htmlContent(fallback), { label: 'briefing' })
   }
 }

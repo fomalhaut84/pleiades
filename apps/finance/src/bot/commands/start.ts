@@ -1,9 +1,9 @@
-import { escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/html'
 import type { ReplyOutput } from '../core/reply'
 
 /*
  * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 봇 소개 · 도움말.
- * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말한다(수신은 `../discord/router` · 009 D-5 B3b 에서 텔레그램 등록부 삭제).
+ * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말한다(수신은 `../discord/router` · 009 D-5 B3b 에서 옛 채널 등록부 삭제).
  * 판단 흐름은 `__tests__/lookup-flow.test.ts` · `manage-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
@@ -59,7 +59,7 @@ const COMMANDS_HELP =
   `백테스트 [종목] [전략] [기간] — 과거 전략 시뮬레이션\n` +
   `전략: rsi, 골든크로스, bb, sma`
 
-/** 봇 소개 — 이름이 없으면 "사용자"(텔레그램 `from.first_name` · Discord 는 PR-3). */
+/** 봇 소개 — 이름이 없으면 "사용자"(Discord 표시 이름 · PR-3). */
 export async function decideStart(firstName: string | undefined, out: ReplyOutput): Promise<void> {
   const name = escapeHtml(firstName ?? '사용자')
   await out.replyLong(

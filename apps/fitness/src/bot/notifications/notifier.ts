@@ -1,7 +1,7 @@
 // pleiades 1a-3 (pleiades#95 · 003 §5-1): 아웃바운드 알림을 @pleiades/notify 파사드로 보낸다.
 // 재시도 · HTML→plain 폴백 · 길이 분할은 패키지 코어가 소유한다(003 §4-1(a)).
 //
-// pleiades 009 D-5 B2 (pleiades#504): 텔레그램을 지웠다 — 스위치(`NOTIFY_ALLOWED_CHANNEL`·`NOTIFY_INTERACTIVE_CHANNEL`)를 읽지 않고
+// pleiades 009 D-5 B2 (pleiades#504): 옛 채널을 지웠다 — 스위치(`NOTIFY_ALLOWED_CHANNEL`·`NOTIFY_INTERACTIVE_CHANNEL`)를 읽지 않고
 // 늘 Discord 로 보낸다(009 §5-4). 텍스트 = `#fitness` 웹훅(`DISCORD_WEBHOOK_FITNESS`) · 키보드 = fit Discord 봇.
 // 설정이 비면 수신자 0(호출부 가드의 `total === 0`). 값은 pleiades 루트 `.env`(`platformEnv` · 프로세스 env 우선)에서 읽는다.
 // 버튼 클릭은 봇 프로세스의 gateway(`discord-interactions.ts`)가 받는다.

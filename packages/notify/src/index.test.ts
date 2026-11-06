@@ -13,8 +13,8 @@ describe('@pleiades/notify smoke', () => {
     expect(Object.keys(Route).length).toBeGreaterThan(0);
   });
 
-  // 009 D-5 B5 (pleiades#515): 텔레그램 표면은 지웠다
-  it('텔레그램 export 가 없다', () => {
+  // 009 D-5 B5 (pleiades#515): 옛 채널 표면은 지웠다
+  it('옛 채널 export 가 없다', () => {
     const names = Object.keys(api);
     expect(names.filter((n) => /telegram/i.test(n))).toEqual([]);
   });
@@ -40,7 +40,7 @@ describe('버전 단일 출처', () => {
   });
 });
 
-// 009 D-5 B5: telegram.test.ts 를 지우며 옮겼다 — 소비자 `prepare`(임시 클론 · 의존성 없이 tsc)가 안전하려면 그대로 참이어야 한다
+// 009 D-5 B5: 옛 채널 테스트 파일을 지우며 옮겼다 — 소비자 `prepare`(임시 클론 · 의존성 없이 tsc)가 안전하려면 그대로 참이어야 한다
 describe('패키지는 외부 런타임 의존성이 없다 (S-2 · 소비자 prepare 안전)', () => {
   it('src/*.ts (테스트 제외) 어디에도 "grammy" import 가 없다', () => {
     const dir = __dirname;

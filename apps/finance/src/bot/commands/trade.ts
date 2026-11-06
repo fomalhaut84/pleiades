@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { createTrade } from '@/lib/trade-service'
 import { formatKRWFull, formatUSD } from '../utils/formatter'
-import { escapeHtml, h } from '../utils/telegram'
+import { escapeHtml, h } from '../utils/html'
 import { buildTickerCheckLines } from '../utils/trade-price-check'
 import {
   afterCommit,
@@ -18,7 +18,7 @@ import { pendingKey } from '../core/state-key'
 // pleiades 009 D-3 PR-1a (pleiades#382 · 설계 §4 H2 · A · B · S): 판단(decide*)은 중립 응답 모델로만 말하고 인자(`args`)를 받는다.
 // Discord 라우터가 이 벗기기 식으로 `args` 를 만들어 넘긴다(판단 흐름 `__tests__/trade-flow.test.ts`).
 
-/** 매수·매도 — grammY 와 chat(PR-3)이 같은 객체를 쓴다(설계 P). */
+/** 매수·매도 — chat 라우터(PR-3)가 이 객체를 쓴다(설계 P). */
 export const BUY_RE = /^매수(?:\s+.*)?$/
 export const SELL_RE = /^매도(?:\s+.*)?$/
 
@@ -87,7 +87,7 @@ function formatTradePreview(
   return lines.join('\n')
 }
 
-/** 텔레그램 원문에서 인자를 벗긴다 — 지금 식 그대로(`매수 …` · `매도 …`). */
+/** 원문에서 인자를 벗긴다 — 옛 식 그대로(`매수 …` · `매도 …`). */
 export function tradeArgsFromText(type: 'BUY' | 'SELL', text: string): string | undefined {
   const typeLabel = type === 'BUY' ? '매수' : '매도'
   const match = text.match(new RegExp(`^${typeLabel}(?:\\s+(.*))?$`))

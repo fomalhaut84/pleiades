@@ -19,7 +19,7 @@ vi.mock('@/lib/prisma', () => ({
     },
   },
 }))
-vi.mock('@/bot/utils/telegram', () => ({
+vi.mock('@/bot/utils/html', () => ({
   // Codex #462 P2: redispatchAlert 이 escapeHtml 을 호출하므로 mock 도 노출 필요.
   // 실제 로직 (`&` → `&amp;` 등) 을 그대로 replay 해 회귀 테스트가 정확한 escape
   // 결과를 assert 할 수 있게 함.
@@ -145,7 +145,7 @@ describe('buildRetryContext', () => {
 })
 
 describe('redispatchAlert', () => {
-  // pleiades 009 D-5 B4 (pleiades#512): 수신자는 #finance 웹훅 하나(DISCORD_WEBHOOK_FINANCE) — 텔레그램 env 는 읽지 않는다.
+  // pleiades 009 D-5 B4 (pleiades#512): 수신자는 #finance 웹훅 하나(DISCORD_WEBHOOK_FINANCE) — 옛 채널 env 는 읽지 않는다.
   // 전송은 @pleiades/notify DiscordTransport → fetch. 재시도는 네트워크 오류(코드 있는 연결 실패)에서만이라
   // 아래 오류들('네트워크 오류' · 403 · 문자열)은 즉시 실패로 집계된다(실제 sleep 없음).
   // 여러 대상의 부분 실패(partial · 마지막 실패 lastError)는 대상이 하나라 이 경로에 없다 —
@@ -159,7 +159,7 @@ describe('redispatchAlert', () => {
     fetchMock.mockResolvedValue(okResponse)
     vi.stubGlobal('fetch', fetchMock)
     vi.stubEnv('DISCORD_WEBHOOK_FINANCE', WEBHOOK)
-    // 옛 텔레그램 env 가 남아 있어도 읽지 않는다(서버 .env 잔여 · 009 §5-2)
+    // 옛 채널 env 가 남아 있어도 읽지 않는다(서버 .env 잔여 · 009 §5-2)
     vi.stubEnv('TELEGRAM_BOT_TOKEN', '1:x')
     vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '1,2,3')
   })
@@ -239,7 +239,7 @@ describe('redispatchAlert', () => {
     errSpy.mockRestore()
   })
 
-  it('웹훅 비어 있음 → status=failed, totalChats=0, 전송 없음 · 텔레그램 env 가 있어도', async () => {
+  it('웹훅 비어 있음 → status=failed, totalChats=0, 전송 없음 · 옛 채널 env 가 있어도', async () => {
     vi.stubEnv('DISCORD_WEBHOOK_FINANCE', '')
     const res = await redispatchAlert(row)
     expect(res.status).toBe('failed')
