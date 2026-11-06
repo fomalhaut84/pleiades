@@ -1,4 +1,3 @@
-import type { Bot } from 'grammy'
 import {
   askAdvisor,
   AdvisorTimeoutError,
@@ -24,19 +23,12 @@ import {
   type Requester,
 } from '../core/reply'
 import { pendingKey, type StateKey } from '../core/state-key'
-import {
-  telegramButtonOutput,
-  telegramButtonPress,
-  telegramOutput,
-  telegramRequester,
-  telegramStateKeyOf,
-} from '../utils/telegram-reply'
 
 /*
  * pleiades 009 D-3 PR-1b (pleiades#385 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 H2 · Q · S):
- * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말하고, 아래 register* 는 텔레그램 어댑터다.
+ * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말한다(수신은 `../discord/router` · 009 D-5 B3b 에서 텔레그램 등록부 삭제).
  * 대화 상태(세션 · 동시 1건)의 키는 상태 키(`telegram:<chatId>` — Discord 는 채널+사용자 · UQ-4 플랫폼별).
- * 특성 테스트 `__tests__/ai-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ * 판단 흐름은 `__tests__/ai-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
 const MIN_AI_TEXT_LENGTH = 3
@@ -511,55 +503,4 @@ export function aiFallbackRoute(text: string, isCommand: boolean): 'trade' | 'qu
   // 질문형 키워드 → AI 질문
   if (isAiQuestion(text)) return 'question'
   return 'none'
-}
-
-// ============================================================
-// 등록 — 텔레그램 어댑터
-// ============================================================
-
-export function registerAiCommands(bot: Bot): void {
-  bot.command('ai', async (ctx) => {
-    await decideAiCommand(ctx.match?.toString(), telegramStateKeyOf(ctx), telegramOutput(ctx))
-  })
-
-  // AI 세션 초기화
-  bot.command('reset', async (ctx) => {
-    await decideReset(telegramStateKeyOf(ctx), telegramOutput(ctx))
-  })
-
-  // aitrade: 콜백 처리
-  bot.on('callback_query:data', async (ctx, next) => {
-    const data = ctx.callbackQuery?.data
-    if (data?.startsWith('aitrade:')) {
-      try {
-        await decideAiTradeButton(data, telegramButtonPress(ctx), telegramButtonOutput(ctx))
-      } catch (error) {
-        console.error('[bot] AI 거래 콜백 실패:', error)
-        await ctx.answerCallbackQuery({ text: '⚠️ 처리 중 오류가 발생했습니다.' })
-      }
-    } else {
-      await next()
-    }
-  })
-}
-
-/**
- * AI fallback: 거래 파싱 또는 일반 질문
- */
-export function registerAiFallback(bot: Bot): void {
-  bot.on('message:text', async (ctx) => {
-    const text = ctx.message.text
-    // 텔레그램 명령 = 슬래시 시작
-    const route = aiFallbackRoute(text, text.startsWith('/'))
-
-    if (route === 'trade') {
-      decideTradeParse(text, telegramRequester(ctx), telegramOutput(ctx))
-      return
-    }
-
-    if (route === 'question') {
-      decideAiQuestion(text, telegramStateKeyOf(ctx), telegramOutput(ctx))
-      return
-    }
-  })
 }

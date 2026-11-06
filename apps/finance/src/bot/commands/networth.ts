@@ -1,4 +1,3 @@
-import type { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import {
   calcCurrentValueKRW,
@@ -7,12 +6,11 @@ import {
 import { formatKRWCompact, formatPercent } from '../utils/formatter'
 import { escapeHtml, h } from '../utils/telegram'
 import { plainReply, type ReplyOutput } from '../core/reply'
-import { telegramOutput } from '../utils/telegram-reply'
 
 /*
  * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 순자산 · 자산목록 · 자산추가 · 자산수정.
  * 판단(decide*)은 인자(`args`)와 중립 응답 모델만 안다 · 텔레그램 원문 벗기기는 `*ArgsFromText`(지금 식 그대로).
- * 특성 테스트 `__tests__/manage-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ * 판단 흐름은 `__tests__/manage-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
 export const NET_WORTH_RE = /^순자산\s*$/
@@ -300,24 +298,4 @@ export async function decideAssetUpdate(args: string, out: ReplyOutput): Promise
     `${h.b(escapeHtml(updated.name))}\n` +
     `이전: ${formatKRWCompact(oldValue)} → 변경: ${formatKRWCompact(updated.value)}`
   )
-}
-
-export function registerNetWorthCommands(bot: Bot): void {
-  // 등록에 try/catch 가 없다 — 판단 밖으로 던진 오류는 지금처럼 grammY bot.catch 로 간다
-  const netWorth = (ctx: Context) => decideNetWorth(telegramOutput(ctx))
-  const assetList = (ctx: Context) => decideAssetList(telegramOutput(ctx))
-  const assetAdd = (ctx: Context) => decideAssetAdd(assetAddArgsFromText(ctx.message?.text ?? ''), telegramOutput(ctx))
-  const assetUpdate = (ctx: Context) => decideAssetUpdate(assetUpdateArgsFromText(ctx.message?.text ?? ''), telegramOutput(ctx))
-
-  bot.command('networth', netWorth)
-  bot.hears(NET_WORTH_RE, netWorth)
-
-  bot.command('assetlist', assetList)
-  bot.hears(ASSET_LIST_RE, assetList)
-
-  bot.command('assetadd', assetAdd)
-  bot.hears(ASSET_ADD_RE, assetAdd)
-
-  bot.command('assetupdate', assetUpdate)
-  bot.hears(ASSET_UPDATE_RE, assetUpdate)
 }

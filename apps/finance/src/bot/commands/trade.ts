@@ -1,4 +1,3 @@
-import { Bot } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { createTrade } from '@/lib/trade-service'
 import { formatKRWFull, formatUSD } from '../utils/formatter'
@@ -15,15 +14,9 @@ import {
   type Requester,
 } from '../core/reply'
 import { pendingKey } from '../core/state-key'
-import {
-  telegramButtonOutput,
-  telegramButtonPress,
-  telegramOutput,
-  telegramRequester,
-} from '../utils/telegram-reply'
 
 // pleiades 009 D-3 PR-1a (pleiades#382 · 설계 §4 H2 · A · B · S): 판단(decide*)은 중립 응답 모델로만 말하고 인자(`args`)를 받는다.
-// 텔레그램 등록부는 지금의 벗기기 식으로 `args` 를 만들어 넘긴다 — 호출열은 분리 전과 같다(특성 테스트 `__tests__/trade-telegram.test.ts`).
+// Discord 라우터가 이 벗기기 식으로 `args` 를 만들어 넘긴다(판단 흐름 `__tests__/trade-flow.test.ts`).
 
 /** 매수·매도 — grammY 와 chat(PR-3)이 같은 객체를 쓴다(설계 P). */
 export const BUY_RE = /^매수(?:\s+.*)?$/
@@ -396,42 +389,4 @@ export async function decideTradeButton(data: string, press: ButtonPress, out: B
       )),
     ])
   }
-}
-
-// ============================================================
-// 텔레그램 등록부 — grammY ctx → 어댑터 → decide*
-// ============================================================
-
-export function registerTradeCommands(bot: Bot): void {
-  bot.hears(BUY_RE, async (ctx) => {
-    try {
-      await decideTrade('BUY', tradeArgsFromText('BUY', ctx.message?.text ?? ''), telegramOutput(ctx), telegramRequester(ctx))
-    } catch (error) {
-      console.error('[bot] 매수 실패:', error)
-      await ctx.reply('⚠️ 매수 기록에 실패했습니다.')
-    }
-  })
-
-  bot.hears(SELL_RE, async (ctx) => {
-    try {
-      await decideTrade('SELL', tradeArgsFromText('SELL', ctx.message?.text ?? ''), telegramOutput(ctx), telegramRequester(ctx))
-    } catch (error) {
-      console.error('[bot] 매도 실패:', error)
-      await ctx.reply('⚠️ 매도 기록에 실패했습니다.')
-    }
-  })
-
-  bot.on('callback_query:data', async (ctx, next) => {
-    const data = ctx.callbackQuery?.data
-    if (data?.startsWith('trade:')) {
-      try {
-        await decideTradeButton(data, telegramButtonPress(ctx), telegramButtonOutput(ctx))
-      } catch (error) {
-        console.error('[bot] 콜백 처리 실패:', error)
-        await ctx.answerCallbackQuery({ text: '⚠️ 처리 중 오류가 발생했습니다.' })
-      }
-    } else {
-      await next()
-    }
-  })
 }

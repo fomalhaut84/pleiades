@@ -1,9 +1,9 @@
 /**
  * pleiades 009 D-3 PR-1a (pleiades#382 · 설계 §4 P · A · S · B): 소비·거래 판단 함수를 플랫폼 없이 직접 건다.
  *
- * 텔레그램 호출열은 `*-telegram.test.ts` 가 고정한다. 여기서는 PR-3(Discord 수신)이 기댈 판단 계약을 본다 —
- * 메시지 키 격리(같은 숫자 · 다른 플랫폼) · `Requester.dbUserId` 가 `Transaction.userId` 로 간다(UQ-2 의 자리) ·
- * 명령 모양 판정은 어댑터가 준다(`!foo 3` 이 소비로 가지 않는다) · 인자 벗기기 · 정규식 상수가 등록된 객체와 같다.
+ * 판단 흐름 전체는 `expense-flow.test.ts` · `trade-flow.test.ts` 가 고정한다(009 D-5 B3a). 여기서는 Discord 수신이 기댈 판단 계약을 본다 —
+ * 메시지 키 격리(같은 메시지 번호 · 다른 채널) · `Requester.dbUserId` 가 `Transaction.userId` 로 간다(UQ-2 의 자리) ·
+ * 명령 모양 판정은 어댑터가 준다(`!foo 3` 이 소비로 가지 않는다) · 인자 벗기기. 정규식 라우팅은 `discord/__tests__/router.test.ts`.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -33,18 +33,15 @@ import { getAllCategories, matchCategory } from '@/lib/category-matcher'
 import { checkBudgetUsage } from '@/bot/notifications/budget-alert'
 import { createTrade } from '@/lib/trade-service'
 import type { BotReply, ButtonOutput, ButtonPress, ReplyOutput, Requester } from '../../core/reply'
-import { discordMessageKey, telegramMessageKey } from '../../core/state-key'
+import { discordMessageKey } from '../../core/state-key'
 import {
-  INCOME_RE,
   decideExpenseButton,
   decideExpenseInput,
   DESCRIPTION_DISPLAY_MAX,
   displayDescription,
   expenseFallbackRoute,
-  registerExpenseCommands,
 } from '../expense'
-import { BUY_RE, SELL_RE, decideTrade, decideTradeButton, registerTradeCommands, tradeArgsFromText } from '../trade'
-import { captureBot } from './telegram-fake'
+import { decideTrade, decideTradeButton, tradeArgsFromText } from '../trade'
 
 /** 가짜 메시지 출력 — 보낸 메시지마다 `keyOf(n)` 키를 돌려준다. */
 function fakeOut(keyOf: (n: number) => string) {
@@ -80,7 +77,7 @@ function fakeButtons() {
 
 const FOOD = { id: 'c-food', name: '식비', icon: '🍚', type: 'expense' }
 const discordUser: Requester = { userId: '555', dbUserId: 'discord:555' }
-const telegramUser: Requester = { userId: '555', dbUserId: '555' }
+const plainUser: Requester = { userId: '555', dbUserId: '555' }
 
 beforeEach(() => {
   vi.mocked(matchCategory).mockReset()
@@ -88,15 +85,6 @@ beforeEach(() => {
   vi.mocked(prisma.transaction.create).mockReset()
   vi.mocked(checkBudgetUsage).mockResolvedValue(undefined)
   vi.mocked(createTrade).mockReset()
-})
-
-describe('설계 P — 정규식 상수가 텔레그램 등록 객체와 같다', () => {
-  it('수입 · 매수 · 매도', () => {
-    expect(captureBot(registerExpenseCommands).hears[0].re).toBe(INCOME_RE)
-    const trade = captureBot(registerTradeCommands).hears.map((h) => h.re)
-    expect(trade[0]).toBe(BUY_RE)
-    expect(trade[1]).toBe(SELL_RE)
-  })
 })
 
 describe('자유 텍스트 경로 — 명령 모양은 어댑터가 정한다', () => {
@@ -108,7 +96,7 @@ describe('자유 텍스트 경로 — 명령 모양은 어댑터가 정한다', 
   })
 })
 
-describe('설계 A — 인자 벗기기(텔레그램 원문)', () => {
+describe('설계 A — 인자 벗기기(원문)', () => {
   it.each([
     ['매수 세진 AAPL 10 150', 'BUY', '세진 AAPL 10 150'],
     ['매수', 'BUY', undefined],
@@ -119,7 +107,7 @@ describe('설계 A — 인자 벗기기(텔레그램 원문)', () => {
   })
 })
 
-describe('설계 S — 버튼 대기 상태는 플랫폼 메시지 키에 묶인다', () => {
+describe('설계 S — 버튼 대기 상태는 메시지 키에 묶인다', () => {
   async function pendingOn(keyOf: (n: number) => string, who: Requester) {
     vi.mocked(matchCategory).mockResolvedValueOnce([FOOD])
     const { out, sent } = fakeOut(keyOf)
@@ -128,19 +116,19 @@ describe('설계 S — 버튼 대기 상태는 플랫폼 메시지 키에 묶인
     return txId
   }
 
-  it('Discord 에서 만든 대기를 같은 숫자의 텔레그램 메시지 키로는 찾지 못한다', async () => {
+  it('한 채널에서 만든 대기를 다른 채널의 같은 메시지 번호 키로는 찾지 못한다', async () => {
     const txId = await pendingOn(() => discordMessageKey('100', '5'), discordUser)
-    const tg = fakeButtons()
-    await decideExpenseButton(`tx:cancel:${txId}`, { messageKey: telegramMessageKey(100, 5), clickerId: '555' }, tg.out)
-    expect(tg.steps).toEqual([['toast', '⚠️ 만료된 요청입니다.'], ['removeButtons']])
+    const other = fakeButtons()
+    await decideExpenseButton(`tx:cancel:${txId}`, { messageKey: discordMessageKey('101', '5'), clickerId: '555' }, other.out)
+    expect(other.steps).toEqual([['toast', '⚠️ 만료된 요청입니다.'], ['removeButtons']])
     const dc = fakeButtons()
     await decideExpenseButton(`tx:cancel:${txId}`, { messageKey: discordMessageKey('100', '5'), clickerId: '555' }, dc.out)
     expect(dc.steps[0]).toEqual(['toast', '취소되었습니다.'])
   })
 
-  it('Requester.dbUserId 가 Transaction.userId 로 간다(텔레그램 "555" · Discord "discord:555")', async () => {
+  it('Requester.dbUserId 가 Transaction.userId 로 간다(받은 값 그대로 "555" · Discord "discord:555")', async () => {
     for (const [who, keyOf] of [
-      [telegramUser, () => telegramMessageKey(1, 1)],
+      [plainUser, () => discordMessageKey('1', '1')],
       [discordUser, () => discordMessageKey('1', '2')],
     ] as const) {
       const txId = await pendingOn(keyOf, who)

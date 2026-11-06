@@ -1,9 +1,9 @@
 /**
  * pleiades 009 D-3 PR-2a (pleiades#392) — 조회·관리 판단 함수 계약(설계 §4 P · A2).
  *
- * 텔레그램 호출열은 `lookup-telegram.test.ts` · `manage-telegram.test.ts` 가 고정한다. 여기서는
- * ① grammY 에 등록된 정규식이 export 한 상수와 **같은 객체**다 — PR-3 의 chat `hears` 가 같은 상수를 쓰면 의미가 갈리지 않는다(P)
- * ② 텔레그램 원문 → 인자 벗기기 표(A2 — Discord 는 라우터 `args` 를 그대로 넘긴다)
+ * 판단 흐름 전체는 `lookup-flow.test.ts` · `manage-flow.test.ts` 가 고정한다(009 D-5 B3a). 여기서는
+ * ① 정확 일치 정규식이 "이름 + 다른 말" 을 잡지 않는다(P — 라우팅은 `discord/__tests__/router.test.ts`)
+ * ② 원문 → 인자 벗기기 표(A2 — Discord 영어 명령은 라우터 `args` 를 그대로 넘긴다)
  * ③ 판단 함수가 인자와 응답 모델만으로 동작한다(플랫폼 무관)
  */
 
@@ -21,22 +21,20 @@ vi.mock('@/lib/ta/engine', () => ({ generateTAReport: vi.fn() }))
 
 import { prisma } from '@/lib/prisma'
 import type { BotReply, ReplyOutput } from '../../core/reply'
-import { decideHelp, decideStart, registerCommands } from '../start'
-import { ACCOUNT_DETAIL_RE, PORTFOLIO_SUMMARY_RE, decideAccountDetail, registerPortfolioCommands } from '../portfolio'
-import { FX_RATE_RE, PRICE_RE, decidePrice, registerPriceCommands } from '../price'
-import { ANALYSIS_RE, analysisArgsFromText, decideAnalysis, registerAnalysisCommands } from '../analysis'
-import { STRATEGY_LIST_RE, STRATEGY_RE, decideStrategy, registerStrategyCommands, strategyArgsFromText } from '../strategy'
+import { decideHelp, decideStart } from '../start'
+import { PORTFOLIO_SUMMARY_RE, decideAccountDetail } from '../portfolio'
+import { FX_RATE_RE, decidePrice } from '../price'
+import { analysisArgsFromText, decideAnalysis } from '../analysis'
+import { STRATEGY_LIST_RE, decideStrategy, strategyArgsFromText } from '../strategy'
 import {
-  UNWATCH_RE, WATCHLIST_RE, WATCH_RE, decideUnwatch, decideWatch, registerWatchlistCommands, unwatchArgsFromText, watchArgsFromText,
+  WATCHLIST_RE, WATCH_RE, decideUnwatch, decideWatch, unwatchArgsFromText, watchArgsFromText,
 } from '../watchlist'
 import {
-  ASSET_ADD_RE, ASSET_LIST_RE, ASSET_UPDATE_RE, NET_WORTH_RE, assetAddArgsFromText, assetUpdateArgsFromText, decideAssetAdd,
-  registerNetWorthCommands,
+  ASSET_LIST_RE, NET_WORTH_RE, assetAddArgsFromText, assetUpdateArgsFromText, decideAssetAdd,
 } from '../networth'
 import {
-  BUDGET_SET_RE, BUDGET_STATUS_RE, EXPENSE_SUMMARY_RE, INCOME_SUMMARY_RE, decideBudgetSet, registerBudgetCommands,
+  BUDGET_STATUS_RE, EXPENSE_SUMMARY_RE, INCOME_SUMMARY_RE, decideBudgetSet,
 } from '../budget'
-import { captureBot } from './telegram-fake'
 
 /** 가짜 출력 — reply 는 plain/html 을, replyLong 은 html 본문을 따로 남긴다. */
 function fakeOut() {
@@ -57,25 +55,7 @@ beforeEach(() => {
   vi.mocked(prisma.holding.findMany).mockReset()
 })
 
-describe('정규식 상수 = 등록 객체 (P)', () => {
-  it.each([
-    ['portfolio', registerPortfolioCommands, [PORTFOLIO_SUMMARY_RE, ACCOUNT_DETAIL_RE]],
-    ['price', registerPriceCommands, [PRICE_RE, FX_RATE_RE]],
-    ['analysis', registerAnalysisCommands, [ANALYSIS_RE]],
-    ['strategy', registerStrategyCommands, [STRATEGY_RE, STRATEGY_LIST_RE]],
-    ['watchlist', registerWatchlistCommands, [WATCH_RE, UNWATCH_RE, WATCHLIST_RE]],
-    ['networth', registerNetWorthCommands, [NET_WORTH_RE, ASSET_LIST_RE, ASSET_ADD_RE, ASSET_UPDATE_RE]],
-    ['budget', registerBudgetCommands, [EXPENSE_SUMMARY_RE, INCOME_SUMMARY_RE, BUDGET_STATUS_RE, BUDGET_SET_RE]],
-  ] as const)('%s', (_name, register, constants) => {
-    const bot = captureBot(register as never)
-    expect(bot.hears.map((h) => h.re)).toHaveLength(constants.length)
-    bot.hears.forEach((h, i) => expect(h.re).toBe(constants[i]))
-  })
-
-  it('start 는 영어 명령뿐', () => {
-    expect(captureBot(registerCommands).hears).toEqual([])
-  })
-
+describe('정규식 상수 (P)', () => {
   it('정확 일치 명령은 "이름 + 다른 말" 을 잡지 않는다(그 말은 소비·AI fallback 으로 간다)', () => {
     for (const [re, text] of [
       [PORTFOLIO_SUMMARY_RE, '현황 어때?'], [FX_RATE_RE, '환율 알려줘'], [STRATEGY_LIST_RE, '전략목록 보여줘'],

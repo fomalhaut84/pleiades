@@ -1,14 +1,12 @@
-import type { Bot } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { formatKRWFull } from '../utils/formatter'
 import { escapeHtml, h } from '../utils/telegram'
 import { plainReply, type ReplyOutput } from '../core/reply'
-import { telegramOutput } from '../utils/telegram-reply'
 
 /*
  * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 소비 · 수입 · 예산 · 예산설정.
- * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말하고, 아래 register* 는 텔레그램 어댑터다(try/catch 그대로).
- * 특성 테스트 `__tests__/manage-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말한다(수신은 `../discord/router` · 009 D-5 B3b 에서 텔레그램 등록부 삭제).
+ * 판단 흐름은 `__tests__/manage-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
 export const EXPENSE_SUMMARY_RE = /^소비\s*$/
@@ -212,42 +210,4 @@ export async function decideBudgetSet(text: string, out: ReplyOutput): Promise<v
     `✅ ${month}월 전체 예산이 설정되었습니다.\n\n` +
       `예산: ${h.b(formatKRWFull(amount))}`
   )
-}
-
-export function registerBudgetCommands(bot: Bot): void {
-  bot.hears(EXPENSE_SUMMARY_RE, async (ctx) => {
-    try {
-      await decideTransactionSummary('expense', telegramOutput(ctx))
-    } catch (error) {
-      console.error('[bot] 소비 조회 실패:', error)
-      await ctx.reply('⚠️ 소비 조회에 실패했습니다.')
-    }
-  })
-
-  bot.hears(INCOME_SUMMARY_RE, async (ctx) => {
-    try {
-      await decideTransactionSummary('income', telegramOutput(ctx))
-    } catch (error) {
-      console.error('[bot] 수입 조회 실패:', error)
-      await ctx.reply('⚠️ 수입 조회에 실패했습니다.')
-    }
-  })
-
-  bot.hears(BUDGET_STATUS_RE, async (ctx) => {
-    try {
-      await decideBudgetStatus(telegramOutput(ctx))
-    } catch (error) {
-      console.error('[bot] 예산 조회 실패:', error)
-      await ctx.reply('⚠️ 예산 조회에 실패했습니다.')
-    }
-  })
-
-  bot.hears(BUDGET_SET_RE, async (ctx) => {
-    try {
-      await decideBudgetSet(ctx.message?.text ?? '', telegramOutput(ctx))
-    } catch (error) {
-      console.error('[bot] 예산 설정 실패:', error)
-      await ctx.reply('⚠️ 예산 설정에 실패했습니다.')
-    }
-  })
 }

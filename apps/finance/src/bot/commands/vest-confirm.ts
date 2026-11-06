@@ -10,7 +10,6 @@
  * (`notifications/discord-interactions.ts`)가 같은 결정을 쓴다.
  */
 
-import { Bot } from 'grammy'
 import {
   getRsuVestPreview,
   processRsuVest,
@@ -86,28 +85,4 @@ export async function decideVest(data: string): Promise<VestDecision> {
   if (!m) return { kind: 'alert', text: '알 수 없는 요청입니다.' }
   if (m[1] === 'cancel') return { kind: 'edit', text: '🚫 RSU 베스팅 처리가 취소되었습니다.', toast: '취소됨' }
   return decideConfirm(m[2])
-}
-
-export function registerVestConfirmHandler(bot: Bot): void {
-  bot.callbackQuery(VEST_CALLBACK_RE, async (ctx) => {
-    const decision = await decideVest(ctx.match[0])
-
-    if (decision.kind === 'alert') {
-      await ctx.answerCallbackQuery({ text: decision.text, show_alert: true })
-      return
-    }
-
-    // 확정이면 vest 는 이미 DB 반영됐다 — 이후의 telegram API 호출은 best-effort.
-    // 실패해도 사용자에 '처리 실패' 메시지를 보여서는 안 됨.
-    try {
-      await ctx.editMessageText(decision.text)
-    } catch (err) {
-      console.error(`[vest-confirm] editMessageText 실패 (결정 후 · ${decision.toast}): ${sanitizeError(err)}`)
-    }
-    try {
-      await ctx.answerCallbackQuery({ text: decision.toast })
-    } catch (err) {
-      console.error(`[vest-confirm] answerCallbackQuery 실패 (결정 후 · ${decision.toast}): ${sanitizeError(err)}`)
-    }
-  })
 }

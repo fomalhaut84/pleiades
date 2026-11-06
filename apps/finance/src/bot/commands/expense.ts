@@ -1,4 +1,3 @@
-import { Bot } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { parseExpenseInput, isParseError } from '@/lib/expense-parser'
 import { matchCategory, suggestByHistory, getAllCategories, type MatchedCategory } from '@/lib/category-matcher'
@@ -20,16 +19,9 @@ import {
   type Requester,
 } from '../core/reply'
 import { pendingKey } from '../core/state-key'
-import {
-  telegramButtonOutput,
-  telegramButtonPress,
-  telegramOutput,
-  telegramRequester,
-} from '../utils/telegram-reply'
 
 // pleiades 009 D-3 PR-1a (pleiades#382 · 설계 §4 H2 · B · S): 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말한다.
-// 텔레그램 등록부(register*)는 grammY ctx 를 어댑터(`../utils/telegram-reply`)로 감싸 넘긴다 — 호출열은 분리 전과 같다
-// (특성 테스트 `__tests__/expense-telegram.test.ts`). Discord 수신은 PR-3.
+// 수신은 `../discord/router`(PR-3). 텔레그램 등록부는 009 D-5 B3b(pleiades#508)에서 지웠다 — 판단 흐름은 `__tests__/expense-flow.test.ts`.
 
 /** `수입 …` 명시적 prefix — 인자 필수("수입" 단독은 budget 핸들러). grammY 와 chat(PR-3)이 같은 객체를 쓴다(설계 P). */
 export const INCOME_RE = /^수입\s+.+$/
@@ -690,61 +682,4 @@ export async function decideMultiExpenseButton(data: string, press: ButtonPress,
       )
     }
   }
-}
-
-// ============================================================
-// 텔레그램 등록부 — grammY ctx → 어댑터 → decide*
-// ============================================================
-
-export function registerExpenseCommands(bot: Bot): void {
-  // "수입 ..." 명시적 prefix (인자 필수 — "수입" 단독은 budget 핸들러가 처리)
-  bot.hears(INCOME_RE, async (ctx) => {
-    try {
-      await decideExpenseInput(ctx.message?.text ?? '', telegramOutput(ctx), telegramRequester(ctx))
-    } catch (error) {
-      console.error('[bot] 수입 입력 실패:', error)
-      await ctx.reply('⚠️ 수입 기록에 실패했습니다.')
-    }
-  })
-
-  // InlineKeyboard 콜백 (tx: + multi: prefix)
-  bot.on('callback_query:data', async (ctx, next) => {
-    const data = ctx.callbackQuery?.data
-    if (data?.startsWith('tx:')) {
-      try {
-        await decideExpenseButton(data, telegramButtonPress(ctx), telegramButtonOutput(ctx))
-      } catch (error) {
-        console.error('[bot] 콜백 처리 실패:', error)
-        await ctx.answerCallbackQuery({ text: '⚠️ 처리 중 오류가 발생했습니다.' })
-      }
-    } else if (data?.startsWith('multi:')) {
-      try {
-        await decideMultiExpenseButton(data, telegramButtonPress(ctx), telegramButtonOutput(ctx))
-      } catch (error) {
-        console.error('[bot] 복수 거래 콜백 실패:', error)
-        await ctx.answerCallbackQuery({ text: '⚠️ 처리 중 오류가 발생했습니다.' })
-      }
-    } else {
-      await next()
-    }
-  })
-}
-
-/**
- * 다른 커맨드에 매칭되지 않은 텍스트를 자연어 소비 입력으로 처리.
- * 반드시 다른 모든 hears 핸들러 이후에 등록해야 한다.
- */
-export function registerExpenseFallback(bot: Bot): void {
-  bot.on('message:text', async (ctx, next) => {
-    const text = ctx.message.text
-    // 텔레그램 명령 = 슬래시 시작
-    if (expenseFallbackRoute(text, text.startsWith('/')) === 'next') return next()
-
-    try {
-      await decideExpenseInput(text, telegramOutput(ctx), telegramRequester(ctx))
-    } catch (error) {
-      console.error('[bot] 소비 입력 실패:', error)
-      await ctx.reply('⚠️ 소비 기록에 실패했습니다.')
-    }
-  })
 }

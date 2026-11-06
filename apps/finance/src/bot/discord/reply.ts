@@ -1,7 +1,7 @@
 /**
  * pleiades 009 D-3 PR-3 (pleiades#398 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 H2 · B · P · D): 중립 응답 모델(`../core/reply`) → `@pleiades/chat`.
  *
- * 텔레그램 어댑터(`../utils/telegram-reply`)의 Discord 짝 — grammY 를 끌고 오지 않는다. fit `discord/reply.ts` 를 본떴다(앱 사이 import 없음).
+ * 판단 응답 모델(`../core/reply`)의 Discord 어댑터 — grammY 를 끌고 오지 않는다(텔레그램 어댑터는 009 D-5 B3b 에서 지웠다). fit `discord/reply.ts` 를 본떴다(앱 사이 import 없음).
  *   reply     → `ctx.reply({ text, format, buttons })`(html 변환 · 2000자 분할 · 버튼은 마지막 조각 = chat) · 키 = 마지막 조각의 메시지
  *   replyLong → 같은 `reply`(html · 분할은 chat — 텔레그램 plain 재전송 분기는 옮기지 않는다)
  *   replyFile → `ctx.replyFile` · 10 MiB 초과는 보내기 전에 정적 안내(chat 이 던지기 전 · 설계 D)

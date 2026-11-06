@@ -2,7 +2,7 @@
  * pleiades 009 D-3 PR-1a (pleiades#382 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 H2 · B): 봇 판단 함수의 중립 응답 모델.
  *
  * 판단 함수(decide*)는 플랫폼을 모른다 — 본문 · 형식 · 버튼(라벨 · action)과 **부르는 순서**만 정한다.
- * 텔레그램 어댑터(`../utils/telegram-reply`)는 단계마다 지금과 같은 grammY 호출 하나를 낸다(호출열 동등 — 특성 테스트가 고정).
+ * 텔레그램 어댑터는 009 D-5 B3b(pleiades#508)에서 지웠다 — 판단 흐름은 `commands/__tests__/*-flow.test.ts` 가 고정한다.
  * Discord 어댑터(PR-3 · chat)는 같은 단계를 chat 호출로 옮긴다. fit `core/reply.ts` 를 본뗬고 버튼 출력에 `edit`(본문·버튼 교체)이 더 있다
  * (앱 사이 import 는 하지 않는다).
  * 버튼 action 은 텔레그램 callback data 와 같은 문자열(`tx:` · `multi:` · `trade:` 접두 — Discord custom_id 한도 100자 안 · 설계 B).
@@ -37,7 +37,7 @@ export interface BotReply {
 }
 
 /**
- * 보낸 메시지의 키 — 플랫폼 접두가 붙어 있다(`../core/state-key` `telegramMessageKey` · `discordMessageKey`).
+ * 보낸 메시지의 키 — 플랫폼 접두가 붙어 있다(`../core/state-key` `discordMessageKey`).
  * 버튼 대기 상태(pending)가 이 키 + 요청 id 에 묶인다(설계 S — 플랫폼 사이 충돌이 구조상 0).
  */
 export type MessageKey = string
