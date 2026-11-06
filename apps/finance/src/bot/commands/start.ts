@@ -1,12 +1,10 @@
-import type { Bot } from 'grammy'
 import { escapeHtml, h } from '../utils/telegram'
 import type { ReplyOutput } from '../core/reply'
-import { telegramOutput } from '../utils/telegram-reply'
 
 /*
  * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 봇 소개 · 도움말.
- * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말하고, 아래 register* 는 텔레그램 어댑터다(인자 벗기기 식 · try/catch 그대로).
- * 특성 테스트 `__tests__/lookup-telegram.test.ts` · `manage-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말한다(수신은 `../discord/router` · 009 D-5 B3b 에서 텔레그램 등록부 삭제).
+ * 판단 흐름은 `__tests__/lookup-flow.test.ts` · `manage-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
 const COMMANDS_HELP =
@@ -74,14 +72,4 @@ export async function decideStart(firstName: string | undefined, out: ReplyOutpu
 
 export async function decideHelp(out: ReplyOutput): Promise<void> {
   await out.replyLong(COMMANDS_HELP)
-}
-
-export function registerCommands(bot: Bot): void {
-  bot.command('start', async (ctx) => {
-    await decideStart(ctx.from?.first_name, telegramOutput(ctx))
-  })
-
-  bot.command('help', async (ctx) => {
-    await decideHelp(telegramOutput(ctx))
-  })
 }

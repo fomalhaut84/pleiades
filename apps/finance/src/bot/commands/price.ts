@@ -1,16 +1,14 @@
-import type { Bot } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { fetchQuote, InvalidTickerError, searchYahooByName, type QuoteResult } from '@/lib/price-fetcher'
 import { searchKrxByName } from '@/lib/krx-stocks'
 import { escapeHtml, h } from '../utils/telegram'
 import { buildQuoteMessage, formatChange, formatChangePercent } from './price-format'
 import { plainReply, type ReplyOutput } from '../core/reply'
-import { telegramOutput } from '../utils/telegram-reply'
 
 /*
  * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 주가 · 환율.
- * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말하고, 아래 register* 는 텔레그램 어댑터다(try/catch 그대로).
- * 특성 테스트 `__tests__/lookup-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말한다(수신은 `../discord/router` · 009 D-5 B3b 에서 텔레그램 등록부 삭제).
+ * 판단 흐름은 `__tests__/lookup-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
 export const PRICE_RE = /^주가(?:\s+.*)?$/
@@ -239,24 +237,4 @@ export async function decideFxRate(out: ReplyOutput): Promise<void> {
       `변동: ${changeStr}${changePctStr}\n` +
       `갱신: ${updatedAt}`
   )
-}
-
-export function registerPriceCommands(bot: Bot): void {
-  bot.hears(PRICE_RE, async (ctx) => {
-    try {
-      await decidePrice(ctx.message?.text ?? '', telegramOutput(ctx))
-    } catch (error) {
-      console.error('[bot] 주가 조회 실패:', error)
-      await ctx.reply('⚠️ 주가 조회에 실패했습니다.')
-    }
-  })
-
-  bot.hears(FX_RATE_RE, async (ctx) => {
-    try {
-      await decideFxRate(telegramOutput(ctx))
-    } catch (error) {
-      console.error('[bot] 환율 조회 실패:', error)
-      await ctx.reply('⚠️ 환율 조회에 실패했습니다.')
-    }
-  })
 }

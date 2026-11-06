@@ -1,14 +1,12 @@
-import type { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { isToggleKey } from '@/lib/alert-config/categories'
 import { escapeHtml, h } from '../utils/telegram'
 import { plainReply, type ReplyOutput } from '../core/reply'
-import { telegramOutput } from '../utils/telegram-reply'
 
 /*
  * pleiades 009 D-3 PR-2b (pleiades#394 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 알림설정.
  * 판단(decideAlertConfig)은 인자와 중립 응답 모델만 안다 · 텔레그램 인자 추출은 `alertArgsFromTelegram`(지금 식 그대로).
- * 특성 테스트 `__tests__/special-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ * 판단 흐름은 `__tests__/special-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
 export const ALERT_CONFIG_RE = /^알림설정(?:\s+.*)?$/
@@ -45,21 +43,6 @@ function isValidValue(key: string, value: string): boolean {
     return v === 'on' || v === 'off'
   }
   return /^-?\d+(\.\d+)?$/.test(value)
-}
-
-export function registerAlertCommands(bot: Bot): void {
-  // 텔레그램 커맨드는 영문만 지원하므로 /alertconfig + 한글 "알림설정" 모두 매칭
-  bot.command('alertconfig', handler)
-  bot.hears(ALERT_CONFIG_RE, handler)
-}
-
-async function handler(ctx: Context) {
-  try {
-    await decideAlertConfig(alertArgsFromTelegram(ctx.match, ctx.message?.text ?? ''), telegramOutput(ctx))
-  } catch (error) {
-    console.error('[bot] 알림설정 실패:', error)
-    await ctx.reply('⚠️ 알림 설정에 실패했습니다.')
-  }
 }
 
 /** `알림설정` 판단 — 인자 없음 = 현황 · `[항목] [값]` = 변경. */

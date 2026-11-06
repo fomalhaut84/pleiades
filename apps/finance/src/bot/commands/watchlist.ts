@@ -1,16 +1,14 @@
-import type { Bot, Context } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import { fetchQuote } from '@/lib/price-fetcher'
 import { formatWatchlistPriceInfo } from './price-format'
 import { escapeHtml, h } from '../utils/telegram'
 import { sanitizeError } from '../utils/error'
 import { plainReply, type ReplyOutput } from '../core/reply'
-import { telegramOutput } from '../utils/telegram-reply'
 
 /*
  * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 관심 · 관심삭제 · 관심목록.
  * 판단(decide*)은 인자(`args`)와 중립 응답 모델만 안다 · 텔레그램 원문 벗기기는 `*ArgsFromText`(지금 식 그대로).
- * 특성 테스트 `__tests__/manage-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ * 판단 흐름은 `__tests__/manage-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
 export const WATCH_RE = /^관심(?!삭제|목록)(?:\s+.*)?$/
@@ -254,20 +252,4 @@ export async function decideWatchlist(out: ReplyOutput): Promise<void> {
   }
 
   await out.replyLong(lines.join('\n'))
-}
-
-export function registerWatchlistCommands(bot: Bot): void {
-  // 등록에 try/catch 가 없다 — 판단 밖으로 던진 오류는 지금처럼 grammY bot.catch 로 간다
-  const watch = (ctx: Context) => decideWatch(watchArgsFromText(ctx.message?.text ?? ''), telegramOutput(ctx))
-  const unwatch = (ctx: Context) => decideUnwatch(unwatchArgsFromText(ctx.message?.text ?? ''), telegramOutput(ctx))
-  const list = (ctx: Context) => decideWatchlist(telegramOutput(ctx))
-
-  bot.command('watch', watch)
-  bot.hears(WATCH_RE, watch)
-
-  bot.command('unwatch', unwatch)
-  bot.hears(UNWATCH_RE, unwatch)
-
-  bot.command('watchlist', list)
-  bot.hears(WATCHLIST_RE, list)
 }

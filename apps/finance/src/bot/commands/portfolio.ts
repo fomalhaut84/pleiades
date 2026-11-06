@@ -1,4 +1,3 @@
-import type { Bot } from 'grammy'
 import { prisma } from '@/lib/prisma'
 import {
   calcCostKRW,
@@ -16,12 +15,11 @@ import {
 } from '../utils/formatter'
 import { escapeHtml, h } from '../utils/telegram'
 import { plainReply, type ReplyOutput } from '../core/reply'
-import { telegramOutput } from '../utils/telegram-reply'
 
 /*
  * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 현황 · 계좌.
- * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말하고, 아래 register* 는 텔레그램 어댑터다(인자 벗기기 식 · try/catch 그대로).
- * 특성 테스트 `__tests__/lookup-telegram.test.ts` · `manage-telegram.test.ts` 가 텔레그램 호출열을 고정한다.
+ * 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말한다(수신은 `../discord/router` · 009 D-5 B3b 에서 텔레그램 등록부 삭제).
+ * 판단 흐름은 `__tests__/lookup-flow.test.ts` · `manage-flow.test.ts` 가 고정한다(009 D-5 B3a).
  */
 
 export const PORTFOLIO_SUMMARY_RE = /^현황$/
@@ -155,24 +153,4 @@ export async function decideAccountDetail(text: string, out: ReplyOutput): Promi
   lines.push(`${h.b('총 수익률')}: ${formatPercent(summary.returnPct)}`)
 
   await out.replyLong(lines.join('\n'))
-}
-
-export function registerPortfolioCommands(bot: Bot): void {
-  bot.hears(PORTFOLIO_SUMMARY_RE, async (ctx) => {
-    try {
-      await decidePortfolioSummary(telegramOutput(ctx))
-    } catch (error) {
-      console.error('[bot] 현황 조회 실패:', error)
-      await ctx.reply('⚠️ 포트폴리오 조회에 실패했습니다.')
-    }
-  })
-
-  bot.hears(ACCOUNT_DETAIL_RE, async (ctx) => {
-    try {
-      await decideAccountDetail(ctx.message?.text ?? '', telegramOutput(ctx))
-    } catch (error) {
-      console.error('[bot] 계좌 조회 실패:', error)
-      await ctx.reply('⚠️ 계좌 조회에 실패했습니다.')
-    }
-  })
 }

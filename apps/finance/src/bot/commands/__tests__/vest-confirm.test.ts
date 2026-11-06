@@ -1,10 +1,9 @@
 /**
  * pleiades M-6b-4 (pleiades#155) — vest 버튼 판단(decideVest)을 채널 중립으로 분리한 회귀 테스트.
- * 텔레그램 핸들러는 분리 전과 같은 안내·수정을 해야 한다.
+ * Discord 버튼 핸들러는 `notifications/__tests__/discord-interactions.test.ts`(텔레그램 핸들러는 009 D-5 B3b · pleiades#508 에서 지웠다).
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Bot } from 'grammy'
 
 vi.mock('@/lib/rsu-vest-service', async () => {
   class RsuVestError extends Error {
@@ -21,7 +20,7 @@ vi.mock('@/lib/rsu-vest-service', async () => {
 })
 
 import { getRsuVestPreview, processRsuVest, RsuVestError } from '@/lib/rsu-vest-service'
-import { decideVest, registerVestConfirmHandler } from '../vest-confirm'
+import { decideVest } from '../vest-confirm'
 
 const preview = {
   id: 'r1',
@@ -114,52 +113,5 @@ describe('decideVest', () => {
     expect(text).toContain('매수: 10주')
     expect(text).toContain('매도: 3주')
     expect(text).toContain('보유: 17주')
-  })
-})
-
-describe('registerVestConfirmHandler — 텔레그램 동작 보존', () => {
-  type Handler = (ctx: unknown) => Promise<void>
-  function setup() {
-    let handler: Handler | undefined
-    const bot = {
-      callbackQuery: (re: RegExp, h: Handler) => {
-        expect(re.test('vest:confirm:r1')).toBe(true)
-        handler = h
-      },
-    } as unknown as Bot
-    registerVestConfirmHandler(bot)
-    const ctx = (data: string) => ({
-      match: /^vest:(confirm|cancel):(.+)$/.exec(data) as RegExpExecArray,
-      editMessageText: vi.fn(async () => true),
-      answerCallbackQuery: vi.fn(async () => true),
-    })
-    return { run: (c: unknown) => (handler as Handler)(c), ctx }
-  }
-
-  it('alert — show_alert 로 안내 · 원본 수정 없음', async () => {
-    vi.mocked(getRsuVestPreview).mockRejectedValue(mkErr('NOT_FOUND'))
-    const { run, ctx } = setup()
-    const c = ctx('vest:confirm:none')
-    await run(c)
-    expect(c.answerCallbackQuery).toHaveBeenCalledWith({ text: 'msg:NOT_FOUND', show_alert: true })
-    expect(c.editMessageText).not.toHaveBeenCalled()
-  })
-
-  it('취소 — 원본 수정 후 토스트', async () => {
-    const { run, ctx } = setup()
-    const c = ctx('vest:cancel:r1')
-    await run(c)
-    expect(c.editMessageText).toHaveBeenCalledWith('🚫 RSU 베스팅 처리가 취소되었습니다.')
-    expect(c.answerCallbackQuery).toHaveBeenCalledWith({ text: '취소됨' })
-  })
-
-  it('확정 후 원본 수정이 실패해도 토스트는 보낸다(commit 완료 후 best-effort)', async () => {
-    vi.mocked(getRsuVestPreview).mockResolvedValue(preview)
-    vi.mocked(processRsuVest).mockResolvedValue(result)
-    const { run, ctx } = setup()
-    const c = ctx('vest:confirm:r1')
-    c.editMessageText.mockRejectedValue(new Error('message is not modified'))
-    await expect(run(c)).resolves.toBeUndefined()
-    expect(c.answerCallbackQuery).toHaveBeenCalledWith({ text: '완료' })
   })
 })

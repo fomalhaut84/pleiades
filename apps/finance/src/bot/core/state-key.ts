@@ -9,20 +9,11 @@
 
 import type { MessageKey } from './reply'
 
-/** 대화 상태 키 — `telegram:<chatId>` 또는 `discord:<channelId>:<userId>`. */
+/** 대화 상태 키 — `discord:<channelId>:<userId>`(텔레그램 키는 009 D-5 B3b 에서 지웠다 · pleiades#508). */
 export type StateKey = string
-
-export function telegramStateKey(chatId: number): StateKey {
-  return `telegram:${chatId}`
-}
 
 export function discordStateKey(channelId: string, userId: string): StateKey {
   return `discord:${channelId}:${userId}`
-}
-
-/** 텔레그램 메시지 키 — `telegram:<chatId>:<messageId>`. */
-export function telegramMessageKey(chatId: number, messageId: number): MessageKey {
-  return `telegram:${chatId}:${messageId}`
 }
 
 /** Discord 메시지 키 — `discord:<channelId>:<messageId>`(chat `SentMessage{channelId,id}` ↔ `ButtonContext{channelId,messageId}` 짝). */
