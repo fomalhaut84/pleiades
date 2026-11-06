@@ -450,6 +450,16 @@ class RealSend(Base):
     def hook(self, url):
         self.platform.write_text(f"NOTIFY_DEPLOY_CHANNEL=discord\nDISCORD_WEBHOOK_DEPLOY={url}\n")
 
+    # 회귀: #523 — 스위치 줄이 없거나 discord 가 아니어도 웹훅이 있으면 보낸다(notify-deploy 와 같다)
+    def test_switch_is_ignored(self):
+        for head in ("", "NOTIFY_DEPLOY_CHANNEL=off\n"):
+            self.serve(204)  # hook() 이 스위치 discord 줄과 웹훅 줄을 쓴다 → 스위치 줄만 바꾼다
+            hook_line = [l for l in self.platform.read_text().splitlines() if l.startswith("DISCORD_WEBHOOK_DEPLOY=")]
+            self.platform.write_text(head + hook_line[0] + "\n")
+            r = self.run_script(FAKE_FAIL="findb", NOTIFY_DRY_RUN="0")
+            self.assertEqual(r.returncode, 1)
+            self.assertEqual(len(_Hook.bodies), 1, head)
+
     def test_failure_is_posted_with_codes_only(self):
         self.serve(204)
         r = self.run_script(FAKE_FAIL="findb", NOTIFY_DRY_RUN="0")
