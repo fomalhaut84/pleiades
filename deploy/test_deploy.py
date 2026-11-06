@@ -248,7 +248,7 @@ class DeployDryRun(unittest.TestCase):
 
     def test_refuses_platform_env_readable_by_other_accounts(self):
         shared = self.root / "shared.env"
-        shared.write_text("NOTIFY_ALLOWED_CHANNEL=telegram\n")
+        shared.write_text("NOTIFY_ALLOWED_CHANNEL=discord\n")
         shared.chmod(0o644)
         r = deploy(self.root, "fin", "--dry-run", env={"PLEIADES_ENV_FILE": str(shared)})
         self.assertNotEqual(r.returncode, 0)
@@ -262,7 +262,7 @@ class DeployDryRun(unittest.TestCase):
                 self.assertNotEqual(r.returncode, 0)
                 self.assertIn("절대경로", r.stderr)
         root_env = self.root / ".env"  # PLEIADES_ENV_FILE 이 없으면 루트 .env 가 플랫폼 설정이다(#143)
-        root_env.write_text("NOTIFY_ALLOWED_CHANNEL=telegram\n")
+        root_env.write_text("NOTIFY_ALLOWED_CHANNEL=discord\n")
         root_env.chmod(0o664)
         r = deploy(self.root, "fin", "--dry-run")
         self.assertNotEqual(r.returncode, 0)
