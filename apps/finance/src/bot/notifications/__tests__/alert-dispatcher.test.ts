@@ -4,11 +4,10 @@
  * 테스트 대상:
  *   - createRetryRateLimiter: cooldown 준수, reset, 시간 경과 후 재허용
  *   - buildRetryContext: 원본 shape 유지 + retriedFrom 마커, 원본 mutate 방지
- *   - redispatchAlert: chat 별 파사드 전송 성공/실패 카운트, computeDeliveryStatus 매핑 (pleiades#136)
+ *   - redispatchAlert: #finance 웹훅 재발송 · 저장 본문 escape → Discord 마크다운 (pleiades#136 · 009 D-5 B4 R11)
  *   - persistRetryHistory: retriedFrom 포함 recordAlertHistory 호출
  *
- * NOTE: '../index' (getBot) 는 모듈 로드시 모든 command register 를 chain-import 하므로
- * env 미설정 테스트에서 crash 방지 위해 mock 필수. '@/lib/prisma' 도 마찬가지.
+ * NOTE: '@/lib/prisma' 는 env 미설정 테스트에서 crash 방지 위해 mock 필수.
  */
 
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
@@ -19,9 +18,6 @@ vi.mock('@/lib/prisma', () => ({
       createMany: vi.fn(),
     },
   },
-}))
-vi.mock('../../index', () => ({
-  getBot: vi.fn(() => ({} as unknown)),
 }))
 vi.mock('@/bot/utils/telegram', () => ({
   // Codex #462 P2: redispatchAlert 이 escapeHtml 을 호출하므로 mock 도 노출 필요.
@@ -38,7 +34,6 @@ import {
   persistRetryHistory,
   type RedispatchTargetRow,
 } from '../alert-dispatcher'
-import type { Bot } from 'grammy'
 
 describe('createRetryRateLimiter', () => {
   it('첫 시도는 항상 allowed', () => {
@@ -150,139 +145,113 @@ describe('buildRetryContext', () => {
 })
 
 describe('redispatchAlert', () => {
-  // pleiades#136: 수신자는 파사드가 TELEGRAM_ALLOWED_CHAT_IDS 에서 읽고(fin 숫자 규칙 → 문자열 target),
-  // 전송은 @pleiades/notify TelegramTransport → bot.api.sendMessage. 재시도는 네트워크 오류에서만이라
-  // 아래 오류들('네트워크 오류' · '403' · 문자열)은 즉시 실패로 집계된다(실제 sleep 없음).
-  const sendMessage = vi.fn()
-  const fakeBot = { api: { sendMessage } } as unknown as Bot
+  // pleiades 009 D-5 B4 (pleiades#512): 수신자는 #finance 웹훅 하나(DISCORD_WEBHOOK_FINANCE) — 텔레그램 env 는 읽지 않는다.
+  // 전송은 @pleiades/notify DiscordTransport → fetch. 재시도는 네트워크 오류(코드 있는 연결 실패)에서만이라
+  // 아래 오류들('네트워크 오류' · 403 · 문자열)은 즉시 실패로 집계된다(실제 sleep 없음).
+  // 여러 대상의 부분 실패(partial · 마지막 실패 lastError)는 대상이 하나라 이 경로에 없다 —
+  // 매핑은 alert-history.test(computeDeliveryStatus) · notifier.test(lastErrorOf)가 덮는다.
+  const WEBHOOK = 'https://discord.com/api/webhooks/1/fin-token'
+  const fetchMock = vi.fn<(url: string, init: { body: string }) => Promise<unknown>>()
+  const okResponse = { ok: true, status: 200, json: async () => ({ id: 'd1' }), text: async () => '' }
 
   beforeEach(() => {
-    sendMessage.mockReset()
-    // pleiades 009 D-1 (#350): 토큰이 없으면 텔레그램 수신자 0 — 실제 설정처럼 토큰을 넣는다(CI 에는 앱 .env 가 없다 · #354)
+    fetchMock.mockReset()
+    fetchMock.mockResolvedValue(okResponse)
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubEnv('DISCORD_WEBHOOK_FINANCE', WEBHOOK)
+    // 옛 텔레그램 env 가 남아 있어도 읽지 않는다(서버 .env 잔여 · 009 §5-2)
     vi.stubEnv('TELEGRAM_BOT_TOKEN', '1:x')
     vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '1,2,3')
   })
   afterEach(() => {
     vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
   })
 
-  // Codex #462 P2: 저장된 message 는 plain-text 요약. 그대로 HTML parse_mode 로 넘기면
-  // HTML metacharacter (`<`, `>`, `&`) 가 있는 이름 (예: `SOXL < 40`) 이 Telegram
-  // HTML parser 에서 거부되거나 예상 못한 마크업 렌더. redispatchAlert 는 escape 후 전송.
+  // Codex #462 P2: 저장된 message 는 plain-text 요약. HTML metacharacter (`<`, `>`, `&`) 가 있는 이름
+  // (예: `SOXL < 40`) 이 마크업으로 해석되지 않게 redispatchAlert 는 escape 후 HTML 로 넘긴다.
   // Codex #463 P2 (2차): kind 기반 gating — raw kind (custom_strategy 등) 는 그대로
   // escape, pre-escaped kind (target_hit 등) 는 decode 후 재escape 로 round-trip.
+  // 009 D-5 B4 R11: HTML → Discord 마크다운 변환(`discord-md`)을 거친 웹훅 본문으로 확인한다.
   const row = { message: '<b>hi</b>', kind: 'custom_strategy' }
-  const sentText = (call: number) => sendMessage.mock.calls[call][1]
+  // `<` 는 Discord 마크다운에서 `\<` 로 escape 된다(멘션·링크 문법 차단 · 화면에는 `<` 로 보인다)
+  const sentContent = (call = 0) => JSON.parse(fetchMock.mock.calls[call][1].body).content as string
 
-  it('모든 chat 성공 → status=sent, successCount=totalChats. escape 후 전송', async () => {
-    sendMessage.mockResolvedValue({ message_id: 10 })
-    const res = await redispatchAlert(row, fakeBot)
-    expect(res.status).toBe('sent')
-    expect(res.successCount).toBe(3)
-    expect(res.totalChats).toBe(3)
-    expect(res.lastError).toBeUndefined()
-    expect(sendMessage).toHaveBeenCalledTimes(3)
-    // Raw `<b>hi</b>` 가 아니라 escape 된 `&lt;b&gt;hi&lt;/b&gt;` 로 전송돼야 (Codex #462 P2)
-    expect(sendMessage).toHaveBeenNthCalledWith(1, '1', '&lt;b&gt;hi&lt;/b&gt;', { parse_mode: 'HTML' })
+  it('웹훅 성공 → status=sent, successCount=totalChats=1. 태그는 마크업이 아니라 글자로 간다', async () => {
+    const res = await redispatchAlert(row)
+    expect(res).toEqual({ successCount: 1, totalChats: 1, status: 'sent', lastError: undefined })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][0]).toBe(`${WEBHOOK}?wait=true`)
+    // raw `<b>hi</b>` 가 굵게(`**hi**`)로 바뀌지 않는다 (Codex #462 P2)
+    expect(sentContent()).toBe('\\<b>hi\\</b>')
   })
 
-  // Codex #462 P2 회귀 방지 — 사용자 입력 (custom strategy name 등) 에 HTML
-  // metacharacter 가 들어와도 Telegram HTML parser 를 부수지 않고 plaintext 로 안전 전달.
-  it('raw kind + HTML metacharacter → 전부 escape 후 전송', async () => {
-    vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '42')
-    sendMessage.mockResolvedValue({ message_id: 10 })
+  // Codex #462 P2 회귀 방지 — 사용자 입력 (custom strategy name 등) 의 HTML metacharacter 를 원문 그대로
+  it('raw kind + HTML metacharacter → 원문 문자 그대로 표시', async () => {
     const dangerous = { message: 'SOXL < 40 & QQQ > 500 (사용자 & 이름)', kind: 'custom_strategy' }
-    await redispatchAlert(dangerous, fakeBot)
-    expect(sendMessage).toHaveBeenCalledWith('42', 'SOXL &lt; 40 &amp; QQQ &gt; 500 (사용자 &amp; 이름)', {
-      parse_mode: 'HTML',
-    })
+    await redispatchAlert(dangerous)
+    expect(sentContent()).toBe('SOXL \\< 40 & QQQ > 500 (사용자 & 이름)')
   })
 
   // Codex #463 P2 (1차) 회귀 방지 — pre-escaped kind (target_hit 등) 는 decode→escape
-  // round-trip 으로 double-encode 방지.
-  it('pre-escaped kind (target_hit) — decode 후 재escape 로 round-trip 보존', async () => {
-    vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '42')
-    sendMessage.mockResolvedValue({ message_id: 10 })
+  // round-trip 으로 double-encode 방지. 009 D-5 B4 R11: 옛 HTML 저장분이 Discord 에 entity 째 보이지 않는다.
+  it('pre-escaped kind (target_hit) — 옛 HTML 저장분이 entity 없이 원래 문자로', async () => {
     const preEscaped = {
       message: '🎯 A &amp; B (AAPL) 목표가 도달: 100 (목표 &lt;100&gt;)',
       kind: 'target_hit',
     }
-    await redispatchAlert(preEscaped, fakeBot)
-    expect(sentText(0)).toBe('🎯 A &amp; B (AAPL) 목표가 도달: 100 (목표 &lt;100&gt;)')
+    await redispatchAlert(preEscaped)
+    expect(sentContent()).toBe('🎯 A & B (AAPL) 목표가 도달: 100 (목표 \\<100>)')
   })
 
   // Codex #463 P2 (2차) 회귀 방지 — raw kind 에서 사용자가 literal `&amp;` 를 이름에
   // 넣었으면 decode 하지 않고 그대로 escape 해야 원본 문자 (`&amp;` 리터럴) 보존.
   it('raw kind + literal HTML entity (custom_strategy 이름) → decode 하지 않음', async () => {
-    vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '42')
-    sendMessage.mockResolvedValue({ message_id: 10 })
-    // 사용자가 정말 `&amp;` 라는 리터럴 문자열을 전략 이름으로 사용한 경우
     const literalEntity = { message: 'A &amp; B 전략 (AAPL) — AND 조건 만족', kind: 'custom_strategy' }
-    await redispatchAlert(literalEntity, fakeBot)
-    // decode 하지 않고 그대로 escape → `&amp;` 가 `&amp;amp;` 로 정확 escape,
-    // Telegram 은 `&amp;` 리터럴 표시 (사용자 원본 존중).
-    expect(sentText(0)).toBe('A &amp;amp; B 전략 (AAPL) — AND 조건 만족')
+    await redispatchAlert(literalEntity)
+    expect(sentContent()).toBe('A &amp; B 전략 (AAPL) — AND 조건 만족')
   })
 
-  it('모든 chat 실패 → status=failed, lastError 세팅', async () => {
-    vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '1,2')
-    sendMessage.mockRejectedValue(new Error('네트워크 오류'))
+  // 009 D-5 B4 R11: 마크다운 문자는 Discord 에서 서식이 되지 않게 escape 된다
+  it('마크다운 문자(* _ `)는 escape 돼 서식이 되지 않는다', async () => {
+    await redispatchAlert({ message: '*TQQQ* _급락_ `-5%`', kind: 'drop' })
+    expect(sentContent()).toBe('\\*TQQQ\\* \\_급락\\_ \\`-5%\\`')
+  })
+
+  it('웹훅 거부(403) → status=failed, lastError 세팅', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 403, json: async () => ({ message: 'Missing Access' }), text: async () => '' })
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const res = await redispatchAlert(row, fakeBot)
+    const res = await redispatchAlert(row)
     expect(res.status).toBe('failed')
     expect(res.successCount).toBe(0)
+    expect(res.totalChats).toBe(1)
+    expect(res.lastError).toMatch(/^Discord webhook 응답 403/)
+    errSpy.mockRestore()
+  })
+
+  it('연결 실패(코드 없는 오류) → 재시도 없이 failed, lastError = 원문', async () => {
+    fetchMock.mockRejectedValue(new Error('네트워크 오류'))
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await redispatchAlert(row)
+    expect(res.status).toBe('failed')
     expect(res.lastError).toBe('네트워크 오류')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
     errSpy.mockRestore()
   })
 
-  it('일부 실패 → status=partial', async () => {
-    sendMessage
-      .mockResolvedValueOnce({ message_id: 1 })
-      .mockRejectedValueOnce(new Error('403'))
-      .mockResolvedValueOnce({ message_id: 3 })
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const res = await redispatchAlert(row, fakeBot)
-    expect(res.status).toBe('partial')
-    expect(res.successCount).toBe(2)
-    expect(res.lastError).toBe('403')
-    errSpy.mockRestore()
-  })
-
-  // 회귀: pleiades#136 사전 리뷰 info — 구 루프는 실패마다 lastError 를 덮어써 **마지막** 실패를 남겼다.
-  it('실패가 둘 이상이면 lastError = 마지막 실패 chat 의 메시지', async () => {
-    sendMessage
-      .mockRejectedValueOnce(new Error('A'))
-      .mockResolvedValueOnce({ message_id: 2 })
-      .mockRejectedValueOnce(new Error('B'))
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const res = await redispatchAlert(row, fakeBot)
-    expect(res.status).toBe('partial')
-    expect(res.lastError).toBe('B')
-    errSpy.mockRestore()
-  })
-
-  it('수신자 env 비어 있음 → status=failed, totalChats=0, 전송 없음', async () => {
-    vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '')
-    const res = await redispatchAlert(row, fakeBot)
+  it('웹훅 비어 있음 → status=failed, totalChats=0, 전송 없음 · 텔레그램 env 가 있어도', async () => {
+    vi.stubEnv('DISCORD_WEBHOOK_FINANCE', '')
+    const res = await redispatchAlert(row)
     expect(res.status).toBe('failed')
     expect(res.totalChats).toBe(0)
     expect(res.successCount).toBe(0)
-    expect(sendMessage).not.toHaveBeenCalled()
-  })
-
-  it('비숫자 토큰은 수신자에서 빠진다 (fin 규칙 보존 — totalChats = recipientCount)', async () => {
-    vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '1, abc ,007')
-    sendMessage.mockResolvedValue({ message_id: 10 })
-    const res = await redispatchAlert(row, fakeBot)
-    expect(res.totalChats).toBe(2)
-    expect(sendMessage.mock.calls.map((c) => c[0])).toEqual(['1', '7'])
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('Error 아닌 예외 (문자열) 도 lastError 로 캐치', async () => {
-    vi.stubEnv('TELEGRAM_ALLOWED_CHAT_IDS', '1')
-    sendMessage.mockRejectedValue('string-error')
+    fetchMock.mockRejectedValue('string-error')
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const res = await redispatchAlert(row, fakeBot)
+    const res = await redispatchAlert(row)
     expect(res.lastError).toBe('string-error')
     errSpy.mockRestore()
   })

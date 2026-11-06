@@ -10,8 +10,6 @@
 import { escapeHtml } from '@/bot/utils/telegram'
 import { notifierFor, Route, htmlContent, lastErrorOf } from './notifier'
 import { computeDeliveryStatus, recordAlertHistory, type AlertKind } from './alert-history'
-import { notifyBot } from '../index'
-import type { NotifyBot } from './notifier'
 import type { AlertHistoryContext } from '@/lib/alert-history/context'
 
 /** 동일 id 재발송 최소 간격 (스팸 방지 — 스펙 5분). */
@@ -102,7 +100,6 @@ const PRE_ESCAPED_KINDS = new Set<string>(['target_hit', 'stop_loss', 'watch_buy
 
 export async function redispatchAlert(
   row: Pick<RedispatchTargetRow, 'message' | 'kind'>,
-  bot: NotifyBot = notifyBot(),
 ): Promise<RedispatchResult> {
   // Codex #462 · #463 P2 (2차): 저장 상태가 kind 별로 mixed —
   //   - PRE_ESCAPED_KINDS: `A &amp; B` (이미 escape 된 상태로 store)
@@ -117,7 +114,7 @@ export async function redispatchAlert(
   const isPreEscaped = PRE_ESCAPED_KINDS.has(row.kind)
   const normalized = isPreEscaped ? decodeHtmlEntities(row.message) : row.message
   const safeMessage = escapeHtml(normalized)
-  const delivery = await notifierFor(bot).notify(Route.ALLOWED, htmlContent(safeMessage), { label: 'alert-retry' })
+  const delivery = await notifierFor().notify(Route.ALLOWED, htmlContent(safeMessage), { label: 'alert-retry' })
   const status = computeDeliveryStatus(delivery.sent, delivery.total)
   return { successCount: delivery.sent, totalChats: delivery.total, status, lastError: lastErrorOf(delivery) }
 }

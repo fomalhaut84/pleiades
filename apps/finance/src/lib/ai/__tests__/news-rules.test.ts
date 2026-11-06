@@ -6,7 +6,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
 // 봇·DB·CLI 모듈을 실제로 로드하지 않는다 (active-review.test.ts 와 같은 방식 · #279 사전 리뷰 info)
-vi.mock('@/bot/index', () => ({ getBot: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({ prisma: {} }))
 vi.mock('@/lib/ai/claude-advisor', () => ({ askAdvisor: vi.fn(), AdvisorError: class extends Error {}, describeAdvisorError: vi.fn() }))
 

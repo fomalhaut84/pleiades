@@ -4,14 +4,12 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { notifyBot } from '@/bot/index'
 import { isGiftSource } from '@/lib/tax/gift-tax'
 import { accountEmoji, formatKRWFull } from '@/bot/utils/formatter'
 import { escapeHtml, h } from '@/bot/utils/telegram'
 import { notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
 
 export async function sendMonthlyReminder(): Promise<void> {
-  const bot = notifyBot()
 
   const now = new Date()
   const kst = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
@@ -63,7 +61,7 @@ export async function sendMonthlyReminder(): Promise<void> {
 
   const fullMessage = lines.join('\n')
 
-  await notifierFor(bot).notify(Route.ALLOWED, htmlContent(fullMessage), NOTIFY_CTX)
+  await notifierFor().notify(Route.ALLOWED, htmlContent(fullMessage), NOTIFY_CTX)
 
   console.log('[notification] 월 적립 리마인더 발송 완료')
 }

@@ -25,7 +25,7 @@ vi.mock('@/lib/category-matcher', () => ({
 }))
 vi.mock('@/lib/ai/claude-advisor', () => ({ askAdvisor: vi.fn() }))
 vi.mock('@/lib/whooing-webhook', () => ({ sendToWhooing: vi.fn() }))
-// grammY 봇 모듈(notifyBot)을 끌어오지 않게 통째로 대체한다
+// 예산 알림(Prisma·notifier)을 끌어오지 않게 통째로 대체한다
 vi.mock('@/bot/notifications/budget-alert', () => ({ checkBudgetUsage: vi.fn() }))
 
 import { prisma } from '@/lib/prisma'

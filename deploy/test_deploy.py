@@ -759,7 +759,8 @@ class SmokeIsolation(unittest.TestCase):
         self.assertIn("const SMOKE_ARG = '--smoke'", self.ENTRY)
         check = self.ENTRY.index("process.argv.includes(SMOKE_ARG)")
         self.assertLess(self.ENTRY.index("'[bot] standalone 프로세스 시작...'"), check)  # 스모크 READY_MARKER 가 먼저
-        for first in ("schedulePriceUpdates()", "scheduleNotifications()", "startDiscordInteractions(", "notifyBot("):
+        # 009 D-5 B4 — notifyBot() 은 지웠다(startDiscordInteractions() 인자 없음)
+        for first in ("schedulePriceUpdates()", "scheduleNotifications()", "startDiscordInteractions("):
             self.assertLess(check, self.ENTRY.index(first, self.ENTRY.index("async function main")), first)
 
     def test_smoke_child_env_overrides_operational_values(self):

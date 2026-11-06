@@ -1,15 +1,14 @@
 /**
- * 모닝 브리핑 생성 + 텔레그램 발송
+ * 모닝 브리핑 생성 + 발송
  *
  * AI(askAdvisor)로 보유 종목 전략별 맞춤 브리핑 생성.
  * 한국장 08:30 KST / 미국장 23:00 KST 자동 발송.
  */
 
-import { notifyBot } from '@/bot/index'
 import { askAdvisor, describeAdvisorError } from '@/lib/ai/claude-advisor'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 import type { Notifier } from '@pleiades/notify'
-import { notifierFor, Route, htmlContent, type NotifyBot } from './notifier'
+import { notifierFor, Route, htmlContent } from './notifier'
 import { sanitizeError } from '@/bot/utils/error'
 import { formatKstDate } from '@/lib/kst-date'
 import { newsSearchRules } from '@/lib/ai/news-rules'
@@ -50,11 +49,11 @@ export function buildBriefingPrompt(session: MarketSession, now: Date = new Date
 }
 
 /**
- * 브리핑 응답 대상 — 봇을 받아 notifier 를 만든다(pleiades 009 D-3 PR-2b · pleiades#394 · 설계 §4 D2).
- * 봇 명령이 넘긴다: 텔레그램 = `notifierForChat(bot, chatId)`(요청 chat 하나) · Discord = 요청 채널(PR-3).
- * 없으면 크론 경로 — `notifierFor`(라우트 스위치). `notifyBot()` 은 지금처럼 이 함수 안에서 부른다(실패 경로 같음).
+ * 브리핑 응답 대상 — notifier 를 만든다(pleiades 009 D-3 PR-2b · pleiades#394 · 설계 §4 D2).
+ * 봇 명령이 넘긴다: Discord 요청 채널(`notifierForDiscordChannel` · PR-3). 없으면 크론 경로 — `notifierFor()`(ALLOWED 웹훅).
+ * 이 함수 안에서 부른다(실패 경로 같음 · 009 D-5 B4 에서 봇 핸들 인자를 뺐다 · pleiades#512).
  */
-export type BriefingTarget = (bot: NotifyBot) => Notifier
+export type BriefingTarget = () => Notifier
 
 export interface BriefingOptions {
   /** 실패 안내의 AI 명령 표기 — 기본 텔레그램 `/ai` · Discord 는 `!ai`(PR-3 · 설계 D2 "문구를 인자로") */
@@ -71,8 +70,7 @@ export async function sendBriefing(
   target?: BriefingTarget,
   options: BriefingOptions = {},
 ): Promise<void> {
-  const bot = notifyBot()
-  const notifier = target === undefined ? notifierFor(bot) : target(bot)
+  const notifier = target === undefined ? notifierFor() : target()
   const prompt = buildBriefingPrompt(session, new Date(), await gatherBriefingNews(session))
 
   try {

@@ -1,7 +1,6 @@
 /**
- * pleiades M-6b-4 (pleiades#155 · 003 §6 1b-2b): Discord 버튼 클릭을 받는 gateway — 봇 프로세스에서 텔레그램 롱폴링과 함께 돈다.
- * 토큰·채널이 설정돼 있으면 스위치(NOTIFY_INTERACTIVE_CHANNEL)와 무관하게 접속한다 — 스위치를 나중에 켜도(루트 .env)
- * 재시작 없이 버튼이 동작하게. 허용 = DISCORD_ALLOWED_USER_IDS AND 그 채널(#147 결정). 판단은 텔레그램과 같은 decideVest.
+ * pleiades M-6b-4 (pleiades#155 · 003 §6 1b-2b): Discord 버튼 클릭을 받는 gateway — 봇 프로세스에서 돈다.
+ * 토큰·채널이 설정돼 있으면 접속한다. 허용 = DISCORD_ALLOWED_USER_IDS AND 그 채널(#147 결정). 판단은 decideVest.
  *
  * Discord 3초 응답 제한은 gateway 계층이 처리한다 — 클릭 즉시 DEFERRED_UPDATE_MESSAGE 후 종가 조회·트랜잭션을 기다려
  * 원본을 수정한다(interaction 토큰 유효 15분).
@@ -18,7 +17,7 @@
 import path from 'node:path'
 import { createChat, createIdentifyGuard, fileGuardStore, MESSAGE_INTENTS, type Chat } from '@pleiades/chat'
 import { createDiscordRouter } from '@/bot/discord/router'
-import { discordBotConfig, discordChatChannelId, htmlContent, notifierFor, NOTIFY_CTX, Route, type NotifyBot } from './notifier'
+import { discordBotConfig, discordChatChannelId, htmlContent, notifierFor, NOTIFY_CTX, Route } from './notifier'
 
 // 버튼 핸들러는 discord/vest-button.ts(pleiades#398) — 기존 import 경로를 지킨다
 export { handleDiscordButton } from '@/bot/discord/vest-button'
@@ -48,25 +47,25 @@ export function buttonChannels(): string[] {
 
 /**
  * 4014 강등 알림 1회(설계 F) — ADMIN(fin 은 ADMIN 을 매핑하고 IDENTIFY 차단 알림도 ADMIN 이다 · fit 은 ALLOWED).
- * Discord 봇 토큰과 무관한 notifier(웹훅 · 텔레그램)로 보낸다.
+ * Discord 봇 토큰과 무관한 notifier(`#admin` 웹훅)로 보낸다.
  */
-export async function notifyIntentsFallback(notifyBot: NotifyBot): Promise<void> {
+export async function notifyIntentsFallback(): Promise<void> {
   const msg =
     '⚠️ <b>fin Discord 메시지 수신 꺼짐</b>\n개발자 포털 MESSAGE CONTENT 토글이 꺼져 있어(4014) 버튼만 받는다. ' +
     '토글을 켠 뒤 봇을 재시작하거나 deploy/discord-inbound.sh fin off 로 끈다.'
-  const r = await notifierFor(notifyBot).notify(Route.ADMIN, htmlContent(msg), NOTIFY_CTX)
+  const r = await notifierFor().notify(Route.ADMIN, htmlContent(msg), NOTIFY_CTX)
   // chat 은 콜백 실패를 삼킨다 — 안 나갔으면 여기서 남긴다
   if (r.sent === 0) console.warn(`[${LABEL}] 4014 강등 알림 미전송 (sent=0/total=${r.total})`)
 }
 
 /**
- * 설정이 갖춰졌으면 gateway 를 시작해 돌려준다. 아니면 undefined(로그 1줄 · 텔레그램은 그대로).
- * `notifyBot` 은 IDENTIFY 차단 알림 경로(ADMIN) — Discord 봇 토큰과 무관한 notifier(웹훅 · 텔레그램)로 보낸다.
+ * 설정이 갖춰졌으면 gateway 를 시작해 돌려준다. 아니면 undefined(로그 1줄).
+ * IDENTIFY 차단 알림(ADMIN)은 Discord 봇 토큰과 무관한 notifier(`#admin` 웹훅)로 보낸다.
  */
-export function startDiscordInteractions(notifyBot: NotifyBot): Chat | undefined {
+export function startDiscordInteractions(): Chat | undefined {
   const cfg = discordBotConfig()
   if (!cfg.ready) {
-    console.log('[discord-fin] 봇 토큰·채널 미설정 — Discord 버튼 수신 안 함(텔레그램 버튼은 그대로)')
+    console.log('[discord-fin] 봇 토큰·채널 미설정 — Discord 버튼 수신 안 함')
     return undefined
   }
   if (cfg.allowedUserIds.length === 0) {
@@ -79,7 +78,7 @@ export function startDiscordInteractions(notifyBot: NotifyBot): Chat | undefined
     token: () => discordBotConfig().token,
     label: LABEL,
     intents: inbound ? MESSAGE_INTENTS : 0,
-    ...(inbound ? { fallbackIntents: 0, onIntentsFallback: () => notifyIntentsFallback(notifyBot) } : {}),
+    ...(inbound ? { fallbackIntents: 0, onIntentsFallback: () => notifyIntentsFallback() } : {}),
     router: discordRouter,
     allowedUserIds: () => discordBotConfig().allowedUserIds,
     allowedChannelIds: buttonChannels,
@@ -91,7 +90,7 @@ export function startDiscordInteractions(notifyBot: NotifyBot): Chat | undefined
           `⚠️ <b>fin Discord 봇 접속 중단</b>\nIDENTIFY 보호(${info.reason} · 24시간 ${info.count}/${info.limit}) — ` +
           `${new Date(info.retryAt).toISOString()} 이후 다시 시도한다. 재시작 루프가 있는지 확인한다.`
         console.error(`[${LABEL}] IDENTIFY 보호 — ${info.reason} · ${info.count}/${info.limit}`)
-        const r = await notifierFor(notifyBot).notify(Route.ADMIN, htmlContent(msg), NOTIFY_CTX)
+        const r = await notifierFor().notify(Route.ADMIN, htmlContent(msg), NOTIFY_CTX)
         // chat 의 guard 는 onBlocked 의 실패를 삼킨다 — 안 나갔으면 여기서 남긴다
         if (r.sent === 0) console.warn(`[${LABEL}] IDENTIFY 차단 알림 미전송 (sent=0/total=${r.total})`)
       },

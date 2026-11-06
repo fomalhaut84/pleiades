@@ -4,7 +4,6 @@
  * 매월 지정일에 askAdvisor로 전월 리포트를 생성하여 텔레그램 발송.
  */
 
-import { notifyBot } from '@/bot/index'
 import { askAdvisor } from '@/lib/ai/claude-advisor'
 import { markdownToTelegramHtml } from '@/bot/utils/markdown'
 import { notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
@@ -23,7 +22,6 @@ function getPrevMonth(): { year: number; month: number } {
 }
 
 export async function sendMonthlyReport(): Promise<void> {
-  const bot = notifyBot()
   const { year, month } = getPrevMonth()
 
   const prompt =
@@ -50,7 +48,7 @@ export async function sendMonthlyReport(): Promise<void> {
 
     const html = markdownToTelegramHtml(result.response)
 
-    await notifierFor(bot).notify(Route.ALLOWED, htmlContent(html), NOTIFY_CTX)
+    await notifierFor().notify(Route.ALLOWED, htmlContent(html), NOTIFY_CTX)
 
     console.log(`[notification] ${year}년 ${month}월 월간 리포트 발송 완료`)
   } catch (error) {
@@ -58,6 +56,6 @@ export async function sendMonthlyReport(): Promise<void> {
 
     // AI 실패 시 간단 안내 메시지 발송
     const fallback = `📊 ${year}년 ${month}월 월간 리포트 생성에 실패했습니다.\n웹 AI 분석 페이지에서 직접 조회해주세요.`
-    await notifierFor(bot).notify(Route.ALLOWED, htmlContent(fallback), NOTIFY_CTX)
+    await notifierFor().notify(Route.ALLOWED, htmlContent(fallback), NOTIFY_CTX)
   }
 }

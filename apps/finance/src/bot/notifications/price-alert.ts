@@ -7,7 +7,6 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { notifyBot } from '@/bot/index'
 import { formatPercent } from '@/bot/utils/formatter'
 import { escapeHtml } from '@/bot/utils/telegram'
 import { notifierFor, recipients, Route, htmlContent, lastErrorOf, NOTIFY_CTX } from './notifier'
@@ -332,10 +331,9 @@ export async function checkPriceAlerts(): Promise<void> {
 
   if (events.length === 0) return
 
-  const bot = notifyBot()
   const combined = `⚡ <b>변동 알림</b>\n\n${events.map((e) => e.message).join('\n')}`
 
-  const delivery = await notifierFor(bot).notify(Route.ALLOWED, htmlContent(combined), NOTIFY_CTX)
+  const delivery = await notifierFor().notify(Route.ALLOWED, htmlContent(combined), NOTIFY_CTX)
   const sendSuccess = delivery.sent
   const lastError = lastErrorOf(delivery)
 

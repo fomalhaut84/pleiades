@@ -2,7 +2,6 @@ import { toDiscordComponents } from '@pleiades/notify'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/prisma', () => ({ prisma: {} }))
-vi.mock('@/bot/index', () => ({ notifyBot: vi.fn() }))
 
 import { buildVestButtons } from '../rsu'
 

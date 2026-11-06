@@ -185,6 +185,7 @@ export const LOG_REDACT_PATHS = [
   'args.password', 'args.token', 'args.secret', 'args.apiKey',
   '*.password', '*.token', '*.secret', '*.apiKey', '*.jwt',
   'args.body.password', 'args.body.token',
+  // TELEGRAM_BOT_TOKEN — 앱은 더 읽지 않지만 서버 토큰 삭제·revoke(009 D-5 T 단계) 전까지 가림을 남긴다(B4 9-1 info 1)
   'DATABASE_URL', 'TELEGRAM_BOT_TOKEN', 'OPENDART_API_KEY',
   'DISCORD_BOT_TOKEN_FINANCE', 'DISCORD_BOT_TOKEN_FITNESS',
   'DISCORD_WEBHOOK_FINANCE', 'DISCORD_WEBHOOK_FITNESS', 'DISCORD_WEBHOOK_ADMIN', 'DISCORD_WEBHOOK_DEPLOY',
