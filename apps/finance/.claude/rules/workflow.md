@@ -24,19 +24,9 @@ hotfix: main → hotfix/20-crash → main + dev 양쪽 머지
 
 ## 릴리즈 전략
 
-- dev → main 머지 후 태그 생성.
-- 태그 형식: `v{major}.{minor}.{patch}` (예: `v1.0.0`, `v1.2.1`)
-- GitHub에서 릴리즈 생성 + 릴리즈 노트 작성 후 배포.
-
-```bash
-# 릴리즈 절차
-git checkout main && git pull
-git merge dev
-git tag v1.0.0
-git push origin main --tags
-
-gh release create v1.0.0 --title "v1.0.0" --notes "릴리즈 노트 내용"
-```
+- 이 앱은 pleiades 모노레포의 모듈이다 — 릴리즈·배포는 **pleiades 루트 `.claude/rules/workflow.md` 의 릴리즈 전략**을 따른다
+  (릴리즈 PR `dev` → `main` · 사용자 머지 · 단일 태그 `v*` · `git push origin <tag>` — `--tags` 금지 · Release 발행 = 배포).
+- 옛 단독 저장소 절차(로컬 `git merge dev` · `git push origin main --tags`)는 쓰지 않는다(009 D-5 B7b).
 
 버전 기준:
 - major: 큰 기능 추가 또는 Breaking change (Phase 완료 등)

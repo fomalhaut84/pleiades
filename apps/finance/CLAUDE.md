@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **AI**: Claude Code CLI (`claude -p`, Max 플랜) — `--resume`으로 봇 대화 세션 유지
 - **MCP**: 자체 myFinance MCP 서버 (포트폴리오/세금/관심종목/RSU/스톡옵션/가계부 조회 도구)
 - **Bot**: Discord (`@pleiades/chat` gateway 수신 · `@pleiades/notify` 알림 — standalone 프로세스로 분리 운영)
-- **Deploy**: pleiades 루트 `deploy/`(PM2 + Nginx on Ubuntu · 웹 + 봇 standalone 프로세스 · `deploy/pleiades.config.cjs`)
+- **Deploy**: pleiades 루트 `deploy/`(PM2 + Nginx on Ubuntu · `pleiades-fin-web` · `pleiades-fin-bot` · `pleiades-fin-mcp` 3개 프로세스 · `deploy/pleiades.config.cjs`)
 
 ## Commands
 
@@ -63,14 +63,16 @@ assets/fonts/         → PDF 리포트용 한글 폰트 (Noto Sans KR)
 ## Architecture
 
 ```
-PM2 ──► myfinance (Next.js 웹)            ┐
+PM2 ──► pleiades-fin-web (Next.js 웹)     ┐
         ├─ Frontend SSR/CSR               │
         └─ API Routes ──► Prisma ─► PostgreSQL
                                            │
-PM2 ──► myfinance-bot (standalone)        │
+PM2 ──► pleiades-fin-bot (standalone)     │
         ├─ Discord gateway(@pleiades/chat) │
         ├─ Cron (price/snapshot/TA/recurring/vesting)
         └─ Notification Scheduler (daily/briefing/RSU/…)
+                                           │
+PM2 ──► pleiades-fin-mcp (MCP HTTP 서버)  │
                                            │
                   Claude Code CLI (claude -p, --resume 세션 유지)
                   └─ MCP: myFinance (자체)
