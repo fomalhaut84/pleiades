@@ -75,7 +75,7 @@ export function getErrorCode(err: unknown): string | undefined {
   return undefined;
 }
 
-const GRAMMY_TIMEOUT_RE = /Request to '.+' timed out after \d+ seconds/i;
+const CLIENT_TIMEOUT_RE = /Request to '.+' timed out after \d+ seconds/i;
 const ABORT_NAME_RE = /^AbortError$/i;
 
 /**
@@ -89,7 +89,7 @@ export function isNetworkError(err: unknown): boolean {
   let depth = 0;
   while (cur != null && depth < MAX_DEPTH) {
     if (cur instanceof Error) {
-      if (GRAMMY_TIMEOUT_RE.test(cur.message)) return true;
+      if (CLIENT_TIMEOUT_RE.test(cur.message)) return true;
       if (ABORT_NAME_RE.test(cur.name)) return true;
       const obj = cur as { type?: unknown; error?: unknown; cause?: unknown };
       if (obj.type === 'aborted') return true;
