@@ -318,13 +318,16 @@ main() {
   local bad first last
   bad=$(awk '$2 !~ /^[23]/' "$probe" | wc -l | tr -d ' ')
   first=$(awk '$2 !~ /^[23]/ {print $1; exit}' "$probe"); last=$(awk '$2 !~ /^[23]/ {l=$1} END {print l}' "$probe")
+  # 코드별 개수 — 000(연결 거부 · 웹 재기동 빈틈 ≈2 s)과 5xx(앱 오류)를 가른다(#549). ssh-deploy.sh 는 "응답 <수>" 만 읽는다
+  local codes
+  codes=$(awk '$2 !~ /^[23]/ {print $2}' "$probe" | sort | uniq -c | awk '{printf "%s%s×%s", (NR > 1 ? " " : ""), $2, $1}')
   local r lines=""
   for r in web bot mcp; do
     local nw
     read -r -a nw <<<"$(count_window "$HOME/.pm2/logs/pleiades-$APP-$r-error" "$t0" "$t1")"
     lines+=" $r ${nw[0]}(경고 ${nw[1]})"
   done
-  form "C5 프로브 오류 응답 $bad${first:+ ($first~$last)} · 창 안 오류 줄$lines"
+  form "C5 프로브 오류 응답 $bad${first:+ ($first~$last · $codes)} · 창 안 오류 줄$lines"
   local mcp_code
   mcp_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:${new_mcp_port:-$mcp_port}/health")
   read -r -a procs <<<"$(app_procs)"

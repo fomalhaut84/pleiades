@@ -48,7 +48,12 @@ CURL_STUB = """#!/bin/bash
 echo "curl $*" >> "$STUB/log"
 case "$*" in
   */health*) printf '%s' "${STUB_MCP_CODE:-200}" ;;
-  *) printf '%s' "${STUB_WEB_CODE:-307}" ;;
+  *)
+    # STUB_WEB_SEQ="000,502" — 웹 프로브 응답을 차례로(다 쓰면 307) · #549
+    if [[ -n "${STUB_WEB_SEQ:-}" ]]; then
+      n=$(cat "$STUB/web_n" 2>/dev/null || echo 0); echo $((n + 1)) > "$STUB/web_n"
+      IFS=, read -r -a seq <<<"$STUB_WEB_SEQ"; printf '%s' "${seq[$n]:-307}"
+    else printf '%s' "${STUB_WEB_CODE:-307}"; fi ;;
 esac
 """
 
@@ -351,6 +356,18 @@ class ReleaseInplace(unittest.TestCase):
         r = self.srv.run("fin", "v1.0.1", "--yes", STUB_BOT_ERROR="1")
         self.assertIn("bot 1(경고 0)", r.stdout)
         self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_c5_probe_errors_are_broken_down_by_code(self):
+        # 회귀: #549 — 000(웹 재기동 빈틈)과 5xx(앱 오류)를 판정 양식에서 가른다 · "응답 <수>" 는 그대로(ssh-deploy.sh 가 읽는다)
+        self.srv.release("v1.0.1")
+        r = self.srv.run("fin", "v1.0.1", "--yes", STUB_WEB_SEQ="000,502", STUB_SLEEP="5")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertRegex(r.stdout, r"C5 프로브 오류 응답 2 \(\d\d:\d\d:\d\d~\d\d:\d\d:\d\d · 000×1 502×1\) · 창 안 오류 줄")
+
+    def test_c5_without_probe_errors_has_no_breakdown(self):
+        self.srv.release("v1.0.1")
+        r = self.srv.run("fin", "v1.0.1", "--yes")
+        self.assertIn("C5 프로브 오류 응답 0 · 창 안 오류 줄", r.stdout)
 
     def test_done_line_comes_from_the_real_run_only(self):
         # 회귀: M2 — dry-run 의 완료 줄로 "완료 안내: 예" 가 되면 안 된다
