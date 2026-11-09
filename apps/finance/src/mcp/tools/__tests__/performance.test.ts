@@ -49,7 +49,7 @@ beforeEach(() => {
 })
 
 describe('get_performance 수량 변동 표시', () => {
-  it('수량이 바뀐 종목에만 표시 · 소수 주는 4자리까지 · 주의 줄 1번', async () => {
+  it('수량이 바뀐 종목에만 표시 · 소수 주 그대로 · 주의 줄 1번', async () => {
     given([
       holding({ ticker: 'AAA' }),
       holding({ ticker: 'BBB', displayName: '비', returnPct: -60, sharesStart: 10, sharesEnd: 4, sharesChanged: true }),
@@ -59,7 +59,7 @@ describe('get_performance 수량 변동 표시', () => {
     const line = (ticker: string) => t.split('\n').find((l) => l.includes(`(${ticker})`))!
     expect(line('AAA')).not.toContain('수량 변동')
     expect(line('BBB')).toContain('⚠ 수량 변동 10→4주')
-    expect(line('CCC')).toContain('수량 변동 1.2346→2주')
+    expect(line('CCC')).toContain('수량 변동 1.23456→2주')
     expect(t.split(SHARES_CHANGED_NOTE)).toHaveLength(2)
   })
 

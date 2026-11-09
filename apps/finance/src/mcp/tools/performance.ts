@@ -1,5 +1,6 @@
 import { calculateTWR } from '@/lib/performance/twr'
 import { calculateContribution } from '@/lib/performance/contribution'
+import { formatShares, SHARES_CHANGED_CAUSE } from '@/lib/performance/shares'
 import {
   resolveAccountId,
   getAllAccountIds,
@@ -10,12 +11,7 @@ import {
 // pleiades#262 B — 기여도는 기간 안의 매수·매도를 빼지 않는다. AI 가 수량 변동분을 손실·이익으로 읽지 않게 표시한다
 export const SHARES_CHANGED_MARK = '⚠'
 export const SHARES_CHANGED_NOTE =
-  `※ ${SHARES_CHANGED_MARK} 종목은 기간 중 수량이 바뀌었다 — 수익률·기여도가 매수·매도 금액이 섞인 평가액 변화라 실제 손익이 아니다.`
-
-/** 소수 주(해외)는 4자리까지 · 정수면 소수점 없이 */
-function formatShares(shares: number): string {
-  return String(Number(shares.toFixed(4)))
-}
+  `※ ${SHARES_CHANGED_MARK} 종목은 기간 중 수량이 바뀌었다(${SHARES_CHANGED_CAUSE}) — 수익률·기여도는 수량 변화분이 섞인 평가액 변화라 실제 손익과 다를 수 있다. 전체 수익률도 기간 중 입출금·거래가 섞일 수 있다.`
 
 /**
  * get_performance: TWR 수익률 + 종목별 기여도 분석

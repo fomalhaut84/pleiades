@@ -1,6 +1,7 @@
 'use client'
 
 import { formatPercent } from '@/lib/format'
+import { formatShares, SHARES_CHANGED_CAUSE } from '@/lib/performance/shares'
 
 interface HoldingContribution {
   ticker: string
@@ -81,7 +82,7 @@ export default function ContributionTable({ data, loading }: ContributionTablePr
                   {h.sharesChanged && (
                     <span
                       className="ml-1.5 rounded bg-surface-dim px-1.5 py-0.5 text-[10px] font-semibold text-amber-400"
-                      title={`수량 ${h.sharesStart ?? 0} → ${h.sharesEnd ?? 0}`}
+                      title={`수량 ${formatShares(h.sharesStart ?? 0)} → ${formatShares(h.sharesEnd ?? 0)}`}
                     >
                       수량 변동
                     </span>
@@ -104,7 +105,7 @@ export default function ContributionTable({ data, loading }: ContributionTablePr
 
       {data.holdings.some((h) => h.sharesChanged) && (
         <p className="mt-3 text-[11px] text-dim">
-          ‘수량 변동’ 종목은 기간 중 매수·매도가 있었습니다 — 수익률·기여도에 그 금액이 섞여 있어 실제 손익과 다릅니다.
+          ‘수량 변동’ 종목은 기간 중 수량이 바뀌었습니다({SHARES_CHANGED_CAUSE}) — 수익률·기여도에 수량 변화분이 섞여 실제 손익과 다를 수 있습니다.
         </p>
       )}
     </div>

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { periodToStartDate } from './constants'
+import { sharesDiffer } from './shares'
 
 export interface HoldingContribution {
   ticker: string
@@ -20,13 +21,6 @@ export interface ContributionResult {
   holdings: HoldingContribution[]
   totalReturn: number   // 전체 수익률 (%)
   hasData: boolean
-}
-
-/** 부동소수 합산 오차는 변동으로 보지 않는다 — 소수 주(해외)도 1e-6 주보다 작게 사고팔지 않는다 */
-const SHARES_EPSILON = 1e-6
-
-export function sharesDiffer(start: number, end: number): boolean {
-  return Math.abs(end - start) > SHARES_EPSILON
 }
 
 /**

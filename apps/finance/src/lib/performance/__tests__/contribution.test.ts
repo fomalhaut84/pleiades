@@ -13,7 +13,8 @@ vi.mock('@/lib/prisma', () => ({
 }))
 
 import { prisma } from '@/lib/prisma'
-import { calculateContribution, sharesDiffer } from '../contribution'
+import { calculateContribution } from '../contribution'
+import { formatShares, sharesDiffer } from '../shares'
 
 type H = { ticker: string; displayName: string; shares: number; valueKRW: number }
 
@@ -42,6 +43,16 @@ describe('sharesDiffer', () => {
   })
   it('소수 주 매수는 변동이다', () => {
     expect(sharesDiffer(1.5, 1.75)).toBe(true)
+  })
+  it('변동으로 판정되면 표시값도 다르다 — "1→1주" 가 나오지 않는다(9-1 info)', () => {
+    for (const [a, b] of [[1, 1.0000011], [1.0000004, 1.0000015], [2.4999995, 2.5000006]]) {
+      expect(sharesDiffer(a, b)).toBe(true)
+      expect(formatShares(a)).not.toBe(formatShares(b))
+    }
+  })
+  it('합산 오차는 표시에서 사라진다', () => {
+    expect(formatShares(0.1 + 0.2)).toBe('0.3')
+    expect(formatShares(10)).toBe('10')
   })
 })
 
