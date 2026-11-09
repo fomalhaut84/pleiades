@@ -36,6 +36,12 @@ describe('sanitizeMessage', () => {
     );
     expect(sanitizeMessage(`path=/webhooks/987/${ITOK}`)).toBe('path=/webhooks/987/<REDACTED>');
   });
+  it('id 가 비거나 undefined 여도 토큰을 가리고 쿼리는 남긴다 (#333 · 9-1 info)', () => {
+    expect(sanitizeMessage(`POST /api/v10/webhooks//${ITOK}?wait=true`)).toBe('POST /api/v10/webhooks//<REDACTED>?wait=true');
+    expect(sanitizeMessage(`POST /interactions/undefined/${ITOK}/callback`)).toBe(
+      'POST /interactions/undefined/<REDACTED>/callback',
+    );
+  });
   it('JSON 문자열 안의 인터랙션 토큰도 따옴표 앞까지 가린다 (#333)', () => {
     expect(sanitizeError({ url: `/interactions/5/${ITOK}/callback` })).toBe('{"url":"/interactions/5/<REDACTED>/callback"}');
   });
