@@ -26,7 +26,9 @@ import {
   handleDiscordButton,
   messageChannels,
   notifyIntentsFallback,
+  READY_POLL_MS,
   startDiscordInteractions,
+  startDiscordInteractionsWhenReady,
 } from "../discord-interactions";
 import { BOT_PROCESS, notifierFor } from "../notifier";
 
@@ -213,5 +215,63 @@ describe("notifyIntentsFallback(F1)", () => {
     await notifyIntentsFallback(BOT_PROCESS);
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+// pleiades#157 — 기동 때 설정이 없으면 채워질 때까지 다시 보고 한 번만 시작한다
+describe("startDiscordInteractionsWhenReady", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.mocked(createChat).mockClear();
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  const unset = () => {
+    vi.stubEnv("DISCORD_BOT_TOKEN_FITNESS", "");
+    vi.stubEnv("DISCORD_CHANNEL_ID_FITNESS", "");
+  };
+  const set = () => {
+    vi.stubEnv("DISCORD_BOT_TOKEN_FITNESS", "token-xxxxxxxxxxxxxxxxxxxx");
+    vi.stubEnv("DISCORD_CHANNEL_ID_FITNESS", "223456789012345678");
+    vi.stubEnv("DISCORD_CHANNEL_ID_FITNESS_CHAT", "");
+  };
+
+  it("기동 때 없으면 시작하지 않고, 설정이 채워진 다음 주기에 한 번만 시작한다", () => {
+    unset();
+    const h = startDiscordInteractionsWhenReady(BOT_PROCESS);
+    expect(createChat).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(READY_POLL_MS * 3);
+    expect(createChat).not.toHaveBeenCalled();
+    set();
+    vi.advanceTimersByTime(READY_POLL_MS);
+    expect(createChat).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(READY_POLL_MS * 5);
+    expect(createChat).toHaveBeenCalledTimes(1); // 다시 만들지 않는다
+    const chat = vi.mocked(createChat).mock.results[0].value as { stop: ReturnType<typeof vi.fn> };
+    h.stop();
+    expect(chat.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("기동 때 있으면 바로 시작하고 주기 확인을 걸지 않는다", () => {
+    set();
+    startDiscordInteractionsWhenReady(BOT_PROCESS).stop();
+    expect(createChat).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("시작 전 stop 하면 주기 확인을 멈춘다", () => {
+    unset();
+    const h = startDiscordInteractionsWhenReady(BOT_PROCESS);
+    h.stop();
+    set();
+    vi.advanceTimersByTime(READY_POLL_MS * 2);
+    expect(createChat).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
