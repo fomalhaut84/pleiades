@@ -111,3 +111,34 @@ export function startDiscordInteractions(notifyBot: BotProcess): Chat | undefine
   chat.start();
   return chat;
 }
+
+/** 기동 때 설정이 없으면 이 주기로 다시 본다(pleiades#157). */
+export const READY_POLL_MS = 60_000;
+
+/**
+ * 기동 때 봇 토큰·채널이 없으면 `READY_POLL_MS` 마다 다시 보고, 갖춰지는 순간 한 번 시작한다(pleiades#157).
+ * 그 전에는 버튼 알림이 나가도 클릭을 받을 gateway 가 없었다 — 설정을 채운 뒤 재시작해야 했다.
+ * 시작한 뒤의 토큰·채널·허용 사용자는 chat 이 호출마다 다시 읽는다. 대화 채널 스위치(intents)는 시작 때 정해지므로 바꾸면 재시작한다.
+ * 대화 채널 키는 토큰·채널과 같이 저장한다 — 따로 저장하면 그 사이 주기에 버튼만으로 시작할 수 있다(9-1 info).
+ */
+export function startDiscordInteractionsWhenReady(notifyBot: BotProcess): { stop(): void } {
+  let chat = startDiscordInteractions(notifyBot);
+  let timer: ReturnType<typeof setInterval> | undefined;
+  if (chat === undefined) {
+    timer = setInterval(() => {
+      if (!discordBotConfig().ready) return;
+      clearInterval(timer);
+      timer = undefined;
+      console.log(`[${LABEL}] 봇 토큰·채널 설정 감지 — gateway 시작`);
+      chat = startDiscordInteractions(notifyBot);
+    }, READY_POLL_MS);
+    timer.unref?.();
+  }
+  return {
+    stop() {
+      if (timer !== undefined) clearInterval(timer);
+      timer = undefined;
+      chat?.stop();
+    },
+  };
+}

@@ -11,7 +11,7 @@
 import 'dotenv/config'
 import { schedulePriceUpdates, scheduleSnapshots, scheduleKrxSync, scheduleRecurring, scheduleVestingStatusUpdate, scheduleEarningsScan, scheduleBenchmarkRefresh } from '@/lib/cron'
 import { scheduleNotifications } from './notifications/scheduler'
-import { startDiscordInteractions } from './notifications/discord-interactions'
+import { startDiscordInteractionsWhenReady } from './notifications/discord-interactions'
 import { sanitizeError } from './utils/error'
 
 /** 빌드 스모크 전용(scripts/smoke-bot-bundle.mjs) — 진입 로그만 찍고 어떤 등록·토큰·DB·gateway 보다 먼저 끝낸다. 운영 pm2 정의에는 없다 */
@@ -35,13 +35,13 @@ async function main(): Promise<void> {
   scheduleNotifications()
   console.log('[bot] cron + 알림 스케줄러 등록 완료')
 
-  // pleiades M-6b-4 (pleiades#155): Discord 수신(gateway) — 봇 토큰·채널이 있을 때만
-  const discordGateway = startDiscordInteractions()
+  // pleiades M-6b-4 (pleiades#155): Discord 수신(gateway) — 봇 토큰·채널이 있을 때만 · 없으면 채워질 때까지 60초마다 다시 본다(pleiades#157)
+  const discordGateway = startDiscordInteractionsWhenReady()
 
   // graceful shutdown
   const shutdown = async () => {
     console.log('[bot] 종료 중...')
-    discordGateway?.stop()
+    discordGateway.stop()
     process.exit(0)
   }
 

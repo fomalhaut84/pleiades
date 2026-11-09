@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { startBotScheduler } from "./notifications/scheduler";
-import { startDiscordInteractions } from "./notifications/discord-interactions";
+import { startDiscordInteractionsWhenReady } from "./notifications/discord-interactions";
 import { BOT_PROCESS } from "./notifications/notifier";
 import { sanitizeError } from "./utils/error";
 import { sweepOrphanedJobs, startOrphanSweeper } from "@/lib/report-job";
@@ -36,12 +36,12 @@ async function main() {
   // 알림 스케줄러 시작
   startBotScheduler(BOT_PROCESS);
 
-  // pleiades M-6b-3 (pleiades#151): Discord 버튼·메시지 수신(gateway) — 봇 토큰·채널이 있을 때만
-  const discordGateway = startDiscordInteractions(BOT_PROCESS);
+  // pleiades M-6b-3 (pleiades#151): Discord 버튼·메시지 수신(gateway) — 봇 토큰·채널이 있을 때만 · 없으면 채워질 때까지 60초마다 다시 본다(pleiades#157)
+  const discordGateway = startDiscordInteractionsWhenReady(BOT_PROCESS);
 
   const shutdown = () => {
     console.log("[bot] 종료 중...");
-    discordGateway?.stop();
+    discordGateway.stop();
     process.exit(0);
   };
 
