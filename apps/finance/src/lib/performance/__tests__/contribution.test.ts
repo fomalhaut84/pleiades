@@ -9,6 +9,7 @@ vi.mock('@/lib/prisma', () => ({
   prisma: {
     account: { findUniqueOrThrow: vi.fn() },
     portfolioSnapshot: { findMany: vi.fn(), findFirst: vi.fn() },
+    trade: { findMany: vi.fn() },
   },
 }))
 
@@ -18,9 +19,13 @@ import { formatShares, sharesDiffer } from '../shares'
 
 type H = { ticker: string; displayName: string; shares: number; valueKRW: number }
 
+const START = new Date('2026-10-01T00:00:00Z')
+const END = new Date('2026-11-01T00:00:00Z')
+
 function snap(id: string, holdings: H[]) {
   return {
     id,
+    snapshotDate: id === 's' ? START : END,
     totalValueKRW: holdings.reduce((a, h) => a + h.valueKRW, 0),
     holdingSnapshots: holdings,
   }
@@ -35,6 +40,7 @@ beforeEach(() => {
   vi.mocked(prisma.account.findUniqueOrThrow).mockReset().mockResolvedValue({ name: '계좌' } as never)
   vi.mocked(prisma.portfolioSnapshot.findMany).mockReset()
   vi.mocked(prisma.portfolioSnapshot.findFirst).mockReset()
+  vi.mocked(prisma.trade.findMany).mockReset().mockResolvedValue([] as never)
 })
 
 describe('sharesDiffer', () => {
@@ -96,5 +102,25 @@ describe('calculateContribution 수량 변동 표시', () => {
     )
     const r = await calculateContribution('acc', '1M')
     expect(r.holdings[0]).toMatchObject({ sharesStart: 10, sharesEnd: 10, sharesChanged: false })
+  })
+
+  // 회귀: PR #546 Codex P2 — 기간 중 팔았다가 다시 사 끝점 수량이 같아도 표시한다
+  it('끝점 수량이 같아도 기간 안에 거래가 있으면 sharesChanged=true · 거래 조회는 그 계좌 · 양 끝 날짜 포함', async () => {
+    given(
+      snap('s', [
+        { ticker: 'AAA', displayName: '에이', shares: 10, valueKRW: 1000 },
+        { ticker: 'BBB', displayName: '비', shares: 10, valueKRW: 1000 },
+      ]),
+      snap('e', [
+        { ticker: 'AAA', displayName: '에이', shares: 10, valueKRW: 900 },
+        { ticker: 'BBB', displayName: '비', shares: 10, valueKRW: 1000 },
+      ]),
+    )
+    vi.mocked(prisma.trade.findMany).mockResolvedValue([{ ticker: 'AAA' }] as never)
+    const r = await calculateContribution('acc', '1M')
+    expect(r.holdings.find((h) => h.ticker === 'AAA')).toMatchObject({ sharesStart: 10, sharesEnd: 10, sharesChanged: true })
+    expect(r.holdings.find((h) => h.ticker === 'BBB')?.sharesChanged).toBe(false)
+    const where = vi.mocked(prisma.trade.findMany).mock.calls[0][0]?.where
+    expect(where).toMatchObject({ accountId: 'acc', tradedAt: { gte: START, lt: new Date('2026-11-02T00:00:00Z') } })
   })
 })

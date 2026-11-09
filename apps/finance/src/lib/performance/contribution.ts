@@ -79,6 +79,11 @@ export async function calculateContribution(
   const startSnapshot = snapshots[0]
   const endSnapshot = latestSnapshot
 
+  // 기간 안에 거래가 있었던 티커 — 끝점 수량이 같아도(10→4→10) 표시한다(PR #546 Codex P2).
+  // 스냅샷은 하루 1개(날짜 키)라 시작·끝 날짜의 거래가 스냅샷 앞인지 뒤인지 모른다 — 양 끝 날짜를 넣어
+  // 놓치지 않는 쪽으로 기운다(표시는 주의일 뿐 계산을 바꾸지 않는다)
+  const tradedTickers = await tradedTickersBetween(accountId, startSnapshot.snapshotDate, endSnapshot.snapshotDate)
+
   const startTotal = startSnapshot.totalValueKRW
   const endTotal = endSnapshot.totalValueKRW
 
@@ -143,7 +148,7 @@ export async function calculateContribution(
       contribution,
       sharesStart,
       sharesEnd,
-      sharesChanged: sharesDiffer(sharesStart, sharesEnd),
+      sharesChanged: sharesDiffer(sharesStart, sharesEnd) || tradedTickers.has(ticker),
     })
   })
 
@@ -160,4 +165,15 @@ export async function calculateContribution(
     totalReturn,
     hasData: true,
   }
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+async function tradedTickersBetween(accountId: string, from: Date, to: Date): Promise<Set<string>> {
+  const trades = await prisma.trade.findMany({
+    where: { accountId, tradedAt: { gte: from, lt: new Date(to.getTime() + DAY_MS) } },
+    select: { ticker: true },
+    distinct: ['ticker'],
+  })
+  return new Set(trades.map((t) => t.ticker))
 }
