@@ -18,6 +18,7 @@ import {
   createDiscordTransport,
   createNotifier,
   platformEnv,
+  sanitizeMessage,
   sendDiscordFile,
   type DiscordFile,
   type Notifier,
@@ -167,12 +168,12 @@ export const recipients: Pick<Notifier, 'targetCount' | 'targets'> = createNotif
 })
 
 /**
- * 구 per-chat 루프의 `lastError`(마지막 실패 대상의 raw `error.message`)를 결과에서 복원한다 — 003 발견 17 · Q19 C(raw 보존).
- * DB `AlertHistory.lastError` 에 그대로 저장되던 값과 같은 형태다.
+ * 구 per-chat 루프의 `lastError`(마지막 실패 대상의 `error.message`)를 결과에서 복원한다 — 003 발견 17.
  *
- * 패키지 `Delivery.error` 문서는 DB·API 에 쓰기 전 sanitize 를 요구하지만, 여기서는 **의도적으로 raw 를
- * 유지한다** — 구 동작 보존(Q19 C). sanitize 적용은 #137 에서 다룬다.
+ * pleiades#137: 패키지 `Delivery.error` 문서대로 DB·API 에 쓰기 전 `sanitizeMessage` 를 거친다 — 웹훅·봇·인터랙션 토큰을 가린다.
+ * 소비자(`AlertHistory.lastError` · 재발송 API 응답)는 모두 이 함수를 거친다. 이미 저장된 행은 그대로다.
  */
 export function lastErrorOf(result: BroadcastResult): string | undefined {
-  return result.deliveries.filter((d) => !d.ok).at(-1)?.error
+  const raw = result.deliveries.filter((d) => !d.ok).at(-1)?.error
+  return raw === undefined ? undefined : sanitizeMessage(raw)
 }
