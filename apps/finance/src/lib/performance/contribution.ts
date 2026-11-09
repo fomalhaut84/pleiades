@@ -1,22 +1,32 @@
 import { prisma } from '@/lib/prisma'
 import { periodToStartDate } from './constants'
 
-interface HoldingContribution {
+export interface HoldingContribution {
   ticker: string
   displayName: string
   weightStart: number   // 시작 시점 비중 (%)
   weightEnd: number     // 종료 시점 비중 (%)
   returnPct: number     // 개별 수익률 (%)
   contribution: number  // 기여도 (%)
+  sharesStart: number   // 시작 시점 수량 (없으면 0)
+  sharesEnd: number     // 종료 시점 수량 (없으면 0)
+  sharesChanged: boolean // 기간 안에 수량이 바뀌었다 — 수익률·기여도에 매수·매도가 섞여 있다 (pleiades#262)
 }
 
-interface ContributionResult {
+export interface ContributionResult {
   accountId: string
   accountName: string
   period: string
   holdings: HoldingContribution[]
   totalReturn: number   // 전체 수익률 (%)
   hasData: boolean
+}
+
+/** 부동소수 합산 오차는 변동으로 보지 않는다 — 소수 주(해외)도 1e-6 주보다 작게 사고팔지 않는다 */
+const SHARES_EPSILON = 1e-6
+
+export function sharesDiffer(start: number, end: number): boolean {
+  return Math.abs(end - start) > SHARES_EPSILON
 }
 
 /**
@@ -26,6 +36,10 @@ interface ContributionResult {
  * - weight_i = startValue_i / totalStartValue
  * - return_i = (endValue_i - startValue_i) / startValue_i
  * - contribution_i = weight_i * return_i
+ *
+ * 기간 안의 매수·매도·이체는 빼지 않는다 — 평가액 변화만 본다. 그래서 수량이 바뀐 종목은
+ * `sharesChanged` 로 표시해 수익률·기여도를 실제 손익으로 읽지 않게 한다(pleiades#262 B).
+ * 현금흐름 보정(Modified Dietz · #262 A)은 별도 설계다.
  */
 export async function calculateContribution(
   accountId: string,
@@ -86,17 +100,22 @@ export async function calculateContribution(
   }
 
   // 시작 시점 종목별 가치 매핑
-  const startMap = new Map<string, number>()
+  const startMap = new Map<string, { valueKRW: number; shares: number }>()
   for (const h of startSnapshot.holdingSnapshots) {
-    startMap.set(h.ticker, (startMap.get(h.ticker) ?? 0) + h.valueKRW)
+    const existing = startMap.get(h.ticker)
+    startMap.set(h.ticker, {
+      valueKRW: (existing?.valueKRW ?? 0) + h.valueKRW,
+      shares: (existing?.shares ?? 0) + h.shares,
+    })
   }
 
   // 종료 시점 종목별 가치 매핑
-  const endMap = new Map<string, { valueKRW: number; displayName: string }>()
+  const endMap = new Map<string, { valueKRW: number; shares: number; displayName: string }>()
   for (const h of endSnapshot.holdingSnapshots) {
     const existing = endMap.get(h.ticker)
     endMap.set(h.ticker, {
       valueKRW: (existing?.valueKRW ?? 0) + h.valueKRW,
+      shares: (existing?.shares ?? 0) + h.shares,
       displayName: h.displayName,
     })
   }
@@ -108,8 +127,10 @@ export async function calculateContribution(
   const holdings: HoldingContribution[] = []
 
   allTickers.forEach((ticker) => {
-    const startValue = startMap.get(ticker) ?? 0
+    const startValue = startMap.get(ticker)?.valueKRW ?? 0
     const endValue = endMap.get(ticker)?.valueKRW ?? 0
+    const sharesStart = startMap.get(ticker)?.shares ?? 0
+    const sharesEnd = endMap.get(ticker)?.shares ?? 0
     const displayName = endMap.get(ticker)?.displayName
       ?? startSnapshot.holdingSnapshots.find((h) => h.ticker === ticker)?.displayName
       ?? ticker
@@ -126,6 +147,9 @@ export async function calculateContribution(
       weightEnd,
       returnPct,
       contribution,
+      sharesStart,
+      sharesEnd,
+      sharesChanged: sharesDiffer(sharesStart, sharesEnd),
     })
   })
 

@@ -9,6 +9,10 @@ interface HoldingContribution {
   weightEnd: number
   returnPct: number
   contribution: number
+  // pleiades#262 B — 옛 응답(필드 없음)은 표시하지 않는다
+  sharesStart?: number
+  sharesEnd?: number
+  sharesChanged?: boolean
 }
 
 interface ContributionData {
@@ -72,7 +76,17 @@ export default function ContributionTable({ data, loading }: ContributionTablePr
           <tbody>
             {data.holdings.map((h) => (
               <tr key={h.ticker} className="border-b border-border">
-                <td className="py-2.5 text-bright font-medium">{h.displayName}</td>
+                <td className="py-2.5 text-bright font-medium">
+                  {h.displayName}
+                  {h.sharesChanged && (
+                    <span
+                      className="ml-1.5 rounded bg-surface-dim px-1.5 py-0.5 text-[10px] font-semibold text-amber-400"
+                      title={`수량 ${h.sharesStart ?? 0} → ${h.sharesEnd ?? 0}`}
+                    >
+                      수량 변동
+                    </span>
+                  )}
+                </td>
                 <td className="py-2.5 text-right text-sub tabular-nums">
                   {h.weightStart.toFixed(1)}%
                 </td>
@@ -87,6 +101,12 @@ export default function ContributionTable({ data, loading }: ContributionTablePr
           </tbody>
         </table>
       </div>
+
+      {data.holdings.some((h) => h.sharesChanged) && (
+        <p className="mt-3 text-[11px] text-dim">
+          ‘수량 변동’ 종목은 기간 중 매수·매도가 있었습니다 — 수익률·기여도에 그 금액이 섞여 있어 실제 손익과 다릅니다.
+        </p>
+      )}
     </div>
   )
 }
