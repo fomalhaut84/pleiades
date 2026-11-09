@@ -94,6 +94,35 @@ describe('calculateContribution — 현금흐름 보정', () => {
     expect(old.weightEnd).toBe(0)
   })
 
+  it('손익 절대값 순으로 정렬한다 — 큰 손실이 앞', async () => {
+    given([
+      snap(0, [
+        { ticker: 'UP', displayName: 'UP', shares: 1, valueKRW: 1000 },
+        { ticker: 'DOWN', displayName: 'DOWN', shares: 1, valueKRW: 1000 },
+        { ticker: 'FLAT', displayName: 'FLAT', shares: 1, valueKRW: 1000 },
+      ]),
+      snap(30, [
+        { ticker: 'UP', displayName: 'UP', shares: 1, valueKRW: 1050 },
+        { ticker: 'DOWN', displayName: 'DOWN', shares: 1, valueKRW: 800 },
+        { ticker: 'FLAT', displayName: 'FLAT', shares: 1, valueKRW: 1000 },
+      ]),
+    ])
+    const r = await calculateContribution('acc', '1M')
+    expect(r.holdings.map((h) => h.ticker)).toEqual(['DOWN', 'UP', 'FLAT'])
+  })
+
+  it('기간 초 대량 매도로 계좌 분모가 작으면 기간 수익률·기여도 null 이 결과까지 간다(Q5)', async () => {
+    given([
+      snap(0, [{ ticker: 'A', displayName: 'A', shares: 100, valueKRW: 10000 }]),
+      snap(1, [{ ticker: 'A', displayName: 'A', shares: 1, valueKRW: 100 }]),
+      snap(30, [{ ticker: 'A', displayName: 'A', shares: 1, valueKRW: 100 }]),
+    ])
+    const r = await calculateContribution('acc', '1M')
+    expect(r.hasData).toBe(true)
+    expect(r.totalReturn).toBeNull()
+    expect(r.holdings[0].contribution).toBeNull()
+  })
+
   it('스냅샷이 2개 미만이면 hasData=false · 기간 수익률 null', async () => {
     given([snap(0, [])])
     const r = await calculateContribution('acc', '1M')

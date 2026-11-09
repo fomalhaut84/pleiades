@@ -75,7 +75,7 @@ export async function getPerformance(args: {
           lines.push(
             `- ${h.displayName} (${h.ticker}):` +
               ` 비중 ${h.weightStart.toFixed(1)}%→${h.weightEnd.toFixed(1)}%` +
-              ` | 손익 ${formatSignedKRW(h.gainKRW)}` +
+              ` | 손익 ${formatSignedKRW(Math.round(h.gainKRW) || 0)}` + // -0 → 0 ("-0원" 방지 · 9-1 info)
               ` | 수익률 ${pct(h.returnPct, 1, '%')}` +
               ` | 기여도 ${pct(h.contribution, 2, '%p')}` +
               flow +

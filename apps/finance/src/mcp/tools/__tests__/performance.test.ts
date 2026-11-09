@@ -69,6 +69,11 @@ describe('get_performance 기여도 — 현금흐름 보정', () => {
     expect(t).not.toContain('수량 변동') // #546 표시는 대체됐다
   })
 
+  it('손익 잔차 -0.4원은 "-0원" 이 아니라 "+0원"', async () => {
+    given([holding({ gainKRW: -0.4 })])
+    expect(line(await text(), 'AAA')).toContain('손익 +0원')
+  })
+
   it('null 은 "—" 로 낸다 — 0 으로 읽히지 않게', async () => {
     given([holding({ returnPct: null, contribution: null })], null)
     const t = await text()
