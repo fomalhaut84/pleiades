@@ -24,6 +24,7 @@ describe('LOG_REDACT_PATHS', () => {
     'DISCORD_WEBHOOK_DEPLOY',
     'AUTH_SECRET',
     'NEXTAUTH_SECRET',
+    'AUTH_PIN',
     'WHOOING_WEBHOOK_URL',
   ])('%s 값을 가린다', (key) => {
     const line = render({ [key]: 'SECRET-VALUE' })
@@ -41,12 +42,15 @@ describe('MCP logger 인스턴스 redact', () => {
   it('logger 가 LOG_REDACT_PATHS 로 최상위 비밀을 가린다', () => {
     const holder = logger as unknown as Record<symbol, unknown>
     const original = holder[pino.symbols.streamSym]
+    const level = logger.level
+    logger.level = 'info' // MCP_LOG_LEVEL 이 높아도 기록되게(9-1 info)
     let out = ''
     holder[pino.symbols.streamSym] = { write: (s: string) => { out += s } }
     try {
       logger.info({ AUTH_SECRET: 'SECRET-VALUE', WHOOING_WEBHOOK_URL: 'https://hook/SECRET-HOOK' }, 'm')
     } finally {
       holder[pino.symbols.streamSym] = original
+      logger.level = level
     }
     expect(out).toContain('[REDACTED]')
     expect(out).not.toContain('SECRET-VALUE')

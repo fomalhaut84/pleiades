@@ -41,12 +41,15 @@ describe("MCP logger 인스턴스 redact", () => {
   it("logger 가 LOG_REDACT_PATHS 로 최상위 비밀을 가린다", () => {
     const holder = logger as unknown as Record<symbol, unknown>;
     const original = holder[pino.symbols.streamSym];
+    const level = logger.level;
+    logger.level = "info"; // MCP_LOG_LEVEL 이 높아도 기록되게(9-1 info)
     let out = "";
     holder[pino.symbols.streamSym] = { write: (s: string) => { out += s; } };
     try {
       logger.info({ GARMIN_PASSWORD: "SECRET-VALUE", MFDS_API_KEY: "SECRET-KEY" }, "m");
     } finally {
       holder[pino.symbols.streamSym] = original;
+      logger.level = level;
     }
     expect(out).toContain("[REDACTED]");
     expect(out).not.toContain("SECRET-VALUE");
