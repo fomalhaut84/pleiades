@@ -468,7 +468,7 @@ export async function syncAll(
     }
   }
 
-  // #425: 종료 후 심박 회복 (hrr2 · hrrDrop10) 후처리 — 심박이 SYNC_ORDER 의 마지막이라 활동 fetcher 안에서는 그 날 심박이
+  // #425: 종료 후 심박 회복 (hrr2 · hrrDrop10) 후처리 — 심박이 SYNC_ORDER 에서 활동 뒤라 활동 fetcher 안에서는 그 날 심박이
   // 없을 수 있다. 창은 시작일 − 2일: 저녁 러닝 직후 싱크에서 하루치 심박이 부분이라 null 로 남은 활동을 다음 싱크 (창이 오늘뿐) 가
   // 다시 잡게. DB 만 읽고 쓰므로 await (수 건). 실패는 로그만 — 싱크 결과에 영향 X.
   if (recoveryFrom !== null) {
