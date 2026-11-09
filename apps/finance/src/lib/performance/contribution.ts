@@ -1,17 +1,17 @@
 import { prisma } from '@/lib/prisma'
 import { periodToStartDate } from './constants'
-import { sharesDiffer } from './shares'
+import { modifiedDietzFromSnapshots } from './modified-dietz'
 
 export interface HoldingContribution {
   ticker: string
   displayName: string
-  weightStart: number   // 시작 시점 비중 (%)
-  weightEnd: number     // 종료 시점 비중 (%)
-  returnPct: number     // 개별 수익률 (%)
-  contribution: number  // 기여도 (%)
-  sharesStart: number   // 시작 시점 수량 (없으면 0)
-  sharesEnd: number     // 종료 시점 수량 (없으면 0)
-  sharesChanged: boolean // 기간 안에 수량이 바뀌었다 — 수익률·기여도에 매수·매도가 섞여 있다 (pleiades#262)
+  weightStart: number           // 시작 스냅샷 비중 (%)
+  weightEnd: number             // 종료 스냅샷 비중 (%)
+  returnPct: number | null      // 종목 수익률 r_i (%) — 분모가 작으면 null("—")
+  contribution: number | null   // 기여도 c_i (%p) — 계좌 분모가 작으면 null
+  gainKRW: number               // 손익 G_i(원) = 끝 − 시작 − 순유입 + 배당
+  netFlowKRW: number            // 기간 순매수(+)·순매도(−) — 스냅샷 수량 차분
+  dividendKRW: number           // 기간 세후 배당
 }
 
 export interface ContributionResult {
@@ -19,21 +19,16 @@ export interface ContributionResult {
   accountName: string
   period: string
   holdings: HoldingContribution[]
-  totalReturn: number   // 전체 수익률 (%)
+  totalReturn: number | null    // 기간 수익률 R (%) = Σ 기여도 · Modified Dietz — TWR 이 아니다
   hasData: boolean
 }
 
 /**
- * 종목별 기여도 분석
+ * 종목별 기여도 — 현금흐름 보정(Modified Dietz · docs/specs/010-fin-cashflow-return.md · pleiades#554).
  *
- * 시작/종료 시점의 HoldingSnapshot을 비교하여:
- * - weight_i = startValue_i / totalStartValue
- * - return_i = (endValue_i - startValue_i) / startValue_i
- * - contribution_i = weight_i * return_i
- *
- * 기간 안의 매수·매도·이체는 빼지 않는다 — 평가액 변화만 본다. 그래서 수량이 바뀐 종목은
- * `sharesChanged` 로 표시해 수익률·기여도를 실제 손익으로 읽지 않게 한다(pleiades#262 B).
- * 현금흐름 보정(Modified Dietz · #262 A)은 별도 설계다.
+ * 경계는 "보유 종목만"(스냅샷에 현금이 없다)이라 매수·매도·vest 가 외부 흐름이다. 흐름은 기간 안 스냅샷 전체의
+ * 수량 차분에서 얻는다(거래 기록 날짜는 스냅샷과 맞지 않는다 · 010 §3-3). 세후 배당은 수익에 넣는다.
+ * 기여도 합 = 기간 수익률. 분할은 기록 경로가 없어 매매로 보일 수 있다.
  */
 export async function calculateContribution(
   accountId: string,
@@ -45,6 +40,14 @@ export async function calculateContribution(
   })
 
   const startDate = periodToStartDate(period)
+  const empty: ContributionResult = {
+    accountId,
+    accountName: account.name,
+    period,
+    holdings: [],
+    totalReturn: null,
+    hasData: false,
+  }
 
   const snapshots = await prisma.portfolioSnapshot.findMany({
     where: {
@@ -52,128 +55,56 @@ export async function calculateContribution(
       ...(startDate ? { snapshotDate: { gte: startDate } } : {}),
     },
     orderBy: { snapshotDate: 'asc' },
-    include: { holdingSnapshots: true },
-    take: 1,
-  })
-
-  const latestSnapshot = await prisma.portfolioSnapshot.findFirst({
-    where: {
-      accountId,
-      ...(startDate ? { snapshotDate: { gte: startDate } } : {}),
+    select: {
+      snapshotDate: true,
+      totalValueKRW: true,
+      holdingSnapshots: { select: { ticker: true, displayName: true, shares: true, valueKRW: true } },
     },
-    orderBy: { snapshotDate: 'desc' },
-    include: { holdingSnapshots: true },
+  })
+  if (snapshots.length < 2) return empty
+
+  const first = snapshots[0]
+  const last = snapshots[snapshots.length - 1]
+
+  // 배당 지급일 [S, E) — modifiedDietz 가 다시 거른다(반열린 구간 · 010 §2 정정 블록)
+  const dividends = await prisma.dividend.findMany({
+    where: { accountId, payDate: { gte: first.snapshotDate, lt: last.snapshotDate } },
+    select: { ticker: true, payDate: true, amountKRW: true },
   })
 
-  if (snapshots.length === 0 || !latestSnapshot || snapshots[0].id === latestSnapshot.id) {
-    return {
-      accountId,
-      accountName: account.name,
-      period,
-      holdings: [],
-      totalReturn: 0,
-      hasData: false,
-    }
-  }
+  const result = modifiedDietzFromSnapshots(
+    snapshots.map((s) => ({ date: s.snapshotDate, holdings: s.holdingSnapshots })),
+    dividends.map((d) => ({ ticker: d.ticker, date: d.payDate, amountKRW: d.amountKRW }))
+  )
+  if (!result) return empty
 
-  const startSnapshot = snapshots[0]
-  const endSnapshot = latestSnapshot
+  // 표시 이름 — 가장 늦게 나온 스냅샷의 이름(전량 매도 종목은 마지막 보유 때 이름)
+  const names = new Map<string, string>()
+  for (const s of snapshots) for (const h of s.holdingSnapshots) names.set(h.ticker, h.displayName)
 
-  // 기간 안에 거래가 있었던 티커 — 끝점 수량이 같아도(10→4→10) 표시한다(PR #546 Codex P2).
-  // 스냅샷은 하루 1개(날짜 키)라 시작·끝 날짜의 거래가 스냅샷 앞인지 뒤인지 모른다 — 양 끝 날짜를 넣어
-  // 놓치지 않는 쪽으로 기운다(표시는 주의일 뿐 계산을 바꾸지 않는다)
-  const tradedTickers = await tradedTickersBetween(accountId, startSnapshot.snapshotDate, endSnapshot.snapshotDate)
-
-  const startTotal = startSnapshot.totalValueKRW
-  const endTotal = endSnapshot.totalValueKRW
-
-  if (startTotal === 0) {
-    return {
-      accountId,
-      accountName: account.name,
-      period,
-      holdings: [],
-      totalReturn: 0,
-      hasData: false,
-    }
-  }
-
-  // 시작 시점 종목별 가치 매핑
-  const startMap = new Map<string, { valueKRW: number; shares: number }>()
-  for (const h of startSnapshot.holdingSnapshots) {
-    const existing = startMap.get(h.ticker)
-    startMap.set(h.ticker, {
-      valueKRW: (existing?.valueKRW ?? 0) + h.valueKRW,
-      shares: (existing?.shares ?? 0) + h.shares,
-    })
-  }
-
-  // 종료 시점 종목별 가치 매핑
-  const endMap = new Map<string, { valueKRW: number; shares: number; displayName: string }>()
-  for (const h of endSnapshot.holdingSnapshots) {
-    const existing = endMap.get(h.ticker)
-    endMap.set(h.ticker, {
-      valueKRW: (existing?.valueKRW ?? 0) + h.valueKRW,
-      shares: (existing?.shares ?? 0) + h.shares,
-      displayName: h.displayName,
-    })
-  }
-
-  // 모든 종목 합집합
-  const allTickers = new Set<string>()
-  startMap.forEach((_, k) => allTickers.add(k))
-  endMap.forEach((_, k) => allTickers.add(k))
-  const holdings: HoldingContribution[] = []
-
-  allTickers.forEach((ticker) => {
-    const startValue = startMap.get(ticker)?.valueKRW ?? 0
-    const endValue = endMap.get(ticker)?.valueKRW ?? 0
-    const sharesStart = startMap.get(ticker)?.shares ?? 0
-    const sharesEnd = endMap.get(ticker)?.shares ?? 0
-    const displayName = endMap.get(ticker)?.displayName
-      ?? startSnapshot.holdingSnapshots.find((h) => h.ticker === ticker)?.displayName
-      ?? ticker
-
-    const weightStart = startTotal > 0 ? (startValue / startTotal) * 100 : 0
-    const weightEnd = endTotal > 0 ? (endValue / endTotal) * 100 : 0
-    const returnPct = startValue > 0 ? ((endValue - startValue) / startValue) * 100 : 0
-    const contribution = (weightStart / 100) * returnPct
-
-    holdings.push({
-      ticker,
-      displayName,
-      weightStart,
-      weightEnd,
-      returnPct,
-      contribution,
-      sharesStart,
-      sharesEnd,
-      sharesChanged: sharesDiffer(sharesStart, sharesEnd) || tradedTickers.has(ticker),
-    })
-  })
-
-  // 기여도 절대값 순 정렬
-  holdings.sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution))
-
-  const totalReturn = startTotal > 0 ? ((endTotal - startTotal) / startTotal) * 100 : 0
+  const startTotal = first.totalValueKRW
+  const endTotal = last.totalValueKRW
+  const holdings: HoldingContribution[] = result.holdings
+    .map((h) => ({
+      ticker: h.ticker,
+      displayName: names.get(h.ticker) ?? h.ticker,
+      weightStart: startTotal > 0 ? (h.startKRW / startTotal) * 100 : 0,
+      weightEnd: endTotal > 0 ? (h.endKRW / endTotal) * 100 : 0,
+      returnPct: h.returnPct,
+      contribution: h.contributionPct,
+      gainKRW: h.gainKRW,
+      netFlowKRW: h.flowKRW,
+      dividendKRW: h.dividendKRW,
+    }))
+    // 기여도가 null(계좌 분모가 작다)이어도 순서가 같도록 손익 절대값 순
+    .sort((a, b) => Math.abs(b.gainKRW) - Math.abs(a.gainKRW))
 
   return {
     accountId,
     accountName: account.name,
     period,
     holdings,
-    totalReturn,
+    totalReturn: result.returnPct,
     hasData: true,
   }
-}
-
-const DAY_MS = 24 * 60 * 60 * 1000
-
-async function tradedTickersBetween(accountId: string, from: Date, to: Date): Promise<Set<string>> {
-  const trades = await prisma.trade.findMany({
-    where: { accountId, tradedAt: { gte: from, lt: new Date(to.getTime() + DAY_MS) } },
-    select: { ticker: true },
-    distinct: ['ticker'],
-  })
-  return new Set(trades.map((t) => t.ticker))
 }
