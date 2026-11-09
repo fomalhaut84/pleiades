@@ -40,12 +40,14 @@ import { syncAll, type DataType, type SyncResult } from "../src/lib/garmin/sync"
 import { ymdKST, todayKST } from "../src/lib/garmin/utils";
 import { WELLNESS_RETENTION_DAYS } from "../src/lib/garmin/preserve";
 import { OMRON_DATA_TYPES } from "../src/lib/omron/data-types";
+import { isOmronEnabled } from "../src/lib/omron/sync";
 import {
   buildBackfillChunks,
   buildLastSyncSnapshot,
   markersForTypes,
   mixedProviderError,
   needsGarminLogin,
+  omronDisabledError,
   pickBackfillTo,
   resolveRestoredLastSyncDate,
   restorableTypes,
@@ -282,6 +284,8 @@ async function main() {
     process.exit(1);
   }
   const types = parseTypes(readFlag(args, "types"));
+  const omronOff = omronDisabledError(types, isOmronEnabled());
+  if (omronOff) throw new Error(omronOff);
   const from = parseKST(fromRaw, "--from");
   const toRaw = readFlag(args, "to");
   const to = toRaw ? parseKST(toRaw, "--to") : await defaultTo(types);
