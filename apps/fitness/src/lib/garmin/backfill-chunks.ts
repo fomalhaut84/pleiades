@@ -164,7 +164,7 @@ export function mixedProviderError(types: readonly string[]): string | null {
 export function omronDisabledError(types: readonly string[], omronEnabled: boolean): string | null {
   const omron = types.filter((t) => isOmronDataType(t));
   if (omron.length === 0 || omronEnabled) return null;
-  return `--types: OMRON 타입 (${omron.join(", ")}) 을 골랐지만 OMRON env 가 설정되지 않았습니다 — env 를 채우고 다시 실행하세요 (pleiades#162)`;
+  return `--types: OMRON 타입 (${omron.join(", ")}) 을 골랐지만 OMRON 이 비활성입니다(env 누락 또는 형식 오류) — env 를 확인하고 다시 실행하세요 (pleiades#162)`;
 }
 
 /** #521: OMRON 만 고른 백필은 Garmin 로그인이 필요 없다 (syncAll 이 OMRON 은 Garmin 클라이언트 없이 돈다) */

@@ -37,7 +37,7 @@ describe("needsGarminLogin", () => {
 // 회귀: pleiades#162 — OMRON env 가 비면 명시한 OMRON 백필이 데이터 0 으로 "성공" 하던 것
 describe("omronDisabledError — OMRON 비활성인데 OMRON 타입 명시", () => {
   it("OMRON 타입 + 비활성 → 거부 사유", () => {
-    expect(omronDisabledError(["omron_blood_pressure"], false)).toMatch(/OMRON env 가 설정되지 않았습니다/);
+    expect(omronDisabledError(["omron_blood_pressure"], false)).toMatch(/OMRON 이 비활성입니다/);
   });
   it("OMRON 타입 + 활성 → 통과", () => {
     expect(omronDisabledError(["omron_blood_pressure", "omron_body_composition"], true)).toBeNull();
