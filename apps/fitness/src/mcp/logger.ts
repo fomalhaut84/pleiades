@@ -170,6 +170,11 @@ export const LOG_REDACT_PATHS = [
   "args.body.password",
   "args.body.token",
   "DATABASE_URL",
+  // fit 앱 `.env` 의 다른 비밀(pleiades#453)
+  "GARMIN_PASSWORD",
+  "OMRON_PASSWORD",
+  "OMRON_APP_KEY",
+  "MFDS_API_KEY",
   "DISCORD_BOT_TOKEN_FINANCE",
   "DISCORD_BOT_TOKEN_FITNESS",
   "DISCORD_WEBHOOK_FINANCE",
@@ -204,7 +209,7 @@ export function newTraceId(): string {
 // pino redact 의 `paths` 옵션은 top-level 만 다루므로 args 내부 (nested) 도 커버해야 함.
 // database_url / DATABASE_URL 처럼 대소문자 상관없이 매칭 (i flag).
 const SENSITIVE_KEY_REGEX =
-  /password|token|secret|apikey|jwt|database_url|databaseurl/i;
+  /password|token|secret|api[_-]?key|jwt|database_url|databaseurl|webhook/i; // webhook·api_key: pleiades#453
 
 /**
  * Deep-redact sensitive 필드 (`password/token/secret/apiKey/jwt`). Pino redact 는
