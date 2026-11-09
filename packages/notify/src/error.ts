@@ -7,8 +7,15 @@
  */
 
 const TOKEN_RE = /bot\d+:[A-Za-z0-9_-]+/g;
-/** Discord 웹훅 URL 의 토큰 부분 (`/api/[v10/]webhooks/<id>/<token>`) — M-6a #141. */
-const DISCORD_WEBHOOK_RE = /(\/api\/(?:v\d+\/)?webhooks\/\d+\/)[A-Za-z0-9_-]+/g;
+/**
+ * Discord 웹훅 경로의 토큰 부분 (`[/api[/v10]]/webhooks/<id>/<token>`) — M-6a #141.
+ * 인터랙션 후속 메시지(`/webhooks/<application id>/<interaction token>`)도 같은 모양이다(#333).
+ * id · 토큰 문자는 좁히지 않는다 — id 가 비거나(`str()` → '') `undefined` 여도 토큰을 가린다(9-1 info).
+ * 퍼센트 인코딩된 경로(`%2Fwebhooks%2F…`)는 범위 밖이다 — URL 을 만드는 곳이 경로를 인코딩하지 않는다.
+ */
+const DISCORD_WEBHOOK_RE = /(\/webhooks\/[^/?#\s"'<>]*\/)[^/?#\s"'<>]+/g;
+/** 인터랙션 응답 경로의 토큰 부분 (`/interactions/<id>/<token>/callback`) — #333. */
+const DISCORD_INTERACTION_RE = /(\/interactions\/[^/?#\s"'<>]*\/)[^/?#\s"'<>]+/g;
 /** Discord 봇 토큰(`<base64 id>.<ts>.<hmac>`) — M-6b-2 #149. */
 const DISCORD_BOT_TOKEN_RE = /\b[MNO][A-Za-z\d_-]{20,}\.[A-Za-z\d_-]{5,}\.[A-Za-z\d_-]{25,}\b/g;
 const NETWORK_CODES = new Set([
@@ -26,6 +33,7 @@ export function sanitizeMessage(msg: string): string {
   return msg
     .replace(TOKEN_RE, 'bot<REDACTED>')
     .replace(DISCORD_WEBHOOK_RE, '$1<REDACTED>')
+    .replace(DISCORD_INTERACTION_RE, '$1<REDACTED>')
     .replace(DISCORD_BOT_TOKEN_RE, '<DISCORD_TOKEN_REDACTED>');
 }
 
