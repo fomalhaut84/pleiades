@@ -22,6 +22,23 @@ describe('sanitizeMessage', () => {
       'Failed to parse URL from https://discord.com/api/v10/webhooks/1/<REDACTED>',
     );
   });
+
+  // #333 — 인터랙션 토큰(콜백 · 후속 메시지 웹훅)
+  const ITOK = 'aW50ZXJhY3Rpb246MTIzOjQ1Ng.x-Y_z=';
+  it('인터랙션 콜백 URL 의 토큰을 가리고 id 와 /callback 은 남긴다 (#333)', () => {
+    expect(sanitizeMessage(`POST https://discord.com/api/v10/interactions/1234567890/${ITOK}/callback 404`)).toBe(
+      'POST https://discord.com/api/v10/interactions/1234567890/<REDACTED>/callback 404',
+    );
+  });
+  it('인터랙션 후속 웹훅 URL 의 토큰을 가린다 — 하위 경로 · 접두 없는 경로 (#333)', () => {
+    expect(sanitizeMessage(`PATCH https://discord.com/api/v10/webhooks/987/${ITOK}/messages/@original 401`)).toBe(
+      'PATCH https://discord.com/api/v10/webhooks/987/<REDACTED>/messages/@original 401',
+    );
+    expect(sanitizeMessage(`path=/webhooks/987/${ITOK}`)).toBe('path=/webhooks/987/<REDACTED>');
+  });
+  it('JSON 문자열 안의 인터랙션 토큰도 따옴표 앞까지 가린다 (#333)', () => {
+    expect(sanitizeError({ url: `/interactions/5/${ITOK}/callback` })).toBe('{"url":"/interactions/5/<REDACTED>/callback"}');
+  });
 });
 
 describe('sanitizeError', () => {

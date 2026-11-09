@@ -7,8 +7,14 @@
  */
 
 const TOKEN_RE = /bot\d+:[A-Za-z0-9_-]+/g;
-/** Discord 웹훅 URL 의 토큰 부분 (`/api/[v10/]webhooks/<id>/<token>`) — M-6a #141. */
-const DISCORD_WEBHOOK_RE = /(\/api\/(?:v\d+\/)?webhooks\/\d+\/)[A-Za-z0-9_-]+/g;
+/**
+ * Discord 웹훅 경로의 토큰 부분 (`[/api[/v10]]/webhooks/<id>/<token>`) — M-6a #141.
+ * 인터랙션 후속 메시지(`/webhooks/<application id>/<interaction token>`)도 같은 모양이다(#333).
+ * 토큰 문자는 좁히지 않는다 — 경로 · 쿼리 · 따옴표 · 공백 앞까지 전부 가린다.
+ */
+const DISCORD_WEBHOOK_RE = /(\/webhooks\/\d+\/)[^/?#\s"'<>]+/g;
+/** 인터랙션 응답 경로의 토큰 부분 (`/interactions/<id>/<token>/callback`) — #333. */
+const DISCORD_INTERACTION_RE = /(\/interactions\/\d+\/)[^/?#\s"'<>]+/g;
 /** Discord 봇 토큰(`<base64 id>.<ts>.<hmac>`) — M-6b-2 #149. */
 const DISCORD_BOT_TOKEN_RE = /\b[MNO][A-Za-z\d_-]{20,}\.[A-Za-z\d_-]{5,}\.[A-Za-z\d_-]{25,}\b/g;
 const NETWORK_CODES = new Set([
@@ -26,6 +32,7 @@ export function sanitizeMessage(msg: string): string {
   return msg
     .replace(TOKEN_RE, 'bot<REDACTED>')
     .replace(DISCORD_WEBHOOK_RE, '$1<REDACTED>')
+    .replace(DISCORD_INTERACTION_RE, '$1<REDACTED>')
     .replace(DISCORD_BOT_TOKEN_RE, '<DISCORD_TOKEN_REDACTED>');
 }
 
