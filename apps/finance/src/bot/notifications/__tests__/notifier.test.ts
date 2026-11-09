@@ -181,4 +181,11 @@ describe('lastErrorOf', () => {
     expect(lastErrorOf({ sent: 1, total: 3, deliveries } as never)).toBe('B')
     expect(lastErrorOf({ sent: 1, total: 1, deliveries: [deliveries[1]] } as never)).toBeUndefined()
   })
+
+  // 회귀: pleiades#137 — DB·재발송 API 에 쓰기 전 토큰을 가린다
+  it('웹훅·인터랙션·봇 토큰을 가린 메시지를 돌려준다', () => {
+    const error = 'Failed to parse URL from https://discord.com/api/webhooks/123/SECRET-HOOK · /interactions/9/SECRET-ITOK/callback · bot123:SECRET-BOT'
+    const out = lastErrorOf({ sent: 0, total: 1, deliveries: [{ target: 'finance', ok: false, error }] } as never)
+    expect(out).toBe('Failed to parse URL from https://discord.com/api/webhooks/123/<REDACTED> · /interactions/9/<REDACTED>/callback · bot<REDACTED>')
+  })
 })
