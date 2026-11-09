@@ -4600,3 +4600,23 @@ tools/local/run.sh fin -- npx vitest run src/lib/performance/__tests__/tmp-bench
 | 313 × 100 | 31,300 | 4.47 ms |
 
 - **계산은 병목이 아니다.** 남는 비용은 DB 조회(그 행 수를 읽는 것) — **미측정**. 로컬 `pleiades_fin` 에 합성 스냅샷을 넣어야 재므로 A1-2(쿼리 연결)에서 사용자 확인 뒤 잰다(ALL × 계좌 수 × (기여도 + TWR) · 010 §4-2).
+
+## 2026-11-09 — 010 A1-2 DB 조회 시간 (#554 · 로컬 `pleiades_fin` · 합성 · 사용자 승인)
+
+```bash
+# 임시 스크립트(커밋하지 않음 · 측정 뒤 삭제) apps/finance/scripts/tmp-measure-552.ts:
+#   DB 이름 대조(pleiades_fin) → 합성 계좌 3 × 939 스냅샷(≈3Y 월~토) × 30 종목 = HoldingSnapshot 84,510 행
+#   → 예열 1회 + 5회 평균 → finally 에서 합성 계좌·스냅샷 삭제 → 전후 행 수 대조
+tools/local/run.sh fin -- npx tsx scripts/tmp-measure-552.ts
+```
+
+| 조회 | 1회 |
+|---|---|
+| 옛 기여도(양 끝 스냅샷 2 + Trade) ALL × 3계좌 | 3.3 ms |
+| TWR(스냅샷 전체 · 2필드 + Deposit) ALL × 3계좌 | 6.4 ms |
+| **A1-2 기여도(스냅샷 전체 + 보유 3필드 + 배당) ALL × 3계좌** | **288 ms** |
+| 같은 · ALL × 1계좌 | 151 ms |
+| 같은 · 1Y × 3계좌 | 115 ms |
+
+- 전후 행 수 같음(계좌 3 · 스냅샷 0 · 보유 스냅샷 0 → 측정 뒤 같음) — 로컬 DB 에는 원래 스냅샷이 없다.
+- 계산(2026-11-09 A1-1 절)은 이 값의 2% 미만 — 비용은 보유 행 읽기다. 운영 크기(실제 스냅샷 수·종목 수)는 미확인.

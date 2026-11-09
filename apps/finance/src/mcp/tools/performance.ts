@@ -1,6 +1,6 @@
 import { calculateTWR } from '@/lib/performance/twr'
 import { calculateContribution } from '@/lib/performance/contribution'
-import { formatShares, SHARES_CHANGED_CAUSE } from '@/lib/performance/shares'
+import { formatKRW, formatSignedKRW } from '@/lib/format'
 import {
   resolveAccountId,
   getAllAccountIds,
@@ -8,10 +8,12 @@ import {
   toolError,
 } from '../utils'
 
-// pleiades#262 B — 기여도는 기간 안의 매수·매도를 빼지 않는다. AI 가 수량 변동분을 손실·이익으로 읽지 않게 표시한다
-export const SHARES_CHANGED_MARK = '⚠'
-export const SHARES_CHANGED_NOTE =
-  `※ ${SHARES_CHANGED_MARK} 종목은 기간 중 수량이 바뀌었다(${SHARES_CHANGED_CAUSE}) — 수익률·기여도는 수량 변화분이 섞인 평가액 변화라 실제 손익과 다를 수 있다. 전체 수익률도 기간 중 입출금·거래가 섞일 수 있다.`
+// pleiades#554 · 010 Q2 — 기여도는 현금흐름 보정값이다. AI 가 TWR 과 같은 숫자로 읽거나 "—" 를 0 으로 읽지 않게 한 줄 남긴다
+export const CONTRIBUTION_NOTE =
+  '※ 수익률·기여도·기간 수익률은 현금흐름 보정값이다(Modified Dietz — 기간 중 매수·매도·vest 는 스냅샷 수량 변화로 빼고 세후 배당은 더한다). TWR 과 다를 수 있다. "—" 는 분모가 너무 작아 계산하지 않은 값이다. 주식 분할은 기록 경로가 없어 매매로 보일 수 있다.'
+
+const pct = (v: number | null, digits: number, unit: string) =>
+  v === null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(digits)}${unit}`
 
 /**
  * get_performance: TWR 수익률 + 종목별 기여도 분석
@@ -64,23 +66,23 @@ export async function getPerformance(args: {
       // 종목별 기여도
       if (contribution.hasData && contribution.holdings.length > 0) {
         lines.push(`\n### 종목별 기여도`)
-        lines.push(
-          `전체 수익률: ${contribution.totalReturn >= 0 ? '+' : ''}${contribution.totalReturn.toFixed(2)}%`
-        )
+        lines.push(`기간 수익률(현금흐름 보정): ${pct(contribution.totalReturn, 2, '%')}`)
         for (const h of contribution.holdings) {
+          const flow = Math.round(h.netFlowKRW) === 0
+            ? ''
+            : ` | ${h.netFlowKRW > 0 ? '순매수' : '순매도'} ${formatKRW(Math.abs(h.netFlowKRW))}`
+          const div = Math.round(h.dividendKRW) === 0 ? '' : ` | 배당 ${formatKRW(h.dividendKRW)}`
           lines.push(
             `- ${h.displayName} (${h.ticker}):` +
               ` 비중 ${h.weightStart.toFixed(1)}%→${h.weightEnd.toFixed(1)}%` +
-              ` | 수익률 ${h.returnPct >= 0 ? '+' : ''}${h.returnPct.toFixed(1)}%` +
-              ` | 기여도 ${h.contribution >= 0 ? '+' : ''}${h.contribution.toFixed(2)}%p` +
-              (h.sharesChanged
-                ? ` | ${SHARES_CHANGED_MARK} 수량 변동 ${formatShares(h.sharesStart)}→${formatShares(h.sharesEnd)}주`
-                : '')
+              ` | 손익 ${formatSignedKRW(h.gainKRW)}` +
+              ` | 수익률 ${pct(h.returnPct, 1, '%')}` +
+              ` | 기여도 ${pct(h.contribution, 2, '%p')}` +
+              flow +
+              div
           )
         }
-        if (contribution.holdings.some((h) => h.sharesChanged)) {
-          lines.push(SHARES_CHANGED_NOTE)
-        }
+        lines.push(CONTRIBUTION_NOTE)
       }
 
       results.push(lines.join('\n'))
