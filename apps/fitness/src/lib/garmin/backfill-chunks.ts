@@ -157,6 +157,16 @@ export function mixedProviderError(types: readonly string[]): string | null {
   return `--types: OMRON 타입 (${omron.join(", ")}) 은 Garmin 타입과 섞을 수 없습니다 — 따로 실행하세요 (#521)`;
 }
 
+/**
+ * pleiades#162: OMRON 타입을 명시했는데 OMRON env 가 비어 있으면 백필을 시작하지 않는다.
+ * `syncAll` 은 그 타입을 결과 없이 건너뛰므로(일반 싱크용 · 에러 아님) 백필 러너가 데이터 0 을 성공으로 보고했다.
+ */
+export function omronDisabledError(types: readonly string[], omronEnabled: boolean): string | null {
+  const omron = types.filter((t) => isOmronDataType(t));
+  if (omron.length === 0 || omronEnabled) return null;
+  return `--types: OMRON 타입 (${omron.join(", ")}) 을 골랐지만 OMRON env 가 설정되지 않았습니다 — env 를 채우고 다시 실행하세요 (pleiades#162)`;
+}
+
 /** #521: OMRON 만 고른 백필은 Garmin 로그인이 필요 없다 (syncAll 이 OMRON 은 Garmin 클라이언트 없이 돈다) */
 export function needsGarminLogin(types: readonly string[]): boolean {
   return types.some((t) => !isOmronDataType(t));
