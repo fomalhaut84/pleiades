@@ -1,35 +1,39 @@
 'use client'
 
 import { formatPercent } from '@/lib/format'
-import { formatShares, SHARES_CHANGED_CAUSE } from '@/lib/performance/shares'
 
+// pleiades#554 · 010 — 현금흐름 보정값. null = 분모가 너무 작아 계산하지 않음("—")
 interface HoldingContribution {
   ticker: string
   displayName: string
   weightStart: number
   weightEnd: number
-  returnPct: number
-  contribution: number
-  // pleiades#262 B — 옛 응답(필드 없음)은 표시하지 않는다
-  sharesStart?: number
-  sharesEnd?: number
-  sharesChanged?: boolean
+  returnPct: number | null
+  contribution: number | null
 }
 
 interface ContributionData {
   accountName: string
   holdings: HoldingContribution[]
-  totalReturn: number
+  totalReturn: number | null
   hasData: boolean
 }
+
+const DASH = '—'
 
 interface ContributionTableProps {
   data: ContributionData | null
   loading: boolean
 }
 
-function returnColor(value: number): string {
+function returnColor(value: number | null): string {
+  if (value === null) return 'text-dim'
   return value >= 0 ? 'text-green-400' : 'text-red-400'
+}
+
+function signedPercent(value: number | null, digits: number): string {
+  if (value === null) return DASH
+  return `${value >= 0 ? '+' : ''}${value.toFixed(digits)}%`
 }
 
 export default function ContributionTable({ data, loading }: ContributionTableProps) {
@@ -60,7 +64,7 @@ export default function ContributionTable({ data, loading }: ContributionTablePr
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-[13px] font-bold text-bright">종목별 기여도</h3>
         <span className={`text-[12px] font-bold tabular-nums ${returnColor(data.totalReturn)}`}>
-          전체 {formatPercent(data.totalReturn)}
+          기간 수익률 {data.totalReturn === null ? DASH : formatPercent(data.totalReturn)}
         </span>
       </div>
 
@@ -77,25 +81,15 @@ export default function ContributionTable({ data, loading }: ContributionTablePr
           <tbody>
             {data.holdings.map((h) => (
               <tr key={h.ticker} className="border-b border-border">
-                <td className="py-2.5 text-bright font-medium">
-                  {h.displayName}
-                  {h.sharesChanged && (
-                    <span
-                      className="ml-1.5 rounded bg-surface-dim px-1.5 py-0.5 text-[10px] font-semibold text-amber-400"
-                      title={`수량 ${formatShares(h.sharesStart ?? 0)} → ${formatShares(h.sharesEnd ?? 0)}`}
-                    >
-                      수량 변동
-                    </span>
-                  )}
-                </td>
+                <td className="py-2.5 text-bright font-medium">{h.displayName}</td>
                 <td className="py-2.5 text-right text-sub tabular-nums">
                   {h.weightStart.toFixed(1)}%
                 </td>
                 <td className={`py-2.5 text-right tabular-nums font-semibold ${returnColor(h.returnPct)}`}>
-                  {formatPercent(h.returnPct)}
+                  {h.returnPct === null ? DASH : formatPercent(h.returnPct)}
                 </td>
                 <td className={`py-2.5 text-right tabular-nums font-semibold ${returnColor(h.contribution)}`}>
-                  {h.contribution >= 0 ? '+' : ''}{h.contribution.toFixed(2)}%
+                  {signedPercent(h.contribution, 2)}
                 </td>
               </tr>
             ))}
@@ -103,11 +97,10 @@ export default function ContributionTable({ data, loading }: ContributionTablePr
         </table>
       </div>
 
-      {data.holdings.some((h) => h.sharesChanged) && (
-        <p className="mt-3 text-[11px] text-dim">
-          ‘수량 변동’ 종목은 기간 중 수량이 바뀌었습니다({SHARES_CHANGED_CAUSE}) — 수익률·기여도에 수량 변화분이 섞여 실제 손익과 다를 수 있습니다.
-        </p>
-      )}
+      <p className="mt-3 text-[11px] text-dim">
+        현금흐름 보정값입니다 — 기간 중 매수·매도·vest 는 빼고 세후 배당은 더했습니다. 위 TWR 과 다를 수 있습니다.
+        ‘{DASH}’ 는 분모가 너무 작아 계산하지 않은 값이고, 주식 분할은 매매로 보일 수 있습니다.
+      </p>
     </div>
   )
 }

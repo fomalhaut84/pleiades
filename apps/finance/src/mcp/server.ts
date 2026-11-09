@@ -282,7 +282,7 @@ server.tool(
 
 server.tool(
   'get_performance',
-  'TWR 수익률 + 종목별 기여도 분석',
+  'TWR 수익률 + 종목별 기여도 분석(기여도·기간 수익률은 현금흐름 보정 · Modified Dietz — TWR 과 다를 수 있다)',
   {
     account_name: z.enum(ACCOUNT_NAMES).describe('계좌명 (세진/소담/다솜/전체)'),
     period: z.enum(PERIODS).optional().describe('기간 (1M/3M/6M/1Y/ALL, 기본 1M)'),
