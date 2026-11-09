@@ -1,6 +1,7 @@
 'use client'
 
 import { formatPercent } from '@/lib/format'
+import { formatShares, SHARES_CHANGED_CAUSE } from '@/lib/performance/shares'
 
 interface HoldingContribution {
   ticker: string
@@ -9,6 +10,10 @@ interface HoldingContribution {
   weightEnd: number
   returnPct: number
   contribution: number
+  // pleiades#262 B — 옛 응답(필드 없음)은 표시하지 않는다
+  sharesStart?: number
+  sharesEnd?: number
+  sharesChanged?: boolean
 }
 
 interface ContributionData {
@@ -72,7 +77,17 @@ export default function ContributionTable({ data, loading }: ContributionTablePr
           <tbody>
             {data.holdings.map((h) => (
               <tr key={h.ticker} className="border-b border-border">
-                <td className="py-2.5 text-bright font-medium">{h.displayName}</td>
+                <td className="py-2.5 text-bright font-medium">
+                  {h.displayName}
+                  {h.sharesChanged && (
+                    <span
+                      className="ml-1.5 rounded bg-surface-dim px-1.5 py-0.5 text-[10px] font-semibold text-amber-400"
+                      title={`수량 ${formatShares(h.sharesStart ?? 0)} → ${formatShares(h.sharesEnd ?? 0)}`}
+                    >
+                      수량 변동
+                    </span>
+                  )}
+                </td>
                 <td className="py-2.5 text-right text-sub tabular-nums">
                   {h.weightStart.toFixed(1)}%
                 </td>
@@ -87,6 +102,12 @@ export default function ContributionTable({ data, loading }: ContributionTablePr
           </tbody>
         </table>
       </div>
+
+      {data.holdings.some((h) => h.sharesChanged) && (
+        <p className="mt-3 text-[11px] text-dim">
+          ‘수량 변동’ 종목은 기간 중 수량이 바뀌었습니다({SHARES_CHANGED_CAUSE}) — 수익률·기여도에 수량 변화분이 섞여 실제 손익과 다를 수 있습니다.
+        </p>
+      )}
     </div>
   )
 }
