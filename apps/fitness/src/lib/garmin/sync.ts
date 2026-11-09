@@ -67,8 +67,17 @@ const OMRON_SYNC_FNS: Record<OmronDataType, (start: Date, end: Date) => Promise<
   omron_body_composition: syncOmronBodyComposition,
 };
 
-const SYNC_ORDER: DataType[] = [
+/**
+ * 기본 싱크 순서(정기 크론 · `/sync` · `dataTypes` 를 넘기지 않는 호출).
+ * pleiades#196: 프로필(LTHR · 역치 파워)을 활동보다 먼저 — 활동 fetcher 가 새 활동의 강도를 프로필 값으로 분류하고
+ * `keepStoredIntensity`(#572)가 저장된 분류를 덮지 않으므로, 역치가 바뀐 직후 첫 싱크가 옛 값으로 고정하던 것을 막는다.
+ * 주간 리포트(weekly-report step 1a)가 이미 같은 순서다.
+ */
+export const SYNC_ORDER: readonly DataType[] = [
   "daily_stats",
+  // #378: 프로필 스냅샷(user_profile) 앞 — 같은 값을 두 소스가 다르게 들 수 있어 이력이 먼저 갱신되도록.
+  "fitness_metrics",
+  "user_profile",
   "activities",
   "sleep",
   "heart_rate",
@@ -77,9 +86,6 @@ const SYNC_ORDER: DataType[] = [
   // #514: Garmin 체중 · 혈압 뒤 — 같은 날짜면 OMRON 이 Garmin 행을 교체한다 (OMRON 우선)
   "omron_body_composition",
   "omron_blood_pressure",
-  // #378: 프로필 스냅샷(user_profile) 앞 — 같은 값을 두 소스가 다르게 들 수 있어 이력이 먼저 갱신되도록.
-  "fitness_metrics",
-  "user_profile",
 ];
 
 async function getStartDate(dataType: DataType): Promise<Date> {
@@ -462,7 +468,7 @@ export async function syncAll(
     }
   }
 
-  // #425: 종료 후 심박 회복 (hrr2 · hrrDrop10) 후처리 — 심박이 SYNC_ORDER 의 마지막이라 활동 fetcher 안에서는 그 날 심박이
+  // #425: 종료 후 심박 회복 (hrr2 · hrrDrop10) 후처리 — 심박이 SYNC_ORDER 에서 활동 뒤라 활동 fetcher 안에서는 그 날 심박이
   // 없을 수 있다. 창은 시작일 − 2일: 저녁 러닝 직후 싱크에서 하루치 심박이 부분이라 null 로 남은 활동을 다음 싱크 (창이 오늘뿐) 가
   // 다시 잡게. DB 만 읽고 쓰므로 await (수 건). 실패는 로그만 — 싱크 결과에 영향 X.
   if (recoveryFrom !== null) {
