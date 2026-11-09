@@ -4585,3 +4585,18 @@ python3 -m unittest discover -s tools/local                  # test_residual 이
 - N1(430 파일 · 3,938 줄) 대비 −160 파일 · −962 줄. 허용 밖 0.
 - `apps/*/src` 의 남은 줄은 전부 줄 허용(옛 env stub · fit DB 컬럼 · fin logger redact) 또는 명시 경로(`client-utils.ts` · `system-prompt.test.ts`).
 
+
+## 2026-11-09 — 010 A1-1 계산 시간 (#552 · `apps/finance` · 로컬 · 합성 스냅샷)
+
+```bash
+# 임시 테스트(커밋하지 않음): 합성 스냅샷 days × 종목 n 으로 flowsFromSnapshots + modifiedDietz 를 20회 돌린 평균
+tools/local/run.sh fin -- npx vitest run src/lib/performance/__tests__/tmp-bench.test.ts
+```
+
+| 스냅샷 × 종목 | HoldingSnapshot 행 | 계산 1회 |
+|---|---|---|
+| 313 × 30 (1Y · 월~토) | 9,390 | 1.53 ms |
+| 939 × 30 (3Y) | 28,170 | 3.88 ms |
+| 313 × 100 | 31,300 | 4.47 ms |
+
+- **계산은 병목이 아니다.** 남는 비용은 DB 조회(그 행 수를 읽는 것) — **미측정**. 로컬 `pleiades_fin` 에 합성 스냅샷을 넣어야 재므로 A1-2(쿼리 연결)에서 사용자 확인 뒤 잰다(ALL × 계좌 수 × (기여도 + TWR) · 010 §4-2).
