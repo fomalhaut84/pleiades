@@ -50,8 +50,9 @@ export function positionsOf(point: SnapshotPoint): ReadonlyMap<string, Position>
   return map
 }
 
+/** 평가액 0 인 쪽(시세 없어 평단가 대체 · USD `avgPriceFx` 없음)은 단가가 없는 것으로 본다 — 평균을 반으로 깎지 않는다(PR 9-1 major) */
 function unitKRW(p: Position | undefined): number | null {
-  return p && p.shares > 0 ? p.valueKRW / p.shares : null
+  return p && p.shares > 0 && p.valueKRW > 0 ? p.valueKRW / p.shares : null
 }
 
 /** 두 스냅샷 사이 흐름의 원화 단가 — 양쪽이면 평균 · 한쪽이면 그쪽 · 둘 다 없으면 0 */

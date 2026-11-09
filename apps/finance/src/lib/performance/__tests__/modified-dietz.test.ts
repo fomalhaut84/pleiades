@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { flowsFromSnapshots, flowUnitKRW, type SnapshotPoint } from '../flows'
-import { modifiedDietz, type DietzInput } from '../modified-dietz'
+import { modifiedDietz, modifiedDietzFromSnapshots, type DietzInput } from '../modified-dietz'
 
 const S = new Date('2026-10-01T00:00:00Z')
 const day = (n: number) => new Date(S.getTime() + n * 24 * 60 * 60 * 1000)
@@ -46,6 +46,12 @@ describe('flowsFromSnapshots', () => {
   it('끝점 수량이 같아도 중간 매매(10→4→10)를 잡는다 · 입력 순서와 무관', () => {
     const f = flowsFromSnapshots([pt(2, [['A', 10, 1000]]), pt(0, [['A', 10, 1000]]), pt(1, [['A', 4, 400]])])
     expect(f.map((x) => x.amountKRW)).toEqual([-600, 600])
+  })
+
+  // 회귀: PR 9-1 major — 평가액 0 인 쪽(시세 없음 · USD avgPriceFx 없음)이 평균을 반으로 깎았다
+  it('평가액 0 인 스냅샷은 단가가 없는 것으로 보고 다른 쪽 단가를 쓴다', () => {
+    const f = flowsFromSnapshots([pt(0, [['A', 10, 1000]]), pt(1, [['A', 15, 0]]), pt(2, [['A', 15, 1500]])])
+    expect(f).toEqual([{ ticker: 'A', date: day(1), amountKRW: 5 * 100 }])
   })
 
   it('원화 단가는 valueKRW/shares — 현지 통화 가격(price)을 쓰지 않는다(USD 환율 포함)', () => {
@@ -158,5 +164,64 @@ describe('modifiedDietz', () => {
       ],
     })
     expect(h(r, 'A').flowKRW).toBe(0)
+  })
+
+  it('종목 분모가 양수여도 계좌 분모의 1% 미만이면 r_i 만 null', () => {
+    const r = run({
+      startValues: m({ A: 10000, TINY: 50 }),
+      endValues: m({ A: 10000, TINY: 60 }),
+    })
+    expect(h(r, 'TINY').returnPct).toBeNull()
+    expect(h(r, 'TINY').contributionPct).toBeCloseTo((10 / 10050) * 100)
+  })
+
+  it('계좌 분모가 0 이하면 R·기여도 null', () => {
+    const r = run({
+      startValues: m({ A: 100 }),
+      endValues: m({ A: 0 }),
+      flows: [{ ticker: 'A', date: day(1), amountKRW: -200 }],
+    })
+    expect(r.denominatorKRW).toBeLessThanOrEqual(0)
+    expect(r.returnPct).toBeNull()
+  })
+
+  it('시작 평가액 0(기간 안 첫 매수) — 분모는 가중 매수액 · 합 = R', () => {
+    const r = run({
+      endValues: m({ A: 1100 }),
+      flows: [{ ticker: 'A', date: day(15), amountKRW: 1000 }],
+    })
+    expect(r.denominatorKRW).toBeCloseTo(500)
+    expect(r.returnPct).toBeCloseTo(20)
+    expect(sumC(r)).toBeCloseTo(r.returnPct!)
+  })
+
+  it('입력 Map·배열을 바꾸지 않는다', () => {
+    const startValues = m({ A: 1000 })
+    const flows = [{ ticker: 'A', date: day(10), amountKRW: 500 }]
+    const before = JSON.stringify([...startValues, ...flows])
+    run({ startValues, endValues: m({ A: 1600 }), flows })
+    expect(JSON.stringify([...startValues, ...flows])).toBe(before)
+  })
+})
+
+describe('modifiedDietzFromSnapshots', () => {
+  // 회귀: PR 9-1 major — start/end 가 스냅샷 날짜와 다르면 첫 스냅샷 직전 흐름이 이중으로 빠졌다. 이 함수는 날짜를 스냅샷에서 꺼낸다
+  it('시작·끝·흐름을 같은 스냅샷에서 뽑는다 — 기간 중 매수는 수익이 아니다', () => {
+    const r = modifiedDietzFromSnapshots(
+      [
+        { date: day(30), holdings: [{ ticker: 'A', shares: 15, valueKRW: 1650 }] },
+        { date: day(0), holdings: [{ ticker: 'A', shares: 10, valueKRW: 1000 }] },
+        { date: day(10), holdings: [{ ticker: 'A', shares: 15, valueKRW: 1500 }] },
+      ],
+      []
+    )!
+    // 흐름 = 5 × 100(앞 단가) 과 100(뒤 단가 1500/15) 의 평균 = 500 · day 10
+    expect(h(r, 'A').flowKRW).toBeCloseTo(500)
+    expect(h(r, 'A').gainKRW).toBeCloseTo(150)
+    expect(r.periodDays).toBe(30)
+  })
+
+  it('스냅샷이 2개 미만이면 null', () => {
+    expect(modifiedDietzFromSnapshots([{ date: day(0), holdings: [] }], [])).toBeNull()
   })
 })

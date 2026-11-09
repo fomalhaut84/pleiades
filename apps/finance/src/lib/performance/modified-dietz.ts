@@ -14,10 +14,13 @@
  * 배당은 지급일이 [S, E) 일 때 넣는다 — 반열린 구간이라 이어지는 두 기간에 두 번 들어가지 않는다(010 §2 정정 블록).
  * 흐름(스냅샷 차분)은 시점이 뒤 스냅샷이라 (S, E] 에 있다.
  *
+ * **계약: `start`·`end` 는 `startValues`·`endValues` 를 뽑은 스냅샷의 날짜다.** 기간 경계("지금 − 1Y")를 주면
+ * 그 사이 첫 스냅샷 직전의 흐름이 이미 V_start 에 든 매수를 한 번 더 뺀다 — 호출자는 `modifiedDietzFromSnapshots` 를 쓴다.
+ *
  * prisma 를 부르지 않는다 — 순수 함수.
  */
 
-import type { Flow } from './flows'
+import { flowsFromSnapshots, positionsOf, type Flow, type SnapshotPoint } from './flows'
 
 export const MIN_ACCOUNT_DENOMINATOR_RATIO = 0.1
 export const MIN_HOLDING_DENOMINATOR_RATIO = 0.01
@@ -29,8 +32,8 @@ export interface DividendFlow {
 }
 
 export interface DietzInput {
-  start: Date
-  end: Date
+  start: Date // = 시작 스냅샷 날짜(위 계약)
+  end: Date   // = 종료 스냅샷 날짜
   startValues: ReadonlyMap<string, number> // 시작 스냅샷 종목별 valueKRW
   endValues: ReadonlyMap<string, number>   // 종료 스냅샷 종목별 valueKRW
   flows: readonly Flow[]
@@ -134,4 +137,29 @@ export function modifiedDietz(input: DietzInput): DietzResult {
     returnPct: accountOk ? (gainTotal / denominatorKRW) * 100 : null,
     holdings,
   }
+}
+
+const valuesOf = (point: SnapshotPoint): ReadonlyMap<string, number> =>
+  new Map(Array.from(positionsOf(point), ([ticker, p]) => [ticker, p.valueKRW]))
+
+/**
+ * 기간 안 스냅샷 전체(날짜 무관 순서)에서 시작·끝·흐름을 함께 뽑는다 — 위 계약을 호출자가 어길 수 없다.
+ * 스냅샷이 2개 미만이면 null.
+ */
+export function modifiedDietzFromSnapshots(
+  points: readonly SnapshotPoint[],
+  dividends: readonly DividendFlow[]
+): DietzResult | null {
+  if (points.length < 2) return null
+  const sorted = [...points].sort((x, y) => x.date.getTime() - y.date.getTime())
+  const first = sorted[0]
+  const last = sorted[sorted.length - 1]
+  return modifiedDietz({
+    start: first.date,
+    end: last.date,
+    startValues: valuesOf(first),
+    endValues: valuesOf(last),
+    flows: flowsFromSnapshots(sorted),
+    dividends,
+  })
 }
