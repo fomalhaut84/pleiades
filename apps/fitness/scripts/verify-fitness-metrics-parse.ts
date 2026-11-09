@@ -114,7 +114,8 @@ console.log("\n[6] 등록 스캔");
 const read = (...p: string[]) => readFileSync(join(__dirname, "..", ...p), "utf8");
 const syncSrc = read("src", "lib", "garmin", "sync.ts");
 check("sync.ts DataType 에 fitness_metrics", /\|\s*"fitness_metrics"/.test(syncSrc));
-const order = /const SYNC_ORDER: DataType\[\] = \[([\s\S]*?)\];/.exec(syncSrc)?.[1] ?? "";
+// pleiades#196: `export const SYNC_ORDER: readonly DataType[]` 로 바뀌었다 — export · readonly 를 선택으로 받는다
+const order = /(?:export )?const SYNC_ORDER: (?:readonly )?DataType\[\] = \[([\s\S]*?)\];/.exec(syncSrc)?.[1] ?? "";
 const orderList = [...order.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
 check("SYNC_ORDER 에 fitness_metrics 가 user_profile 앞", orderList.indexOf("fitness_metrics") >= 0 && orderList.indexOf("fitness_metrics") < orderList.indexOf("user_profile"), orderList);
 check("SYNC_FNS 에 syncFitnessMetrics", /fitness_metrics:\s*syncFitnessMetrics/.test(syncSrc));

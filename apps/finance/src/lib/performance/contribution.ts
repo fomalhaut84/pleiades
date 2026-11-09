@@ -1,16 +1,20 @@
 import { prisma } from '@/lib/prisma'
 import { periodToStartDate } from './constants'
+import { sharesDiffer } from './shares'
 
-interface HoldingContribution {
+export interface HoldingContribution {
   ticker: string
   displayName: string
   weightStart: number   // 시작 시점 비중 (%)
   weightEnd: number     // 종료 시점 비중 (%)
   returnPct: number     // 개별 수익률 (%)
   contribution: number  // 기여도 (%)
+  sharesStart: number   // 시작 시점 수량 (없으면 0)
+  sharesEnd: number     // 종료 시점 수량 (없으면 0)
+  sharesChanged: boolean // 기간 안에 수량이 바뀌었다 — 수익률·기여도에 매수·매도가 섞여 있다 (pleiades#262)
 }
 
-interface ContributionResult {
+export interface ContributionResult {
   accountId: string
   accountName: string
   period: string
@@ -26,6 +30,10 @@ interface ContributionResult {
  * - weight_i = startValue_i / totalStartValue
  * - return_i = (endValue_i - startValue_i) / startValue_i
  * - contribution_i = weight_i * return_i
+ *
+ * 기간 안의 매수·매도·이체는 빼지 않는다 — 평가액 변화만 본다. 그래서 수량이 바뀐 종목은
+ * `sharesChanged` 로 표시해 수익률·기여도를 실제 손익으로 읽지 않게 한다(pleiades#262 B).
+ * 현금흐름 보정(Modified Dietz · #262 A)은 별도 설계다.
  */
 export async function calculateContribution(
   accountId: string,
@@ -71,6 +79,11 @@ export async function calculateContribution(
   const startSnapshot = snapshots[0]
   const endSnapshot = latestSnapshot
 
+  // 기간 안에 거래가 있었던 티커 — 끝점 수량이 같아도(10→4→10) 표시한다(PR #546 Codex P2).
+  // 스냅샷은 하루 1개(날짜 키)라 시작·끝 날짜의 거래가 스냅샷 앞인지 뒤인지 모른다 — 양 끝 날짜를 넣어
+  // 놓치지 않는 쪽으로 기운다(표시는 주의일 뿐 계산을 바꾸지 않는다)
+  const tradedTickers = await tradedTickersBetween(accountId, startSnapshot.snapshotDate, endSnapshot.snapshotDate)
+
   const startTotal = startSnapshot.totalValueKRW
   const endTotal = endSnapshot.totalValueKRW
 
@@ -86,17 +99,22 @@ export async function calculateContribution(
   }
 
   // 시작 시점 종목별 가치 매핑
-  const startMap = new Map<string, number>()
+  const startMap = new Map<string, { valueKRW: number; shares: number }>()
   for (const h of startSnapshot.holdingSnapshots) {
-    startMap.set(h.ticker, (startMap.get(h.ticker) ?? 0) + h.valueKRW)
+    const existing = startMap.get(h.ticker)
+    startMap.set(h.ticker, {
+      valueKRW: (existing?.valueKRW ?? 0) + h.valueKRW,
+      shares: (existing?.shares ?? 0) + h.shares,
+    })
   }
 
   // 종료 시점 종목별 가치 매핑
-  const endMap = new Map<string, { valueKRW: number; displayName: string }>()
+  const endMap = new Map<string, { valueKRW: number; shares: number; displayName: string }>()
   for (const h of endSnapshot.holdingSnapshots) {
     const existing = endMap.get(h.ticker)
     endMap.set(h.ticker, {
       valueKRW: (existing?.valueKRW ?? 0) + h.valueKRW,
+      shares: (existing?.shares ?? 0) + h.shares,
       displayName: h.displayName,
     })
   }
@@ -108,8 +126,10 @@ export async function calculateContribution(
   const holdings: HoldingContribution[] = []
 
   allTickers.forEach((ticker) => {
-    const startValue = startMap.get(ticker) ?? 0
+    const startValue = startMap.get(ticker)?.valueKRW ?? 0
     const endValue = endMap.get(ticker)?.valueKRW ?? 0
+    const sharesStart = startMap.get(ticker)?.shares ?? 0
+    const sharesEnd = endMap.get(ticker)?.shares ?? 0
     const displayName = endMap.get(ticker)?.displayName
       ?? startSnapshot.holdingSnapshots.find((h) => h.ticker === ticker)?.displayName
       ?? ticker
@@ -126,6 +146,9 @@ export async function calculateContribution(
       weightEnd,
       returnPct,
       contribution,
+      sharesStart,
+      sharesEnd,
+      sharesChanged: sharesDiffer(sharesStart, sharesEnd) || tradedTickers.has(ticker),
     })
   })
 
@@ -142,4 +165,15 @@ export async function calculateContribution(
     totalReturn,
     hasData: true,
   }
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+async function tradedTickersBetween(accountId: string, from: Date, to: Date): Promise<Set<string>> {
+  const trades = await prisma.trade.findMany({
+    where: { accountId, tradedAt: { gte: from, lt: new Date(to.getTime() + DAY_MS) } },
+    select: { ticker: true },
+    distinct: ['ticker'],
+  })
+  return new Set(trades.map((t) => t.ticker))
 }
