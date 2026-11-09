@@ -194,6 +194,8 @@ curl -sS -o /dev/null -w 'mcp %{http_code}\n' "http://127.0.0.1:$MP/health"   # 
 pm2 jlist | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const l=JSON.parse(s.slice(s.indexOf("[")));for(const p of l.filter(x=>x.name.startsWith("pleiades-"))){const v=p.pm2_env.PLEIADES_ENV_FILE??(p.pm2_env.env||{}).PLEIADES_ENV_FILE;console.log(p.name,v===undefined?"MISSING":v===process.env.PLEIADES_ENV_FILE?"same":"DIFF")}})'
 ```
 
+**프로브 오류 응답 읽기 (#549 · 2026-11-09).** 양식은 괄호 안에 코드별 개수를 붙인다(`000×1` 처럼). **`000` = 연결 거부 — 웹 재기동 순간 포트가 닫힌 빈틈(≈2 s)** 이라 2초 간격 프로브에 0~1점 잡히는 것이 정상이다(fin `v1.0.2` · fit `v1.9.1`·`v1.9.2` 모두 1점 `000`). 앱 오류는 `5xx` 다 — 그때 창 안 오류 줄과 함께 본다. C5 통과 조건(3 online · mcp 200 · 재기동 same)은 이 수를 쓰지 않는다. 되돌리기: 문구 (**즉시**).
+
 그리고 사람이 확인한다: 웹 화면(fin 계좌 · fit 오늘) · Discord fin **`현황`**(슬래시 없이 · `discord/router.ts`) 또는 fit **`!today`**(`discord/router.ts`) — 둘 다 등록된 명령이고 DB 읽기만(AI · 외부 시세 · 쓰기 없음). **`/브리핑` 은 쓰지 않는다** — fin 은 `/briefing`·`브리핑` 만 등록하고, 브리핑은 `askAdvisor` 를 거쳐(재시도 · 최대 15분) 봇 확인과 AI 확인(C6)이 섞인다(PR #249 Codex P2).
 
 **fit 은 fin 이 C5 를 통과한 뒤 같은 셸에서 B(`APP=fit`)부터** 다시 — C1 은 unset·export 가 이미 됐으니 확인 줄만, C2 도 `APP=fit` 으로.
@@ -256,7 +258,7 @@ B  직전 태그 · 깨끗 · dump 사본: 예/아니오
 C1 셸 키 0 · platform 600 · 도는 6 same: 예/아니오
 C2 v1.0.1 · 깨끗: 예/아니오
 C4 plan rc <n> · 기본 실행 rc <n> · <초>s · 완료 안내: 예/아니오        (rc≠0 이면 이유 한 줄)
-C5 프로브 오류 응답 <수>(<처음 HH:MM:SS>~<마지막 HH:MM:SS>) · 창 안 오류 줄 web <n> bot <n> mcp <n>
+C5 프로브 오류 응답 <수>(<처음 HH:MM:SS>~<마지막 HH:MM:SS> · <코드>×<수> …) · 창 안 오류 줄 web <n> bot <n> mcp <n>
    3 online · mcp <코드> · 재기동 6 same: 예/아니오 · 웹: 예/아니오 · 현황|!today: 예/아니오
 C6 (fit 뒤 한 번) 임시 완화 제거 · 남은 항목 <n> · fin AI 응답·비용 줄: 예/아니오 · fit AI 응답: 예/아니오 · TA 가이드 문구: 예/아니오/아직
    used 에 model 포함·고정 ID 만: 예/아니오 · 드리프트 fin <n> fit <n> · 웹 'AI 실패' 필터: 예/아니오 · 💸 알림: 없음/왔음(cost <$>)
