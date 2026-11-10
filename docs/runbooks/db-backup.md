@@ -32,8 +32,8 @@ curl -fsSL https://raw.githubusercontent.com/fomalhaut84/pleiades/<REF>/deploy/d
 
 ```bash
 NODE_BIN=$(command -v node); case "$NODE_BIN" in /*) echo "node 경로 통과" ;; *) echo "[중단] 절대 경로가 아니다 — 멈춘다" ;; esac
-env -i HOME="$HOME" PATH=/usr/bin:/bin "$NODE_BIN" ~/pleiades-ops/db-backup.cjs --test-alert
-env -i HOME="$HOME" PATH=/usr/bin:/bin "$NODE_BIN" ~/pleiades-ops/db-backup.cjs
+env -i HOME="$HOME" PATH=/usr/bin:/bin "$NODE_BIN" --network-family-autoselection-attempt-timeout=2000 ~/pleiades-ops/db-backup.cjs --test-alert
+env -i HOME="$HOME" PATH=/usr/bin:/bin "$NODE_BIN" --network-family-autoselection-attempt-timeout=2000 ~/pleiades-ops/db-backup.cjs
 ```
 
 **기대:** `알림 보냄` · `… 통과: fin 테이블 31 …` · `… 통과: fit 테이블 23 …` · `… 결과: 통과`. 테이블 수는 스키마가 바뀌면 달라진다.
@@ -43,6 +43,8 @@ env -i HOME="$HOME" PATH=/usr/bin:/bin "$NODE_BIN" ~/pleiades-ops/db-backup.cjs
 **`fin(exists)` 는** 같은 분에 이미 덤프가 있어 덮어쓰지 않았다는 뜻이다. 기존 덤프는 그대로 있다 — 1분 뒤 다시 돌린다.
 
 ## 3. 등록
+
+> **정정 (2026-11-10 · #579 · 008 별건).** node 를 `--network-family-autoselection-attempt-timeout=2000` 와 함께 부른다 — pm2 앱 · 배포 알림 · 수집기 크론과 같은 값이다(#191 · 이 서버에서 연결 family 자동 선택이 짧으면 외부 연결이 실패했다). 없으면 백업 결과 Discord 알림이 조용히 빠질 수 있다. **이미 등록했으면 아래 블록을 다시 돌린다** — 기존 db-backup 줄을 지우고 새 줄 하나로 바꾼다(다른 줄 보존 · 멱등). 되돌리기: 플래그 없는 줄로 다시 등록(**즉시**).
 
 서버 시간대를 먼저 확인한다. crontab 은 서버 시간대를 따른다.
 
@@ -57,7 +59,7 @@ date +%z
 CRON_AT='20 4'; NODE_BIN=$(command -v node)
 if CUR=$(crontab -l 2>&1) || [[ "$CUR" == *"no crontab"* ]]; then
   [[ "$CUR" == *"no crontab"* ]] && CUR=
-  { printf '%s\n' "$CUR" | grep -v db-backup.cjs; echo "$CRON_AT * * * $NODE_BIN $HOME/pleiades-ops/db-backup.cjs >> $HOME/pleiades-private/db-backup.log 2>&1"; } | crontab -
+  { printf '%s\n' "$CUR" | grep -v db-backup.cjs; echo "$CRON_AT * * * $NODE_BIN --network-family-autoselection-attempt-timeout=2000 $HOME/pleiades-ops/db-backup.cjs >> $HOME/pleiades-private/db-backup.log 2>&1"; } | crontab -
 else
   echo "[중단] crontab 을 읽지 못했다 — 바꾸지 않았다"
 fi
