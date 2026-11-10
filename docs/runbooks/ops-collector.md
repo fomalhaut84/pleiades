@@ -34,8 +34,8 @@ node 와 pm2 의 절대 경로를 먼저 고정한다. 수집기는 pm2 를 `nod
 
 ```bash
 NODE_BIN=$(command -v node); PM2_BIN=$(readlink -f "$(command -v pm2)")
-case "$NODE_BIN" in /*) echo "node 경로 통과" ;; *) echo "!! node 절대 경로가 아니다 — 멈춘다" ;; esac
-case "$PM2_BIN" in /*) head -1 "$PM2_BIN" | grep -q node && echo "pm2 경로 통과" || echo "!! pm2 첫 줄이 node 가 아니다 — 멈춘다" ;; *) echo "!! pm2 를 찾지 못했다 — 멈춘다" ;; esac
+case "$NODE_BIN" in /*) echo "node 경로 통과" ;; *) echo "[중단] node 절대 경로가 아니다 — 멈춘다" ;; esac
+case "$PM2_BIN" in /*) head -1 "$PM2_BIN" | grep -q node && echo "pm2 경로 통과" || echo "[중단] pm2 첫 줄이 node 가 아니다 — 멈춘다" ;; *) echo "[중단] pm2 를 찾지 못했다 — 멈춘다" ;; esac
 ```
 
 크론과 같은 빈 환경으로 한 번 돌린다. 이 시험은 위 pm2 경로를 실제로 탄다.
@@ -58,12 +58,12 @@ env -i HOME="$HOME" PATH=/usr/bin:/bin "$NODE_BIN" ~/pleiades-ops/collect.cjs --
 `crontab -l` 이 실패하면 기존 항목(db-backup)을 지우지 않도록 멈춘다. 다시 돌려도 줄이 늘지 않는다. 2절의 `NODE_BIN` · `PM2_BIN` 이 같은 셸에 있어야 한다.
 
 ```bash
-[[ "$NODE_BIN" == /* && "$PM2_BIN" == /* ]] || { echo "!! 2절의 경로 변수가 없다 — 2절부터"; false; } && \
+[[ "$NODE_BIN" == /* && "$PM2_BIN" == /* ]] || { echo "[중단] 2절의 경로 변수가 없다 — 2절부터"; false; } && \
 if CUR=$(crontab -l 2>&1) || [[ "$CUR" == *"no crontab"* ]]; then
   [[ "$CUR" == *"no crontab"* ]] && CUR=
   { printf '%s\n' "$CUR" | grep -v collect.cjs; echo "2-59/5 * * * * $NODE_BIN --network-family-autoselection-attempt-timeout=2000 $HOME/pleiades-ops/collect.cjs --dry-run --pm2-bin=$PM2_BIN >> $HOME/pleiades-private/ops/collect.log 2>&1"; } | crontab -
 else
-  echo "!! crontab 을 읽지 못했다 — 바꾸지 않았다"
+  echo "[중단] crontab 을 읽지 못했다 — 바꾸지 않았다"
 fi
 crontab -l | grep -c collect.cjs; crontab -l | grep -c db-backup.cjs
 ```
