@@ -1,3 +1,4 @@
+import * as notify from "@pleiades/notify";
 import { describe, expect, it } from "vitest";
 import { sanitizeError, sanitizeMessage } from "../error";
 
@@ -12,6 +13,40 @@ describe("sanitizeMessage", () => {
 
   it("토큰이 없으면 원문을 유지한다", () => {
     expect(sanitizeMessage("plain message")).toBe("plain message");
+  });
+
+  // 회귀: pleiades#540 — 옛 앱 판은 텔레그램 봇 토큰만 가렸다. 패키지 판과 같아야 한다.
+  it("패키지 함수를 그대로 쓴다", () => {
+    expect(sanitizeMessage).toBe(notify.sanitizeMessage);
+    expect(sanitizeError).toBe(notify.sanitizeError);
+  });
+
+  it("웹훅 토큰을 가린다", () => {
+    expect(
+      sanitizeMessage(
+        "POST https://discord.com/api/webhooks/123456/abc_DEF-9?wait=true failed",
+      ),
+    ).toBe(
+      "POST https://discord.com/api/webhooks/123456/<REDACTED>?wait=true failed",
+    );
+  });
+
+  it("인터랙션 토큰을 가린다", () => {
+    expect(
+      sanitizeMessage(
+        "POST https://discord.com/api/v10/interactions/987/aW50ZXJhY3Rpb24/callback 404",
+      ),
+    ).toBe(
+      "POST https://discord.com/api/v10/interactions/987/<REDACTED>/callback 404",
+    );
+  });
+
+  it("Discord 봇 토큰을 가린다", () => {
+    // 실제 토큰이 아닌 모양만 맞춘 값(`<base64 id>.<ts>.<hmac>`)
+    const token = `${"M" + "x".repeat(23)}.${"y".repeat(6)}.${"z".repeat(27)}`;
+    expect(sanitizeMessage(`auth failed for ${token}`)).toBe(
+      "auth failed for <DISCORD_TOKEN_REDACTED>",
+    );
   });
 });
 
