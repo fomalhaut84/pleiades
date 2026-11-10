@@ -548,6 +548,28 @@ class StateAndLock(Base):
         self.assertEqual(len([p for p in self.posts() if "OnceError" in p]), 1)
         self.assertFalse(self.state()["fps"][[k for k, v in self.state()["fps"].items() if "OnceError" in v["material"]][0]]["deferred"])
 
+    def test_merge_keeps_highest_severity(self):
+        # PR #569 Codex P2 — 같은 지문의 경고·실패가 한 회에 오면 먼저 온 쪽 심각도를 썼다
+        self.ok()
+        self.log("pleiades-fin-bot-error-0.log", "2026-11-10 08:01:00: [bot] ⚠ TypeError warn\n2026-11-10 08:01:01: [bot] TypeError fail\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        posts = [p for p in self.posts() if "TypeError" in p]
+        self.assertEqual(len(posts), 1)
+        self.assertIn("🟠 실패", posts[0])
+
+    def test_deferred_counts_accumulate(self):
+        # PR #569 Codex P2 — 첫 게시가 미뤄진 동안 다시 온 횟수가 덮였다
+        self.ok()
+        line = "2026-11-10 08:01:00: [bot] TypeError x\n"
+        capped = {"maxRunMs": 0, "lockStaleRuns": 1, "periodMin": 1}
+        self.log("pleiades-fin-bot-error-0.log", line * 3, append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=capped)
+        self.log("pleiades-fin-bot-error-0.log", line * 2, append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00")
+        posts = [p for p in self.posts() if "TypeError" in p]
+        self.assertEqual(len(posts), 1)
+        self.assertIn("5회", posts[0])
+
     def test_unreadable_log_file_does_not_stop_run(self):
         # 회귀: PR-1 9-1 major — 읽지 못하는 파일 하나가 매 회 예외로 수집 전체를 멈췄다
         self.ok()

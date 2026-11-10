@@ -454,13 +454,17 @@ function line(e, sev, extra = '') {
 const ALL_MISSING_NOTE =
   ' · pleiades 프로세스 6 모두 없음 — 데몬이 수집기 환경으로 다시 떴을 수 있다. resurrect 전에 데몬을 서비스 환경으로 다시 띄운다(런북 ops-collector 3절)'
 
+const SEV_RANK = { 경고: 1, 실패: 2, 장애: 3 }
 function merge(obs) {
   const byFp = new Map()
   for (const o of obs) {
     const fp = fpOf(o.material)
     const cur = byFp.get(fp)
-    if (cur) cur.count += o.count
-    else byFp.set(fp, { ...o, fp })
+    if (!cur) byFp.set(fp, { ...o, fp })
+    else {
+      cur.count += o.count
+      if (SEV_RANK[o.sev] > SEV_RANK[cur.sev]) cur.sev = o.sev // 같은 지문 안에서는 높은 심각도(PR #569 Codex P2)
+    }
   }
   return [...byFp.values()]
 }
@@ -485,13 +489,14 @@ function plan(ctx) {
     const e = entryFor(table, o, now)
     e.days[today] = (e.days[today] || 0) + o.count
     e.ok = 0
-    const isNew = e.deferred || (e.kind === 'state' ? !e.open : e.posted === null)
+    const wasDeferred = e.deferred
+    const isNew = wasDeferred || (e.kind === 'state' ? !e.open : e.posted === null)
     if (e.kind === 'state') e.open = true
     if (isNew) {
       e.deferred = true // 게시가 끝나면 지운다 — 한 회 상한에 걸리면 다음 회에 첫 발생으로 다시 나간다
       e.pending = 0
-      e.firstCount = o.count
-      fresh.push({ e, count: o.count })
+      e.firstCount = (wasDeferred ? e.firstCount || 0 : 0) + o.count // 미뤄진 동안의 횟수를 잃지 않는다(PR #569 Codex P2)
+      fresh.push({ e, count: e.firstCount })
     } else e.pending += o.count
   }
   // 미뤄진 첫 발생이 이번 회에 다시 관측되지 않았을 때(9-1 major):
