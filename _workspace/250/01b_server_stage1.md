@@ -16,3 +16,12 @@
 | V10 | 루프백 MCP `/health` | fin 200 · fit 200 | 수집 대상 |
 | V11 | 디스크 | 홈 사용률 38% · `/backup` 2% · inode 여유 · **서로 다른 파일시스템** | 경보는 두 곳을 따로 |
 | V12 | 시간대 | KST(+0900) | 크론·로그 시각 KST |
+
+## 추가 측정 (2026-11-10 · 사용자 서버 실행 · `.server-scripts/19-server-008-stage1-extra.sh` · PR-1 전 X-1 · X-2 · X-4)
+
+| # | 항목 | 판정 | PR-1 영향 |
+|---|---|---|---|
+| V14 (X-1) | MCP `-out` 줄 형식 | fin·fit 최근 줄 전부 **pm2 시각 접두(`YYYY-MM-DD HH:mm:ss: `) + JSON** · 전부 `level` 키 · **`level` 값은 문자열**(fin `info`·`warn` · fit `info`) — 숫자 아님 | 오류 판정 = `level` ∈ {`error`,`fatal`}(문자열) · 숫자 50·60 도 받는다(로거 설정이 바뀔 때) |
+| V15 (X-2) | `pm2 jlist` 모양 | 출력 1줄 · JSON 이 첫 줄에서 시작(앞 경고 줄 0) · 프로세스 11 중 `pleiades-*` 6 · 6 모두 `name`·`pm_id`·`status`·`restart_time`·`unstable_restarts`·`pm_uptime`·`exec_mode`·`monit.memory`·`monit.cpu` 있음 · status online 6 · exec_mode `cluster_mode` 6 | 허용 목록 필드 확정 · `pleiades-*` 거르기 필수 · 앞 경고 줄 방어는 남긴다(B-1) |
+| V16 (X-2) | 실행 환경 | pm2 = npm 전역 · 첫 줄 `#!/usr/bin/env node` · pm2·node 모두 nvm 아님 · `/usr/bin/node` 있음 · **`flock(1)` 있음** | `process.execPath <pm2 bin>`(E-2) · crontab node 경로 고정 쉽다 · 잠금 (i) 기본 + crontab `flock -n` 덧대기 가능(§2-3 (ii)) |
+| V17 (X-4) | 역할·스트림별 24 h 증가 | 12칸 모두 KB 단위(최대 24 KB/일) · 줄 수가 꾸준한 out = fin bot · fin mcp · fit web · fit bot · fit mcp · fin web out 은 하루 18줄로 적다 · `-error` 대부분 조용 · **fit web error 하루 77줄**(기준선 소음 후보) · bot 로그 파일 앱마다 약 30개(배포마다 pm_id 교체 누적) | C-7 ② 침묵 감지 = 꾸준한 out 5개만 켠다 · fin web out · 모든 `-error` 는 끈다 · fit web error 의 정체는 dry-run 지문별 판정에서 · 파일 수 많음 → glob + inode·오프셋(E-8) |
