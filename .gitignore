@@ -13,6 +13,8 @@ _workspace/**/backup/
 __pycache__/
 .claude/worktrees/
 tools/import/.venv/
+# 공개 승격 검사기의 금지 값 목록 — 서버 도메인·DB 이름 등 저장소에 둘 수 없는 값 (#253)
+tools/ops/deny.local
 # pleiades 루트 .env — 플랫폼 키(NOTIFY_* · DISCORD_WEBHOOK_*) · 비밀 (#143). 앱 .env 는 각 앱 .gitignore 가 막는다
 /.env
 # 서버에서 사용자가 돌릴 임시 스크립트 — 커밋하지 않는다(비밀·서버 수치를 넣지 않는다)

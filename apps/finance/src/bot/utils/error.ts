@@ -3,46 +3,11 @@
  *
  * 참조: docs/specs/354-bot-ipv6-token-fix.md
  * pleiades 009 D-5 B4 (pleiades#512): 옛 채널 전송 전용 분류(`isNetworkError`·`getErrorCode`·`isHtmlParseError`)는 소비자 0 이라 지웠다.
- * `TOKEN_RE` 는 옛 봇 토큰 모양(`bot<id>:<secret>`)이다 — 남은 로그·기록 문자열에 섞여 있을 수 있어 마스킹은 남긴다.
+ * pleiades#540: 마스킹은 `@pleiades/notify` 판을 그대로 쓴다 — 옛 봇 토큰 · Discord 웹훅 · 인터랙션 · Discord 봇 토큰.
+ * 옛 앱 판은 옛 봇 토큰만 가려서 이 파일로 import 하면 웹훅 토큰이 조용히 남았다.
  */
 
-const TOKEN_RE = /bot\d+:[A-Za-z0-9_-]+/g
-
-export function sanitizeMessage(msg: string): string {
-  return msg.replace(TOKEN_RE, 'bot<REDACTED>')
-}
-
-/**
- * Error.cause + `.error` 체인을 깊이 5까지 순회하며 message 추출 + 토큰 마스킹.
- * console.error(err) 가 inner FetchError 까지 dump 하는 문제 차단.
- */
-export function sanitizeError(err: unknown): string {
-  const parts: string[] = []
-  let cur: unknown = err
-  let depth = 0
-  const MAX_DEPTH = 5
-  while (cur != null && depth < MAX_DEPTH) {
-    if (cur instanceof Error) {
-      parts.push(`${cur.name}: ${sanitizeMessage(cur.message)}`)
-      const withInner = cur as { error?: unknown; cause?: unknown }
-      cur = withInner.error ?? withInner.cause
-    } else if (typeof cur === 'string') {
-      parts.push(sanitizeMessage(cur))
-      break
-    } else {
-      try {
-        parts.push(sanitizeMessage(JSON.stringify(cur)))
-      } catch {
-        parts.push('[unserializable]')
-      }
-      break
-    }
-    depth++
-  }
-  // 이중 보호: 각 part 가 이미 sanitize 됐지만, 누락된 필드 (예: cur.toString() 에 토큰 잔존)
-  // 가 join 시 섞이는 경우를 대비해 최종 결과에도 한 번 더 적용.
-  return sanitizeMessage(parts.join(' | '))
-}
+export { sanitizeError, sanitizeMessage } from '@pleiades/notify'
 
 /**
  * 사용자에게 보여도 되는 오류 안내만 꺼낸다 — pleiades 009 D-3 PR-2c (pleiades#396 · UQ-3 · 사용자 2026-10-30 "알려진 안내만 유지").
