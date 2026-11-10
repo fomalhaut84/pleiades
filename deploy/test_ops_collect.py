@@ -419,6 +419,20 @@ class Logs(Base):
         self.ok(now="2026-11-10T08:20:00+09:00")
         self.assertTrue(any("ShrinkError" in x for x in self.posts()))
 
+    def test_first_resume_reconnect_is_normal_but_slow_and_new_session_are_not(self):
+        # 회귀: #583 A — dry-run 첫 판정(11-10)에서 두 봇의 일상 RESUME 재접속이 '실패' 로 잡혔다
+        self.ok()
+        self.log(self.E, "2026-11-10 08:01:00: [discord-fin] gateway 재접속 1000ms 후 (RESUME)\n"
+                 "2026-11-10 08:01:01: [discord-fin] gateway 세션 이어받음\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertEqual(self.posts(), [])
+        self.log(self.E, "2026-11-10 08:06:00: [discord-fin] gateway 재접속 5000ms 후 (RESUME)\n", append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00")
+        self.assertEqual(len(self.posts()), 1)
+        self.log("pleiades-fit-bot-error-0.log", "2026-11-10 08:11:00: [discord-fit] gateway 재접속 1000ms 후 (새 세션)\n", append=True)
+        self.ok(now="2026-11-10T08:15:00+09:00")
+        self.assertTrue(any("fit·bot" in p for p in self.posts()))
+
     def test_warn_vs_fail_gateway_skip_frames_errno_no_raw(self):
         self.ok()
         text = (

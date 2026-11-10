@@ -75,6 +75,8 @@ echo "$ts: TypeError: boom" >> "$HOME/.pm2/logs/pleiades-fin-web-error-114.log"
 # 회귀: #373 — gateway 정상 기동 줄은 warn 이라 stderr 로 가지만 오류가 아니다
 echo "$ts: [discord-fin] gateway 준비 완료" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
 echo "$ts: [discord-fin] gateway 세션 이어받음" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
+echo "$ts: [discord-fin] gateway 재접속 1000ms 후 (RESUME)" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
+[[ -n "${STUB_BOT_SLOW_RESUME:-}" ]] && echo "$ts: [discord-fin] gateway 재접속 5000ms 후 (RESUME)" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
 [[ -n "${STUB_BOT_ERROR:-}" ]] && echo "$ts: [discord-fin] gateway 오류: boom" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
 echo "DATABASE_URL=postgresql://svc:DEPLOYSECRET@localhost/db"
 rc=${STUB_DEPLOY_RC:-0}
@@ -354,6 +356,13 @@ class ReleaseInplace(unittest.TestCase):
         # 회귀: #373 — 정상 기동 줄만 뺀다. 같은 파일의 진짜 오류는 그대로 센다
         self.srv.release("v1.0.1")
         r = self.srv.run("fin", "v1.0.1", "--yes", STUB_BOT_ERROR="1")
+        self.assertIn("bot 1(경고 0)", r.stdout)
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_c5_counts_slow_resume_but_not_first_resume(self):
+        # 회귀: #583 A — 1000ms RESUME 재접속(스텁이 늘 찍는다)은 정상 줄 · 5000ms 이상은 센다
+        self.srv.release("v1.0.1")
+        r = self.srv.run("fin", "v1.0.1", "--yes", STUB_BOT_SLOW_RESUME="1")
         self.assertIn("bot 1(경고 0)", r.stdout)
         self.assertEqual(r.returncode, 0, r.stdout)
 

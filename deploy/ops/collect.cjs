@@ -64,7 +64,8 @@ const DISKS = {
 }
 
 // 판정 계약(release-inplace.sh:106 · #373) — chat 이 gateway 정상 기동을 warn 으로 찍는다
-const NORMAL_GATEWAY = /\] gateway (준비 완료|세션 이어받음)$/
+// 첫 단계(1000ms) RESUME 재접속은 Discord 의 일상 재접속이다(#583 A) — 5000ms 이상 · 새 세션은 그대로 센다
+const NORMAL_GATEWAY = /\] gateway (준비 완료|세션 이어받음|재접속 1000ms 후 \(RESUME\))$/
 const WARN_RE = /⚠|[Ww]arning/ // release-inplace.sh C5 와 같은 경고 패턴
 const PM2_PREFIX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}: / // pleiades.config.cjs log_date_format + pm2 의 ': '
 const LOG_NAME = /^pleiades-(fin|fit)-(web|bot|mcp)-(out|error)(?:-\d+)?\.log$/

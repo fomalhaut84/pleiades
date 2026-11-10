@@ -9,6 +9,7 @@
  * 강등 로그는 `gateway 종료 코드` 를 쓰지 않는다 — 버튼은 살아 있으므로 `discord-switch.sh` 판정을 실패시키지 않는다.
  *
  * **로그 문자열 계약(0-4 · L16′):** `[<label>] gateway 준비 완료` — `deploy/discord-switch.sh` 가 이 줄로 판정한다. 바꾸지 않는다.
+ * `준비 완료` · `세션 이어받음` · `재접속 1000ms 후 (RESUME)` 은 수집기·배포 판정의 정상 줄이다(`deploy/ops/collect.cjs` NORMAL_GATEWAY · `release-inplace.sh` · #373 · #583).
  */
 import { sanitizeError } from '@pleiades/notify';
 import type { Logger } from './types';
@@ -148,6 +149,7 @@ export function createGateway(opts: GatewayOptions): Gateway {
     if (stopped) return;
     const delay = delays[Math.min(failures, delays.length - 1)];
     failures++;
+    // 판정 계약: `재접속 1000ms 후 (RESUME)` 은 수집기·배포 판정이 정상 줄로 거른다(deploy/ops/collect.cjs NORMAL_GATEWAY · release-inplace.sh · #583) — 문구·첫 백오프 값을 바꾸면 함께 고친다
     logger.warn(`[${label}] gateway 재접속 ${delay}ms 후 (${sessionId === undefined ? '새 세션' : 'RESUME'})`);
     later(delay);
   };
