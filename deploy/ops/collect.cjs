@@ -513,6 +513,8 @@ function plan(ctx) {
   if (normal.length > CONFIG.burstLimit) posts.push(burstPost(normal))
   else for (const f of normal) posts.push(firstPost(f, f.count > 1 ? ` · ${f.count}회` : ''))
   for (const e of Object.values(table)) {
+    // 판정하지 못한 회(.env 읽기 실패 · 배포 보류)는 정상 연속을 끊는다 — 복구는 연속 M 회다(#577 · PR #576 Codex P2)
+    if (e.kind === 'state' && e.open && !active.has(e.fp) && !ctx.evaluated.has(e.scope)) e.ok = 0
     if (e.kind === 'state' && e.open && !e.deferred && !active.has(e.fp) && activeScopes.has(e.scope)) {
       // 같은 scope 에서 세부만 바뀌었다(디스크 80→90 · 5xx→000 · errored→stopped) — 복구가 아니다. 새 지문이 따로 나간다(9-1 major)
       Object.assign(e, { open: false, ok: 0, pending: 0 })
@@ -629,22 +631,71 @@ function pruneEvents(now) {
   writeAtomic(file, lines.length ? lines.join('\n') + '\n' : '')
 }
 
-function acquireLock(lock) {
+function tryMkdir(dir) {
   try {
-    fs.mkdirSync(lock)
-    return 'ok'
+    fs.mkdirSync(dir)
+    return true
   } catch (err) {
-    if (err.code !== 'EEXIST') throw err
-  }
-  if (Date.now() - fs.statSync(lock).mtimeMs < CONFIG.lockStaleRuns * CONFIG.periodMin * MIN) return 'busy'
-  fs.rmdirSync(lock)
-  try {
-    fs.mkdirSync(lock)
-  } catch (err) {
-    if (err.code === 'EEXIST') return 'busy' // 다른 실행이 먼저 넘겨받았다(R-3 ③)
+    if (err.code === 'EEXIST') return false
     throw err
   }
-  return 'stale'
+}
+
+function statOrNull(p) {
+  try {
+    return fs.statSync(p)
+  } catch (err) {
+    if (err.code === 'ENOENT') return null
+    throw err
+  }
+}
+
+// 넘겨받기는 보조 잠금(<lock>.takeover) 안에서만 한다 — 두 실행이 같은 stale 잠금을 동시에 보면
+// 하나만 지우고 다시 만든다. 다른 쪽은 보조 잠금을 못 잡아 busy 이거나, 잡은 뒤 다시 봐서 새 잠금이 신선하면 busy(#577 · PR #576 Codex P2).
+// 보조 잠금도 같은 기준으로 stale 이면 치운다(넘겨받던 실행이 그 짧은 사이에 죽은 경우뿐이다).
+// 남은 위험: stale 보조 잠금을 두 실행이 동시에 치우면 둘 다 들어갈 수 있다 — 넘겨받기 중 사망 + 동시 실행이 겹쳐야 한다(PR 9-1 info · 받아들인다).
+function lockId(dir) {
+  const st = fs.statSync(dir, { bigint: true })
+  return `${st.ino}:${st.ctimeNs}` // inode 번호는 rmdir 직후 mkdir 에 다시 쓰일 수 있다 — 생성 시각을 함께 본다(9-1 info)
+}
+
+function acquireLock(lock) {
+  if (tryMkdir(lock)) return { status: 'ok', id: lockId(lock) }
+  const staleMs = CONFIG.lockStaleRuns * CONFIG.periodMin * MIN
+  const isFresh = (st) => st !== null && Date.now() - st.mtimeMs < staleMs
+  if (isFresh(statOrNull(lock))) return { status: 'busy' }
+  const guard = `${lock}.takeover`
+  if (!tryMkdir(guard)) {
+    if (isFresh(statOrNull(guard))) return { status: 'busy' }
+    try {
+      fs.rmdirSync(guard)
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err
+    }
+    if (!tryMkdir(guard)) return { status: 'busy' }
+  }
+  try {
+    const st = statOrNull(lock)
+    if (isFresh(st)) return { status: 'busy' } // 다른 실행이 먼저 넘겨받았다
+    if (st !== null) fs.rmdirSync(lock)
+    if (!tryMkdir(lock)) return { status: 'busy' }
+    return { status: st === null ? 'ok' : 'stale', id: lockId(lock) }
+  } finally {
+    try {
+      fs.rmdirSync(guard)
+    } catch {
+      // 이미 없다 — 다음 실행이 stale 기준으로 다룬다
+    }
+  }
+}
+
+// 자기가 만든 잠금일 때만 지운다 — 넘겨받힌 뒤 남의 잠금을 지우지 않는다(#577)
+function releaseLock(lock, id) {
+  try {
+    if (lockId(lock) === id) fs.rmdirSync(lock)
+  } catch {
+    // 이미 없다 — 결과를 실패로 바꾸지 않는다
+  }
 }
 
 // ── 실행 ─────────────────────────────────────────────────────────────
@@ -688,14 +739,14 @@ async function run(pm2Bin) {
   const lock = path.join(OPS_DIR, 'collect.lock')
   const got = acquireLock(lock)
   const nowDate = TEST && process.env.OPS_NOW ? new Date(process.env.OPS_NOW) : new Date()
-  if (got === 'busy') {
+  if (got.status === 'busy') {
     console.log(`${kstMinute(nowDate)} 건너뜀 — 이전 실행이 아직 돈다`)
     return 1
   }
   try {
     const { state, hadState, corrupt } = loadState()
     const ctx = { state, hadState, now: nowDate.getTime(), started: Date.now(), obs: [], evaluated: new Set(), parseFail: {} }
-    if (got === 'stale') ctx.obs.push(collector('lock-stale', 'event'))
+    if (got.status === 'stale') ctx.obs.push(collector('lock-stale', 'event'))
     if (corrupt) ctx.obs.push(collector('state-parse', 'event'))
     await collect(ctx, pm2Bin)
     const posts = plan(ctx)
@@ -709,11 +760,7 @@ async function run(pm2Bin) {
     console.log(`${kstMinute(nowDate)} 수집 통과 · 관측 ${obsLines.length} · 기록 ${r.posted} · 미룸 ${r.deferred} (dry-run)`)
     return 0
   } finally {
-    try {
-      fs.rmdirSync(lock)
-    } catch {
-      // 넘겨받기 경합으로 이미 없다 — 결과를 실패로 바꾸지 않는다
-    }
+    releaseLock(lock, got.id)
   }
 }
 

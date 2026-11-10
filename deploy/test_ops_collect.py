@@ -311,7 +311,8 @@ class DeployWindow(Base):
         procs = {n: ("online", 0) for n in NAMES}
         del procs["pleiades-fit-bot"]
         self.set_procs(procs)
-        self.ok(now=time.strftime("%Y-%m-%dT%H:%M:%S%z"), config={"summaryAt": "23:59:59"})
+        # 실제 시각을 쓴다(표지 mtime 기준) — 첫 회(NOW 08:00)에서 6시간이 지나면 침묵 경보가 폭주 규칙에 묶이므로 상한을 넉넉히(#577)
+        self.ok(now=time.strftime("%Y-%m-%dT%H:%M:%S%z"), config={"summaryAt": "23:59:59", "burstLimit": 50})
         text = "\n".join(self.posts()).replace("\\", "")
         self.assertIn("deploy-stale:fit", text)
         self.assertIn("fit·bot · pm2 · missing", text)
@@ -368,6 +369,22 @@ class Health(Base):
         rec = [p for p in self.posts() if "🟢" in p]
         self.assertEqual(len(rec), 1)
         self.assertIn("복구", rec[0])
+
+    def test_unevaluated_run_breaks_recovery_streak(self):
+        # 회귀: #577 · PR #576 Codex P2 — 정상 1 → 판정 못 한 회(.env 없음) → 정상 1 은 연속 2회가 아니다
+        env = self.home / "pleiades-fin" / "apps" / "finance" / ".env"
+        self.servers["fin"]["web"].spec["/"] = (503, "")
+        self.ok()
+        self.servers["fin"]["web"].spec["/"] = (200, "")
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        saved = env.read_text()
+        env.unlink()
+        self.ok(now="2026-11-10T08:10:00+09:00")
+        env.write_text(saved)
+        self.ok(now="2026-11-10T08:15:00+09:00", config={"recoverRuns": 2})
+        self.assertFalse(any("🟢" in p and "fin·web" in p for p in self.posts()))
+        self.ok(now="2026-11-10T08:20:00+09:00", config={"recoverRuns": 2})
+        self.assertEqual(len([p for p in self.posts() if "🟢" in p and "fin·web" in p]), 1)
 
 
 class Logs(Base):
@@ -481,6 +498,34 @@ class StateAndLock(Base):
         self.ok()
         self.assertTrue(any("lock-stale" in p for p in self.posts()))
         self.assertFalse(lock.exists())
+
+    def test_stale_lock_with_takeover_in_progress_refuses(self):
+        # 회귀: #577 · PR #576 Codex P2 — 다른 실행이 넘겨받는 중(보조 잠금 신선)이면 지우지 않고 busy
+        self.ops.mkdir(parents=True)
+        lock = self.ops / "collect.lock"
+        lock.mkdir()
+        old = time.time() - 3600
+        os.utime(lock, (old, old))
+        (self.ops / "collect.lock.takeover").mkdir()
+        r = self.run_c()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("이전 실행이 아직 돈다", r.stdout)
+        self.assertEqual(lock.stat().st_mtime, old)
+        self.assertTrue((self.ops / "collect.lock.takeover").exists())
+        self.assertEqual(self.pm2_calls(), [])
+
+    def test_stale_takeover_guard_cleared(self):
+        self.ops.mkdir(parents=True)
+        lock = self.ops / "collect.lock"
+        guard = self.ops / "collect.lock.takeover"
+        old = time.time() - 3600
+        for d in (lock, guard):
+            d.mkdir()
+            os.utime(d, (old, old))
+        self.ok()
+        self.assertTrue(any("lock-stale" in p for p in self.posts()))
+        self.assertFalse(lock.exists())
+        self.assertFalse(guard.exists())
 
     def test_fresh_lock_refuses(self):
         self.ops.mkdir(parents=True)

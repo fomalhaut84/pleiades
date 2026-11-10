@@ -49,7 +49,7 @@ env -i HOME="$HOME" PATH=/usr/bin:/bin "$NODE_BIN" ~/pleiades-ops/collect.cjs --
 - 첫 실행이 09:05 KST 뒤면 일일 요약 1건이 `기록` 에 들어간다.
 - `관측` 이 0 이 아니면 아래 판정 양식(3절)을 붙인다. dry-run 로그를 그대로 붙이지 않는다.
 
-**`건너뜀 — 이전 실행이 아직 돈다`** 는 잠금 디렉터리 `~/pleiades-private/ops/collect.lock` 이 15분 안에 만들어졌다는 뜻이다. 15분 뒤에는 다음 실행이 넘겨받고 `lock-stale` 을 기록한다.
+**`건너뜀 — 이전 실행이 아직 돈다`** 는 잠금 디렉터리 `~/pleiades-private/ops/collect.lock` 이 15분 안에 만들어졌다는 뜻이다. 15분 뒤에는 다음 실행이 넘겨받고 `lock-stale` 을 기록한다. 넘겨받기는 보조 잠금 `collect.lock.takeover` 안에서 한 실행만 한다(#577) — 이것도 15분 넘게 남아 있으면 다음 실행이 치운다.
 
 ## 3. 등록
 
