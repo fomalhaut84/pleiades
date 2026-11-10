@@ -31,7 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/fomalhaut84/pleiades/<REF>/deploy/d
 크론과 같은 빈 환경으로 돌린다. 앞줄은 배포 알림 Discord 채널에 시험 메시지를 보내고, 뒷줄은 백업을 1회 뜬다.
 
 ```bash
-NODE_BIN=$(command -v node); case "$NODE_BIN" in /*) echo "node 경로 통과" ;; *) echo "!! 절대 경로가 아니다 — 멈춘다" ;; esac
+NODE_BIN=$(command -v node); case "$NODE_BIN" in /*) echo "node 경로 통과" ;; *) echo "[중단] 절대 경로가 아니다 — 멈춘다" ;; esac
 env -i HOME="$HOME" PATH=/usr/bin:/bin "$NODE_BIN" ~/pleiades-ops/db-backup.cjs --test-alert
 env -i HOME="$HOME" PATH=/usr/bin:/bin "$NODE_BIN" ~/pleiades-ops/db-backup.cjs
 ```
@@ -59,7 +59,7 @@ if CUR=$(crontab -l 2>&1) || [[ "$CUR" == *"no crontab"* ]]; then
   [[ "$CUR" == *"no crontab"* ]] && CUR=
   { printf '%s\n' "$CUR" | grep -v db-backup.cjs; echo "$CRON_AT * * * $NODE_BIN $HOME/pleiades-ops/db-backup.cjs >> $HOME/pleiades-private/db-backup.log 2>&1"; } | crontab -
 else
-  echo "!! crontab 을 읽지 못했다 — 바꾸지 않았다"
+  echo "[중단] crontab 을 읽지 못했다 — 바꾸지 않았다"
 fi
 crontab -l | grep -c db-backup.cjs
 ```
@@ -263,7 +263,7 @@ if CUR=$(crontab -l 2>&1) || [[ "$CUR" == *"no crontab"* ]]; then
   [[ "$CUR" == *"no crontab"* ]] && CUR=
   { printf '%s\n' "$CUR" | grep -v db-offsite-pull.sh; echo "$CRON_AT * * * $HOME/pleiades-offsite/db-offsite-pull.sh >> $HOME/pleiades-offsite/pull.log 2>&1"; } | crontab -
 else
-  echo "!! crontab 을 읽지 못했다 — 바꾸지 않았다"
+  echo "[중단] crontab 을 읽지 못했다 — 바꾸지 않았다"
 fi
 crontab -l | grep -c db-offsite-pull.sh
 ```
