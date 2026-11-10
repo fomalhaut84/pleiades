@@ -181,6 +181,8 @@ export const LOG_REDACT_PATHS = [
   "DISCORD_WEBHOOK_FITNESS",
   "DISCORD_WEBHOOK_ADMIN",
   "DISCORD_WEBHOOK_DEPLOY",
+  // 008 단계 1 수집기의 `#ops` 웹훅(Q98) — 앱은 읽지 않지만 가린다(pleiades#572)
+  "DISCORD_WEBHOOK_OPS",
 ] as const;
 
 export const logger = pino(
