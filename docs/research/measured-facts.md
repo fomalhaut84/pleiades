@@ -4620,3 +4620,27 @@ tools/local/run.sh fin -- npx tsx scripts/tmp-measure-552.ts
 
 - 전후 행 수 같음(계좌 3 · 스냅샷 0 · 보유 스냅샷 0 → 측정 뒤 같음) — 로컬 DB 에는 원래 스냅샷이 없다.
 - 계산(2026-11-09 A1-1 절)은 이 값의 2% 미만 — 비용은 보유 행 읽기다. 운영 크기(실제 스냅샷 수·종목 수)는 미확인.
+
+## 2026-11-10 — 008 단계 1 실측 (#564 · HEAD `c25f21a9b400` · 로컬 파일만 · 상세 `_workspace/250/01_surveyor_stage1.md`)
+
+서버·ssh·pm2 실행 0. pm2 판독은 로컬 npx 캐시 **7.0.4** 소스 기준 — **서버는 6.0.8**(이 파일 U8)이고 6.0.8 소스는 로컬에 없어 동일성은 미확인.
+
+| # | 값 | 측정 명령 · 근거 |
+|---|---|---|
+| S1 | pm2 데몬은 `rpc.sock`·`pub.sock` 을 **`chmod 775`** 로 만든다(`PM2_SOCKET_USER/GROUP` 가 있으면 chown) | `P/lib/Daemon.js:110` · `:139` (P = `~/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2`) |
+| S2 | RPC 는 읽기(`getMonitorData` 등)와 쓰기(`stop/restart/deleteProcessId` · `killMe` · `sendSignalToProcessName`)를 **한 목록으로** 노출 · axon-rpc 에 인증·권한 검사 0 → **소켓 연결 = 전 권한**(008 §4-6 가정 확인) | `grep -n 'server.expose' P/lib/Daemon.js` → `:215-252` · `P/modules/pm2-axon-rpc/lib/server.js:72-85` · `/usr/bin/grep -rn -E 'auth\|token' P/modules/pm2-axon*/lib` 0(package.json `author` 제외) |
+| S3 | `getMonitorData`(jlist)는 `pm2_env`(env 포함) 전체를 돌려준다 | `P/lib/God/ActionMethods.js:40-57` |
+| S4 | 설정에 `out_file`·`error_file`·`merge_logs`·`exec_mode` 없음 → cluster 모드 → 로그 = `$PM2_HOME/logs/<name>-{out,error}-<pm_id>.log` · `deploy.sh` 가 배포마다 bot 을 delete→start 하므로 **pm_id·파일 이름이 바뀐다** | `deploy/pleiades.config.cjs:62-108` · `P/lib/Common.js:347-353`·`:864-869` · `P/lib/God.js:207-213` · `deploy/deploy.sh:349-361` |
+| S5 | 줄 접두 `YYYY-MM-DD HH:mm:ss: `(쓰기 덩어리마다 · 데몬 TZ) | `deploy/pleiades.config.cjs:62` · `P/lib/ProcessContainer.js:170-171` |
+| S6 | MCP pino 로그(error·fatal 포함)는 HTTP 모드에서 **stdout → `-out` 로그** · C5 는 `-error` 만 센다 → **MCP pino 오류는 C5 창 안 오류 줄에 안 잡힌다** | fin `apps/finance/src/mcp/logger.ts:26-27` · fit `apps/fitness/src/mcp/logger.ts:136` · `deploy/release-inplace.sh:327` |
+| S7 | MCP tee `apps/<dir>/logs/mcp-<KST날짜>.log`(pino JSON · 14일) 는 두 앱 같고, **fatal 전용 `mcp-crash-*.log` 는 fin 만** | fin `logger.ts:21-22`·`:39`·`:100` · `git grep -n mcp-crash HEAD -- apps/fitness` 0 |
+| S8 | web·bot 오류 = 공통 로거 없는 `console.error('[태그] …')` · 호출 수(테스트 제외) fin error 229 · warn 24 / fit error 93 · warn 115 | `git grep --text -cE "console\.(error\|warn)\(" HEAD -- apps/<a>/src ':!**/__tests__/**' ':!**/*.test.ts'` 합 |
+| S9 | web health 라우트 **두 앱 0** · MCP `/health` 만(127.0.0.1 · `{ok,uptime,sessions,version}`) · bot HTTP 없음 | `git ls-tree -r --name-only HEAD -- apps/*/src/app \| grep -iE 'health\|ping\|ready\|live'` 무관 · fin `src/mcp/server.ts:950`·`:986` · fit `:750`·`:785` |
+| S10 | 배포 알림 = 앱 봇이 아니라 `ssh-deploy.sh` → `notify-deploy.cjs` 가 `DISCORD_WEBHOOK_DEPLOY` 웹훅 직접 POST(플랫폼 설정 `PLEIADES_ENV_FILE` 또는 `~/pleiades-platform.env`) · `db-backup.cjs` 도 같다 · 둘 다 **앱 체크아웃 `node_modules/dotenv`** 에 의존 | `deploy/ssh-deploy.sh:55-72` · `deploy/notify-deploy.cjs:28-31`·`:37-46` · `deploy/db-backup.cjs:48`·`:207-217` |
+| S11 | `db-backup.cjs` 는 네트워크 family 타임아웃 플래그가 없다(스크립트·런북 crontab 줄 모두) — `notify-deploy` 는 `ssh-deploy.sh:71` 이 붙인다 | `grep -n network-family deploy/db-backup.cjs` 0 · `docs/runbooks/db-backup.md:60` |
+| S12 | 저장소에 systemd 유닛·타이머 0 · `cron_restart` 0 · crontab 은 런북 설치 명령(db-backup)뿐 | `/usr/bin/grep -rn -E 'systemd\|\.timer\|ExecStart' deploy/*.sh deploy/*.cjs` → 점검 출력만 · `git grep -n cron_restart HEAD` 0 |
+| S13 | `release-inplace.sh` 는 A·C2 에서 체크아웃이 깨끗하지 않으면 멈춘다 → 체크아웃 안 비추적 파일 = 다음 배포 정지 | `deploy/release-inplace.sh:176` · `:275` |
+| S14 | 체크아웃 밖 주기 스크립트 선례 = `~/pleiades-ops/db-backup.cjs`(커밋 고정 + SHA-256) — R-8 로 사라지지 않게 | `deploy/db-backup.cjs:9` · `docs/runbooks/db-backup.md:9`·`:22-26` |
+| S15 | `pm2 jlist` 해석 3벌이 다르다 — `deploy.sh:115` 만 첫 `[` 에서 연다(`[PM2][WARN]` 줄이 앞서면 실패 · #278 은 release-inplace 만 고침) | `deploy/deploy.sh:115` · `release-inplace.sh:81` · `t2-check.sh:108` |
+
+**못 잰 값(서버):** `$PM2_HOME`·소켓 실제 mode·소유 · pm2-logrotate · 로그 크기·증가량 · 전환 뒤 실제 포트 · 현 crontab · `~/pleiades-ops/` 실재.
