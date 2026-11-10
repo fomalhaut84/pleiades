@@ -57,6 +57,9 @@ class AllowTest(unittest.TestCase):
         "docs/handoff/2026-11-09-releases-010-a1-t8-move.md 참고",
         "fe80 같은 단어와 a::b 같은 표기",
         "마이그레이션 `20261019090100` 이 남긴 점프",
+        # 회귀: PR #563 Codex P2 — 경로·호스트 판정을 넓혀도 라우트·파일 이름은 통과한다
+        "`/api/alerts/retry` 라우트 · /settings 페이지 · USD/AMD",
+        "README.md · error.ts · deploy.yml · v1.5.4 · e.g. 예시",
     ]
 
     def test_allowed(self):
@@ -106,6 +109,11 @@ class BlockTest(unittest.TestCase):
         (f"키 {AWS_KEY}를", "TOKEN"),
         (f"토큰 {TG_TOKEN}이", "TOKEN"),
         ("경로/home/x 아래", "ABS_PATH"),
+        # 회귀: PR #563 Codex P2 — 고정 목록 밖 최상위 디렉터리 · 목록 밖 TLD · 허용 접미에서 끊기는 호스트
+        ("/data/private/app.log 에", "ABS_PATH"),
+        ("/workspace/pleiades/app 아래", "ABS_PATH"),
+        ("api.secret.uk 가 느리다", "HOST"),
+        ("github.com.evil.uk 로", "HOST"),
         ("문의 someone@example.com으로", "EMAIL"),
         # 회귀: #253 사전 리뷰 major — 따옴표 env 값 · 스킴 무관 URL · userinfo · 사설 TLD · 짧은 IPv6
         ('DATABASE_URL="x" 로', "ENV_VALUE"),

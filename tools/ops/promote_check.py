@@ -57,10 +57,12 @@ ALLOWED_HOSTS = (
     "example.com",
     "example.org",
 )
-_TLDS = (
-    "com|net|org|io|dev|app|kr|co|me|xyz|cloud|ai|info|biz|site|online|tech|jp|us"
+# 호스트로 보는 마지막 라벨 — 이 목록 + 두 글자 국가 코드(파일 확장자는 뺀다)
+_TLDS = frozenset((
+    "com|net|org|io|dev|app|co|xyz|cloud|ai|info|biz|site|online|tech|edu|gov"
     "|local|internal|lan|home|localdomain|intranet|corp"  # 사설 이름
-)
+).split("|"))
+_FILE_EXT_2 = frozenset("ts js md sh py rb go rs cs pl db gz xz so mk".split())
 
 REASONS = {
     "TOO_LONG": "길이 상한 초과(패턴 검사 생략)",
@@ -89,6 +91,8 @@ def _re(pattern: str, flags: int = 0) -> re.Pattern[str]:
 _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("ABS_PATH", _re(
         rf"(?<![{_W}.~])(?:~/|/(?:Users|home|root|var|etc|opt|tmp|srv|usr|private|backup|mnt|Volumes)/)")),
+    # 고정 목록 밖 최상위 디렉터리도 세 토막 이상이면 절대 경로로 본다(PR #563 Codex P2) · `/api/` 라우트는 뺀다
+    ("ABS_PATH", _re(rf"(?<![{_W}.~/-])/(?!api/)[{_W}.-]+/[{_W}.-]+/[{_W}.-]+")),
     ("EMAIL", _re(rf"(?<![{_W}.+-])[{_W}.+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")),
     # Yahoo 환율 심볼(`AMD=X` · `KRW=X`)은 env 가 아니다 — fin 문서에 자주 나온다
     ("ENV_VALUE", _re(rf"(?<![{_W}])[A-Z][A-Z0-9_]{{2,}}=[\"']?(?!X(?![^\s`'\")\]]))[^\s`'\"]+")),
@@ -114,7 +118,8 @@ _HEX = _re(r"^[0-9a-fA-F]+$")
 _IPV4 = _re(rf"(?<![{_W}.])(?:\d{{1,3}}\.){{3}}\d{{1,3}}(?![{_W}])(?!\.\d)")
 _IPV6 = _re(rf"(?<![{_W}:])(?:[0-9A-Fa-f]{{0,4}}:){{2,7}}[0-9A-Fa-f]{{0,4}}(?![{_W}:])")
 _URL = _re(r"(?<![A-Za-z0-9+.-])[a-z][a-z0-9+.-]*://([^/\s?#'\"<>)]+)", re.IGNORECASE)
-_BARE_HOST = _re(rf"(?<![{_W}@./-])(?:[a-z0-9-]+\.)+(?:{_TLDS})(?![{_W}-])", re.IGNORECASE)
+# 호스트 이름 전체를 먼저 잡고 마지막 라벨·허용 목록을 본다 — 허용 접미에서 끊기지 않게(PR #563 Codex P2)
+_BARE_HOST = _re(rf"(?<![{_W}@./-])(?:[A-Za-z0-9-]+\.)+[A-Za-z0-9-]+(?![{_W}-])(?!\.[A-Za-z0-9])")
 
 
 @dataclass(frozen=True)
@@ -131,6 +136,13 @@ class DenyFileError(Exception):
 def _host_allowed(host: str) -> bool:
     h = host.lower().rstrip(".")
     return any(h == a or h.endswith("." + a) for a in ALLOWED_HOSTS)
+
+
+def _looks_like_host(s: str) -> bool:
+    last = s.rsplit(".", 1)[-1].lower()
+    if last in _TLDS:
+        return True
+    return len(last) == 2 and last.isalpha() and last not in _FILE_EXT_2
 
 
 def _is_generic_token(s: str) -> bool:
@@ -203,7 +215,7 @@ def _line_findings(line: str, n: int, deny_lower: Sequence[str]) -> Iterator[Fin
             yield Finding("IPV6", n, m.start() + 1)
     yield from _url_findings(line, n)
     for m in _BARE_HOST.finditer(line):
-        if not _host_allowed(m.group()):
+        if _looks_like_host(m.group()) and not _host_allowed(m.group()):
             yield Finding("HOST", n, m.start() + 1)
     low = line.lower()
     for value in deny_lower:
