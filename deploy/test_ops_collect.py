@@ -496,6 +496,20 @@ class Alive(Base):
         self.ok(now="2026-11-10T08:05:00+09:00")
         self.assertTrue(any("fin·bot · gateway · stale" in p for p in self.posts()))
 
+    def test_deleted_stale_marker_recovers_and_leaves_no_open_issue(self):
+        # 회귀: #589 9-1 major — stale 인 채 표지를 지우면(런북 조치) ENOENT 를 건너뛰어 이상이 영영 열려 있었다
+        p = self.marker("fit", "2026-11-10T07:00:00+09:00")
+        self.ok()
+        self.assertTrue(any("🔴" in x and "fit·bot · gateway · stale" in x for x in self.posts()))
+        p.unlink()
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.ok(now="2026-11-10T08:10:00+09:00", config={"recoverRuns": 2})
+        self.assertEqual(len([x for x in self.posts() if "🟢" in x and "fit·bot · gateway" in x]), 1)
+        self.marker("fit", "2026-11-10T08:00:00+09:00")
+        self.ok(now="2026-11-10T08:15:00+09:00")
+        firsts = [x for x in self.posts() if "🔴" in x and "fit·bot · gateway · stale" in x]
+        self.assertEqual(len(firsts), 2)  # 닫혔으므로 다시 첫 발생으로 나간다
+
     def test_held_deploy_skips_alive_judgment(self):
         self.marker("fin", "2026-11-10T07:00:00+09:00")
         self.private.mkdir(parents=True, exist_ok=True)

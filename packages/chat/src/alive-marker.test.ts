@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -68,6 +68,14 @@ describe('fileAliveMarker — 실제 파일', () => {
     expect(Object.keys(JSON.parse(readFileSync(file, 'utf8'))).sort()).toEqual(['at', 'state']);
     expect(statSync(file).mode & 0o777).toBe(0o600);
     expect(readdirSync(dir)).toEqual(['alive-fit.json']);
+  });
+  it('rename 이 실패하면 던지고 임시 파일을 남기지 않는다', () => {
+    // 회귀: #589 9-1 info 2 — ACK 마다 다시 쓰므로 실패가 이어지면 .tmp 가 쌓였다
+    const dir = mkdtempSync(join(tmpdir(), 'chat-alive-'));
+    const file = join(dir, 'alive-fin.json');
+    mkdirSync(join(file, 'x'), { recursive: true }); // 대상이 비지 않은 디렉터리 — rename 실패
+    expect(() => fileAliveMarker(file).mark('ready')).toThrow();
+    expect(readdirSync(dir)).toEqual(['alive-fin.json']);
   });
 });
 

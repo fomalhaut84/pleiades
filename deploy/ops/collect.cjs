@@ -464,21 +464,20 @@ function silence(ctx, sizes) {
 }
 
 // ── #589 봇 생존 표지 ────────────────────────────────────────────────
-// 수정 시각만 본다(내용은 읽지 않는다) · 파일이 없으면 판정하지 않는다(릴리즈 전 · Discord 미설정) · 배포 보류 중에도 판정하지 않는다
+// 수정 시각만 본다(내용은 읽지 않는다) · 파일이 없으면 정상으로 본다(릴리즈 전 · Discord 미설정 · 일부러 지운 표지 —
+// 열려 있던 stale 은 복구로 닫힌다 · #589 9-1 major) · 배포 보류 중에는 판정하지 않는다
 function collectAlive(ctx) {
   for (const app of Object.keys(APPS)) {
     if (ctx.deploy[app].held) continue
+    ctx.evaluated.add(`ops · collector · alive-read:${app}`)
+    ctx.evaluated.add(`${app} · bot · gateway`)
     let st
     try {
       st = fs.statSync(path.join(APPS[app], 'logs', `alive-${app}.json`))
     } catch (e) {
-      if (e && e.code === 'ENOENT') continue
-      ctx.evaluated.add(`ops · collector · alive-read:${app}`)
-      ctx.obs.push(collector(`alive-read:${app}`))
+      if (!(e && e.code === 'ENOENT')) ctx.obs.push(collector(`alive-read:${app}`))
       continue
     }
-    ctx.evaluated.add(`ops · collector · alive-read:${app}`)
-    ctx.evaluated.add(`${app} · bot · gateway`)
     if (ctx.now - st.mtimeMs > CONFIG.aliveStaleMin * MIN) ctx.obs.push(observation(app, 'bot', 'gateway', ['stale'], '장애', 'state'))
   }
 }
