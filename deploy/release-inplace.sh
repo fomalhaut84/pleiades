@@ -112,11 +112,13 @@ count_window() {  # <glob 접두> <T0> <T1> — 창 안 줄 수 · 그중 경고
     END { printf "%d %d", n, w }'
 }
 # MCP 서버는 오류를 pino JSON 으로 stdout(-out)에 쓴다 — -error 만 세면 늘 0 이다(#602).
-# 기준은 수집기(deploy/ops/collect.cjs mcpOutObs)와 같다: pm2 접두 뒤 '{' 로 시작하는 줄 · level 이 50 이상 숫자 또는 "error"·"fatal"
+# 수집기(deploy/ops/collect.cjs mcpOutObs)의 근사 — JSON 을 파싱하지 않는다: pm2 접두 바로 뒤 첫 키가 level 이고
+# 값이 50 이상 숫자 또는 "error"·"fatal" 인 줄. 두 앱 MCP logger(pino · formatters.level)는 level 을 늘 첫 키로 쓴다(9-1 info —
+# 중첩 키 "args":{"level":…} 는 세지 않는다). 깨진 JSON 을 수집기는 parseFail 로 따로 세고 여기서는 첫 키가 맞으면 센다
 count_pino_errors() {  # <glob 접두> <T0> <T1> — 창 안 pino 오류 줄 수
   cat "$1"*.log 2>/dev/null | awk -v s="$2" -v e="$3" '
-    substr($0,1,19)>=s && substr($0,1,19)<=e && substr($0,20,3)==": {" &&
-      $0 ~ /"level" *: *(5[0-9]|[6-9][0-9]|[1-9][0-9][0-9]+|"error"|"fatal") *[,}]/ { n++ }
+    substr($0,1,19)>=s && substr($0,1,19)<=e &&
+      substr($0,20) ~ /^: \{ *"level" *: *(5[0-9]|[6-9][0-9]|[1-9][0-9][0-9]+|"error"|"fatal") *[,}]/ { n++ }
     END { printf "%d", n }'
 }
 # 빌드 전 실패 — 직전 태그로 checkout 만 되돌린다(재기동 없음 · M6). 못 되돌리면 4

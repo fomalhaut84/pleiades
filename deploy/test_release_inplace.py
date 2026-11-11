@@ -72,12 +72,13 @@ mkdir -p "$HOME/.pm2/logs"
 [[ -n "${STUB_SLEEP:-}" ]] && sleep "$STUB_SLEEP"
 echo "$ts: ⚠ Warning: Next.js inferred your workspace root" >> "$HOME/.pm2/logs/pleiades-fin-web-error-108.log"
 echo "$ts: TypeError: boom" >> "$HOME/.pm2/logs/pleiades-fin-web-error-114.log"
-# 회귀: #602 — MCP 오류는 pino JSON 으로 -out 에 간다. 오류 2(숫자 50 · 문자열 fatal) · info 1 · JSON 아닌 줄 1 · 창 밖 오류 1
+# 회귀: #602 — MCP 오류는 pino JSON 으로 -out 에 간다. 오류 2(숫자 50 · 문자열 fatal) · info 1 · JSON 아닌 줄 1 · 창 밖 오류 1 · 중첩 level 1(9-1 info)
 echo "$ts: {\\"level\\":50,\\"msg\\":\\"tool failed\\"}" >> "$HOME/.pm2/logs/pleiades-fin-mcp-out-116.log"
 echo "$ts: {\\"level\\":\\"fatal\\",\\"msg\\":\\"x\\"}" >> "$HOME/.pm2/logs/pleiades-fin-mcp-out-116.log"
 echo "$ts: {\\"level\\":30,\\"msg\\":\\"level 50 in text\\"}" >> "$HOME/.pm2/logs/pleiades-fin-mcp-out-116.log"
 echo "$ts: plain \\"level\\":50 line" >> "$HOME/.pm2/logs/pleiades-fin-mcp-out-116.log"
 echo "2000-01-01 00:00:00: {\\"level\\":60}" >> "$HOME/.pm2/logs/pleiades-fin-mcp-out-116.log"
+echo "$ts: {\\"level\\":\\"info\\",\\"args\\":{\\"level\\":\\"error\\"}}" >> "$HOME/.pm2/logs/pleiades-fin-mcp-out-116.log"
 # 회귀: #373 — gateway 정상 기동 줄은 warn 이라 stderr 로 가지만 오류가 아니다
 echo "$ts: [discord-fin] gateway 준비 완료" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
 echo "$ts: [discord-fin] gateway 세션 이어받음" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
