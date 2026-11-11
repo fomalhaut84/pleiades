@@ -41,7 +41,8 @@ const DEFAULTS = {
   maxRunMs: 120000, // P-9 한 회 상한(제약 P-8×주기 > P-9)
   lateRuns: 3, // C-7 ④ 직전 수집이 주기의 k배 넘게 지나면
   // C-7 ② 침묵 감지 — -out 만 · 역할별(V17: 줄이 꾸준한 out 5개 · fin web out · 모든 -error 는 끈다) · 값 = N시간
-  silenceHours: { 'fin-bot': 6, 'fin-mcp': 6, 'fit-web': 6, 'fit-bot': 6, 'fit-mcp': 6 },
+  // 6 → 24(#587): dry-run 판정에서 bot·mcp -out 은 낮에도 6시간씩 조용했다(사용·크론 때만 는다) — 하루 크론이 도는지만 본다
+  silenceHours: { 'fin-bot': 24, 'fin-mcp': 24, 'fit-web': 24, 'fit-bot': 24, 'fit-mcp': 24 },
   readCapBytes: 4 * 1048576, // 한 파일을 한 회에 읽는 상한 — 남은 것은 다음 회
   socketMs: 2000,
   jlistMs: 20000,
@@ -66,7 +67,13 @@ const DISKS = {
 // 판정 계약(release-inplace.sh:106 · #373) — chat 이 gateway 정상 기동을 warn 으로 찍는다
 // 첫 단계(1000ms) RESUME 재접속은 Discord 의 일상 재접속이다(#583 A) — 5000ms 이상 · 새 세션은 그대로 센다
 const NORMAL_GATEWAY = /\] gateway (준비 완료|세션 이어받음|재접속 1000ms 후 \(RESUME\))$/
-const WARN_RE = /⚠|[Ww]arning/ // release-inplace.sh C5 와 같은 경고 패턴
+// release-inplace.sh C5 경고 패턴 + Deprecat…(#587 · 수집기만 — C5 는 배포 경로라 그대로 둔다)
+const WARN_RE = /⚠|[Ww]arning|Deprecat/
+// 알려진 stderr 줄(#587) — 세부 칸이 비어 한 지문으로 묶이던 것을 정해진 토큰 하나로 가른다(원문은 칸에 오지 않는다)
+const KNOWN_STDERR = [
+  { re: /Server Reference ID did not match the expected format/, kind: 'server-action-ref', sev: '경고' }, // 외부 스캐너의 Server Action 요청
+  { re: /The width\(-?\d+\) and height\(-?\d+\) of chart should be greater than 0/, kind: 'chart-size', sev: '경고' }, // Recharts · #588
+]
 const PM2_PREFIX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}: / // pleiades.config.cjs log_date_format + pm2 의 ': '
 const LOG_NAME = /^pleiades-(fin|fit)-(web|bot|mcp)-(out|error)(?:-\d+)?\.log$/
 const FIELD_OK = /^[A-Za-z0-9_.:/-]{1,64}$/ // §1-4 ⓪
@@ -188,6 +195,13 @@ function readMarker(file) {
   }
 }
 
+// release-inplace.sh 가 통과 때 쓰는 C5 창 "t0\tt1"(#587) — 형식이 다르면 없는 것으로 본다(흡수하지 않는다)
+const WINDOW_RE = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\t(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})$/
+function c5Window(app) {
+  const m = WINDOW_RE.exec((readMarker(path.join(PRIVATE, `inplace-${app}-window`)) || {}).body || '')
+  return m && m[1] <= m[2] ? { t0: m[1], t1: m[2] } : null
+}
+
 function deployWindow(ctx) {
   const out = {}
   for (const app of Object.keys(APPS)) {
@@ -199,7 +213,7 @@ function deployWindow(ctx) {
     const stale = Boolean(pending) && ctx.now - pending.mtimeMs >= CONFIG.holdMin * MIN
     ctx.evaluated.add(`ops · collector · deploy-stale:${app}`)
     if (stale) ctx.obs.push(collector(`deploy-stale:${app}`)) // 보류를 끝내고 평소대로 판정한다
-    out[app] = { held: Boolean(pending) && !stale, lastOkChanged: prev !== undefined && prev !== sig }
+    out[app] = { held: Boolean(pending) && !stale, lastOkChanged: prev !== undefined && prev !== sig, window: c5Window(app) }
   }
   return out
 }
@@ -299,24 +313,40 @@ function codeOf(text, explicit) {
   return ''
 }
 
+// pm2 접두 시각을 문자열 그대로 — C5 창(release-inplace.sh 의 date '+%F %T')과 같은 서버 로컬 시각이라 문자열로 비교한다(시간대를 해석하지 않는다)
+const STAMP = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}): /
+const stampOf = (line) => (STAMP.exec(line) || [])[1] || null
+
+// 덩어리 = { at: 첫 줄 시각 문자열(없으면 null), lines }
 function chunksOf(lines) {
   const chunks = []
   for (const line of lines) {
-    if (PM2_PREFIX.test(line) || chunks.length === 0) chunks.push([line.replace(PM2_PREFIX, '')])
-    else chunks[chunks.length - 1].push(line) // 시각 없는 뒷줄은 앞 줄의 덩어리(S5)
+    if (PM2_PREFIX.test(line) || chunks.length === 0) chunks.push({ at: stampOf(line), lines: [line.replace(PM2_PREFIX, '')] })
+    else chunks[chunks.length - 1].lines.push(line) // 시각 없는 뒷줄은 앞 줄의 덩어리(S5)
   }
   return chunks
 }
 
-function stderrObs(app, role, lines) {
+// P-7(#587): 마지막으로 통과한 배포의 C5 창 [t0, t1] 안 경고 줄은 배포 알림이 이미 셌다 — 수집기는 흡수한다. 실패는 그대로 낸다.
+// 창은 release-inplace.sh 가 통과 때만 남긴다 — 실패한 시도의 줄은 아무도 세지 않았으니 흡수하지 않는다(PR-1b 9-1 major)
+const inDeployWindow = (at, win) => at !== null && win !== null && at >= win.t0 && at <= win.t1
+
+function stderrObs(app, role, lines, win = null) {
   const out = []
-  for (const chunk of chunksOf(lines)) {
+  for (const { at, lines: chunk } of chunksOf(lines)) {
     const head = chunk[0]
     if (!head.trim() || NORMAL_GATEWAY.test(head)) continue
     const text = chunk.join('\n')
+    const known = KNOWN_STDERR.find((k) => k.re.test(head))
+    const sev = known ? known.sev : WARN_RE.test(head) ? '경고' : '실패'
+    if (sev === '경고' && inDeployWindow(at, win)) continue
+    if (known) {
+      out.push(observation(app, role, 'stderr', [known.kind], sev, 'event'))
+      continue
+    }
     const tag = field((/^\[([^\]]{1,64})\]/.exec(head) || [])[1])
     const cls = field((/\b[A-Z][A-Za-z]*Error\b/.exec(text) || [])[0])
-    out.push(observation(app, role, 'stderr', [tag, cls, codeOf(text), artifactOf(text)], WARN_RE.test(head) ? '경고' : '실패', 'event'))
+    out.push(observation(app, role, 'stderr', [tag, cls, codeOf(text), artifactOf(text)], sev, 'event'))
   }
   return out
 }
@@ -392,6 +422,8 @@ function collectLogs(ctx) {
     seen[key] = true
     sizes[key] = (sizes[key] || 0) + st.size
     if (stream === 'out' && role !== 'mcp') continue // web·bot -out 은 침묵 감지(C-7 ②)에만
+    // 보류 중에는 -error 를 읽지 않는다(오프셋 그대로) — 배포가 끝나 창이 정해진 뒤 읽어야 창 안 경고만 흡수한다(PR-1b 9-1 major)
+    if (stream === 'error' && ctx.deploy[app].held) continue
     ctx.evaluated.add(`ops · collector · log-read:${key}`)
     let lines
     try {
@@ -400,7 +432,7 @@ function collectLogs(ctx) {
       ctx.obs.push(collector(`log-read:${key}`)) // 한 파일 때문에 수집 전체가 멈추지 않게(9-1 major)
       continue
     }
-    ctx.obs.push(...(stream === 'out' ? mcpOutObs(app, lines, ctx) : stderrObs(app, role, lines)))
+    ctx.obs.push(...(stream === 'out' ? mcpOutObs(app, lines, ctx) : stderrObs(app, role, lines, ctx.deploy[app].window)))
   }
   if (listed) for (const name of Object.keys(ctx.state.files)) if (!names.includes(name)) delete ctx.state.files[name]
   for (const app of Object.keys(APPS)) {
