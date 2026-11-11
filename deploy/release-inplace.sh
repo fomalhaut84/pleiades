@@ -14,6 +14,7 @@
 # 종료 코드: 0 통과 · 1 서비스·체크아웃 그대로 중단(A·B·C1 · 빌드 전 실패는 직전 태그로 되돌린 뒤) · 2 사용법
 #   · 3 deploy.sh exit 3(옛 서비스 online) · 4 빌드·재기동 뒤 실패 또는 되돌리기 실패(판정 양식의 R-8 줄)
 # 창 안 오류 줄의 한계: pm2 는 쓰기 덩어리마다 시각을 붙여 여러 줄 스택의 뒷줄은 세지 않는다 · 시각은 pm2 데몬 TZ 기준
+#   mcp 출력 오류 = 창 안 mcp -out 의 pino 오류(level ≥ 50) 줄 수(#602) — 판정 정보이지 통과 조건이 아니다
 # 자기 교체: C2 의 checkout 이 이 파일을 바꾼다 — 본문을 전부 함수에 두고 마지막 줄에서 main 을 부른 뒤 곧바로 exit 한다
 #   (bash 는 함수 정의를 끝까지 읽은 뒤 실행한다).
 
@@ -109,6 +110,14 @@ count_window() {  # <glob 접두> <T0> <T1> — 창 안 줄 수 · 그중 경고
   cat "$1"*.log 2>/dev/null | awk -v s="$2" -v e="$3" -v normal="$NORMAL_GATEWAY_LINE" '
     substr($0,1,19)>=s && substr($0,1,19)<=e && $0 !~ normal { n++; if ($0 ~ /⚠|[Ww]arning/) w++ }
     END { printf "%d %d", n, w }'
+}
+# MCP 서버는 오류를 pino JSON 으로 stdout(-out)에 쓴다 — -error 만 세면 늘 0 이다(#602).
+# 기준은 수집기(deploy/ops/collect.cjs mcpOutObs)와 같다: pm2 접두 뒤 '{' 로 시작하는 줄 · level 이 50 이상 숫자 또는 "error"·"fatal"
+count_pino_errors() {  # <glob 접두> <T0> <T1> — 창 안 pino 오류 줄 수
+  cat "$1"*.log 2>/dev/null | awk -v s="$2" -v e="$3" '
+    substr($0,1,19)>=s && substr($0,1,19)<=e && substr($0,20,3)==": {" &&
+      $0 ~ /"level" *: *(5[0-9]|[6-9][0-9]|[1-9][0-9][0-9]+|"error"|"fatal") *[,}]/ { n++ }
+    END { printf "%d", n }'
 }
 # 빌드 전 실패 — 직전 태그로 checkout 만 되돌린다(재기동 없음 · M6). 못 되돌리면 4
 revert_checkout() {  # <이유>
@@ -328,6 +337,7 @@ main() {
     read -r -a nw <<<"$(count_window "$HOME/.pm2/logs/pleiades-$APP-$r-error" "$t0" "$t1")"
     lines+=" $r ${nw[0]}(경고 ${nw[1]})"
   done
+  lines+=" · mcp 출력 오류 $(count_pino_errors "$HOME/.pm2/logs/pleiades-$APP-mcp-out" "$t0" "$t1")"
   form "C5 프로브 오류 응답 $bad${first:+ ($first~$last · $codes)} · 창 안 오류 줄$lines"
   local mcp_code
   mcp_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:${new_mcp_port:-$mcp_port}/health")
