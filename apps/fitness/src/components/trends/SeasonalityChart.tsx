@@ -14,6 +14,7 @@ import {
   formatChartValue,
   type ChartMetric,
 } from "./chart-format";
+import { CHART_INITIAL_DIMENSION } from "@/components/ui/chart-dimension";
 
 interface SeasonalityChartProps {
   months: readonly SeasonalityMonth[];
@@ -36,7 +37,7 @@ export default function SeasonalityChart({ months, metric, color, currentYear }:
 
   return (
     <div className="h-[220px] sm:h-[300px]" role="img" aria-label={`${metric.label} 계절성`}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_DIMENSION}>
         <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid vertical={false} stroke={CHART_GRID_STROKE} />
           <XAxis dataKey="month" axisLine={false} tickLine={false} tick={CHART_AXIS_TICK} interval={0} tickFormatter={(m) => `${m}월`} />

@@ -5,6 +5,7 @@
 import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatTimeKST } from "@/lib/format";
 import type { RecoveryDTO } from "@/lib/heart/load-recovery";
+import { CHART_INITIAL_DIMENSION } from "@/components/ui/chart-dimension";
 
 const HR_COLOR = "#f87171";
 const PRE_COLOR = "#525252";
@@ -114,7 +115,7 @@ function RecoveryChart({ recovery, endLabel }: { recovery: RecoveryDTO; endLabel
 
   return (
     <div role="img" aria-label={ariaLabel} style={{ height: CHART_HEIGHT }}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_DIMENSION}>
         <LineChart data={rows} margin={{ top: 18, right: 16, bottom: 0, left: -12 }}>
           <CartesianGrid stroke="#1f1f1f" vertical={false} />
           <XAxis

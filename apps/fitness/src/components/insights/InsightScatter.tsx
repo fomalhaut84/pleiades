@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { CartesianGrid, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
 import { CHART_AXIS_TICK, CHART_GRID_STROKE, CHART_TOOLTIP_CLASS } from "@/components/trends/chart-format";
 import { formatAxis, type AxisFormat } from "./scatter-format";
+import { CHART_INITIAL_DIMENSION } from "@/components/ui/chart-dimension";
 
 export interface ScatterPoint {
   x: number;
@@ -78,7 +79,7 @@ export default function InsightScatter({ series, x, y, ariaLabel, toggle }: Insi
   return (
     <div>
       <div className="h-[220px] sm:h-[320px]" role="img" aria-label={ariaLabel}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_DIMENSION}>
           <ScatterChart margin={{ top: 8, right: 10, bottom: 4, left: 0 }}>
             <CartesianGrid stroke={CHART_GRID_STROKE} />
             <XAxis

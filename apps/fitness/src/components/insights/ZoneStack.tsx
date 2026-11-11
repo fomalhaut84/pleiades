@@ -4,6 +4,7 @@
 // 존 없는 달 = 빈 칸, 존 있는 러닝이 절반 미만 = 흐림 (#395 저커버리지), 이번 달 = 점선 (#395 미완결).
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CHART_AXIS_TICK, CHART_GRID_STROKE, CHART_TOOLTIP_CLASS } from "@/components/trends/chart-format";
+import { CHART_INITIAL_DIMENSION } from "@/components/ui/chart-dimension";
 import { formatDuration } from "@/lib/format";
 import type { ZoneMonth } from "@/lib/insights/zones";
 
@@ -28,7 +29,7 @@ export default function ZoneStack({ months }: { months: readonly ZoneMonth[] }) 
 
   return (
     <div className="h-[220px] sm:h-[280px]" role="img" aria-label="월별 심박 존 시간 비율">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_DIMENSION}>
         <BarChart data={rows} stackOffset="expand" margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barCategoryGap="22%">
           <CartesianGrid vertical={false} stroke={CHART_GRID_STROKE} />
           <XAxis

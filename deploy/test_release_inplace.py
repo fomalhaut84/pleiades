@@ -72,6 +72,13 @@ mkdir -p "$HOME/.pm2/logs"
 [[ -n "${STUB_SLEEP:-}" ]] && sleep "$STUB_SLEEP"
 echo "$ts: ⚠ Warning: Next.js inferred your workspace root" >> "$HOME/.pm2/logs/pleiades-fin-web-error-108.log"
 echo "$ts: TypeError: boom" >> "$HOME/.pm2/logs/pleiades-fin-web-error-114.log"
+# 회귀: #602 — MCP 오류는 pino JSON 으로 -out 에 간다. 오류 2(숫자 50 · 문자열 fatal) · info 1 · JSON 아닌 줄 1 · 창 밖 오류 1 · 중첩 level 1(9-1 info)
+echo "$ts: {\\"level\\":50,\\"msg\\":\\"tool failed\\"}" >> "$HOME/.pm2/logs/pleiades-fin-mcp-out-116.log"
+echo "$ts: {\\"level\\":\\"fatal\\",\\"msg\\":\\"x\\"}" >> "$HOME/.pm2/logs/pleiades-fin-mcp-out-116.log"
+echo "$ts: {\\"level\\":30,\\"msg\\":\\"level 50 in text\\"}" >> "$HOME/.pm2/logs/pleiades-fin-mcp-out-116.log"
+echo "$ts: plain \\"level\\":50 line" >> "$HOME/.pm2/logs/pleiades-fin-mcp-out-116.log"
+echo "2000-01-01 00:00:00: {\\"level\\":60}" >> "$HOME/.pm2/logs/pleiades-fin-mcp-out-116.log"
+echo "$ts: {\\"level\\":\\"info\\",\\"args\\":{\\"level\\":\\"error\\"}}" >> "$HOME/.pm2/logs/pleiades-fin-mcp-out-116.log"
 # 회귀: #373 — gateway 정상 기동 줄은 warn 이라 stderr 로 가지만 오류가 아니다
 echo "$ts: [discord-fin] gateway 준비 완료" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
 echo "$ts: [discord-fin] gateway 세션 이어받음" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
@@ -227,6 +234,7 @@ class ReleaseInplace(unittest.TestCase):
         # 회귀: #276 — 오류 로그 파일명에 pm2 id 가 붙는다. 창 안 2줄(경고 1)을 두 파일에서 센다
         self.assertIn("web 2(경고 1)", out)
         self.assertIn("bot 0(경고 0)", out)  # 회귀: #373 — 정상 기동 줄은 세지 않는다
+        self.assertIn("mcp 0(경고 0) · mcp 출력 오류 2", out)  # 회귀: #602 — -out 의 pino 오류만 · 창 안만
         # 화면에는 홈 경로·로그 원문·셸 비밀이 없다
         self.assertNotIn(str(self.srv.home), out + r.stderr)
         self.assertNotIn("DEPLOYSECRET", out + r.stderr)
