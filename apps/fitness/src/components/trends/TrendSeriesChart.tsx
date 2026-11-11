@@ -17,6 +17,7 @@ import {
   formatChartValue,
   type ChartMetric,
 } from "./chart-format";
+import { CHART_INITIAL_DIMENSION } from "@/components/ui/chart-dimension";
 
 interface TrendSeriesChartProps {
   points: readonly TrendPoint[];
@@ -64,7 +65,7 @@ export default function TrendSeriesChart({ points, metric, color, showBand, unit
 
   return (
     <div className="h-[220px] sm:h-[300px]" role="img" aria-label={`${metric.label} ${unitLabel} 단위 시계열`}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_DIMENSION}>
         <ComposedChart data={rows} margin={{ top: markers ? 14 : 8, right: 8, bottom: 0, left: 0 }} style={{ cursor: "pointer" }}>
           <CartesianGrid vertical={false} stroke={CHART_GRID_STROKE} />
           <XAxis

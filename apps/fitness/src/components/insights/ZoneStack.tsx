@@ -8,6 +8,7 @@ import { formatDuration } from "@/lib/format";
 import type { ZoneMonth } from "@/lib/insights/zones";
 
 import { ZONE_COLORS, ZONE_NAMES } from "./zone-colors";
+import { CHART_INITIAL_DIMENSION } from "@/components/ui/chart-dimension";
 const OPACITY = { normal: 0.85, low: 0.28, current: 0.45 } as const;
 
 type Row = { key: string; z1: number; z2: number; z3: number; z4: number; z5: number; empty: number; month: ZoneMonth };
@@ -28,7 +29,7 @@ export default function ZoneStack({ months }: { months: readonly ZoneMonth[] }) 
 
   return (
     <div className="h-[220px] sm:h-[280px]" role="img" aria-label="월별 심박 존 시간 비율">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_DIMENSION}>
         <BarChart data={rows} stackOffset="expand" margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barCategoryGap="22%">
           <CartesianGrid vertical={false} stroke={CHART_GRID_STROKE} />
           <XAxis
