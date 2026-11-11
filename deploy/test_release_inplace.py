@@ -559,6 +559,20 @@ class ReleaseInplace(unittest.TestCase):
         self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes", "--retry").returncode, 0)
         self.assertIn("이미 v1.0.1 배포됨", self.srv.run("fin", "v1.0.1", "--yes").stdout)
 
+    # 회귀: #587 P-7 — 수집기가 배포 알림(C5)과 같은 창의 경고만 흡수하도록 창을 남긴다 · 실패한 시도는 쓰지 않는다
+    def test_pass_writes_c5_window_and_failure_does_not(self):
+        import re
+        self.srv.release("v1.0.1")
+        win = self.srv.tmp / "private" / "inplace-fin-window"
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes").returncode, 0)
+        body = win.read_text()
+        m = re.fullmatch(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\t(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\n", body)
+        self.assertIsNotNone(m, body)
+        self.assertLessEqual(m.group(1), m.group(2))
+        self.assertEqual(oct(win.stat().st_mode & 0o777), "0o600")
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes", "--retry", STUB_DEPLOY_RC="1").returncode, 4)
+        self.assertEqual(win.read_text(), body, "실패한 시도는 창을 바꾸지 않는다")
+
     def test_build_free_failure_clears_pending(self):
         # 빌드 전 실패는 P 로 되돌린다 — 끝나지 않은 시도가 남지 않는다
         self.srv.release("v1.0.1")

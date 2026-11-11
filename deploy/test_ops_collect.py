@@ -326,6 +326,73 @@ class DeployWindow(Base):
         self.ok(now="2026-11-10T08:05:00+09:00")
         self.assertEqual(self.posts(), [])
 
+    def test_warnings_inside_c5_window_are_absorbed_failures_are_not(self):
+        # 회귀: #587 P-7 — 배포 창 web 경고(C5 가 배포 알림에서 센 줄)가 배포 뒤 첫 관측으로 나왔다
+        self.ok()
+        self.private.joinpath("inplace-fin-window").write_text("2026-11-10 08:01:30\t2026-11-10 08:03:00\n")
+        self.log("pleiades-fin-web-error-0.log",
+                 "2026-11-10 08:00:30: ⚠ BeforeT0\n"  # 직전 수집 뒤 · t0 앞 — C5 가 세지 않았다(PR-1b 9-1 major)
+                 "2026-11-10 08:02:00: ⚠ InsideWarn\n"
+                 "2026-11-10 08:02:30: [web] TypeError: InsideFail\n"
+                 "2026-11-10 08:03:01: [cron] ⚠ AfterT1\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        posts = [p.replace("\\", "") for p in self.posts()]
+        # 08:00:30 경고 1 · 창 안 실패 1 · 08:03:01 cron 경고 1 — 창 안 경고 1 만 흡수
+        self.assertEqual(len(posts), 3, posts)
+        self.assertTrue(any("🟠 실패 · fin·web · stderr · web · TypeError" in p for p in posts))
+        self.assertTrue(any("cron" in p for p in posts))
+        untagged = [p for p in posts if "🟡 경고 · fin·web · stderr · 지문" in p]
+        self.assertEqual(len(untagged), 1)
+        self.assertNotIn("2회", untagged[0])
+
+    def test_held_deploy_defers_error_logs_and_failed_deploy_reports_them(self):
+        # 회귀: PR-1b 9-1 major — 보류 중 흡수한 경고가 실패한 배포에서 어디에도 남지 않았다
+        self.ok()
+        pending = self.private / "inplace-fit-pending"
+        pending.write_text("v1.10.2\n")
+        self.log("pleiades-fit-web-error-0.log", "2026-11-10 08:02:00: ⚠ HeldWarn\n"
+                 "2026-11-10 08:02:01: [web] RangeError: HeldFail\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertEqual([p for p in self.posts() if "fit·web" in p], [])  # 보류 중 — 읽지 않는다
+        # 통과 없이 끝났다(표지가 사라짐 · 창 파일 없음) → 둘 다 낸다
+        pending.unlink()
+        self.ok(now="2026-11-10T08:10:00+09:00")
+        fit = [p.replace("\\", "") for p in self.posts() if "fit·web" in p]
+        self.assertEqual(len(fit), 2, fit)
+        # 통과한 배포 — 표지가 사라진 뒤 창 안 경고만 흡수
+        pending.write_text("v1.10.3\n")
+        self.log("pleiades-fit-web-error-0.log", "2026-11-10 08:12:00: [x] ⚠ PassWarn\n"
+                 "2026-11-10 08:12:01: [web] SyntaxError: PassFail\n", append=True)
+        self.ok(now="2026-11-10T08:15:00+09:00")
+        pending.unlink()
+        self.private.joinpath("inplace-fit-window").write_text("2026-11-10 08:11:00\t2026-11-10 08:13:00\n")
+        self.ok(now="2026-11-10T08:20:00+09:00")
+        later = [p.replace("\\", "") for p in self.posts() if "fit·web" in p][2:]
+        self.assertEqual(len(later), 1, later)
+        self.assertIn("SyntaxError", later[0])
+
+    def test_first_run_during_hold_still_starts_at_end(self):
+        # 회귀: PR #590 Codex P2 — 상태 없는 첫 회가 보류 중이면 기준 오프셋이 없어 보류 뒤 과거 로그를 0 부터 읽었다
+        self.log("pleiades-fit-web-error-0.log", "2026-11-01 00:00:00: [web] OldError\n")
+        self.private.mkdir(parents=True, exist_ok=True)
+        pending = self.private / "inplace-fit-pending"
+        pending.write_text("v1.10.2\n")
+        self.ok()
+        pending.unlink()
+        self.log("pleiades-fit-web-error-0.log", "2026-11-10 08:06:00: [web] NewError\n", append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00")
+        text = "\n".join(self.posts())
+        self.assertIn("fit·web", text)
+        self.assertEqual(sum("fit·web" in p for p in self.posts()), 1)
+        self.assertNotIn("2회", [p for p in self.posts() if "fit·web" in p][0])
+
+    def test_malformed_window_absorbs_nothing(self):
+        self.ok()
+        self.private.joinpath("inplace-fin-window").write_text("2026-11-10 08:03:00\t2026-11-10 08:01:00\n")  # t0 > t1
+        self.log("pleiades-fin-web-error-0.log", "2026-11-10 08:02:00: ⚠ W\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertEqual(len(self.posts()), 1)
+
     def test_never_opens_deploy_lock(self):
         # FIFO — 누가 열면 막힌다(쓰기·읽기 모두) → 시간 초과로 드러난다
         self.private.mkdir(parents=True, exist_ok=True)
@@ -495,11 +562,36 @@ class Logs(Base):
         (self.pm2 / "logs" / "pleiades-fit-mcp-out-0.log").unlink()
         self.ok()
         self.assertTrue(any("glob-empty:fit-mcp-out" in p for p in self.posts()))
-        # 침묵: fin bot out 이 N시간 늘지 않음 · fin web out 은 기본 꺼짐
+        # 회귀: #587 — 기준 24시간. dry-run 판정에서 bot·mcp out 은 낮에도 6시간씩 조용했다
         self.ok(now="2026-11-10T15:00:00+09:00", config={"burstLimit": 20})
+        self.assertNotIn("silent:", "\n".join(self.posts()))
+        # 침묵: fin bot out 이 24시간 늘지 않음 · fin web out 은 기본 꺼짐
+        self.ok(now="2026-11-11T08:05:00+09:00", config={"burstLimit": 20})
         text = "\n".join(self.posts())
         self.assertIn("silent:fin-bot", text)
         self.assertNotIn("silent:fin-web", text)
+
+    def test_known_stderr_kinds_and_deprecated_are_warnings(self):
+        # 회귀: #587 — 세부 칸이 빈 web 줄(스캐너 Server Action · Recharts 크기)이 한 '실패' 지문으로 묶였다
+        self.ok()
+        fin_web = "pleiades-fin-web-error-0.log"
+        fit_web = "pleiades-fit-web-error-0.log"
+        self.log(fin_web, '2026-11-10 08:01:00: [Error: The Server Reference ID did not match the expected format. Received "x".\n'
+                 '2026-11-10 08:01:01: Error: The Server Reference ID did not match the expected format. Received "y".\n'
+                 "2026-11-10 08:01:02: [Error: 다른 원인 비밀메시지\n", append=True)
+        self.log(fit_web, "2026-11-10 08:01:00: The width(-1) and height(-1) of chart should be greater than 0,\n", append=True)
+        self.log(self.E, "2026-11-10 08:01:00: [Deprecated] historical() is deprecated\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        posts = [p.replace("\\", "") for p in self.posts()]
+        ref = [p for p in posts if "server-action-ref" in p]
+        self.assertEqual(len(ref), 1)  # 두 줄(받은 값이 달라도) = 한 지문
+        self.assertIn("🟡 경고 · fin·web · stderr · server-action-ref", ref[0])
+        self.assertIn("2회", ref[0])
+        self.assertTrue(any("🟡 경고 · fit·web · stderr · chart-size" in p for p in posts))
+        self.assertTrue(any("🟡 경고 · fin·bot · stderr · Deprecated" in p for p in posts))
+        # 표 밖은 그대로 실패 · 원문 없음
+        self.assertTrue(any("🟠 실패 · fin·web · stderr · 지문" in p for p in posts))
+        self.assert_no_raw("비밀메시지", "Received", "historical")
 
 
 class StateAndLock(Base):

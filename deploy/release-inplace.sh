@@ -337,6 +337,9 @@ main() {
   form "   사람 확인: 웹 화면 · Discord $([[ $APP == fin ]] && echo '현황' || echo '!today') — 예/아니오 를 덧붙인다"
   [[ "${procs[1]:-0}" == 3 && "$mcp_code" == 200 && "$n_bad" == 0 ]] \
     || stop 4 "C5 — 확인 실패(위 줄) → $(recovery)"
+  # C5 창(t0 · t1 — 서버 로컬 시각 문자열 · pm2 접두와 같은 형식)을 남긴다 — 수집기가 이 창의 경고 줄을 흡수한다(#587 P-7).
+  # 통과 때만 쓴다: 실패한 시도의 줄은 배포 알림이 세지 않았으니 수집기가 그대로 낸다. 못 써도 배포는 통과다
+  (umask 077; printf '%s\t%s\n' "$t0" "$t1" > "$PRIVATE/inplace-$APP-window") 2>>"$LOG" || true
   (umask 077; printf '%s\n' "$V" > "$LAST_OK_FILE") 2>>"$LOG" || true
   rm -f "$PENDING_FILE"
   emit_form "통과"
