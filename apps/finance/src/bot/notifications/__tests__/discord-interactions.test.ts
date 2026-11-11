@@ -17,6 +17,7 @@ vi.mock('@pleiades/chat', async (orig) => ({
 import { decideVest } from '@/bot/commands/vest-confirm'
 import { createChat, MESSAGE_INTENTS } from '@pleiades/chat'
 import {
+  ALIVE_RECORD,
   INBOUND_OFF_LOG,
   INBOUND_ON_LOG,
   buttonChannels,
@@ -133,6 +134,8 @@ describe('startDiscordInteractions', () => {
     expect(opts.fallbackIntents).toBeUndefined()
     expect(log).toHaveBeenCalledWith(INBOUND_OFF_LOG)
     expect(opts.identifyGuard).not.toBe('none')
+    expect(opts.aliveMarker).toBeDefined() // #589 생존 표지
+    expect(ALIVE_RECORD).toBe('logs/alive-fin.json') // deploy/ops/collect.cjs 와 같은 경로
     expect(opts.allowedChannelIds()).toEqual(['123456789012345678'])
     expect(opts.messageChannelIds?.()).toEqual([])
     vi.stubEnv('DISCORD_ALLOWED_USER_IDS', '111111')

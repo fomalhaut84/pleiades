@@ -75,6 +75,8 @@ echo "$ts: TypeError: boom" >> "$HOME/.pm2/logs/pleiades-fin-web-error-114.log"
 # 회귀: #373 — gateway 정상 기동 줄은 warn 이라 stderr 로 가지만 오류가 아니다
 echo "$ts: [discord-fin] gateway 준비 완료" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
 echo "$ts: [discord-fin] gateway 세션 이어받음" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
+echo "$ts: [discord-fin] gateway 재접속 1000ms 후 (RESUME)" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
+[[ -n "${STUB_BOT_SLOW_RESUME:-}" ]] && echo "$ts: [discord-fin] gateway 재접속 5000ms 후 (RESUME)" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
 [[ -n "${STUB_BOT_ERROR:-}" ]] && echo "$ts: [discord-fin] gateway 오류: boom" >> "$HOME/.pm2/logs/pleiades-fin-bot-error-115.log"
 echo "DATABASE_URL=postgresql://svc:DEPLOYSECRET@localhost/db"
 rc=${STUB_DEPLOY_RC:-0}
@@ -357,6 +359,13 @@ class ReleaseInplace(unittest.TestCase):
         self.assertIn("bot 1(경고 0)", r.stdout)
         self.assertEqual(r.returncode, 0, r.stdout)
 
+    def test_c5_counts_slow_resume_but_not_first_resume(self):
+        # 회귀: #583 A — 1000ms RESUME 재접속(스텁이 늘 찍는다)은 정상 줄 · 5000ms 이상은 센다
+        self.srv.release("v1.0.1")
+        r = self.srv.run("fin", "v1.0.1", "--yes", STUB_BOT_SLOW_RESUME="1")
+        self.assertIn("bot 1(경고 0)", r.stdout)
+        self.assertEqual(r.returncode, 0, r.stdout)
+
     def test_c5_probe_errors_are_broken_down_by_code(self):
         # 회귀: #549 — 000(웹 재기동 빈틈)과 5xx(앱 오류)를 판정 양식에서 가른다 · "응답 <수>" 는 그대로(ssh-deploy.sh 가 읽는다)
         self.srv.release("v1.0.1")
@@ -549,6 +558,20 @@ class ReleaseInplace(unittest.TestCase):
         self.assertNotIn("이미 v1.0.1 배포됨", r.stdout)
         self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes", "--retry").returncode, 0)
         self.assertIn("이미 v1.0.1 배포됨", self.srv.run("fin", "v1.0.1", "--yes").stdout)
+
+    # 회귀: #587 P-7 — 수집기가 배포 알림(C5)과 같은 창의 경고만 흡수하도록 창을 남긴다 · 실패한 시도는 쓰지 않는다
+    def test_pass_writes_c5_window_and_failure_does_not(self):
+        import re
+        self.srv.release("v1.0.1")
+        win = self.srv.tmp / "private" / "inplace-fin-window"
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes").returncode, 0)
+        body = win.read_text()
+        m = re.fullmatch(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\t(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\n", body)
+        self.assertIsNotNone(m, body)
+        self.assertLessEqual(m.group(1), m.group(2))
+        self.assertEqual(oct(win.stat().st_mode & 0o777), "0o600")
+        self.assertEqual(self.srv.run("fin", "v1.0.1", "--yes", "--retry", STUB_DEPLOY_RC="1").returncode, 4)
+        self.assertEqual(win.read_text(), body, "실패한 시도는 창을 바꾸지 않는다")
 
     def test_build_free_failure_clears_pending(self):
         # 빌드 전 실패는 P 로 되돌린다 — 끝나지 않은 시도가 남지 않는다

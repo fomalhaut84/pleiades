@@ -103,7 +103,8 @@ app_procs() {
     })'
 }
 # 오류 로그에 들어가지만 오류가 아닌 줄 — chat 이 gateway 정상 기동을 warn 으로 찍는다(#373). 그 문자열은 판정 계약이라 바꾸지 않는다
-NORMAL_GATEWAY_LINE='\\] gateway (준비 완료|세션 이어받음)$'
+# 첫 단계(1000ms) RESUME 재접속도 정상이다(#583 A · Discord 일상 재접속) — 5000ms 이상 · 새 세션은 센다
+NORMAL_GATEWAY_LINE='\\] gateway (준비 완료|세션 이어받음|재접속 1000ms 후 \\(RESUME\\))$'
 count_window() {  # <glob 접두> <T0> <T1> — 창 안 줄 수 · 그중 경고(⚠ · Warning) 수 · 정상 gateway 줄은 세지 않는다
   cat "$1"*.log 2>/dev/null | awk -v s="$2" -v e="$3" -v normal="$NORMAL_GATEWAY_LINE" '
     substr($0,1,19)>=s && substr($0,1,19)<=e && $0 !~ normal { n++; if ($0 ~ /⚠|[Ww]arning/) w++ }
@@ -336,6 +337,9 @@ main() {
   form "   사람 확인: 웹 화면 · Discord $([[ $APP == fin ]] && echo '현황' || echo '!today') — 예/아니오 를 덧붙인다"
   [[ "${procs[1]:-0}" == 3 && "$mcp_code" == 200 && "$n_bad" == 0 ]] \
     || stop 4 "C5 — 확인 실패(위 줄) → $(recovery)"
+  # C5 창(t0 · t1 — 서버 로컬 시각 문자열 · pm2 접두와 같은 형식)을 남긴다 — 수집기가 이 창의 경고 줄을 흡수한다(#587 P-7).
+  # 통과 때만 쓴다: 실패한 시도의 줄은 배포 알림이 세지 않았으니 수집기가 그대로 낸다. 못 써도 배포는 통과다
+  (umask 077; printf '%s\t%s\n' "$t0" "$t1" > "$PRIVATE/inplace-$APP-window") 2>>"$LOG" || true
   (umask 077; printf '%s\n' "$V" > "$LAST_OK_FILE") 2>>"$LOG" || true
   rm -f "$PENDING_FILE"
   emit_form "통과"

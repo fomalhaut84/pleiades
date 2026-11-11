@@ -17,6 +17,7 @@ import tempfile
 import threading
 import time
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -311,7 +312,8 @@ class DeployWindow(Base):
         procs = {n: ("online", 0) for n in NAMES}
         del procs["pleiades-fit-bot"]
         self.set_procs(procs)
-        self.ok(now=time.strftime("%Y-%m-%dT%H:%M:%S%z"), config={"summaryAt": "23:59:59"})
+        # 실제 시각을 쓴다(표지 mtime 기준) — 첫 회(NOW 08:00)에서 6시간이 지나면 침묵 경보가 폭주 규칙에 묶이므로 상한을 넉넉히(#577)
+        self.ok(now=time.strftime("%Y-%m-%dT%H:%M:%S%z"), config={"summaryAt": "23:59:59", "burstLimit": 50})
         text = "\n".join(self.posts()).replace("\\", "")
         self.assertIn("deploy-stale:fit", text)
         self.assertIn("fit·bot · pm2 · missing", text)
@@ -324,6 +326,73 @@ class DeployWindow(Base):
         self.set_procs(procs)
         self.ok(now="2026-11-10T08:05:00+09:00")
         self.assertEqual(self.posts(), [])
+
+    def test_warnings_inside_c5_window_are_absorbed_failures_are_not(self):
+        # 회귀: #587 P-7 — 배포 창 web 경고(C5 가 배포 알림에서 센 줄)가 배포 뒤 첫 관측으로 나왔다
+        self.ok()
+        self.private.joinpath("inplace-fin-window").write_text("2026-11-10 08:01:30\t2026-11-10 08:03:00\n")
+        self.log("pleiades-fin-web-error-0.log",
+                 "2026-11-10 08:00:30: ⚠ BeforeT0\n"  # 직전 수집 뒤 · t0 앞 — C5 가 세지 않았다(PR-1b 9-1 major)
+                 "2026-11-10 08:02:00: ⚠ InsideWarn\n"
+                 "2026-11-10 08:02:30: [web] TypeError: InsideFail\n"
+                 "2026-11-10 08:03:01: [cron] ⚠ AfterT1\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        posts = [p.replace("\\", "") for p in self.posts()]
+        # 08:00:30 경고 1 · 창 안 실패 1 · 08:03:01 cron 경고 1 — 창 안 경고 1 만 흡수
+        self.assertEqual(len(posts), 3, posts)
+        self.assertTrue(any("🟠 실패 · fin·web · stderr · web · TypeError" in p for p in posts))
+        self.assertTrue(any("cron" in p for p in posts))
+        untagged = [p for p in posts if "🟡 경고 · fin·web · stderr · 지문" in p]
+        self.assertEqual(len(untagged), 1)
+        self.assertNotIn("2회", untagged[0])
+
+    def test_held_deploy_defers_error_logs_and_failed_deploy_reports_them(self):
+        # 회귀: PR-1b 9-1 major — 보류 중 흡수한 경고가 실패한 배포에서 어디에도 남지 않았다
+        self.ok()
+        pending = self.private / "inplace-fit-pending"
+        pending.write_text("v1.10.2\n")
+        self.log("pleiades-fit-web-error-0.log", "2026-11-10 08:02:00: ⚠ HeldWarn\n"
+                 "2026-11-10 08:02:01: [web] RangeError: HeldFail\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertEqual([p for p in self.posts() if "fit·web" in p], [])  # 보류 중 — 읽지 않는다
+        # 통과 없이 끝났다(표지가 사라짐 · 창 파일 없음) → 둘 다 낸다
+        pending.unlink()
+        self.ok(now="2026-11-10T08:10:00+09:00")
+        fit = [p.replace("\\", "") for p in self.posts() if "fit·web" in p]
+        self.assertEqual(len(fit), 2, fit)
+        # 통과한 배포 — 표지가 사라진 뒤 창 안 경고만 흡수
+        pending.write_text("v1.10.3\n")
+        self.log("pleiades-fit-web-error-0.log", "2026-11-10 08:12:00: [x] ⚠ PassWarn\n"
+                 "2026-11-10 08:12:01: [web] SyntaxError: PassFail\n", append=True)
+        self.ok(now="2026-11-10T08:15:00+09:00")
+        pending.unlink()
+        self.private.joinpath("inplace-fit-window").write_text("2026-11-10 08:11:00\t2026-11-10 08:13:00\n")
+        self.ok(now="2026-11-10T08:20:00+09:00")
+        later = [p.replace("\\", "") for p in self.posts() if "fit·web" in p][2:]
+        self.assertEqual(len(later), 1, later)
+        self.assertIn("SyntaxError", later[0])
+
+    def test_first_run_during_hold_still_starts_at_end(self):
+        # 회귀: PR #590 Codex P2 — 상태 없는 첫 회가 보류 중이면 기준 오프셋이 없어 보류 뒤 과거 로그를 0 부터 읽었다
+        self.log("pleiades-fit-web-error-0.log", "2026-11-01 00:00:00: [web] OldError\n")
+        self.private.mkdir(parents=True, exist_ok=True)
+        pending = self.private / "inplace-fit-pending"
+        pending.write_text("v1.10.2\n")
+        self.ok()
+        pending.unlink()
+        self.log("pleiades-fit-web-error-0.log", "2026-11-10 08:06:00: [web] NewError\n", append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00")
+        text = "\n".join(self.posts())
+        self.assertIn("fit·web", text)
+        self.assertEqual(sum("fit·web" in p for p in self.posts()), 1)
+        self.assertNotIn("2회", [p for p in self.posts() if "fit·web" in p][0])
+
+    def test_malformed_window_absorbs_nothing(self):
+        self.ok()
+        self.private.joinpath("inplace-fin-window").write_text("2026-11-10 08:03:00\t2026-11-10 08:01:00\n")  # t0 > t1
+        self.log("pleiades-fin-web-error-0.log", "2026-11-10 08:02:00: ⚠ W\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertEqual(len(self.posts()), 1)
 
     def test_never_opens_deploy_lock(self):
         # FIFO — 누가 열면 막힌다(쓰기·읽기 모두) → 시간 초과로 드러난다
@@ -369,6 +438,107 @@ class Health(Base):
         self.assertEqual(len(rec), 1)
         self.assertIn("복구", rec[0])
 
+    def test_unevaluated_run_breaks_recovery_streak(self):
+        # 회귀: #577 · PR #576 Codex P2 — 정상 1 → 판정 못 한 회(.env 없음) → 정상 1 은 연속 2회가 아니다
+        env = self.home / "pleiades-fin" / "apps" / "finance" / ".env"
+        self.servers["fin"]["web"].spec["/"] = (503, "")
+        self.ok()
+        self.servers["fin"]["web"].spec["/"] = (200, "")
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        saved = env.read_text()
+        env.unlink()
+        self.ok(now="2026-11-10T08:10:00+09:00")
+        env.write_text(saved)
+        self.ok(now="2026-11-10T08:15:00+09:00", config={"recoverRuns": 2})
+        self.assertFalse(any("🟢" in p and "fin·web" in p for p in self.posts()))
+        self.ok(now="2026-11-10T08:20:00+09:00", config={"recoverRuns": 2})
+        self.assertEqual(len([p for p in self.posts() if "🟢" in p and "fin·web" in p]), 1)
+
+
+class Alive(Base):
+    """#589 봇 생존 표지 — apps/<dir>/logs/alive-<app>.json 수정 시각 · 연결 유지만 본다(응답 가능 여부는 보지 않는다)."""
+
+    def marker(self, app, at):
+        d = self.home / f"pleiades-{app}" / "apps" / APPS[app] / "logs"
+        d.mkdir(exist_ok=True)
+        p = d / f"alive-{app}.json"
+        p.write_text('{"at":"x","state":"ack"}')
+        t = datetime.fromisoformat(at).timestamp()
+        os.utime(p, (t, t))
+        return p
+
+    def test_no_marker_is_not_judged(self):
+        self.ok()
+        self.ok(now="2026-11-10T09:00:00+09:00", config={"summaryAt": "23:59"})
+        self.assertFalse(any("gateway" in p for p in self.posts()))
+
+    def test_stale_marker_is_outage_and_fresh_marker_recovers(self):
+        self.marker("fit", "2026-11-10T07:49:00+09:00")  # 11분 전
+        self.marker("fin", "2026-11-10T07:55:00+09:00")  # 5분 전 — 정상
+        self.ok()
+        text = "\n".join(self.posts())
+        self.assertIn("🔴", text)
+        self.assertIn("fit·bot · gateway · stale", text)
+        self.assertNotIn("fin·bot · gateway", text)
+        self.marker("fit", "2026-11-10T08:04:30+09:00")
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.marker("fit", "2026-11-10T08:09:30+09:00")
+        self.ok(now="2026-11-10T08:10:00+09:00", config={"recoverRuns": 2})
+        rec = [p for p in self.posts() if "🟢" in p and "fit·bot · gateway" in p]
+        self.assertEqual(len(rec), 1)
+
+    def test_threshold_is_exclusive_and_configurable(self):
+        self.marker("fin", "2026-11-10T07:50:00+09:00")  # 정확히 10분 — 아직 정상
+        self.ok()
+        self.assertFalse(any("gateway" in p for p in self.posts()))
+        self.ok(now="2026-11-10T08:05:00+09:00", config={"aliveStaleMin": 20})
+        self.assertFalse(any("gateway" in p for p in self.posts()))
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertTrue(any("fin·bot · gateway · stale" in p for p in self.posts()))
+
+    def test_deleted_stale_marker_recovers_and_leaves_no_open_issue(self):
+        # 회귀: #589 9-1 major — stale 인 채 표지를 지우면(런북 조치) ENOENT 를 건너뛰어 이상이 영영 열려 있었다
+        p = self.marker("fit", "2026-11-10T07:00:00+09:00")
+        self.ok()
+        self.assertTrue(any("🔴" in x and "fit·bot · gateway · stale" in x for x in self.posts()))
+        p.unlink()
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.ok(now="2026-11-10T08:10:00+09:00", config={"recoverRuns": 2})
+        self.assertEqual(len([x for x in self.posts() if "🟢" in x and "fit·bot · gateway" in x]), 1)
+        self.marker("fit", "2026-11-10T08:00:00+09:00")
+        self.ok(now="2026-11-10T08:15:00+09:00")
+        firsts = [x for x in self.posts() if "🔴" in x and "fit·bot · gateway · stale" in x]
+        self.assertEqual(len(firsts), 2)  # 닫혔으므로 다시 첫 발생으로 나간다
+
+    def test_unreadable_marker_does_not_close_open_stale(self):
+        # 회귀: PR #591 Codex P2 — stat 이 EACCES 인 회도 gateway 를 판정한 것으로 쳐 거짓 복구가 나갔다
+        if os.getuid() == 0:
+            self.skipTest("root 는 권한 거부가 없다")
+        p = self.marker("fin", "2026-11-10T07:00:00+09:00")
+        self.ok()
+        p.parent.chmod(0o000)
+        self.addCleanup(p.parent.chmod, 0o700)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.ok(now="2026-11-10T08:10:00+09:00", config={"recoverRuns": 2})
+        p.parent.chmod(0o700)
+        self.assertFalse(any("🟢" in x and "fin·bot · gateway" in x for x in self.posts()))
+        self.assertTrue(any("alive-read:fin" in x for x in self.posts()))
+
+    def test_held_deploy_skips_alive_judgment(self):
+        self.marker("fin", "2026-11-10T07:00:00+09:00")
+        self.private.mkdir(parents=True, exist_ok=True)
+        self.private.joinpath("inplace-fin-pending").write_text("v1.11.0\n")
+        self.ok()
+        self.assertFalse(any("gateway" in p for p in self.posts()))
+
+    def test_marker_contents_never_reach_records(self):
+        p = self.marker("fit", "2026-11-10T07:00:00+09:00")
+        t = p.stat().st_mtime
+        p.write_text(SECRET)
+        os.utime(p, (t, t))
+        self.ok()
+        self.assert_no_raw()
+
 
 class Logs(Base):
     E = "pleiades-fin-bot-error-0.log"
@@ -401,6 +571,20 @@ class Logs(Base):
             f.write("2026-11-10 08:16:00: [b] ShrinkError\n")
         self.ok(now="2026-11-10T08:20:00+09:00")
         self.assertTrue(any("ShrinkError" in x for x in self.posts()))
+
+    def test_first_resume_reconnect_is_normal_but_slow_and_new_session_are_not(self):
+        # 회귀: #583 A — dry-run 첫 판정(11-10)에서 두 봇의 일상 RESUME 재접속이 '실패' 로 잡혔다
+        self.ok()
+        self.log(self.E, "2026-11-10 08:01:00: [discord-fin] gateway 재접속 1000ms 후 (RESUME)\n"
+                 "2026-11-10 08:01:01: [discord-fin] gateway 세션 이어받음\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertEqual(self.posts(), [])
+        self.log(self.E, "2026-11-10 08:06:00: [discord-fin] gateway 재접속 5000ms 후 (RESUME)\n", append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00")
+        self.assertEqual(len(self.posts()), 1)
+        self.log("pleiades-fit-bot-error-0.log", "2026-11-10 08:11:00: [discord-fit] gateway 재접속 1000ms 후 (새 세션)\n", append=True)
+        self.ok(now="2026-11-10T08:15:00+09:00")
+        self.assertTrue(any("fit·bot" in p for p in self.posts()))
 
     def test_warn_vs_fail_gateway_skip_frames_errno_no_raw(self):
         self.ok()
@@ -464,11 +648,36 @@ class Logs(Base):
         (self.pm2 / "logs" / "pleiades-fit-mcp-out-0.log").unlink()
         self.ok()
         self.assertTrue(any("glob-empty:fit-mcp-out" in p for p in self.posts()))
-        # 침묵: fin bot out 이 N시간 늘지 않음 · fin web out 은 기본 꺼짐
+        # 회귀: #587 — 기준 24시간. dry-run 판정에서 bot·mcp out 은 낮에도 6시간씩 조용했다
         self.ok(now="2026-11-10T15:00:00+09:00", config={"burstLimit": 20})
+        self.assertNotIn("silent:", "\n".join(self.posts()))
+        # 침묵: fin bot out 이 24시간 늘지 않음 · fin web out 은 기본 꺼짐
+        self.ok(now="2026-11-11T08:05:00+09:00", config={"burstLimit": 20})
         text = "\n".join(self.posts())
         self.assertIn("silent:fin-bot", text)
         self.assertNotIn("silent:fin-web", text)
+
+    def test_known_stderr_kinds_and_deprecated_are_warnings(self):
+        # 회귀: #587 — 세부 칸이 빈 web 줄(스캐너 Server Action · Recharts 크기)이 한 '실패' 지문으로 묶였다
+        self.ok()
+        fin_web = "pleiades-fin-web-error-0.log"
+        fit_web = "pleiades-fit-web-error-0.log"
+        self.log(fin_web, '2026-11-10 08:01:00: [Error: The Server Reference ID did not match the expected format. Received "x".\n'
+                 '2026-11-10 08:01:01: Error: The Server Reference ID did not match the expected format. Received "y".\n'
+                 "2026-11-10 08:01:02: [Error: 다른 원인 비밀메시지\n", append=True)
+        self.log(fit_web, "2026-11-10 08:01:00: The width(-1) and height(-1) of chart should be greater than 0,\n", append=True)
+        self.log(self.E, "2026-11-10 08:01:00: [Deprecated] historical() is deprecated\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        posts = [p.replace("\\", "") for p in self.posts()]
+        ref = [p for p in posts if "server-action-ref" in p]
+        self.assertEqual(len(ref), 1)  # 두 줄(받은 값이 달라도) = 한 지문
+        self.assertIn("🟡 경고 · fin·web · stderr · server-action-ref", ref[0])
+        self.assertIn("2회", ref[0])
+        self.assertTrue(any("🟡 경고 · fit·web · stderr · chart-size" in p for p in posts))
+        self.assertTrue(any("🟡 경고 · fin·bot · stderr · Deprecated" in p for p in posts))
+        # 표 밖은 그대로 실패 · 원문 없음
+        self.assertTrue(any("🟠 실패 · fin·web · stderr · 지문" in p for p in posts))
+        self.assert_no_raw("비밀메시지", "Received", "historical")
 
 
 class StateAndLock(Base):
@@ -481,6 +690,34 @@ class StateAndLock(Base):
         self.ok()
         self.assertTrue(any("lock-stale" in p for p in self.posts()))
         self.assertFalse(lock.exists())
+
+    def test_stale_lock_with_takeover_in_progress_refuses(self):
+        # 회귀: #577 · PR #576 Codex P2 — 다른 실행이 넘겨받는 중(보조 잠금 신선)이면 지우지 않고 busy
+        self.ops.mkdir(parents=True)
+        lock = self.ops / "collect.lock"
+        lock.mkdir()
+        old = time.time() - 3600
+        os.utime(lock, (old, old))
+        (self.ops / "collect.lock.takeover").mkdir()
+        r = self.run_c()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("이전 실행이 아직 돈다", r.stdout)
+        self.assertEqual(lock.stat().st_mtime, old)
+        self.assertTrue((self.ops / "collect.lock.takeover").exists())
+        self.assertEqual(self.pm2_calls(), [])
+
+    def test_stale_takeover_guard_cleared(self):
+        self.ops.mkdir(parents=True)
+        lock = self.ops / "collect.lock"
+        guard = self.ops / "collect.lock.takeover"
+        old = time.time() - 3600
+        for d in (lock, guard):
+            d.mkdir()
+            os.utime(d, (old, old))
+        self.ok()
+        self.assertTrue(any("lock-stale" in p for p in self.posts()))
+        self.assertFalse(lock.exists())
+        self.assertFalse(guard.exists())
 
     def test_fresh_lock_refuses(self):
         self.ops.mkdir(parents=True)

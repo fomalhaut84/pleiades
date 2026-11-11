@@ -41,7 +41,11 @@ const DEFAULTS = {
   maxRunMs: 120000, // P-9 한 회 상한(제약 P-8×주기 > P-9)
   lateRuns: 3, // C-7 ④ 직전 수집이 주기의 k배 넘게 지나면
   // C-7 ② 침묵 감지 — -out 만 · 역할별(V17: 줄이 꾸준한 out 5개 · fin web out · 모든 -error 는 끈다) · 값 = N시간
-  silenceHours: { 'fin-bot': 6, 'fin-mcp': 6, 'fit-web': 6, 'fit-bot': 6, 'fit-mcp': 6 },
+  // 6 → 24(#587): dry-run 판정에서 bot·mcp -out 은 낮에도 6시간씩 조용했다(사용·크론 때만 는다) — 하루 크론이 도는지만 본다
+  silenceHours: { 'fin-bot': 24, 'fin-mcp': 24, 'fit-web': 24, 'fit-bot': 24, 'fit-mcp': 24 },
+  // #589 봇 생존 표지 — apps/<dir>/logs/alive-<app>.json 수정 시각이 N분 넘게 그대로면 gateway 정지(chat 이 READY·RESUMED 는 곧바로 · ACK 는 60초에 한 번 쓴다)
+  // 보는 것은 "Discord 연결 유지"다 — 연결은 살아 있는데 답을 못 하는 경우(4014 강등 · 핸들러·AI 정지)는 잡지 않는다
+  aliveStaleMin: 10,
   readCapBytes: 4 * 1048576, // 한 파일을 한 회에 읽는 상한 — 남은 것은 다음 회
   socketMs: 2000,
   jlistMs: 20000,
@@ -64,8 +68,15 @@ const DISKS = {
 }
 
 // 판정 계약(release-inplace.sh:106 · #373) — chat 이 gateway 정상 기동을 warn 으로 찍는다
-const NORMAL_GATEWAY = /\] gateway (준비 완료|세션 이어받음)$/
-const WARN_RE = /⚠|[Ww]arning/ // release-inplace.sh C5 와 같은 경고 패턴
+// 첫 단계(1000ms) RESUME 재접속은 Discord 의 일상 재접속이다(#583 A) — 5000ms 이상 · 새 세션은 그대로 센다
+const NORMAL_GATEWAY = /\] gateway (준비 완료|세션 이어받음|재접속 1000ms 후 \(RESUME\))$/
+// release-inplace.sh C5 경고 패턴 + Deprecat…(#587 · 수집기만 — C5 는 배포 경로라 그대로 둔다)
+const WARN_RE = /⚠|[Ww]arning|Deprecat/
+// 알려진 stderr 줄(#587) — 세부 칸이 비어 한 지문으로 묶이던 것을 정해진 토큰 하나로 가른다(원문은 칸에 오지 않는다)
+const KNOWN_STDERR = [
+  { re: /Server Reference ID did not match the expected format/, kind: 'server-action-ref', sev: '경고' }, // 외부 스캐너의 Server Action 요청
+  { re: /The width\(-?\d+\) and height\(-?\d+\) of chart should be greater than 0/, kind: 'chart-size', sev: '경고' }, // Recharts · #588
+]
 const PM2_PREFIX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}: / // pleiades.config.cjs log_date_format + pm2 의 ': '
 const LOG_NAME = /^pleiades-(fin|fit)-(web|bot|mcp)-(out|error)(?:-\d+)?\.log$/
 const FIELD_OK = /^[A-Za-z0-9_.:/-]{1,64}$/ // §1-4 ⓪
@@ -187,6 +198,13 @@ function readMarker(file) {
   }
 }
 
+// release-inplace.sh 가 통과 때 쓰는 C5 창 "t0\tt1"(#587) — 형식이 다르면 없는 것으로 본다(흡수하지 않는다)
+const WINDOW_RE = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\t(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})$/
+function c5Window(app) {
+  const m = WINDOW_RE.exec((readMarker(path.join(PRIVATE, `inplace-${app}-window`)) || {}).body || '')
+  return m && m[1] <= m[2] ? { t0: m[1], t1: m[2] } : null
+}
+
 function deployWindow(ctx) {
   const out = {}
   for (const app of Object.keys(APPS)) {
@@ -198,7 +216,7 @@ function deployWindow(ctx) {
     const stale = Boolean(pending) && ctx.now - pending.mtimeMs >= CONFIG.holdMin * MIN
     ctx.evaluated.add(`ops · collector · deploy-stale:${app}`)
     if (stale) ctx.obs.push(collector(`deploy-stale:${app}`)) // 보류를 끝내고 평소대로 판정한다
-    out[app] = { held: Boolean(pending) && !stale, lastOkChanged: prev !== undefined && prev !== sig }
+    out[app] = { held: Boolean(pending) && !stale, lastOkChanged: prev !== undefined && prev !== sig, window: c5Window(app) }
   }
   return out
 }
@@ -298,24 +316,40 @@ function codeOf(text, explicit) {
   return ''
 }
 
+// pm2 접두 시각을 문자열 그대로 — C5 창(release-inplace.sh 의 date '+%F %T')과 같은 서버 로컬 시각이라 문자열로 비교한다(시간대를 해석하지 않는다)
+const STAMP = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}): /
+const stampOf = (line) => (STAMP.exec(line) || [])[1] || null
+
+// 덩어리 = { at: 첫 줄 시각 문자열(없으면 null), lines }
 function chunksOf(lines) {
   const chunks = []
   for (const line of lines) {
-    if (PM2_PREFIX.test(line) || chunks.length === 0) chunks.push([line.replace(PM2_PREFIX, '')])
-    else chunks[chunks.length - 1].push(line) // 시각 없는 뒷줄은 앞 줄의 덩어리(S5)
+    if (PM2_PREFIX.test(line) || chunks.length === 0) chunks.push({ at: stampOf(line), lines: [line.replace(PM2_PREFIX, '')] })
+    else chunks[chunks.length - 1].lines.push(line) // 시각 없는 뒷줄은 앞 줄의 덩어리(S5)
   }
   return chunks
 }
 
-function stderrObs(app, role, lines) {
+// P-7(#587): 마지막으로 통과한 배포의 C5 창 [t0, t1] 안 경고 줄은 배포 알림이 이미 셌다 — 수집기는 흡수한다. 실패는 그대로 낸다.
+// 창은 release-inplace.sh 가 통과 때만 남긴다 — 실패한 시도의 줄은 아무도 세지 않았으니 흡수하지 않는다(PR-1b 9-1 major)
+const inDeployWindow = (at, win) => at !== null && win !== null && at >= win.t0 && at <= win.t1
+
+function stderrObs(app, role, lines, win = null) {
   const out = []
-  for (const chunk of chunksOf(lines)) {
+  for (const { at, lines: chunk } of chunksOf(lines)) {
     const head = chunk[0]
     if (!head.trim() || NORMAL_GATEWAY.test(head)) continue
     const text = chunk.join('\n')
+    const known = KNOWN_STDERR.find((k) => k.re.test(head))
+    const sev = known ? known.sev : WARN_RE.test(head) ? '경고' : '실패'
+    if (sev === '경고' && inDeployWindow(at, win)) continue
+    if (known) {
+      out.push(observation(app, role, 'stderr', [known.kind], sev, 'event'))
+      continue
+    }
     const tag = field((/^\[([^\]]{1,64})\]/.exec(head) || [])[1])
     const cls = field((/\b[A-Z][A-Za-z]*Error\b/.exec(text) || [])[0])
-    out.push(observation(app, role, 'stderr', [tag, cls, codeOf(text), artifactOf(text)], WARN_RE.test(head) ? '경고' : '실패', 'event'))
+    out.push(observation(app, role, 'stderr', [tag, cls, codeOf(text), artifactOf(text)], sev, 'event'))
   }
   return out
 }
@@ -391,6 +425,12 @@ function collectLogs(ctx) {
     seen[key] = true
     sizes[key] = (sizes[key] || 0) + st.size
     if (stream === 'out' && role !== 'mcp') continue // web·bot -out 은 침묵 감지(C-7 ②)에만
+    // 보류 중에는 -error 를 읽지 않는다(오프셋 그대로) — 배포가 끝나 창이 정해진 뒤 읽어야 창 안 경고만 흡수한다(PR-1b 9-1 major)
+    if (stream === 'error' && ctx.deploy[app].held) {
+      // 상태가 없는 첫 회면 기준 오프셋(끝)만 남긴다 — 안 남기면 보류가 끝난 뒤 0 부터 읽어 과거 로그가 쏟아진다(PR #590 Codex P2)
+      if (!ctx.hadState) ctx.state.files[name] = { ino: st.ino, off: st.size }
+      continue
+    }
     ctx.evaluated.add(`ops · collector · log-read:${key}`)
     let lines
     try {
@@ -399,7 +439,7 @@ function collectLogs(ctx) {
       ctx.obs.push(collector(`log-read:${key}`)) // 한 파일 때문에 수집 전체가 멈추지 않게(9-1 major)
       continue
     }
-    ctx.obs.push(...(stream === 'out' ? mcpOutObs(app, lines, ctx) : stderrObs(app, role, lines)))
+    ctx.obs.push(...(stream === 'out' ? mcpOutObs(app, lines, ctx) : stderrObs(app, role, lines, ctx.deploy[app].window)))
   }
   if (listed) for (const name of Object.keys(ctx.state.files)) if (!names.includes(name)) delete ctx.state.files[name]
   for (const app of Object.keys(APPS)) {
@@ -420,6 +460,27 @@ function silence(ctx, sizes) {
     if (!prev || prev.size !== size) ctx.state.growth[key] = { size, at: ctx.now }
     ctx.evaluated.add(`ops · collector · silent:${key}`)
     if (ctx.now - ctx.state.growth[key].at > hours * 3600000) ctx.obs.push(collector(`silent:${key}`))
+  }
+}
+
+// ── #589 봇 생존 표지 ────────────────────────────────────────────────
+// 수정 시각만 본다(내용은 읽지 않는다) · 파일이 없으면 정상으로 본다(릴리즈 전 · Discord 미설정 · 일부러 지운 표지 —
+// 열려 있던 stale 은 복구로 닫힌다 · #589 9-1 major) · 배포 보류 중에는 판정하지 않는다
+function collectAlive(ctx) {
+  for (const app of Object.keys(APPS)) {
+    if (ctx.deploy[app].held) continue
+    ctx.evaluated.add(`ops · collector · alive-read:${app}`)
+    let st
+    try {
+      st = fs.statSync(path.join(APPS[app], 'logs', `alive-${app}.json`))
+    } catch (e) {
+      // 읽지 못한 회는 gateway 를 판정하지 않는다 — 열린 stale 을 거짓 복구로 닫지 않는다(PR #591 Codex P2)
+      if (e && e.code === 'ENOENT') ctx.evaluated.add(`${app} · bot · gateway`)
+      else ctx.obs.push(collector(`alive-read:${app}`))
+      continue
+    }
+    ctx.evaluated.add(`${app} · bot · gateway`)
+    if (ctx.now - st.mtimeMs > CONFIG.aliveStaleMin * MIN) ctx.obs.push(observation(app, 'bot', 'gateway', ['stale'], '장애', 'state'))
   }
 }
 
@@ -513,6 +574,8 @@ function plan(ctx) {
   if (normal.length > CONFIG.burstLimit) posts.push(burstPost(normal))
   else for (const f of normal) posts.push(firstPost(f, f.count > 1 ? ` · ${f.count}회` : ''))
   for (const e of Object.values(table)) {
+    // 판정하지 못한 회(.env 읽기 실패 · 배포 보류)는 정상 연속을 끊는다 — 복구는 연속 M 회다(#577 · PR #576 Codex P2)
+    if (e.kind === 'state' && e.open && !active.has(e.fp) && !ctx.evaluated.has(e.scope)) e.ok = 0
     if (e.kind === 'state' && e.open && !e.deferred && !active.has(e.fp) && activeScopes.has(e.scope)) {
       // 같은 scope 에서 세부만 바뀌었다(디스크 80→90 · 5xx→000 · errored→stopped) — 복구가 아니다. 새 지문이 따로 나간다(9-1 major)
       Object.assign(e, { open: false, ok: 0, pending: 0 })
@@ -629,22 +692,71 @@ function pruneEvents(now) {
   writeAtomic(file, lines.length ? lines.join('\n') + '\n' : '')
 }
 
-function acquireLock(lock) {
+function tryMkdir(dir) {
   try {
-    fs.mkdirSync(lock)
-    return 'ok'
+    fs.mkdirSync(dir)
+    return true
   } catch (err) {
-    if (err.code !== 'EEXIST') throw err
-  }
-  if (Date.now() - fs.statSync(lock).mtimeMs < CONFIG.lockStaleRuns * CONFIG.periodMin * MIN) return 'busy'
-  fs.rmdirSync(lock)
-  try {
-    fs.mkdirSync(lock)
-  } catch (err) {
-    if (err.code === 'EEXIST') return 'busy' // 다른 실행이 먼저 넘겨받았다(R-3 ③)
+    if (err.code === 'EEXIST') return false
     throw err
   }
-  return 'stale'
+}
+
+function statOrNull(p) {
+  try {
+    return fs.statSync(p)
+  } catch (err) {
+    if (err.code === 'ENOENT') return null
+    throw err
+  }
+}
+
+// 넘겨받기는 보조 잠금(<lock>.takeover) 안에서만 한다 — 두 실행이 같은 stale 잠금을 동시에 보면
+// 하나만 지우고 다시 만든다. 다른 쪽은 보조 잠금을 못 잡아 busy 이거나, 잡은 뒤 다시 봐서 새 잠금이 신선하면 busy(#577 · PR #576 Codex P2).
+// 보조 잠금도 같은 기준으로 stale 이면 치운다(넘겨받던 실행이 그 짧은 사이에 죽은 경우뿐이다).
+// 남은 위험: stale 보조 잠금을 두 실행이 동시에 치우면 둘 다 들어갈 수 있다 — 넘겨받기 중 사망 + 동시 실행이 겹쳐야 한다(PR 9-1 info · 받아들인다).
+function lockId(dir) {
+  const st = fs.statSync(dir, { bigint: true })
+  return `${st.ino}:${st.ctimeNs}` // inode 번호는 rmdir 직후 mkdir 에 다시 쓰일 수 있다 — 생성 시각을 함께 본다(9-1 info)
+}
+
+function acquireLock(lock) {
+  if (tryMkdir(lock)) return { status: 'ok', id: lockId(lock) }
+  const staleMs = CONFIG.lockStaleRuns * CONFIG.periodMin * MIN
+  const isFresh = (st) => st !== null && Date.now() - st.mtimeMs < staleMs
+  if (isFresh(statOrNull(lock))) return { status: 'busy' }
+  const guard = `${lock}.takeover`
+  if (!tryMkdir(guard)) {
+    if (isFresh(statOrNull(guard))) return { status: 'busy' }
+    try {
+      fs.rmdirSync(guard)
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err
+    }
+    if (!tryMkdir(guard)) return { status: 'busy' }
+  }
+  try {
+    const st = statOrNull(lock)
+    if (isFresh(st)) return { status: 'busy' } // 다른 실행이 먼저 넘겨받았다
+    if (st !== null) fs.rmdirSync(lock)
+    if (!tryMkdir(lock)) return { status: 'busy' }
+    return { status: st === null ? 'ok' : 'stale', id: lockId(lock) }
+  } finally {
+    try {
+      fs.rmdirSync(guard)
+    } catch {
+      // 이미 없다 — 다음 실행이 stale 기준으로 다룬다
+    }
+  }
+}
+
+// 자기가 만든 잠금일 때만 지운다 — 넘겨받힌 뒤 남의 잠금을 지우지 않는다(#577)
+function releaseLock(lock, id) {
+  try {
+    if (lockId(lock) === id) fs.rmdirSync(lock)
+  } catch {
+    // 이미 없다 — 결과를 실패로 바꾸지 않는다
+  }
 }
 
 // ── 실행 ─────────────────────────────────────────────────────────────
@@ -675,6 +787,7 @@ async function collect(ctx, pm2Bin) {
   await collectPm2(ctx, pm2Bin)
   await collectHealth(ctx)
   collectLogs(ctx)
+  collectAlive(ctx)
   collectDisk(ctx)
 }
 
@@ -688,14 +801,14 @@ async function run(pm2Bin) {
   const lock = path.join(OPS_DIR, 'collect.lock')
   const got = acquireLock(lock)
   const nowDate = TEST && process.env.OPS_NOW ? new Date(process.env.OPS_NOW) : new Date()
-  if (got === 'busy') {
+  if (got.status === 'busy') {
     console.log(`${kstMinute(nowDate)} 건너뜀 — 이전 실행이 아직 돈다`)
     return 1
   }
   try {
     const { state, hadState, corrupt } = loadState()
     const ctx = { state, hadState, now: nowDate.getTime(), started: Date.now(), obs: [], evaluated: new Set(), parseFail: {} }
-    if (got === 'stale') ctx.obs.push(collector('lock-stale', 'event'))
+    if (got.status === 'stale') ctx.obs.push(collector('lock-stale', 'event'))
     if (corrupt) ctx.obs.push(collector('state-parse', 'event'))
     await collect(ctx, pm2Bin)
     const posts = plan(ctx)
@@ -709,11 +822,7 @@ async function run(pm2Bin) {
     console.log(`${kstMinute(nowDate)} 수집 통과 · 관측 ${obsLines.length} · 기록 ${r.posted} · 미룸 ${r.deferred} (dry-run)`)
     return 0
   } finally {
-    try {
-      fs.rmdirSync(lock)
-    } catch {
-      // 넘겨받기 경합으로 이미 없다 — 결과를 실패로 바꾸지 않는다
-    }
+    releaseLock(lock, got.id)
   }
 }
 
