@@ -470,14 +470,16 @@ function collectAlive(ctx) {
   for (const app of Object.keys(APPS)) {
     if (ctx.deploy[app].held) continue
     ctx.evaluated.add(`ops · collector · alive-read:${app}`)
-    ctx.evaluated.add(`${app} · bot · gateway`)
     let st
     try {
       st = fs.statSync(path.join(APPS[app], 'logs', `alive-${app}.json`))
     } catch (e) {
-      if (!(e && e.code === 'ENOENT')) ctx.obs.push(collector(`alive-read:${app}`))
+      // 읽지 못한 회는 gateway 를 판정하지 않는다 — 열린 stale 을 거짓 복구로 닫지 않는다(PR #591 Codex P2)
+      if (e && e.code === 'ENOENT') ctx.evaluated.add(`${app} · bot · gateway`)
+      else ctx.obs.push(collector(`alive-read:${app}`))
       continue
     }
+    ctx.evaluated.add(`${app} · bot · gateway`)
     if (ctx.now - st.mtimeMs > CONFIG.aliveStaleMin * MIN) ctx.obs.push(observation(app, 'bot', 'gateway', ['stale'], '장애', 'state'))
   }
 }

@@ -510,6 +510,20 @@ class Alive(Base):
         firsts = [x for x in self.posts() if "🔴" in x and "fit·bot · gateway · stale" in x]
         self.assertEqual(len(firsts), 2)  # 닫혔으므로 다시 첫 발생으로 나간다
 
+    def test_unreadable_marker_does_not_close_open_stale(self):
+        # 회귀: PR #591 Codex P2 — stat 이 EACCES 인 회도 gateway 를 판정한 것으로 쳐 거짓 복구가 나갔다
+        if os.getuid() == 0:
+            self.skipTest("root 는 권한 거부가 없다")
+        p = self.marker("fin", "2026-11-10T07:00:00+09:00")
+        self.ok()
+        p.parent.chmod(0o000)
+        self.addCleanup(p.parent.chmod, 0o700)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.ok(now="2026-11-10T08:10:00+09:00", config={"recoverRuns": 2})
+        p.parent.chmod(0o700)
+        self.assertFalse(any("🟢" in x and "fin·bot · gateway" in x for x in self.posts()))
+        self.assertTrue(any("alive-read:fin" in x for x in self.posts()))
+
     def test_held_deploy_skips_alive_judgment(self):
         self.marker("fin", "2026-11-10T07:00:00+09:00")
         self.private.mkdir(parents=True, exist_ok=True)
