@@ -4,11 +4,11 @@
 // 존 없는 달 = 빈 칸, 존 있는 러닝이 절반 미만 = 흐림 (#395 저커버리지), 이번 달 = 점선 (#395 미완결).
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CHART_AXIS_TICK, CHART_GRID_STROKE, CHART_TOOLTIP_CLASS } from "@/components/trends/chart-format";
+import { CHART_INITIAL_DIMENSION } from "@/components/ui/chart-dimension";
 import { formatDuration } from "@/lib/format";
 import type { ZoneMonth } from "@/lib/insights/zones";
 
 import { ZONE_COLORS, ZONE_NAMES } from "./zone-colors";
-import { CHART_INITIAL_DIMENSION } from "@/components/ui/chart-dimension";
 const OPACITY = { normal: 0.85, low: 0.28, current: 0.45 } as const;
 
 type Row = { key: string; z1: number; z2: number; z3: number; z4: number; z5: number; empty: number; month: ZoneMonth };

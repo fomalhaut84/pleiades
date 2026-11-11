@@ -48,6 +48,7 @@ describe("CHART_INITIAL_DIMENSION", () => {
 describe("퍼센트 크기 ResponsiveContainer 사용처", () => {
   const SRC = join(__dirname, "..", "..", "..");
   const TAG = /<ResponsiveContainer\b[^>]*>/g;
+  // 한계: 문자열 리터럴 크기(width="100%")만 본다 — width={"100%"} 나 태그 안 `>`(화살표 함수 props)는 놓친다
   const PERCENT = /\bwidth="\d+%"[^>]*\bheight="\d+%"|\bheight="\d+%"[^>]*\bwidth="\d+%"/;
 
   function tsxFiles(dir: string): string[] {
