@@ -371,6 +371,21 @@ class DeployWindow(Base):
         self.assertEqual(len(later), 1, later)
         self.assertIn("SyntaxError", later[0])
 
+    def test_first_run_during_hold_still_starts_at_end(self):
+        # 회귀: PR #590 Codex P2 — 상태 없는 첫 회가 보류 중이면 기준 오프셋이 없어 보류 뒤 과거 로그를 0 부터 읽었다
+        self.log("pleiades-fit-web-error-0.log", "2026-11-01 00:00:00: [web] OldError\n")
+        self.private.mkdir(parents=True, exist_ok=True)
+        pending = self.private / "inplace-fit-pending"
+        pending.write_text("v1.10.2\n")
+        self.ok()
+        pending.unlink()
+        self.log("pleiades-fit-web-error-0.log", "2026-11-10 08:06:00: [web] NewError\n", append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00")
+        text = "\n".join(self.posts())
+        self.assertIn("fit·web", text)
+        self.assertEqual(sum("fit·web" in p for p in self.posts()), 1)
+        self.assertNotIn("2회", [p for p in self.posts() if "fit·web" in p][0])
+
     def test_malformed_window_absorbs_nothing(self):
         self.ok()
         self.private.joinpath("inplace-fin-window").write_text("2026-11-10 08:03:00\t2026-11-10 08:01:00\n")  # t0 > t1

@@ -423,7 +423,11 @@ function collectLogs(ctx) {
     sizes[key] = (sizes[key] || 0) + st.size
     if (stream === 'out' && role !== 'mcp') continue // web·bot -out 은 침묵 감지(C-7 ②)에만
     // 보류 중에는 -error 를 읽지 않는다(오프셋 그대로) — 배포가 끝나 창이 정해진 뒤 읽어야 창 안 경고만 흡수한다(PR-1b 9-1 major)
-    if (stream === 'error' && ctx.deploy[app].held) continue
+    if (stream === 'error' && ctx.deploy[app].held) {
+      // 상태가 없는 첫 회면 기준 오프셋(끝)만 남긴다 — 안 남기면 보류가 끝난 뒤 0 부터 읽어 과거 로그가 쏟아진다(PR #590 Codex P2)
+      if (!ctx.hadState) ctx.state.files[name] = { ino: st.ino, off: st.size }
+      continue
+    }
     ctx.evaluated.add(`ops · collector · log-read:${key}`)
     let lines
     try {
