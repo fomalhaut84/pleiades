@@ -86,14 +86,19 @@ gh pr create --base main --head dev --title "Release $V" --body "..."
 #    수정이 필요하면 dev 에 반영 → @codex review → 9-6 으로 PR body 갱신
 #    봇이 안 오면 머지 보류 — 9-3 "봇이 돌지 않을 때" 표의 릴리즈 행 (#14)
 
-# 3. 사용자가 머지
+# 3. 사용자가 머지 — **"Create a merge commit"**(squash · rebase 금지 · 아래 블록)
 
 # 4. 머지 확인 후 태그 (Claude)
 git checkout main && git pull
+git log -1 --format=%P | wc -w   # 2 여야 한다 — 1 이면 squash 됐다(아래 블록의 복구 먼저 · 태그는 그대로 진행해도 된다)
 git tag "$V"
 git push origin "$V"            # --tags 금지 — 로컬에 서비스 태그가 섞여 있으면 원격에 올라간다 (isolation.md I-16)
 gh release create "$V" --title "$V" --notes "릴리즈 노트"   # 노트에 앱별 변경 + "서버 조치" 칸(확정 블록)
 ```
+
+> **릴리즈 PR 은 "Create a merge commit" 으로 머지한다 (#598 · 2026-11-11).** squash 면 `main` 의 릴리즈 커밋 부모가 1개라 `dev` 커밋이 `main` 의 조상이 되지 않는다 — 다음 릴리즈 PR 은 직전 릴리즈 뒤 `dev` 에서 같은 파일을 다시 고친 곳마다 **충돌한다**(실측: `v1.10.1` #576 squash → `v1.11.0` #594 `CONFLICTING`). GitHub 머지 버튼은 마지막에 쓴 방식을 기억하므로 **▾ 에서 방식을 확인하고 누른다.** 머지 뒤 Claude 가 `git log -1 --format=%P origin/main` 으로 부모 2 를 확인한다.
+> - **squash 됐으면:** 내용은 그대로다(릴리즈 커밋 트리 = 릴리즈 PR head). `dev` 에서 `chore/<issue>-<n>` 을 따 `git merge -s ours --no-ff origin/main`(트리 변경 0 · 부모 2) → PR(base `dev`) → **이 PR 도 merge commit 으로** 머지(#595 · #597). 다음 릴리즈 PR 전에 한다.
+> - 되돌리기: 문구 (**즉시**).
 
 > **릴리즈도 봇 게이트를 거친다 (PR #6 Codex 리뷰 P1).** 봇은 `gh pr create` **뒤에**
 > 비동기로 돌기 시작하므로, PR 생성 다음 줄에 머지를 두면 **필수 지적이 남은 채로
