@@ -12,6 +12,7 @@
  * `준비 완료` · `세션 이어받음` · `재접속 1000ms 후 (RESUME)` 은 수집기·배포 판정의 정상 줄이다(`deploy/ops/collect.cjs` NORMAL_GATEWAY · `release-inplace.sh` · #373 · #583).
  */
 import { sanitizeError } from '@pleiades/notify';
+import type { AliveState } from './alive-marker';
 import type { Logger } from './types';
 
 declare const require: (id: string) => unknown;
@@ -45,6 +46,8 @@ export interface GatewayOptions {
   onDispatch: (type: string, data: unknown) => void;
   /** IDENTIFY(새 세션) 직전에만 부른다 — RESUME 은 횟수 제한 대상이 아니다. */
   beforeIdentify?: () => Promise<IdentifyDecision>;
+  /** 살아 있다는 신호(READY · RESUMED · heartbeat ACK · #589) — 던지면 삼키고 경고 1회 · 연결에는 영향 없음. */
+  onAlive?: (state: AliveState) => void;
   label: string;
   logger: Logger;
   createSocket?: WebSocketFactory;
@@ -106,6 +109,18 @@ export function createGateway(opts: GatewayOptions): Gateway {
   let acked = true;
   let failures = 0;
   let intents = opts.intents;
+  let aliveWarned = false;
+
+  const alive = (state: AliveState): void => {
+    if (opts.onAlive === undefined) return;
+    try {
+      opts.onAlive(state);
+    } catch (err) {
+      if (aliveWarned) return;
+      aliveWarned = true;
+      logger.warn(`[${label}] 생존 표지 기록 실패: ${sanitizeError(err)}`);
+    }
+  };
 
   const clearBeats = (): void => {
     if (heartbeat !== undefined) clearInterval(heartbeat);
@@ -219,6 +234,7 @@ export function createGateway(opts: GatewayOptions): Gateway {
         break;
       case 11:
         acked = true;
+        alive('ack');
         break;
       case 1:
         beat();
@@ -239,9 +255,11 @@ export function createGateway(opts: GatewayOptions): Gateway {
           resumeUrl = typeof r.resume_gateway_url === 'string' ? r.resume_gateway_url : undefined;
           failures = 0;
           logger.warn(`[${label}] gateway 준비 완료`);
+          alive('ready');
         } else if (p.t === 'RESUMED') {
           failures = 0;
           logger.warn(`[${label}] gateway 세션 이어받음`);
+          alive('resumed');
         } else if (typeof p.t === 'string') {
           opts.onDispatch(p.t, p.d);
         }

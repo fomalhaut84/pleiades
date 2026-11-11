@@ -14,6 +14,7 @@ import path from "node:path";
 import {
   createChat,
   createIdentifyGuard,
+  fileAliveMarker,
   fileGuardStore,
   MESSAGE_INTENTS,
   type Chat,
@@ -36,6 +37,8 @@ export { handleDiscordButton } from "../discord/auto-adjust-button";
 const LABEL = "discord-fit";
 /** cwd 상대 — pm2·run.sh 모두 apps/fitness 에서 띄운다(deploy/pleiades.config.cjs). */
 export const IDENTIFY_RECORD = path.join("logs", "identify-fit.json");
+/** 생존 표지(#589) — 서버 수집기가 수정 시각으로 gateway 연결 유지를 판정한다(응답 가능 여부는 보지 않는다). 경로를 바꾸면 deploy/ops/collect.cjs 도 고친다. */
+export const ALIVE_RECORD = path.join("logs", "alive-fit.json");
 
 /**
  * 기본 라우터 — 버튼은 notifyBot 을 쓰지 않으므로 봇 프로세스 표지로 만든다.
@@ -95,6 +98,7 @@ export function startDiscordInteractions(notifyBot: BotProcess): Chat | undefine
     allowedChannelIds: buttonChannels,
     messageChannelIds: messageChannels,
     attachmentPolicy: FIT_ATTACHMENT_POLICY,
+    aliveMarker: fileAliveMarker(path.resolve(ALIVE_RECORD)),
     identifyGuard: createIdentifyGuard({
       store: fileGuardStore(path.resolve(IDENTIFY_RECORD)),
       onBlocked: async (info) => {

@@ -43,6 +43,9 @@ const DEFAULTS = {
   // C-7 ② 침묵 감지 — -out 만 · 역할별(V17: 줄이 꾸준한 out 5개 · fin web out · 모든 -error 는 끈다) · 값 = N시간
   // 6 → 24(#587): dry-run 판정에서 bot·mcp -out 은 낮에도 6시간씩 조용했다(사용·크론 때만 는다) — 하루 크론이 도는지만 본다
   silenceHours: { 'fin-bot': 24, 'fin-mcp': 24, 'fit-web': 24, 'fit-bot': 24, 'fit-mcp': 24 },
+  // #589 봇 생존 표지 — apps/<dir>/logs/alive-<app>.json 수정 시각이 N분 넘게 그대로면 gateway 정지(chat 이 READY·RESUMED 는 곧바로 · ACK 는 60초에 한 번 쓴다)
+  // 보는 것은 "Discord 연결 유지"다 — 연결은 살아 있는데 답을 못 하는 경우(4014 강등 · 핸들러·AI 정지)는 잡지 않는다
+  aliveStaleMin: 10,
   readCapBytes: 4 * 1048576, // 한 파일을 한 회에 읽는 상한 — 남은 것은 다음 회
   socketMs: 2000,
   jlistMs: 20000,
@@ -460,6 +463,26 @@ function silence(ctx, sizes) {
   }
 }
 
+// ── #589 봇 생존 표지 ────────────────────────────────────────────────
+// 수정 시각만 본다(내용은 읽지 않는다) · 파일이 없으면 판정하지 않는다(릴리즈 전 · Discord 미설정) · 배포 보류 중에도 판정하지 않는다
+function collectAlive(ctx) {
+  for (const app of Object.keys(APPS)) {
+    if (ctx.deploy[app].held) continue
+    let st
+    try {
+      st = fs.statSync(path.join(APPS[app], 'logs', `alive-${app}.json`))
+    } catch (e) {
+      if (e && e.code === 'ENOENT') continue
+      ctx.evaluated.add(`ops · collector · alive-read:${app}`)
+      ctx.obs.push(collector(`alive-read:${app}`))
+      continue
+    }
+    ctx.evaluated.add(`ops · collector · alive-read:${app}`)
+    ctx.evaluated.add(`${app} · bot · gateway`)
+    if (ctx.now - st.mtimeMs > CONFIG.aliveStaleMin * MIN) ctx.obs.push(observation(app, 'bot', 'gateway', ['stale'], '장애', 'state'))
+  }
+}
+
 // ── C-6 디스크 ───────────────────────────────────────────────────────
 function collectDisk(ctx) {
   for (const [fsName, p] of Object.entries(DISKS)) {
@@ -763,6 +786,7 @@ async function collect(ctx, pm2Bin) {
   await collectPm2(ctx, pm2Bin)
   await collectHealth(ctx)
   collectLogs(ctx)
+  collectAlive(ctx)
   collectDisk(ctx)
 }
 
