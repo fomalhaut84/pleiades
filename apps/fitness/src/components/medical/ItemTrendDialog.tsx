@@ -10,6 +10,7 @@ import { CHART_AXIS_TICK, CHART_GRID_STROKE, CHART_TOOLTIP_CLASS } from "@/compo
 import { FLAG_PILL, valueClass } from "./flag-style";
 import type { CheckupMedication, ItemMedicationsDto } from "@/lib/medication/link";
 import { PILL, medPillClass, medPillText } from "./meds/med-style";
+import { CHART_INITIAL_DIMENSION } from "@/components/ui/chart-dimension";
 
 interface ItemTrendDialogProps {
   itemCode: string | null;
@@ -122,7 +123,7 @@ function TrendChart({ trend, points }: { trend: ItemTrendDto; points: readonly T
 
   return (
     <div className="mt-3 h-[220px]" role="img" aria-label={`${trend.label} 회차별 추이`}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_DIMENSION}>
         <LineChart data={rows} margin={{ top: 20, right: 24, bottom: 0, left: 0 }}>
           <CartesianGrid vertical={false} stroke={CHART_GRID_STROKE} />
           {(low !== null || high !== null) && (
