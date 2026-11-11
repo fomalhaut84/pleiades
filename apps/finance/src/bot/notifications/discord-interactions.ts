@@ -15,7 +15,7 @@
  */
 
 import path from 'node:path'
-import { createChat, createIdentifyGuard, fileGuardStore, MESSAGE_INTENTS, type Chat } from '@pleiades/chat'
+import { createChat, createIdentifyGuard, fileAliveMarker, fileGuardStore, MESSAGE_INTENTS, type Chat } from '@pleiades/chat'
 import { createDiscordRouter } from '@/bot/discord/router'
 import { discordBotConfig, discordChatChannelId, htmlContent, notifierFor, NOTIFY_CTX, Route } from './notifier'
 
@@ -25,6 +25,8 @@ export { handleDiscordButton } from '@/bot/discord/vest-button'
 const LABEL = 'discord-fin'
 /** cwd 상대 — pm2·run.sh 모두 apps/finance 에서 띄운다(deploy/pleiades.config.cjs). */
 export const IDENTIFY_RECORD = path.join('logs', 'identify-fin.json')
+/** 생존 표지(#589) — 서버 수집기가 수정 시각으로 gateway 연결 유지를 판정한다(응답 가능 여부는 보지 않는다). 경로를 바꾸면 deploy/ops/collect.cjs 도 고친다. */
+export const ALIVE_RECORD = path.join('logs', 'alive-fin.json')
 
 /** 라우터 — 메시지(대화 채널 키가 있을 때만 온다)와 버튼. 봇 핸들을 쓰지 않으므로 모듈 하나로 둔다. */
 export const discordRouter = createDiscordRouter()
@@ -83,6 +85,7 @@ export function startDiscordInteractions(): Chat | undefined {
     allowedUserIds: () => discordBotConfig().allowedUserIds,
     allowedChannelIds: buttonChannels,
     messageChannelIds: messageChannels,
+    aliveMarker: fileAliveMarker(path.resolve(ALIVE_RECORD)),
     identifyGuard: createIdentifyGuard({
       store: fileGuardStore(path.resolve(IDENTIFY_RECORD)),
       onBlocked: async (info) => {

@@ -149,6 +149,7 @@ interface FsLike {
   renameSync(a: string, b: string): void;
   mkdirSync(p: string, o: { recursive: true; mode: number }): void;
   chmodSync(p: string, mode: number): void;
+  unlinkSync(p: string): void;
 }
 interface PathLike {
   dirname(p: string): string;
@@ -174,9 +175,19 @@ export function fileGuardStore(file: string): GuardStore {
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
       // 같은 기록을 두 프로세스가 써도 서로의 임시 파일을 rename 하지 않게(#332 사전 리뷰 info 3)
       const tmp = path.join(dir, `.${path.basename(file)}.${processId()}.${Math.random().toString(36).slice(2)}.tmp`);
-      fs.writeFileSync(tmp, text, { mode: 0o600 });
-      fs.chmodSync(tmp, 0o600);
-      fs.renameSync(tmp, file);
+      try {
+        fs.writeFileSync(tmp, text, { mode: 0o600 });
+        fs.chmodSync(tmp, 0o600);
+        fs.renameSync(tmp, file);
+      } catch (err) {
+        // 실패한 임시 파일을 남기지 않는다 — 생존 표지는 ACK 마다 다시 쓰므로 쌓일 수 있다(#589 9-1 info 2)
+        try {
+          fs.unlinkSync(tmp);
+        } catch {
+          // 만들지 못했으면 지울 것도 없다
+        }
+        throw err;
+      }
     },
   };
 }

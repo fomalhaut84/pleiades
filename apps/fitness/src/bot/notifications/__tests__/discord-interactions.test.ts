@@ -19,6 +19,7 @@ import { MESSAGE_INTENTS, createChat, type ChatOptions } from "@pleiades/chat";
 import { Route } from "@pleiades/notify";
 import { decideAutoAdjust } from "../auto-adjust-callback";
 import {
+  ALIVE_RECORD,
   INBOUND_OFF_LOG,
   INBOUND_ON_LOG,
   buttonChannels,
@@ -144,6 +145,8 @@ describe("대화 채널 스위치(Kb1 · Ka3)", () => {
     expect(o.allowedChannelIds()).toEqual([NOTIFY_CH]);
     expect(log).toHaveBeenCalledWith(INBOUND_OFF_LOG);
     expect(INBOUND_OFF_LOG).toBe("[discord-fit] 메시지 수신 꺼짐(버튼만)");
+    expect(o.aliveMarker).toBeDefined(); // #589 생존 표지
+    expect(ALIVE_RECORD).toBe("logs/alive-fit.json"); // deploy/ops/collect.cjs 와 같은 경로
   });
 
   it("형식 불일치 → 꺼짐과 같다", () => {

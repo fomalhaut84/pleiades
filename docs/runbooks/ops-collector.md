@@ -94,6 +94,16 @@ console.log("지문 상위",JSON.stringify(top))
 const d=process.env.HOME+"/pleiades-private/ops/";console.log("크기 KB",JSON.stringify(Object.fromEntries(["state.json","events.jsonl","dry-run.log","collect.log"].map(n=>{try{return [n,Math.round(fs.statSync(d+n).size/1024)]}catch{return [n,null]}}))))'
 ```
 
+### `gateway · stale` 기록을 보면 (#589)
+
+봇의 생존 표지(`apps/<dir>/logs/alive-<app>.json`)가 10분 넘게 바뀌지 않았다는 뜻이다. 봇 gateway 가 Discord 와 연결을 유지하지 못하고 있다 — 좀비 연결 · IDENTIFY 보호에 막힘 · 치명 close 코드로 멈춤 · 재접속 계속 실패 중 하나다. 그 봇의 `-error` 로그에서 `gateway` 줄을 보고(원문은 세션에 붙이지 않는다) 판정만 Claude 에게 알린다.
+
+**이 판정은 "연결 유지" 를 보지 "응답 가능" 을 보지 않는다.** 연결이 살아 있으면 표지는 정상으로 남으므로, 4014 로 버튼만 받는 모드로 강등된 경우(메시지 명령을 받지 못한다 · stderr 기록으로 따로 잡힌다)와 핸들러·AI 호출이 멈춰 답이 없는 경우는 이 기록으로 드러나지 않는다.
+
+봇이 pm2 에서 멈췄으면 pm2 기록과 함께 나온다.
+
+Discord 를 일부러 끈 봇(봇 토큰을 비움 등)은 표지가 낡은 채 남아 이 기록이 계속 난다 — 그때는 그 표지 파일을 지운다. 파일이 없으면 정상으로 보고, 열려 있던 기록은 복구로 닫힌다.
+
 ### `all-missing` 기록을 보면
 
 pleiades 프로세스 6개가 모두 jlist 에 없었다는 뜻이다. 수집기는 데몬 소켓이 살아 있을 때만 pm2 를 부른다. 그래도 시험과 호출 사이에 데몬이 죽으면 pm2 CLI 가 **크론 환경으로 빈 데몬을 띄울 수 있다**(008 §2 확정 블록 Q97).

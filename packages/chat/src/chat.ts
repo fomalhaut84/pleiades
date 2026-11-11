@@ -13,6 +13,7 @@ import { sanitizeError } from '@pleiades/notify';
 import { DEFAULT_ATTACHMENT_POLICY, toAttachment, type AttachmentPolicy } from './attachments';
 import { channelAllowed, isAllowed, type IdList } from './auth';
 import { createGateway, MESSAGE_INTENTS, type IdentifyDecision, type WebSocketFactory } from './gateway';
+import type { AliveMarker, AliveState } from './alive-marker';
 import type { IdentifyGuard } from './identify-guard';
 import { createRest, normalize, type ChatFetch, type Rest } from './rest';
 import type { Router } from './router';
@@ -55,6 +56,8 @@ export interface ChatOptions {
    */
   busyButtonNotice?: string | false;
   attachmentPolicy?: AttachmentPolicy;
+  /** 생존 표지(#589) — 없으면 쓰지 않는다. 서버 수집기가 수정 시각으로 gateway 정지를 판정한다. */
+  aliveMarker?: AliveMarker;
   logger?: Logger;
   fetch?: ChatFetch;
   createSocket?: WebSocketFactory;
@@ -338,6 +341,7 @@ export function createChat(opts: ChatOptions): Chat {
     reconnectDelaysMs: opts.reconnectDelaysMs,
     now,
     beforeIdentify,
+    ...(opts.aliveMarker !== undefined ? { onAlive: (state: AliveState) => opts.aliveMarker?.mark(state) } : {}),
     onDispatch: (type, data) => {
       // 동기로 부른다 — 대기열 자리가 받은 순서대로 잡힌다
       try {

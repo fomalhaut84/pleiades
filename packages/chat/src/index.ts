@@ -23,6 +23,8 @@ export { createRouter, splitCommand } from './router';
 export type { Router, RouterOptions, CommandHandler, CommandOptions, HearsHandler, PlainHandler, ActionHandler } from './router';
 export { createIdentifyGuard, fileGuardStore, DEFAULT_IDENTIFY_LIMIT } from './identify-guard';
 export type { IdentifyGuard, IdentifyGuardOptions, GuardStore, BlockInfo, BlockReason, GuardDecision } from './identify-guard';
+export { createAliveMarker, fileAliveMarker, DEFAULT_ALIVE_INTERVAL_MS } from './alive-marker';
+export type { AliveMarker, AliveMarkerOptions, AliveState } from './alive-marker';
 export { DEFAULT_ATTACHMENT_POLICY } from './attachments';
 export type { AttachmentPolicy } from './attachments';
 export { MESSAGE_INTENTS } from './gateway';

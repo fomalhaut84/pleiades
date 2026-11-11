@@ -17,6 +17,7 @@ import tempfile
 import threading
 import time
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -452,6 +453,91 @@ class Health(Base):
         self.assertFalse(any("🟢" in p and "fin·web" in p for p in self.posts()))
         self.ok(now="2026-11-10T08:20:00+09:00", config={"recoverRuns": 2})
         self.assertEqual(len([p for p in self.posts() if "🟢" in p and "fin·web" in p]), 1)
+
+
+class Alive(Base):
+    """#589 봇 생존 표지 — apps/<dir>/logs/alive-<app>.json 수정 시각 · 연결 유지만 본다(응답 가능 여부는 보지 않는다)."""
+
+    def marker(self, app, at):
+        d = self.home / f"pleiades-{app}" / "apps" / APPS[app] / "logs"
+        d.mkdir(exist_ok=True)
+        p = d / f"alive-{app}.json"
+        p.write_text('{"at":"x","state":"ack"}')
+        t = datetime.fromisoformat(at).timestamp()
+        os.utime(p, (t, t))
+        return p
+
+    def test_no_marker_is_not_judged(self):
+        self.ok()
+        self.ok(now="2026-11-10T09:00:00+09:00", config={"summaryAt": "23:59"})
+        self.assertFalse(any("gateway" in p for p in self.posts()))
+
+    def test_stale_marker_is_outage_and_fresh_marker_recovers(self):
+        self.marker("fit", "2026-11-10T07:49:00+09:00")  # 11분 전
+        self.marker("fin", "2026-11-10T07:55:00+09:00")  # 5분 전 — 정상
+        self.ok()
+        text = "\n".join(self.posts())
+        self.assertIn("🔴", text)
+        self.assertIn("fit·bot · gateway · stale", text)
+        self.assertNotIn("fin·bot · gateway", text)
+        self.marker("fit", "2026-11-10T08:04:30+09:00")
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.marker("fit", "2026-11-10T08:09:30+09:00")
+        self.ok(now="2026-11-10T08:10:00+09:00", config={"recoverRuns": 2})
+        rec = [p for p in self.posts() if "🟢" in p and "fit·bot · gateway" in p]
+        self.assertEqual(len(rec), 1)
+
+    def test_threshold_is_exclusive_and_configurable(self):
+        self.marker("fin", "2026-11-10T07:50:00+09:00")  # 정확히 10분 — 아직 정상
+        self.ok()
+        self.assertFalse(any("gateway" in p for p in self.posts()))
+        self.ok(now="2026-11-10T08:05:00+09:00", config={"aliveStaleMin": 20})
+        self.assertFalse(any("gateway" in p for p in self.posts()))
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertTrue(any("fin·bot · gateway · stale" in p for p in self.posts()))
+
+    def test_deleted_stale_marker_recovers_and_leaves_no_open_issue(self):
+        # 회귀: #589 9-1 major — stale 인 채 표지를 지우면(런북 조치) ENOENT 를 건너뛰어 이상이 영영 열려 있었다
+        p = self.marker("fit", "2026-11-10T07:00:00+09:00")
+        self.ok()
+        self.assertTrue(any("🔴" in x and "fit·bot · gateway · stale" in x for x in self.posts()))
+        p.unlink()
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.ok(now="2026-11-10T08:10:00+09:00", config={"recoverRuns": 2})
+        self.assertEqual(len([x for x in self.posts() if "🟢" in x and "fit·bot · gateway" in x]), 1)
+        self.marker("fit", "2026-11-10T08:00:00+09:00")
+        self.ok(now="2026-11-10T08:15:00+09:00")
+        firsts = [x for x in self.posts() if "🔴" in x and "fit·bot · gateway · stale" in x]
+        self.assertEqual(len(firsts), 2)  # 닫혔으므로 다시 첫 발생으로 나간다
+
+    def test_unreadable_marker_does_not_close_open_stale(self):
+        # 회귀: PR #591 Codex P2 — stat 이 EACCES 인 회도 gateway 를 판정한 것으로 쳐 거짓 복구가 나갔다
+        if os.getuid() == 0:
+            self.skipTest("root 는 권한 거부가 없다")
+        p = self.marker("fin", "2026-11-10T07:00:00+09:00")
+        self.ok()
+        p.parent.chmod(0o000)
+        self.addCleanup(p.parent.chmod, 0o700)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.ok(now="2026-11-10T08:10:00+09:00", config={"recoverRuns": 2})
+        p.parent.chmod(0o700)
+        self.assertFalse(any("🟢" in x and "fin·bot · gateway" in x for x in self.posts()))
+        self.assertTrue(any("alive-read:fin" in x for x in self.posts()))
+
+    def test_held_deploy_skips_alive_judgment(self):
+        self.marker("fin", "2026-11-10T07:00:00+09:00")
+        self.private.mkdir(parents=True, exist_ok=True)
+        self.private.joinpath("inplace-fin-pending").write_text("v1.11.0\n")
+        self.ok()
+        self.assertFalse(any("gateway" in p for p in self.posts()))
+
+    def test_marker_contents_never_reach_records(self):
+        p = self.marker("fit", "2026-11-10T07:00:00+09:00")
+        t = p.stat().st_mtime
+        p.write_text(SECRET)
+        os.utime(p, (t, t))
+        self.ok()
+        self.assert_no_raw()
 
 
 class Logs(Base):
