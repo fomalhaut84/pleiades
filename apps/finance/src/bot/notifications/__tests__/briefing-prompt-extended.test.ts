@@ -11,7 +11,8 @@ import { buildBriefingPrompt } from '../briefing'
 const NOW = new Date('2026-11-11T23:30:00Z')
 
 describe('buildBriefingPrompt — 정규장 밖 흐름 (#615)', () => {
-  it('KR 브리핑: 보유 미국주 get_prices 지정 조회 · 간밤 시간외 → 한국 보유 종목 영향', () => {
+  it('KR 브리핑: 보유 미국주 get_prices 지정 조회 · 직전 거래일 시간외 → 한국 보유 종목 영향', () => {
+    expect(buildBriefingPrompt('KR', NOW)).toContain('직전 미국 거래일')
     const p = buildBriefingPrompt('KR', NOW)
     expect(p).toContain('get_prices 로 보유 미국주(USD) 티커를 지정해 조회')
     expect(p).toContain('시간외')

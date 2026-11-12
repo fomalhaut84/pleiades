@@ -207,16 +207,32 @@ export function formatExtendedQuote(
   currency: string,
 ): string {
   const label = ext.session === 'pre' ? '프리마켓' : '시간외'
-  const pct = ext.changePercent != null ? `${ext.changePercent >= 0 ? '+' : ''}${ext.changePercent.toFixed(2)}% · ` : ''
-  return `${label} ${formatQuoteValue(ticker, ext.price, currency)} (${pct}정규장 종가 대비 · ${formatKstDateTimeFull(ext.time)})`
+  // 변동률이 없으면 비교 기준 문구도 뺀다 — 값 없이 "정규장 종가 대비" 만 남지 않게 (9-1 info)
+  const basis = ext.changePercent != null
+    ? `${ext.changePercent >= 0 ? '+' : ''}${ext.changePercent.toFixed(2)}% · 정규장 종가 대비 · `
+    : ''
+  return `${label} ${formatQuoteValue(ticker, ext.price, currency)} (${basis}${formatKstDateTimeFull(ext.time)})`
 }
 
 /** 시가총액 표기 (#615): USD "$4.20T"·"$33.52B" · KRW "1,369.1조원"·"3,351억원" · 그 밖 "<값>B <통화>". */
 export function formatMarketCap(value: number, currency: string): string {
+  // 단위는 반올림한 뒤의 값으로 정한다 — 9,999.5억이 "10,000억원" 으로 나오지 않게 (9-1 info)
   if (currency === 'KRW') {
-    if (value >= 1e12) return `${(value / 1e12).toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}조원`
-    return `${Math.round(value / 1e8).toLocaleString('ko-KR')}억원`
+    const eok = Math.round(value / 1e8)
+    if (eok >= 10_000) return `${(value / 1e12).toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}조원`
+    if (value >= 1e8) return `${eok.toLocaleString('ko-KR')}억원`
+    return `${Math.round(value).toLocaleString('ko-KR')}원`
   }
-  const scaled = value >= 1e12 ? `${(value / 1e12).toFixed(2)}T` : value >= 1e9 ? `${(value / 1e9).toFixed(2)}B` : `${(value / 1e6).toFixed(1)}M`
+  const units: [number, string, number][] = [[1e12, 'T', 2], [1e9, 'B', 2], [1e6, 'M', 1]]
+  let scaled = `${Math.round(value).toLocaleString('en-US')}`
+  for (const [i, [div, suffix, digits]] of units.entries()) {
+    const shown = Number((value / div).toFixed(digits))
+    const prev = units[i - 1]
+    if (shown >= 1) {
+      // 반올림으로 다음 단위에 닿으면(999.995B → 1000.00B) 윗단위로 올린다
+      scaled = prev && shown >= 1000 ? `${(value / prev[0]).toFixed(prev[2])}${prev[1]}` : `${shown.toFixed(digits)}${suffix}`
+      break
+    }
+  }
   return currency === 'USD' ? `$${scaled}` : `${scaled} ${currency}`
 }

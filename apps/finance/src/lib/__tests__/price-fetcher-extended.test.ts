@@ -22,7 +22,7 @@ describe('extractExtendedQuote (#615)', () => {
     const ext = extractExtendedQuote(
       {
         postMarketPrice: 158.78, postMarketChangePercent: -8.6, postMarketTime: '2026-11-12T01:00:00Z',
-        preMarketPrice: 160.1, preMarketChangePercent: -7.85, preMarketTime: '2026-11-12T01:30:00Z',
+        preMarketPrice: 160.1, preMarketChangePercent: -7.85, preMarketTime: '2026-11-12T12:30:00Z',
       },
       REG,
       173.73,
@@ -38,6 +38,15 @@ describe('extractExtendedQuote (#615)', () => {
       173.73,
     )
     expect(ext).toBeNull()
+  })
+
+  it('정규장 시각과 같은 시각의 값은 내지 않는다 (경계 · 뒤에 찍힌 것만)', () => {
+    expect(extractExtendedQuote({ postMarketPrice: 150, postMarketChangePercent: -1, postMarketTime: REG.toISOString() }, REG, 173.73)).toBeNull()
+  })
+
+  it('시각이 epoch 초 숫자여도 읽는다', () => {
+    const sec = Math.floor(Date.parse('2026-11-12T01:00:00Z') / 1000)
+    expect(extractExtendedQuote({ postMarketPrice: 158.78, postMarketChangePercent: -8.6, postMarketTime: sec }, REG, 173.73)?.time).toEqual(new Date('2026-11-12T01:00:00Z'))
   })
 
   it('변동률이 없으면 정규장 종가 대비로 계산한다', () => {

@@ -18,6 +18,7 @@ vi.mock('@/lib/prisma', () => ({
 vi.mock('@/lib/price-fetcher', () => ({ fetchQuote: vi.fn() }))
 
 import { getPrices } from '../market'
+import { formatExtendedQuote, formatMarketCap } from '../../utils'
 import { fetchQuote } from '@/lib/price-fetcher'
 import { prisma } from '@/lib/prisma'
 
@@ -416,5 +417,23 @@ describe('getPrices — 시간외·프리마켓 · 시총 (#615)', () => {
     vi.mocked(fetchQuote).mockResolvedValueOnce(nvda({ marketCap: null, extended: null }) as never)
     const text = (await getPrices({ tickers: ['NVDA'] })).content[0].text
     expect(text).not.toContain('시총')
+  })
+})
+
+// #615 9-1 info: 변동률 없음 · 시총 반올림 경계
+describe('formatExtendedQuote · formatMarketCap 경계 (#615)', () => {
+  it('변동률이 없으면 기준 문구 없이 시각만', () => {
+    const s = formatExtendedQuote('NVDA', { session: 'post', price: 90, changePercent: null, time: new Date('2026-11-12T01:00:00Z') }, 'USD')
+    expect(s).toBe('시간외 $90.00 (2026-11-12 10:00 KST)')
+  })
+  it('KRW: 반올림 뒤 1조에 닿으면 조 · 1억 미만은 원', () => {
+    expect(formatMarketCap(9999.6e8, 'KRW')).toBe('1.0조원')
+    expect(formatMarketCap(3351e8, 'KRW')).toBe('3,351억원')
+    expect(formatMarketCap(5e7, 'KRW')).toBe('50,000,000원')
+  })
+  it('USD: 반올림 뒤 다음 단위에 닿으면 윗단위', () => {
+    expect(formatMarketCap(999.996e9, 'USD')).toBe('$1.00T')
+    expect(formatMarketCap(33516877824, 'USD')).toBe('$33.52B')
+    expect(formatMarketCap(512.3e6, 'USD')).toBe('$512.3M')
   })
 })
