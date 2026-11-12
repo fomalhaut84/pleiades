@@ -7,10 +7,16 @@ describe('newTraceId', () => {
     expect(id).toMatch(/^[0-9a-f]{8}$/)
   })
 
+  it('16진 8자 형식', () => {
+    for (let i = 0; i < 50; i++) expect(newTraceId()).toMatch(/^[0-9a-f]{8}$/)
+  })
+
+  // 회귀: #638 — 32비트 ID 1000 개는 실행마다 ≈1/8,600 확률로 겹쳐 CI 가 흔들렸다(#637).
+  // 100 개면 생일 충돌 ≈ 100²/(2·2³²) ≈ 1/860,000 — 고정 실패 대신 사실상 결정적이다.
   it('호출마다 유일 값 (충돌 확률 낮음)', () => {
     const ids = new Set()
-    for (let i = 0; i < 1000; i++) ids.add(newTraceId())
-    expect(ids.size).toBe(1000)
+    for (let i = 0; i < 100; i++) ids.add(newTraceId())
+    expect(ids.size).toBe(100)
   })
 })
 
