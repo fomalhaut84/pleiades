@@ -335,7 +335,7 @@ class HappyPath(Base):
             cfg = json.loads(Path(opt("--mcp-config")).read_text())
             self.assertEqual(sorted(cfg["mcpServers"]), ["myfinance", "myfitness"])
         out = r.stdout
-        self.assertIn("init 통과 · 플러그인 0 · MCP 서버 2(연결 2) · 목록 밖 도구 0", out)  # 회귀: #634
+        self.assertIn("init 통과 · 플러그인 0(내장 0 제외) · MCP 서버 2(연결 2) · 목록 밖 도구 0", out)  # 회귀: #634
         for line in ("S-4 CLI 후 2.1.308 → 같음", "J2 통과", "J3 통과", "누적 비용 $1.80", "fin 등록 59 = 읽기 25 + 쓰기 34 (MCP 아닌 항목 2 버림) · 차이 0",
                      "fit 등록 28 = 읽기 27 + 쓰기 1 · 차이 0 · 포트 기본값과 다름", "포트 mcp-config 와 같음", "원장 대조 다름 0/17",
                      "공유 로그 통과", "결과: 실행 끝", "X1 교차 · 완료 · $0.30", "D2 대조(fit) · 완료", "   X4 [예 / 부분 / 아니오]"):
@@ -364,7 +364,7 @@ class HappyPath(Base):
         self.assertIn("결과: 사전 판정 통과 — 질문 0", r.stdout)
         self.assertEqual(self.asks(), [])
         self.assertEqual(len(self.probes()), 1)
-        self.assertIn("init 탐침: 통과 · 플러그인 0 · MCP 서버 2(연결 2) · 목록 밖 도구 0 · 모델 응답 없음 · CLI 2.1.308", r.stdout)
+        self.assertIn("init 탐침: 통과 · 플러그인 0(내장 0 제외) · MCP 서버 2(연결 2) · 목록 밖 도구 0 · 모델 응답 없음 · CLI 2.1.308", r.stdout)
         self.assertEqual(self.state()["runs"], [])
         self.assertTrue(self.state()["probe"]["ok"])
 
@@ -684,8 +684,27 @@ class InitCheck(Base):
 
     def test_plugin_loaded(self):
         r = self.violation({"init": {"plugins": [{"name": "p", "path": "/x"}]}}, "플러그인")
-        self.assertIn("플러그인 1 · MCP 서버 2(연결 2)", r.stdout)
+        self.assertIn("플러그인 1(내장 0 제외) · MCP 서버 2(연결 2)", r.stdout)
         self.assertNotIn("/x", r.stdout)
+
+    # 회귀: #645 — 서버 CLI 2.1.311 init 에 내장 플러그인 3(`…@builtin`)이 늘 실린다 · 그것만이면 통과
+    BUILTIN = [{"name": "cc-plugin-agents-md", "source": "cc-plugin-agents-md@builtin"},
+               {"name": "cc-plugin-telemetry", "source": "cc-plugin-telemetry@builtin"}]
+
+    def test_builtin_plugins_only_pass(self):
+        tools = ["mcp__myfinance__get_portfolio", "mcp__myfitness__get_sleep"]
+        self.set_scenario(default={"tools": tools, "init": {"plugins": self.BUILTIN}}, probe={"init": {"plugins": self.BUILTIN}})
+        r = self.run_x1()
+        self.assertIn("J2 통과", r.stdout)
+        self.assertIn("플러그인 0(내장 2 제외)", r.stdout)
+        self.assertNotIn("cc-plugin", r.stdout)
+
+    def test_builtin_plus_other_plugin_is_violation(self):
+        r = self.violation({"init": {"plugins": self.BUILTIN + [{"name": "dev", "source": "dev@market"}]}}, "플러그인")
+        self.assertIn("플러그인 1(내장 2 제외)", r.stdout)
+
+    def test_plugin_without_builtin_source_is_violation(self):
+        self.violation({"init": {"plugins": [{"name": "x", "source": "x@builtin-ish"}, {"name": "y"}]}}, "플러그인")
 
     def test_plugin_errors_count_as_plugins(self):
         self.violation({"init": {"plugin_errors": [{"plugin": "p"}]}}, "플러그인")

@@ -644,7 +644,7 @@ function sessionArgs(ctx) {
 }
 
 const initCheck = (lists) => (e) => judgeInit(e, new Set(lists.allow), [APPS.fin.serverKey, APPS.fit.serverKey])
-const initCounts = (i) => (i.plugins === undefined ? '' : ` · 플러그인 ${i.plugins} · MCP 서버 ${i.servers}(연결 ${i.connected}) · 목록 밖 도구 ${i.outside}`)
+const initCounts = (i) => (i.plugins === undefined ? '' : ` · 플러그인 ${i.plugins}(내장 ${i.builtin || 0} 제외) · MCP 서버 ${i.servers}(연결 ${i.connected}) · 목록 밖 도구 ${i.outside}`)
 
 // #634 9-1 major 2 — 사전 판정의 init 탐침: 실제와 같은 인자로 띄워 첫 init 줄을 받는 즉시 SIGKILL. init 은 CLI 가 질의 시작 때
 // (API 호출 전) 내는 첫 이벤트다(2.1.322 코드 · 2.1.308 은 런북 8절). 통과를 CLI 버전과 함께 state 에 남긴다 — 본 실행은 이것을 요구한다

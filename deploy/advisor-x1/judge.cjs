@@ -79,13 +79,17 @@ function judgeInit(e, allow, serverKeys) {
   if (!e || e.type !== 'system' || e.subtype !== 'init') return fmt('init 없음')
   if (!Array.isArray(e.tools) || !Array.isArray(e.mcp_servers) || !Array.isArray(e.plugins)) return fmt('init 필드 없음')
   if (['plugin_errors', 'mcp_server_errors'].some((k) => e[k] !== undefined && !Array.isArray(e[k]))) return fmt('init 필드 형식')
-  const plugins = e.plugins.length + (e.plugin_errors || []).length
+  // #645: CLI 내장 플러그인(출처 `…@builtin`)은 설정 범위와 무관하게 늘 로드된다(운영 advisor 호출도 같다 · 서버 2.1.311 실측 3).
+  // 위반에서 빼고 개수만 보고한다 — 내장 플러그인이 도구를 더해도 아래 `outside`(목록 밖 도구) 가 잡는다. 출처를 알 수 없으면 내장으로 보지 않는다.
+  const isBuiltin = (p) => !!p && typeof p === 'object' && typeof p.source === 'string' && /@builtin$/.test(p.source)
+  const builtin = e.plugins.filter(isBuiltin).length
+  const plugins = e.plugins.length - builtin + (e.plugin_errors || []).length
   const names = e.mcp_servers.map((m) => m && m.name)
   const servers = e.mcp_servers.length
   const connected = serverKeys.filter((k) => e.mcp_servers.some((m) => m && m.name === k && m.status === 'connected')).length
   const outside = e.tools.filter((t) => !allow.has(t)).length // 내장 도구(--tools "" 기대)도 여기서 걸린다
   const extraServer = servers !== serverKeys.length || !serverKeys.every((k) => names.includes(k)) || (e.mcp_server_errors || []).length > 0
-  const counts = { plugins, servers, connected, outside }
+  const counts = { plugins, builtin, servers, connected, outside }
   const why = plugins ? '플러그인' : extraServer ? 'MCP 서버' : outside ? '목록 밖 도구' : ''
   if (why) return { ok: false, kind: 'violation', why, ...counts }
   if (connected !== serverKeys.length) {
