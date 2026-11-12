@@ -4696,3 +4696,5 @@ HEAD `1d9eadc23d49` · `apps/*` 정적 읽기만(봇·웹·MCP·`claude` 실행 
 
 - 모델 고정 ID 는 두 앱 같다: sonnet `claude-sonnet-5` · haiku `claude-haiku-4-5-20251001`.
 - **못 잰 값(서버):** caller·채널별 호출 수·비용·지연·실패 분포(판정 스크립트 `.server-scripts/23-server-239-advisor-cost.sh` · gitignored) · **fin 성공 지연은 기록 자체가 없다**(크론 caller 만 "끝 − 크론 시각" 상한) · fit 1회 호출 비용·지연 · 토큰 · 서버 실제 `MCP_PORT` · CLI 버전 · 계정 쿼터 · CLI 세션 디스크 누적.
+
+**서버 기준선 (2026-11-12 · 사용자 실행 · 최근 14일 · 판정 요약 `_workspace/239/01b_server_advisor_cost.md`):** advisor 호출 138(fin 83 · fit 55) · 비용 $36.49(하루 $2.61) · 정기 호출 92 · $24.33(2/3) · 사람 대화 46 · $12.16 · 실패·재시도·드리프트 0. fit 대화 지연 p50 20.5 s · p90 78.7 s · fit 정기 리포트 62~149 s · fin 크론 상한 p50 83~108 s(fin 지연 기록 없음 W1). MCP 도구 p50 fin 110 ms · fit 23 ms — 지연은 모델 턴이 정한다. fin `get_news` 오류 11/60.
