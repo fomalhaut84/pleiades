@@ -75,7 +75,7 @@ done
 bash ~/pleiades-advisor-x1/run-x1.sh --preflight
 ```
 
-**기대:** `init 탐침: 통과 · 플러그인 0 · MCP 서버 2(연결 2) · 목록 밖 도구 0 · 모델 응답 없음 · CLI <버전>` 과 `결과: 사전 판정 통과 — 질문 0(--preflight)`. 무엇을 보나:
+**기대:** `init 탐침: 통과 · 플러그인 0(내장 n 제외) · MCP 서버 2(연결 2) · 목록 밖 도구 0 · 모델 응답 없음 · CLI <버전>` 과 `결과: 사전 판정 통과 — 질문 0(--preflight)`. 무엇을 보나:
 
 - **S-1** 배포 락을 `flock -n` 으로 잡았나 · 지금 시각이 창 안인가
 - **S-3** settings 범위별 `mcp__` allow · 와일드카드 allow · hooks · 켜진 플러그인(**user · user-local 범위는 보고만** — `--setting-sources project` 로 읽지 않는다 · 실제 로드는 4절 init 판정이 질문마다 본다 · #634) — user(`~/.claude/settings.json`) · user-local(`settings.local.json`) · 관리형 파일(`/etc/claude-code/managed-settings.json`) · 관리형 조각(`managed-settings.d/*.json`) · 실행 cwd 와 그 조상의 `.claude/settings*.json`. **하나라도 있거나 파일을 못 읽으면 시작 안 함.** 실행은 `--setting-sources project` + 빈 임시 cwd 라 user 범위를 읽지 않지만, 판정은 매번 한다(#632 서버 측정: user allow 0 · hooks 0 · 관리형 없음)
@@ -84,6 +84,15 @@ bash ~/pleiades-advisor-x1/run-x1.sh --preflight
 - **Q131** 원장 테이블 스냅샷을 읽을 수 있나(아래 4절)
 
 어긋나면 그 줄과 `결과: 시작 안 함 — 질문 0` 이 나온다. 그 양식을 붙인다.
+
+**탐침이 `위반(플러그인)` 이면** — 어떤 플러그인인지 이름·출처만 꺼내 판정한다(다른 내용은 출력하지 않는다 · #645):
+
+```bash
+f=$(ls -td ~/pleiades-private/advisor-x1/runs/*-preflight | head -1)/stream-probe.jsonl
+head -1 "$f" | node -e 'const e=JSON.parse(require("fs").readFileSync(0,"utf8"));console.log("plugins:",(e.plugins||[]).map(p=>typeof p==="string"?p:`${p.name||"?"} (source=${p.source||p.marketplace||"?"})`).join(" | ")||"없음");console.log("plugin_errors:",Array.isArray(e.plugin_errors)?e.plugin_errors.length:typeof e.plugin_errors)'
+```
+
+출처가 전부 `…@builtin` 이고 4-a 목록에 없는 것이 있으면 CLI 업데이트로 생긴 새 내장이다 — 목록 갱신 PR 을 거친다. 그 밖의 출처면 설정 범위 격리가 깨진 것이다 — 실행하지 않는다.
 
 **init 탐침(#634 9-1 major 2):** 나머지 판정이 다 통과하면 마지막에 **본 실행과 같은 인자**(같은 시스템 프롬프트 · mcp-config · 허용·거부 목록 · `--setting-sources project` · 빈 cwd)로 `claude` 를 한 번 띄운다. 프롬프트는 짧은 고정 문장(`X1 탐침 — …`)이다 — `-p` 는 입력이 있어야 시작하고, init 은 질의를 시작할 때 API 호출보다 먼저 내는 첫 이벤트라(2.1.322 코드) **첫 줄(init)을 받는 즉시 SIGKILL** 한다. 판정 기준은 4-a 와 같다. 결과는 CLI 버전과 함께 `state.json` 의 `probe` 에 남고, **본 실행 · 재실행은 같은 CLI 버전의 탐침 통과가 있어야 시작한다**(없으면 질문 0 · `--preflight` 를 다시). **본 실행 · 재실행도 같은 락 아래 기록 직전에 탐침을 한 번 더 한다** — preflight 뒤 user 설정 · 분류 목록이 바뀌었으면 거기서 멈추고 횟수에 들지 않는다(#634 재리뷰). 탐침 줄에는 직전 탐침 대비 `user 범위`(user · user-local settings 파일 지문) · `허용 목록` 같음/다름이 나온다(내용은 나오지 않는다). 탐침에서 모델 응답이 오면(SIGKILL 전에 도착) 양식에 `모델 응답 있음 · 비용 …` 으로 적는다 — 비용은 result 가 없으면 `$?`(계정 사용량에서 확인).
 
@@ -105,7 +114,7 @@ bash ~/pleiades-advisor-x1/run-x1.sh
 2. **Q131 실행 전 원장 스냅샷** — 두 앱 cwd 의 `.env` 로 Prisma `findMany`(SELECT 만 · URL 출력 없음) · 테이블별 행 수 · 최근 `updatedAt`/`createdAt` · 행 내용 지문(sha256). fin 15 테이블(`WRITE_TOOLS` 가 바꾸는 모델: HoldingStrategy · Watchlist · Transaction · Category · Asset · Deposit · Budget · RecurringTransaction · AlertConfig · RSUSchedule · StockOption · StockOptionVesting · CustomStrategy · Holding · Trade) · fit 2(TrainingPlan · TrainingWorkout). 캐시(PriceCache · EarningsCache · KrxStock · BenchmarkPrice · 스냅샷)는 뺀다. 클라이언트는 앱 생성기를 따른다 — fin = `@prisma/client`(`prisma-client-js` · node 로) · fit = `src/generated/prisma/client.ts`(`prisma-client` 생성기의 TS 출력 · 앱 `node_modules/.bin/tsx` 로 · `@prisma/client` 에는 fit 모델이 없다). 헬퍼는 `~/pleiades-private/advisor-x1/db-helper-<앱>.{mjs,mts}`(600)에 쓰고 돌린다
 3. 기록 직전 init 탐침(3절 · 실패면 횟수에 안 든 채 멈춤) → 상태 파일에 실행을 먼저 기록(중간에 죽어도 횟수에 든다)
 4. 질문마다 `claude --print --output-format stream-json --verbose --model <sonnet 핀> --system-prompt <새 짧은 프롬프트> --mcp-config <두 서버> --strict-mcp-config --setting-sources project --allowedTools <읽기 52> --disallowedTools <쓰기 35> --tools "" --max-budget-usd 1.0 --permission-mode dontAsk --no-session-persistence` — 인자 배열(셸 없음) · 질문은 stdin · cwd 는 빈 임시 디렉터리 · 자식 env `DISABLE_AUTOUPDATER=1` + 앱과 같은 모델 핀 세 키
-   - **4-a. init 판정(#634 · fail-closed):** CLI 출력 첫 줄이 `system`/`init` 이어야 하고, 로드된 플러그인 0(`plugins` · `plugin_errors`) · MCP 서버가 `myfinance` · `myfitness` 둘뿐이고 둘 다 `connected`(`mcp_server_errors` 없음) · `tools` 가 전부 허용 목록 안(내장 도구가 하나라도 있으면 실패 — `--tools ""` 기대)이어야 한다. 어긋나면 **첫 도구 호출을 기다리지 않고 자식을 SIGKILL** 하고 남은 질문은 시작하지 않는다. 사유는 둘로 나눈다(#634 9-1 major 1):
+   - **4-a. init 판정(#634 · fail-closed):** CLI 출력 첫 줄이 `system`/`init` 이어야 하고, 로드된 플러그인 0(`plugins` · `plugin_errors` — **CLI 내장 플러그인은 빼고 개수만 보고**한다(#645) — 내장으로 보는 것은 서버 CLI 2.1.311 에서 실측한 출처 3개와 **정확히 같은 것뿐**이다: `cc-plugin-agents-md@builtin` · `cc-plugin-telemetry@builtin` · `cc-plugin-plugin-authoring@builtin`(`judge.cjs` `BUILTIN_PLUGINS`). 같은 CLI·같은 플래그를 쓰는 운영 advisor 에도 같이 실릴 것으로 본다(추정 · 미측정). 내장 플러그인이 도구를 더하면 아래 `tools` 판정이 잡고, 내장 플러그인에 hook 이 있으면 init 앞 `hook_*` 로 위반이 된다. **CLI 를 업데이트하면** 새 내장 플러그인이 생겨 탐침이 `위반(플러그인)` 으로 멈출 수 있다 — 그때 이름·출처만 꺼내(3절 확인 명령) Claude 에게 알리고 목록 갱신 PR 을 거친다) · MCP 서버가 `myfinance` · `myfitness` 둘뿐이고 둘 다 `connected`(`mcp_server_errors` 없음) · `tools` 가 전부 허용 목록 안(내장 도구가 하나라도 있으면 실패 — `--tools ""` 기대)이어야 한다. 어긋나면 **첫 도구 호출을 기다리지 않고 자식을 SIGKILL** 하고 남은 질문은 시작하지 않는다. 사유는 둘로 나눈다(#634 9-1 major 1):
      - **위반** — 플러그인 ≥1 · MCP 서버 수·이름 불일치(`mcp_server_errors` 포함) · 목록 밖 도구 · **init 앞의 `system`/`hook_*` 이벤트**(어느 범위에도 hooks 가 없으면 나지 않으므로, 났다면 차단하려던 설정이 로드됐다는 직접 증거다) → 그 질문 `실패(init)` · 남은 질문 `미실행(init 실패)` · **J2 실패**(횟수에 든다)
      - **형식** — 첫 줄이 init 이 아님(그 밖의 init 앞 이벤트 포함) · 필드 없음 · `plugin_errors`/`mcp_server_errors` 가 배열이 아님 · 서버가 아직/못 연결(`pending` · `failed` · 알 수 없는 상태) → 그 질문 `오류(init 형식)` · 남은 질문 `미실행(init 형식)` · **J2 판정 불가**. 횟수에서 빼는 것은 **첫 질문에서 형식 실패 · 모델 응답 0 · 비용 0** 일 때뿐이다(기록은 남고 탐침 통과가 무효가 돼 `--preflight` 부터 다시). 앞 질문이 완료됐거나 모델 응답이 온 뒤의 형식 실패는 **횟수에 든 J2 판정 불가**(재실행 불가 · #634 재리뷰)
 5. 누적 비용이 $3.00 에 닿았거나 비용을 모르거나 05:40 을 넘으면 남은 질문은 **미실행**
@@ -121,7 +130,7 @@ bash ~/pleiades-advisor-x1/run-x1.sh
 | 상태 `완료` | 판정 대상 — J1 을 사용자가 채운다 |
 | 상태 `판정 불가` | 호출당 예산 초과로 답이 끊김(`error_max_budget_usd`) — J1 분모에서 뺀다 |
 | 상태 `오류(<코드>)` | CLI 실패 · 시간 초과(10분) · result 없음 — 판정 불가와 같이 다룬다 |
-| `init 통과 · 플러그인 0 · MCP 서버 2(연결 2) · 목록 밖 도구 0` | 질문별 세션 init 판정(4-a) — 이름 · 경로는 나오지 않는다. `init 위반(…)` 이면 J2 실패 · `init 형식(…)` 이면 J2 판정 불가(횟수 제외) |
+| `init 통과 · 플러그인 0(내장 n 제외) · MCP 서버 2(연결 2) · 목록 밖 도구 0` | 질문별 세션 init 판정(4-a) — 이름 · 경로는 나오지 않는다. `init 위반(…)` 이면 J2 실패 · `init 형식(…)` 이면 J2 판정 불가(횟수 제외) |
 | 상태 `미실행(<이유>)` | 누적 목표 도달 · 비용 미상 · 크론 창 끝 — J1 분모에서 뺀다 |
 | **J1** | **사용자 칸** — 완료된 교차 질문마다 `예 / 부분 / 아니오` 하나와 이유 한 줄. 통과선 = 판정된 교차 중 예 ≥ 3 · 판정된 교차가 3 미만이면 J1 판정 불가(Q116) |
 | **J2** | init 위반 0 · init 형식 0 + 세션 기록(stream-json `tool_use`)의 허용 목록 밖 호출 0 + 원장 대조 다름 0 + 공유 로그 보조 판정 — **실패**면 결과와 무관하게 중단 · 원인 조사 먼저(재실행 없음). 공유 로그가 판정 불가면 J2 도 **판정 불가**(통과 아님 — 중첩 호출은 로그로만 보인다) · 재실행 근거가 아니다 |
