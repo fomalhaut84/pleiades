@@ -73,15 +73,18 @@ function parseStream(text) {
 // init 앞 system/hook_* 를 위반으로 보는 근거: 어느 범위에도 hooks 가 없으면(S-3) hook 이벤트는 나지 않는다 — 났다면 차단하려던
 // 설정(플러그인·user hooks)이 실제로 로드됐다는 직접 증거다. 그 밖의 init 앞 이벤트는 CLI 형식 변화로 보고 형식 문제로 둔다.
 const KNOWN_STATUS = new Set(['connected', 'pending', 'failed', 'needs-auth', 'disabled'])
+// #645: 서버 CLI 2.1.311 init 에 실린 내장 플러그인 출처(2026-11-12 서버 실측). 바꾸면 런북 4-a 의 목록도 같이.
+const BUILTIN_PLUGINS = new Set(['cc-plugin-agents-md@builtin', 'cc-plugin-telemetry@builtin', 'cc-plugin-plugin-authoring@builtin'])
 const fmt = (why, extra = {}) => ({ ok: false, kind: 'format', why, ...extra })
 function judgeInit(e, allow, serverKeys) {
   if (e && e.type === 'system' && typeof e.subtype === 'string' && e.subtype.startsWith('hook_')) return { ok: false, kind: 'violation', why: 'init 전 hook' }
   if (!e || e.type !== 'system' || e.subtype !== 'init') return fmt('init 없음')
   if (!Array.isArray(e.tools) || !Array.isArray(e.mcp_servers) || !Array.isArray(e.plugins)) return fmt('init 필드 없음')
   if (['plugin_errors', 'mcp_server_errors'].some((k) => e[k] !== undefined && !Array.isArray(e[k]))) return fmt('init 필드 형식')
-  // #645: CLI 내장 플러그인(출처 `…@builtin`)은 설정 범위와 무관하게 늘 로드된다(운영 advisor 호출도 같다 · 서버 2.1.311 실측 3).
-  // 위반에서 빼고 개수만 보고한다 — 내장 플러그인이 도구를 더해도 아래 `outside`(목록 밖 도구) 가 잡는다. 출처를 알 수 없으면 내장으로 보지 않는다.
-  const isBuiltin = (p) => !!p && typeof p === 'object' && typeof p.source === 'string' && /@builtin$/.test(p.source)
+  // #645: CLI 내장 플러그인은 설정 범위와 무관하게 늘 로드된다(서버 CLI 2.1.311 실측 3 — 같은 CLI·같은 플래그인 운영 advisor 도 같을 것이다 · 추정).
+  // 위반에서 빼고 개수만 보고한다. **실측한 출처 문자열과 정확히 같을 때만** 내장으로 본다(9-1 major — 접미사 `@builtin` 만 보면 사용자가
+  // 이름을 `builtin` 으로 붙인 마켓플레이스의 플러그인도 빠진다). CLI 업데이트로 새 내장이 생기면 위반으로 멈춘다 → 런북대로 목록을 갱신한다.
+  const isBuiltin = (p) => !!p && typeof p === 'object' && typeof p.source === 'string' && BUILTIN_PLUGINS.has(p.source)
   const builtin = e.plugins.filter(isBuiltin).length
   const plugins = e.plugins.length - builtin + (e.plugin_errors || []).length
   const names = e.mcp_servers.map((m) => m && m.name)

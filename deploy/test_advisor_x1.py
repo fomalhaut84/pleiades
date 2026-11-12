@@ -704,7 +704,19 @@ class InitCheck(Base):
         self.assertIn("플러그인 1(내장 2 제외)", r.stdout)
 
     def test_plugin_without_builtin_source_is_violation(self):
-        self.violation({"init": {"plugins": [{"name": "x", "source": "x@builtin-ish"}, {"name": "y"}]}}, "플러그인")
+        r = self.violation({"init": {"plugins": [{"name": "x", "source": "x@builtin-ish"}, {"name": "y"}]}}, "플러그인")
+        self.assertIn("플러그인 2(내장 0 제외)", r.stdout)
+
+    # 회귀: #645 9-1 major — 접미사가 아니라 실측 출처와 정확히 같을 때만 내장이다
+    def test_unknown_builtin_marketplace_is_violation(self):
+        r = self.violation({"init": {"plugins": self.BUILTIN + [{"name": "evil", "source": "evil@builtin"}]}}, "플러그인")
+        self.assertIn("플러그인 1(내장 2 제외)", r.stdout)
+
+    # 회귀: #645 9-1 info — 내장 플러그인이 도구를 더하면 목록 밖 도구로 잡힌다
+    def test_builtin_plugin_extra_tool_is_violation(self):
+        tools = ["mcp__myfinance__get_portfolio", "mcp__myfitness__get_sleep", "Skill"]
+        r = self.violation({"init": {"plugins": self.BUILTIN, "tools": tools}}, "목록 밖 도구")
+        self.assertIn("플러그인 0(내장 2 제외)", r.stdout)
 
     def test_plugin_errors_count_as_plugins(self):
         self.violation({"init": {"plugin_errors": [{"plugin": "p"}]}}, "플러그인")
