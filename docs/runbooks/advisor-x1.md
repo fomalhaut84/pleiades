@@ -95,7 +95,7 @@ bash ~/pleiades-advisor-x1/run-x1.sh
 스크립트가 하는 일(순서):
 
 1. 사전 판정(3절 전부) — 하나라도 어긋나면 질문 0
-2. **Q131 실행 전 원장 스냅샷** — 두 앱 cwd 의 `.env` 로 Prisma `findMany`(SELECT 만 · URL 출력 없음) · 테이블별 행 수 · 최근 `updatedAt`/`createdAt` · 행 내용 지문(sha256). fin 15 테이블(`WRITE_TOOLS` 가 바꾸는 모델: HoldingStrategy · Watchlist · Transaction · Category · Asset · Deposit · Budget · RecurringTransaction · AlertConfig · RSUSchedule · StockOption · StockOptionVesting · CustomStrategy · Holding · Trade) · fit 2(TrainingPlan · TrainingWorkout). 캐시(PriceCache · EarningsCache · KrxStock · BenchmarkPrice · 스냅샷)는 뺀다
+2. **Q131 실행 전 원장 스냅샷** — 두 앱 cwd 의 `.env` 로 Prisma `findMany`(SELECT 만 · URL 출력 없음) · 테이블별 행 수 · 최근 `updatedAt`/`createdAt` · 행 내용 지문(sha256). fin 15 테이블(`WRITE_TOOLS` 가 바꾸는 모델: HoldingStrategy · Watchlist · Transaction · Category · Asset · Deposit · Budget · RecurringTransaction · AlertConfig · RSUSchedule · StockOption · StockOptionVesting · CustomStrategy · Holding · Trade) · fit 2(TrainingPlan · TrainingWorkout). 캐시(PriceCache · EarningsCache · KrxStock · BenchmarkPrice · 스냅샷)는 뺀다. 클라이언트는 앱 생성기를 따른다 — fin = `@prisma/client`(`prisma-client-js` · node 로) · fit = `src/generated/prisma/client.ts`(`prisma-client` 생성기의 TS 출력 · 앱 `node_modules/.bin/tsx` 로 · `@prisma/client` 에는 fit 모델이 없다). 헬퍼는 `~/pleiades-private/advisor-x1/db-helper-<앱>.{mjs,mts}`(600)에 쓰고 돌린다
 3. 상태 파일에 실행을 먼저 기록(중간에 죽어도 횟수에 든다)
 4. 질문마다 `claude --print --output-format stream-json --verbose --model <sonnet 핀> --system-prompt <새 짧은 프롬프트> --mcp-config <두 서버> --strict-mcp-config --setting-sources project --allowedTools <읽기 52> --disallowedTools <쓰기 35> --tools "" --max-budget-usd 1.0 --permission-mode dontAsk --no-session-persistence` — 인자 배열(셸 없음) · 질문은 stdin · cwd 는 빈 임시 디렉터리 · 자식 env `DISABLE_AUTOUPDATER=1` + 앱과 같은 모델 핀 세 키
 5. 누적 비용이 $3.00 에 닿았거나 비용을 모르거나 05:40 을 넘으면 남은 질문은 **미실행**
@@ -113,8 +113,8 @@ bash ~/pleiades-advisor-x1/run-x1.sh
 | 상태 `오류(<코드>)` | CLI 실패 · 시간 초과(10분) · result 없음 — 판정 불가와 같이 다룬다 |
 | 상태 `미실행(<이유>)` | 누적 목표 도달 · 비용 미상 · 크론 창 끝 — J1 분모에서 뺀다 |
 | **J1** | **사용자 칸** — 완료된 교차 질문마다 `예 / 부분 / 아니오` 하나와 이유 한 줄. 통과선 = 판정된 교차 중 예 ≥ 3 · 판정된 교차가 3 미만이면 J1 판정 불가(Q116) |
-| **J2** | 세션 기록(stream-json `tool_use`)의 허용 목록 밖 호출 0 + 원장 대조 다름 0 + 공유 로그 보조 판정 — 실패면 결과와 무관하게 **중단 · 원인 조사 먼저**(재실행 없음) |
-| 공유 로그 | 실험 시간 창의 두 MCP 로그(`apps/<dir>/logs/mcp-<날짜>.log` · msg `tool_call*` 의 `tool`)가 허용 목록 안인가 · fin MCP pm2 로그 `caller=strategy:parse`(중첩) 0 · 같은 창에 fin 봇 `caller=bot:ai_chat` 이 있으면 **섞임**(세션 기록 0 이면 J2 통과로 보고 그 사실을 적는다) · 세션은 도구를 불렀는데 로그 파일이 없으면 `판정 불가(로그 없음)` |
+| **J2** | 세션 기록(stream-json `tool_use`)의 허용 목록 밖 호출 0 + 원장 대조 다름 0 + 공유 로그 보조 판정 — **실패**면 결과와 무관하게 중단 · 원인 조사 먼저(재실행 없음). 공유 로그가 판정 불가면 J2 도 **판정 불가**(통과 아님 — 중첩 호출은 로그로만 보인다) · 재실행 근거가 아니다 |
+| 공유 로그 | 실험 시간 창의 두 MCP 로그(`apps/<dir>/logs/mcp-<날짜>.log` · msg `tool_call*` 의 `tool`)가 허용 목록 안인가 · fin MCP pm2 로그 `caller=strategy:parse`(중첩) 0 · 같은 창에 fin 봇 `caller=bot:ai_chat` 이 있으면 **섞임**(세션 기록 0 이면 J2 통과로 보고 그 사실을 적는다 — 중첩 근거가 있을 때만) · 세션은 도구를 불렀는데 MCP 로그 파일이 없거나 fin MCP · fin 봇 pm2 로그 파일이 없으면 `판정 불가(로그 없음)`(섞여도 같다) |
 | **J3** | 완료된 교차 질문 모두 두 도메인 도구가 1번 이상 **성공** |
 | J4 | 대조 질문 — 기록만(Q129) |
 | J5 | 지연 p50 · max · 누적 비용 — fit 대화 기준(p50 20.5s · p90 78.7s)과 나란히 |
@@ -139,6 +139,7 @@ less ~/pleiades-private/advisor-x1/runs/$(ls -t ~/pleiades-private/advisor-x1/ru
 | J1 판정 불가 — 원인이 미실행 | `run-x1.sh --rerun=resume` | 미실행이던 교차 질문(같은 상한) |
 | J1 실패 · J3 실패 | `run-x1.sh --rerun=prompt` | 교차 4개 — 시스템 프롬프트에 `knowledge.txt`(K2 지식 일부)를 덧붙인다 |
 | J2 실패 | 없음 | 판정 중단 · 분류 목록 · settings 원인 조사 |
+| J2 판정 불가 | 없음 | 로그가 왜 없었나(pm2 로그 위치 · 회전 · `MCP_LOG_TEE_FILE`) 확인 뒤 Claude 와 다음을 정한다 — 상태 파일은 통과로 남지 않아 재실행이 막힌다 |
 
 재실행도 목표 총액은 $3.00 이다. 재실행 뒤에도 실패 · 판정 불가면 **통합 층 보류**를 올린다(002 단계 0 판정).
 
@@ -169,6 +170,7 @@ rm -rf ~/pleiades-private/advisor-x1/runs && echo 원문 삭제
 | pm2 로그 시각대 | 줄 접두는 서버 로컬 시각으로 읽는다(앞뒤 2분 여유) — `date +%z` 가 pm2 데몬과 같다는 전제 |
 | 실험 창에 원장을 바꾸는 크론 | 원장 대조가 다르면 5절 끝 절차 |
 | `~/.claude.json` 의 프로젝트별 설정 | 실행 cwd 가 매번 새 경로라 해당 항목이 없다 |
+| fit tsx | 서버 `deploy.sh` 1단계 앱 `npm ci` 는 `--omit=dev` 없이 돌고 셸 `NODE_ENV` 를 비운 채 배포한다(`release-inplace.sh:237`) — devDependencies(`tsx`)가 설치된다. 없으면 Q131 이 `fit tsx 없음` 으로 멈춘다 |
 | MCP 도구 검색(`ToolSearch`) | 자식 env `ENABLE_TOOL_SEARCH=false` 로 끈다 — 2.1.308 에서 이 env 가 듣는지는 확인 안 됨. 양식에 `목록 밖 … [ToolSearch]` 가 나오면 J2 판정 전에 원인을 확인한다(MCP 아닌 CLI 도구라 원장 쓰기는 아니다) |
 | `permissions.defaultMode` · `managed-mcp.json` | S-3 줄에 보고만 한다(막지 않는다) — `--permission-mode dontAsk` · `--strict-mcp-config` 가 덮는다고 보고 설계했다 |
 

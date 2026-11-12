@@ -121,6 +121,13 @@ class PrismaClient {
 }
 module.exports = { PrismaClient }
 """
+# fit 은 prisma-client 생성기(TS · src/generated/prisma/client.ts)라 앱 tsx 로 읽는다 — 가짜도 그 자리에 TS 로 둔다(회귀: PR #633 Codex P1)
+FAKE_FIT_CLIENT = (
+    "import { createRequire } from 'module'\n"
+    "const fake: { PrismaClient: new () => unknown } = createRequire(process.cwd() + '/x.js')('./fake-prisma.cjs')\n"
+    "export const PrismaClient = fake.PrismaClient\n"
+)
+TSX = ROOT / "apps" / "fitness" / "node_modules" / "tsx" / "dist" / "cli.mjs"
 
 
 class Mcp(http.server.BaseHTTPRequestHandler):
@@ -165,6 +172,7 @@ class Mcp(http.server.BaseHTTPRequestHandler):
 
 class Base(unittest.TestCase):
     def setUp(self):
+        self.assertTrue(TSX.exists(), "apps/fitness npm ci 필요(tsx) — 건너뛰면 fit Q131 경로를 증명하지 않는다")
         self.tmp = Path(tempfile.mkdtemp(prefix="x1", dir="/tmp")).resolve()
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
         self.home = self.tmp / "h"
@@ -209,9 +217,17 @@ class Base(unittest.TestCase):
             (a / ".env").write_text(f'MCP_PORT={port}\nDATABASE_URL="{DB_SECRET}-{app}"\n')
             (a / "expected-url").write_text(f"{DB_SECRET}-{app}")
             (a / "fake-db.json").write_text(json.dumps({m: [{"id": 1, "v": "a", "updatedAt": "2026-11-01T00:00:00Z"}] for m in LEDGER[app]}))
-            pc = a / "node_modules" / "@prisma" / "client"
-            pc.mkdir(parents=True)
-            (pc / "index.js").write_text(FAKE_PRISMA)
+            if app == "fin":  # prisma-client-js → @prisma/client
+                pc = a / "node_modules" / "@prisma" / "client"
+                pc.mkdir(parents=True)
+                (pc / "index.js").write_text(FAKE_PRISMA)
+            else:  # prisma-client → src/generated/prisma/client.ts (+ 앱 tsx)
+                (a / "fake-prisma.cjs").write_text(FAKE_PRISMA)
+                gen = a / "src" / "generated" / "prisma"
+                gen.mkdir(parents=True)
+                (gen / "client.ts").write_text(FAKE_FIT_CLIENT)
+                (a / "node_modules" / ".bin").mkdir(parents=True)
+                (a / "node_modules" / ".bin" / "tsx").symlink_to(TSX)
         self.questions({i: f"Q-SECRET-{i} 지출과 수면" for i in ("X1", "X2", "X3", "X4", "D1", "D2")})
         self.set_scenario()
 
@@ -533,11 +549,26 @@ class J2J3(Base):
         self.assertIn("공유 로그 판정 불가(로그 없음)", r.stdout)
         self.assertIn("중첩 strategy:parse ?", r.stdout)
         self.assertIn("같은 창 fin ai_chat ?", r.stdout)
+        # 회귀: PR #633 Codex P2 — 중첩 근거가 없으면 J2 는 통과가 아니라 판정 불가 · 상태에도 통과로 남기지 않는다
+        self.assertIn("J2 판정 불가", r.stdout)
+        self.assertNotIn("J2 통과", r.stdout)
+        self.assertEqual(self.state()["runs"][0]["j2"], "판정 불가")
+        self.calls.write_text("")
+        self.assert_stopped(self.run_x1("--rerun=resume"), "본 실행 J2 가 통과가 아니다")
+
+    def test_mixed_without_nested_evidence_is_undecidable(self):
+        # 회귀: PR #633 Codex P2 — 섞임 규칙(세션 0 이면 통과)은 중첩 근거가 있을 때만
+        (self.pm2 / "logs" / "pleiades-fin-mcp-out.log").unlink()
+        self.set_scenario(replies=[{"tools": ["mcp__myfinance__get_portfolio", "mcp__myfitness__get_sleep"],
+                                    "pm2": [{"file": "pleiades-fin-bot-out.log", "text": "[advisor] ok caller=bot:ai_chat model=m"}]}])
+        r = self.run_x1()
+        self.assertIn("J2 판정 불가", r.stdout)
 
     def test_missing_mcp_log_is_undecidable_not_pass(self):
         self.set_scenario(default={"tools": ["mcp__myfinance__get_portfolio", "mcp__myfitness__get_sleep"], "noLog": True})
         r = self.run_x1()
         self.assertIn("공유 로그 판정 불가(로그 없음)", r.stdout)
+        self.assertIn("J2 판정 불가", r.stdout)
 
 
 class Q131Ledger(Base):
@@ -560,6 +591,17 @@ class Q131Ledger(Base):
     def test_db_failure_stops_without_leaking(self):
         (self.app_dir("fit") / "db-fail").touch()
         self.assert_stopped(self.run_x1(), "Q131: fit DB 조회 실패(TypeError)")
+
+    def test_fit_needs_generated_client(self):
+        # 회귀: PR #633 Codex P1 — fit 은 @prisma/client 에 모델이 없다. 생성 클라이언트가 없으면 @prisma/client 가 있어도 멈춘다
+        a = self.app_dir("fit")
+        shutil.rmtree(a / "src" / "generated")
+        pc = a / "node_modules" / "@prisma" / "client"
+        pc.mkdir(parents=True)
+        (pc / "index.js").write_text(FAKE_PRISMA)
+        self.assert_stopped(self.run_x1(), "Q131: fit DB 조회 실패")
+        (a / "node_modules" / ".bin" / "tsx").unlink()
+        self.assert_stopped(self.run_x1(), "Q131: fit tsx 없음")
 
     def test_missing_ledger_model_stops(self):
         s = self.app_dir("fit") / COPY[3]

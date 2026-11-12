@@ -48,7 +48,7 @@ const APPS = {
     dir: path.join(HOME, 'pleiades-fin', 'apps', 'finance'),
     serverKey: 'myfinance', // I-4 — 도구 접두 mcp__myfinance__
     tools: 'src/lib/ai/advisor-tools.ts',
-    models: 'src/lib/ai/models.ts', pins: 'PINNED_MODELS',
+    models: 'src/lib/ai/models.ts', pins: 'PINNED_MODELS', client: 'pkg',
     // Q131 원장 테이블 — WRITE_TOOLS 의 도구가 바꾸는 모델(src/mcp/tools/*.ts · lib/trade-service.ts · lib/rsu-vest-service.ts).
     // 캐시는 뺀다(PriceCache · EarningsCache · KrxStock · BenchmarkPrice · 스냅샷 — 읽기 도구·크론도 쓴다 · 011 §3-1)
     ledger: ['HoldingStrategy', 'Watchlist', 'Transaction', 'Category', 'Asset', 'Deposit', 'Budget', 'RecurringTransaction',
@@ -58,7 +58,7 @@ const APPS = {
     dir: path.join(HOME, 'pleiades-fit', 'apps', 'fitness'),
     serverKey: 'myfitness',
     tools: 'src/lib/ai/advisor-tools.ts',
-    models: 'src/lib/ai/models.ts', pins: 'PINNED_CLAUDE_MODELS',
+    models: 'src/lib/ai/models.ts', pins: 'PINNED_CLAUDE_MODELS', client: 'src/generated/prisma/client.ts', // schema.prisma generator output
     // generate_training_plan(ADVISOR_EXCLUDED_TOOLS)이 쓰는 모델(src/mcp/tools/training-plan.ts:302,326,348)
     ledger: ['TrainingPlan', 'TrainingWorkout'],
   },
@@ -133,8 +133,7 @@ function privateFile(file, label) {
 }
 
 function parseQuestions(text) {
-  const out = {}
-  let cur = null
+  const out = {}; let cur = null
   for (const line of text.split(/\r?\n/)) {
     const m = line.match(/^## (\S+)\s*$/)
     if (m) {
@@ -204,8 +203,7 @@ function checkSettings(cwd, form) {
 function block(src, name) {
   const i = src.indexOf(`export const ${name}`)
   if (i < 0) return null
-  const eq = src.indexOf('=', i)
-  const open = src.indexOf('[', eq)
+  const eq = src.indexOf('=', i), open = src.indexOf('[', eq)
   if (eq < 0 || open < 0) return null
   let depth = 0
   for (let k = open; k < src.length; k++) {
@@ -223,8 +221,7 @@ const quoted = (s) => [...s.matchAll(/'([^'\n]*)'|"([^"\n]*)"/g)].map((m) => m[1
 
 function finLists(src) {
   const prefix = (src.match(/const MCP_PREFIX = ['"]([^'"]+)['"]/) || [])[1]
-  const read = block(src, 'READ_TOOLS')
-  const write = block(src, 'WRITE_TOOLS')
+  const read = block(src, 'READ_TOOLS'), write = block(src, 'WRITE_TOOLS')
   if (!prefix || !read || !write) stop('S-5: fin 분류 상수를 찾지 못했다(소스 형식 변경 — 스크립트 갱신 필요)')
   const seg = [...read.body.matchAll(/\.\.\.mcp\(\[([\s\S]*?)\]\)/g)]
   if (read.head !== '' || seg.length !== 1 || write.head !== 'mcp(') stop('S-5: fin 분류 상수 형식이 예상과 다르다(mcp([...]) 하나씩)')
@@ -233,8 +230,7 @@ function finLists(src) {
 }
 
 function fitLists(src) {
-  const allow = block(src, 'ADVISOR_ALLOWED_TOOLS')
-  const excl = block(src, 'ADVISOR_EXCLUDED_TOOLS')
+  const allow = block(src, 'ADVISOR_ALLOWED_TOOLS'), excl = block(src, 'ADVISOR_EXCLUDED_TOOLS')
   if (!allow || !excl || allow.head || excl.head) stop('S-5: fit 분류 상수를 찾지 못했다(소스 형식 변경 — 스크립트 갱신 필요)')
   return { read: quoted(allow.body), write: quoted(excl.body), dropped: 0 }
 }
@@ -384,8 +380,10 @@ async function checkTools(form) {
 }
 
 // ── Q131 원장 스냅샷(앱 cwd 의 .env · Prisma SELECT · URL 출력 없음) ──
+// ESM 한 벌 — fin 은 node 로(.mjs · @prisma/client = prisma-client-js 생성기) · fit 은 앱 tsx 로(.mts · prisma-client 생성기가
+// TS 로 src/generated/prisma/client.ts 에 만든다 — @prisma/client 에는 fit 모델이 없다 · 회귀: PR #633 Codex P1)
 const DB_HELPER = `
-const fs = require('fs'), crypto = require('crypto')
+import fs from 'fs'; import crypto from 'crypto'; import path from 'path'; import { createRequire } from 'module'; import { pathToFileURL } from 'url'
 const LINE = /^\\s*(?:export\\s+)?([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*(.*?)\\s*$/
 for (const raw of fs.readFileSync('.env', 'utf8').split(/\\r?\\n/)) {
   const m = raw.match(LINE); if (!m || raw.trimStart().startsWith('#') || m[1] !== 'DATABASE_URL') continue
@@ -397,7 +395,9 @@ const canon = (v) => v === null || typeof v !== 'object' ? (typeof v === 'bigint
 let p
 const out = (o) => process.stdout.write(JSON.stringify(o))
 ;(async () => {
-  const { PrismaClient } = require('@prisma/client'); p = new PrismaClient()
+  const c = process.env.X1_CLIENT
+  const { PrismaClient } = c === 'pkg' ? createRequire(path.join(process.cwd(), 'x1.js'))('@prisma/client') : await import(pathToFileURL(c).href)
+  p = new PrismaClient()
   const tables = {}
   for (const t of JSON.parse(process.env.X1_TABLES)) {
     const d = p[t[0].toLowerCase() + t.slice(1)]
@@ -416,9 +416,15 @@ function dbSnapshot(app) {
   const a = APPS[app]
   const schema = (() => { try { return readText(path.join(a.dir, 'prisma', 'schema.prisma')) } catch { return '' } })()
   for (const t of a.ledger) if (!new RegExp(`^model ${t} \\{`, 'm').test(schema)) stop(`Q131: ${app} 스키마에 원장 모델이 없다(스크립트 갱신 필요)`)
-  const env = { ...process.env, X1_TABLES: JSON.stringify(a.ledger) }
+  const tsx = path.join(a.dir, 'node_modules', '.bin', 'tsx') // deploy.sh 1단계 앱 npm ci 가 devDependencies 까지 설치한다
+  if (a.client !== 'pkg' && !fs.existsSync(tsx)) stop(`Q131: ${app} tsx 없음(생성 클라이언트를 읽지 못한다)`)
+  const helper = path.join(X1_DIR, `db-helper-${app}.${a.client === 'pkg' ? 'mjs' : 'mts'}`)
+  writePrivate(helper, DB_HELPER)
+  const env = { ...process.env, X1_TABLES: JSON.stringify(a.ledger), X1_CLIENT: a.client === 'pkg' ? 'pkg' : path.join(a.dir, a.client),
+    PATH: `${path.dirname(process.execPath)}:${process.env.PATH || ''}` } // tsx 셔뱅(/usr/bin/env node)이 같은 node 를 찾게
   delete env.DATABASE_URL
-  const r = spawnSync(process.execPath, ['-e', DB_HELPER], { cwd: a.dir, env, encoding: 'utf8', timeout: CONFIG.dbMs, stdio: ['ignore', 'pipe', 'ignore'] })
+  const [cmd, argv] = a.client === 'pkg' ? [process.execPath, [helper]] : [tsx, [helper]]
+  const r = spawnSync(cmd, argv, { cwd: a.dir, env, encoding: 'utf8', timeout: CONFIG.dbMs, stdio: ['ignore', 'pipe', 'ignore'] })
   let j
   try { j = JSON.parse(r.stdout) } catch { j = { ok: false, code: r.error ? 'spawn' : 'output' } }
   if (!j.ok) stop(`Q131: ${app} DB 조회 실패(${safeName(j.code)})`)
@@ -429,8 +435,7 @@ function dbDiff(before, after) {
   let diff = 0, total = 0
   for (const app of Object.keys(before)) for (const t of Object.keys(before[app])) {
     total++
-    const b = before[app][t]
-    const a = after[app] && after[app][t]
+    const b = before[app][t], a = after[app] && after[app][t]
     if (!a || a.n !== b.n || a.latest !== b.latest || a.digest !== b.digest) diff++
   }
   return { diff, total }
@@ -564,11 +569,9 @@ function sharedLogs(lists, t0, t1, sessionCounts) {
   const finChat = pm2Count('fin', ['bot'], /caller=bot:ai_chat\b/, t0, t1)
   const fitChat = pm2Count('fit', ['bot'], /\[askAdvisor\] channel=/, t0, t1)
   const mixed = (finChat || 0) > 0
-  let verdict
-  if (mixed) verdict = '섞임'
-  else if (fin.outside || fit.outside || (nested || 0) > 0) verdict = '실패'
-  else if ((sessionCounts.fin && !fin.files) || (sessionCounts.fit && !fit.files) || nested === null || finChat === null) verdict = '판정 불가(로그 없음)'
-  else verdict = '통과'
+  const missing = (sessionCounts.fin && !fin.files) || (sessionCounts.fit && !fit.files) || nested === null || finChat === null
+  // 순서: 섞이지 않은 실패 → 근거 없음(섞여도 중첩 근거가 없으면 통과로 보지 않는다 · PR #633 Codex P2) → 섞임 → 통과
+  const verdict = !mixed && (fin.outside || fit.outside || nested > 0) ? '실패' : missing ? '판정 불가(로그 없음)' : mixed ? '섞임' : '통과'
   return { fin, fit, nested, finChat, fitChat, mixed, verdict }
 }
 
@@ -619,7 +622,8 @@ function verdicts(form, plan, results, shared, db, sessionOutside) {
   const cross = CROSS.filter((id) => plan.ids.includes(id))
   const done = cross.filter((id) => results[id] && results[id].status === '완료')
   const j2fail = sessionOutside > 0 || db.diff !== 0 || shared.verdict === '실패'
-  const j2 = j2fail ? '실패' : '통과'
+  // 중첩 호출은 공유 로그로만 보인다 — 로그가 판정 불가면 J2 도 판정 불가(통과 아님 · 재실행 근거 아님 · 회귀: PR #633 Codex P2)
+  const j2 = j2fail ? '실패' : shared.verdict.startsWith('판정 불가') ? '판정 불가' : '통과'
   form.push('-- 판정')
   form.push(`J1 (사용자) 완료된 교차 ${done.length}${done.length < 3 && plan.kind === 'main' ? ' — 3 미만이면 J1 판정 불가(§5-6)' : ''}`)
   for (const id of done) form.push(`   ${id} [예 / 부분 / 아니오] 이유: ____`)
@@ -719,20 +723,16 @@ async function questionsAndVerdicts(ctx, form, args, record) {
     fs.appendFileSync(answers, `\n## ${id} (${KIND[id]}) · ${q.status}\n\n### 질문\n${questions[id]}\n\n### 도구\n${q.calls.map((c) => `${c.name}${c.ok ? '' : ' (실패)'}`).join('\n') || '(없음)'}\n\n### 답\n${q.text}\n`)
     form.push(questionLine(id, q, cum))
   }
-  const t1 = Date.now()
-  const after = cliVersion(bin, env)
+  const t1 = Date.now(), after = cliVersion(bin, env)
   let dbAfter = null
   try { dbAfter = { fin: dbSnapshot('fin'), fit: dbSnapshot('fit') } } catch (e) { if (!(e instanceof Stop)) throw e } // 질문 뒤라 멈추지 않는다 — 대조 실패 = J2 실패
   const sessionOutside = Object.values(results).reduce((s, q) => s + (q.outside || 0), 0)
   const sessionCounts = { fin: Object.values(results).some((q) => q.fin && q.fin.n), fit: Object.values(results).some((q) => q.fit && q.fit.n) }
   const shared = sharedLogs(lists, t0, t1, sessionCounts)
   const db = dbAfter ? dbDiff(ctx.db, dbAfter) : { diff: '?(실행 뒤 조회 실패)', total: APPS.fin.ledger.length + APPS.fit.ledger.length }
-  form.push(`S-4 CLI 후 ${after || '?'} → ${after === ctx.before ? '같음' : '다름 — 운영 advisor 영향 확인(#255 · R-11)'}`)
-  form.push(`누적 비용 ${usd(cum)} · 배포 겹침 0(락을 끝까지 쥠)`)
+  form.push(`S-4 CLI 후 ${after || '?'} → ${after === ctx.before ? '같음' : '다름 — 운영 advisor 영향 확인(#255 · R-11)'}`, `누적 비용 ${usd(cum)} · 배포 겹침 0(락을 끝까지 쥠)`)
   const j2 = verdicts(form, plan, results, shared, db, sessionOutside)
-  record.status = Object.fromEntries(Object.entries(results).map(([id, q]) => [id, q.status]))
-  record.j2 = j2
-  record.cost = cum
+  Object.assign(record, { j2, cost: cum, status: Object.fromEntries(Object.entries(results).map(([id, q]) => [id, q.status])) })
   writePrivate(STATE(), JSON.stringify(ctx.state, null, 2))
   const left = 2 - ctx.state.runs.length
   form.push(`재실행: 남은 ${left}회${left > 0 && j2 === '통과' ? ' — 가능하면 --rerun=prompt(J1·J3 실패) · budget(판정 불가) · resume(미실행) 중 하나(§5-6)' : ''}`)
