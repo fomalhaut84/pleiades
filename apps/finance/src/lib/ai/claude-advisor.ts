@@ -765,6 +765,9 @@ async function runAdvisorOnce(
   cmdParts.push(
     '--mcp-config', shellEscape(mcpConfigPath),
     '--strict-mcp-config',
+    // #635: 서버 user settings(켜진 플러그인 · 그 hook)를 읽지 않는다 — 사람의 개발용 플러그인 hook 이 호출마다 돌아
+    // 맥락을 주입하고 세션 요약 파일을 남겼다. 앱 cwd 의 CLAUDE.md·rules(매매 방법론)는 project 범위라 그대로다.
+    '--setting-sources', 'project',
     // #247: 모노레포 루트 CLAUDE.md·rules 를 컨텍스트에서 뺀다 (cli-isolation.ts)
     ...monorepoExcludeArgs(projectRoot).map(shellEscape),
     // pleiades#419: 기본은 읽기만 — 쓰기는 호출부가 allowWriteTools 로 명시
