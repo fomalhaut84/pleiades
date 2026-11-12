@@ -76,12 +76,17 @@ process.stdin.on('data', (d) => { stdin += d }).on('end', () => {
   log({ kind: 'ask', argv: a, cwd: process.cwd(), cwdEntries: fs.readdirSync(process.cwd()), stdin,
     env: { DISABLE_AUTOUPDATER: process.env.DISABLE_AUTOUPDATER, SONNET: process.env.ANTHROPIC_DEFAULT_SONNET_MODEL,
       HAIKU: process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL, TOOL_SEARCH: process.env.ENABLE_TOOL_SEARCH, DB: process.env.DATABASE_URL || null, LOCK: process.env.X1_LOCK_HELD || null } })
+  const allow = (a[a.indexOf('--allowedTools') + 1] || '').split(',').filter(Boolean)
+  const servers = [{ name: 'myfinance', status: 'connected' }, { name: 'myfitness', status: 'connected' }]
+  const init = { type: 'system', subtype: 'init', tools: allow.slice(0, 3), mcp_servers: servers, plugins: [], ...(r.init || {}) }
+  for (const k of r.dropInit || []) delete init[k]
+  process.stdout.write((r.firstLine || JSON.stringify(init)) + '\n')
   setTimeout(() => emit(r, n), r.sleepMs || 0)
 })
 function emit(r, n) {
   const out = (o) => process.stdout.write(JSON.stringify(o) + '\n')
-  out({ type: 'system', subtype: 'init' })
   ;(r.tools || []).forEach((t, i) => {
+    fs.appendFileSync(calls + '.tool', t + '\n')
     out({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't' + i, name: t }] } })
     out({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't' + i, ...((r.err || []).includes(t) ? { is_error: true } : {}) }] } })
     const pre = Object.keys(PRE).find((p) => t.startsWith(p))
@@ -178,7 +183,7 @@ class Base(unittest.TestCase):
         self.home = self.tmp / "h"
         self.inst = self.home / "pleiades-advisor-x1"  # 체크아웃 밖 설치(Q115)
         self.inst.mkdir(parents=True)
-        for f in ("x1.cjs", "run-x1.sh"):
+        for f in ("x1.cjs", "judge.cjs", "run-x1.sh"):
             shutil.copy(SRC / f, self.inst / f)
         self.private = self.home / "pleiades-private"
         self.x1 = self.private / "advisor-x1"
@@ -311,6 +316,7 @@ class HappyPath(Base):
             cfg = json.loads(Path(opt("--mcp-config")).read_text())
             self.assertEqual(sorted(cfg["mcpServers"]), ["myfinance", "myfitness"])
         out = r.stdout
+        self.assertIn("init 통과 · 플러그인 0 · MCP 서버 2(연결 2) · 목록 밖 도구 0", out)  # 회귀: #634
         for line in ("S-4 CLI 후 2.1.308 → 같음", "J2 통과", "J3 통과", "누적 비용 $1.80", "fin 등록 59 = 읽기 25 + 쓰기 34 (MCP 아닌 항목 2 버림) · 차이 0",
                      "fit 등록 28 = 읽기 27 + 쓰기 1 · 차이 0 · 포트 기본값과 다름", "포트 mcp-config 와 같음", "원장 대조 다름 0/17",
                      "공유 로그 통과", "결과: 실행 끝", "X1 교차 · 완료 · $0.30", "D2 대조(fit) · 완료", "   X4 [예 / 부분 / 아니오]"):
@@ -396,6 +402,16 @@ class S3Settings(Base):
                 r = self.run_x1()
                 self.assert_stopped(r, f"S-3: 막는 항목 1({scope})")
                 path.unlink()
+
+    def test_user_plugin_reported_not_blocked(self):
+        # 회귀: #634 — user 범위 플러그인은 --setting-sources project 로 읽지 않는다 → 보고만 · 관리형은 막는다(test_blocking_settings)
+        self.put(self.home / ".claude" / "settings.json", {"enabledPlugins": {"p@m": True}})
+        self.put(self.home / ".claude" / "settings.local.json", {"enabledPlugins": {"q@m": True}})
+        r = self.run_x1("--preflight")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("user allow mcp 0 · 와일드카드 0 · 기타 0 · hooks 없음 · 플러그인 켬(보고만)", r.stdout)
+        self.put(self.private / ".claude" / "settings.json", {"enabledPlugins": {"p@m": True}})
+        self.assert_stopped(self.run_x1(), "S-3: 막는 항목 1(project(조상))")
 
     def test_harmless_settings_pass(self):
         self.put(self.home / ".claude" / "settings.json", {"permissions": {"allow": ["Bash(ls)"], "defaultMode": "acceptEdits"}, "autoUpdatesChannel": "stable"})
@@ -499,7 +515,7 @@ class J2J3(Base):
         self.set_scenario(replies=[{"tools": ["mcp__myfinance__create_transaction", "mcp__myfitness__get_sleep"]}])
         r = self.run_x1()
         self.assertIn("목록 밖 1 [mcp__myfinance__create_transaction]", r.stdout)
-        self.assertIn("J2 실패 — 세션 목록 밖 1", r.stdout)
+        self.assertIn("J2 실패 — init 어긋남 0 · 세션 목록 밖 1", r.stdout)
         self.assertIn("재실행: 남은 1회\n", r.stdout + "\n")
         self.assertEqual(self.state()["runs"][0]["j2"], "실패")
 
@@ -569,6 +585,46 @@ class J2J3(Base):
         r = self.run_x1()
         self.assertIn("공유 로그 판정 불가(로그 없음)", r.stdout)
         self.assertIn("J2 판정 불가", r.stdout)
+
+
+class InitCheck(Base):
+    """회귀: #634 — 질문마다 stream-json 첫 init 을 판정한다. 어긋나면 첫 tool_use 전에 끊고 이후 질문을 시작하지 않는다."""
+
+    def bad(self, reply, why):
+        self.set_scenario(replies=[{"tools": ["mcp__myfinance__get_portfolio", "mcp__myfitness__get_sleep"], "sleepMs": 3000, **reply}])
+        r = self.run_x1()
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual(len(self.asks()), 1)
+        self.assertFalse(Path(str(self.calls) + ".tool").exists(), "init 판정 실패면 tool_use 전에 끊는다")
+        self.assertIn(f"X1 교차 · 실패(init)", r.stdout)
+        self.assertIn(f"init 실패({why})", r.stdout)
+        self.assertIn("X2 교차 · 미실행(init 실패)", r.stdout)
+        self.assertIn("D2 대조(fit) · 미실행(init 실패)", r.stdout)
+        self.assertIn("J2 실패 — init 어긋남 1", r.stdout)
+        self.assertEqual(self.state()["runs"][0]["j2"], "실패")
+        return r
+
+    def test_plugin_loaded(self):
+        r = self.bad({"init": {"plugins": [{"name": "p", "path": "/x"}]}}, "플러그인")
+        self.assertIn("플러그인 1 · MCP 서버 2(연결 2)", r.stdout)
+        self.assertNotIn("/x", r.stdout)
+
+    def test_extra_or_disconnected_server(self):
+        servers = [{"name": "myfinance", "status": "connected"}, {"name": "myfitness", "status": "connected"}, {"name": "other", "status": "connected"}]
+        self.assertIn("MCP 서버 3(연결 2)", self.bad({"init": {"mcp_servers": servers}}, "MCP 서버").stdout)
+
+    def test_disconnected_server(self):
+        servers = [{"name": "myfinance", "status": "connected"}, {"name": "myfitness", "status": "failed"}]
+        self.assertIn("MCP 서버 2(연결 1)", self.bad({"init": {"mcp_servers": servers}}, "MCP 서버").stdout)
+
+    def test_builtin_tool(self):
+        self.assertIn("목록 밖 도구 1", self.bad({"init": {"tools": ["Bash", "mcp__myfinance__get_portfolio"]}}, "목록 밖 도구").stdout)
+
+    def test_no_init_or_missing_field(self):
+        self.bad({"firstLine": json.dumps({"type": "assistant", "message": {"content": []}})}, "init 없음")
+
+    def test_missing_plugins_field(self):
+        self.bad({"dropInit": ["plugins"]}, "init 필드 없음")
 
 
 class Q131Ledger(Base):

@@ -6,7 +6,7 @@
 
 | 항목 | 값 |
 |---|---|
-| 스크립트 | `deploy/advisor-x1/x1.cjs`(node 단일 파일 · 의존성 없음) + `run-x1.sh`(배포 락 래퍼) — 커밋을 고정해 `~/pleiades-advisor-x1/` 에 둔다. 체크아웃 안에서는 돌지 않는다(스크립트가 거부한다 · Q115) |
+| 스크립트 | `deploy/advisor-x1/x1.cjs`(본체) + `judge.cjs`(순수 판정 함수 · x1.cjs 가 require) + `run-x1.sh`(배포 락 래퍼) — node 만 · npm 의존성 없음 · 세 파일을 같은 커밋으로 — 커밋을 고정해 `~/pleiades-advisor-x1/` 에 둔다. 체크아웃 안에서는 돌지 않는다(스크립트가 거부한다 · Q115) |
 | 입력 | `~/pleiades-private/advisor-x1/questions.txt`(600 · 사용자 작성 · 2절) · 재실행 prompt 때만 `knowledge.txt`(600) |
 | 결과 | `~/pleiades-private/advisor-x1/runs/<KST 시각>-<종류>/`(700) — `answers.md`(질문·도구 이름·답 원문) · `stream-<번호>.jsonl`(CLI 출력 원문) · `form.txt`(판정 양식 사본) · `mcp-config.json` · 빈 `cwd/` · 파일 600 |
 | 상태 | `~/pleiades-private/advisor-x1/state.json` — 실행 기록(재실행 합쳐 최대 1회 강제) |
@@ -34,7 +34,7 @@
 
 ```bash
 mkdir -p ~/pleiades-advisor-x1 ~/pleiades-private/advisor-x1 && chmod 700 ~/pleiades-advisor-x1 ~/pleiades-private ~/pleiades-private/advisor-x1
-for f in x1.cjs:<SHA256_X1> run-x1.sh:<SHA256_RUN>; do n=${f%%:*}; h=${f#*:}
+for f in x1.cjs:<SHA256_X1> judge.cjs:<SHA256_JUDGE> run-x1.sh:<SHA256_RUN>; do n=${f%%:*}; h=${f#*:}
   curl -fsSL "https://raw.githubusercontent.com/fomalhaut84/pleiades/<REF>/deploy/advisor-x1/$n" -o ~/pleiades-advisor-x1/$n.new \
     && echo "$h  $HOME/pleiades-advisor-x1/$n.new" | sha256sum -c --quiet \
     && mv ~/pleiades-advisor-x1/$n.new ~/pleiades-advisor-x1/$n && echo "$n 설치 통과" || echo "[중단] $n 검증 실패 — 멈춘다"
@@ -77,12 +77,14 @@ bash ~/pleiades-advisor-x1/run-x1.sh --preflight
 **기대:** `결과: 사전 판정 통과 — 질문 0(--preflight)`. 무엇을 보나:
 
 - **S-1** 배포 락을 `flock -n` 으로 잡았나 · 지금 시각이 창 안인가
-- **S-3** settings 범위별 `mcp__` allow · 와일드카드 allow · hooks · 켜진 플러그인 — user(`~/.claude/settings.json`) · user-local(`settings.local.json`) · 관리형 파일(`/etc/claude-code/managed-settings.json`) · 관리형 조각(`managed-settings.d/*.json`) · 실행 cwd 와 그 조상의 `.claude/settings*.json`. **하나라도 있거나 파일을 못 읽으면 시작 안 함.** 실행은 `--setting-sources project` + 빈 임시 cwd 라 user 범위를 읽지 않지만, 판정은 매번 한다(#632 서버 측정: user allow 0 · hooks 0 · 관리형 없음)
+- **S-3** settings 범위별 `mcp__` allow · 와일드카드 allow · hooks · 켜진 플러그인(**user · user-local 범위는 보고만** — `--setting-sources project` 로 읽지 않는다 · 실제 로드는 4절 init 판정이 질문마다 본다 · #634) — user(`~/.claude/settings.json`) · user-local(`settings.local.json`) · 관리형 파일(`/etc/claude-code/managed-settings.json`) · 관리형 조각(`managed-settings.d/*.json`) · 실행 cwd 와 그 조상의 `.claude/settings*.json`. **하나라도 있거나 파일을 못 읽으면 시작 안 함.** 실행은 `--setting-sources project` + 빈 임시 cwd 라 user 범위를 읽지 않지만, 판정은 매번 한다(#632 서버 측정: user allow 0 · hooks 0 · 관리형 없음)
 - **S-4** `claude --version` · help 에 필요한 옵션 14개 · 두 앱 `models.ts` 모델 핀이 같은가
 - **S-5** 두 체크아웃의 분류 상수(fin `READ_TOOLS`·`WRITE_TOOLS` · fit `ADVISOR_ALLOWED_TOOLS`·`ADVISOR_EXCLUDED_TOOLS`)로 허용·거부 목록을 만들고, 두 MCP 의 `tools/list` 와 빠짐없이 맞는지 · fin `READ_TOOLS` 의 MCP 아닌 항목(WebSearch · WebFetch)은 버린다 · 도구 접두 = mcp-config 서버 키(`myfinance` · `myfitness`) · fin `MCP_PORT` = mcp-config 포트 · fit 포트는 기본값과 같음/다름만
 - **Q131** 원장 테이블 스냅샷을 읽을 수 있나(아래 4절)
 
 어긋나면 그 줄과 `결과: 시작 안 함 — 질문 0` 이 나온다. 그 양식을 붙인다.
+
+**사전 판정은 모델을 부르지 않으므로 세션 init 판정(4절 4-a)은 하지 않는다** — init 은 본 실행 · 재실행의 질문마다만 본다.
 
 ## 4. 본 실행
 
@@ -98,6 +100,7 @@ bash ~/pleiades-advisor-x1/run-x1.sh
 2. **Q131 실행 전 원장 스냅샷** — 두 앱 cwd 의 `.env` 로 Prisma `findMany`(SELECT 만 · URL 출력 없음) · 테이블별 행 수 · 최근 `updatedAt`/`createdAt` · 행 내용 지문(sha256). fin 15 테이블(`WRITE_TOOLS` 가 바꾸는 모델: HoldingStrategy · Watchlist · Transaction · Category · Asset · Deposit · Budget · RecurringTransaction · AlertConfig · RSUSchedule · StockOption · StockOptionVesting · CustomStrategy · Holding · Trade) · fit 2(TrainingPlan · TrainingWorkout). 캐시(PriceCache · EarningsCache · KrxStock · BenchmarkPrice · 스냅샷)는 뺀다. 클라이언트는 앱 생성기를 따른다 — fin = `@prisma/client`(`prisma-client-js` · node 로) · fit = `src/generated/prisma/client.ts`(`prisma-client` 생성기의 TS 출력 · 앱 `node_modules/.bin/tsx` 로 · `@prisma/client` 에는 fit 모델이 없다). 헬퍼는 `~/pleiades-private/advisor-x1/db-helper-<앱>.{mjs,mts}`(600)에 쓰고 돌린다
 3. 상태 파일에 실행을 먼저 기록(중간에 죽어도 횟수에 든다)
 4. 질문마다 `claude --print --output-format stream-json --verbose --model <sonnet 핀> --system-prompt <새 짧은 프롬프트> --mcp-config <두 서버> --strict-mcp-config --setting-sources project --allowedTools <읽기 52> --disallowedTools <쓰기 35> --tools "" --max-budget-usd 1.0 --permission-mode dontAsk --no-session-persistence` — 인자 배열(셸 없음) · 질문은 stdin · cwd 는 빈 임시 디렉터리 · 자식 env `DISABLE_AUTOUPDATER=1` + 앱과 같은 모델 핀 세 키
+   - **4-a. init 판정(#634 · fail-closed):** CLI 출력 첫 줄이 `system`/`init` 이어야 하고, 로드된 플러그인 0(`plugins` · `plugin_errors`) · MCP 서버가 `myfinance` · `myfitness` 둘뿐이고 둘 다 `connected`(`mcp_server_errors` 없음) · `tools` 가 전부 허용 목록 안(내장 도구가 하나라도 있으면 실패 — `--tools ""` 기대)이어야 한다. 첫 줄이 init 이 아니거나 필드가 없거나 어긋나면 **첫 도구 호출을 기다리지 않고 자식을 끊는다** — 그 질문 = `실패(init)` · J2 실패 · 남은 질문은 `미실행(init 실패)`
 5. 누적 비용이 $3.00 에 닿았거나 비용을 모르거나 05:40 을 넘으면 남은 질문은 **미실행**
 6. 끝나면 `claude --version`(전후 비교) · 원장 스냅샷 다시(차이) · 공유 로그 보조 판정 · 판정 양식
 
@@ -111,9 +114,10 @@ bash ~/pleiades-advisor-x1/run-x1.sh
 | 상태 `완료` | 판정 대상 — J1 을 사용자가 채운다 |
 | 상태 `판정 불가` | 호출당 예산 초과로 답이 끊김(`error_max_budget_usd`) — J1 분모에서 뺀다 |
 | 상태 `오류(<코드>)` | CLI 실패 · 시간 초과(10분) · result 없음 — 판정 불가와 같이 다룬다 |
+| `init 통과 · 플러그인 0 · MCP 서버 2(연결 2) · 목록 밖 도구 0` | 질문별 세션 init 판정(4-a) — 이름 · 경로는 나오지 않는다. `실패(init)` 이면 J2 실패 |
 | 상태 `미실행(<이유>)` | 누적 목표 도달 · 비용 미상 · 크론 창 끝 — J1 분모에서 뺀다 |
 | **J1** | **사용자 칸** — 완료된 교차 질문마다 `예 / 부분 / 아니오` 하나와 이유 한 줄. 통과선 = 판정된 교차 중 예 ≥ 3 · 판정된 교차가 3 미만이면 J1 판정 불가(Q116) |
-| **J2** | 세션 기록(stream-json `tool_use`)의 허용 목록 밖 호출 0 + 원장 대조 다름 0 + 공유 로그 보조 판정 — **실패**면 결과와 무관하게 중단 · 원인 조사 먼저(재실행 없음). 공유 로그가 판정 불가면 J2 도 **판정 불가**(통과 아님 — 중첩 호출은 로그로만 보인다) · 재실행 근거가 아니다 |
+| **J2** | init 어긋남 0 + 세션 기록(stream-json `tool_use`)의 허용 목록 밖 호출 0 + 원장 대조 다름 0 + 공유 로그 보조 판정 — **실패**면 결과와 무관하게 중단 · 원인 조사 먼저(재실행 없음). 공유 로그가 판정 불가면 J2 도 **판정 불가**(통과 아님 — 중첩 호출은 로그로만 보인다) · 재실행 근거가 아니다 |
 | 공유 로그 | 실험 시간 창의 두 MCP 로그(`apps/<dir>/logs/mcp-<날짜>.log` · msg `tool_call*` 의 `tool`)가 허용 목록 안인가 · fin MCP pm2 로그 `caller=strategy:parse`(중첩) 0 · 같은 창에 fin 봇 `caller=bot:ai_chat` 이 있으면 **섞임**(세션 기록 0 이면 J2 통과로 보고 그 사실을 적는다 — 중첩 근거가 있을 때만) · 세션은 도구를 불렀는데 MCP 로그 파일이 없거나 fin MCP · fin 봇 pm2 로그 파일이 없으면 `판정 불가(로그 없음)`(섞여도 같다) |
 | **J3** | 완료된 교차 질문 모두 두 도메인 도구가 1번 이상 **성공** |
 | J4 | 대조 질문 — 기록만(Q129) |
@@ -165,7 +169,8 @@ rm -rf ~/pleiades-private/advisor-x1/runs && echo 원문 삭제
 | 항목 | 현재 처리 |
 |---|---|
 | `claude -p` 가 stdin 으로 질문을 받는가(2.1.308) | 받는다고 보고 설계했다 — 첫 본 실행에서 `turns` · 답이 비면 알린다(사전 판정은 모델을 부르지 않아 못 본다) |
-| `--setting-sources project` 의 효과 | help 에 옵션이 있는지만 본다 · user 범위도 S-3 에서 매번 판정하므로 효과가 없어도 열리는 구멍은 0 |
+| `--setting-sources project` 의 효과 | **질문마다 init 판정(4-a)이 확인한다** — user 범위 플러그인이 실제로 로드되면 그 질문에서 끊고 J2 실패 |
+| init 이벤트 필드(2.1.308) | `tools` · `mcp_servers[{name,status}]` · `plugins`(+ `plugin_errors` · `mcp_server_errors`)는 로컬 CLI 2.1.322 의 init 생성 코드에서 확인했다. 2.1.308 에 `plugins` 가 없으면 `실패(init 필드 없음)` 으로 멈춘다(안전한 쪽) — 그때는 Claude 와 판정 방법을 다시 정한다. MCP 리소스 도구 같은 내장 도구가 `--tools ""` 에도 남으면 `목록 밖 도구` 로 실패한다 — 같은 처리 |
 | `--bare` | 쓰지 않는다 — 인증 경로를 바꿀 수 있다(OAuth 계정). S-3 판정 + `--setting-sources` 로 대신한다 |
 | pm2 로그 시각대 | 줄 접두는 서버 로컬 시각으로 읽는다(앞뒤 2분 여유) — `date +%z` 가 pm2 데몬과 같다는 전제 |
 | 실험 창에 원장을 바꾸는 크론 | 원장 대조가 다르면 5절 끝 절차 |
