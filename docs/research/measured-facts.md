@@ -4644,3 +4644,17 @@ tools/local/run.sh fin -- npx tsx scripts/tmp-measure-552.ts
 | S15 | `pm2 jlist` 해석 3벌이 다르다 — `deploy.sh:115` 만 첫 `[` 에서 연다(`[PM2][WARN]` 줄이 앞서면 실패 · #278 은 release-inplace 만 고침) | `deploy/deploy.sh:115` · `release-inplace.sh:81` · `t2-check.sh:108` |
 
 **못 잰 값(서버):** `$PM2_HOME`·소켓 실제 mode·소유 · pm2-logrotate · 로그 크기·증가량 · 전환 뒤 실제 포트 · 현 crontab · `~/pleiades-ops/` 실재.
+
+## 2026-11-12 — 야후 quote 정규장 밖 필드 (#615 · 로컬 · 읽기 전용 · 키 없음)
+
+**명령:** `apps/finance` cwd 에서 `yahoo-finance2` `quote(t)` 를 부르고 키 이름이 `^(marketState|regularMarket(Price|Time|ChangePercent)|(pre|post)Market|marketCap|sharesOutstanding|hasPrePostMarketData)` 인 필드만 출력 (2026-11-12 10:35 KST · 로컬 node 20.18 — 라이브러리가 Node ≥ 22 경고를 냄 · 값은 나옴).
+
+| 티커 | marketState | hasPrePostMarketData | regularMarket (Price · %) · Time | postMarket (Price · %) · Time | marketCap |
+|---|---|---|---|---|---|
+| NVDA | `POSTPOST` | true | 173.73 · +2.92 · 11-11T21:00:00Z | 158.78 · −8.61 · 11-12T01:00:00Z | 4,195,058,188,288 |
+| CRWV | `POSTPOST` | true | 60.77 · +24.71 · 11-11T21:00:01Z | 56.90 · −6.37 · 11-12T00:59:59Z | 33,516,877,824 |
+| 005930.KS | `REGULAR` | false | 210,250 · +2.07 · 11-12T01:15:49Z | (필드 없음) | 1,369,132,763,185,152 |
+
+- 정규장 밖 값은 `postMarketTime` > `regularMarketTime` 으로 가를 수 있다(시간외 시각이 정규장 마감 뒤). `preMarket*` 은 이 시각에 나오지 않았다(미측정 — 프리마켓 시간대에 다시 잴 값).
+- `fetchQuote`(`apps/finance/src/lib/price-fetcher.ts`)는 #615 전까지 `regularMarket*` 만 꺼냈다.
+- 시작 브리핑 시각(`scheduler.ts` `30 8 * * 1-5` KR · `0 23 * * 1-5` US): 미국 표준시(EST)에서 08:30 KST = 18:30 ET(시간외 04:00~20:00 ET 안) · 23:00 KST = 09:00 ET(프리마켓 안). 서머타임(EDT)에서는 23:00 KST = 10:00 ET(정규장 중).

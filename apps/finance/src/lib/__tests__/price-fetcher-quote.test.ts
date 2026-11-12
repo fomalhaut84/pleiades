@@ -127,3 +127,37 @@ describe('fetchQuote — marketTime / marketState 매핑 (#499)', () => {
     expect(quote.marketState).toBeNull()
   })
 })
+
+// #615: 야후가 준 시간외 값과 시총을 QuoteResult 로 넘긴다 (실측 2026-11-12 NVDA POSTPOST 형태)
+describe('fetchQuote — 시간외 · 시총 (#615)', () => {
+  it('정규장 뒤 postMarket 값을 extended 로 · marketCap 을 그대로', async () => {
+    quoteMock.mockResolvedValueOnce({
+      regularMarketPrice: 173.73,
+      regularMarketChangePercent: 2.92305,
+      currency: 'USD',
+      exchange: 'NMS',
+      shortName: 'NVIDIA Corporation',
+      marketState: 'POSTPOST',
+      regularMarketTime: new Date('2026-11-11T21:00:00Z'),
+      hasPrePostMarketData: true,
+      postMarketPrice: 158.78,
+      postMarketChange: -14.949997,
+      postMarketChangePercent: -8.605306,
+      postMarketTime: new Date('2026-11-12T01:00:00Z'),
+      marketCap: 4195058188288,
+    })
+    const q = await fetchQuote('NVDA', { skipCache: true })
+    expect(q.extended).toEqual({ session: 'post', price: 158.78, change: -14.949997, changePercent: -8.605306, time: new Date('2026-11-12T01:00:00Z') })
+    expect(q.marketCap).toBe(4195058188288)
+  })
+
+  it('한국 종목(pre/post 없음)은 extended null', async () => {
+    quoteMock.mockResolvedValueOnce({
+      regularMarketPrice: 210250, currency: 'KRW', exchange: 'KSC', shortName: 'SamsungElec',
+      marketState: 'REGULAR', regularMarketTime: new Date('2026-11-12T01:15:49Z'), hasPrePostMarketData: false,
+    })
+    const q = await fetchQuote('005930.KS', { skipCache: true })
+    expect(q.extended).toBeNull()
+    expect(q.marketCap).toBeNull()
+  })
+})

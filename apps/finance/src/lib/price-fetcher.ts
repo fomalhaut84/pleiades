@@ -7,8 +7,12 @@ import {
   mergeCrossTickersIntoMeta,
   normalizeMarketTime,
   resolveRefreshMeta,
+  extractExtendedQuote,
+  extractMarketCap,
+  type ExtendedQuote,
 } from './price-fetcher-utils'
 export { mergeCrossTickersIntoMeta } from './price-fetcher-utils'
+export type { ExtendedQuote } from './price-fetcher-utils'
 
 const yahooFinance = createYahooFinance()
 
@@ -43,6 +47,10 @@ export interface QuoteResult {
   marketTime: Date | null
   /** 장 상태 (야후 `marketState`: REGULAR/CLOSED/PRE/POST/…). 없으면 null (#499) */
   marketState: string | null
+  /** 정규장 밖(프리·시간외) 시세 — 정규장 시각보다 뒤에 찍힌 것만 (#615). 없으면 null */
+  extended: ExtendedQuote | null
+  /** 시가총액 (야후 `marketCap` · 통화 = currency). 없으면 null (#615) */
+  marketCap: number | null
 }
 
 /** `fetchQuote` 옵션 */
@@ -95,6 +103,9 @@ export async function fetchQuote(ticker: string, options?: FetchQuoteOptions): P
   // #499: 시세 기준 시각/장 상태 — 반환값이 언제 기준인지 판별 가능하게 함께 전달
   const marketTime = normalizeMarketTime(quote.regularMarketTime)
   const marketState = typeof quote.marketState === 'string' ? quote.marketState : null
+  // #615: 시간외·프리마켓 값과 시총 — 야후가 주는데 버리고 있었다 (AI 가 시간외 변동을 "확인 불가" 로 답했다)
+  const extended = extractExtendedQuote(quote, marketTime, price)
+  const marketCap = extractMarketCap(quote)
 
   // PriceCache upsert — 존재하면 갱신, 없으면 생성 (fallback 조회 시 캐시 적재)
   // market은 update 분기에도 포함 — 기존 raw 코드가 신규 정규화 코드로 자연 수렴되도록 보장
@@ -125,6 +136,8 @@ export async function fetchQuote(ticker: string, options?: FetchQuoteOptions): P
     changePercent: changePct,
     marketTime,
     marketState,
+    extended,
+    marketCap,
   }
 }
 
