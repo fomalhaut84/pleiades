@@ -4658,3 +4658,43 @@ tools/local/run.sh fin -- npx tsx scripts/tmp-measure-552.ts
 - 정규장 밖 값은 `postMarketTime` > `regularMarketTime` 으로 가를 수 있다(시간외 시각이 정규장 마감 뒤). `preMarket*` 은 이 시각에 나오지 않았다(미측정 — 프리마켓 시간대에 다시 잴 값).
 - `fetchQuote`(`apps/finance/src/lib/price-fetcher.ts`)는 #615 전까지 `regularMarket*` 만 꺼냈다.
 - 시작 브리핑 시각(`scheduler.ts` `30 8 * * 1-5` KR · `0 23 * * 1-5` US): 미국 표준시(EST)에서 08:30 KST = 18:30 ET(시간외 04:00~20:00 ET 안) · 23:00 KST = 09:00 ET(프리마켓 안). 서머타임(EDT)에서는 23:00 KST = 10:00 ET(정규장 중).
+
+## 2026-11-12 — 예측 시장 공개 API 접근 (#616 · 로컬 Mac · 관리 프록시 경유 · 키 없음 · 읽기만)
+
+**명령:** `curl -sS -m 20 -D - -o /dev/null -w "%{http_code} connect=%{http_connect}" <URL>` (12:0x KST).
+
+| 대상 | 프록시 CONNECT | 원 서버 응답 | 판정 |
+|---|---|---|---|
+| `gamma-api.polymarket.com/markets?limit=1` · `/public-search?q=…` | 200 | TLS 단계 `LibreSSL SSL_connect: SSL_ERROR_SYSCALL` (응답 없음 · 재시도 같음) | 접근 안 됨 |
+| `polymarket.com/` · `clob.polymarket.com/` | 200 | **`HTTP/2 451`** · `server: cloudflare` · `cf-ray …-ICN` · `text/plain` | **원 서버의 지역 제한**(프록시 차단 아님 — CONNECT 200 · `X-Squid-Error` 없음) |
+| `api.elections.kalshi.com/trade-api/v2/markets?limit=2&status=open` | 200 | `HTTP/2 200` · 6.8 KB JSON | 접근 됨 — 필드 `title` · `last_price_dollars` · `yes_bid/ask_dollars` · `volume_24h_fp` · `close_time` 등 · **자유어 검색 엔드포인트는 없다**(목록 · 시리즈/이벤트 티커로 거른다 — API 문서 기준 · 미실측) |
+
+- 서버 쪽 접근은 재지 않았다(I-3 · 서버 판정은 사용자). Polymarket 451 은 지역 기준이라 같은 지역 서버도 같을 가능성이 높다 — 추정이며 미측정.
+- 우회(다른 지역 경유)는 하지 않는다 — 원 서버가 그 지역 접근을 막은 것이다.
+
+## 2026-11-12 — 011 통합 어드바이저 실측 (#239)
+
+HEAD `1d9eadc23d49` · `apps/*` 정적 읽기만(봇·웹·MCP·`claude` 실행 0 · 서버 0) · 상세·명령 전부 `_workspace/239/01_surveyor_advisor.md`. 위 2026-09 advisor 측정(원본 저장소 기준)을 대체하지 않고 현행 값을 나란히 둔다.
+
+| 항목 | fin | fit | 명령 |
+|---|---|---|---|
+| `claude` 호출 함수 · caller | `askAdvisor` 1개 · caller 12(크론 4 · 분기 1 · 사람 7) | spawn 7파일 — `askAdvisor`(MCP · 채널 7) + 1회 호출 6(MCP 없음 · `--max-turns 1` · 1개는 호출부 0) | `git grep --text -nE "askAdvisor\(\|spawn\(\|CLAUDE_BIN" -- 'apps/*/src/**'` |
+| MCP 등록 도구 / 어드바이저 읽기 / 쓰기 | 59 / 25 / 34(쓰기 허용은 `bot:ai_chat` 1경로) | 28 / 27 / 1(허용 경로 0) | `grep -A1 "server\.tool\($"` ↔ `advisor-tools.ts` 집합 비교 · 차이 0/0 |
+| 교차 도메인 참조 | 0 | 0 | `git grep -l myfitness -- apps/finance/src` · 역방향 |
+| Web 도구 | WebSearch·WebFetch 허용 | 차단(`--tools ""`) | `claude-advisor.ts` |
+| 비용 상한 | 시도마다 `--max-budget-usd`(기본 $0.50 · 크론 $1.0 · 재시도 합산 cap) | **없음**(`--max-turns 15` 만) | `git grep -n max-budget -- apps/fitness/src` = 0 |
+| 성공 로그 | `[advisor] ok caller= model= used= cost=$ turns= tools=` — **지연 없음** | `[askAdvisor] channel= duration=<ms>ms turns= session= cost=$` | `claude-advisor.ts` fin 950 · fit 382 부근 |
+| 비용·지연 DB 컬럼 | 0 (실패만 `AlertHistory` kind `ai_failure`) | 0 (`AIAdvice` 결과 행 · `ReportJob` 시작/완료) | `grep -niE "duration\|cost" apps/*/prisma/schema.prisma` |
+| 토큰(`modelUsage`) 기록 | 0 (드리프트 판정만) | 0 (세션 누적 입력 토큰만 메모리) | 같은 파일 |
+| 세션 | 키 `discord:<채널>:<사용자>` · 24 h · 메모리 · `bot:ai_chat` 만 resume | 키 = 채널 이름(`discord` 하나가 모든 Discord 사용자 공유) · 6 h/100k 토큰 · 메모리 · `--no-session-persistence` 없음 | `bot/commands/ai.ts` · `session-store.ts` |
+| 동시성 | 앱 전체 제한 없음 · 대화만 상태 키별 1건 | 앱 전체 제한 없음 · 봇 대화만 프로세스 전역 1건 | `chatBusy` · `isProcessing` |
+| 시스템 프롬프트 | `--system-prompt`(대체) · 코드 상수 13,752 B(파일) | `--append-system-prompt` · DB `PromptVersion` "system" + 동적 맥락 | `wc -c apps/*/src/lib/ai/system-prompt.ts` |
+| cwd 로드 앱 하네스 | `apps/finance/CLAUDE.md` 10,105 B + `.claude/rules` 5파일 22,874 B(개발 `workflow.md` 11,921 B 포함 · TA 가이드가 `stock-trading-method` 를 이름으로 부름) | 0 | `wc -c` · `find apps/finance/.claude/rules -type f` |
+| MCP 서버 | `127.0.0.1` HTTP · 인증 없음 · 다중 세션 · 30분 무활동 정리 · 기본 4210(정적 `mcp-config.json`) | 같음 · 기본 4301(런타임 생성 설정) | `src/mcp/server.ts` |
+| 중첩 호출 | MCP `create_custom_strategy` → `parseStrategyText` → `askAdvisor`(MCP 프로세스에서 `claude`) | 없음 | `src/mcp/tools/custom-strategy.ts:47` |
+| MCP 도구 로그 | `apps/<dir>/logs/mcp-YYYY-MM-DD.log` pino JSON `tool` · `latency_ms` · `status` · 14일 | 같음 | `src/mcp/logger.ts` |
+
+- 모델 고정 ID 는 두 앱 같다: sonnet `claude-sonnet-5` · haiku `claude-haiku-4-5-20251001`.
+- **못 잰 값(서버):** caller·채널별 호출 수·비용·지연·실패 분포(판정 스크립트 `.server-scripts/23-server-239-advisor-cost.sh` · gitignored) · **fin 성공 지연은 기록 자체가 없다**(크론 caller 만 "끝 − 크론 시각" 상한) · fit 1회 호출 비용·지연 · 토큰 · 서버 실제 `MCP_PORT` · CLI 버전 · 계정 쿼터 · CLI 세션 디스크 누적.
+
+**서버 기준선 (2026-11-12 · 사용자 실행 · 최근 14일 · 판정 요약 `_workspace/239/01b_server_advisor_cost.md`):** advisor 호출 138(fin 83 · fit 55) · 비용 $36.49(하루 $2.61) · 정기 호출 92 · $24.33(2/3) · 사람 대화 46 · $12.16 · 실패·재시도·드리프트 0. fit 대화 지연 p50 20.5 s · p90 78.7 s · fit 정기 리포트 62~149 s · fin 크론 상한 p50 83~108 s(fin 지연 기록 없음 W1). MCP 도구 p50 fin 110 ms · fit 23 ms — 지연은 모델 턴이 정한다. fin `get_news` 오류 11/60.

@@ -802,6 +802,8 @@ async function runAdvisorOnce(
     let errBuf: Buffer = Buffer.alloc(0)
     let timedOut = false
 
+    // #624: 벽시계 지연 — CLI 기동까지 포함한 체감 값(#239 W1 · fit `duration=` 과 같은 형식으로 로그 끝에)
+    const startedAt = Date.now()
     const child = spawn('sh', ['-c', cmd], {
       cwd: projectRoot,
       // #255: CLI 내부 보조 호출(WebSearch 요약 등)의 별칭도 고정 ID 로
@@ -832,6 +834,7 @@ async function runAdvisorOnce(
 
       const stdout = Buffer.concat(chunks).toString('utf-8')
       const stderr = errBuf.toString('utf-8').trim()
+      const durationTag = ` duration=${Date.now() - startedAt}ms`
 
       // Codex PR #484 P1 (3차): stream-json 은 NDJSON. 마지막 result event 가 최종
       // metadata. 각 assistant event 의 tool_use block 도 함께 수집해 expectsTools
@@ -863,7 +866,7 @@ async function runAdvisorOnce(
         // #247: 종료 코드만으로는 예산 초과인지 알 수 없었다 — 원인 요약을 메시지·로그에
         const failure = describeResultFailure(output)
         console.error(
-          `[advisor] fail caller=${options.caller ?? 'unknown'} model=${modelId} code=${errorCode} exit=${code} ${failure}`,
+          `[advisor] fail caller=${options.caller ?? 'unknown'} model=${modelId} code=${errorCode} exit=${code} ${failure}${durationTag}`,
         )
         reject(new AdvisorError(`Claude CLI 종료 코드: ${code} (${failure})`, detail, errorCode, observedCost))
         return
@@ -880,7 +883,7 @@ async function runAdvisorOnce(
         const errorCode = classifyResultFailure(output, errorText || undefined)
         console.error(
           `[advisor] fail caller=${options.caller ?? 'unknown'} model=${modelId} code=${errorCode} exit=0 ` +
-            describeResultFailure(output),
+            describeResultFailure(output) + durationTag,
         )
         reject(new AdvisorError(
           `AI 응답 오류: ${output.result || `api_error_status=${output.api_error_status ?? 'unknown'}`}`,
@@ -949,12 +952,13 @@ async function runAdvisorOnce(
       const cost = typeof output.total_cost_usd === 'number' ? output.total_cost_usd.toFixed(4) : '?'
       console.log(
         `[advisor] ok caller=${options.caller ?? 'unknown'} model=${modelId} used=${usedModels} ` +
-          `cost=$${cost} turns=${numTurns} tools=${toolCalls.length}`,
+          `cost=$${cost} turns=${numTurns} tools=${toolCalls.length}${durationTag}`,
       )
 
       resolve({
         response: output.result,
         model,
+        // CLI 가 보고한 값 — 로그의 `duration=`(#624)은 CLI 기동까지 포함한 벽시계 값이라 다를 수 있다
         durationMs: output.duration_ms,
         costUsd: output.total_cost_usd,
         sessionId: output.session_id ?? '',
