@@ -223,8 +223,10 @@ function parseMfdsResponse(payload: unknown, query: string): ParseResult {
     );
     return { hit: null, envelopeValid: false };
   }
+  // #610: 미스(임계 미달 · 동점 거부)는 AI 폴백으로 가는 정상 흐름 — stdout(info). stderr 는 운영 수집기·배포 판정이 오류로 센다.
+  // 장애(HTTP · fetch · structural · resultCode)는 warn 그대로.
   if (candidates.length === 0) {
-    console.warn(
+    console.info(
       `[mfds] no defensible match for "${query}" (candidates=${itemArr.length})`,
     );
     return { hit: null, envelopeValid: true };
@@ -242,7 +244,7 @@ function parseMfdsResponse(payload: unknown, query: string): ParseResult {
     `${h.kcalPer100g}|${h.proteinPer100g ?? "?"}|${h.carbsPer100g ?? "?"}|${h.fatPer100g ?? "?"}`;
   const distinctTuples = new Set(tied.map((c) => tupleKey(c.hit)));
   if (distinctNames.size > 1 || distinctTuples.size > 1) {
-    console.warn(
+    console.info(
       `[mfds] ambiguous tied match for "${query}" (names=${distinctNames.size} tuples=${distinctTuples.size}) — reject`,
     );
     return { hit: null, envelopeValid: true };
