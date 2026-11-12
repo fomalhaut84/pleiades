@@ -196,3 +196,27 @@ export function parseDateStrict(str: string): Date | null {
   if (date.getUTCFullYear() !== y || date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) return null
   return date
 }
+
+/**
+ * 정규장 밖 시세 표기 (#615): "시간외 $158.78 (-8.61% · 정규장 종가 대비 · 2026-11-12 10:00 KST)".
+ * 변동률이 없으면 괄호 안에서 그 칸만 빠진다.
+ */
+export function formatExtendedQuote(
+  ticker: string,
+  ext: { session: 'pre' | 'post'; price: number; changePercent: number | null; time: Date },
+  currency: string,
+): string {
+  const label = ext.session === 'pre' ? '프리마켓' : '시간외'
+  const pct = ext.changePercent != null ? `${ext.changePercent >= 0 ? '+' : ''}${ext.changePercent.toFixed(2)}% · ` : ''
+  return `${label} ${formatQuoteValue(ticker, ext.price, currency)} (${pct}정규장 종가 대비 · ${formatKstDateTimeFull(ext.time)})`
+}
+
+/** 시가총액 표기 (#615): USD "$4.20T"·"$33.52B" · KRW "1,369.1조원"·"3,351억원" · 그 밖 "<값>B <통화>". */
+export function formatMarketCap(value: number, currency: string): string {
+  if (currency === 'KRW') {
+    if (value >= 1e12) return `${(value / 1e12).toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}조원`
+    return `${Math.round(value / 1e8).toLocaleString('ko-KR')}억원`
+  }
+  const scaled = value >= 1e12 ? `${(value / 1e12).toFixed(2)}T` : value >= 1e9 ? `${(value / 1e9).toFixed(2)}B` : `${(value / 1e6).toFixed(1)}M`
+  return currency === 'USD' ? `$${scaled}` : `${scaled} ${currency}`
+}

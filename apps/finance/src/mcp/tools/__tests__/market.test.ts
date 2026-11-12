@@ -35,6 +35,8 @@ function kospiQuote(overrides: Record<string, unknown> = {}) {
     changePercent: -0.18,
     marketTime: KR_CLOSE,
     marketState: 'CLOSED',
+    extended: null,
+    marketCap: null,
     ...overrides,
   }
 }
@@ -107,6 +109,8 @@ describe('getPrices — 지수 티커 표기 (#499)', () => {
         changePercent: 0.44,
         marketTime: new Date('2026-09-16T20:00:00Z'), // 09-17 05:00 KST
         marketState: 'REGULAR',
+        extended: null,
+        marketCap: null,
       })
 
     const text = (await getPrices({ tickers: ['^KS11', 'AAPL'] })).content[0].text
@@ -254,6 +258,8 @@ describe('getPrices — 장 상태 라벨 시장별 분기 (#500)', () => {
       changePercent: 0.44,
       marketTime: new Date('2026-09-16T20:00:00Z'),
       marketState: 'POST',
+      extended: null,
+      marketCap: null,
     })
 
     const text = (await getPrices({ tickers: ['AAPL'] })).content[0].text
@@ -275,6 +281,8 @@ describe('getPrices — 장 상태 라벨 시장별 분기 (#500)', () => {
       changePercent: null,
       marketTime: new Date('2026-09-17T01:00:00Z'),
       marketState: 'POSTPOST',
+      extended: null,
+      marketCap: null,
     })
 
     const text = (await getPrices({ tickers: ['AAPL'] })).content[0].text
@@ -310,6 +318,8 @@ describe('getPrices — 장 상태 라벨 시장별 분기 (#500)', () => {
           market: 'US',
           marketTime: new Date('2026-09-16T20:00:00Z'),
           marketState: 'PREPRE',
+          extended: null,
+          marketCap: null,
         }),
       )
 
@@ -330,6 +340,8 @@ describe('getPrices — 시세 값과 장 상태 분리 (#506 · Codex P2 #505)'
     changePercent: 0.44,
     marketTime: new Date('2026-09-16T20:00:00Z'),
     marketState,
+    extended: null,
+    marketCap: null,
   })
 
   it.each(['PRE', 'PREPRE', 'POST', 'POSTPOST'])(
@@ -355,5 +367,54 @@ describe('getPrices — 시세 값과 장 상태 분리 (#506 · Codex P2 #505)'
     vi.mocked(fetchQuote).mockResolvedValueOnce(aapl('CLOSED'))
     const text = (await getPrices({ tickers: ['AAPL'] })).content[0].text
     expect(text).toContain('KST (마감)')
+  })
+})
+
+// #615: 야후가 주는 시간외·프리마켓 값과 시총을 줄에 붙인다 — AI 가 시간외 변동을 "확인 불가" 로 답했다
+describe('getPrices — 시간외·프리마켓 · 시총 (#615)', () => {
+  const nvda = (overrides: Record<string, unknown> = {}) => ({
+    ticker: 'NVDA',
+    displayName: 'NVIDIA Corporation',
+    price: 173.73,
+    currency: 'USD',
+    market: 'US',
+    change: 4.93,
+    changePercent: 2.92,
+    marketTime: new Date('2026-11-11T21:00:00Z'),
+    marketState: 'POSTPOST',
+    extended: { session: 'post', price: 158.78, change: -14.95, changePercent: -8.605306, time: new Date('2026-11-12T01:00:00Z') },
+    marketCap: 4195058188288,
+    ...overrides,
+  })
+
+  it('시간외 가격 · 정규장 종가 대비 변동률 · 기준 시각을 붙인다', async () => {
+    vi.mocked(fetchQuote).mockResolvedValueOnce(nvda() as never)
+    const text = (await getPrices({ tickers: ['NVDA'] })).content[0].text
+    expect(text).toContain('시간외 $158.78 (-8.61% · 정규장 종가 대비 · 2026-11-12 10:00 KST)')
+    expect(text).toContain('시총 $4.20T')
+  })
+
+  it('프리마켓은 프리마켓으로 표기', async () => {
+    vi.mocked(fetchQuote).mockResolvedValueOnce(
+      nvda({ extended: { session: 'pre', price: 160.1, change: -13.63, changePercent: -7.85, time: new Date('2026-11-12T12:30:00Z') } }) as never,
+    )
+    const text = (await getPrices({ tickers: ['NVDA'] })).content[0].text
+    expect(text).toContain('프리마켓 $160.10 (-7.85% · 정규장 종가 대비 · 2026-11-12 21:30 KST)')
+  })
+
+  it('정규장 밖 값이 없으면(한국 종목 · 장중) 붙이지 않는다', async () => {
+    vi.mocked(fetchQuote).mockResolvedValueOnce(
+      nvda({ ticker: '005930.KS', displayName: '삼성전자', price: 210250, currency: 'KRW', market: 'KR', marketState: 'REGULAR', extended: null, marketCap: 1369132763185152 }) as never,
+    )
+    const text = (await getPrices({ tickers: ['005930.KS'] })).content[0].text
+    expect(text).not.toContain('시간외')
+    expect(text).not.toContain('프리마켓')
+    expect(text).toContain('시총 1,369.1조원')
+  })
+
+  it('시총이 없으면 시총 칸을 생략', async () => {
+    vi.mocked(fetchQuote).mockResolvedValueOnce(nvda({ marketCap: null, extended: null }) as never)
+    const text = (await getPrices({ tickers: ['NVDA'] })).content[0].text
+    expect(text).not.toContain('시총')
   })
 })

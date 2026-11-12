@@ -136,3 +136,48 @@ function toEpochMs(raw: unknown): number | null {
   }
   return null
 }
+
+/** 정규장 밖 시세 (#615) — 야후 `preMarket*`·`postMarket*`. 변동은 정규장 종가 대비. */
+export interface ExtendedQuote {
+  session: 'pre' | 'post'
+  price: number
+  change: number | null
+  changePercent: number | null
+  time: Date
+}
+
+const finiteOrNull = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+
+/**
+ * 야후 quote 에서 정규장 밖 시세를 고른다 (#615).
+ *
+ * `marketState` 에 기대지 않는다 — 시각으로 정한다: 정규장 시각(`regularTime`)보다 **뒤**에 찍힌
+ * pre/post 값 중 가장 늦은 것. 장중에는 전날 시간외 값이 남아 있어도 정규장 시각보다 이르므로 나오지 않는다.
+ * 정규장 시각을 모르면 기준을 세울 수 없어 null. 변동·변동률이 없으면 정규장 종가 대비로 계산한다.
+ */
+export function extractExtendedQuote(
+  quote: Record<string, unknown>,
+  regularTime: Date | null,
+  regularPrice: number,
+): ExtendedQuote | null {
+  if (!regularTime) return null
+  const candidates: ExtendedQuote[] = []
+  for (const session of ['pre', 'post'] as const) {
+    const price = finiteOrNull(quote[`${session}MarketPrice`])
+    const time = normalizeMarketTime(quote[`${session}MarketTime`])
+    if (price === null || price <= 0 || !time || time.getTime() <= regularTime.getTime()) continue
+    const canDerive = Number.isFinite(regularPrice) && regularPrice > 0
+    const change = finiteOrNull(quote[`${session}MarketChange`]) ?? (canDerive ? price - regularPrice : null)
+    const changePercent =
+      finiteOrNull(quote[`${session}MarketChangePercent`]) ?? (canDerive ? ((price - regularPrice) / regularPrice) * 100 : null)
+    candidates.push({ session, price, change, changePercent, time })
+  }
+  if (candidates.length === 0) return null
+  return candidates.reduce((a, b) => (b.time.getTime() > a.time.getTime() ? b : a))
+}
+
+/** 야후 `marketCap` (#615) — 양의 유한값만. */
+export function extractMarketCap(quote: Record<string, unknown>): number | null {
+  const v = finiteOrNull(quote.marketCap)
+  return v !== null && v > 0 ? v : null
+}

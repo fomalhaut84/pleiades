@@ -188,6 +188,8 @@ async function fetchAndReplyWithFallback(out: ReplyOutput, ticker: string): Prom
         // 거짓 기준 시각을 만들지 않고 null — 캐시 시각은 아래 suffix 로 안내 (#499).
         marketTime: null,
         marketState: null,
+        extended: null,
+        marketCap: null,
       }, `⚠️ 실시간 조회 실패, 캐시 데이터 표시 (${updatedAt})`)
     } else {
       await out.reply(plainReply(`⚠️ 주가 조회 중 일시적 오류가 발생했습니다. 잠시 후 다시 시도해주세요.`))

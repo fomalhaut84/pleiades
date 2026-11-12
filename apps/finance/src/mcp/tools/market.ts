@@ -3,7 +3,7 @@ import { fetchQuote } from '@/lib/price-fetcher'
 import { isIndexTicker } from '@/lib/price-fetcher-utils'
 import { formatKstDateTime, formatKstDateTimeFull } from '@/lib/kst-date'
 import { DEFAULT_FX_RATE_USD_KRW } from '@/lib/format'
-import { toolResult, toolError, formatQuoteValue, formatMarketStamp } from '../utils'
+import { toolResult, toolError, formatQuoteValue, formatMarketStamp, formatExtendedQuote, formatMarketCap } from '../utils'
 
 /**
  * get_prices: 보유 종목 또는 지정 종목의 현재 시세
@@ -34,8 +34,11 @@ export async function getPrices(args: { tickers?: string[] }) {
           const changeStr = quote.changePercent != null
             ? ` (${quote.changePercent >= 0 ? '+' : ''}${quote.changePercent.toFixed(2)}%)`
             : ''
+          // #615: 시총 · 정규장 밖 시세 — 기준(정규장 종가 대비)과 시각을 같이 적는다
+          const capStr = quote.marketCap != null ? ` · 시총 ${formatMarketCap(quote.marketCap, quote.currency)}` : ''
+          const extStr = quote.extended ? ` · ${formatExtendedQuote(ticker, quote.extended, quote.currency)}` : ''
           entries.push({
-            text: `- ${quote.displayName} (${ticker}): ${priceStr}${changeStr}`,
+            text: `- ${quote.displayName} (${ticker}): ${priceStr}${changeStr}${capStr}${extStr}`,
             stamp: formatMarketStamp(quote.marketTime, quote.marketState, quote.market),
           })
         } else {
