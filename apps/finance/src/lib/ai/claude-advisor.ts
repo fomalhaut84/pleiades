@@ -958,6 +958,7 @@ async function runAdvisorOnce(
       resolve({
         response: output.result,
         model,
+        // CLI 가 보고한 값 — 로그의 `duration=`(#624)은 CLI 기동까지 포함한 벽시계 값이라 다를 수 있다
         durationMs: output.duration_ms,
         costUsd: output.total_cost_usd,
         sessionId: output.session_id ?? '',
