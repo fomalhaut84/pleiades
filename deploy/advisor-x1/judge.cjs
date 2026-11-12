@@ -107,7 +107,7 @@ function judgeAnswer(r, lists, pin) {
   else if (result.subtype === 'error_max_budget_usd') status = '판정 불가'
   else if (result.is_error === true || result.subtype !== 'success') [status, code] = ['오류', safeName(String(result.subtype))]
   const used = result && result.modelUsage && typeof result.modelUsage === 'object' ? Object.keys(result.modelUsage) : []
-  return { status, code, init: r.init || { ok: false, kind: 'format', why: 'init 없음' }, cost: result && typeof result.total_cost_usd === 'number' ? result.total_cost_usd : null,
+  return { status, code, replied: !!r.replied || calls.length > 0, init: r.init || { ok: false, kind: 'format', why: 'init 없음' }, cost: result && typeof result.total_cost_usd === 'number' ? result.total_cost_usd : null,
     turns: result && typeof result.num_turns === 'number' ? result.num_turns : null, ms: r.ms,
     fin: dom(lists.pre.fin), fit: dom(lists.pre.fit), outside: outside.length, outsideNames: outside.map((c) => safeName(c.name)).slice(0, 5),
     drift: used.length === 0 ? '판정 불가' : used.every((m) => m === pin.sonnet || m === pin.haiku) && used.includes(pin.sonnet) ? '없음' : '있음',

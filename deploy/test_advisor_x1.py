@@ -82,7 +82,9 @@ process.stdin.on('data', (d) => { stdin += d }).on('end', () => {
   const init = { type: 'system', subtype: 'init', tools: allow.slice(0, 3), mcp_servers: servers, plugins: [], ...(r.init || {}) }
   for (const k of r.dropInit || []) delete init[k]
   const first = (r.firstLine || JSON.stringify(init)) + '\n'
-  if (r.splitInit) {  // 첫 줄이 여러 청크로 오는 경우
+  if (r.initDelayMs) {  // init 이 늦게 오는 경우(탐침 시간 초과)
+    setTimeout(() => { process.stdout.write(first); emit(r, n) }, r.initDelayMs)
+  } else if (r.splitInit) {  // 첫 줄이 여러 청크로 오는 경우
     process.stdout.write(first.slice(0, 20))
     setTimeout(() => { process.stdout.write(first.slice(20)); setTimeout(() => emit(r, n), r.sleepMs || 0) }, 300)
   } else {
@@ -647,7 +649,9 @@ class InitCheck(Base):
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertEqual(len(self.asks()), len(replies_before) + 1)
         killed = Path(str(self.calls) + ".tool")
-        self.assertFalse(killed.exists() and len(killed.read_text().split()) > 2 * len(replies_before), "init 판정 실패면 tool_use 전에 끊는다")
+        tool_uses = len(killed.read_text().split()) if killed.exists() else 0
+        # 앞선 정상 질문들의 tool_use(질문당 2)만 있어야 한다 — 끊긴 질문의 tool_use 가 하나라도 있으면 init 판정 전에 도구가 돌았다는 뜻
+        self.assertEqual(tool_uses, 2 * len(replies_before), "init 판정 실패 질문은 첫 tool_use 전에 SIGKILL 돼야 한다")
         self.assertIn(label, r.stdout)
         return r
 
@@ -669,8 +673,11 @@ class InitCheck(Base):
         self.assertIn("이번 실행은 세지 않는다", r.stdout)
         run = self.state()["runs"][0]
         self.assertEqual((run["j2"], run["counted"]), ("판정 불가", False))
+        self.assertFalse(self.state()["probe"]["ok"])  # 회귀: #634 재리뷰 major 2 — 세지 않은 실행 뒤에는 --preflight 를 다시 요구
         self.calls.write_text("")
         self.set_scenario()
+        self.assert_stopped(self.run_x1(), "init 탐침 통과가 없다")
+        self.run_x1("--preflight")
         r2 = self.run_x1()  # 횟수에 안 들었으니 본 실행을 다시 할 수 있다
         self.assertIn("J2 통과", r2.stdout)
         return r
@@ -697,7 +704,27 @@ class InitCheck(Base):
         self.violation({"firstLine": json.dumps({"type": "system", "subtype": "hook_started", "hook_name": "SessionStart"})}, "init 전 hook")
 
     def test_no_init(self):
-        self.format_({"firstLine": json.dumps({"type": "assistant", "message": {"content": []}})}, "init 없음")
+        self.format_({"firstLine": json.dumps({"type": "system", "subtype": "status"})}, "init 없음")
+
+    def test_format_with_model_reply_is_counted(self):
+        # 회귀: #634 재리뷰 major 2 — 첫 질문이어도 모델 응답이 왔으면 횟수에 든다
+        r = self.cut({"firstLine": json.dumps({"type": "assistant", "message": {"content": []}})}, "init 형식(init 없음)")
+        self.assertNotIn("이번 실행은 세지 않는다", r.stdout)
+        self.assertTrue(self.state()["runs"][0]["counted"])
+
+    def test_format_after_completed_question_is_counted(self):
+        # 회귀: #634 재리뷰 major 2 — X1 완료 → X2 형식 실패 = 부분 결과가 있으니 횟수에 든다 · 재실행 규칙 적용
+        ok = {"tools": ["mcp__myfinance__get_portfolio", "mcp__myfitness__get_sleep"]}
+        r = self.cut({"dropInit": ["plugins"]}, "X2 교차 · 오류(init 형식)", replies_before=(ok,))
+        self.assertIn("X1 교차 · 완료", r.stdout)
+        self.assertIn("J2 판정 불가", r.stdout)
+        self.assertNotIn("이번 실행은 세지 않는다", r.stdout)
+        run = self.state()["runs"][0]
+        self.assertEqual((run["j2"], run["counted"]), ("판정 불가", True))
+        self.assertTrue(self.state()["probe"]["ok"])
+        self.calls.write_text("")
+        self.assert_stopped(self.run_x1(), "본 실행은 이미 있다")
+        self.assert_stopped(self.run_x1("--rerun=resume"), "본 실행 J2 가 통과가 아니다")
 
     def test_missing_plugins_field(self):
         self.format_({"dropInit": ["plugins"]}, "init 필드 없음")
@@ -728,6 +755,32 @@ class InitCheck(Base):
 
 
 class Probe(Base):
+    def test_main_probes_again_before_recording(self):
+        # 회귀: #634 재리뷰 major 1 — 본 실행은 기록 직전에 같은 락 아래 탐침을 다시 한다 · 실패면 횟수에 안 든 채 멈춘다
+        r = self.run_x1()
+        self.assertEqual(len(self.probes()), 1)
+        self.assertIn("init 탐침: 통과", r.stdout)
+        self.calls.write_text("")
+        (self.x1 / "state.json").unlink()
+        self.seed_probe()
+        self.set_scenario(probe={"init": {"plugins": [{"name": "p"}]}})
+        self.assert_stopped(self.run_x1(), "init 탐침이 통과하지 않았다")
+        self.assertEqual(self.state()["runs"], [])
+        self.assertFalse(self.state()["probe"]["ok"])
+
+    def test_probe_reports_user_and_allowlist_change(self):
+        self.run_x1("--preflight")
+        (self.home / ".claude").mkdir(exist_ok=True)
+        (self.home / ".claude" / "settings.json").write_text(json.dumps({"enabledPlugins": {"p@m": True}}))
+        r = self.run_x1("--preflight")
+        self.assertIn("직전 탐침 대비 user 범위 다름 · 허용 목록 같음", r.stdout)
+
+    def test_probe_timeout(self):
+        self.set_scenario(probe={"initDelayMs": 5000})
+        r = self.run_x1("--preflight", X1_PROBE_TIMEOUT_MS="300")
+        self.assert_stopped(r, "init 탐침이 통과하지 않았다")
+        self.assertIn("init 탐침: 형식(init 없음)", r.stdout)
+
     """회귀: #634 9-1 major 2 — 사전 판정이 같은 인자로 init 탐침을 하고, 본 실행은 같은 CLI 버전의 탐침 통과를 요구한다."""
 
     def test_probe_kills_on_init_and_records(self):

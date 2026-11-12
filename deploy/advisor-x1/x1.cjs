@@ -34,7 +34,7 @@ const CONFIG = {
   // 런북 release-inplace.md C0 — 두 앱 크론이 비는 00:15~05:55(KST) · 매월 1일 · 1·4·7·10월 7일은 피한다
   windowStart: '00:15',
   lastStart: '05:40', // 질문 상한 10분이 05:55 전에 끝나게
-  httpMs: 10000, cliMs: 30000, dbMs: 120000,
+  httpMs: 10000, cliMs: 30000, dbMs: 120000, probeMs: TEST && process.env.X1_PROBE_TIMEOUT_MS ? Number(process.env.X1_PROBE_TIMEOUT_MS) : 30000,
   logTailBytes: 16 * 1048576, questionMaxChars: 4000, knowledgeMaxBytes: 20000,
 }
 
@@ -196,6 +196,8 @@ function checkSettings(cwd, form) {
     .concat(`관리형 managed-mcp.json ${fs.existsSync(path.join(MANAGED_DIR, 'managed-mcp.json')) ? '있음' : '없음'}(보고만)`)
   form.push(`S-3 settings: ${base.join(' | ')} | 관리형 조각 ${frags}개${extra.length ? ` (${extra.join(' | ')})` : ''} | ${memo.join(' · ')} | 실행 범위 --setting-sources project + 빈 임시 cwd`)
   if (bad.length) stop(`S-3: 막는 항목 ${bad.length}(${[...new Set(bad.map((r) => r.scope))].join(' · ')}) — 실행 안 함`)
+  // 탐침 기록에 남길 user 범위 지문(내용은 남기지 않는다) — 탐침 뒤 user 설정이 바뀌었는지 양식에 같음/다름(#634 재리뷰 major 1)
+  return sha(['settings.json', 'settings.local.json'].map((f) => { try { return readText(path.join(CLAUDE_DIR, f)) } catch { return '-' } }).join('\0'))
 }
 
 // ── S-5 도구 목록(Q118 · 배포 체크아웃 소스에서) ────────────────────
@@ -428,7 +430,7 @@ function askOnce(bin, args, env, cwd, prompt, rawFile, checkInit, probe = false)
       if (e && e.type === 'assistant') replied = true
       if (!(init = checkInit(e)).ok || probe) kill()
     }
-    const timer = setTimeout(() => { timedOut = true; kill('SIGTERM') }, probe ? CONFIG.cliMs : CONFIG.questionTimeoutMs)
+    const timer = setTimeout(() => { timedOut = true; kill('SIGTERM') }, probe ? CONFIG.probeMs : CONFIG.questionTimeoutMs)
     child.stdout.on('data', (c) => {
       out += c
       if (!init && out.includes('\n')) judge(out.slice(0, out.indexOf('\n'))) // 첫 줄이 여러 청크로 와도 줄이 끝나야 판정
@@ -583,7 +585,10 @@ function verdicts(form, plan, results, shared, db, sessionOutside) {
   form.push(`J4 대조 기록만(Q129) — ${['D1', 'D2'].filter((id) => plan.ids.includes(id)).map((id) => `${id} ${results[id] ? results[id].status : '-'}`).join(' · ') || '이번 실행에 없음'}`)
   const ms = Object.values(results).filter((q) => q.status !== '미실행').map((q) => q.ms).sort((a, b) => a - b)
   form.push(`J5 지연 ${ms.length ? `p50 ${sec(ms[Math.floor(ms.length / 2)])} · max ${sec(ms[ms.length - 1])}` : '-'} (fit 대화 기준 p50 20.5s · p90 78.7s · §3-2)`)
-  return { j2, uncounted: j2 === '판정 불가' && initFormats > 0 }
+  // 횟수 제외는 첫 질문이 형식 실패이고 모델 응답·비용이 0 일 때만 — 부분 결과가 있는 실행은 센다(회귀: #634 재리뷰 major 2)
+  const first = results[plan.ids[0]]
+  const clean = first && first.init && first.init.kind === 'format' && !first.replied && !first.cost && Object.keys(results).every((id) => id === plan.ids[0] || results[id].status === '미실행')
+  return { j2, uncounted: j2 === '판정 불가' && !!clean }
 }
 
 // ── 본체 ─────────────────────────────────────────────────────────────
@@ -608,7 +613,7 @@ async function preflight(args, form, started) {
   ensurePrivateDir(runDir)
   const cwd = path.join(runDir, 'cwd')
   ensurePrivateDir(cwd)
-  checkSettings(cwd, form)
+  const userHash = checkSettings(cwd, form)
   const pin = pins()
   const bin = resolveClaude(args.claudeBin)
   const env = childEnv(pin)
@@ -623,7 +628,7 @@ async function preflight(args, form, started) {
   const lists = await checkTools(form)
   const db = { fin: dbSnapshot('fin'), fit: dbSnapshot('fit') }
   form.push(`Q131 원장 스냅샷: fin ${APPS.fin.ledger.length} · fit ${APPS.fit.ledger.length} 테이블 읽음`)
-  const ctx = { questions, qhash, state, plan, knowledge, runDir, cwd, pin, bin, env, before, lists, db }
+  const ctx = { questions, qhash, state, plan, knowledge, runDir, cwd, pin, bin, env, before, lists, db, userHash }
   if (args.preflight) await probeInit(ctx, form)
   return ctx
 }
@@ -647,9 +652,12 @@ async function probeInit(ctx, form) {
   const r = await askOnce(ctx.bin, sessionArgs(ctx), ctx.env, ctx.cwd, 'X1 탐침 — 이 메시지에는 답하지 않는다.', path.join(ctx.runDir, 'stream-probe.jsonl'), initCheck(ctx.lists), true)
   const { result } = parseStream(r.out)
   const i = r.init
-  ctx.state.probe = { ok: i.ok, version: ctx.before, at: Date.now() }
+  const prev = ctx.state.probe || {}, allowHash = sha(ctx.lists.allow.join(','))
+  const same = (a, b) => (a === undefined ? '첫 기록' : a === b ? '같음' : '다름')
+  ctx.state.probe = { ok: i.ok, version: ctx.before, userHash: ctx.userHash, allowHash, at: Date.now() }
   writePrivate(STATE(), JSON.stringify(ctx.state, null, 2))
-  form.push(`init 탐침: ${i.ok ? '통과' : `${i.kind === 'violation' ? '위반' : '형식'}(${i.why})`}${initCounts(i)} · 모델 응답 ${r.replied || result ? `있음 · 비용 ${usd(result && result.total_cost_usd)}` : '없음'} · CLI ${ctx.before}`)
+  form.push(`init 탐침: ${i.ok ? '통과' : `${i.kind === 'violation' ? '위반' : '형식'}(${i.why})`}${initCounts(i)} · 모델 응답 ${r.replied || result ? `있음 · 비용 ${usd(result && result.total_cost_usd)}` : '없음'} · CLI ${ctx.before}`
+    + ` · 직전 탐침 대비 user 범위 ${same(prev.userHash, ctx.userHash)} · 허용 목록 ${same(prev.allowHash, allowHash)}`)
   if (!i.ok) stop('S-3: init 탐침이 통과하지 않았다 — 본 실행 불가(런북 3절)')
 }
 
@@ -657,6 +665,8 @@ async function experiment(ctx, form) {
   const { plan } = ctx
   const args = sessionArgs(ctx)
   form.push(`S-6 호출당 상한 ${usd(plan.budget)} · 목표 총액 ${usd(CONFIG.targetUsd)} · 세션 기록 끔 · 내장 도구 끔 · dontAsk · 프롬프트 ${plan.kind === 'prompt' ? '변형(K2 지식 덧붙임)' : '기본'} · 원문은 비공개 파일`)
+  // 같은 락 아래 기록 직전에 탐침을 한 번 더 — preflight 뒤 user 설정·분류 목록이 바뀌었으면 여기서 멈춘다(횟수에 안 든다 · 회귀: #634 재리뷰 major 1)
+  await probeInit(ctx, form)
   const record = { kind: plan.kind, at: Date.now(), qhash: ctx.qhash, status: {}, j2: '진행 중' }
   ctx.state.runs.push(record)
   writePrivate(STATE(), JSON.stringify(ctx.state, null, 2)) // 첫 질문 전에 남긴다 — 중간에 죽어도 횟수에 든다
@@ -709,7 +719,11 @@ async function questionsAndVerdicts(ctx, form, args, record) {
   Object.assign(record, { j2, cost: cum, counted: !uncounted, status: Object.fromEntries(Object.entries(results).map(([id, q]) => [id, q.status])) })
   writePrivate(STATE(), JSON.stringify(ctx.state, null, 2))
   const left = 2 - counted(ctx.state).length
-  if (uncounted) form.push('실행 횟수: 이번 실행은 세지 않는다(init 형식 문제) — CLI init 형식을 Claude 와 확인한 뒤 같은 명령으로 다시')
+  if (uncounted) {
+    ctx.state.probe.ok = false // 다음 실행 전에 --preflight 를 다시 요구한다(회귀: #634 재리뷰 major 2)
+    writePrivate(STATE(), JSON.stringify(ctx.state, null, 2))
+    form.push('실행 횟수: 이번 실행은 세지 않는다(첫 질문 init 형식 · 모델 응답 0) — CLI init 형식을 Claude 와 확인하고 --preflight 부터 다시')
+  }
   form.push(`재실행: 남은 ${left}회${left > 0 && j2 === '통과' ? ' — 가능하면 --rerun=prompt(J1·J3 실패) · budget(판정 불가) · resume(미실행) 중 하나(§5-6)' : ''}`)
 }
 
