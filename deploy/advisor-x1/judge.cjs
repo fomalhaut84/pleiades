@@ -67,17 +67,32 @@ function parseStream(text) {
 
 // ── #634 세션 init 판정(fail-closed) ─────────────────────────────────
 // CLI stream-json 첫 이벤트 {type:'system', subtype:'init', tools:[이름], mcp_servers:[{name, status}], plugins:[…], plugin_errors?, mcp_server_errors?}
-// (필드는 로컬 CLI 2.1.322 의 init 생성 코드에서 확인 · 서버 2.1.308 은 런북 8절). 필드가 없거나 다르면 실패 — 안전한 쪽으로 멈춘다
+// (필드는 로컬 CLI 2.1.322 의 init 생성 코드에서 확인 · 서버 2.1.308 은 런북 8절). 판정은 둘로 나눈다(회귀: #634 9-1 major 1):
+//  - violation(위반 → J2 실패): 플러그인 ≥1 · 서버 수·이름 불일치 · 목록 밖 도구 · init 앞의 hook 이벤트
+//  - format(형식 → 자식을 끊되 J2 판정 불가 · 실행 횟수에 넣지 않음): init 없음 · 필드 없음·형식 다름 · 서버가 아직/못 연결(알 수 없는 상태 포함)
+// init 앞 system/hook_* 를 위반으로 보는 근거: 어느 범위에도 hooks 가 없으면(S-3) hook 이벤트는 나지 않는다 — 났다면 차단하려던
+// 설정(플러그인·user hooks)이 실제로 로드됐다는 직접 증거다. 그 밖의 init 앞 이벤트는 CLI 형식 변화로 보고 형식 문제로 둔다.
+const KNOWN_STATUS = new Set(['connected', 'pending', 'failed', 'needs-auth', 'disabled'])
+const fmt = (why, extra = {}) => ({ ok: false, kind: 'format', why, ...extra })
 function judgeInit(e, allow, serverKeys) {
-  if (!e || e.type !== 'system' || e.subtype !== 'init') return { ok: false, why: 'init 없음' }
-  if (!Array.isArray(e.tools) || !Array.isArray(e.mcp_servers) || !Array.isArray(e.plugins)) return { ok: false, why: 'init 필드 없음' }
-  const plugins = e.plugins.length + (Array.isArray(e.plugin_errors) ? e.plugin_errors.length : 0)
+  if (e && e.type === 'system' && typeof e.subtype === 'string' && e.subtype.startsWith('hook_')) return { ok: false, kind: 'violation', why: 'init 전 hook' }
+  if (!e || e.type !== 'system' || e.subtype !== 'init') return fmt('init 없음')
+  if (!Array.isArray(e.tools) || !Array.isArray(e.mcp_servers) || !Array.isArray(e.plugins)) return fmt('init 필드 없음')
+  if (['plugin_errors', 'mcp_server_errors'].some((k) => e[k] !== undefined && !Array.isArray(e[k]))) return fmt('init 필드 형식')
+  const plugins = e.plugins.length + (e.plugin_errors || []).length
+  const names = e.mcp_servers.map((m) => m && m.name)
   const servers = e.mcp_servers.length
   const connected = serverKeys.filter((k) => e.mcp_servers.some((m) => m && m.name === k && m.status === 'connected')).length
   const outside = e.tools.filter((t) => !allow.has(t)).length // 내장 도구(--tools "" 기대)도 여기서 걸린다
-  const errors = Array.isArray(e.mcp_server_errors) ? e.mcp_server_errors.length : 0
-  const why = plugins ? '플러그인' : servers !== serverKeys.length || connected !== serverKeys.length || errors ? 'MCP 서버' : outside ? '목록 밖 도구' : ''
-  return { ok: !why, why, plugins, servers, connected, outside }
+  const extraServer = servers !== serverKeys.length || !serverKeys.every((k) => names.includes(k)) || (e.mcp_server_errors || []).length > 0
+  const counts = { plugins, servers, connected, outside }
+  const why = plugins ? '플러그인' : extraServer ? 'MCP 서버' : outside ? '목록 밖 도구' : ''
+  if (why) return { ok: false, kind: 'violation', why, ...counts }
+  if (connected !== serverKeys.length) {
+    const unknown = e.mcp_servers.some((m) => !m || !KNOWN_STATUS.has(m.status))
+    return fmt(unknown ? '알 수 없는 MCP 상태' : 'MCP 미연결', counts)
+  }
+  return { ok: true, kind: '', why: '', ...counts }
 }
 
 function judgeAnswer(r, lists, pin) {
@@ -86,13 +101,13 @@ function judgeAnswer(r, lists, pin) {
   const dom = (pre) => ({ n: calls.filter((c) => c.name.startsWith(pre)).length, ok: calls.filter((c) => c.name.startsWith(pre) && c.ok).length })
   const outside = calls.filter((c) => !allow.has(c.name))
   let status = '완료', code = ''
-  if (!r.init || !r.init.ok) [status, code] = ['실패', 'init'] // #634 — 끊은 질문
+  if (!r.init || !r.init.ok) [status, code] = r.init && r.init.kind === 'violation' ? ['실패', 'init'] : ['오류', 'init 형식'] // #634 — 끊은 질문
   else if (r.timedOut) [status, code] = ['오류', 'timeout']
   else if (!result) [status, code] = ['오류', 'no-result']
   else if (result.subtype === 'error_max_budget_usd') status = '판정 불가'
   else if (result.is_error === true || result.subtype !== 'success') [status, code] = ['오류', safeName(String(result.subtype))]
   const used = result && result.modelUsage && typeof result.modelUsage === 'object' ? Object.keys(result.modelUsage) : []
-  return { status, code, init: r.init || { ok: false, why: 'init 없음' }, cost: result && typeof result.total_cost_usd === 'number' ? result.total_cost_usd : null,
+  return { status, code, init: r.init || { ok: false, kind: 'format', why: 'init 없음' }, cost: result && typeof result.total_cost_usd === 'number' ? result.total_cost_usd : null,
     turns: result && typeof result.num_turns === 'number' ? result.num_turns : null, ms: r.ms,
     fin: dom(lists.pre.fin), fit: dom(lists.pre.fit), outside: outside.length, outsideNames: outside.map((c) => safeName(c.name)).slice(0, 5),
     drift: used.length === 0 ? '판정 불가' : used.every((m) => m === pin.sonnet || m === pin.haiku) && used.includes(pin.sonnet) ? '없음' : '있음',

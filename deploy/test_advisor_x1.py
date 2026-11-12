@@ -71,17 +71,24 @@ const mcpLog = (app, tool, msg = 'tool_call') => {
 }
 let stdin = ''
 process.stdin.on('data', (d) => { stdin += d }).on('end', () => {
+  const probe = stdin.includes('X1 탐침')
   const n = fs.readFileSync(calls, 'utf8').split('\n').filter(Boolean).map(JSON.parse).filter((x) => x.kind === 'ask').length
-  const r = (sc.replies || [])[n] || sc.default
-  log({ kind: 'ask', argv: a, cwd: process.cwd(), cwdEntries: fs.readdirSync(process.cwd()), stdin,
+  const r = probe ? { tools: ['mcp__myfinance__get_portfolio'], sleepMs: 3000, ...(sc.probe || {}) } : (sc.replies || [])[n] || sc.default
+  log({ kind: probe ? 'probe' : 'ask', argv: a, cwd: process.cwd(), cwdEntries: fs.readdirSync(process.cwd()), stdin,
     env: { DISABLE_AUTOUPDATER: process.env.DISABLE_AUTOUPDATER, SONNET: process.env.ANTHROPIC_DEFAULT_SONNET_MODEL,
       HAIKU: process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL, TOOL_SEARCH: process.env.ENABLE_TOOL_SEARCH, DB: process.env.DATABASE_URL || null, LOCK: process.env.X1_LOCK_HELD || null } })
   const allow = (a[a.indexOf('--allowedTools') + 1] || '').split(',').filter(Boolean)
   const servers = [{ name: 'myfinance', status: 'connected' }, { name: 'myfitness', status: 'connected' }]
   const init = { type: 'system', subtype: 'init', tools: allow.slice(0, 3), mcp_servers: servers, plugins: [], ...(r.init || {}) }
   for (const k of r.dropInit || []) delete init[k]
-  process.stdout.write((r.firstLine || JSON.stringify(init)) + '\n')
-  setTimeout(() => emit(r, n), r.sleepMs || 0)
+  const first = (r.firstLine || JSON.stringify(init)) + '\n'
+  if (r.splitInit) {  // 첫 줄이 여러 청크로 오는 경우
+    process.stdout.write(first.slice(0, 20))
+    setTimeout(() => { process.stdout.write(first.slice(20)); setTimeout(() => emit(r, n), r.sleepMs || 0) }, 300)
+  } else {
+    process.stdout.write(first)
+    setTimeout(() => emit(r, n), r.sleepMs || 0)
+  }
 })
 function emit(r, n) {
   const out = (o) => process.stdout.write(JSON.stringify(o) + '\n')
@@ -235,6 +242,16 @@ class Base(unittest.TestCase):
                 (a / "node_modules" / ".bin" / "tsx").symlink_to(TSX)
         self.questions({i: f"Q-SECRET-{i} 지출과 수면" for i in ("X1", "X2", "X3", "X4", "D1", "D2")})
         self.set_scenario()
+        self.seed_probe()
+
+    def seed_probe(self, ok=True, version="2.1.308"):
+        # 본 실행은 같은 CLI 버전의 init 탐침 통과를 요구한다(#634 9-1 major 2) — 탐침 자체는 Probe 클래스가 시험한다
+        f = self.x1 / "state.json"
+        f.write_text(json.dumps({"runs": [], "probe": {"ok": ok, "version": version, "at": 0}}))
+        f.chmod(0o600)
+
+    def probes(self):
+        return [c for c in map(json.loads, filter(None, self.calls.read_text().splitlines())) if c["kind"] == "probe"]
 
     def app_dir(self, app):
         return self.home / f"pleiades-{app}" / "apps" / DIRS[app]
@@ -344,7 +361,10 @@ class HappyPath(Base):
         self.assertIn("창 밖", r.stdout)
         self.assertIn("결과: 사전 판정 통과 — 질문 0", r.stdout)
         self.assertEqual(self.asks(), [])
-        self.assertFalse((self.x1 / "state.json").exists())
+        self.assertEqual(len(self.probes()), 1)
+        self.assertIn("init 탐침: 통과 · 플러그인 0 · MCP 서버 2(연결 2) · 목록 밖 도구 0 · 모델 응답 없음 · CLI 2.1.308", r.stdout)
+        self.assertEqual(self.state()["runs"], [])
+        self.assertTrue(self.state()["probe"]["ok"])
 
 
 class S1Lock(Base):
@@ -515,7 +535,7 @@ class J2J3(Base):
         self.set_scenario(replies=[{"tools": ["mcp__myfinance__create_transaction", "mcp__myfitness__get_sleep"]}])
         r = self.run_x1()
         self.assertIn("목록 밖 1 [mcp__myfinance__create_transaction]", r.stdout)
-        self.assertIn("J2 실패 — init 어긋남 0 · 세션 목록 밖 1", r.stdout)
+        self.assertIn("J2 실패 — init 위반 0 · init 형식 0 · 세션 목록 밖 1", r.stdout)
         self.assertIn("재실행: 남은 1회\n", r.stdout + "\n")
         self.assertEqual(self.state()["runs"][0]["j2"], "실패")
 
@@ -572,6 +592,36 @@ class J2J3(Base):
         self.calls.write_text("")
         self.assert_stopped(self.run_x1("--rerun=resume"), "본 실행 J2 가 통과가 아니다")
 
+    def test_unreadable_pm2_log_is_undecidable(self):
+        # 회귀: PR #643 Codex P2 — 매칭 파일은 있는데 못 읽으면(권한 · 회전) 빈 로그(0 건)가 아니라 판정 불가
+        if os.geteuid() == 0:
+            self.skipTest("root 는 권한 000 을 읽는다")
+        f = self.pm2 / "logs" / "pleiades-fin-mcp-out.log"
+        f.chmod(0o000)
+        self.addCleanup(f.chmod, 0o600)
+        r = self.run_x1()
+        self.assertIn("공유 로그 판정 불가(로그 읽기 실패)", r.stdout)
+        self.assertIn("J2 판정 불가", r.stdout)
+        self.assertEqual(self.state()["runs"][0]["j2"], "판정 불가")
+        self.calls.write_text("")
+        self.assert_stopped(self.run_x1("--rerun=resume"), "본 실행 J2 가 통과가 아니다")
+
+    def test_unreadable_mcp_log_is_undecidable(self):
+        # 회귀: PR #643 Codex P2 — MCP 로그도 같다
+        if os.geteuid() == 0:
+            self.skipTest("root 는 권한 000 을 읽는다")
+        self.set_scenario(default={"tools": ["mcp__myfinance__get_portfolio", "mcp__myfitness__get_sleep"], "noLog": True})
+        logs = self.app_dir("fin") / "logs"
+        logs.mkdir(parents=True, exist_ok=True)
+        from datetime import datetime, timedelta, timezone
+        f = logs / f"mcp-{(datetime.now(timezone.utc) + timedelta(hours=9)).date()}.log"
+        f.write_text("")
+        f.chmod(0o000)
+        self.addCleanup(f.chmod, 0o600)
+        r = self.run_x1()
+        self.assertIn("공유 로그 판정 불가(로그 읽기 실패)", r.stdout)
+        self.assertIn("J2 판정 불가", r.stdout)
+
     def test_mixed_without_nested_evidence_is_undecidable(self):
         # 회귀: PR #633 Codex P2 — 섞임 규칙(세션 0 이면 통과)은 중첩 근거가 있을 때만
         (self.pm2 / "logs" / "pleiades-fin-mcp-out.log").unlink()
@@ -588,43 +638,130 @@ class J2J3(Base):
 
 
 class InitCheck(Base):
-    """회귀: #634 — 질문마다 stream-json 첫 init 을 판정한다. 어긋나면 첫 tool_use 전에 끊고 이후 질문을 시작하지 않는다."""
+    """회귀: #634 — 질문마다 stream-json 첫 init 을 판정한다. 어긋나면 첫 tool_use 전에 끊고 이후 질문을 시작하지 않는다.
+    회귀: #634 9-1 major 1 — 위반(플러그인 · 서버 · 목록 밖 도구 · init 전 hook)은 J2 실패 · 형식(init 없음 · 필드 · 상태)은 판정 불가 · 횟수 제외."""
 
-    def bad(self, reply, why):
-        self.set_scenario(replies=[{"tools": ["mcp__myfinance__get_portfolio", "mcp__myfitness__get_sleep"], "sleepMs": 3000, **reply}])
+    def cut(self, reply, label, replies_before=()):
+        self.set_scenario(replies=[*replies_before, {"tools": ["mcp__myfinance__get_portfolio", "mcp__myfitness__get_sleep"], "sleepMs": 3000, **reply}])
         r = self.run_x1()
         self.assertEqual(r.returncode, 0, r.stdout)
-        self.assertEqual(len(self.asks()), 1)
-        self.assertFalse(Path(str(self.calls) + ".tool").exists(), "init 판정 실패면 tool_use 전에 끊는다")
-        self.assertIn(f"X1 교차 · 실패(init)", r.stdout)
-        self.assertIn(f"init 실패({why})", r.stdout)
+        self.assertEqual(len(self.asks()), len(replies_before) + 1)
+        killed = Path(str(self.calls) + ".tool")
+        self.assertFalse(killed.exists() and len(killed.read_text().split()) > 2 * len(replies_before), "init 판정 실패면 tool_use 전에 끊는다")
+        self.assertIn(label, r.stdout)
+        return r
+
+    def violation(self, reply, why):
+        r = self.cut(reply, f"init 위반({why})")
+        self.assertIn("X1 교차 · 실패(init)", r.stdout)
         self.assertIn("X2 교차 · 미실행(init 실패)", r.stdout)
         self.assertIn("D2 대조(fit) · 미실행(init 실패)", r.stdout)
-        self.assertIn("J2 실패 — init 어긋남 1", r.stdout)
+        self.assertIn("J2 실패 — init 위반 1 · init 형식 0", r.stdout)
         self.assertEqual(self.state()["runs"][0]["j2"], "실패")
+        self.assertTrue(self.state()["runs"][0]["counted"])
+        return r
+
+    def format_(self, reply, why):
+        r = self.cut(reply, f"init 형식({why})")
+        self.assertIn("X1 교차 · 오류(init 형식)", r.stdout)
+        self.assertIn("X2 교차 · 미실행(init 형식)", r.stdout)
+        self.assertIn("J2 판정 불가 — init 위반 0 · init 형식 1", r.stdout)
+        self.assertIn("이번 실행은 세지 않는다", r.stdout)
+        run = self.state()["runs"][0]
+        self.assertEqual((run["j2"], run["counted"]), ("판정 불가", False))
+        self.calls.write_text("")
+        self.set_scenario()
+        r2 = self.run_x1()  # 횟수에 안 들었으니 본 실행을 다시 할 수 있다
+        self.assertIn("J2 통과", r2.stdout)
         return r
 
     def test_plugin_loaded(self):
-        r = self.bad({"init": {"plugins": [{"name": "p", "path": "/x"}]}}, "플러그인")
+        r = self.violation({"init": {"plugins": [{"name": "p", "path": "/x"}]}}, "플러그인")
         self.assertIn("플러그인 1 · MCP 서버 2(연결 2)", r.stdout)
         self.assertNotIn("/x", r.stdout)
 
-    def test_extra_or_disconnected_server(self):
-        servers = [{"name": "myfinance", "status": "connected"}, {"name": "myfitness", "status": "connected"}, {"name": "other", "status": "connected"}]
-        self.assertIn("MCP 서버 3(연결 2)", self.bad({"init": {"mcp_servers": servers}}, "MCP 서버").stdout)
+    def test_plugin_errors_count_as_plugins(self):
+        self.violation({"init": {"plugin_errors": [{"plugin": "p"}]}}, "플러그인")
 
-    def test_disconnected_server(self):
-        servers = [{"name": "myfinance", "status": "connected"}, {"name": "myfitness", "status": "failed"}]
-        self.assertIn("MCP 서버 2(연결 1)", self.bad({"init": {"mcp_servers": servers}}, "MCP 서버").stdout)
+    def test_extra_server(self):
+        servers = [{"name": "myfinance", "status": "connected"}, {"name": "myfitness", "status": "connected"}, {"name": "other", "status": "connected"}]
+        self.assertIn("MCP 서버 3(연결 2)", self.violation({"init": {"mcp_servers": servers}}, "MCP 서버").stdout)
+
+    def test_mcp_server_errors_is_violation(self):
+        self.violation({"init": {"mcp_server_errors": [{"name": "other"}]}}, "MCP 서버")
 
     def test_builtin_tool(self):
-        self.assertIn("목록 밖 도구 1", self.bad({"init": {"tools": ["Bash", "mcp__myfinance__get_portfolio"]}}, "목록 밖 도구").stdout)
+        self.assertIn("목록 밖 도구 1", self.violation({"init": {"tools": ["Bash", "mcp__myfinance__get_portfolio"]}}, "목록 밖 도구").stdout)
 
-    def test_no_init_or_missing_field(self):
-        self.bad({"firstLine": json.dumps({"type": "assistant", "message": {"content": []}})}, "init 없음")
+    def test_hook_before_init_is_violation(self):
+        self.violation({"firstLine": json.dumps({"type": "system", "subtype": "hook_started", "hook_name": "SessionStart"})}, "init 전 hook")
+
+    def test_no_init(self):
+        self.format_({"firstLine": json.dumps({"type": "assistant", "message": {"content": []}})}, "init 없음")
 
     def test_missing_plugins_field(self):
-        self.bad({"dropInit": ["plugins"]}, "init 필드 없음")
+        self.format_({"dropInit": ["plugins"]}, "init 필드 없음")
+
+    def test_error_fields_not_arrays(self):
+        self.format_({"init": {"plugin_errors": "x"}}, "init 필드 형식")
+
+    def test_disconnected_or_unknown_status_is_format(self):
+        servers = [{"name": "myfinance", "status": "connected"}, {"name": "myfitness", "status": "pending"}]
+        self.assertIn("MCP 서버 2(연결 1)", self.format_({"init": {"mcp_servers": servers}}, "MCP 미연결").stdout)
+
+    def test_unknown_status(self):
+        servers = [{"name": "myfinance", "status": "connected"}, {"name": "myfitness", "status": "warming"}]
+        self.format_({"init": {"mcp_servers": servers}}, "알 수 없는 MCP 상태")
+
+    def test_split_init_line_passes(self):
+        self.set_scenario(default={"tools": ["mcp__myfinance__get_portfolio", "mcp__myfitness__get_sleep"], "splitInit": True})
+        r = self.run_x1()
+        self.assertIn("J2 통과", r.stdout)
+        self.assertEqual(r.stdout.count("init 통과"), 6)
+
+    def test_second_question_init_violation(self):
+        ok = {"tools": ["mcp__myfinance__get_portfolio", "mcp__myfitness__get_sleep"]}
+        r = self.cut({"init": {"plugins": [{"name": "p"}]}}, "X2 교차 · 실패(init)", replies_before=(ok,))
+        self.assertIn("X1 교차 · 완료", r.stdout)
+        self.assertIn("X3 교차 · 미실행(init 실패)", r.stdout)
+        self.assertIn("J2 실패", r.stdout)
+
+
+class Probe(Base):
+    """회귀: #634 9-1 major 2 — 사전 판정이 같은 인자로 init 탐침을 하고, 본 실행은 같은 CLI 버전의 탐침 통과를 요구한다."""
+
+    def test_probe_kills_on_init_and_records(self):
+        r = self.run_x1("--preflight")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        p = self.probes()
+        self.assertEqual(len(p), 1)
+        for k in ("--strict-mcp-config", "--no-session-persistence", "--setting-sources"):
+            self.assertIn(k, p[0]["argv"])
+        self.assertFalse(Path(str(self.calls) + ".tool").exists(), "탐침은 init 에서 끊는다")
+        self.assertIn("모델 응답 없음", r.stdout)
+
+    def test_probe_violation_stops_and_records_fail(self):
+        self.set_scenario(probe={"init": {"plugins": [{"name": "p"}]}})
+        self.assert_stopped(self.run_x1("--preflight"), "init 탐침이 통과하지 않았다")
+        self.assertFalse(self.state()["probe"]["ok"])
+        self.assert_stopped(self.run_x1(), "init 탐침 통과가 없다")
+
+    def test_probe_model_reply_is_reported(self):
+        self.set_scenario(probe={"firstLine": json.dumps({"type": "assistant", "message": {"content": []}})})
+        r = self.run_x1("--preflight")
+        self.assertIn("init 탐침: 형식(init 없음)", r.stdout)
+        self.assertIn("모델 응답 있음", r.stdout)
+
+    def test_main_needs_probe_of_same_version(self):
+        (self.x1 / "state.json").unlink()
+        self.assert_stopped(self.run_x1(), "같은 CLI 버전(2.1.308)의 init 탐침 통과가 없다")
+        self.seed_probe(version="2.1.300")
+        self.assert_stopped(self.run_x1(), "같은 CLI 버전(2.1.308)의 init 탐침 통과가 없다")
+        self.seed_probe(ok=False)
+        self.assert_stopped(self.run_x1(), "init 탐침 통과가 없다")
+        self.run_x1("--preflight")
+        r = self.run_x1()
+        self.assertIn("결과: 실행 끝", r.stdout)
 
 
 class Q131Ledger(Base):

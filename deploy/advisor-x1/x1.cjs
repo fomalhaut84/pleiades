@@ -414,24 +414,24 @@ function cliArgs(model, system, mcpConfig, lists, budget) {
     '--max-budget-usd', String(budget), '--permission-mode', 'dontAsk', '--no-session-persistence']
 }
 
-// #634 — 첫 줄(init)을 받자마자 판정한다. 어긋나면 첫 tool_use 를 기다리지 않고 끊는다(fail-closed)
-function askOnce(bin, args, env, cwd, prompt, rawFile, checkInit) {
+// #634 — 첫 줄(init)을 받자마자 판정한다. 어긋나면 첫 tool_use 를 기다리지 않고 SIGKILL(fail-closed).
+// probe(사전 판정의 init 탐침)는 판정이 나면 결과와 무관하게 SIGKILL — 모델 응답 전에 끊으려는 것이다
+function askOnce(bin, args, env, cwd, prompt, rawFile, checkInit, probe = false) {
   return new Promise((resolve) => {
     const t0 = Date.now()
     const child = spawn(bin, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] })
-    let out = '', err = '', timedOut = false, init = null
-    const kill = () => { child.kill('SIGTERM'); setTimeout(() => child.kill('SIGKILL'), 5000).unref() }
+    let out = '', err = '', timedOut = false, init = null, replied = false
+    const kill = (sig = 'SIGKILL') => { child.kill(sig); setTimeout(() => child.kill('SIGKILL'), 5000).unref() }
     const judge = (line) => {
       let e = null
-      try { e = JSON.parse(line) } catch { /* init 아님 */ }
-      if (!(init = checkInit(e)).ok) kill()
+      try { e = JSON.parse(line) } catch { /* init 아님 → 형식 */ }
+      if (e && e.type === 'assistant') replied = true
+      if (!(init = checkInit(e)).ok || probe) kill()
     }
-    const timer = setTimeout(() => {
-      timedOut = true; kill()
-    }, CONFIG.questionTimeoutMs)
+    const timer = setTimeout(() => { timedOut = true; kill('SIGTERM') }, probe ? CONFIG.cliMs : CONFIG.questionTimeoutMs)
     child.stdout.on('data', (c) => {
       out += c
-      if (!init && out.includes('\n')) judge(out.slice(0, out.indexOf('\n')))
+      if (!init && out.includes('\n')) judge(out.slice(0, out.indexOf('\n'))) // 첫 줄이 여러 청크로 와도 줄이 끝나야 판정
     })
     child.stderr.on('data', (c) => { if (err.length < 65536) err += c })
     child.on('error', () => {}); child.stdin.on('error', () => {})
@@ -439,8 +439,9 @@ function askOnce(bin, args, env, cwd, prompt, rawFile, checkInit) {
     child.on('close', (code) => {
       clearTimeout(timer)
       if (!init) judge(out.split('\n')[0])
+      replied = replied || out.split('\n').some((l) => l.startsWith('{"type":"assistant"'))
       writePrivate(rawFile, `${out}\n--- stderr ---\n${err}`)
-      resolve({ out, code, timedOut, init, ms: Date.now() - t0 })
+      resolve({ out, code, timedOut, init, replied, ms: Date.now() - t0 })
     })
   })
 }
@@ -458,12 +459,14 @@ function tail(file) {
   } catch { return null }
 }
 
-function mcpLogScan(app, allow, pre, t0, t1) {
+function mcpLogScan(app, allow, pre, t0, t1, rd) {
   const dates = new Set([kstParts(new Date(t0)).date, kstParts(new Date(t1)).date])
   let files = 0, records = 0, outside = 0
   for (const d of dates) {
-    const text = tail(path.join(APPS[app].dir, 'logs', `mcp-${d}.log`))
-    if (text === null) continue; files++
+    const file = path.join(APPS[app].dir, 'logs', `mcp-${d}.log`)
+    const text = tail(file)
+    if (text === null) { if (fs.existsSync(file)) rd.fail++; continue } // 있는데 못 읽음 = 판정 불가(PR #643 Codex P2)
+    files++
     for (const line of text.split('\n')) {
       if (!line.startsWith('{')) continue
       let j
@@ -478,7 +481,8 @@ function mcpLogScan(app, allow, pre, t0, t1) {
 }
 
 // pm2 로그 줄 접두는 서버 로컬 시각(deploy/pleiades.config.cjs log_date_format) — 앞뒤 2분 여유
-function pm2Count(app, roles, re, t0, t1) {
+// rd.fail — 매칭 파일을 읽지 못한 수. 읽기 실패를 빈 로그(0 건)로 읽지 않는다(회귀: PR #643 Codex P2)
+function pm2Count(app, roles, re, t0, t1, rd) {
   let n = 0
   let names = []
   try { names = fs.readdirSync(PM2_LOGS) } catch { return null }
@@ -486,7 +490,8 @@ function pm2Count(app, roles, re, t0, t1) {
   const files = names.filter((x) => NAME.test(x))
   if (!files.length) return null // 회귀: #632 9-1 major 3 — 대상 로그 0개를 0 건(통과)으로 읽지 않는다
   for (const f of files) {
-    const text = tail(path.join(PM2_LOGS, f)) || ''
+    const text = tail(path.join(PM2_LOGS, f))
+    if (text === null) { rd.fail++; return null }
     for (const line of text.split('\n')) {
       const m = line.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}): /)
       if (!m || !re.test(line)) continue
@@ -499,15 +504,17 @@ function pm2Count(app, roles, re, t0, t1) {
 
 function sharedLogs(lists, t0, t1, sessionCounts) {
   const allow = new Set(lists.allow)
-  const fin = mcpLogScan('fin', allow, lists.pre.fin, t0, t1)
-  const fit = mcpLogScan('fit', allow, lists.pre.fit, t0, t1)
-  const nested = pm2Count('fin', ['mcp'], /caller=strategy:parse\b/, t0, t1)
-  const finChat = pm2Count('fin', ['bot'], /caller=bot:ai_chat\b/, t0, t1)
-  const fitChat = pm2Count('fit', ['bot'], /\[askAdvisor\] channel=/, t0, t1)
+  const rd = { fail: 0 }
+  const fin = mcpLogScan('fin', allow, lists.pre.fin, t0, t1, rd)
+  const fit = mcpLogScan('fit', allow, lists.pre.fit, t0, t1, rd)
+  const nested = pm2Count('fin', ['mcp'], /caller=strategy:parse\b/, t0, t1, rd)
+  const finChat = pm2Count('fin', ['bot'], /caller=bot:ai_chat\b/, t0, t1, rd)
+  const fitChat = pm2Count('fit', ['bot'], /\[askAdvisor\] channel=/, t0, t1, rd)
   const mixed = (finChat || 0) > 0
   const missing = (sessionCounts.fin && !fin.files) || (sessionCounts.fit && !fit.files) || nested === null || finChat === null
   // 순서: 섞이지 않은 실패 → 근거 없음(섞여도 중첩 근거가 없으면 통과로 보지 않는다 · PR #633 Codex P2) → 섞임 → 통과
-  const verdict = !mixed && (fin.outside || fit.outside || nested > 0) ? '실패' : missing ? '판정 불가(로그 없음)' : mixed ? '섞임' : '통과'
+  const verdict = !mixed && (fin.outside || fit.outside || nested > 0) ? '실패'
+    : rd.fail ? '판정 불가(로그 읽기 실패)' : missing ? '판정 불가(로그 없음)' : mixed ? '섞임' : '통과'
   return { fin, fit, nested, finChat, fitChat, mixed, verdict }
 }
 
@@ -520,14 +527,15 @@ function loadState() {
   }
 }
 
+const counted = (state) => state.runs.filter((r) => r.counted !== false)
 function planRun(args, state, qhash) {
-  const main = state.runs.find((r) => r.kind === 'main')
+  const main = counted(state).find((r) => r.kind === 'main')
   if (!args.rerun) {
     if (main) stop('재실행: 본 실행은 이미 있다 — 재실행은 --rerun=<budget|resume|prompt>')
     return { kind: 'main', ids: QUESTION_IDS, budget: CONFIG.budgetUsd }
   }
   if (!main) stop('재실행: 본 실행 기록이 없다')
-  if (state.runs.length >= 2) stop('재실행: 이미 1회 했다(합쳐 최대 1회 · §5-5)')
+  if (counted(state).length >= 2) stop('재실행: 이미 1회 했다(합쳐 최대 1회 · §5-5)')
   if (main.j2 !== '통과') stop('재실행: 본 실행 J2 가 통과가 아니다 — 원인 조사 먼저(§5-6)')
   if (main.qhash !== qhash) stop('재실행: 질문 파일이 본 실행과 다르다')
   const st = main.status || {}
@@ -551,21 +559,22 @@ function questionLine(id, q, cum) {
   if (q.status === '미실행') return `${id} ${KIND[id]} · 미실행(${q.reason}) · 누적 ${usd(cum)}`
   return `${id} ${KIND[id]} · ${q.status}${q.code ? `(${q.code})` : ''} · ${usd(q.cost)} · ${sec(q.ms)} · turns ${q.turns ?? '?'}`
     + ` · fin ${q.fin.n}(성공 ${q.fin.ok}) · fit ${q.fit.n}(성공 ${q.fit.ok}) · 목록 밖 ${q.outside}${q.outside ? ` [${q.outsideNames.join(',')}]` : ''}`
-    + ` · init ${q.init.ok ? '통과' : `실패(${q.init.why})`}${q.init.plugins === undefined ? '' : ` · 플러그인 ${q.init.plugins} · MCP 서버 ${q.init.servers}(연결 ${q.init.connected}) · 목록 밖 도구 ${q.init.outside}`}`
+    + ` · init ${q.init.ok ? '통과' : `${q.init.kind === 'violation' ? '위반' : '형식'}(${q.init.why})`}${initCounts(q.init)}`
     + ` · 모델 드리프트 ${q.drift} · 누적 ${usd(cum)}`
 }
 
 function verdicts(form, plan, results, shared, db, sessionOutside) {
   const cross = CROSS.filter((id) => plan.ids.includes(id))
   const done = cross.filter((id) => results[id] && results[id].status === '완료')
-  const initFails = Object.values(results).filter((q) => q.init && !q.init.ok).length // #634 — init 어긋남 = J2 실패
+  const bad = (kind) => Object.values(results).filter((q) => q.init && !q.init.ok && q.init.kind === kind).length
+  const initFails = bad('violation'), initFormats = bad('format') // #634 9-1 major 1 — 위반 = J2 실패 · 형식 = 판정 불가
   const j2fail = sessionOutside > 0 || db.diff !== 0 || shared.verdict === '실패' || initFails > 0
   // 중첩 호출은 공유 로그로만 보인다 — 로그가 판정 불가면 J2 도 판정 불가(통과 아님 · 재실행 근거 아님 · 회귀: PR #633 Codex P2)
-  const j2 = j2fail ? '실패' : shared.verdict.startsWith('판정 불가') ? '판정 불가' : '통과'
+  const j2 = j2fail ? '실패' : initFormats || shared.verdict.startsWith('판정 불가') ? '판정 불가' : '통과'
   form.push('-- 판정')
   form.push(`J1 (사용자) 완료된 교차 ${done.length}${done.length < 3 && plan.kind === 'main' ? ' — 3 미만이면 J1 판정 불가(§5-6)' : ''}`)
   for (const id of done) form.push(`   ${id} [예 / 부분 / 아니오] 이유: ____`)
-  form.push(`J2 ${j2} — init 어긋남 ${initFails} · 세션 목록 밖 ${sessionOutside} · 공유 로그 ${shared.verdict}(fin MCP 기록 ${shared.fin.records} · 밖 ${shared.fin.outside} | fit MCP 기록 ${shared.fit.records} · 밖 ${shared.fit.outside}`
+  form.push(`J2 ${j2} — init 위반 ${initFails} · init 형식 ${initFormats} · 세션 목록 밖 ${sessionOutside} · 공유 로그 ${shared.verdict}(fin MCP 기록 ${shared.fin.records} · 밖 ${shared.fin.outside} | fit MCP 기록 ${shared.fit.records} · 밖 ${shared.fit.outside}`
     + ` | 중첩 strategy:parse ${shared.nested ?? '?'} | 같은 창 fin ai_chat ${shared.finChat ?? '?'} · fit 대화 ${shared.fitChat ?? '?'}) · 원장 대조 다름 ${db.diff}/${db.total}`
     + `${shared.mixed && !j2fail ? ' — 섞임: 세션 기록 0 이라 통과로 본다(§5-6 J2)' : ''}`)
   if (shared.mixed && shared.nested > 0) form.push(`⚠ 섞인 창에 중첩 호출 ${shared.nested} — 사람 대화에서 온 것인지 확인한다(fin 봇 로그 · 원문은 붙이지 않는다)`)
@@ -574,7 +583,7 @@ function verdicts(form, plan, results, shared, db, sessionOutside) {
   form.push(`J4 대조 기록만(Q129) — ${['D1', 'D2'].filter((id) => plan.ids.includes(id)).map((id) => `${id} ${results[id] ? results[id].status : '-'}`).join(' · ') || '이번 실행에 없음'}`)
   const ms = Object.values(results).filter((q) => q.status !== '미실행').map((q) => q.ms).sort((a, b) => a - b)
   form.push(`J5 지연 ${ms.length ? `p50 ${sec(ms[Math.floor(ms.length / 2)])} · max ${sec(ms[ms.length - 1])}` : '-'} (fit 대화 기준 p50 20.5s · p90 78.7s · §3-2)`)
-  return j2
+  return { j2, uncounted: j2 === '판정 불가' && initFormats > 0 }
 }
 
 // ── 본체 ─────────────────────────────────────────────────────────────
@@ -609,19 +618,44 @@ async function preflight(args, form, started) {
   const missing = REQUIRED_OPTIONS.filter((o) => !`${help.stdout || ''}${help.stderr || ''}`.includes(o))
   form.push(`S-4 CLI: 전 ${before} · 자식 env DISABLE_AUTOUPDATER=1 · 모델 핀 두 앱 같음(sonnet) · 필요 옵션 ${REQUIRED_OPTIONS.length - missing.length}/${REQUIRED_OPTIONS.length}`)
   if (missing.length) stop(`S-4: CLI help 에 없는 옵션 ${missing.length}(${missing.join(' ')}) — 실행 안 함`)
+  const pr = state.probe
+  if (!args.preflight && !(pr && pr.ok && pr.version === before)) stop(`S-3: 같은 CLI 버전(${before})의 init 탐침 통과가 없다 — --preflight 먼저(회귀: #634 9-1 major 2)`)
   const lists = await checkTools(form)
   const db = { fin: dbSnapshot('fin'), fit: dbSnapshot('fit') }
   form.push(`Q131 원장 스냅샷: fin ${APPS.fin.ledger.length} · fit ${APPS.fit.ledger.length} 테이블 읽음`)
-  return { questions, qhash, state, plan, knowledge, runDir, cwd, pin, bin, env, before, lists, db }
+  const ctx = { questions, qhash, state, plan, knowledge, runDir, cwd, pin, bin, env, before, lists, db }
+  if (args.preflight) await probeInit(ctx, form)
+  return ctx
 }
 
-async function experiment(ctx, form) {
+// 본 실행·재실행·탐침이 같은 인자를 쓴다(탐침은 그 인자의 init 을 본다)
+function sessionArgs(ctx) {
   const { plan, lists, pin, runDir } = ctx
   const system = plan.kind === 'prompt' ? `${SYSTEM_PROMPT}\n\n## 도메인 참고\n${ctx.knowledge}` : SYSTEM_PROMPT
   const mcpConfig = path.join(runDir, 'mcp-config.json')
   writePrivate(mcpConfig, JSON.stringify({ mcpServers: { [APPS.fin.serverKey]: { type: 'http', url: lists.urls.fin },
     [APPS.fit.serverKey]: { type: 'http', url: lists.urls.fit } } }, null, 2))
-  const args = cliArgs(pin.sonnet, system, mcpConfig, lists, plan.budget)
+  return cliArgs(pin.sonnet, system, mcpConfig, lists, plan.budget)
+}
+
+const initCheck = (lists) => (e) => judgeInit(e, new Set(lists.allow), [APPS.fin.serverKey, APPS.fit.serverKey])
+const initCounts = (i) => (i.plugins === undefined ? '' : ` · 플러그인 ${i.plugins} · MCP 서버 ${i.servers}(연결 ${i.connected}) · 목록 밖 도구 ${i.outside}`)
+
+// #634 9-1 major 2 — 사전 판정의 init 탐침: 실제와 같은 인자로 띄워 첫 init 줄을 받는 즉시 SIGKILL. init 은 CLI 가 질의 시작 때
+// (API 호출 전) 내는 첫 이벤트다(2.1.322 코드 · 2.1.308 은 런북 8절). 통과를 CLI 버전과 함께 state 에 남긴다 — 본 실행은 이것을 요구한다
+async function probeInit(ctx, form) {
+  const r = await askOnce(ctx.bin, sessionArgs(ctx), ctx.env, ctx.cwd, 'X1 탐침 — 이 메시지에는 답하지 않는다.', path.join(ctx.runDir, 'stream-probe.jsonl'), initCheck(ctx.lists), true)
+  const { result } = parseStream(r.out)
+  const i = r.init
+  ctx.state.probe = { ok: i.ok, version: ctx.before, at: Date.now() }
+  writePrivate(STATE(), JSON.stringify(ctx.state, null, 2))
+  form.push(`init 탐침: ${i.ok ? '통과' : `${i.kind === 'violation' ? '위반' : '형식'}(${i.why})`}${initCounts(i)} · 모델 응답 ${r.replied || result ? `있음 · 비용 ${usd(result && result.total_cost_usd)}` : '없음'} · CLI ${ctx.before}`)
+  if (!i.ok) stop('S-3: init 탐침이 통과하지 않았다 — 본 실행 불가(런북 3절)')
+}
+
+async function experiment(ctx, form) {
+  const { plan } = ctx
+  const args = sessionArgs(ctx)
   form.push(`S-6 호출당 상한 ${usd(plan.budget)} · 목표 총액 ${usd(CONFIG.targetUsd)} · 세션 기록 끔 · 내장 도구 끔 · dontAsk · 프롬프트 ${plan.kind === 'prompt' ? '변형(K2 지식 덧붙임)' : '기본'} · 원문은 비공개 파일`)
   const record = { kind: plan.kind, at: Date.now(), qhash: ctx.qhash, status: {}, j2: '진행 중' }
   ctx.state.runs.push(record)
@@ -639,13 +673,13 @@ async function questionsAndVerdicts(ctx, form, args, record) {
   const { plan, questions, lists, pin, bin, env, cwd, runDir } = ctx
   const answers = path.join(runDir, 'answers.md')
   writePrivate(answers, `# X1 ${plan.kind} 답 원문(비공개 · 600)\n`)
-  const results = {}, allowSet = new Set(lists.allow), serverKeys = [APPS.fin.serverKey, APPS.fit.serverKey]
-  let cum = 0, initFail = false
+  const results = {}
+  let cum = 0, initStop = null
   const t0 = Date.now()
   form.push('-- 질문')
   for (const id of plan.ids) {
     const win = checkWindow(nowDate())
-    const reason = initFail ? 'init 실패' : cum === null ? '비용 미상' : cum >= CONFIG.targetUsd ? '누적 목표 도달' : win ? '크론 창 끝' : null
+    const reason = initStop ? initStop : cum === null ? '비용 미상' : cum >= CONFIG.targetUsd ? '누적 목표 도달' : win ? '크론 창 끝' : null
     if (reason) {
       results[id] = { status: '미실행', reason }
       form.push(questionLine(id, results[id], cum))
@@ -654,11 +688,11 @@ async function questionsAndVerdicts(ctx, form, args, record) {
     if (TEST && process.env.X1_TEST_THROW === id) throw Object.assign(new Error('test'), { code: 'ETEST' }) // 예외 경로 시험용
     const now = kstParts(nowDate())
     const prompt = `현재 시각: ${now.date} ${now.hm} KST\n\n---\n\n사용자 질문: ${questions[id]}`
-    const r = await askOnce(bin, args, env, cwd, prompt, path.join(runDir, `stream-${id}.jsonl`), (e) => judgeInit(e, allowSet, serverKeys))
+    const r = await askOnce(bin, args, env, cwd, prompt, path.join(runDir, `stream-${id}.jsonl`), initCheck(lists))
     const q = judgeAnswer(r, lists, pin)
     cum = q.cost === null || cum === null ? null : cum + q.cost
     results[id] = q
-    initFail = initFail || !q.init.ok
+    if (!initStop && !q.init.ok) initStop = q.init.kind === 'violation' ? 'init 실패' : 'init 형식'
     fs.appendFileSync(answers, `\n## ${id} (${KIND[id]}) · ${q.status}\n\n### 질문\n${questions[id]}\n\n### 도구\n${q.calls.map((c) => `${c.name}${c.ok ? '' : ' (실패)'}`).join('\n') || '(없음)'}\n\n### 답\n${q.text}\n`)
     form.push(questionLine(id, q, cum))
   }
@@ -670,10 +704,12 @@ async function questionsAndVerdicts(ctx, form, args, record) {
   const shared = sharedLogs(lists, t0, t1, sessionCounts)
   const db = dbAfter ? dbDiff(ctx.db, dbAfter) : { diff: '?(실행 뒤 조회 실패)', total: APPS.fin.ledger.length + APPS.fit.ledger.length }
   form.push(`S-4 CLI 후 ${after || '?'} → ${after === ctx.before ? '같음' : '다름 — 운영 advisor 영향 확인(#255 · R-11)'}`, `누적 비용 ${usd(cum)} · 배포 겹침 0(락을 끝까지 쥠)`)
-  const j2 = verdicts(form, plan, results, shared, db, sessionOutside)
-  Object.assign(record, { j2, cost: cum, status: Object.fromEntries(Object.entries(results).map(([id, q]) => [id, q.status])) })
+  const { j2, uncounted } = verdicts(form, plan, results, shared, db, sessionOutside)
+  // init 형식 문제로 끊긴 실행은 횟수에 넣지 않는다(CLI 형식 확인 뒤 다시 · 회귀: #634 9-1 major 1) — 기록은 남긴다
+  Object.assign(record, { j2, cost: cum, counted: !uncounted, status: Object.fromEntries(Object.entries(results).map(([id, q]) => [id, q.status])) })
   writePrivate(STATE(), JSON.stringify(ctx.state, null, 2))
-  const left = 2 - ctx.state.runs.length
+  const left = 2 - counted(ctx.state).length
+  if (uncounted) form.push('실행 횟수: 이번 실행은 세지 않는다(init 형식 문제) — CLI init 형식을 Claude 와 확인한 뒤 같은 명령으로 다시')
   form.push(`재실행: 남은 ${left}회${left > 0 && j2 === '통과' ? ' — 가능하면 --rerun=prompt(J1·J3 실패) · budget(판정 불가) · resume(미실행) 중 하나(§5-6)' : ''}`)
 }
 
