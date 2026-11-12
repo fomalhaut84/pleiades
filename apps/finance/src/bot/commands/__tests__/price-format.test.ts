@@ -25,6 +25,8 @@ function quote(overrides: Partial<QuoteResult> = {}): QuoteResult {
     changePercent: -0.18,
     marketTime: new Date('2026-09-17T06:30:00Z'),
     marketState: 'CLOSED',
+    extended: null,
+    marketCap: null,
     ...overrides,
   }
 }
