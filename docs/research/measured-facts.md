@@ -4658,3 +4658,16 @@ tools/local/run.sh fin -- npx tsx scripts/tmp-measure-552.ts
 - 정규장 밖 값은 `postMarketTime` > `regularMarketTime` 으로 가를 수 있다(시간외 시각이 정규장 마감 뒤). `preMarket*` 은 이 시각에 나오지 않았다(미측정 — 프리마켓 시간대에 다시 잴 값).
 - `fetchQuote`(`apps/finance/src/lib/price-fetcher.ts`)는 #615 전까지 `regularMarket*` 만 꺼냈다.
 - 시작 브리핑 시각(`scheduler.ts` `30 8 * * 1-5` KR · `0 23 * * 1-5` US): 미국 표준시(EST)에서 08:30 KST = 18:30 ET(시간외 04:00~20:00 ET 안) · 23:00 KST = 09:00 ET(프리마켓 안). 서머타임(EDT)에서는 23:00 KST = 10:00 ET(정규장 중).
+
+## 2026-11-12 — 예측 시장 공개 API 접근 (#616 · 로컬 Mac · 관리 프록시 경유 · 키 없음 · 읽기만)
+
+**명령:** `curl -sS -m 20 -D - -o /dev/null -w "%{http_code} connect=%{http_connect}" <URL>` (12:0x KST).
+
+| 대상 | 프록시 CONNECT | 원 서버 응답 | 판정 |
+|---|---|---|---|
+| `gamma-api.polymarket.com/markets?limit=1` · `/public-search?q=…` | 200 | TLS 단계 `LibreSSL SSL_connect: SSL_ERROR_SYSCALL` (응답 없음 · 재시도 같음) | 접근 안 됨 |
+| `polymarket.com/` · `clob.polymarket.com/` | 200 | **`HTTP/2 451`** · `server: cloudflare` · `cf-ray …-ICN` · `text/plain` | **원 서버의 지역 제한**(프록시 차단 아님 — CONNECT 200 · `X-Squid-Error` 없음) |
+| `api.elections.kalshi.com/trade-api/v2/markets?limit=2&status=open` | 200 | `HTTP/2 200` · 6.8 KB JSON | 접근 됨 — 필드 `title` · `last_price_dollars` · `yes_bid/ask_dollars` · `volume_24h_fp` · `close_time` 등 · **자유어 검색 엔드포인트는 없다**(목록 · 시리즈/이벤트 티커로 거른다 — API 문서 기준 · 미실측) |
+
+- 서버 쪽 접근은 재지 않았다(I-3 · 서버 판정은 사용자). Polymarket 451 은 지역 기준이라 같은 지역 서버도 같을 가능성이 높다 — 추정이며 미측정.
+- 우회(다른 지역 경유)는 하지 않는다 — 원 서버가 그 지역 접근을 막은 것이다.
