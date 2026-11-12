@@ -48,6 +48,13 @@ describe('askAdvisor 가 만드는 CLI 명령', () => {
     vi.restoreAllMocks()
   })
 
+  // 회귀: #635 — 서버 user settings 의 플러그인 hook 이 운영 호출마다 돌았다(맥락 주입 · 세션 요약 파일)
+  it('--setting-sources project 로 user settings·플러그인을 읽지 않는다', async () => {
+    await askAdvisor('질문')
+    const [cmd] = spawned.commands
+    expect(cmd).toMatch(/ --setting-sources '?project'?( |$)/)
+  })
+
   it('옵션이 없으면 쓰기를 빼고 명시 금지하며 읽기 전용임을 알린다', async () => {
     await askAdvisor('질문')
     const [cmd] = spawned.commands

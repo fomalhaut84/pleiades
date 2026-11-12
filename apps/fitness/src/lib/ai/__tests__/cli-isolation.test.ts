@@ -20,6 +20,13 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe("Claude CLI 격리 인자", () => {
+  // 회귀: #635 — 서버 user settings 의 플러그인 hook 이 운영 호출마다 돌았다(맥락 주입 · 세션 요약 파일)
+  it("--setting-sources project 로 user settings·플러그인을 읽지 않는다", () => {
+    const i = CLAUDE_CLI_ISOLATION_ARGS.indexOf("--setting-sources");
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(CLAUDE_CLI_ISOLATION_ARGS[i + 1]).toBe("project");
+  });
+
   it("--strict-mcp-config 를 담는다", () => {
     expect(CLAUDE_CLI_ISOLATION_ARGS).toContain("--strict-mcp-config");
   });

@@ -38,4 +38,6 @@ export function monorepoExcludeArgs(
 // 커넥터가 남고, 모델이 그것을 부르면 1회성 호출 (`--max-turns 1`) 은 error_max_turns 로 실패 · 어드바이저는 권한 거부로 턴을 낭비한다.
 // `--strict-mcp-config` = `--mcp-config` 로 넘긴 서버만 사용 (넘기지 않으면 MCP 없음).
 // #247: 호출부는 전부 `cwd: process.cwd()` 라 기준 디렉터리도 같은 값이다.
-export const CLAUDE_CLI_ISOLATION_ARGS: readonly string[] = ["--strict-mcp-config", ...monorepoExcludeArgs(process.cwd())];
+// #635: `--setting-sources project` = 서버 user settings(켜진 플러그인 · 그 hook)를 읽지 않는다. 서버 Claude Code 는 사람의 개발용과
+// 계정·설정을 같이 쓴다 — 개발용 플러그인 hook 이 호출마다 돌아 맥락을 주입하고 세션 요약 파일을 남겼다. 앱 cwd 의 CLAUDE.md 는 project 범위라 그대로다.
+export const CLAUDE_CLI_ISOLATION_ARGS: readonly string[] = ["--strict-mcp-config", "--setting-sources", "project", ...monorepoExcludeArgs(process.cwd())];
