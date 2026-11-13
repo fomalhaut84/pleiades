@@ -4,6 +4,7 @@ import path from "path";
 import { buildStaticSystemPrompt, buildDynamicContext } from "./system-prompt";
 import { resolvePromptTemplate } from "@/lib/prompts/resolve";
 import { ADVISOR_ALLOWED_TOOLS } from "./advisor-tools";
+import { budgetArgs, remainingBudgetUsd, resolveMaxBudgetUsd } from "./advisor-budget";
 import * as SessionStore from "./session-store";
 import { CLAUDE_CLI_ISOLATION_ARGS } from "./cli-isolation";
 import { claudeModelId, claudeSpawnEnv, warnModelDrift } from "./models";
@@ -46,11 +47,15 @@ interface ClaudeResponse {
   systemPromptVersionId: string | null;
   duration_ms?: number;
   num_turns?: number;
+  /** CLI 가 보고한 이번 시도 비용 — 재시도 합계 상한(#665)에 쓴다 */
+  cost_usd?: number;
 }
 
 export interface AskOptions {
   /** 세션 격리 채널. web/discord/cron-morning/cron-evening/cron-weekly/default 등. */
   channel?: string;
+  /** #665(012 4a-4): askAdvisor 한 번(재시도 포함) 전체 비용 상한 USD. 기본 $1.00(advisor-budget.ts). */
+  maxBudgetUsd?: number;
   /**
    * #197: num_turns < minTurns 이면 tool 호출 없이 답변한 것으로 간주.
    *
@@ -234,13 +239,24 @@ export async function askAdvisor(
   const minTurns = options.minTurns ?? 0;
   const maxRetries = getAskAdvisorMaxRetries();
   const boostFirst = envBool("ASK_ADVISOR_BOOST_FIRST");
+  const budgetCap = resolveMaxBudgetUsd(options.maxBudgetUsd);
 
   let lastResponse: ClaudeResponse | null = null;
+  let costSpent = 0;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // #665: 상한은 재시도 포함 전체 — 남은 잔액이 없으면 더 부르지 않는다
+    const budget = remainingBudgetUsd(budgetCap, costSpent);
+    if (budget === null) {
+      throw new Error(
+        `askAdvisor: 예산 상한 도달 (spent=$${costSpent.toFixed(4)} / cap=$${budgetCap.toFixed(4)}) channel=${channel}`,
+      );
+    }
     // #200/#244: boostFirst=true 이면 첫 시도부터 강화 prefix. 아니면 재시도만.
     const applyBoost = boostFirst || attempt > 0;
     const effectivePrompt = applyBoost ? `${RETRY_BOOST_PREFIX}${prompt}` : prompt;
-    const response = await askAdvisorOnce(effectivePrompt, options);
+    const response = await askAdvisorOnce(effectivePrompt, options, budget);
+    // 비용을 모르는 시도(stdout 이 JSON 이 아님 등)는 준 잔액을 다 쓴 것으로 센다 — 0 으로 세면 재시도마다 상한 전액을 다시 준다(#665 9-1)
+    costSpent += response.cost_usd ?? budget;
     lastResponse = response;
     if ((response.num_turns ?? 0) >= minTurns) {
       return { ...response, result: stripToolCallArtifacts(response.result) };
@@ -265,7 +281,8 @@ export async function askAdvisor(
 
 async function askAdvisorOnce(
   prompt: string,
-  options: AskOptions = {},
+  options: AskOptions,
+  budgetUsd: number,
 ): Promise<ClaudeResponse> {
   const channel = options.channel ?? DEFAULT_CHANNEL;
   // #552 R6: 시스템 프롬프트 = DB 사용 중 버전 (시험 실행이면 초안). 세션을 만든 버전과 다르면 getSession 이 새 세션으로 돌린다.
@@ -289,6 +306,8 @@ async function askAdvisorOnce(
     // 근본 fix (issue #179) 이후에도 여유 필요 시 재조정. 10 → 15 로 완화해
     // 정상 세션이 tool 호출 횟수 초과로 실패하는 경우를 방지.
     "15",
+    // #665(012 4a-4): 이번 시도 비용 상한(재시도 합계의 남은 잔액) — 넘으면 CLI 가 error_max_budget_usd 로 끝낸다
+    ...budgetArgs(budgetUsd),
     "--allowedTools",
     // 승인 없이 실행되는 read-only 도구 목록 · mutating 제외 근거는 advisor-tools.ts (#552 프롬프트 검증과 공유)
     ADVISOR_ALLOWED_TOOLS.join(","),
@@ -381,7 +400,9 @@ async function askAdvisorOnce(
             .map((d) => d.tool_name)
             .filter(Boolean)
             .join(",");
-          const parts = [`Claude CLI 실패 (subtype=${subtype}, turns=${numTurns})`];
+          // #665 9-1: 상한 도달(subtype=error_max_budget_usd) 진단에 비용·상한을 함께 남긴다
+          const costPart = typeof parsed.total_cost_usd === "number" ? `, cost=$${parsed.total_cost_usd.toFixed(4)}` : "";
+          const parts = [`Claude CLI 실패 (subtype=${subtype}, turns=${numTurns}${costPart}, cap=$${budgetUsd.toFixed(4)})`];
           if (deniedTools) {
             parts.push(`거부된 도구=${deniedTools}`);
           }
@@ -423,7 +444,7 @@ async function askAdvisorOnce(
         const turns = parsed.num_turns ?? "?";
         const isError = parsed.is_error === true;
         console.log(
-          `[askAdvisor] channel=${channel} duration=${durationMs}ms turns=${turns} session=${sessionShort} cost=$${cost}${
+          `[askAdvisor] channel=${channel} model=${ADVISOR_MODEL} duration=${durationMs}ms turns=${turns} session=${sessionShort} cost=$${cost} cap=$${budgetUsd.toFixed(4)}${
             isError ? " is_error=true" : ""
           }`
         );
@@ -433,6 +454,7 @@ async function askAdvisorOnce(
           sessionId: parsed.session_id ?? currentSessionId,
           duration_ms: durationMs,
           num_turns: parsed.num_turns,
+          cost_usd: typeof parsed.total_cost_usd === "number" ? parsed.total_cost_usd : undefined,
           systemPromptVersionId: system.versionId,
         });
       } else {

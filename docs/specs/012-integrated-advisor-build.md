@@ -407,6 +407,8 @@
 
 > **확정 (2026-11-13 · #657 · 4a-3a) — K-3 지식 prompt 이름 = `domain_knowledge`**(두 도메인 같음 · 인자 없음 · user 메시지 1개의 텍스트) · **읽기 경로에만 등록** · fin = `CLAUDE.md` `## Key Domain Rules` 절 + rules 두 파일(제자리 · 핸들러 안에서 읽기 · 출처가 없으면 그 prompt 오류) · fit = `PromptVersion` system 사용 중 본문(없거나 실패면 코드 기본값 · MCP 자신의 Prisma · 프로필·동적 맥락 제외). 되돌리기: 문구 (**즉시**).
 
+> **확정 (2026-11-13 · #665 · 4a-4) — K-5 fit 호출 상한.** fit `askAdvisor` 에 `--max-budget-usd` — 기본 **$1.00**(fin 크론 · D1 과 같다) · 호출부 `maxBudgetUsd` · **재시도 포함 전체 상한** · 성공 줄에 `model=` · `cap=`. `tools=` 는 `--output-format json` 에 도구 호출 수가 없어 v0 밖 · 1회 호출 6곳은 v0 권고로 남는다. 되돌리기: 문구 (**즉시**).
+
 **#240 에 주는 것:** 도메인 #3 은 K-0 선언 · 읽기 경로를 가진 MCP · K-2 데이터 · K-3 prompt · K-5 로그 줄로 태어난다. 데이터 모델·시계열 집계는 계약 밖(#240).
 
 ---
