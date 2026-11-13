@@ -5,6 +5,7 @@ name: Apps CI
 # - secrets 0 (I-9) · DB 는 러너 안 postgres 컨테이너뿐 (I-7)
 # - 워크플로우 수준 paths 필터를 쓰지 않는다 — 필수 체크가 트리거되지 않은 PR 에서 "Expected" 로 막힌다 (006 §4-4)
 # - 필수 체크(Q52 · 2026-10-01): apps-fin · apps-fit. apps-fin-test 는 서비스 CI 에 없는 추가분이라 비필수.
+#   단 fin 안전 시험(도구 분류 · MCP 읽기 경로 · #655)은 apps-fin 안에서 따로 돈다 — fit 은 npm test 가 이미 apps-fit 안이다.
 #   job 이름을 바꾸면 dev·main ruleset 의 required_status_checks 도 함께 바꾼다.
 # - apps/* 서비스 결함으로 실패하면 고치지 않는다 (Q57) — 그 체크를 비필수로 내리고 pleiades 이슈에 기록한다.
 # - 세 job 모두 루트 npm ci 를 먼저 한다 (006 ㉒ · fit M-5a #132 · fin M-5b #136) — apps/* 가 file:../../packages/notify 를 참조하고
@@ -75,6 +76,10 @@ jobs:
         run: npm run lint
       - name: Typecheck
         run: npx tsc --noEmit
+      # #655: 도구 분류(domain.json ↔ 등록 · 쓰기 허용 호출부)와 MCP 읽기 경로 시험만 필수 job 에서 돈다 — DB 불필요.
+      # 전체 fin 테스트(apps-fin-test)는 Q52 대로 비필수지만, 쓰기 도구가 읽기 쪽으로 새는 회귀는 머지를 막아야 한다.
+      - name: Safety tests (도구 분류 · 읽기 경로 · 지식 prompt)
+        run: npx vitest run src/lib/ai/__tests__/advisor-tools.test.ts src/mcp/__tests__/read-mode.test.ts src/mcp/__tests__/knowledge-prompt.test.ts
       - name: Build
         run: npm run build
 

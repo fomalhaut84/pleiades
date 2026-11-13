@@ -62,3 +62,8 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # #655: 도메인 계약 시험(domain.json 형식 · 등록 ↔ 분류 · 서버 키·포트 · 읽기 경로) — 표준 라이브러리만 · 소스 읽기만.
+      # 필수 체크(verify) 안에서 돌려 분류 회귀가 머지를 막게 한다. 나머지 deploy/ 시험은 8절대로 로컬.
+      - name: Domain contract (deploy/test_domain_contract.py)
+        run: python3 -m unittest deploy.test_domain_contract
