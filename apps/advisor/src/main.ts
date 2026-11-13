@@ -104,7 +104,7 @@ if (require.main === module) {
     .then((code) => {
       process.exitCode = code;
       // bot 은 종료 처리를 마쳤다 — 남은 핸들(타이머 · 소켓)을 기다리지 않는다(pm2 kill_timeout 안)
-      if (process.argv[2] === "bot") process.exit(code);
+      if (process.argv[2] === "bot") process.stdout.write("", () => process.exit(code)); // 마지막 로그 줄을 비운 뒤(9-1 info 3)
     })
     .catch(() => {
       process.stderr.write("advisor: 시작하지 못했다 (설정 · 비공개 위치 · domain.json 확인)\n");

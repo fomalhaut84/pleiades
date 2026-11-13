@@ -169,6 +169,8 @@ export class Advisor {
       if ("kind" in started) return started;
       session = started;
     }
+    // 세션 준비(MCP · 최대 10 s) 중 종료가 오면 CLI 를 새로 띄우지 않는다 — 신호 뒤 생긴 자식은 pm2 트리 종료가 못 본다(9-1 info 1)
+    if (this.abort.signal.aborted) return { kind: "refused", reason: "shutting-down", text: MESSAGES.shuttingDown };
     let { v, run } = await this.runOnce(key, session, q, resumed);
     if (resumed && v.status === "init") {
       // 이어 묻던 세션의 init 실패 — 그 사이 배포로 읽기 도구가 바뀌면 세션 시작 때 고정한 허용 목록이 낡는다(9-1 info 1).
@@ -177,6 +179,7 @@ export class Advisor {
       const started = await this.startOrRefuse(key);
       if ("kind" in started) return started;
       session = started;
+      if (this.abort.signal.aborted) return { kind: "refused", reason: "shutting-down", text: MESSAGES.shuttingDown };
       ({ v, run } = await this.runOnce(key, session, q, false));
     }
     const s: Session = session;

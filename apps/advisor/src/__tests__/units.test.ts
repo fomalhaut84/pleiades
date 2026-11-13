@@ -127,11 +127,12 @@ describe("CLI 인자 · env · 고정", () => {
       TZ: "Asia/Seoul", TMPDIR: "/t", TERM: "xterm", CLAUDE_CONFIG_DIR: "/c", ANTHROPIC_API_KEY: "k", CLAUDE_CODE_OAUTH_TOKEN: "o",
       PLEIADES_ENV_FILE: "/p.env", PLEIADES_PRIVATE_DIR: "/priv", pm_id: "3", PM2_HOME: "/pm2", name: "pleiades-adv-bot",
       ADVISOR_MCP_PORT_FINANCE: "4210", NODE_OPTIONS: "--x", FOO: "bar", FAKE_CLI_SPEC: "/s",
+      HTTPS_PROXY: "http://p", https_proxy: "http://p", NO_PROXY: "localhost", NODE_EXTRA_CA_CERTS: "/ca", ANTHROPIC_BASE_URL: "https://a",
     };
     const env = childEnv({ haiku: "h", sonnet: "s" }, base);
     const fixed = ["DISABLE_AUTOUPDATER", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_SMALL_FAST_MODEL", "ENABLE_TOOL_SEARCH"];
     const passed = ["HOME", "PATH", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR", "TERM", "CLAUDE_CONFIG_DIR",
-      "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"];
+      "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "HTTPS_PROXY", "https_proxy", "NO_PROXY", "NODE_EXTRA_CA_CERTS", "ANTHROPIC_BASE_URL"];
     expect(Object.keys(env).sort()).toEqual([...passed, ...fixed].sort());
     expect(childEnv({ haiku: "h", sonnet: "s" }, { PATH: "/bin" })).not.toHaveProperty("ANTHROPIC_API_KEY");
     expect(childEnv({ haiku: "h", sonnet: "s" }, base, ["FAKE_CLI_SPEC"])).toMatchObject({ FAKE_CLI_SPEC: "/s" });

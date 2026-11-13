@@ -130,6 +130,20 @@ describe("Advisor — 크기 가드 · 종료", () => {
     expect(Date.now() - t0).toBeLessThan(8000);
     expect(await a.ask(KEY, "q2")).toMatchObject({ kind: "refused", reason: "shutting-down", text: MESSAGES.shuttingDown });
   });
+
+  // 회귀: #695 9-1 info 1 — 세션 준비 중 종료가 오면 끊긴 신호를 든 채 CLI 를 새로 띄웠다
+  it("세션 준비 중 종료 — CLI 를 띄우지 않고 거부", async () => {
+    happy();
+    const real = advisor();
+    const a: Advisor = advisor({
+      prepare: async (d) => {
+        a.shutdown();
+        return (await real.prepareAll()).find((r) => r.id === d.id)!;
+      },
+    });
+    expect(await a.ask(KEY, "q")).toMatchObject({ kind: "refused", reason: "shutting-down" });
+    expect(fs.existsSync(cliLog)).toBe(false);
+  });
 });
 
 describe("Advisor.ask — 거부 · 실패", () => {
