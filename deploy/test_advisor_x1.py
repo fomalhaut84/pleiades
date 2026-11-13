@@ -3,7 +3,7 @@
 실행: python3 -m unittest discover -s deploy
 테스트는 deploy/ 최상위에 둔다 — deploy/advisor-x1/ 아래 두면 discover 가 조용히 0건이다(test_ops_collect.py 와 같은 이유).
 claude 는 스텁 node 스크립트 · 두 MCP 는 임시 HTTP 서버(하나는 SSE 응답) · Prisma 는 가짜 @prisma/client · 로그는 합성 파일이다.
-실제 claude · 실제 MCP · 실제 DB · pm2 · 서버를 부르지 않는다(I-3 · I-8). 분류 상수·모델 핀·스키마는 저장소 소스를 복사해 쓴다(Q118).
+실제 claude · 실제 MCP · 실제 DB · pm2 · 서버를 부르지 않는다(I-3 · I-8). 분류(domain.json · #653)·모델 핀·스키마는 저장소 소스를 복사해 쓴다(Q118).
 핵심 계약: 사전 판정(S-1·S-3·S-4·S-5·Q131)이 하나라도 어긋나면 질문 0 · 인자 셋 · 누적 목표 · J2·J3 판정 · 재실행 1회 ·
 판정 양식에 원문·값·경로가 없다.
 """
@@ -27,15 +27,13 @@ NODE = shutil.which("node") or "/usr/bin/node"
 NOW = "2026-11-15T03:00:00+09:00"  # 일요일 03:00 KST — 크론 창 안
 DB_SECRET = "postgres://u:DBSECRET42@db/x"
 DIRS = {"fin": "finance", "fit": "fitness"}
-COPY = ["src/lib/ai/advisor-tools.ts", "src/lib/ai/models.ts", "src/lib/ai/mcp-config.json", "prisma/schema.prisma"]
+COPY = ["domain.json", "src/lib/ai/models.ts", "src/lib/ai/mcp-config.json", "prisma/schema.prisma"]
 
 
 def registered(app: str) -> list:
-    src = (ROOT / "apps" / DIRS[app] / "src/lib/ai/advisor-tools.ts").read_text()
-    if app == "fin":
-        body = src[src.index("export const READ_TOOLS") : src.index("READ_ONLY_PROMPT_NOTICE")]
-        return re.findall(r"'([a-z_]+)'", body)
-    return re.findall(r'"mcp__myfitness__([a-z_]+)"', src)
+    # 분류 정본 domain.json(#653 · 012 K-2) — 스텁 MCP 는 분류된 도구 전부를 등록한 것으로 둔다
+    tools = json.loads((ROOT / "apps" / DIRS[app] / "domain.json").read_text())["tools"]
+    return tools["read"] + tools["write"]
 
 
 REG = {a: registered(a) for a in DIRS}
@@ -336,7 +334,7 @@ class HappyPath(Base):
             self.assertEqual(sorted(cfg["mcpServers"]), ["myfinance", "myfitness"])
         out = r.stdout
         self.assertIn("init 통과 · 플러그인 0(내장 0 제외) · MCP 서버 2(연결 2) · 목록 밖 도구 0", out)  # 회귀: #634
-        for line in ("S-4 CLI 후 2.1.308 → 같음", "J2 통과", "J3 통과", "누적 비용 $1.80", "fin 등록 59 = 읽기 25 + 쓰기 34 (MCP 아닌 항목 2 버림) · 차이 0",
+        for line in ("S-4 CLI 후 2.1.308 → 같음", "J2 통과", "J3 통과", "누적 비용 $1.80", "fin 등록 59 = 읽기 25 + 쓰기 34 · 차이 0",
                      "fit 등록 28 = 읽기 27 + 쓰기 1 · 차이 0 · 포트 기본값과 다름", "포트 mcp-config 와 같음", "원장 대조 다름 0/17",
                      "공유 로그 통과", "결과: 실행 끝", "X1 교차 · 완료 · $0.30", "D2 대조(fit) · 완료", "   X4 [예 / 부분 / 아니오]"):
             self.assertIn(line, out)
@@ -472,27 +470,33 @@ class S5Tools(Base):
     def test_prefix_and_server_key(self):
         f = self.app_dir("fin") / COPY[0]
         orig = f.read_text()
-        f.write_text(orig.replace("const MCP_PREFIX = 'mcp__myfinance__'", "const MCP_PREFIX = 'mcp__finance__'"))
+        f.write_text(orig.replace('"serverKey": "myfinance"', '"serverKey": "finance"'))
         self.assert_stopped(self.run_x1(), "S-5: fin 도구 접두가 mcp-config 서버 키(myfinance)와 다르다(I-4)")
         f.write_text(orig)
         c = self.app_dir("fit") / COPY[2]
         c.write_text(c.read_text().replace('"myfitness"', '"fitness"'))
         self.assert_stopped(self.run_x1(), "S-5: fit mcp-config.json 에 서버 키 myfitness 가 없다(I-4)")
 
-    def test_commented_tool_stops(self):
-        # 회귀: #632 9-1 major 1 — READ 에서 주석 처리돼 WRITE 에도 없는 도구가 허용 목록으로 새던 fail-open
+    def test_domain_format_stops(self):
+        # #653: 분류는 JSON(domain.json) — 깨진 JSON · 계약 표지 · 이름 형식이 다르면 질문 0
         f = self.app_dir("fin") / COPY[0]
         orig = f.read_text()
-        f.write_text(orig.replace("    'get_portfolio',\n", "    // 'get_portfolio',\n", 1))
-        self.assert_stopped(self.run_x1(), "S-5: 분류 상수에 주석·템플릿 문자열")
-        f.write_text(orig.replace("    'get_trades',\n", "    'get_trades', // don't — 주석 속 아포스트로피\n", 1))
-        self.assert_stopped(self.run_x1(), "S-5: 분류 상수에 주석·템플릿 문자열")
-        f.write_text(orig.replace("    'get_trades',\n", "    `get_trades`,\n", 1))
-        self.assert_stopped(self.run_x1(), "S-5: 분류 상수에 주석·템플릿 문자열")
+        f.write_text(orig[:-3])
+        self.assert_stopped(self.run_x1(), "S-5: domain.json 이 JSON 이 아니다")
+        f.write_text(orig.replace('"pleiades-domain/v0"', '"pleiades-domain/v9"'))
+        self.assert_stopped(self.run_x1(), "S-5: domain.json 형식이 예상과 다르다")
+        f.write_text(orig.replace('"get_portfolio"', '"get_portfolio // x"', 1))
+        self.assert_stopped(self.run_x1(), "S-5: domain.json 분류에 이름 형식이 다른 항목")
+        d = json.loads(orig)
+        d["tools"]["read"].append(7)
+        f.write_text(json.dumps(d))
+        self.assert_stopped(self.run_x1(), "S-5: domain.json 분류에 이름 형식이 다른 항목")
 
     def test_read_write_overlap_stops(self):
         f = self.app_dir("fin") / COPY[0]
-        f.write_text(f.read_text().replace("  'delete_custom_strategy',", "  'delete_custom_strategy',\n  'get_portfolio',"))
+        d = json.loads(f.read_text())
+        d["tools"]["write"].append("get_portfolio")
+        f.write_text(json.dumps(d))
         self.assert_stopped(self.run_x1(), "S-5: fin 읽기·쓰기 목록이 겹친다")
 
     def test_fin_port_mismatch_stops(self):

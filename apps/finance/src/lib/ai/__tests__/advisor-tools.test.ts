@@ -2,7 +2,8 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { advisorToolArgs, READ_TOOLS, WRITE_TOOLS } from '../advisor-tools'
+import domain from '../../../../domain.json'
+import { advisorToolArgs, READ_TOOLS, WEB_TOOLS, WRITE_TOOLS } from '../advisor-tools'
 
 const SRC = join(__dirname, '..', '..', '..')
 const WRITE_NAME = /__(create|update|delete|add|set|vest|exercise)_/
@@ -30,6 +31,20 @@ describe('도구 목록', () => {
     expect(names).toHaveLength(59)
     const known = new Set<string>([...READ_TOOLS, ...WRITE_TOOLS])
     expect(names.filter((n) => !known.has(n))).toEqual([])
+  })
+})
+
+describe('domain.json (#653 · 012 K-2)', () => {
+  it('분류의 정본이다 — READ_TOOLS = 접두 + tools.read + 웹 · WRITE_TOOLS = 접두 + tools.write', () => {
+    expect(READ_TOOLS).toEqual([...domain.tools.read.map((n) => `mcp__myfinance__${n}`), ...WEB_TOOLS])
+    expect(WRITE_TOOLS).toEqual(domain.tools.write.map((n) => `mcp__myfinance__${n}`))
+    expect(WEB_TOOLS).toEqual(['WebSearch', 'WebFetch'])
+  })
+
+  it('분류된 도구는 전부 MCP 서버에 등록돼 있다 — 등록 ↔ 분류 양방향', () => {
+    const server = readFileSync(join(SRC, 'mcp', 'server.ts'), 'utf8')
+    const registered = new Set([...server.matchAll(/server\.tool\(\s*['"](\w+)['"]/g)].map((m) => m[1]))
+    expect([...domain.tools.read, ...domain.tools.write].filter((n) => !registered.has(n))).toEqual([])
   })
 })
 

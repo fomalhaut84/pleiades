@@ -3,80 +3,22 @@
 // 프롬프트의 "사용자 확인 후 호출" 지시만으로는 막지 못한다. 봇 AI 대화는 쓰기를 받으므로 이 위험이 남는다(#419 기록).
 // fit `src/lib/ai/advisor-tools.ts` 와 같은 방향이다.
 
-const MCP_PREFIX = 'mcp__myfinance__'
+import domain from '../../../domain.json'
+
+// #653(012 4a-1 · K-2): 분류의 정본은 앱 루트 `domain.json` 의 `tools.read`·`tools.write`(MCP 도구 · 접두 없는 이름)다.
+// 여기는 그것에 접두를 붙여 CLI 인자 목록을 만든다 — 값은 옮기기 전과 같다. 새 MCP 도구는 domain.json 에 분류한다.
+const MCP_PREFIX = `mcp__${domain.mcp.serverKey}__`
 
 const mcp = (names: readonly string[]): readonly string[] => names.map((name) => `${MCP_PREFIX}${name}`)
 
+/** MCP 가 아닌 웹 조회 도구 — 도메인 분류(K-2) 밖이고 이 앱 advisor 만 허용한다. */
+export const WEB_TOOLS: readonly string[] = ['WebSearch', 'WebFetch']
+
 /** DB 원장을 바꾸지 않는 도구 + 웹 조회. `get_prices`·`get_watchlist` 는 시세 캐시(PriceCache)만 갱신한다. */
-export const READ_TOOLS: readonly string[] = [
-  ...mcp([
-    'get_portfolio',
-    'get_trades',
-    'get_performance',
-    'get_gift_tax_status',
-    'get_dividends',
-    'get_spending_summary',
-    'simulate_growth',
-    'get_prices',
-    'get_fx_rate',
-    'get_news',
-    'get_disclosures',
-    'get_technical_analysis',
-    'get_holding_strategy',
-    'get_all_strategies',
-    'get_networth',
-    'get_rsu_schedule',
-    'get_stock_options',
-    'get_watchlist',
-    'get_transactions',
-    'list_assets',
-    'list_budgets',
-    'list_recurring_transactions',
-    'list_alert_configs',
-    'list_alert_history',
-    'list_custom_strategies',
-  ]),
-  'WebSearch',
-  'WebFetch',
-]
+export const READ_TOOLS: readonly string[] = [...mcp(domain.tools.read), ...WEB_TOOLS]
 
 /** 원장·설정을 바꾸는 도구. `create_transaction` 은 외부 웹훅까지 간다. */
-export const WRITE_TOOLS: readonly string[] = mcp([
-  'set_holding_strategy',
-  'add_watchlist',
-  'update_watchlist',
-  'delete_watchlist',
-  'create_transaction',
-  'update_transaction',
-  'delete_transaction',
-  'create_category',
-  'update_category',
-  'delete_category',
-  'create_asset',
-  'update_asset',
-  'delete_asset',
-  'create_asset_deposit',
-  'set_budget',
-  'delete_budget',
-  'create_recurring_transaction',
-  'update_recurring_transaction',
-  'delete_recurring_transaction',
-  'update_alert_config',
-  'create_rsu_schedule',
-  'update_rsu_schedule',
-  'delete_rsu_schedule',
-  'vest_rsu',
-  'create_stock_option',
-  'update_stock_option',
-  'delete_stock_option',
-  'create_stock_option_vesting',
-  'update_stock_option_vesting',
-  'delete_stock_option_vesting',
-  'exercise_vesting',
-  'create_custom_strategy',
-  'update_custom_strategy',
-  'delete_custom_strategy',
-])
+export const WRITE_TOOLS: readonly string[] = mcp(domain.tools.write)
 
 /** 쓰기를 받지 않는 호출의 시스템 프롬프트 끝에 붙인다 — 프롬프트 본문은 쓰기 도구를 안내하므로 없으면 "진행할까요?" 로 막다른 흐름이 된다. */
 export const READ_ONLY_PROMPT_NOTICE = `
