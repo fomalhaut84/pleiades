@@ -116,7 +116,14 @@ describe("costOf", () => {
 
   // 회귀: #686 9-1 major 2 — init 실패(모델 호출 전)를 $1 로 셌다
   it("init 실패는 0", () => {
-    expect(costOf({ kind: "failed", text: "", verdict: { ...verdict(null), status: "init" }, code: "format:MCP 미연결" })).toBe(0);
+    expect(costOf({ kind: "failed", text: "", verdict: { ...verdict(null), status: "init", code: "format:MCP 미연결" }, code: "format:MCP 미연결" })).toBe(0);
+  });
+
+  // 회귀: PR #688 Codex P2 — init 뒤 hook 위반은 모델이 돌았는데 0 으로 셌다
+  it("init 뒤 hook 위반은 보고된 비용 · 보고가 없으면 호출당 상한", () => {
+    const hook = { ...verdict(0.42), status: "init" as const, code: "violation:hook", violation: true };
+    expect(costOf({ kind: "failed", text: "", verdict: hook, code: "violation:hook" })).toBe(0.42);
+    expect(costOf({ kind: "failed", text: "", verdict: { ...hook, cost: null }, code: "violation:hook" })).toBe(CALL_BUDGET_USD);
   });
 });
 
