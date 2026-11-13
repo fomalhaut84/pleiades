@@ -444,6 +444,18 @@
 > - **하지 않기로 한 것:** 미분류 도구 차단(읽기 경로가 구조로 보장 · 막으면 배포가 체크아웃보다 새로울 때 도메인 전체 탈락).
 > 되돌리기: 문구 (**즉시**).
 
+> **확정 (2026-11-13 · #691) — 4b-3 설계.** 근거 `_workspace/239/4b3/`(실측 `01_surveyor_4b3.md` → 초안 r1·r2·r3 + r4 블록 `02_writer_4b3*.md` → 감사 3회 `03_auditor_4b3*.md` · 정정 9 → 3 → 3 · 3회차 셋은 국소라 재감사 없이 반영 — 전례 #37). **정본 상세는 `02_writer_4b3_r3.md`(뒤 블록이 앞을 이긴다)** · 이 블록은 요약이다.
+> - **사용자 결정:** CLI 설정·세션 기록 위치 = **공유 유지**(분리는 env 만으로 안 된다 — 설정 검사가 CLI cwd 의 조상 `~/.claude` 를 project 범위로 읽어 서버의 켜진 플러그인 때문에 전 질문 거부 · `settings.ts:61-65,79-80` · 분리는 코드 변경 + 근거 미측정이라 별건) · PR **4개**.
+> - **배치:** 셋째 체크아웃 `~/pleiades-adv` · 스크립트 `deploy/advisor/adv-inplace.sh <vX.Y.Z> | stop` · pm2 정의 `deploy/advisor/pleiades-adv.config.cjs`(이름 `pleiades-adv-bot` 하나 · `kill_timeout 15000` 필수 — pm2 기본 1600 ms) · 시험 `deploy/test_adv_inplace.py` · 런북 `docs/runbooks/advisor-inplace.md`. 구조 4파일 무변경.
+> - **G-R1 확장:** 스크립트는 `PLEIADES_PRIVATE_DIR` 이 설정돼 있으면 거부(release-inplace unset 목록 밖이라 다르면 락 시험이 다른 파일을 본다) · fin·fit `inplace-*-last-ok` 존재 + 내용 대조로 같은 위치 확인 · `env_same` 사전 대조는 **락 뒤 · fin·fit 만**(`n_same > 0` · adv 자신은 정보 줄 — 자기 복구를 막지 않게).
+> - **G-R3:** 락 뒤 본문 전체를 `( … ) 9>&-` 서브셸로 · 바깥은 rc 만 · 트랩은 바깥 · 시험은 PATH 스텁이 fd 9 를 받으면 실패하는 **동적** 방식 · `git -c maintenance.auto=false -c gc.auto=0 fetch`.
+> - **상태 규칙(A):** 비태그 HEAD 는 last-ok 없을 때만(첫 실행) · "이미 배포됨" 은 HEAD = V · last-ok = V · pending 없음 · `-stopped` 없음일 때만 · **그 밖은 진행**(되돌리기 · 정지 뒤 다시 켜기 포함).
+> - **`stop`:** 락만 거친다 · 데몬 없음(`~/.pm2/rpc.sock` 없음) = pm2 무호출(빈 `save --force` 로 fin·fit resurrect 목록을 지우지 않게) · adv 있을 때만 delete·save · `-stopped` 표지 + `alive-adv.json` 삭제.
+> - **넘겨받은 6항목:** 자식 env = **허용 목록**(인증 키 포함 · 빠지면 사용액 0 또는 $1.00) · 지식 = argv 유지 + `ask` 안 100,000 B 가드(예약 뒤 거부 → 순 0) · 사용액 = **`usd` 안 예약 → 차분 정산**(파일 형식 무변경 · pm2 SIGINT 는 트리 전체 · 10초 유예) · 4014 = chat 선택 콜백 `onFatalClose`(FATAL 로그 줄 문구 불변 · 두 앱 동작 무변경 · 번들은 바뀐다) · CLI 세션 위치 = 공유 · `alive-adv` = 수집기 활성 앱 집합 `activeApps()`(adv = last-ok 있고 `-stopped` 없을 때 · 7곳 한 집합 · `all-missing` 은 fin·fit 만 · 재활성 회는 오프셋만 끝으로).
+> - **PR:** 4b-3a1 chat(두 앱 다음 릴리즈 재빌드 · revert **중간**) → 4b-3a2 advisor(5파일 · **중간**) → 4b-3b 스크립트·런북(**중간**) → 4b-3c 수집기(**중간** · 서버 재설치) → 릴리즈 minor(서버 조치 선택). 정지 **즉시**(락이 비어 있을 때).
+> - **이 블록이 고치는 위 서술:** §8 4b-3 행 "`collect.cjs` 역할 집합 분기 1" → 7곳 + 활성 집합 · §3-4 G-R1 의 "직접 `pm2 restart` 금지" 근거 — 옵션 없는 `pm2 restart` 는 저장 env 를 쓴다(`discord-inbound.sh:92,112`) · 셸 env 가 들어가는 길은 `--update-env`·`start`·`startOrRestart` — 런북 금지 문구는 그쪽으로.
+> 되돌리기: 문구 (**즉시**).
+
 ---
 
 ## 9. 정본 형태 (U5)
