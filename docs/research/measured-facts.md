@@ -4723,3 +4723,22 @@ HEAD `4fd10d3b62f0` · pleiades 추적 파일 정적 읽기만(봇·웹·MCP·`c
 | 셋째 앱을 모르는 곳(N12 밖) | `apps-ci.yml` · `security-audit.yml`(lockfile 5) · `workflow.md` 8절 · 루트 `.gitignore` · 4b-1 등록 = 필수 7 + 선택 1(`precheck.py` 무변경 — `node` 이미 허용) | AU A-10 · AU3 R3-2 |
 
 - **못 잰 값:** resume 대화 턴별 비용 · 셋째 체크아웃 서버 디스크 · 4c-2 넘김 경로 비용 비교 · 쿼터 형태·잔량 — 재는 방법은 012 §0-4.
+
+## 2026-11-13 — 012 4b-3 통합 층 서버 배치 실측 (#239)
+
+HEAD `48ccb68b03e6` · pleiades 추적 파일 정적 읽기 + 로컬 `claude --help`/`--version`(모델 호출 0) · 서버 0. 상세·줄 근거 `_workspace/239/4b3/01_surveyor_4b3.md`. 012 [N10]·[N20]·[N21]·§0-5 에 있는 값은 다시 적지 않는다.
+
+| 항목 | 값 | 명령 |
+|---|---|---|
+| `release-inplace.sh` C1 unset 목록 | `PLEIADES_PRIVATE_DIR` 은 **목록 밖** — 락 파일 위치는 셸 값을 따른다. 통합 층 락 시험 파일도 자기 env 의 `PLEIADES_PRIVATE_DIR` 로 정해진다 | `sed -n '21p;173p;181p' deploy/release-inplace.sh` · `apps/advisor/src/private-dir.ts:10-12` |
+| fin 도메인 지식(`knowledge-prompt.ts` 규칙으로 조립) | **7,904 B**([N10] 7,894) | `cd apps/finance && node -e '<extractSection + rules 2파일 join("\n\n---\n\n")>'` |
+| fit 지식 코드 기본값 | **12,509 B**([N10] 12,513) · 운영은 DB 활성 본문(미측정) | `node -e` 로 `SYSTEM_PROMPT_DEFAULT` 템플릿 리터럴 바이트 |
+| 통합 층 `BASE_SYSTEM_PROMPT` | 576 B · 도메인별 지식 상한 32,000 B(`domains.ts:14`) | `node -e` 로 `advisor.ts` 리터럴 바이트 |
+| 로컬 CLI | 2.1.323 · `--system-prompt-file`·`--append-system-prompt-file` = help 독립 항목 **없음**(`--bare` 설명에만) · 바이너리 문자열 6·12회 · `--settings`·`--setting-sources` 있음 · `--system-prompt-snapshot`(기본 on — resume 은 첫 요청의 기록본) | `~/.local/share/claude/versions/2.1.323 --help \| grep …` · `strings … \| grep -o -E -- "--(append-)?system-prompt-file" \| sort \| uniq -c` |
+| chat 치명 close | 4014 등 `FATAL_CLOSE` 는 `logger.error` 한 줄 뒤 정지 · 치명 콜백 0(콜백은 `onIntentsFallback` 뿐) | `packages/chat/src/gateway.ts:65,289-309` |
+| 통합 층 종료 | SIGTERM 은 gateway 만 멈춘다 · 진행 중 질문 대기·자식 종료 0 · 사용액은 답 뒤에만 기록 | `apps/advisor/src/main.ts:67-74` · `bot.ts:92-97` |
+| 자식 env | 상속 + 거부 목록 4형식(`DATABASE_URL`·`DISCORD_*`·`ANTHROPIC_MODEL`·`NOTIFY_*`) | `apps/advisor/src/cli.ts:44-57` |
+| 수집기에 adv 를 넣을 때 바꿀 곳 | 7(`APPS` · 역할 집합 · `LOG_NAME` · health · glob-empty · 배포 표지 · alive 는 경로 규칙 그대로) | `grep -n -E "APPS\|ROLES\|LOG_NAME\|alive" deploy/ops/collect.cjs` |
+| `deploy/` 시험(8절) | **508 통과 · 건너뜀 1** · 628 s(로컬 macOS) | `python3 -m unittest discover -s deploy` |
+
+- **못 잰 값:** 서버 CLI 2.1.311 의 `-file` 옵션 · pm2 기본 `kill_timeout`·트리 종료(로컬 pm2 패키지 없음) · 서버 CLI 인증 정보 위치(`CLAUDE_CONFIG_DIR` 분리 영향) · fit DB 활성 지식 크기 · 셋째 체크아웃 이름(미정).
