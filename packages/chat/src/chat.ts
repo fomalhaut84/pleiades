@@ -45,7 +45,7 @@ export interface ChatOptions {
   /** 강등 1회 알림 — 봇 토큰과 무관한 경로로 보낸다(호출부). 실패는 삼킨다. */
   onIntentsFallback?: () => void | Promise<void>;
   /**
-   * 치명 close(4004 · 4010~4014 · 강등 뒤 4014)로 gateway 가 멈출 때 1회 — 봇 토큰과 무관한 경로로 보낸다(호출부 · 012 4b-3a1 #693).
+   * 치명 close(4004 · 4010~4014 · 강등 뒤 4014)로 gateway 가 멈출 때마다 1회(멈춘 뒤 `start()` 로 다시 시작하면 다음 치명 정지에서 다시 부른다) — 봇 토큰과 무관한 경로로 보낸다(호출부 · 012 4b-3a1 #693).
    * `gateway 종료 코드` 로그 줄은 그대로 찍힌 뒤 부른다 · 실패는 삼킨다. 넘기지 않으면 지금과 같다.
    */
   onFatalClose?: (code: number) => void | Promise<void>;

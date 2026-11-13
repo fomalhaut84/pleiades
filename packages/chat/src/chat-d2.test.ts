@@ -504,6 +504,7 @@ describe('치명 close 콜백 onFatalClose', () => {
       await tick();
       expect(sockets).toHaveLength(1);
       expect(logger.warn).toHaveBeenCalledWith(expect.stringMatching(/치명 종료 알림 실패/));
+      expect(logger.warn.mock.calls.flat().filter((m: string) => /치명 종료 알림 실패/.test(m))).toHaveLength(1);
     }
   });
 
