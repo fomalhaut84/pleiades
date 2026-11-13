@@ -5,7 +5,7 @@ import path from "node:path";
 import type { MessageContext, Outgoing } from "@pleiades/chat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AskOutcome, MESSAGES } from "../advisor";
-import { BOT_MESSAGES, costOf, createAdvisorRouter, startBot, startBotWhenReady } from "../bot";
+import { BOT_MESSAGES, costOf, createAdvisorRouter, fatalCloseAlert, Inflight, startBot, startBotWhenReady } from "../bot";
 import { CALL_BUDGET_USD } from "../cli";
 import { answerToHtml } from "../format";
 import { AnswerVerdict } from "../judge";
@@ -75,6 +75,29 @@ describe("DailySpend (비공개 파일 · KST)", () => {
     s.add(0.7, start);
     expect(s.read("2026-11-13").usd).toBe(0.7);
     expect(s.read().usd).toBe(0);
+  });
+
+  // 012 4b-3a2 (#695) B7 — 예약 후 차분 정산 · 파일 형식은 그대로 { date, usd }(4b-2 판으로 되돌려도 읽힌다)
+  it("reserve 는 usd 에 더하고 · settle 은 차분(음수 허용 · 0 아래로 안 감) · 형식 무변경", () => {
+    const now = () => Date.parse("2026-11-13T05:00:00Z");
+    const s = new DailySpend(tmp, now);
+    s.add(0.3);
+    expect(s.reserve(1, "2026-11-13")).toMatchObject({ usd: 1.3, broken: false });
+    expect(s.settle(0.12 - 1, "2026-11-13")).toMatchObject({ usd: 0.42, broken: false });
+    expect(JSON.parse(fs.readFileSync(path.join(tmp, "spend-2026-11-13.json"), "utf8"))).toEqual({ date: "2026-11-13", usd: 0.42 });
+    expect(s.settle(-5, "2026-11-13").usd).toBe(0);
+    expect(s.settle(0, "2026-11-13").usd).toBe(0);
+  });
+
+  itUnlessRoot("reserve 쓰기 실패 = broken(질문을 시작하지 않는 근거)", () => {
+    const now = () => Date.parse("2026-11-13T05:00:00Z");
+    const s = new DailySpend(tmp, now);
+    fs.chmodSync(tmp, 0o500);
+    try {
+      expect(s.reserve(1, "2026-11-13").broken).toBe(true);
+    } finally {
+      fs.chmodSync(tmp, 0o700);
+    }
   });
 
   it("상한 도달 · 깨진 파일은 상한으로 본다(닫힌 쪽) · 덮어쓰지 않는다", () => {
@@ -147,10 +170,13 @@ describe("createAdvisorRouter", () => {
     const alerts: string[] = [];
     const logs: string[] = [];
     const spend = new DailySpend(tmp, () => Date.parse("2026-11-13T05:00:00Z"), cap);
+    const inflight = new Inflight();
+    let hook: () => unknown = () => undefined;
     const router = createAdvisorRouter({
       advisor: {
         ask: async (k, q) => {
           asks.push([k, q]);
+          await hook();
           return outcome;
         },
         reset: () => MESSAGES.reset,
@@ -161,8 +187,9 @@ describe("createAdvisorRouter", () => {
         return true;
       },
       log: (l) => logs.push(l),
+      inflight,
     });
-    return { router, asks, alerts, logs, spend };
+    return { router, asks, alerts, logs, spend, inflight, onAsk: (f: () => unknown) => (hook = f) };
   };
 
   it("자유 텍스트 → 코어(키 discord:<채널>:<사용자>) → html 답 · 사용액 더함", async () => {
@@ -198,21 +225,62 @@ describe("createAdvisorRouter", () => {
   });
 
   // 회귀: #686 9-1 major 1 — 기록 실패가 받은 답을 잃게 하고 그 뒤로 상한이 꺼졌다
-  itUnlessRoot("사용액 기록에 실패해도 받은 답은 보내고 · 관리자 알림 · 다음 질문은 거부", async () => {
+  // 012 4b-3a2 (#695) B7 — 예약이 질문 앞이라 쓰기 실패는 예약에서 드러난다 → 질문을 시작하지 않는다
+  itUnlessRoot("예약 쓰기에 실패하면 코어를 부르지 않고 거부 · 관리자 알림 · 다음 질문도 거부", async () => {
     const s = setup({ kind: "answer", text: "답", verdict: verdict(0.2) });
     fs.chmodSync(tmp, 0o500);
     try {
       const first = fakeCtx("q1");
       await s.router.handleMessage(first.ctx);
-      expect(first.replies).toEqual([{ text: "답", format: "html" }]);
+      expect(first.replies).toEqual([BOT_MESSAGES.dailyCap(5)]);
       expect(s.alerts).toEqual([expect.stringContaining("기록 실패")]);
       const second = fakeCtx("q2");
       await s.router.handleMessage(second.ctx);
       expect(second.replies).toEqual([BOT_MESSAGES.dailyCap(5)]);
-      expect(s.asks).toHaveLength(1);
+      expect(s.asks).toHaveLength(0);
     } finally {
       fs.chmodSync(tmp, 0o700);
     }
+  });
+
+  itUnlessRoot("정산 쓰기에 실패해도 받은 답은 보내고 · 관리자 알림 · 예약분은 남는다(과다 쪽)", async () => {
+    const s = setup({ kind: "answer", text: "답", verdict: verdict(0.2) });
+    s.onAsk(() => fs.chmodSync(tmp, 0o500));
+    try {
+      const first = fakeCtx("q1");
+      await s.router.handleMessage(first.ctx);
+      expect(first.replies).toEqual([{ text: "답", format: "html" }]);
+      expect(s.alerts).toEqual([expect.stringContaining("기록 실패")]);
+    } finally {
+      fs.chmodSync(tmp, 0o700);
+    }
+    expect(new DailySpend(tmp, () => Date.parse("2026-11-13T05:00:00Z")).read().usd).toBe(CALL_BUDGET_USD);
+  });
+
+  it("질문 동안 호출당 상한이 예약돼 있다 · 끝나면 실제 비용으로 정산", async () => {
+    const s = setup({ kind: "answer", text: "답", verdict: verdict(0.42) });
+    let during = -1;
+    s.onAsk(() => {
+      during = s.spend.read().usd;
+    });
+    await s.router.handleMessage(fakeCtx("q").ctx);
+    expect(during).toBe(CALL_BUDGET_USD);
+    expect(s.spend.read().usd).toBe(0.42);
+  });
+
+  it("진행 중 질문 추적 — idle 은 정산까지 끝난 뒤 true · 시간 안에 안 끝나면 false", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const s = setup({ kind: "answer", text: "답", verdict: verdict(0.1) });
+    s.onAsk(() => gate);
+    const done = s.router.handleMessage(fakeCtx("q").ctx);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(await s.inflight.idle(20)).toBe(false);
+    release();
+    expect(await s.inflight.idle(1000)).toBe(true);
+    await done;
+    expect(s.spend.read().usd).toBe(0.1);
+    expect(await s.inflight.idle(0)).toBe(true);
   });
 
   it("!reset 은 그 키의 세션을 버린다 · 첨부는 받지 않는다", async () => {
@@ -224,6 +292,20 @@ describe("createAdvisorRouter", () => {
     await s.router.handleMessage(a.ctx);
     expect(a.replies).toEqual([BOT_MESSAGES.textOnly]);
     expect(s.asks).toHaveLength(0);
+  });
+});
+
+// 012 4b-3a2 (#695) B8 — 치명 close(4014 = 포털 MESSAGE CONTENT 꺼짐)는 관리자 알림 1회
+describe("fatalCloseAlert", () => {
+  it("4014 → 로그 1줄 · 관리자 알림(포털 안내) · 그 밖 코드도 알림", async () => {
+    const logs: string[] = [];
+    const alerts: string[] = [];
+    const f = fatalCloseAlert({ log: (l) => logs.push(l), alert: async (t) => (alerts.push(t), true) });
+    await f(4014);
+    await f(4004);
+    expect(logs).toEqual([expect.stringContaining("치명 종료 4014"), expect.stringContaining("치명 종료 4004")]);
+    expect(alerts[0]).toMatch(/4014.*MESSAGE CONTENT/);
+    expect(alerts[1]).toMatch(/4004.*토큰/);
   });
 });
 

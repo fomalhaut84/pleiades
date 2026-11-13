@@ -61,7 +61,27 @@ export class DailySpend {
   add(usd: number, date: string = kstDate(this.now())): SpendState {
     const s = this.read(date);
     if (s.broken || !(usd > 0)) return s;
-    const next = { date, usd: Math.round((s.usd + usd) * 10_000) / 10_000 };
+    return this.write(s, s.usd + usd);
+  }
+
+  /**
+   * 질문 **전**에 호출당 상한을 그날 사용액에 더한다(012 4b-3a2 #695 B7) — 강제 종료·크래시로 정산하지 못해도 상한 쪽으로 남는다.
+   * 쓰기에 실패하면 broken — 호출부는 질문을 시작하지 않는다. 형식은 그대로 { date, usd }(4b-2 판으로 되돌려도 읽힌다).
+   */
+  reserve(usd: number, date: string = kstDate(this.now())): SpendState {
+    return this.add(usd, date);
+  }
+
+  /** 예약을 실제 비용으로 고친다 — 차분(실제 − 예약) 1회 · 음수 허용 · 0 아래로는 내려가지 않는다. 0 이면 쓰지 않는다. */
+  settle(delta: number, date: string = kstDate(this.now())): SpendState {
+    const s = this.read(date);
+    if (s.broken || !Number.isFinite(delta) || delta === 0) return s;
+    return this.write(s, Math.max(0, s.usd + delta));
+  }
+
+  private write(s: SpendState, usd: number): SpendState {
+    const { date } = s;
+    const next = { date, usd: Math.round(usd * 10_000) / 10_000 };
     const tmp = `${this.file(date)}.tmp`;
     try {
       fs.writeFileSync(tmp, JSON.stringify(next), { mode: 0o600 });
