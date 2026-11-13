@@ -39,6 +39,7 @@ function advisor(over: Partial<ConstructorParameters<typeof Advisor>[0]> = {}) {
     lockProbe: () => lock,
     log: (l) => logs.push(l),
     questionTimeoutMs: 5000,
+    passEnv: ["FAKE_CLI_SPEC", "FAKE_CLI_LOG"], // 4b-3a2 B4 — 자식 env 가 허용 목록이라 시험 키는 명시해야 간다
     ...over,
   });
 }
@@ -104,6 +105,30 @@ describe("Advisor.ask — 정상", () => {
     expect(logs.some((l) => l.includes("domain=fit unavailable why=prompts/get 실패"))).toBe(true);
     const system = cliCalls()[0].argv[cliCalls()[0].argv.indexOf("--system-prompt") + 1];
     expect(system).toContain("## 이번 대화에서 쓸 수 없는 도메인\n건강");
+  });
+});
+
+// 012 4b-3a2 (#695) — B5 지식 크기 가드 · B7 종료
+describe("Advisor — 크기 가드 · 종료", () => {
+  it("시스템 프롬프트가 상한을 넘으면 CLI 를 띄우지 않고 거부(system-too-large) · 세션을 남기지 않는다", async () => {
+    happy();
+    const a = advisor({ systemMaxBytes: 100 });
+    expect(await a.ask(KEY, "q")).toMatchObject({ kind: "refused", reason: "system-too-large", text: MESSAGES.tooLarge });
+    expect(fs.existsSync(cliLog)).toBe(false);
+    expect(logs.join("\n")).toMatch(/refused system-too-large bytes=\d+/);
+    expect(await advisor().ask(KEY, "q")).toMatchObject({ kind: "answer" }); // 기본 상한(100,000 B)이면 두 도메인은 통과
+  });
+
+  it("shutdown — 진행 중 CLI 를 끊고(시간 초과를 기다리지 않는다) · 그 뒤 질문은 거부", async () => {
+    setCli([initLine([FIN_TOOL, FIT_TOOL], ["myfinance", "myfitness"])], true);
+    const a = advisor({ questionTimeoutMs: 60_000 });
+    const t0 = Date.now();
+    const p = a.ask(KEY, "q");
+    await new Promise((r) => setTimeout(r, 300));
+    a.shutdown();
+    expect(await p).toMatchObject({ kind: "failed" });
+    expect(Date.now() - t0).toBeLessThan(8000);
+    expect(await a.ask(KEY, "q2")).toMatchObject({ kind: "refused", reason: "shutting-down", text: MESSAGES.shuttingDown });
   });
 });
 

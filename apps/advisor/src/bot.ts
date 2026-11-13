@@ -2,6 +2,8 @@
 // 새 통합 채널 하나 — 그 채널의 메시지를 코어(Advisor.ask)로 · `!reset` · 첨부는 받지 않는다 · 버튼 없음.
 // 허용 = 허용 사용자(전용 키 · 비면 공유 목록) AND 그 채널(chat 이 본다) · 같은 채널 입력은 하나씩(chat serializeByChannel).
 // 하루 상한 [D2]: 질문 전 확인 → 닿았으면 거부 + 관리자 알림(그날 1회). 사용액 = 답의 비용(모르면 호출당 상한으로 센다 — 적게 세지 않는다).
+// 012 4b-3a2(#695): 사용액은 질문 **전** 호출당 상한을 예약하고 끝나면 차분으로 정산한다(B7 — 강제 종료돼도 상한 쪽으로 남는다) ·
+// 진행 중 질문을 추적해 종료 때 정산까지 기다린다 · 치명 close(4014 등)는 관리자 알림(B8).
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -45,6 +47,49 @@ export interface RouterDeps {
   spend: DailySpend;
   alert: (text: string) => Promise<boolean>;
   log: (line: string) => void;
+  /** 진행 중 질문 추적 — 종료 때 정산까지 기다린다(B7) */
+  inflight?: Inflight;
+}
+
+/** 진행 중 작업 수 — 종료 때 `idle(ms)` 로 정산까지 기다린다(012 4b-3a2 #695 B7) */
+export class Inflight {
+  private n = 0;
+  private waiters: (() => void)[] = [];
+
+  async track<T>(work: () => Promise<T>): Promise<T> {
+    this.n++;
+    try {
+      return await work();
+    } finally {
+      this.n--;
+      if (this.n === 0) for (const w of this.waiters.splice(0)) w();
+    }
+  }
+
+  /** 0 이 되면 true · ms 안에 안 되면 false */
+  idle(ms: number): Promise<boolean> {
+    if (this.n === 0) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(t);
+        resolve(true);
+      };
+      const t = setTimeout(() => {
+        this.waiters = this.waiters.filter((w) => w !== done);
+        resolve(false);
+      }, ms);
+      this.waiters.push(done);
+    });
+  }
+}
+
+/** 치명 close 알림(B8) — 4014 = 개발자 포털 MESSAGE CONTENT INTENT 꺼짐 · 그 밖 = 토큰·권한. 알림 실패는 chat 이 삼킨다 */
+export function fatalCloseAlert(deps: Pick<RouterDeps, "log" | "alert">): (code: number) => Promise<void> {
+  return async (code) => {
+    deps.log(`[${LABEL}] 치명 종료 ${code} — 다시 접속하지 않는다`);
+    const hint = code === 4014 ? "개발자 포털에서 MESSAGE CONTENT INTENT 를 켠 뒤 스크립트로 재기동" : "토큰·권한 확인 뒤 스크립트로 재기동";
+    await deps.alert(`통합 어드바이저 Discord 접속 종료(코드 ${code}) — 메시지를 받지 않는다 · ${hint}`);
+  };
 }
 
 /**
@@ -77,30 +122,40 @@ export function createAdvisorRouter(deps: RouterDeps): Router {
     .attachment(async (ctx) => {
       await ctx.reply(BOT_MESSAGES.textOnly);
     })
-    .fallback(async (ctx) => {
-      const before = deps.spend.read();
-      if (before.broken || before.usd >= deps.spend.cap) {
-        deps.log(`[advisor] refused daily-cap usd=${before.usd.toFixed(4)}${before.broken ? " broken=true" : ""}`);
-        await capAlert(before.date, before.broken ? "파일을 읽지 못함" : "도달");
-        await ctx.reply(BOT_MESSAGES.dailyCap(deps.spend.cap));
-        return;
-      }
-      await ctx.typing();
-      const typing = setInterval(() => void ctx.typing(), TYPING_EVERY_MS);
-      let r: AskOutcome;
-      try {
-        r = await deps.advisor.ask(keyOf(ctx), ctx.text);
-      } finally {
-        clearInterval(typing);
-      }
-      // 질문 전에 읽은 날짜로 더한다(KST 자정을 넘긴 질문 · 9-1 info 1). 기록에 실패해도 이미 받은 답은 보낸다(9-1 major 1)
-      const after = deps.spend.add(costOf(r), before.date);
-      if (after.broken) {
-        deps.log("[advisor] daily-cap 기록 실패 — 오늘 남은 질문은 거부한다");
-        await capAlert(after.date, "기록 실패");
-      } else if (after.usd >= deps.spend.cap) await capAlert(after.date, "도달");
-      await ctx.reply(r.kind === "answer" ? { text: answerToHtml(r.text), format: "html" } : r.text);
-    });
+    .fallback((ctx) => (deps.inflight ? deps.inflight.track(() => onQuestion(ctx)) : onQuestion(ctx)));
+
+  async function onQuestion(ctx: MessageContext): Promise<void> {
+    const before = deps.spend.read();
+    if (before.broken || before.usd >= deps.spend.cap) {
+      deps.log(`[advisor] refused daily-cap usd=${before.usd.toFixed(4)}${before.broken ? " broken=true" : ""}`);
+      await capAlert(before.date, before.broken ? "파일을 읽지 못함" : "도달");
+      await ctx.reply(BOT_MESSAGES.dailyCap(deps.spend.cap));
+      return;
+    }
+    // 예약(B7) — 쓰지 못하면 질문을 시작하지 않는다(상한을 셀 수 없다 · 닫힌 쪽)
+    const reserved = deps.spend.reserve(CALL_BUDGET_USD, before.date);
+    if (reserved.broken) {
+      deps.log("[advisor] daily-cap 기록 실패 — 오늘 남은 질문은 거부한다");
+      await capAlert(reserved.date, "기록 실패");
+      await ctx.reply(BOT_MESSAGES.dailyCap(deps.spend.cap));
+      return;
+    }
+    await ctx.typing();
+    const typing = setInterval(() => void ctx.typing(), TYPING_EVERY_MS);
+    let r: AskOutcome;
+    try {
+      r = await deps.advisor.ask(keyOf(ctx), ctx.text);
+    } finally {
+      clearInterval(typing);
+    }
+    // 질문 전에 읽은 날짜로 정산한다(KST 자정을 넘긴 질문 · 9-1 info 1). 기록에 실패해도 이미 받은 답은 보낸다(9-1 major 1) · 예약분은 남는다
+    const after = deps.spend.settle(costOf(r) - CALL_BUDGET_USD, before.date);
+    if (after.broken) {
+      deps.log("[advisor] daily-cap 기록 실패 — 오늘 남은 질문은 거부한다");
+      await capAlert(after.date, "기록 실패");
+    } else if (after.usd >= deps.spend.cap) await capAlert(after.date, "도달");
+    await ctx.reply(r.kind === "answer" ? { text: answerToHtml(r.text), format: "html" } : r.text);
+  }
 }
 
 export interface StartDeps extends RouterDeps {
@@ -128,6 +183,7 @@ export function startBot(deps: StartDeps): Chat | undefined {
       return c ? [c] : [];
     },
     aliveMarker: fileAliveMarker(path.resolve(ALIVE_RECORD)),
+    onFatalClose: fatalCloseAlert(deps),
     identifyGuard: createIdentifyGuard({
       store: fileGuardStore(path.resolve(IDENTIFY_RECORD)),
       onBlocked: async (info) => {

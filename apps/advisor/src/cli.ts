@@ -40,11 +40,17 @@ export function readPins(appsDir: string): Pin {
   return got[0];
 }
 
-/** 자식 env — DB·Discord 키는 넘기지 않는다 · 앱과 같은 핀 셋 · 자동 업데이트 끔 · MCP 도구 검색 끔(X1 #632 9-1) */
-export function childEnv(pin: Pin, base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+/**
+ * 자식 env 허용 목록(012 4b-3a2 #695 B4) — 실행·로케일·CLI 설정 위치·인증 키만. 플랫폼 키(`PLEIADES_*` · `DISCORD_*` …) ·
+ * pm2 가 넣는 키 · DB · 셸에 있던 그 밖 키는 넘기지 않는다. 인증 키는 있을 때만 그대로 간다(빠지면 질문이 실패한다 — 런북 첫 질문 확인).
+ */
+const CHILD_ENV_ALLOW = /^(HOME|PATH|USER|LOGNAME|SHELL|LANG|LC_[A-Z_]+|TZ|TMPDIR|TERM|CLAUDE_CONFIG_DIR|ANTHROPIC_API_KEY|CLAUDE_CODE_OAUTH_TOKEN)$/;
+
+/** 자식 env — 허용 목록 + 앱과 같은 핀 셋 · 자동 업데이트 끔 · MCP 도구 검색 끔(X1 #632 9-1). `extra` 는 시험용 추가 통과 키 */
+export function childEnv(pin: Pin, base: NodeJS.ProcessEnv, extra: readonly string[] = []): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const [k, v] of Object.entries(base)) {
-    if (!/^(DATABASE_URL|DISCORD_[A-Z0-9_]*|ANTHROPIC_MODEL|NOTIFY_[A-Z0-9_]*)$/.test(k)) env[k] = v;
+    if (v !== undefined && (CHILD_ENV_ALLOW.test(k) || extra.includes(k))) env[k] = v;
   }
   return {
     ...env,
@@ -104,6 +110,8 @@ export interface RunInput {
   prompt: string;
   checkInit: (e: unknown) => InitVerdict;
   timeoutMs?: number;
+  /** 끊으면 자식에 SIGTERM(5초 뒤 SIGKILL) — 종료 처리(012 4b-3a2 #695 B7) */
+  signal?: AbortSignal;
 }
 
 export interface RunOutput {
@@ -144,6 +152,9 @@ export function runCli(i: RunInput): Promise<RunOutput> {
       timedOut = true;
       kill("SIGTERM");
     }, i.timeoutMs ?? QUESTION_TIMEOUT_MS);
+    const onAbort = () => kill("SIGTERM");
+    if (i.signal?.aborted) onAbort();
+    else i.signal?.addEventListener("abort", onAbort, { once: true });
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (c: string) => {
       if (overflow) return;
@@ -163,6 +174,7 @@ export function runCli(i: RunInput): Promise<RunOutput> {
     child.stdin.end(i.prompt);
     child.on("close", (code) => {
       clearTimeout(timer);
+      i.signal?.removeEventListener("abort", onAbort);
       if (!init) judge(out.split("\n")[0]);
       resolve({ out, stderrBytes, code, timedOut, overflow, init, ms: Date.now() - t0 });
     });

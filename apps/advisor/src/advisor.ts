@@ -31,9 +31,18 @@ export const MESSAGES = {
   safety: "🔧 안전 점검에 걸려 답하지 않았어요. 관리자 확인이 필요해요.",
   failed: "❌ 답을 만들지 못했어요. 잠시 뒤 다시 시도해 주세요.",
   reset: "🔄 통합 어드바이저 대화를 새로 시작해요.",
+  tooLarge: "🔧 도메인 지식이 너무 커서 질문을 시작하지 않았어요. 관리자 확인이 필요해요.",
+  shuttingDown: "🔄 통합 어드바이저가 다시 시작하는 중이에요. 잠시 뒤 다시 물어봐 주세요.",
 } as const;
 
-export type RefuseReason = "busy" | "deploying" | "lock-unknown" | "settings" | "no-domain" | "invalid" | "config";
+export type RefuseReason = "busy" | "deploying" | "lock-unknown" | "settings" | "no-domain" | "invalid" | "config"
+  | "system-too-large" | "shutting-down";
+
+/**
+ * 시스템 프롬프트(argv `--system-prompt`) 상한(012 4b-3a2 #695 B5) — Linux 단일 인자 상한 131,072 B 보다 아래.
+ * 두 도메인은 도메인 상한(32,000 B)으로 넘을 수 없다 · 도메인 #3 이 여기에 닿으면 `--system-prompt-file`(서버 CLI 실측 뒤).
+ */
+export const SYSTEM_MAX_BYTES = 100_000;
 export type AskOutcome =
   | { kind: "answer"; text: string; verdict: AnswerVerdict }
   | { kind: "failed"; text: string; verdict: AnswerVerdict | null; code: string }
@@ -51,6 +60,10 @@ export interface AdvisorDeps {
   log?: (line: string) => void;
   now?: () => number;
   questionTimeoutMs?: number;
+  /** 시스템 프롬프트 상한(기본 SYSTEM_MAX_BYTES) — 시험에서 낮춘다 */
+  systemMaxBytes?: number;
+  /** 자식 env 허용 목록에 더할 키 — 시험(가짜 CLI)만 쓴다 */
+  passEnv?: readonly string[];
 }
 
 const keyTag = (key: string) => crypto.createHash("sha256").update(key).digest("hex").slice(0, 8);
@@ -71,6 +84,8 @@ export class Advisor {
   private readonly workDir: string;
   private readonly advisorDir: string;
   private busy = false;
+  private closing = false;
+  private readonly abort = new AbortController();
 
   constructor(private readonly deps: AdvisorDeps) {
     this.store = new SessionStore(deps.now);
@@ -82,6 +97,12 @@ export class Advisor {
 
   private log(line: string) {
     (this.deps.log ?? ((l: string) => process.stdout.write(`${l}\n`)))(line);
+  }
+
+  /** 종료(012 4b-3a2 #695 B7) — 새 질문은 거부하고 진행 중 CLI 에 SIGTERM. 진행 중 질문은 실패로 끝나 정산까지 돈다 */
+  shutdown(): void {
+    this.closing = true;
+    this.abort.abort();
   }
 
   reset(key: string): string {
@@ -118,6 +139,7 @@ export class Advisor {
   }
 
   async ask(key: string, question: string): Promise<AskOutcome> {
+    if (this.closing) return { kind: "refused", reason: "shutting-down", text: MESSAGES.shuttingDown };
     if (this.busy) return { kind: "refused", reason: "busy", text: MESSAGES.busy };
     const q = question.trim();
     if (!q || q.length > QUESTION_MAX_CHARS) return { kind: "refused", reason: "invalid", text: MESSAGES.invalid };
@@ -173,7 +195,14 @@ export class Advisor {
   private async startOrRefuse(key: string): Promise<Session | AskOutcome> {
     try {
       const started = await this.startSession(key);
-      return started ?? { kind: "refused", reason: "no-domain", text: MESSAGES.noDomain };
+      if (!started) return { kind: "refused", reason: "no-domain", text: MESSAGES.noDomain };
+      const bytes = Buffer.byteLength(started.system, "utf8");
+      if (bytes > (this.deps.systemMaxBytes ?? SYSTEM_MAX_BYTES)) {
+        this.store.reset(key);
+        this.log(`[advisor] key=${keyTag(key)} refused system-too-large bytes=${bytes}`);
+        return { kind: "refused", reason: "system-too-large", text: MESSAGES.tooLarge };
+      }
+      return started;
     } catch {
       this.log(`[advisor] key=${keyTag(key)} refused config`);
       return { kind: "refused", reason: "config", text: MESSAGES.noDomain };
@@ -187,11 +216,12 @@ export class Advisor {
       prefix: this.deps.claude.prefix,
       args: cliArgs({ model: this.pin.sonnet, system: s.system, mcpConfigPath: s.mcpConfigPath, allow: s.allow,
         budgetUsd: CALL_BUDGET_USD, resume: s.cliSessionId }),
-      env: childEnv(this.pin, this.deps.env),
+      env: childEnv(this.pin, this.deps.env, this.deps.passEnv),
       cwd: this.workDir,
       prompt: q,
       checkInit: (e) => judgeInit(e, allow, s.serverKeys),
       timeoutMs: this.deps.questionTimeoutMs,
+      signal: this.abort.signal,
     });
     const v = judgeAnswer(run, allow, s.prefixes, this.pin);
     const tools = s.prefixes.map((p) => `${safeName(p.replace(/^mcp__|__$/g, ""))}:${v.byPrefix[p].ok}/${v.byPrefix[p].n}`).join(",");

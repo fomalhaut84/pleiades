@@ -120,6 +120,24 @@ describe("CLI 인자 · env · 고정", () => {
     for (const k of ["DATABASE_URL", "DISCORD_BOT_TOKEN_ADVISOR", "NOTIFY_X", "ANTHROPIC_MODEL"]) expect(env[k]).toBeUndefined();
   });
 
+  // 012 4b-3a2 (#695) B4 — 상속 + 거부 목록이 아니라 허용 목록. pm2 주입 키 · 플랫폼 키 · 셸에 있던 그 밖 키는 claude 로 가지 않는다
+  it("자식 env 는 허용 목록만 — 인증 키는 있을 때만 · 추가 통과 키는 명시한 것만", () => {
+    const base = {
+      HOME: "/h", PATH: "/bin", USER: "u", LOGNAME: "u", SHELL: "/bin/sh", LANG: "ko_KR.UTF-8", LC_ALL: "C", LC_CTYPE: "UTF-8",
+      TZ: "Asia/Seoul", TMPDIR: "/t", TERM: "xterm", CLAUDE_CONFIG_DIR: "/c", ANTHROPIC_API_KEY: "k", CLAUDE_CODE_OAUTH_TOKEN: "o",
+      PLEIADES_ENV_FILE: "/p.env", PLEIADES_PRIVATE_DIR: "/priv", pm_id: "3", PM2_HOME: "/pm2", name: "pleiades-adv-bot",
+      ADVISOR_MCP_PORT_FINANCE: "4210", NODE_OPTIONS: "--x", FOO: "bar", FAKE_CLI_SPEC: "/s",
+    };
+    const env = childEnv({ haiku: "h", sonnet: "s" }, base);
+    const fixed = ["DISABLE_AUTOUPDATER", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_SMALL_FAST_MODEL", "ENABLE_TOOL_SEARCH"];
+    const passed = ["HOME", "PATH", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR", "TERM", "CLAUDE_CONFIG_DIR",
+      "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"];
+    expect(Object.keys(env).sort()).toEqual([...passed, ...fixed].sort());
+    expect(childEnv({ haiku: "h", sonnet: "s" }, { PATH: "/bin" })).not.toHaveProperty("ANTHROPIC_API_KEY");
+    expect(childEnv({ haiku: "h", sonnet: "s" }, base, ["FAKE_CLI_SPEC"])).toMatchObject({ FAKE_CLI_SPEC: "/s" });
+    expect(childEnv({ haiku: "h", sonnet: "s" }, base, ["FAKE_CLI_SPEC"])).not.toHaveProperty("FOO");
+  });
+
   it("세션을 남기고(--no-session-persistence 없음) 이어 묻기는 --resume · 상한 $1.0000", () => {
     const base = { model: "m", system: "s", mcpConfigPath: "/p", allow: ["a", "b"], budgetUsd: CALL_BUDGET_USD };
     const fresh = cliArgs({ ...base, resume: null });

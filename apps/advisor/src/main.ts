@@ -9,11 +9,14 @@ import path from "node:path";
 import { Advisor } from "./advisor";
 import { resolveClaude } from "./cli";
 import { lockFileOf, probeDeployLock } from "./deploy-lock";
-import { startBotWhenReady } from "./bot";
+import { Inflight, startBotWhenReady } from "./bot";
 import { botConfig, createAdminAlert } from "./platform";
 import { privateRoot } from "./private-dir";
 import { DailySpend } from "./spend";
 import { sessionKey } from "./session-store";
+
+/** 종료 때 진행 중 질문(정산 포함)을 기다리는 최대 시간 — pm2 `kill_timeout`(15 s · deploy/advisor) 안 (012 4b-3a2 #695 B7) */
+export const SHUTDOWN_GRACE_MS = 10_000;
 
 export const USAGE = "사용: advisor bot | advisor probe | advisor ask <채널ID> <사용자ID>  (질문은 stdin)";
 
@@ -57,21 +60,27 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv, out: Write, e
   if (cmd === "bot" && rest.length === 0) {
     const log: Write = (l) => out(l);
     const advisor = makeAdvisor(env, log, true);
+    const inflight = new Inflight();
     const handle = startBotWhenReady({
       advisor,
       spend: new DailySpend(path.join(privateRoot(env), "advisor")),
       alert: createAdminAlert(log),
       config: () => botConfig(),
       log,
+      inflight,
     });
     await new Promise<void>((resolve) => {
       const stop = () => {
-        handle.stop();
         resolve();
       };
       process.once("SIGTERM", stop);
-      process.once("SIGINT", stop);
+      process.once("SIGINT", stop); // pm2 기본 종료 신호 — 트리 전체(자식 claude 포함)에 간다
     });
+    // B7: 새 입력 끊기 → 새 질문 거부 · 진행 중 CLI 끊기 → 정산까지 기다림(최대 SHUTDOWN_GRACE_MS)
+    handle.stop();
+    advisor.shutdown();
+    const drained = await inflight.idle(SHUTDOWN_GRACE_MS);
+    log(`[advisor] 종료 — 진행 중 질문 ${drained ? "정산 완료" : `${SHUTDOWN_GRACE_MS}ms 안에 끝나지 않음(예약분이 남는다)`}`);
     return 0;
   }
   if (cmd === "ask" && rest.length === 2) {
@@ -94,6 +103,8 @@ if (require.main === module) {
   main(process.argv.slice(2), process.env, (l) => process.stdout.write(`${l}\n`), (l) => process.stderr.write(`${l}\n`))
     .then((code) => {
       process.exitCode = code;
+      // bot 은 종료 처리를 마쳤다 — 남은 핸들(타이머 · 소켓)을 기다리지 않는다(pm2 kill_timeout 안)
+      if (process.argv[2] === "bot") process.exit(code);
     })
     .catch(() => {
       process.stderr.write("advisor: 시작하지 못했다 (설정 · 비공개 위치 · domain.json 확인)\n");
