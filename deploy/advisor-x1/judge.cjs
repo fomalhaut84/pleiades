@@ -1,5 +1,5 @@
 // judge.cjs — 011 실험 X1 의 순수 판정 함수(#632 · #634). x1.cjs 가 require 한다 — 같은 디렉터리에 같은 커밋으로 설치한다.
-// 파일·프로세스·네트워크를 건드리지 않는다. 입력은 소스 문자열 · CLI stream-json 문자열 · 허용 목록뿐이다.
+// 파일·프로세스·네트워크를 건드리지 않는다. 입력은 분류 JSON 문자열 · CLI stream-json 문자열 · 허용 목록뿐이다.
 'use strict'
 
 class Stop extends Error {} // 사전 판정 실패 — 질문 0 으로 멈춘다
@@ -7,41 +7,20 @@ const stop = (line) => { throw new Stop(line) }
 const NAME_OK = /^[A-Za-z0-9_]{1,80}$/
 const safeName = (s) => (typeof s === 'string' && NAME_OK.test(s) ? s : '?')
 
-// ── S-5 분류 상수 파싱(Q118) ─────────────────────────────────────────
-// `export const NAME…= <head>[ <body> ]` — 대괄호 짝을 문자열을 건너뛰며 센다. head = '=' 와 첫 '[' 사이(fin WRITE_TOOLS 는 'mcp(')
-function block(src, name) {
-  const i = src.indexOf(`export const ${name}`)
-  if (i < 0) return null
-  const eq = src.indexOf('=', i), open = src.indexOf('[', eq)
-  if (eq < 0 || open < 0) return null
-  let depth = 0
-  for (let k = open; k < src.length; k++) {
-    const ch = src[k]
-    if (ch === "'" || ch === '"') {
-      if ((k = src.indexOf(ch, k + 1)) < 0) return null
-    } else if (ch === '`' || (ch === '/' && (src[k + 1] === '/' || src[k + 1] === '*'))) {
-      stop('S-5: 분류 상수에 주석·템플릿 문자열 — 스크립트 갱신 필요') // 회귀: #632 9-1 major 1 — 주석 처리된 도구가 허용 목록으로 새지 않게
-    } else if (ch === '[') depth++
-    else if (ch === ']' && --depth === 0) return { head: src.slice(eq + 1, open).trim(), body: src.slice(open + 1, k) }
-  }
-  return null
-}
-const quoted = (s) => [...s.matchAll(/'([^'\n]*)'|"([^"\n]*)"/g)].map((m) => m[1] ?? m[2])
-
-function finLists(src) {
-  const prefix = (src.match(/const MCP_PREFIX = ['"]([^'"]+)['"]/) || [])[1]
-  const read = block(src, 'READ_TOOLS'), write = block(src, 'WRITE_TOOLS')
-  if (!prefix || !read || !write) stop('S-5: fin 분류 상수를 찾지 못했다(소스 형식 변경 — 스크립트 갱신 필요)')
-  const seg = [...read.body.matchAll(/\.\.\.mcp\(\[([\s\S]*?)\]\)/g)]
-  if (read.head !== '' || seg.length !== 1 || write.head !== 'mcp(') stop('S-5: fin 분류 상수 형식이 예상과 다르다(mcp([...]) 하나씩)')
-  const outer = quoted(read.body.replace(seg[0][0], '')) // MCP 아닌 항목(WebSearch · WebFetch — §5-8 I-3) → 버린다
-  return { prefix, read: quoted(seg[0][1]).map((n) => prefix + n), write: quoted(write.body).map((n) => prefix + n), dropped: outer.length }
-}
-
-function fitLists(src) {
-  const allow = block(src, 'ADVISOR_ALLOWED_TOOLS'), excl = block(src, 'ADVISOR_EXCLUDED_TOOLS')
-  if (!allow || !excl || allow.head || excl.head) stop('S-5: fit 분류 상수를 찾지 못했다(소스 형식 변경 — 스크립트 갱신 필요)')
-  return { read: quoted(allow.body), write: quoted(excl.body), dropped: 0 }
+// ── S-5 분류(Q118 · #653 — 012 K-2) ─────────────────────────────────
+// 앱 루트 domain.json(계약 pleiades-domain/v0)의 tools.read · tools.write — 이 도메인 MCP 도구만 · 접두 없는 이름.
+// JSON 이라 주석·템플릿으로 도구가 가려질 길이 없다(옛 TS 상수 파서의 #632 9-1 major 1 가드가 필요 없어졌다).
+// 형식이 다르면 멈춘다 — 빈 목록 · 이름 형식 · 겹침은 x1.cjs sourceLists 가 본다.
+const TOOL_NAME = /^[a-z0-9_]{1,60}$/
+function domainLists(text) {
+  let d
+  try { d = JSON.parse(text) } catch { stop('S-5: domain.json 이 JSON 이 아니다') }
+  const t = d && d.tools, key = d && d.mcp && d.mcp.serverKey
+  if (!d || d.contract !== 'pleiades-domain/v0' || !t || !Array.isArray(t.read) || !Array.isArray(t.write) || typeof key !== 'string' || !TOOL_NAME.test(key))
+    stop('S-5: domain.json 형식이 예상과 다르다(contract · mcp.serverKey · tools.read · tools.write — 스크립트 갱신 필요)')
+  if ([...t.read, ...t.write].some((n) => typeof n !== 'string' || !TOOL_NAME.test(n))) stop('S-5: domain.json 분류에 이름 형식이 다른 항목')
+  const prefix = `mcp__${key}__`
+  return { prefix, read: t.read.map((n) => prefix + n), write: t.write.map((n) => prefix + n) }
 }
 
 // ── stream-json ──────────────────────────────────────────────────────
@@ -121,4 +100,4 @@ function judgeAnswer(r, lists, pin) {
     text: result && typeof result.result === 'string' ? result.result : '', calls }
 }
 
-module.exports = { Stop, stop, safeName, finLists, fitLists, parseStream, judgeInit, judgeAnswer }
+module.exports = { Stop, stop, safeName, domainLists, parseStream, judgeInit, judgeAnswer }

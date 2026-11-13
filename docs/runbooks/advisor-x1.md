@@ -81,6 +81,7 @@ bash ~/pleiades-advisor-x1/run-x1.sh --preflight
 - **S-3** settings 범위별 `mcp__` allow · 와일드카드 allow · hooks · 켜진 플러그인(**user · user-local 범위는 보고만** — `--setting-sources project` 로 읽지 않는다 · 실제 로드는 4절 init 판정이 질문마다 본다 · #634) — user(`~/.claude/settings.json`) · user-local(`settings.local.json`) · 관리형 파일(`/etc/claude-code/managed-settings.json`) · 관리형 조각(`managed-settings.d/*.json`) · 실행 cwd 와 그 조상의 `.claude/settings*.json`. **하나라도 있거나 파일을 못 읽으면 시작 안 함.** 실행은 `--setting-sources project` + 빈 임시 cwd 라 user 범위를 읽지 않지만, 판정은 매번 한다(#632 서버 측정: user allow 0 · hooks 0 · 관리형 없음)
 - **S-4** `claude --version` · help 에 필요한 옵션 14개 · 두 앱 `models.ts` 모델 핀이 같은가
 - **S-5** 두 체크아웃의 분류 상수(fin `READ_TOOLS`·`WRITE_TOOLS` · fit `ADVISOR_ALLOWED_TOOLS`·`ADVISOR_EXCLUDED_TOOLS`)로 허용·거부 목록을 만들고, 두 MCP 의 `tools/list` 와 빠짐없이 맞는지 · fin `READ_TOOLS` 의 MCP 아닌 항목(WebSearch · WebFetch)은 버린다 · 도구 접두 = mcp-config 서버 키(`myfinance` · `myfitness`) · fin `MCP_PORT` = mcp-config 포트 · fit 포트는 기본값과 같음/다름만
+  > **정정 (2026-11-13 · #653 · 012 4a-1).** 분류 출처가 두 체크아웃의 **`apps/<dir>/domain.json`**(`tools.read`·`tools.write` · MCP 도구만이라 버리는 항목이 없다)으로 바뀌었다. `x1.cjs` 를 다시 쓰려면 #653 머지 커밋 이후 REF 로 재설치한다 — 그 전 설치본은 #653 을 담은 릴리즈 뒤 S-5 에서 멈춘다(옛 TS 상수를 찾는다 · 질문 0 · 안전). 되돌리기: 문구 (**즉시**).
 - **Q131** 원장 테이블 스냅샷을 읽을 수 있나(아래 4절)
 
 어긋나면 그 줄과 `결과: 시작 안 함 — 질문 0` 이 나온다. 그 양식을 붙인다.

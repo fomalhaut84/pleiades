@@ -240,16 +240,16 @@ check("`.max(365)` / `Math.min(365` 리터럴 0건", offenders.length === 0, off
 // --- 7. Codex 2회차 P1: 새 MCP 도구가 어드바이저 allowlist 에 없으면 -p 비대화형에서 호출 불가
 console.log("\n[7] server.ts 등록 도구 ⊆ claude-advisor allowlist");
 const serverSrc = readFileSync(join(__dirname, "..", "src", "mcp", "server.ts"), "utf8");
-// #552: allowlist 는 advisor-tools.ts 상수로 분리 (claude-advisor.ts 는 그걸 join 한다)
-const advisorSrc = readFileSync(join(__dirname, "..", "src", "lib", "ai", "advisor-tools.ts"), "utf8");
+// #653(012 4a-1 · K-2): 분류의 정본은 앱 루트 domain.json — read = allowlist · write = 의도적 제외(옛 하드코딩 MUTATING 대신)
+const domain = JSON.parse(readFileSync(join(__dirname, "..", "domain.json"), "utf8")) as { tools: { read: string[]; write: string[] } };
 const registered = [...serverSrc.matchAll(/server\.tool\(\s*"([a-z_]+)"/g)].map((m) => m[1]);
-const allowedBlock = advisorSrc.slice(advisorSrc.indexOf("export const ADVISOR_ALLOWED_TOOLS"), advisorSrc.indexOf("];", advisorSrc.indexOf("export const ADVISOR_ALLOWED_TOOLS")));
-const allowed = new Set([...allowedBlock.matchAll(/mcp__myfitness__([a-z_]+)/g)].map((m) => m[1]));
-const MUTATING = new Set(["generate_training_plan"]); // 의도적으로 allowlist 제외 (advisor-tools.ts ADVISOR_EXCLUDED_TOOLS)
+const allowed = new Set(domain.tools.read);
+const MUTATING = new Set(domain.tools.write);
 const missing = registered.filter((t) => !MUTATING.has(t) && !allowed.has(t));
 check(`등록 도구 ${registered.length}개 파싱됨 (get_data_coverage 포함)`, registered.length >= 22 && registered.includes("get_data_coverage"));
 check("read-only 도구 전부 allowlist 에 있음", missing.length === 0, missing);
 check("mutating 도구는 allowlist 에 없음", ![...MUTATING].some((t) => allowed.has(t)));
+check("분류된 도구는 전부 등록돼 있음 (domain.json ⊆ server.ts)", [...allowed, ...MUTATING].every((t) => registered.includes(t)), [...allowed, ...MUTATING].filter((t) => !registered.includes(t)));
 // Codex 6회차 P2: days 상한이 풀린 모든 일별 도구는 행 상한 승격을 가져야 한다
 const bpSrc = readFileSync(join(__dirname, "..", "src", "mcp", "tools", "blood-pressure.ts"), "utf8");
 check("get_blood_pressure 도 promoteGranularity 를 적용한다 (소스 확인)", /promoteGranularity\("daily", displayDays, displayRecords\.length\)/.test(bpSrc) && /aggregateDaily\(displayRecords/.test(bpSrc));

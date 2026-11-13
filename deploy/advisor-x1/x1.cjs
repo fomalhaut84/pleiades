@@ -18,7 +18,7 @@
 const crypto = require('crypto'), fs = require('fs'), http = require('http'), os = require('os'), path = require('path')
 const { spawn, spawnSync } = require('child_process')
 // 순수 판정 함수(소스 분류 상수 · stream-json · init) — 같은 디렉터리에 커밋 고정으로 함께 설치한다(런북 1절)
-const { Stop, stop, safeName, finLists, fitLists, parseStream, judgeInit, judgeAnswer } = require('./judge.cjs')
+const { Stop, stop, safeName, domainLists, parseStream, judgeInit, judgeAnswer } = require('./judge.cjs')
 
 const TEST = process.env.PLEIADES_TEST === '1'
 const HOME = os.homedir()
@@ -49,7 +49,7 @@ const APPS = {
   fin: {
     dir: path.join(HOME, 'pleiades-fin', 'apps', 'finance'),
     serverKey: 'myfinance', // I-4 — 도구 접두 mcp__myfinance__
-    tools: 'src/lib/ai/advisor-tools.ts',
+    tools: 'domain.json', // #653 — 012 K-2 분류 정본
     models: 'src/lib/ai/models.ts', pins: 'PINNED_MODELS', client: 'pkg',
     // Q131 원장 테이블 — WRITE_TOOLS 의 도구가 바꾸는 모델(src/mcp/tools/*.ts · lib/trade-service.ts · lib/rsu-vest-service.ts).
     // 캐시는 뺀다(PriceCache · EarningsCache · KrxStock · BenchmarkPrice · 스냅샷 — 읽기 도구·크론도 쓴다 · 011 §3-1)
@@ -59,7 +59,7 @@ const APPS = {
   fit: {
     dir: path.join(HOME, 'pleiades-fit', 'apps', 'fitness'),
     serverKey: 'myfitness',
-    tools: 'src/lib/ai/advisor-tools.ts',
+    tools: 'domain.json', // #653 — 012 K-2 분류 정본
     models: 'src/lib/ai/models.ts', pins: 'PINNED_CLAUDE_MODELS', client: 'src/generated/prisma/client.ts', // schema.prisma generator output
     // generate_training_plan(ADVISOR_EXCLUDED_TOOLS)이 쓰는 모델(src/mcp/tools/training-plan.ts:302,326,348)
     ledger: ['TrainingPlan', 'TrainingWorkout'],
@@ -200,14 +200,14 @@ function checkSettings(cwd, form) {
   return sha(['settings.json', 'settings.local.json'].map((f) => { try { return readText(path.join(CLAUDE_DIR, f)) } catch { return '-' } }).join('\0'))
 }
 
-// ── S-5 도구 목록(Q118 · 배포 체크아웃 소스에서) ────────────────────
+// ── S-5 도구 목록(Q118 · 배포 체크아웃의 domain.json 에서 · #653) ────────────────────
 function sourceLists() {
   const out = {}
   for (const [app, a] of Object.entries(APPS)) {
     let src; try { src = readText(path.join(a.dir, a.tools)) } catch { stop(`S-5: ${app} 분류 소스 없음`) }
-    const l = app === 'fin' ? finLists(src) : fitLists(src)
+    const l = domainLists(src)
     const pre = `mcp__${a.serverKey}__`
-    if (app === 'fin' && l.prefix !== pre) stop(`S-5: fin 도구 접두가 mcp-config 서버 키(${a.serverKey})와 다르다(I-4)`)
+    if (l.prefix !== pre) stop(`S-5: ${app} 도구 접두가 mcp-config 서버 키(${a.serverKey})와 다르다(I-4)`)
     for (const n of [...l.read, ...l.write]) if (!n.startsWith(pre) || safeName(n) !== n) stop(`S-5: ${app} 분류 목록에 접두·형식이 다른 항목`)
     if (!l.read.length) stop(`S-5: ${app} 읽기 목록이 비었다`)
     if (l.read.some((n) => l.write.includes(n))) stop(`S-5: ${app} 읽기·쓰기 목록이 겹친다`)
@@ -332,7 +332,7 @@ async function checkTools(form) {
     try { registered = await listTools(urls[app]) } catch { stop(`S-5: ${app} MCP tools/list 실패`) }
     const l = lists[app]
     const c = compareRegistered(app, l, registered)
-    parts.push(`${app} 등록 ${c.n} = 읽기 ${l.read.length} + 쓰기 ${l.write.length}${l.dropped ? ` (MCP 아닌 항목 ${l.dropped} 버림)` : ''} · 차이 ${c.missing + c.extra}`
+    parts.push(`${app} 등록 ${c.n} = 읽기 ${l.read.length} + 쓰기 ${l.write.length} · 차이 ${c.missing + c.extra}`
       + ` · 포트 ${app === 'fin' ? 'mcp-config 와' : '기본값과'} ${same ? '같음' : '다름'}`)
     if (c.missing || c.extra) {
       form.push(`S-5 도구: ${parts.join(' | ')}`)
