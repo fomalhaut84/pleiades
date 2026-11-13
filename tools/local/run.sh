@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # run.sh — apps/* 를 로컬에서 기동·migrate 할 때 쓰는 유일한 입구 (#104 · 006 §4-5 L-1·L-2·L-7).
 #
-# 사용:  tools/local/run.sh <fin|fit> -- <명령…>
+# 사용:  tools/local/run.sh <fin|fit|adv> -- <명령…>   (adv = apps/advisor 통합 층 · #679 · pm2 리허설 없음 — 012 §4-3)
 #   예: tools/local/run.sh fin -- npx prisma migrate deploy      tools/local/run.sh fit -- npm run dev
 # 하는 일: cwd = apps/<app> · 감싼 명령 사전 검사(precheck.py — npm/npx/node 만 · 파괴 명령 · 훅 판정기)
 #         · PATH 맨 앞에 pleiades bin/(claude shim) · 셸의 DATABASE_URL 을 지운다(env -u)
@@ -15,7 +15,7 @@ set -euo pipefail
 die() { echo "run.sh: 중단 — $*" >&2; exit 1; }
 [[ $# -ge 3 && "$2" == "--" ]] || { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 APP=$1; shift 2
-case "$APP" in fin) DIR=finance ;; fit) DIR=fitness ;; *) die "앱은 fin 또는 fit" ;; esac
+case "$APP" in fin) DIR=finance ;; fit) DIR=fitness ;; adv) DIR=advisor ;; *) die "앱은 fin · fit · adv" ;; esac
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=${PLEIADES_ROOT:-$(cd "$HERE/../.." && pwd)}

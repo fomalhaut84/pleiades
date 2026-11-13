@@ -28,7 +28,7 @@ class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        for app in ("finance", "fitness"):
+        for app in ("finance", "fitness", "advisor"):
             (self.root / "apps" / app).mkdir(parents=True)
         shim = self.root / "bin" / "claude"
         shim.parent.mkdir()
@@ -39,7 +39,7 @@ class Base(unittest.TestCase):
         self.tmp.cleanup()
 
     def problems(self, app, env, cwd=None, **opts):
-        cwd = cwd or self.root / "apps" / {"fin": "finance", "fit": "fitness"}[app]
+        cwd = cwd or self.root / "apps" / {"fin": "finance", "fit": "fitness", "adv": "advisor"}[app]
         return c.problems(app, env, cwd=cwd, root=self.root, **{**OPTS, **opts})
 
     def keys(self, *a, **k):
@@ -114,6 +114,34 @@ class Fin(Base):
         self.assertEqual(self.keys("fin", env), {"WHOOING_WEBHOOK_URL"})
 
 
+class Adv(Base):
+    """#679 · 012 4b-1 — 통합 층(apps/advisor): DB 없음 · 웹 포트 없음 · claude 는 shim(fin 과 같은 L-7)."""
+
+    def env(self, **extra):
+        return {"PATH": f"{self.root}/bin:/usr/bin:/bin", **extra}
+
+    def test_good_passes_without_db_and_port(self):
+        self.assertEqual(self.problems("adv", self.env()), [])
+
+    def test_database_url_must_be_empty(self):
+        # 통합 층은 DB 를 쓰지 않는다(012 Q135) — 로컬 pleiades_* 라도 두지 않는다
+        for url in ("postgresql://u:p@localhost:5432/pleiades_fin", "postgresql://svc@prod/myfinance"):
+            self.assertEqual(self.keys("adv", self.env(DATABASE_URL=url)), {"DATABASE_URL"})
+
+    def test_claude_not_shimmed(self):
+        self.assertIn("claude", self.keys("adv", {"PATH": "/usr/bin:/bin"}))
+
+    def test_reserved_port_still_refused(self):
+        self.assertIn("PORT", self.keys("adv", self.env(PORT="4100")))
+
+    def test_platform_key_in_app_env_is_blocked(self):
+        (self.root / "apps/advisor/.env").write_text("DISCORD_BOT_TOKEN_ADVISOR=x\n")
+        self.assertIn("DISCORD_BOT_TOKEN_ADVISOR", self.keys("adv", self.env()))
+
+    def test_wrong_cwd(self):
+        self.assertIn("cwd", self.keys("adv", self.env(), cwd=self.root / "apps/finance"))
+
+
 class RunSh(Base):
     """run.sh — L-1 파괴 명령 거부 · 셸 DATABASE_URL 제거 · 검사 통과 시에만 실행."""
 
@@ -176,6 +204,33 @@ class RunSh(Base):
         r = self.run_sh(*cmd, PLEIADES_VERIFY_DISCORD_IDS="100",
                         PLEIADES_VERIFY_DISCORD_WEBHOOK_SHA256=c.token_hash(hook).upper())  # 대문자 해시도 같은 값이다
         self.assertEqual((r.returncode, r.stdout.strip()), (0, "ran"), r.stderr)
+
+    def test_adv_runs_in_advisor_dir(self):
+        # #679 — run.sh adv: cwd = apps/advisor · 앱 .env 없이(DB·포트 없음) 통과
+        import subprocess, shutil
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("node 없음")
+        full = {"PATH": f"{os.path.dirname(node)}:/usr/bin:/bin", "PLEIADES_ROOT": str(self.root)}
+        r = subprocess.run(["bash", str(HERE / "run.sh"), "adv", "--", "node", "-e",
+                            "console.log(require('path').basename(process.cwd()) + ' ' + (process.env.DATABASE_URL || 'unset'))"],
+                           capture_output=True, text=True, env={**full, "DATABASE_URL": "postgresql://svc@prod/x"}, check=False)
+        self.assertEqual((r.returncode, r.stdout.strip()), (0, "advisor unset"), r.stderr)
+
+    def test_adv_pm2_is_refused(self):
+        # #679 9-1 info — 통합 층은 로컬 pm2 리허설을 하지 않는다(012 §4-3 · I-3 예외는 fin·fit 만).
+        # precheck APP_OF_DIR 에 advisor 가 없어 닫힌 쪽으로 거부된다 — 이 경로를 고정한다
+        import subprocess
+        r = subprocess.run(["bash", str(HERE / "run.sh"), "adv", "--", "npx", "pm2", "list", "pleiades-adv-bot"],
+                           capture_output=True, text=True, env={"PATH": "/usr/bin:/bin", "PLEIADES_ROOT": str(self.root)}, check=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("pleiades-<app>-<역할>", r.stderr)
+
+    def test_unknown_app_refused(self):
+        import subprocess
+        r = subprocess.run(["bash", str(HERE / "run.sh"), "xyz", "--", "node", "-v"], capture_output=True, text=True,
+                           env={"PATH": "/usr/bin:/bin", "PLEIADES_ROOT": str(self.root)}, check=False)
+        self.assertEqual(r.returncode, 1)
 
     def test_violation_blocks(self):
         r = self.run_sh("node", "-e", "console.log('should-not-run')", GARMIN_EMAIL="me@x.com")
