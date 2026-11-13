@@ -5,7 +5,7 @@ name: Apps CI
 # - secrets 0 (I-9) · DB 는 러너 안 postgres 컨테이너뿐 (I-7)
 # - 워크플로우 수준 paths 필터를 쓰지 않는다 — 필수 체크가 트리거되지 않은 PR 에서 "Expected" 로 막힌다 (006 §4-4)
 # - 필수 체크(Q52 · 2026-10-01): apps-fin · apps-fit. apps-fin-test 는 서비스 CI 에 없는 추가분이라 비필수.
-#   apps-adv(#679 · 012 4b-1)는 추가 때 비필수 — 필수로 올리는 것은 ruleset 변경(사용자) · 코어(4b-1b) 안전 시험 전에 올리기를 권한다.
+#   apps-adv(#679 · 012 4b-1)도 필수(2026-11-13 · 사용자 요청 · ruleset `main·dev 보호`) — 통합 층 안전 시험(init fail-closed · 락 · 설정)이 여기서 돈다.
 #   단 fin 안전 시험(도구 분류 · MCP 읽기 경로 · #655)은 apps-fin 안에서 따로 돈다 — fit 은 npm test 가 이미 apps-fit 안이다.
 #   job 이름을 바꾸면 dev·main ruleset 의 required_status_checks 도 함께 바꾼다.
 # - apps/* 서비스 결함으로 실패하면 고치지 않는다 (Q57) — 그 체크를 비필수로 내리고 pleiades 이슈에 기록한다.

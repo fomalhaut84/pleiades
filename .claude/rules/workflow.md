@@ -289,7 +289,7 @@ git checkout integration/pleiades && git checkout -b integration/<type>-pleiades
 >
 > **정정 (2026-10-28 · 009 D-1 PR-1 · #345) — `apps/*` 행 선행에 chat 설치·빌드.** 두 앱 행의 선행은 **루트 `npm ci` → `npm --prefix packages/chat ci` → `npx --no-install tsc -p packages/chat`**(pleiades 루트에서 · `run.sh` 밖)이다 — 앱 봇 번들이 빌드 때 chat dist 를 인라인한다(D-1 PR-2·PR-3 부터 앱이 import). 서버 `deploy/deploy.sh` 1단계와 `apps-ci.yml` 세 잡이 같은 순서로 돈다. 앱 cwd 의 `npm ci` 는 chat 링크를 npm 10·11 모두 문제없이 받는다 — 앱 `.npmrc` 는 두지 않는다(`_workspace/009/d1/01_m1_app_npm_ci.md`). 되돌리기: 문구 (**즉시**).
 >
-> **CI (2026-10-01 · M-3 · #120).** 같은 단계가 `.github/workflows/apps-ci.yml` 에서 돈다 — **필수 = `apps-fin`·`apps-fit`**(서비스 CI 단계 그대로) · **`apps-fin-test` 는 비필수**(서비스 CI 에 없는 추가분 · 006 Q52 확정). `apps/*` 서비스 결함으로 실패하면 고치지 않고 그 체크를 비필수로 내린 뒤 pleiades 이슈에 기록한다(006 Q57 확정 · `isolation.md` 파생 규칙). 로컬 8절과 달리 CI 에는 `.env` 가 없다 — `DATABASE_URL` 만 러너 postgres 로. 되돌리기: 문구 (**즉시**).
+> **CI (2026-10-01 · M-3 · #120).** 같은 단계가 `.github/workflows/apps-ci.yml` 에서 돈다 — **필수 = `apps-fin`·`apps-fit`**(서비스 CI 단계 그대로) · **`apps-adv`**(2026-11-13 · #680 · 통합 층 안전 시험) · **`apps-fin-test` 는 비필수**(서비스 CI 에 없는 추가분 · 006 Q52 확정). `apps/*` 서비스 결함으로 실패하면 고치지 않고 그 체크를 비필수로 내린 뒤 pleiades 이슈에 기록한다(006 Q57 확정 · `isolation.md` 파생 규칙). 로컬 8절과 달리 CI 에는 `.env` 가 없다 — `DATABASE_URL` 만 러너 postgres 로. 되돌리기: 문구 (**즉시**).
 
 > **정정 (2026-11-13 · #655) — 안전 시험은 필수 체크 안에서 돈다.** 도구 분류·MCP 읽기 경로 시험(fin `advisor-tools.test.ts` · `read-mode.test.ts`)은 비필수 `apps-fin-test` 와 별도로 **필수 `apps-fin` job** 의 한 단계로도 돈다(fit 은 `npm test` 가 이미 `apps-fit` 안이다). `deploy/test_domain_contract.py` 는 deploy/ 행의 *"CI 미포함"* 예외로 **필수 `verify` job** 에서 돈다. 쓰기 도구가 읽기 쪽으로 새는 회귀는 머지를 막아야 하기 때문이다. 되돌리기: 문구·workflow (**즉시**).
 
