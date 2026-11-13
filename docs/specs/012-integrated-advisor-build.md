@@ -403,6 +403,8 @@
 | **K-5** | 모든 advisor 호출: 호출당 상한 · 성공·실패 줄에 `caller · model · cost · turns · tools · duration` | 로그 줄 키 | 0~1 | `askAdvisor` 1(상한 · `model=`·`tools=`) · 1회 호출 [N5] 6곳은 v0 권고 · v1 필수 |
 | **K-6** | `@pleiades/notify` · ALLOWED 필수 · ADMIN 선택 | 라우트 | 0 | 0 |
 
+> **확정 (2026-11-13 · #655 · 4a-2) — K-1 읽기 전용 경로 이름 = `/mcp/read`**(두 도메인 같음 · 같은 포트 · 쿼리 무시). 등록 거르기는 `src/mcp/read-mode.ts`(domain.json `tools.read` · 분류에 없는 도구도 닫힌 쪽) · 세션은 만든 경로의 모드에 묶여 다른 모드 경로의 sid 는 없는 세션과 같은 404 · `/mcp`·stdio 무변경. 되돌리기: 문구 (**즉시**).
+
 **#240 에 주는 것:** 도메인 #3 은 K-0 선언 · 읽기 경로를 가진 MCP · K-2 데이터 · K-3 prompt · K-5 로그 줄로 태어난다. 데이터 모델·시계열 집계는 계약 밖(#240).
 
 ---

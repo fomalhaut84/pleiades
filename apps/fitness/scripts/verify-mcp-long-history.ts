@@ -242,7 +242,7 @@ console.log("\n[7] server.ts 등록 도구 ⊆ claude-advisor allowlist");
 const serverSrc = readFileSync(join(__dirname, "..", "src", "mcp", "server.ts"), "utf8");
 // #653(012 4a-1 · K-2): 분류의 정본은 앱 루트 domain.json — read = allowlist · write = 의도적 제외(옛 하드코딩 MUTATING 대신)
 const domain = JSON.parse(readFileSync(join(__dirname, "..", "domain.json"), "utf8")) as { tools: { read: string[]; write: string[] } };
-const registered = [...serverSrc.matchAll(/server\.tool\(\s*"([a-z_]+)"/g)].map((m) => m[1]);
+const registered = [...serverSrc.matchAll(/server\.(?:tool|registerTool)\(\s*"([a-z_]+)"/g)].map((m) => m[1]);
 const allowed = new Set(domain.tools.read);
 const MUTATING = new Set(domain.tools.write);
 const missing = registered.filter((t) => !MUTATING.has(t) && !allowed.has(t));

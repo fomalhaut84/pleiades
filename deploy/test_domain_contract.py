@@ -3,7 +3,7 @@
 실행: python3 -m unittest discover -s deploy
 도메인마다 같은 검사를 돈다 — 새 도메인(#240)은 DOMAINS 에 한 줄 더하면 같은 계약을 받는다.
 보는 것: 형식 · 분류가 MCP 서버 등록과 양방향으로 같다 · 서버 키·포트가 mcp-config.json · server.ts 기본값과 같다 ·
-키 접미사를 앱 코드가 실제로 쓴다. 소스를 읽기만 한다(실행 0).
+키 접미사를 앱 코드가 실제로 쓴다 · 읽기 전용 경로(K-1). 소스를 읽기만 한다(실행 0).
 """
 
 import json
@@ -23,7 +23,8 @@ def load(app_dir: str) -> dict:
 
 def registered(app_dir: str) -> list:
     src = (ROOT / "apps" / app_dir / "src" / "mcp" / "server.ts").read_text(encoding="utf-8")
-    return re.findall(r"server\.tool\(\s*['\"]([a-z0-9_]+)['\"]", src)
+    # server.tool · server.registerTool 둘 다 — 새 등록 API 로 추가한 도구도 분류 대조에 들어온다(#655 9-1)
+    return re.findall(r"server\.(?:tool|registerTool)\(\s*['\"]([a-z0-9_]+)['\"]", src)
 
 
 class DomainContract(unittest.TestCase):
@@ -88,6 +89,15 @@ class DomainContract(unittest.TestCase):
                 suffix = load(d)["keySuffix"]
                 src = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "apps" / d / "src").rglob("*.ts"))
                 self.assertIn(f"DISCORD_CHANNEL_ID_{suffix}", src)
+
+    def test_read_path(self):
+        # K-1(#655 · 012 Q133): 읽기 전용 경로는 두 도메인 같은 이름 · domain.json tools.read 로 등록을 거른다
+        for app, d in DOMAINS.items():
+            with self.subTest(app=app):
+                mode = (ROOT / "apps" / d / "src" / "mcp" / "read-mode.ts").read_text(encoding="utf-8")
+                self.assertRegex(mode, r"MCP_READ_PATH = ['\"]/mcp/read['\"]")
+                self.assertRegex(mode, r"import domain from ['\"]\.\./\.\./domain\.json['\"]")
+                self.assertIn("new Set(domain.tools.read)", mode)
 
     def test_advisor_tools_read_domain_json(self):
         # 앱 advisor 분류 상수가 domain.json 에서 오고 목록을 다시 적지 않는다
