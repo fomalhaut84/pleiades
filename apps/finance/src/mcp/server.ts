@@ -12,6 +12,7 @@ import { z } from 'zod'
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 import { pickStaleSessions, resolveSessionRequest } from './session-utils'
+import { assertReadOnlyRegistration, canReuseSession, mcpModeForUrl, restrictToolRegistration, type McpMode } from './read-mode'
 import { logger, newTraceId, summarizeArgs, installCrashHandlers } from './logger'
 
 import { getPortfolio, getTrades } from './tools/portfolio'
@@ -179,11 +180,14 @@ function extractErrorMessage(result: unknown): string {
  * server.tool 을 wrapping 하여 모든 tool 호출을 구조화 로그로 기록.
  * (Phase 32-C — pino instrument)
  */
-export function createMyFinanceMcpServer(): McpServer {
+export function createMyFinanceMcpServer(mode: McpMode = 'full'): McpServer {
   const server = new McpServer({
     name: 'myfinance',
     version: '1.0.0',
   })
+
+  // #655(012 4a-2): 읽기 모드면 읽기 분류 도구만 등록한다 — 계측 래퍼보다 먼저 건다(래퍼가 이것을 감싼다).
+  restrictToolRegistration(server, mode)
 
   // Monkey-patch server.tool → 각 handler 를 latency/status/traceId 로 계측.
   // 원래 signature 다양 (arg count 4~5) 지만 handler 는 항상 마지막 인자.
@@ -940,6 +944,9 @@ server.tool(
   async (args) => exerciseVesting(args)
 )
 
+  // #655 9-1: 읽기 모드면 실제 등록 전체가 읽기 분류인지 마지막으로 본다 — 어긋나면 이 세션을 만들지 않는다
+  assertReadOnlyRegistration(server, mode)
+
   return server
 }
 
@@ -974,6 +981,8 @@ const SESSION_SWEEP_INTERVAL_MS = 5 * 60 * 1000 // 5분
 interface SessionEntry {
   transport: StreamableHTTPServerTransport
   lastActivityAt: number
+  /** 세션을 만든 경로의 모드 — 다른 모드 경로로는 재사용하지 않는다(#655) */
+  mode: McpMode
 }
 
 
@@ -994,7 +1003,8 @@ async function startHttp(): Promise<void> {
       return
     }
 
-    if (url === '/mcp' || url.startsWith('/mcp?')) {
+    const mode = mcpModeForUrl(url)
+    if (mode) {
       const t0 = Date.now()
       const sessionIdHeader = (req.headers['mcp-session-id'] as string | undefined) ?? null
       try {
@@ -1018,6 +1028,17 @@ async function startHttp(): Promise<void> {
 
         if (resolution === 'reuse') {
           const entry = transports.get(sessionIdHeader!)!
+          if (!canReuseSession(entry.mode, mode)) {
+            // #655: 전체 경로 세션(쓰기 도구 있음)을 읽기 경로로 쓰지 못하게 — 없는 세션과 같은 응답
+            logger.warn({ sid: sessionIdHeader, sessionMode: entry.mode, requestMode: mode }, 'session_mode_mismatch')
+            res.writeHead(404, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({
+              jsonrpc: '2.0',
+              error: { code: -32001, message: `Session not found: ${sessionIdHeader}` },
+              id: null,
+            }))
+            return
+          }
           entry.lastActivityAt = Date.now() // TTL 갱신
           transport = entry.transport
         } else if (resolution === 'create') {
@@ -1027,8 +1048,8 @@ async function startHttp(): Promise<void> {
             sessionIdGenerator: () => randomUUID(),
             onsessioninitialized: (sid: string) => {
               assignedSid = sid
-              transports.set(sid, { transport: transport!, lastActivityAt: Date.now() })
-              logger.info({ sid, total: transports.size }, 'session_initialized')
+              transports.set(sid, { transport: transport!, lastActivityAt: Date.now(), mode })
+              logger.info({ sid, mode, total: transports.size }, 'session_initialized')
             },
           })
           transport.onclose = () => {
@@ -1037,7 +1058,7 @@ async function startHttp(): Promise<void> {
               logger.info({ sid: assignedSid, total: transports.size }, 'session_closed')
             }
           }
-          const s = createMyFinanceMcpServer()
+          const s = createMyFinanceMcpServer(mode)
           await s.connect(transport)
           attachToolCallInstrumentation(transport)
         } else if (resolution === 'expired') {
@@ -1066,7 +1087,7 @@ async function startHttp(): Promise<void> {
         // attachToolCallInstrumentation 이 담당 (stdio/HTTP 공통). 여기서는 그대로 위임.
         await transport!.handleRequest(req, res, body)
         logger.info(
-          { httpMethod: req.method, rpcMethod: method, sid: sessionIdHeader ?? '(new)', latency_ms: Date.now() - t0 },
+          { httpMethod: req.method, rpcMethod: method, mode, sid: sessionIdHeader ?? '(new)', latency_ms: Date.now() - t0 },
           'http_request',
         )
         return

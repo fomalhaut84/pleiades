@@ -27,7 +27,7 @@ describe('도구 목록', () => {
 
   it('MCP 서버의 도구는 전부 어느 한쪽에 있다 — 새 도구가 분류 없이 빠지지 않는다', () => {
     const server = readFileSync(join(SRC, 'mcp', 'server.ts'), 'utf8')
-    const names = [...server.matchAll(/server\.tool\(\s*['"](\w+)['"]/g)].map((m) => `mcp__myfinance__${m[1]}`)
+    const names = [...server.matchAll(/server\.(?:tool|registerTool)\(\s*['"](\w+)['"]/g)].map((m) => `mcp__myfinance__${m[1]}`)
     expect(names).toHaveLength(59)
     const known = new Set<string>([...READ_TOOLS, ...WRITE_TOOLS])
     expect(names.filter((n) => !known.has(n))).toEqual([])
@@ -43,7 +43,7 @@ describe('domain.json (#653 · 012 K-2)', () => {
 
   it('분류된 도구는 전부 MCP 서버에 등록돼 있다 — 등록 ↔ 분류 양방향', () => {
     const server = readFileSync(join(SRC, 'mcp', 'server.ts'), 'utf8')
-    const registered = new Set([...server.matchAll(/server\.tool\(\s*['"](\w+)['"]/g)].map((m) => m[1]))
+    const registered = new Set([...server.matchAll(/server\.(?:tool|registerTool)\(\s*['"](\w+)['"]/g)].map((m) => m[1]))
     expect([...domain.tools.read, ...domain.tools.write].filter((n) => !registered.has(n))).toEqual([])
   })
 })

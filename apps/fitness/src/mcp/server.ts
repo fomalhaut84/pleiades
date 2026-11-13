@@ -16,6 +16,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { z } from "zod";
 
 import { pickStaleSessions, resolveSessionRequest } from "./session-utils";
+import { assertReadOnlyRegistration, canReuseSession, mcpModeForUrl, restrictToolRegistration, type McpMode } from "./read-mode";
 import {
   logger,
   newTraceId,
@@ -220,11 +221,14 @@ function attachToolCallInstrumentation(
  *
  * server.tool 을 wrapping 하여 모든 tool 호출을 구조화 로그로 기록 (#194).
  */
-export function createMyFitnessMcpServer(): McpServer {
+export function createMyFitnessMcpServer(mode: McpMode = "full"): McpServer {
   const server = new McpServer({
     name: "myfitness",
     version: "1.0.0",
   });
+
+  // #655(012 4a-2): 읽기 모드면 읽기 분류 도구만 등록한다 — 계측 래퍼보다 먼저 건다(래퍼가 이것을 감싼다).
+  restrictToolRegistration(server, mode);
 
   // Monkey-patch server.tool → 각 handler 를 latency/status/traceId 로 계측.
   // 원래 signature 다양 (arg count 4~5) 지만 handler 는 항상 마지막 인자.
@@ -734,6 +738,9 @@ server.tool(
   async () => getPersonalGoals()
 );
 
+  // #655 9-1: 읽기 모드면 실제 등록 전체가 읽기 분류인지 마지막으로 본다 — 어긋나면 이 세션을 만들지 않는다
+  assertReadOnlyRegistration(server, mode);
+
   return server;
 }
 
@@ -768,6 +775,8 @@ const SESSION_SWEEP_INTERVAL_MS = 5 * 60 * 1000; // 5분
 interface SessionEntry {
   transport: StreamableHTTPServerTransport;
   lastActivityAt: number;
+  /** 세션을 만든 경로의 모드 — 다른 모드 경로로는 재사용하지 않는다(#655) */
+  mode: McpMode;
 }
 
 /**
@@ -795,7 +804,8 @@ async function startHttp(): Promise<void> {
         return;
       }
 
-      if (url === "/mcp" || url.startsWith("/mcp?")) {
+      const mode = mcpModeForUrl(url);
+      if (mode) {
         const t0 = Date.now();
         const sessionIdHeader =
           (req.headers["mcp-session-id"] as string | undefined) ?? null;
@@ -823,6 +833,25 @@ async function startHttp(): Promise<void> {
 
           if (resolution === "reuse") {
             const entry = transports.get(sessionIdHeader!)!;
+            if (!canReuseSession(entry.mode, mode)) {
+              // #655: 전체 경로 세션(mutating 도구 있음)을 읽기 경로로 쓰지 못하게 — 없는 세션과 같은 응답
+              logger.warn(
+                { sid: sessionIdHeader, sessionMode: entry.mode, requestMode: mode },
+                "session_mode_mismatch",
+              );
+              res.writeHead(404, { "Content-Type": "application/json" });
+              res.end(
+                JSON.stringify({
+                  jsonrpc: "2.0",
+                  error: {
+                    code: -32001,
+                    message: `Session not found: ${sessionIdHeader}`,
+                  },
+                  id: null,
+                })
+              );
+              return;
+            }
             entry.lastActivityAt = Date.now(); // TTL 갱신
             transport = entry.transport;
           } else if (resolution === "create") {
@@ -835,9 +864,10 @@ async function startHttp(): Promise<void> {
                 transports.set(sid, {
                   transport: transport!,
                   lastActivityAt: Date.now(),
+                  mode,
                 });
                 logger.info(
-                  { sid, total: transports.size },
+                  { sid, mode, total: transports.size },
                   "session_initialized",
                 );
               },
@@ -851,7 +881,7 @@ async function startHttp(): Promise<void> {
                 );
               }
             };
-            const s = createMyFitnessMcpServer();
+            const s = createMyFitnessMcpServer(mode);
             await s.connect(transport);
             // #244 F4: sid getter 로 tool_call 로그에 세션 매칭. onsessioninitialized 후
             // assignedSid 가 채워짐 (tool_call 은 초기화 후에만 발생).
@@ -892,6 +922,7 @@ async function startHttp(): Promise<void> {
             {
               httpMethod: req.method,
               rpcMethod: method,
+              mode,
               sid: sessionIdHeader ?? "(new)",
               latency_ms: Date.now() - t0,
             },
