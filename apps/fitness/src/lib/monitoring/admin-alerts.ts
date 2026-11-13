@@ -10,6 +10,7 @@ import { sanitizeError } from "@/bot/utils/error";
 import { Route, html } from "@pleiades/notify";
 import { BOT_NOTIFY_CTX, notifierFor } from "@/bot/notifications/notifier";
 import { OmronAuthError } from "@/lib/omron/client";
+import { ASK_ADVISOR_DEFAULT_MAX_BUDGET_USD } from "@/lib/ai/advisor-budget";
 
 // ─── 카테고리 정의 ─────────────────────────────────────────────────────────
 
@@ -17,6 +18,7 @@ import { OmronAuthError } from "@/lib/omron/client";
 export type FailureCategory =
   | "claude_auth_expired"
   | "claude_rate_limit"
+  | "claude_budget_exceeded"
   | "mcp_transport_down"
   | "garmin_auth_failed"
   | "omron_auth_failed"
@@ -27,6 +29,7 @@ export type FailureCategory =
 /** SystemAlertState.alertType 값 (rate-limit 독립 관리). */
 const ALERT_TYPE: Partial<Record<FailureCategory, string>> = {
   claude_auth_expired: "claude_auth_expired",
+  claude_budget_exceeded: "claude_budget_exceeded",
   mcp_transport_down: "mcp_transport_down",
   garmin_auth_failed: "garmin_auth_failed",
   omron_auth_failed: "omron_auth_failed",
@@ -53,6 +56,11 @@ const CLAUDE_RATE_LIMIT_PATTERNS = [
   /api_status=429/i,
   /api_error_status\s*[:=]\s*429/i,
   /quota/i,
+];
+// #666: askAdvisor 비용 상한(#665) — CLI 가 상한에서 끝낸 경우(subtype) + 재시도 루프가 남은 잔액 0 에서 멈춘 경우.
+const CLAUDE_BUDGET_PATTERNS = [
+  /subtype=error_max_budget_usd/,
+  /askAdvisor: 예산 상한 도달/,
 ];
 const TOOL_MISSING_PATTERNS = [
   /tool\s+호출\s+부족/, // askAdvisor turns=1 minTurns=2 실패 (#244)
@@ -108,11 +116,13 @@ function anyMatch(msg: string, patterns: RegExp[]): boolean {
 
 /**
  * Claude CLI + MCP transport 실패를 분류. dedicated (Garmin) 은 별도 helper 로.
- * 매칭 우선순위: MCP transport → Claude auth → Claude rate-limit → tool_missing → network.
+ * 매칭 우선순위: 비용 상한 → MCP transport → Claude auth → Claude rate-limit → tool_missing → network.
+ * 비용 상한은 CLI 가 스스로 적은 subtype 이라 확정적이다 — 뒤에 붙는 stderr 의 다른 패턴보다 앞선다(#666).
  */
 export function classifyClaudeError(err: unknown): FailureCategory {
   const msg = err instanceof Error ? err.message : String(err);
-  // MCP 를 최우선 (auth 패턴이 ECONNREFUSED 아래 있어 오분류 방지).
+  if (anyMatch(msg, CLAUDE_BUDGET_PATTERNS)) return "claude_budget_exceeded";
+  // MCP 를 그다음 (auth 패턴이 ECONNREFUSED 아래 있어 오분류 방지).
   if (anyMatch(msg, MCP_TRANSPORT_PATTERNS)) return "mcp_transport_down";
   if (anyMatch(msg, CLAUDE_AUTH_PATTERNS)) return "claude_auth_expired";
   if (anyMatch(msg, CLAUDE_RATE_LIMIT_PATTERNS)) return "claude_rate_limit";
@@ -137,16 +147,27 @@ export function isGarminAuthError(err: unknown): boolean {
 
 // ─── 사용자용 문구 ─────────────────────────────────────────────────────────
 
+export interface FriendlyErrorOptions {
+  /**
+   * 관리자 알림 경로가 있는 호출부인가 (기본 true = 봇 프로세스).
+   * 웹 route 는 봇 표지가 없어 `notifyRateLimitedAlert` 가 보내지 않는다 — false 로 "알림 전송됨" 을 빼야 거짓 안내가 없다(#666).
+   */
+  adminAlerted?: boolean;
+}
+
 /** 카테고리 → 사용자 노출 문구. 원본 error message 는 서버 로그로만. */
-export function formatUserFriendlyError(err: unknown): string {
+export function formatUserFriendlyError(err: unknown, options: FriendlyErrorOptions = {}): string {
   const category = classifyClaudeError(err);
+  const alerted = (options.adminAlerted ?? true) ? " 관리자에게 알림 전송됨." : "";
   switch (category) {
+    case "claude_budget_exceeded":
+      return `💸 이번 AI 요청이 호출당 비용 상한에 닿아 중단됐습니다.${alerted} 질문을 좁혀 다시 시도해 주세요.`;
     case "claude_auth_expired":
-      return "⚠️ AI 서비스 인증이 만료됐습니다. 관리자에게 알림 전송됨. 잠시 후 재시도해 주세요.";
+      return `⚠️ AI 서비스 인증이 만료됐습니다.${alerted} 잠시 후 재시도해 주세요.`;
     case "claude_rate_limit":
       return "⏰ AI 요청량이 한도에 도달했습니다. 잠시 후 재시도해 주세요.";
     case "mcp_transport_down":
-      return "🔧 데이터 도구 연결이 끊겼어요. 관리자에게 알림 전송됨. 잠시 후 재시도해 주세요.";
+      return `🔧 데이터 도구 연결이 끊겼어요.${alerted} 잠시 후 재시도해 주세요.`;
     case "tool_missing":
       return "🔧 AI 가 데이터를 못 불러왔어요. 잠시 후 재시도해 주세요.";
     case "network":
@@ -288,6 +309,29 @@ export async function notifyClaudeAuthExpiredIfNeeded(
   });
 }
 
+/** #666: 호출당 비용 상한 도달 — 한 번은 큰 질문일 수 있지만 반복되면 프롬프트·도구 호출 폭주 신호다 */
+export async function notifyClaudeBudgetExceededIfNeeded(
+  bot: BotProcess | undefined,
+  err: unknown,
+): Promise<void> {
+  if (classifyClaudeError(err) !== "claude_budget_exceeded") return;
+  await notifyRateLimitedAlert(bot, err, {
+    alertType: ALERT_TYPE.claude_budget_exceeded!,
+    logPrefix: "[claude-budget] EXCEEDED",
+    buildMessage: (errSnippet, kst) =>
+      [
+        `💸 <b>AI 호출 비용 상한 도달</b>`,
+        `시각: ${kst} (KST)`,
+        "",
+        // 실제 상한은 아래 에러 조각의 cap= 이다 — 호출부가 maxBudgetUsd 를 넘기면 기본값과 다르다(9-1 info)
+        `askAdvisor 호출당 상한(재시도 포함) · 기본값 $${ASK_ADVISOR_DEFAULT_MAX_BUDGET_USD.toFixed(2)} · 이번 값은 에러의 cap=`,
+        `반복되면 서버 로그의 <code>[askAdvisor]</code> 줄(turns · cost)과 MCP·도구 오류 동반 여부를 확인`,
+        "",
+        `<b>에러</b>: ${errSnippet}`,
+      ].join("\n"),
+  });
+}
+
 export async function notifyMcpTransportDownIfNeeded(
   bot: BotProcess | undefined,
   err: unknown,
@@ -358,7 +402,7 @@ export async function notifyOmronAuthFailedIfNeeded(
 // ─── 통합 dispatcher ────────────────────────────────────────────────────────
 
 /**
- * 알려진 카테고리 (Claude auth / MCP transport) 중 어느 것에라도 매칭되면 해당 wrapper
+ * 알려진 카테고리 (Claude auth / MCP transport / 비용 상한 #666) 중 어느 것에라도 매칭되면 해당 wrapper
  * 호출. 매칭 안 되면 no-op. 3개 catch 지점 (ai / scheduler / auto-adjust) 에서 통합 호출.
  *
  * **주의**: Garmin 은 이 dispatcher 로 오지 않도록 (classifyClaudeError 의 unauthorized
@@ -377,6 +421,10 @@ export async function notifyAdminIfKnownFailure(
   }
   if (category === "mcp_transport_down") {
     await notifyMcpTransportDownIfNeeded(bot, err);
+    return;
+  }
+  if (category === "claude_budget_exceeded") {
+    await notifyClaudeBudgetExceededIfNeeded(bot, err);
     return;
   }
   // Garmin 은 여기서 처리 안 함 — syncAll 등 context 명확한 지점에서 직접 호출.

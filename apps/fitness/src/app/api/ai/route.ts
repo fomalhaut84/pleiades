@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { askAdvisor, resetSession, getSessionId } from "@/lib/ai/claude-advisor";
 import prisma from "@/lib/prisma";
+import { formatUserFriendlyError } from "@/lib/monitoring/admin-alerts";
+import { sanitizeError } from "@/bot/utils/error";
 
 export async function POST(request: Request) {
   try {
@@ -41,8 +43,9 @@ export async function POST(request: Request) {
       duration_ms,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    // #666: 원문(CLI stderr 일부 포함 가능)은 서버 로그로만 — 응답은 분류된 정적 문구. 웹은 관리자 알림 경로가 없다
+    console.error(`[api/ai] failed: ${sanitizeError(error)}`);
+    return NextResponse.json({ error: formatUserFriendlyError(error, { adminAlerted: false }) }, { status: 500 });
   }
 }
 
