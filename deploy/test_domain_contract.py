@@ -3,7 +3,7 @@
 실행: python3 -m unittest discover -s deploy
 도메인마다 같은 검사를 돈다 — 새 도메인(#240)은 DOMAINS 에 한 줄 더하면 같은 계약을 받는다.
 보는 것: 형식 · 분류가 MCP 서버 등록과 양방향으로 같다 · 서버 키·포트가 mcp-config.json · server.ts 기본값과 같다 ·
-키 접미사를 앱 코드가 실제로 쓴다 · 읽기 전용 경로(K-1). 소스를 읽기만 한다(실행 0).
+키 접미사를 앱 코드가 실제로 쓴다 · 읽기 전용 경로(K-1) · 지식 prompt(K-3). 소스를 읽기만 한다(실행 0).
 """
 
 import json
@@ -98,6 +98,16 @@ class DomainContract(unittest.TestCase):
                 self.assertRegex(mode, r"MCP_READ_PATH = ['\"]/mcp/read['\"]")
                 self.assertRegex(mode, r"import domain from ['\"]\.\./\.\./domain\.json['\"]")
                 self.assertIn("new Set(domain.tools.read)", mode)
+
+    def test_knowledge_prompt(self):
+        # K-3(#657 · 012 Q135): 지식 prompt 는 두 도메인 같은 이름 · 읽기 모드에서만 등록
+        for app, d in DOMAINS.items():
+            with self.subTest(app=app):
+                mod = (ROOT / "apps" / d / "src" / "mcp" / "knowledge-prompt.ts").read_text(encoding="utf-8")
+                self.assertRegex(mod, r"DOMAIN_KNOWLEDGE_PROMPT = ['\"]domain_knowledge['\"]")
+                server = (ROOT / "apps" / d / "src" / "mcp" / "server.ts").read_text(encoding="utf-8")
+                self.assertEqual(len(re.findall(r"registerDomainKnowledgePrompt\(", server)), 1)
+                self.assertRegex(server, r"if \(mode === ['\"]read['\"]\) registerDomainKnowledgePrompt\(server")
 
     def test_advisor_tools_read_domain_json(self):
         # 앱 advisor 분류 상수가 domain.json 에서 오고 목록을 다시 적지 않는다
