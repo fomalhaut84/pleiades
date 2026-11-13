@@ -7,8 +7,8 @@
 사용 (cwd = apps/<app> · 보통 tools/local/run.sh 가 부른다):
   PLEIADES_VERIFY_DISCORD_TOKEN_SHA256=<hash,hash> \
   PLEIADES_VERIFY_DISCORD_IDS=<채널·사용자 id,…> PLEIADES_VERIFY_DISCORD_WEBHOOK_SHA256=<hash,hash> \
-    python3 ../../tools/local/check_env.py <fin|fit>
-  해시 구하기: python3 ../../tools/local/check_env.py <fin|fit> --discord-hashes   (실효 Discord 봇 토큰·웹훅의 SHA-256 만 출력)
+    python3 ../../tools/local/check_env.py <fin|fit|adv>
+  해시 구하기: python3 ../../tools/local/check_env.py <fin|fit|adv> --discord-hashes   (실효 Discord 봇 토큰·웹훅의 SHA-256 만 출력)
 종료 코드: 0 통과 · 1 위반 · 2 사용 오류
 """
 
@@ -25,13 +25,17 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
-APP_DIRS = {"fin": "finance", "fit": "fitness"}
+APP_DIRS = {"fin": "finance", "fit": "fitness", "adv": "advisor"}
+# #679 · 012 4b-1 — 통합 층(adv)은 DB 를 쓰지 않고(012 Q135 · 지식은 MCP prompt 로) 웹 포트가 없다(봇 하나)
+DB_APPS = {"fin", "fit"}
+WEB_APPS = {"fin", "fit"}
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 DB_PORT = 5432
 RESERVED_PORTS = {3000, 4100, 4200, 4210, 4301}  # next dev 기본 · 서비스 fin/fit 웹 · MCP (006 L-3)
 MUST_BE_EMPTY = {
     "fin": ("WHOOING_WEBHOOK_URL",),  # 실제 가계부에 기록된다 (L-6)
     "fit": ("GARMIN_EMAIL", "GARMIN_PASSWORD", "MFDS_API_KEY"),  # 서비스 Garmin 세션 · 외부 API (L-5 · L-6)
+    "adv": ("DATABASE_URL",),  # 통합 층은 DB 없이 돈다 — 어떤 DB 든 두지 않는다(I-7 · 012 Q135)
 }
 # 009 D-5 B6 (pleiades#517): 옛 채널 검사(검증 봇 id · 앱 간 같은 봇 · CHAT_ID 키 대조)는 지웠다 — 두 앱이 옛 채널 키를
 # 읽지 않아 로컬에 서비스 토큰이 있어도 폴링·409 가 생기지 않는다. 로컬 봇 가드는 Discord 판(I-4′ · I-5′ · 아래 _check_platform).
@@ -202,12 +206,12 @@ def _check_db(app: str, url: str) -> list[Problem]:
     return [Problem("DATABASE_URL", " · ".join(bad))] if bad else []
 
 
-def _check_ports(env: dict[str, str]) -> list[Problem]:
+def _check_ports(env: dict[str, str], *, web: bool = True) -> list[Problem]:
     out, seen = [], set()
     for key in ("PORT", "MCP_PORT"):
         value = env.get(key, "")
         if not value:
-            if key == "PORT":
+            if key == "PORT" and web:
                 out.append(Problem(key, "비어 있다 — 기본 3000 · 서비스 포트와 겹치지 않게 명시한다 (L-3)"))
             continue
         if not value.isdigit() or int(value) in RESERVED_PORTS or value in seen:
@@ -217,6 +221,7 @@ def _check_ports(env: dict[str, str]) -> list[Problem]:
 
 
 def _check_advisor(app: str, env: dict[str, str], root: Path) -> list[Problem]:
+    # fin · adv 는 PATH 의 'claude' 를 부른다 — 첫 claude 가 shim 이어야 한다
     if app == "fit":
         path = env.get("CLAUDE_BIN", "")
         if not path.startswith("/") or os.path.exists(path):
@@ -225,7 +230,7 @@ def _check_advisor(app: str, env: dict[str, str], root: Path) -> list[Problem]:
     found = shutil.which("claude", path=env.get("PATH", ""))
     shim = os.path.realpath(root / "bin" / "claude")
     if not found or os.path.realpath(found) != shim:
-        return [Problem("claude", f"PATH 첫 claude 가 pleiades shim({root / 'bin/claude'})이 아니다 — fin 은 'claude' 하드코딩 (L-7)")]
+        return [Problem("claude", f"PATH 첫 claude 가 pleiades shim({root / 'bin/claude'})이 아니다 — fin·adv 는 'claude' 를 PATH 로 부른다 (L-7)")]
     return []
 
 
@@ -243,8 +248,9 @@ def problems(app: str, env: dict[str, str], *, cwd: Path, root: Path = ROOT,
         if f.name != ".env.example":
             out.append(Problem(f.name, "Next 가 .env 보다 먼저 읽는다 — 지운다 (L-2)"))
     out += [Problem(k, "dotenv 동작을 바꾼다 — 셸에서 지운다 (L-2)") for k in DOTENV_CONTROL if k in env]
-    out += _check_db(app, env.get("DATABASE_URL", ""))
-    out += _check_ports(env)
+    if app in DB_APPS:
+        out += _check_db(app, env.get("DATABASE_URL", ""))
+    out += _check_ports(env, web=app in WEB_APPS)
     if check_platform:
         out += _check_platform(env, cwd, root, discord_hashes, discord_ids, webhook_hashes)
     out += [Problem(k, "비워야 한다") for k in MUST_BE_EMPTY[app] if env.get(k)]

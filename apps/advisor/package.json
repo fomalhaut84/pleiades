@@ -1,0 +1,24 @@
+{
+  "name": "pleiades-advisor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "통합 어드바이저 — 두 도메인 읽기 경로를 한 세션에서 쓰는 통합 층 (012 · 4b)",
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --platform=node --target=node20 --outfile=dist/advisor.cjs",
+    "lint": "eslint src/ --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@types/node": "^20",
+    "esbuild": "^0.28.1",
+    "eslint": "^9.39.4",
+    "typescript": "^5",
+    "typescript-eslint": "^8",
+    "vitest": "^4.1.12"
+  },
+  "overrides": {
+    "minimatch@10": "^11.0.4"
+  }
+}

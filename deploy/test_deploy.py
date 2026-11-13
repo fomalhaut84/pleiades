@@ -777,7 +777,8 @@ class SmokeIsolation(unittest.TestCase):
 class GitignoreStatePaths(unittest.TestCase):
     # 007 4-2 정정 1 — 끝 `/` 없는 경로라야 P-2 심링크도 무시된다
     PATHS = ["apps/finance/reports", "apps/finance/logs", "apps/finance/backups", "apps/fitness/.garmin-tokens",
-             "apps/fitness/.omron-tokens", "apps/fitness/.runtime", "apps/fitness/logs"]
+             "apps/fitness/.omron-tokens", "apps/fitness/.runtime", "apps/fitness/logs",
+             "apps/advisor/logs"]  # #679 · 012 4b-1 — 통합 층 IDENTIFY·생존 표지 기록(N23)
 
     def test_symlink_paths_are_ignored_by_root_gitignore(self):
         # 스크래치 저장소에 루트 .gitignore 만 두고 심링크를 만든다 — 실제 디렉터리는 앱 .gitignore 가 먼저 잡는다
