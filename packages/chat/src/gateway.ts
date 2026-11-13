@@ -7,6 +7,7 @@
  * **4014 강등(009 D-2 F1):** `fallbackIntents` 가 있으면 4014 에서 멈추지 않고 그 intents 로 낮춰 새로 IDENTIFY 한다 —
  * 프로세스 수명 동안 유지(이후 새 세션도 낮춘 값 · RESUME 은 intents 를 보내지 않는다) · 낮춘 값으로 받은 4014 는 치명.
  * 강등 로그는 `gateway 종료 코드` 를 쓰지 않는다 — 버튼은 살아 있으므로 `discord-switch.sh` 판정을 실패시키지 않는다.
+ * **치명 close 콜백(012 4b-3a1 · #693):** `onFatalClose` 는 그 `gateway 종료 코드` 줄을 찍은 **뒤** 1회 부른다 — 줄 문구는 그대로다.
  *
  * **로그 문자열 계약(0-4 · L16′):** `[<label>] gateway 준비 완료` — `deploy/discord-switch.sh` 가 이 줄로 판정한다. 바꾸지 않는다.
  * `준비 완료` · `세션 이어받음` · `재접속 1000ms 후 (RESUME)` 은 수집기·배포 판정의 정상 줄이다(`deploy/ops/collect.cjs` NORMAL_GATEWAY · `release-inplace.sh` · #373 · #583).
@@ -43,6 +44,8 @@ export interface GatewayOptions {
   fallbackIntents?: number;
   /** 강등 1회 알림 — 실패(throw·reject)는 삼키고 경고만 · 재접속은 그대로. */
   onIntentsFallback?: () => void | Promise<void>;
+  /** 치명 close 로 멈출 때 1회(012 4b-3a1 · #693) — `gateway 종료 코드` 줄을 찍은 **뒤** 부른다 · 실패는 삼키고 경고만. */
+  onFatalClose?: (code: number) => void | Promise<void>;
   onDispatch: (type: string, data: unknown) => void;
   /** IDENTIFY(새 세션) 직전에만 부른다 — RESUME 은 횟수 제한 대상이 아니다. */
   beforeIdentify?: () => Promise<IdentifyDecision>;
@@ -178,6 +181,15 @@ export function createGateway(opts: GatewayOptions): Gateway {
     }
   };
 
+  const notifyFatal = (code: number): void => {
+    const warn = (err: unknown): void => logger.warn(`[${label}] 치명 종료 알림 실패: ${sanitizeError(err)}`);
+    try {
+      Promise.resolve(opts.onFatalClose?.(code)).catch(warn);
+    } catch (err) {
+      warn(err);
+    }
+  };
+
   const identify = async (sock: WebSocketLike): Promise<void> => {
     let decision: IdentifyDecision = { ok: true };
     if (opts.beforeIdentify !== undefined) {
@@ -304,6 +316,7 @@ export function createGateway(opts: GatewayOptions): Gateway {
         stopped = true;
         const hint = code === 4014 ? ' — 포털에서 MESSAGE CONTENT INTENT 를 켠다' : '(토큰·권한 확인)';
         logger.error(`[${label}] gateway 종료 코드 ${code} — 다시 접속하지 않는다${hint}`);
+        notifyFatal(code);
         return;
       }
       scheduleReconnect();

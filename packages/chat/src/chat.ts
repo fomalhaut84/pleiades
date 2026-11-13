@@ -44,6 +44,11 @@ export interface ChatOptions {
   fallbackIntents?: number;
   /** 강등 1회 알림 — 봇 토큰과 무관한 경로로 보낸다(호출부). 실패는 삼킨다. */
   onIntentsFallback?: () => void | Promise<void>;
+  /**
+   * 치명 close(4004 · 4010~4014 · 강등 뒤 4014)로 gateway 가 멈출 때 1회 — 봇 토큰과 무관한 경로로 보낸다(호출부 · 012 4b-3a1 #693).
+   * `gateway 종료 코드` 로그 줄은 그대로 찍힌 뒤 부른다 · 실패는 삼킨다. 넘기지 않으면 지금과 같다.
+   */
+  onFatalClose?: (code: number) => void | Promise<void>;
   /** 같은 채널 입력을 순서대로 하나씩 — 기본 `true`(009 D-2 Q3). */
   serializeByChannel?: boolean;
   /** 핸들러 하나를 기다리는 상한 — 넘으면 취소하지 않고 다음 입력으로 넘어간다. 기본 10분(AI 최장 540초 + 여유). */
@@ -335,6 +340,7 @@ export function createChat(opts: ChatOptions): Chat {
     intents,
     fallbackIntents,
     onIntentsFallback: opts.onIntentsFallback,
+    onFatalClose: opts.onFatalClose,
     label,
     logger,
     createSocket: opts.createSocket,
