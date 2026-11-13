@@ -139,11 +139,12 @@ export async function decideAiQuestion(
     await out.reply(htmlReply(html, { long: true }));
   } catch (error) {
     // #253: 원본 message 는 서버 로그, 사용자에게는 카테고리 매핑 문구.
-    // 인증 만료면 관리자에게 rate-limited alert (best-effort, catch 내부에서 무시).
+    // 인증 만료·MCP 다운·비용 상한이면 관리자에게 rate-limited alert — 결과를 받아 문구에 반영한다(#673).
     const rawMsg = error instanceof Error ? error.message : String(error);
     console.error(`[handleAiQuestion] 실패: ${rawMsg}`);
-    void notifyAdminIfKnownFailure(options.bot, error).catch(() => {});
-    const friendly = formatUserFriendlyError(error);
+    // #673: 알림 결과(최대 ADMIN_ALERT_WAIT_MS)를 받아 문구가 실제 결과만 말하게 한다 · dispatcher 는 던지지 않는다
+    const adminAlert = await notifyAdminIfKnownFailure(options.bot, error);
+    const friendly = formatUserFriendlyError(error, { adminAlert });
     try {
       await out.reply(plainReply(friendly));
     } catch {

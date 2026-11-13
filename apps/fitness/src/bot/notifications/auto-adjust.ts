@@ -452,9 +452,10 @@ export async function runAutoAdjustProposal(bot: BotProcess): Promise<void> {
     const msg = sanitizeError(error);
     console.error(`[auto-adjust] 실패: ${msg}`);
     // #253: 인증 만료면 관리자 alert. best-effort.
-    void notifyAdminIfKnownFailure(bot, error).catch(() => {});
+    // #673: 알림 결과를 받아 문구에 반영 (최대 ADMIN_ALERT_WAIT_MS · 던지지 않는다)
+    const adminAlert = await notifyAdminIfKnownFailure(bot, error);
     try {
-      const friendly = formatUserFriendlyError(error);
+      const friendly = formatUserFriendlyError(error, { adminAlert });
       await notifierFor().notify(
         Route.ALLOWED,
         html(`❌ Auto-adjust 알림 실패\n${friendly}`),

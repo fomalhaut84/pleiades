@@ -7,6 +7,8 @@ import { loadActivityEvalInput } from "@/lib/ai/activity-eval/load";
 import { resolvePromptTemplate } from "@/lib/prompts/resolve";
 import { ACTIVITY_EVAL_CATEGORY, ACTIVITY_EVAL_CHANNEL } from "@/lib/ai/activity-eval/constants";
 import prisma from "@/lib/prisma";
+import { formatUserFriendlyError } from "@/lib/monitoring/admin-alerts";
+import { sanitizeError } from "@/bot/utils/error";
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -32,7 +34,8 @@ export async function POST(_request: Request, { params }: Params) {
     // #552 M19-2: 실제로 쓴 지시문 버전 (모드별 키 · 치환 폴백이면 null)
     const promptVersionId = ctx.templateFallback ? null : ctx.mode === "full" ? full.versionId : brief.versionId;
     if (!result || result.trim().length === 0) {
-      throw new Error("어드바이저가 빈 응답을 돌려줬습니다");
+      console.error("[activity-eval] failed: 빈 응답");
+      return NextResponse.json({ error: "어드바이저가 빈 응답을 돌려줬습니다" }, { status: 500 });
     }
 
     // 이력 저장은 부차적 — 30~90초짜리 평가를 DB 오류로 버리지 않는다 (사전 리뷰 info 4)
@@ -53,8 +56,8 @@ export async function POST(_request: Request, { params }: Params) {
       duration_ms,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("[activity-eval] failed:", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    // #666: 원문(CLI stderr 일부 포함 가능)은 서버 로그로만 — 응답은 분류된 정적 문구. 웹은 관리자 알림 경로가 없다
+    console.error(`[activity-eval] failed: ${sanitizeError(error)}`);
+    return NextResponse.json({ error: formatUserFriendlyError(error) }, { status: 500 });
   }
 }
