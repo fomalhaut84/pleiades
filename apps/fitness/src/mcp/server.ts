@@ -17,6 +17,7 @@ import { z } from "zod";
 
 import { pickStaleSessions, resolveSessionRequest } from "./session-utils";
 import { assertReadOnlyRegistration, canReuseSession, mcpModeForUrl, restrictToolRegistration, type McpMode } from "./read-mode";
+import { registerDomainKnowledgePrompt } from "./knowledge-prompt";
 import {
   logger,
   newTraceId,
@@ -737,6 +738,9 @@ server.tool(
   {},
   async () => getPersonalGoals()
 );
+
+  // #657(012 4a-3a): 도메인 지식 prompt 는 읽기 경로에만 — 전체 경로(앱 advisor)의 맥락은 그대로다
+  if (mode === "read") registerDomainKnowledgePrompt(server, async () => (await import("./prisma")).default, logger);
 
   // #655 9-1: 읽기 모드면 실제 등록 전체가 읽기 분류인지 마지막으로 본다 — 어긋나면 이 세션을 만들지 않는다
   assertReadOnlyRegistration(server, mode);

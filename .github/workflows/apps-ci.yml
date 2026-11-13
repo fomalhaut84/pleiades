@@ -78,8 +78,8 @@ jobs:
         run: npx tsc --noEmit
       # #655: 도구 분류(domain.json ↔ 등록 · 쓰기 허용 호출부)와 MCP 읽기 경로 시험만 필수 job 에서 돈다 — DB 불필요.
       # 전체 fin 테스트(apps-fin-test)는 Q52 대로 비필수지만, 쓰기 도구가 읽기 쪽으로 새는 회귀는 머지를 막아야 한다.
-      - name: Safety tests (도구 분류 · 읽기 경로)
-        run: npx vitest run src/lib/ai/__tests__/advisor-tools.test.ts src/mcp/__tests__/read-mode.test.ts
+      - name: Safety tests (도구 분류 · 읽기 경로 · 지식 prompt)
+        run: npx vitest run src/lib/ai/__tests__/advisor-tools.test.ts src/mcp/__tests__/read-mode.test.ts src/mcp/__tests__/knowledge-prompt.test.ts
       - name: Build
         run: npm run build
 
