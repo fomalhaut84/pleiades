@@ -4698,3 +4698,28 @@ HEAD `1d9eadc23d49` · `apps/*` 정적 읽기만(봇·웹·MCP·`claude` 실행 
 - **못 잰 값(서버):** caller·채널별 호출 수·비용·지연·실패 분포(판정 스크립트 `.server-scripts/23-server-239-advisor-cost.sh` · gitignored) · **fin 성공 지연은 기록 자체가 없다**(크론 caller 만 "끝 − 크론 시각" 상한) · fit 1회 호출 비용·지연 · 토큰 · 서버 실제 `MCP_PORT` · CLI 버전 · 계정 쿼터 · CLI 세션 디스크 누적.
 
 **서버 기준선 (2026-11-12 · 사용자 실행 · 최근 14일 · 판정 요약 `_workspace/239/01b_server_advisor_cost.md`):** advisor 호출 138(fin 83 · fit 55) · 비용 $36.49(하루 $2.61) · 정기 호출 92 · $24.33(2/3) · 사람 대화 46 · $12.16 · 실패·재시도·드리프트 0. fit 대화 지연 p50 20.5 s · p90 78.7 s · fit 정기 리포트 62~149 s · fin 크론 상한 p50 83~108 s(fin 지연 기록 없음 W1). MCP 도구 p50 fin 110 ms · fit 23 ms — 지연은 모델 턴이 정한다. fin `get_news` 오류 11/60.
+
+## 2026-11-13 — 012 통합 어드바이저 구현 설계 실측 (#651)
+
+HEAD `4fd10d3b62f0` · pleiades 추적 파일 정적 읽기만(봇·웹·MCP·`claude` 실행 0 · 서버 0 · 로컬 DB 0). **측정 명령·줄 근거는 전부 `_workspace/239/stage3/01_surveyor_runtime.md`(RT) · `01_surveyor_tools.md`(TL)** · 감사 3회(`03_auditor_stage3*.md`)가 확인·정정한 값으로 적는다. 2026-11-12 011 절을 대체하지 않고 더한다.
+
+| 항목 | 값 | 출처 |
+|---|---|---|
+| 앱 봇 대화 채널 키 | 메시지마다 다시 읽힌다(`IdList` 함수 · 플랫폼 env mtime 재읽기) — 끄기 즉시 · 켜기는 재시작(intents 는 기동 때 고정) | RT §0 R1 |
+| G1 계열(배포 경로에 셋째 앱) | 앱 고정 운영 파일 8 · 그중 web·bot·mcp+prisma 구조 가정 4(`deploy.sh` · `pleiades.config.cjs` · `release-inplace.sh` · `collect.cjs`) · 로컬 3 · 시험 6 · `deploy.yml` 0 | RT §3-1 |
+| 체크아웃 밖 설치 선례 | 수집기 1파일 · X1 3파일 · curl + sha256 · 의존 모듈 설치 0 · 저장소 systemd 단위 0 | RT §3-2 |
+| `release-inplace.sh` 프로세스 검사 | C1·C5 `env_same` = `pleiades-` 로 시작하는 **모든** pm2 프로세스의 `PLEIADES_ENV_FILE` 대조 · `app_procs` = `pleiades-<app>-` · C5 online == 3 · pm2 정의에 `PLEIADES_ENV_FILE` 0 · `--retry` 는 C2 만 건너뛰고 C1~C5 재실행 | 012 §0 N20·N25 · AU · AU3 R3-1 |
+| 배포 락 `deploy.lock` 사용처 | `release-inplace.sh`(fd 9 · 자식에서 fd 닫음) · `discord-inbound.sh` · X1 `run-x1.sh` = `flock -n` · 수집기는 열지 않음 · `deploy.sh`·`ssh-deploy.sh`·`discord-switch` 는 락 없음(`discord-inbound.sh:61` 주석은 낡음) | 012 §0-5 S1 |
+| `DISCORD_ALLOWED_USER_IDS` | fin·fit 봇이 같이 읽는 목록 하나 · 정확 일치 정규식 3(notify `PLATFORM_KEY_RE` · `check_env.py` `PLATFORM_KEY` · `DISCORD_ID_KEY`) | 012 §0-5 S2 · AU2 R2-D |
+| `createChat` 필수 인자 | 6(`token` · `router` · `allowedUserIds` · `allowedChannelIds` · `label` · `identifyGuard`) · 앱 조립 파일 fin 135 · fit 148 줄 · chat src 11파일 1,653 줄 | RT §1 · AU B-6 |
+| AI 분기(4c-1) | 파일 3 · 분기 5(fin `router.ts:148` trade · `:149` question · `:174` `!ai` · fit `free-text.ts:53` · `router.ts:52`) · 스위치 env 0 · fin question 과 `!ai` 는 같은 함수 `decideAiQuestion` | RT §2 · AU A-7 |
+| 세션 | fin `discord:<채널>:<사용자>` 24 h · fit `"discord"` 6 h · 100,000 토큰 · `--session-id` 0 | RT §4 |
+| 기억 저장 자리 | 모델 fin 30 · fit 22 · 사용자 기억 전용 0 · 통합 층 DB 0 · fit `personalGoalNote` 1칸 | RT §5 |
+| MCP 등록 · C3+ | fin 59 · fit 28(분류 차이 0/0) · 등록은 팩토리 한 함수 · 계측 래퍼가 단일 지점 · MCP 는 분류를 import 0 · 앱당 공통 3 + 경로 2 + sid 가드 1 · 배포 pre-flight 는 `/health` 만 | TL §1 · AU B-1~B-4 |
+| 읽기 도구 부수 쓰기 | fin `get_prices`·`get_watchlist` 가격 캐시 upsert(실패는 삼킴) · fit `get_activity_splits`·`get_activity_context` 웹 경유 Garmin(토큰 무효면 토큰 파일) · `get_personal_records` 는 웹 메모리 캐시 · DB 읽기 전용 접속은 읽기 도구를 깨지 않는다 | TL §2 · AU B-15 |
+| `READ_TOOLS` 줄 | `advisor-tools.ts:11-41` · `WebSearch`·`WebFetch` `:39-40` | AU A-13 |
+| 지식 크기 | fin `SYSTEM_PROMPT` 13,226 B · fin 답 지식 7,894 B(rules 2파일 + `CLAUDE.md` Key Domain Rules 절) · fit 기본 시스템 12,513 B · 확인 소계 33,633 B · 미확인 fin `NEWS_RULES_SECTION` · fit DB 활성 본문 | TL §4 |
+| MCP SDK | fin 1.32.1 · fit 1.32.2 — `registerPrompt`·`registerResource`·`readOnlyHint` 제공 · 두 앱 사용 0 | AU A-5 |
+| 셋째 앱을 모르는 곳(N12 밖) | `apps-ci.yml` · `security-audit.yml`(lockfile 5) · `workflow.md` 8절 · 루트 `.gitignore` · 4b-1 등록 = 필수 7 + 선택 1(`precheck.py` 무변경 — `node` 이미 허용) | AU A-10 · AU3 R3-2 |
+
+- **못 잰 값:** resume 대화 턴별 비용 · 셋째 체크아웃 서버 디스크 · 4c-2 넘김 경로 비용 비교 · 쿼터 형태·잔량 — 재는 방법은 012 §0-4.
