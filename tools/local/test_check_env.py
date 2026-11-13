@@ -246,6 +246,11 @@ class PlatformKeys(Base):
         self.assertEqual(self.keys("fit", GOOD_FIT) & {"NOTIFY_ALLOWED_CHANNEL", "DISCORD_WEBHOOK_FITNESS"},
                          {"NOTIFY_ALLOWED_CHANNEL", "DISCORD_WEBHOOK_FITNESS"})
 
+    def test_advisor_allow_key_in_app_env_is_blocked(self):
+        # #685 · Q138 — 전용 허용 키도 플랫폼 키다(앱 .env 에 두면 루트 값을 가린다)
+        (self.root / "apps/advisor/.env").write_text("DISCORD_ALLOWED_USER_IDS_ADVISOR=1\n")
+        self.assertIn("DISCORD_ALLOWED_USER_IDS_ADVISOR", self.keys("adv", {"PATH": f"{self.root}/bin"}))
+
     def test_shell_platform_key_is_allowed(self):
         # 셸 export(일회성 덮어쓰기)는 막지 않는다 — 앱 .env 파일만 본다
         self.assertEqual(self.keys("fit", {**GOOD_FIT, "NOTIFY_ALLOWED_CHANNEL": "discord"}), set())
@@ -393,6 +398,13 @@ class DiscordTargets(Base):
     def test_production_channel_is_refused(self):
         self.root_env("DISCORD_CHANNEL_ID_FITNESS_CHAT=999\n")
         self.assertEqual(self.dkeys(), {"DISCORD_CHANNEL_ID_FITNESS_CHAT"})
+
+    def test_advisor_allow_key_is_a_target(self):
+        # #685 · Q138 — 전용 허용 키의 운영 사용자 ID 가 로컬 실효 env 에 있으면 거부(I-5′)
+        self.root_env("DISCORD_ALLOWED_USER_IDS_ADVISOR=100,777\n")
+        self.assertEqual(self.dkeys(), {"DISCORD_ALLOWED_USER_IDS_ADVISOR"})
+        self.root_env("DISCORD_ALLOWED_USER_IDS_ADVISOR=100\n")
+        self.assertEqual(self.dkeys(), set())
 
     def test_one_unknown_user_in_list_is_refused_by_count_only(self):
         self.root_env("DISCORD_ALLOWED_USER_IDS=100,888\n")

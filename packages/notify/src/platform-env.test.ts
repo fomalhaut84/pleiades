@@ -6,6 +6,7 @@ import {
   findPlatformEnvFile,
   parseEnvValue,
   parsePlatformEnv,
+  PLATFORM_KEY_RE,
   platformEnv,
   resetPlatformEnvCache,
 } from './platform-env';
@@ -141,5 +142,12 @@ describe('platformEnv — 루트 .env 와 프로세스 env', () => {
 
   it('플랫폼 키가 아닌 이름은 거부한다 — 봇 토큰을 이 경로로 읽지 못한다', () => {
     expect(() => platformEnv('APP_BOT_TOKEN')).toThrow('플랫폼 키가 아니다');
+  });
+
+  // #685 · 012 Q138 — 통합 층 전용 허용 사용자 키는 플랫폼 키다(정확한 이름만 · 접미사 와일드카드 아님)
+  it('DISCORD_ALLOWED_USER_IDS_ADVISOR 는 플랫폼 키 · 다른 접미사는 아니다', () => {
+    expect(PLATFORM_KEY_RE.test('DISCORD_ALLOWED_USER_IDS_ADVISOR')).toBe(true);
+    expect(PLATFORM_KEY_RE.test('DISCORD_ALLOWED_USER_IDS_FINANCE')).toBe(false);
+    expect(parsePlatformEnv('DISCORD_ALLOWED_USER_IDS_ADVISOR="1,2"\n').values).toEqual({ DISCORD_ALLOWED_USER_IDS_ADVISOR: '1,2' });
   });
 });

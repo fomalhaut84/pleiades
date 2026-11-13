@@ -46,14 +46,14 @@ LINE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
 # (@pleiades/notify platformEnv 는 프로세스 env 를 먼저 본다 · #143)
 PLATFORM_KEY = re.compile(
     r"^(?:NOTIFY_[A-Z0-9_]+|DISCORD_WEBHOOK_[A-Z0-9_]+|DISCORD_BOT_TOKEN_[A-Z0-9_]+|DISCORD_CHANNEL_ID_[A-Z0-9_]+"
-    r"|DISCORD_ALLOWED_USER_IDS)$"
-)  # @pleiades/notify platform-env.ts PLATFORM_KEY_RE 와 같아야 한다
+    r"|DISCORD_ALLOWED_USER_IDS(?:_ADVISOR)?)$"
+)  # @pleiades/notify platform-env.ts PLATFORM_KEY_RE 와 같아야 한다 · _ADVISOR = 통합 층 전용 허용(#685 · Q138)
 
 
 # 009 D-G(#328) — Discord 봇 토큰. 토큰 → 봇 ID 도출은 공식 문서로 확인하지 못했다(009 U-9) — 허용 목록은 토큰 SHA-256 이다
 DISCORD_TOKEN_KEY = re.compile(r"^DISCORD_BOT_TOKEN_[A-Z0-9_]+$")
 # #359 · I-5′ — 로컬 앱이 닿는 Discord 대상. 웹훅 URL 은 그 자체가 비밀이라 해시로 대조한다
-DISCORD_ID_KEY = re.compile(r"^(?:DISCORD_CHANNEL_ID_[A-Z0-9_]+|DISCORD_ALLOWED_USER_IDS)$")
+DISCORD_ID_KEY = re.compile(r"^(?:DISCORD_CHANNEL_ID_[A-Z0-9_]+|DISCORD_ALLOWED_USER_IDS(?:_ADVISOR)?)$")
 DISCORD_WEBHOOK_KEY = re.compile(r"^DISCORD_WEBHOOK_[A-Z0-9_]+$")
 
 
