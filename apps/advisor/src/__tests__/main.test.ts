@@ -1,6 +1,7 @@
 // #680 — 진입점: 사용법 · 키 형식. 실제 실행 경로(probe · ask)는 advisor.test 가 코어로 본다.
 import { describe, expect, it } from "vitest";
-import { USAGE, main } from "../main";
+import { Readable } from "node:stream";
+import { USAGE, main, readAll } from "../main";
 
 const run = async (argv: string[]) => {
   const out: string[] = [];
@@ -18,5 +19,13 @@ describe("advisor main", () => {
 
   it("ask 의 채널·사용자 ID 가 숫자가 아니면 2", async () => {
     expect((await run(["ask", "abc", "1"])).code).toBe(2);
+  });
+});
+
+// 회귀: PR #684 Codex P2 — 청크 경계에 걸린 멀티바이트 문자
+describe("readAll", () => {
+  it("한글 한 글자가 두 청크로 나뉘어도 깨지지 않는다", async () => {
+    const b = Buffer.from("수면 질문", "utf8");
+    expect(await readAll(Readable.from([b.subarray(0, 1), b.subarray(1, 4), b.subarray(4)]))).toBe("수면 질문");
   });
 });

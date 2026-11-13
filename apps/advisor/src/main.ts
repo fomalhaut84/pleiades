@@ -30,11 +30,14 @@ function makeAdvisor(env: NodeJS.ProcessEnv, log: Write, needClaude: boolean): A
   });
 }
 
-async function readStdin(): Promise<string> {
-  let s = "";
-  for await (const c of process.stdin) s += c;
-  return s;
+/** 버퍼를 모아 한 번에 UTF-8 로 — 청크마다 디코드하면 경계에 걸린 한글이 깨진다(PR #684 Codex P2) */
+export async function readAll(stream: AsyncIterable<Buffer | string>): Promise<string> {
+  const parts: Buffer[] = [];
+  for await (const c of stream) parts.push(typeof c === "string" ? Buffer.from(c, "utf8") : c);
+  return Buffer.concat(parts).toString("utf8");
 }
+
+const readStdin = () => readAll(process.stdin);
 
 /** 종료 코드: 0 정상 · 1 거부·실패 · 2 사용법 */
 export async function main(argv: string[], env: NodeJS.ProcessEnv, out: Write, err: Write, input = readStdin): Promise<number> {
