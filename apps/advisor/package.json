@@ -9,6 +9,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@pleiades/chat": "file:../../packages/chat",
+    "@pleiades/notify": "file:../../packages/notify"
+  },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@types/node": "^20",
