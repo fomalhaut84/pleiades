@@ -51,7 +51,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { syncAll } from "@/lib/garmin/sync";
 import { generateMorningReport } from "@/lib/daily-report";
 import { askAdvisor, resetSession } from "@/lib/ai/claude-advisor";
-import { notifyAdminIfKnownFailure } from "@/lib/monitoring/admin-alerts";
+import { formatUserFriendlyError, notifyAdminIfKnownFailure } from "@/lib/monitoring/admin-alerts";
 import { applyKcalCorrection } from "@/lib/nutrition/scale-macros";
 import { estimateNutritionFromPhoto } from "@/lib/nutrition/estimate-nutrition-photo";
 import { estimateNutritionFromMfds } from "@/lib/nutrition/estimate-nutrition-mfds";
@@ -189,6 +189,16 @@ describe("명령 판단 11", () => {
     err.mockRestore();
     expect(log.at(-1)).toEqual({ text: "친절한 오류", format: "plain" });
     expect(vi.mocked(notifyAdminIfKnownFailure).mock.calls.at(-1)?.[0]).toBe(discordBot);
+  });
+
+  it("ai — 관리자 알림 결과를 사용자 문구에 넘긴다 (#673)", async () => {
+    vi.mocked(askAdvisor).mockRejectedValueOnce(new Error("x"));
+    vi.mocked(notifyAdminIfKnownFailure).mockResolvedValueOnce("recent");
+    const err = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { out } = sink();
+    await decideAiQuestion("q", out, { channel: "discord", bot: discordBot });
+    err.mockRestore();
+    expect(vi.mocked(formatUserFriendlyError).mock.calls.at(-1)?.[1]).toEqual({ adminAlert: "recent" });
   });
 
   it("reset — 자기 플랫폼 세션만", () => {
