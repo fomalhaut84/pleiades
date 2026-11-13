@@ -45,10 +45,11 @@ async function runReportCron(
     const msg = sanitizeError(error);
     console.error(`[bot-cron] ${label} 에러: ${msg}`);
     // #253: 인증 만료면 관리자 alert (rate-limited). best-effort.
-    void notifyAdminIfKnownFailure(bot, error).catch(() => {});
+    // #673: 알림 결과를 받아 문구에 반영 (최대 ADMIN_ALERT_WAIT_MS · 던지지 않는다)
+    const adminAlert = await notifyAdminIfKnownFailure(bot, error);
     // 조용한 실패 차단: 사용자에게 카테고리 매핑 문구 (기존 raw msg 대체).
     try {
-      const friendly = formatUserFriendlyError(error);
+      const friendly = formatUserFriendlyError(error, { adminAlert });
       await notifierFor().notify(
         Route.ALLOWED,
         htmlContent(`❌ ${label} 생성 실패\n${friendly}`),
