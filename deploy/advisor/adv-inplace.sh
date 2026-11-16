@@ -260,6 +260,9 @@ stop_body() {
         ;;
       *)
         pm2 delete "$ADV_NAME" >>"$LOG" 2>&1 || stop 4 "S — pm2 delete 실패 → 같은 명령 재실행"
+        # 두 앱이 없는 데몬(재부팅 뒤 부분 복구 등)에서 save --force 하면 두 앱 resurrect 목록이 지워진다(PR #700 Codex P2)
+        grep -qE '^pleiades-(fin|fit)-' <<<"$(env_same)" \
+          || stop 4 "S — $ADV_NAME 는 내렸지만 두 앱이 없는 데몬이라 save 하지 않았다(dump 에 adv 남음) → 두 앱을 복구한 뒤 stop 다시"
         pm2 save --force >>"$LOG" 2>&1 || stop 4 "S — pm2 save 실패 → 같은 명령 재실행"
         form "S  $ADV_NAME 삭제 · save: 예"
         ;;

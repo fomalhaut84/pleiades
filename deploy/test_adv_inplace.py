@@ -531,6 +531,17 @@ class AdvInplace(unittest.TestCase):
         self.assertForm(r, 4, "dump")
         self.assertNotIn("pm2 save", self.srv.calls())
 
+    # 회귀: PR #700 Codex P2 — 데몬에 adv 만 있고 두 앱은 아직 복구 전이면 delete 뒤 save 가 두 앱 resurrect 목록을 지운다
+    def test_stop_with_only_adv_in_daemon_does_not_save(self):
+        self.srv.release("v1.0.1")
+        self.assertForm(self.deploy(), 0)
+        before = self.srv.calls()
+        r = self.srv.run("stop", "--yes", STUB_NO_APPS="1")
+        self.assertForm(r, 4, "save 하지 않았다")
+        new = self.srv.calls()[len(before):]
+        self.assertIn("pm2 delete pleiades-adv-bot", new)
+        self.assertNotIn("pm2 save", new)
+
     def test_stop_without_daemon_but_adv_in_dump_is_rc4(self):
         (self.srv.home / ".pm2" / "rpc.sock").unlink()
         self.dump(with_adv=True)
