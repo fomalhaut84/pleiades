@@ -1,6 +1,6 @@
 /**
  * 회귀: pleiades#540 — 앱 판 `sanitizeMessage`·`sanitizeError` 는 `@pleiades/notify` 판과 같아야 한다.
- * 옛 앱 판은 텔레그램 봇 토큰만 가려서, 이 파일로 import 하면 웹훅·인터랙션·Discord 봇 토큰이 조용히 남았다.
+ * 옛 앱 판은 옛 채널 봇 토큰(`<숫자>:<문자열>`)만 가려서, 이 파일로 import 하면 웹훅·인터랙션·Discord 봇 토큰이 조용히 남았다.
  */
 
 import * as notify from '@pleiades/notify'
@@ -30,7 +30,7 @@ describe('sanitizeMessage (앱 판 = 패키지 판)', () => {
     expect(sanitizeMessage(BOT_TOKEN)).toBe('auth failed for <DISCORD_TOKEN_REDACTED>')
   })
 
-  it('옛 텔레그램 봇 토큰도 계속 가린다', () => {
+  it('옛 채널 봇 토큰도 계속 가린다', () => {
     expect(sanitizeMessage('call bot123456:ABC-def_78 failed')).toBe('call bot<REDACTED> failed')
   })
 

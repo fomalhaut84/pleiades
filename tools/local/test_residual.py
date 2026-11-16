@@ -87,6 +87,7 @@ class LineRule:
 
 LINE_RULES = (
     LineRule(("deploy/release-inplace.sh",), when=r"^PLEIADES_KEYS='", strip=KEY, why="셸 정리 목록(5-2)"),
+    LineRule(("deploy/advisor/adv-inplace.sh",), when=r"^PLEIADES_KEYS='", strip=KEY, why="셸 정리 목록 — 통합 층 배포(#699 · #681)"),
     LineRule(("docs/runbooks/release-inplace.md",), when=r"^KEYS='", strip=KEY, why="셸 정리 목록 런북 사본(5-2)"),
     LineRule(("apps/finance/src/mcp/logger.ts",), strip=KEY, why="redact — 서버 토큰 revoke 까지 가린다"),
     LineRule(("apps/fitness/src/**",), strip=DB_COLUMN, why="DB 컬럼명(S-8)"),
@@ -190,6 +191,9 @@ class ResidualTest(unittest.TestCase):
         self.assertTrue(line_allowed("deploy/release-inplace.sh", "PLEIADES_KEYS='A|TELEGRAM_[A-Z_]*|B'"))
         self.assertFalse(line_allowed("deploy/x.sh", 'echo telegram'))
         self.assertFalse(line_allowed("deploy/release-inplace.sh", "# TELEGRAM_BOT_TOKEN 정리"))
+        # 회귀: #681 — 통합 층 배포 스크립트의 셸 정리 목록도 키 이름만 허용한다
+        self.assertTrue(line_allowed("deploy/advisor/adv-inplace.sh", "PLEIADES_KEYS='A|TELEGRAM_[A-Z_]*|B'"))
+        self.assertFalse(line_allowed("deploy/advisor/adv-inplace.sh", "# 텔레그램 키 정리"))
 
     def test_glob(self):
         self.assertTrue(matches("apps/finance/docs/a/b.md", ("apps/*/docs/**",)))
