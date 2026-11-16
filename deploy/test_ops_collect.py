@@ -827,3 +827,159 @@ class StateAndLock(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Advisor(Base):
+    """012 4b-3c(#704) — 통합 층 pleiades-adv-bot 감시. 활성 = inplace-adv-last-ok 있음 AND inplace-adv-stopped 없음."""
+
+    ADV = "pleiades-adv-bot"
+    E = "pleiades-adv-bot-error-9.log"
+
+    def setUp(self):
+        super().setUp()
+        self.adv_dir = self.home / "pleiades-adv" / "apps" / "advisor"
+        (self.adv_dir / "logs").mkdir(parents=True)
+        self.private.mkdir(parents=True, exist_ok=True)
+
+    def activate(self, on=True):
+        (self.private / "inplace-adv-last-ok").write_text("v1.15.0\n")
+        stopped = self.private / "inplace-adv-stopped"
+        if on:
+            stopped.unlink(missing_ok=True)
+        else:
+            stopped.write_text("x\n")
+
+    def procs(self, adv=None, apps=True):
+        p = {n: ("online", 0) for n in NAMES} if apps else {}
+        if adv:
+            p[self.ADV] = (adv, 0)
+        self.set_procs(p)
+
+    def text(self):
+        return "\n".join(self.posts())
+
+    def marker(self, at):
+        p = self.adv_dir / "logs" / "alive-adv.json"
+        p.write_text('{"at":"x","state":"ack"}')
+        t = datetime.fromisoformat(at).timestamp()
+        os.utime(p, (t, t))
+
+    def test_never_deployed_is_not_judged_and_logs_untouched(self):
+        self.log(self.E, "2026-11-10 07:59:00: [advisor] TypeError: x\n")
+        self.ok()
+        self.log(self.E, "2026-11-10 08:01:00: [advisor] RangeError: y\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertNotIn("adv", self.text())
+        self.assertNotIn(self.E, self.state()["files"])   # 활성 밖 앱은 오프셋도 남기지 않는다(R2-3)
+
+    def test_active_missing_is_outage_online_is_quiet(self):
+        self.activate()
+        self.procs(adv="online")
+        self.ok()
+        self.assertEqual(self.posts(), [])
+        self.procs(adv=None)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertIn("adv·bot · pm2 · missing", self.text())
+        self.assertIn("🔴", self.text())
+
+    def test_stopped_is_not_judged(self):
+        self.activate(on=False)
+        self.procs(adv=None)
+        self.ok()
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertNotIn("adv", self.text())
+
+    def test_all_missing_counts_only_domain_apps(self):
+        # 정정 3 — adv 만 살아 있어도 fin·fit 6 개 부재는 all-missing 1 건
+        self.activate()
+        self.ok()
+        self.procs(adv="online", apps=False)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        allm = [p for p in self.posts() if "all-missing" in p]
+        self.assertEqual(len(allm), 1)
+
+    def test_all_missing_not_raised_by_adv_absence_alone(self):
+        self.activate()
+        self.procs(adv="online")
+        self.ok()
+        self.procs(adv=None)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertFalse(any("all-missing" in p for p in self.posts()))
+
+    def test_active_error_log_is_read(self):
+        self.activate()
+        self.procs(adv="online")
+        self.log(self.E, "")
+        self.ok()
+        self.log(self.E, "2026-11-10 08:01:00: [advisor] TypeError: boom\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertIn("adv·bot", self.text())
+        self.assertIn("TypeError", self.text())
+
+    def test_reactivation_starts_at_end(self):
+        # r4 보충 2 — 정지 동안 쌓인 줄이 다시 켠 회에 한꺼번에 나오지 않는다
+        self.activate(on=False)
+        self.procs(adv=None)
+        self.log(self.E, "")
+        self.ok()
+        self.log(self.E, "2026-11-10 08:01:00: [advisor] OldStoppedError\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.activate()
+        self.procs(adv="online")
+        self.ok(now="2026-11-10T08:10:00+09:00")
+        self.assertNotIn("OldStoppedError", self.text())
+        self.log(self.E, "2026-11-10 08:12:00: [advisor] FreshAdvError\n", append=True)
+        self.ok(now="2026-11-10T08:15:00+09:00")
+        self.assertIn("FreshAdvError", self.text())
+        self.assertNotIn("OldStoppedError", self.text())
+
+    def test_stopped_with_log_file_present_keeps_domain_judgment(self):
+        # R2-3 시험 — -stopped + adv 로그 파일이 있어도 예외 없이 fin·fit 판정 그대로
+        self.activate(on=False)
+        self.log(self.E, "2026-11-10 07:59:00: x\n")
+        self.ok()
+        procs = {n: ("online", 0) for n in NAMES}
+        del procs["pleiades-fit-web"]
+        self.set_procs(procs)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertIn("fit·web · pm2 · missing", self.text())
+        self.assertNotIn("adv", self.text())
+
+    def test_alive_marker_stale_when_active_only(self):
+        self.activate()
+        self.procs(adv="online")
+        self.marker("2026-11-10T07:40:00+09:00")
+        self.ok()
+        self.assertIn("adv·bot · gateway · stale", self.text())
+        before = len(self.posts())
+        self.activate(on=False)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertFalse(any("adv" in p for p in self.posts()[before:]))
+
+    def test_no_health_glob_or_silence_for_adv(self):
+        self.activate()
+        self.procs(adv="online")
+        self.ok()
+        self.ok(now="2026-11-12T08:05:00+09:00")   # 이틀 — 침묵이 있었다면 났다
+        t = self.text()
+        for bad in ("glob-empty:adv", "env-read:adv", "adv·mcp", "adv·web", "silent:adv"):
+            self.assertNotIn(bad, t)
+
+    def test_pending_marker_holds_adv(self):
+        self.activate()
+        self.procs(adv="online")
+        self.ok()
+        (self.private / "inplace-adv-pending").write_text("v1.15.1\n")
+        os.utime(self.private / "inplace-adv-pending", (datetime.fromisoformat("2026-11-10T08:03:00+09:00").timestamp(),) * 2)
+        self.procs(adv=None)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertNotIn("adv·bot · pm2", self.text())
+
+    def test_adv_out_log_is_not_read(self):
+        self.activate()
+        self.procs(adv="online")
+        self.log("pleiades-adv-bot-out-9.log", "")
+        self.ok()
+        self.log("pleiades-adv-bot-out-9.log", '2026-11-10 08:01:00: [advisor] key=abc status=answer TypeError\n', append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertNotIn("adv", self.text())

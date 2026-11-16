@@ -54,11 +54,16 @@ const DEFAULTS = {
 const CONFIG = TEST && process.env.OPS_CONFIG ? { ...DEFAULTS, ...JSON.parse(process.env.OPS_CONFIG) } : DEFAULTS
 const MIN = 60000
 
+// 도메인 앱 — .env · health · glob-empty · 침묵 · all-missing 은 이 둘만 본다
 const APPS = {
   fin: path.join(HOME, 'pleiades-fin', 'apps', 'finance'),
   fit: path.join(HOME, 'pleiades-fit', 'apps', 'fitness'),
 }
 const ROLES = ['web', 'bot', 'mcp']
+// 통합 층(012 4b-3c · #704) — 셋째 체크아웃 · 봇 하나 · 수동 배포(deploy/advisor/adv-inplace.sh)가 쓰는 표지로 감시 여부를 정한다
+const ADV_DIR = path.join(HOME, 'pleiades-adv', 'apps', 'advisor')
+const APP_DIRS = { ...APPS, adv: ADV_DIR }
+const ROLES_OF = { fin: ROLES, fit: ROLES, adv: ['bot'] }
 const PM2_HOME = process.env.PM2_HOME || path.join(HOME, '.pm2')
 const PRIVATE = process.env.PLEIADES_PRIVATE_DIR || path.join(HOME, 'pleiades-private') // release-inplace.sh 와 같은 규칙
 const OPS_DIR = path.join(PRIVATE, 'ops')
@@ -78,7 +83,7 @@ const KNOWN_STDERR = [
   { re: /The width\(-?\d+\) and height\(-?\d+\) of chart should be greater than 0/, kind: 'chart-size', sev: '경고' }, // Recharts · #588
 ]
 const PM2_PREFIX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}: / // pleiades.config.cjs log_date_format + pm2 의 ': '
-const LOG_NAME = /^pleiades-(fin|fit)-(web|bot|mcp)-(out|error)(?:-\d+)?\.log$/
+const LOG_NAME = /^pleiades-(fin|fit|adv)-(web|bot|mcp)-(out|error)(?:-\d+)?\.log$/ // 앱·역할 조합은 ROLES_OF · 활성 집합이 거른다
 const FIELD_OK = /^[A-Za-z0-9_.:/-]{1,64}$/ // §1-4 ⓪
 const ERRNO = new Set(Object.keys(os.constants.errno)) // §1-2 코드 = errno 이름 목록 안의 값만(E-6)
 const SEV = { 장애: '🔴', 실패: '🟠', 경고: '🟡', 복구: '🟢' }
@@ -146,9 +151,10 @@ function readJlist(bin) {
 
 function judgePm2(ctx, procs) {
   const { obs, evaluated, state, deploy } = ctx
-  const expected = Object.keys(APPS).flatMap((a) => ROLES.map((r) => [a, r]))
+  const expected = ctx.active.flatMap((a) => ROLES_OF[a].map((r) => [a, r]))
   evaluated.add('ops · pm2 · all-missing')
-  if (expected.every(([a, r]) => !procs[`pleiades-${a}-${r}`])) {
+  // 두 앱 6 개만 — adv 하나가 살아 있어도 두 앱이 다 없으면 resurrect 신호다(4b-3 정정 3)
+  if (Object.keys(APPS).every((a) => ROLES.every((r) => !procs[`pleiades-${a}-${r}`]))) {
     obs.push(observation('ops', 'pm2', 'all-missing', [], '장애', 'state'))
     return
   }
@@ -207,7 +213,7 @@ function c5Window(app) {
 
 function deployWindow(ctx) {
   const out = {}
-  for (const app of Object.keys(APPS)) {
+  for (const app of ctx.active) {
     const pending = readMarker(path.join(PRIVATE, `inplace-${app}-pending`))
     const lastOk = readMarker(path.join(PRIVATE, `inplace-${app}-last-ok`))
     const sig = lastOk ? `${lastOk.body}@${lastOk.mtimeMs}` : ''
@@ -416,6 +422,11 @@ function collectLogs(ctx) {
   for (const name of names) {
     const [, app, role, stream] = LOG_NAME.exec(name)
     const key = `${app}-${role}-${stream}`
+    // 활성 집합 밖 앱(정지 · 첫 배포 전 adv) · 그 앱에 없는 역할은 읽지도 오프셋을 남기지도 않는다(4b-3 R2-3)
+    if (!ctx.active.includes(app) || !ROLES_OF[app].includes(role)) {
+      delete ctx.state.files[name]
+      continue
+    }
     let st
     try {
       st = fs.statSync(path.join(dir, name))
@@ -424,7 +435,12 @@ function collectLogs(ctx) {
     }
     seen[key] = true
     sizes[key] = (sizes[key] || 0) + st.size
-    if (stream === 'out' && role !== 'mcp') continue // web·bot -out 은 침묵 감지(C-7 ②)에만
+    if (stream === 'out' && role !== 'mcp') continue // web·bot -out 은 침묵 감지(C-7 ②)에만 · adv 로그(stdout)는 읽지 않는다
+    // 비활성 → 활성으로 바뀐 회 — 끝에서 시작한다(정지 동안 쌓인 줄이 한꺼번에 나오지 않게 · 4b-3 r4 보충 2 · PR #590 첫 회와 같다)
+    if (ctx.reactivated.has(app)) {
+      ctx.state.files[name] = { ino: st.ino, off: st.size }
+      continue
+    }
     // 보류 중에는 -error 를 읽지 않는다(오프셋 그대로) — 배포가 끝나 창이 정해진 뒤 읽어야 창 안 경고만 흡수한다(PR-1b 9-1 major)
     if (stream === 'error' && ctx.deploy[app].held) {
       // 상태가 없는 첫 회면 기준 오프셋(끝)만 남긴다 — 안 남기면 보류가 끝난 뒤 0 부터 읽어 과거 로그가 쏟아진다(PR #590 Codex P2)
@@ -442,7 +458,7 @@ function collectLogs(ctx) {
     ctx.obs.push(...(stream === 'out' ? mcpOutObs(app, lines, ctx) : stderrObs(app, role, lines, ctx.deploy[app].window)))
   }
   if (listed) for (const name of Object.keys(ctx.state.files)) if (!names.includes(name)) delete ctx.state.files[name]
-  for (const app of Object.keys(APPS)) {
+  for (const app of Object.keys(APPS)) { // 도메인 앱만 — adv 는 크래시 때만 -error 가 생긴다
     for (const key of [`${app}-web-error`, `${app}-bot-error`, `${app}-mcp-out`, `${app}-mcp-error`]) {
       ctx.evaluated.add(`ops · collector · glob-empty:${key}`)
       if (!seen[key]) ctx.obs.push(collector(`glob-empty:${key}`))
@@ -467,12 +483,12 @@ function silence(ctx, sizes) {
 // 수정 시각만 본다(내용은 읽지 않는다) · 파일이 없으면 정상으로 본다(릴리즈 전 · Discord 미설정 · 일부러 지운 표지 —
 // 열려 있던 stale 은 복구로 닫힌다 · #589 9-1 major) · 배포 보류 중에는 판정하지 않는다
 function collectAlive(ctx) {
-  for (const app of Object.keys(APPS)) {
+  for (const app of ctx.active) {
     if (ctx.deploy[app].held) continue
     ctx.evaluated.add(`ops · collector · alive-read:${app}`)
     let st
     try {
-      st = fs.statSync(path.join(APPS[app], 'logs', `alive-${app}.json`))
+      st = fs.statSync(path.join(APP_DIRS[app], 'logs', `alive-${app}.json`))
     } catch (e) {
       // 읽지 못한 회는 gateway 를 판정하지 않는다 — 열린 stale 을 거짓 복구로 닫지 않는다(PR #591 Codex P2)
       if (e && e.code === 'ENOENT') ctx.evaluated.add(`${app} · bot · gateway`)
@@ -780,7 +796,20 @@ function deliver(posts, ctx) {
   return { events, posted: out.length, deferred }
 }
 
+// 이번 회에 감시하는 앱 — 한 회에 한 번만 정하고 모든 판정이 이것만 쓴다(4b-3 R2-3).
+// adv = 수동 배포가 한 번이라도 통과했고(last-ok) 정지 표지가 없을 때. 표지를 못 읽으면 없는 것으로 본다(감시 밖 · 안전한 쪽은 아니지만
+// 비공개 위치를 못 읽는 회는 두 앱 판정도 deploy-stale·collector 경고로 드러난다)
+function activeApps(ctx) {
+  const adv = fs.existsSync(path.join(PRIVATE, 'inplace-adv-last-ok')) && !fs.existsSync(path.join(PRIVATE, 'inplace-adv-stopped'))
+  const active = [...Object.keys(APPS), ...(adv ? ['adv'] : [])]
+  const prev = ctx.state.active || Object.keys(APPS)
+  ctx.reactivated = new Set(ctx.hadState ? active.filter((a) => !prev.includes(a)) : [])
+  ctx.state.active = active
+  return active
+}
+
 async function collect(ctx, pm2Bin) {
+  ctx.active = activeApps(ctx)
   const late = ctx.state.lastRunAt !== null && ctx.now - ctx.state.lastRunAt > CONFIG.lateRuns * CONFIG.periodMin * MIN
   if (late) ctx.obs.push(collector('late', 'event'))
   ctx.deploy = deployWindow(ctx)
