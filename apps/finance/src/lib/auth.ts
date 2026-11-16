@@ -1,5 +1,6 @@
 import NextAuth, { CredentialsSignin } from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
+import { clientKey, pinMatches } from './auth-guard'
 
 // Auth.js v5는 authorize 내부에서 throw된 일반 Error의 message를 클라이언트로
 // 노출하지 않고 모두 'CredentialsSignin'으로 sanitize한다.
@@ -88,14 +89,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         // v5에서는 Request 객체로 헤더 접근 (next-auth v4는 NodeJS req였음)
-        const forwarded = request.headers.get('x-forwarded-for')
-        const rateLimitKey = forwarded?.split(',')[0]?.trim() || 'unknown'
+        // 키는 요청자가 고를 수 없는 값만 — x-forwarded-for 첫 값은 요청자가 정할 수 있었다(#701)
+        const rateLimitKey = clientKey(request.headers)
 
         if (!checkRateLimit(rateLimitKey)) {
           throw new RateLimitedError()
         }
 
-        if (credentials?.pin === pin) {
+        if (pinMatches(credentials?.pin, pin)) {
           clearFailures(rateLimitKey)
           return { id: 'admin', name: '세진', role: 'admin' }
         }
