@@ -19,6 +19,7 @@ import {
 } from "@pleiades/chat";
 import { AskOutcome } from "./advisor";
 import { CALL_BUDGET_USD } from "./cli";
+import { POST_INIT_HOOK_CODE } from "./judge";
 import { answerToHtml } from "./format";
 import { BotConfig } from "./platform";
 import { sessionKey } from "./session-store";
@@ -96,9 +97,8 @@ export function fatalCloseAlert(deps: Pick<RouterDeps, "log" | "alert">): (code:
  * 그 질문이 쓴 비용 — CLI 가 보고한 비용이 있으면 그 값(상태와 무관 · init 뒤 hook 위반도 모델이 돌았다 · PR #688 Codex P2).
  * 보고가 없을 때: init 단계에서 끊긴 것(첫 줄 판정 — 모델 호출 전)은 0(9-1 major 2 — 도메인 MCP 가 잠깐 끊긴 것만으로 상한이 닫히지 않게),
  * 그 밖(timeout · no-result · init 뒤 hook)은 호출당 상한(적게 세지 않는다). 거부(CLI 안 띄움)는 0.
- * 이어 묻기 재시도(advisor.ts)는 두 번째 결과만 돌아오지만 첫 시도는 init 단계 실패라 비용 0 이다.
+ * 이어 묻기 재시도(advisor.ts)는 두 번째 결과만 돌아오지만 첫 시도는 init 단계 실패라 비용 0 이다 — init 뒤 hook 은 재시도하지 않는다(#711).
  */
-export const POST_INIT_HOOK_CODE = "violation:hook";
 export function costOf(r: AskOutcome): number {
   if (r.kind === "refused" || !r.verdict) return 0;
   if (r.verdict.cost !== null) return r.verdict.cost;

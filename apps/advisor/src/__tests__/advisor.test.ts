@@ -228,6 +228,19 @@ describe("Advisor.ask — 거부 · 실패", () => {
     expect(calls[2].argv[calls[2].argv.indexOf("--allowedTools") + 1]).toContain(NEW);
   });
 
+  // 회귀: #711 · PR #710 Codex P2 — init 뒤 hook 은 모델 비용이 났을 수 있다 · 재시도가 판정·비용을 덮어썼다
+  it("이어 묻던 세션의 init 뒤 hook 위반은 다시 묻지 않고 그 판정·비용을 그대로 낸다", async () => {
+    happy();
+    const a = advisor();
+    await a.ask(KEY, "q1");
+    setCli([initLine([FIN_TOOL, FIT_TOOL], ["myfinance", "myfitness"]), { type: "system", subtype: "hook_started" }, resultLine({ total_cost_usd: 0.42 })]);
+    const r = await a.ask(KEY, "q2");
+    expect(r).toMatchObject({ kind: "failed", text: MESSAGES.safety, code: "violation:hook" });
+    expect(r.kind === "failed" && r.verdict?.cost).toBe(0.42);
+    expect(cliCalls()).toHaveLength(2); // q1 + q2 — 재시도 없음
+    expect(cliCalls()[1].argv).toContain("--resume");
+  });
+
   it("세션 id 를 받지 못하면 다음 질문은 새 세션(9-1 info 11)", async () => {
     setCli([initLine([FIN_TOOL, FIT_TOOL], ["myfinance", "myfitness"]), resultLine({ session_id: undefined })]);
     const a = advisor();
