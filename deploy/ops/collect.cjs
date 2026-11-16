@@ -42,7 +42,10 @@ const DEFAULTS = {
   lateRuns: 3, // C-7 ④ 직전 수집이 주기의 k배 넘게 지나면
   // C-7 ② 침묵 감지 — -out 만 · 역할별(V17: 줄이 꾸준한 out 5개 · fin web out · 모든 -error 는 끈다) · 값 = N시간
   // 6 → 24(#587): dry-run 판정에서 bot·mcp -out 은 낮에도 6시간씩 조용했다(사용·크론 때만 는다) — 하루 크론이 도는지만 본다
-  silenceHours: { 'fin-bot': 24, 'fin-mcp': 24, 'fit-web': 24, 'fit-bot': 24, 'fit-mcp': 24 },
+  // #713(#622 재판정): bot 역할은 끈다 — 연결은 생존 표지(#589)가 본다 · fin-mcp 72h — 주말엔 fin AI 호출이 없어 24h 넘게 그대로였다(오탐 275)
+  silenceHours: { 'fin-mcp': 72, 'fit-web': 24, 'fit-mcp': 24 },
+  // #713(사용자 2026-11-16) — 경고 등급은 일일 요약에만: 첫 발생·반복·복구를 기록(게시)하지 않고 조용히 처리한다 · 폭주 수에서 뺀다
+  quietWarnings: true,
   // #589 봇 생존 표지 — apps/<dir>/logs/alive-<app>.json 수정 시각이 N분 넘게 그대로면 gateway 정지(chat 이 READY·RESUMED 는 곧바로 · ACK 는 60초에 한 번 쓴다)
   // 보는 것은 "Discord 연결 유지"다 — 연결은 살아 있는데 답을 못 하는 경우(4014 강등 · 핸들러·AI 정지)는 잡지 않는다
   aliveStaleMin: 10,
@@ -80,9 +83,13 @@ const WARN_RE = /⚠|[Ww]arning|Deprecat/
 // 알려진 stderr 줄(#587) — 세부 칸이 비어 한 지문으로 묶이던 것을 정해진 토큰 하나로 가른다(원문은 칸에 오지 않는다)
 const KNOWN_STDERR = [
   { re: /Server Reference ID did not match the expected format/, kind: 'server-action-ref', sev: '경고' }, // 외부 스캐너의 Server Action 요청
+  { re: /Failed to find Server Action/, kind: 'server-action-ref', sev: '경고' }, // 같은 스캐너의 다른 문구(#622 재판정 · 하루 16건 · #713)
+  { re: /\[auth\]\[error\].*\bUnknownAction\b/, kind: 'auth-unknown-action', sev: '경고' }, // 스캐너의 /api/auth/* 탐색 — Auth.js 가 없는 동작을 거부(#713)
   { re: /The width\(-?\d+\) and height\(-?\d+\) of chart should be greater than 0/, kind: 'chart-size', sev: '경고' }, // Recharts · #588
 ]
 const PM2_PREFIX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}: / // pleiades.config.cjs log_date_format + pm2 의 ': '
+const ANSI = /\x1b\[[0-9;]*m/g // Auth.js 등은 색 코드로 줄을 시작한다 — 판정 전에 벗긴다(#713)
+const STACK_LINE = /^\s+at /
 const LOG_NAME = /^pleiades-(fin|fit|adv)-(web|bot|mcp)-(out|error)(?:-\d+)?\.log$/ // 앱·역할 조합은 ROLES_OF · 활성 집합이 거른다
 const FIELD_OK = /^[A-Za-z0-9_.:/-]{1,64}$/ // §1-4 ⓪
 const ERRNO = new Set(Object.keys(os.constants.errno)) // §1-2 코드 = errno 이름 목록 안의 값만(E-6)
@@ -342,9 +349,14 @@ const inDeployWindow = (at, win) => at !== null && win !== null && at >= win.t0 
 
 function stderrObs(app, role, lines, win = null) {
   const out = []
-  for (const { at, lines: chunk } of chunksOf(lines)) {
+  let prevAt
+  for (const { at, lines: raw } of chunksOf(lines)) {
+    const chunk = raw.map((l) => l.replace(ANSI, ''))
     const head = chunk[0]
-    if (!head.trim() || NORMAL_GATEWAY.test(head)) continue
+    // 같은 초에 스택 줄로 시작하는 덩어리 = 앞 덩어리의 연속(따로 쓴 스택에 pm2 가 시각을 따로 붙였다 · Auth.js · #713) — 앞에서 셌다
+    const continued = at !== null && at === prevAt && STACK_LINE.test(head)
+    prevAt = at
+    if (continued || !head.trim() || NORMAL_GATEWAY.test(head)) continue
     const text = chunk.join('\n')
     const known = KNOWN_STDERR.find((k) => k.re.test(head))
     const sev = known ? known.sev : WARN_RE.test(head) ? '경고' : '실패'
@@ -585,8 +597,10 @@ function plan(ctx) {
     else if (ctx.evaluated.has(e.scope) || activeScopes.has(e.scope)) Object.assign(e, { deferred: false, open: false, ok: 0, pending: 0 })
   }
   const special = fresh.filter((f) => f.e.src === 'all-missing')
-  const normal = fresh.filter((f) => f.e.src !== 'all-missing')
+  const quiet = fresh.filter((f) => f.e.src !== 'all-missing' && isQuiet(f.e))
+  const normal = fresh.filter((f) => f.e.src !== 'all-missing' && !isQuiet(f.e))
   for (const f of special) posts.push(firstPost(f, ALL_MISSING_NOTE))
+  for (const f of quiet) posts.push(firstPost(f, f.count > 1 ? ` · ${f.count}회` : '')) // deliver 가 조용히 처리한다
   if (normal.length > CONFIG.burstLimit) posts.push(burstPost(normal))
   else for (const f of normal) posts.push(firstPost(f, f.count > 1 ? ` · ${f.count}회` : ''))
   for (const e of Object.values(table)) {
@@ -604,6 +618,9 @@ function plan(ctx) {
   if (summary) posts.push(summary)
   return posts
 }
+
+// 경고는 일일 요약에만(#713) — 게시 대상(첫 발생 · 반복 · 복구)이어도 deliver 가 기록하지 않고 상태만 넘긴다
+const isQuiet = (e) => CONFIG.quietWarnings && e && e.sev === '경고'
 
 function firstPost({ e, count }, extra) {
   return { type: 'first', e, count, text: line(e, e.sev, extra), commit: (now) => Object.assign(e, { posted: now, deferred: false }) }
@@ -640,7 +657,10 @@ function summaryPost(ctx, today) {
     .sort((a, b) => b.days[yesterday] - a.days[yesterday])
     .slice(0, 5)
     .map((e) => `${e.app}·${e.role}·${e.src} ${e.fp} ×${e.days[yesterday]}`)
-  const text = `[ops] ${md(`일일 요약 · 살아 있음 · 열린 이상 ${open.length}${open.length ? ` (${open.slice(0, 10).join(' / ')})` : ''} · 어제 상위 ${top.length ? top.join(' / ') : '없음'}`)}`
+  const warned = all.filter((e) => e.sev === '경고' && e.days[yesterday])
+  const warnTotal = warned.reduce((n, e) => n + e.days[yesterday], 0)
+  const warnPart = CONFIG.quietWarnings ? ` · 경고 어제 ${warned.length}종 ${warnTotal}회` : ''
+  const text = `[ops] ${md(`일일 요약 · 살아 있음 · 열린 이상 ${open.length}${open.length ? ` (${open.slice(0, 10).join(' / ')})` : ''}${warnPart} · 어제 상위 ${top.length ? top.join(' / ') : '없음'}`)}`
   return { type: 'summary', e: null, count: open.length, text, commit: () => (ctx.state.summaryDate = today) }
 }
 
@@ -782,18 +802,21 @@ function deliver(posts, ctx) {
   const out = []
   const events = []
   let deferred = 0
+  let quiet = 0
   for (const p of posts) {
-    if (Date.now() >= deadline) {
+    const silent = isQuiet(p.e)
+    if (!silent && Date.now() >= deadline) {
       deferred += 1 // commit 하지 않는다 — 상태가 다음 회에 다시 고른다(P-9)
       continue
     }
-    out.push(`${stamp} ${p.text}`) // dry-run: 게시 대신 기록 · 템플릿 + 허용 칸뿐이다
+    if (silent) quiet += 1 // 요약에만 — 기록하지 않고 상태만 넘긴다(미뤄진 채 남지 않게 commit 은 한다)
+    else out.push(`${stamp} ${p.text}`) // dry-run: 게시 대신 기록 · 템플릿 + 허용 칸뿐이다
     p.commit(ctx.now)
     const e = p.e || {}
-    events.push(JSON.stringify({ at: ctx.now, type: p.type, fp: e.fp || null, app: e.app || null, role: e.role || null, src: e.src || null, sev: e.sev || null, count: p.count }))
+    events.push(JSON.stringify({ at: ctx.now, type: p.type, fp: e.fp || null, app: e.app || null, role: e.role || null, src: e.src || null, sev: e.sev || null, count: p.count, ...(silent ? { quiet: true } : {}) }))
   }
   appendLines('dry-run.log', out)
-  return { events, posted: out.length, deferred }
+  return { events, posted: out.length, deferred, quiet }
 }
 
 // 이번 회에 감시하는 앱 — 한 회에 한 번만 정하고 모든 판정이 이것만 쓴다(4b-3 R2-3).
@@ -858,7 +881,7 @@ async function run(pm2Bin) {
     if (summaryRun && state.summaryDate === kstDate(nowDate)) pruneEvents(ctx.now)
     state.lastRunAt = ctx.now
     writeAtomic(STATE(), prune(state, ctx.now))
-    console.log(`${kstMinute(nowDate)} 수집 통과 · 관측 ${obsLines.length} · 기록 ${r.posted} · 미룸 ${r.deferred} (dry-run)`)
+    console.log(`${kstMinute(nowDate)} 수집 통과 · 관측 ${obsLines.length} · 기록 ${r.posted} · 미룸 ${r.deferred} · 요약만 ${r.quiet} (dry-run)`)
     return 0
   } finally {
     releaseLock(lock, got.id)
