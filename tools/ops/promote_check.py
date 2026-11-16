@@ -96,7 +96,7 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("EMAIL", _re(rf"(?<![{_W}.+-])[{_W}.+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")),
     # Yahoo 환율 심볼(`AMD=X` · `KRW=X`)은 env 가 아니다 — fin 문서에 자주 나온다
     ("ENV_VALUE", _re(rf"(?<![{_W}])[A-Z][A-Z0-9_]{{2,}}=[\"']?(?!X(?![^\s`'\")\]]))[^\s`'\"]+")),
-    ("TOKEN", _re(rf"(?<![{_W}])(?:bot)?\d{{6,}}:[A-Za-z0-9_-]{{30,}}")),  # 텔레그램 봇
+    ("TOKEN", _re(rf"(?<![{_W}])(?:bot)?\d{{6,}}:[A-Za-z0-9_-]{{30,}}")),  # 옛 채널 봇 토큰(`<숫자>:<문자열>`)
     ("TOKEN", _re(rf"(?<![{_W}-])[MNO][A-Za-z\d_-]{{20,}}\.[A-Za-z\d_-]{{5,}}\.[A-Za-z\d_-]{{25,}}")),  # Discord 봇
     ("TOKEN", _re(rf"(?<![{_W}-])eyJ[{_W}-]{{10,}}\.[{_W}-]{{10,}}\.[{_W}-]{{10,}}")),  # JWT
     ("TOKEN", _re(rf"(?<![{_W}])(?:gh[pousr]_[A-Za-z0-9]{{30,}}|github_pat_[{_W}]{{20,}})")),
@@ -154,7 +154,7 @@ def _is_generic_token(s: str) -> bool:
 
 
 def _is_migration_stamp(s: str) -> bool:
-    """Prisma 마이그레이션 이름(`YYYYMMDDHHMMSS`)은 ID 가 아니다 — Discord ID 17~20자리 · 텔레그램 9~13자리와 겹치지 않는다."""
+    """Prisma 마이그레이션 이름(`YYYYMMDDHHMMSS`)은 ID 가 아니다 — Discord ID 17~20자리 · 옛 채널 ID 9~13자리와 겹치지 않는다."""
     if len(s) != 14:
         return False
     try:
