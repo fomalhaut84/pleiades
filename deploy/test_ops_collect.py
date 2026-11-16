@@ -134,7 +134,7 @@ class Base(unittest.TestCase):
             f.write(text)
         return p
 
-    def run_c(self, *args, now=NOW, config=None, timeout=60, **env):
+    def run_c(self, *args, now=NOW, config=None, timeout=60, prod_defaults=False, **env):
         e = {
             "PATH": "/usr/bin:/bin",
             "HOME": str(self.home),
@@ -145,7 +145,7 @@ class Base(unittest.TestCase):
             "OPS_NOW": now,
             "OPS_DISK_HOME": str(self.home),
             "OPS_DISK_BACKUP": str(self.tmp),
-            "OPS_CONFIG": json.dumps({"summaryAt": "23:59", "disk": {"warn": 101, "crit": 102}, **(config or {})}),
+            "OPS_CONFIG": json.dumps({"summaryAt": "23:59", "disk": {"warn": 101, "crit": 102}, **({} if prod_defaults else {"quietWarnings": False}), **(config or {})}),
         }
         e.update(env)
         argv = list(args) if args else ["--dry-run", f"--pm2-bin={self.bin}"]
@@ -651,11 +651,16 @@ class Logs(Base):
         # 회귀: #587 — 기준 24시간. dry-run 판정에서 bot·mcp out 은 낮에도 6시간씩 조용했다
         self.ok(now="2026-11-10T15:00:00+09:00", config={"burstLimit": 20})
         self.assertNotIn("silent:", "\n".join(self.posts()))
-        # 침묵: fin bot out 이 24시간 늘지 않음 · fin web out 은 기본 꺼짐
+        # 침묵: 24시간 — fit web·mcp 는 나고 · bot 역할은 끔(생존 표지가 본다 · #713) · fin web 은 기본 꺼짐 · fin mcp 는 72h(주말 · #713)
         self.ok(now="2026-11-11T08:05:00+09:00", config={"burstLimit": 20})
         text = "\n".join(self.posts())
-        self.assertIn("silent:fin-bot", text)
-        self.assertNotIn("silent:fin-web", text)
+        self.assertIn("silent:fit-mcp", text)
+        for off in ("silent:fin-bot", "silent:fit-bot", "silent:fin-web", "silent:fin-mcp"):
+            self.assertNotIn(off, text)
+        self.ok(now="2026-11-13T08:00:00+09:00", config={"burstLimit": 20})
+        self.assertNotIn("silent:fin-mcp", "\n".join(self.posts()))   # 정확히 72h — 아직
+        self.ok(now="2026-11-13T08:10:00+09:00", config={"burstLimit": 20})
+        self.assertIn("silent:fin-mcp", "\n".join(self.posts()))
 
     def test_known_stderr_kinds_and_deprecated_are_warnings(self):
         # 회귀: #587 — 세부 칸이 빈 web 줄(스캐너 Server Action · Recharts 크기)이 한 '실패' 지문으로 묶였다
@@ -1032,3 +1037,165 @@ class Advisor(Base):
         self.log("pleiades-adv-bot-out-9.log", '2026-11-10 08:01:00: [advisor] key=abc status=answer TypeError\n', append=True)
         self.ok(now="2026-11-10T08:05:00+09:00")
         self.assertNotIn("adv", self.text())
+
+
+class Quiet2a(Base):
+    """008 PR-2a(#713) — #622 재판정 보정: 스캐너·인증 탐색 분류 · 스택 연속 덩어리 · 경고는 일일 요약에만."""
+
+    W = "pleiades-fin-web-error-0.log"
+    E = "pleiades-fin-bot-error-0.log"
+
+    def test_failed_to_find_server_action_is_scanner(self):
+        self.ok()
+        self.log(self.W, '2026-11-10 08:01:00: Error: Failed to find Server Action "abc". This request might be from an older or newer deployment.\n'
+                 "Read more: https://nextjs.org/docs/messages/failed-to-find-server-action\n", append=True)   # 실측 SA+O — 뒷줄은 시각 없는 연속 줄
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        posts = self.posts()
+        self.assertTrue(any("🟡 경고 · fin·web · stderr · server-action-ref" in p for p in posts), posts)
+        self.assertFalse(any("🟠" in p for p in posts), posts)
+
+    def test_authjs_unknown_action_with_ansi_and_split_stack(self):
+        # 08:11 실측 모양 — 색 코드로 시작하는 첫 줄 1 덩어리 + 같은 초 스택 10 줄 덩어리(pm2 가 따로 시각을 붙였다)
+        self.ok()
+        head = "2026-11-10 08:01:17: \x1b[31m[auth][error]\x1b[0m UnknownAction: Unsupported action. Read more at https://errors.authjs.dev#unknownaction\n"
+        stack = "2026-11-10 08:01:17:     at a (/srv/x/node_modules/@auth/core/x.js:1:2)\n" + "".join(f"    at f{i} (/srv/x/.next/server/app/api/auth/[...nextauth]/route.js:{i}:1)\n" for i in range(9))
+        self.log(self.W, head + stack + head.replace("08:01:17", "08:01:19") + stack.replace("08:01:17", "08:01:19"), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        posts = self.posts()
+        mine = [p for p in posts if "auth-unknown-action" in p]
+        self.assertEqual(len(mine), 1, posts)
+        self.assertIn("🟡 경고 · fin·web · stderr · auth-unknown-action", mine[0])
+        self.assertIn("2회", mine[0])
+        self.assertFalse(any("🟠" in p for p in posts), posts)   # 스택 덩어리가 따로 실패로 나오지 않는다
+        self.assert_no_raw("errors.authjs.dev")
+
+    def test_stack_chunk_at_other_second_still_counts(self):
+        self.ok()
+        self.log(self.W, "2026-11-10 08:01:00: [x] TypeError: boom\n2026-11-10 08:01:05:     at y (/srv/x/a.js:1:1)\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertEqual(sum("🟠" in p for p in self.posts()), 2)
+
+    def test_warnings_go_to_daily_summary_only(self):
+        q = {"quietWarnings": True}
+        self.ok(config=q)
+        self.log(self.E, "2026-11-10 08:01:00: [Deprecated] historical() is deprecated\n", append=True)
+        self.log(self.E, "2026-11-10 08:02:00: [bot] TypeError: real\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=q)
+        posts = self.posts()
+        self.assertFalse(any("🟡" in p for p in posts), posts)
+        self.assertTrue(any("🟠 실패 · fin·bot" in p for p in posts), posts)
+        quiet = [e for e in self.events() if e.get("quiet")]
+        self.assertEqual(len(quiet), 1)
+        self.assertEqual(quiet[0]["sev"], "경고")
+        # 같은 지문 반복도 조용히 · 미뤄진 채로 남지 않는다
+        self.log(self.E, "2026-11-10 09:30:00: [Deprecated] again\n", append=True)
+        self.ok(now="2026-11-10T09:35:00+09:00", config=q)
+        self.assertFalse(any("🟡" in p for p in self.posts()))
+        self.assertFalse(any(e["deferred"] for e in self.state()["fps"].values()))
+        # 다음 날 요약에 경고 개수
+        self.ok(now="2026-11-11T09:10:00+09:00", config={**q, "summaryAt": "09:05"})
+        summ = [p for p in self.posts() if "일일 요약" in p]
+        self.assertEqual(len(summ), 1)
+        self.assertRegex(summ[0], r"경고 어제 [1-9]\d*종 [2-9]\d*회")   # Deprecated 2회 + 수집기 late 등
+        self.assertIn("fin·bot·stderr e682dc78fef1 ×2", summ[0])   # 운영 Deprecated 지문과 같은 값
+
+    def test_quiet_warnings_do_not_count_toward_burst(self):
+        q = {"quietWarnings": True, "burstLimit": 2}
+        self.ok(config=q)
+        lines = "".join(f"2026-11-10 08:01:0{i}: [w{i}] Warning: thing{i}\n" for i in range(5))
+        lines += "2026-11-10 08:02:00: [bot] TypeError: one\n"
+        self.log(self.E, lines, append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=q)
+        posts = self.posts()
+        self.assertFalse(any("새 지문" in p for p in posts), posts)
+        self.assertTrue(any("TypeError" in p for p in posts), posts)
+
+    def test_quiet_state_warning_open_and_recover_silently(self):
+        q = {"quietWarnings": True, "recoverRuns": 1}
+        self.ok(config=q)
+        (self.pm2 / "logs" / "pleiades-fit-mcp-out-0.log").unlink()
+        self.ok(now="2026-11-10T08:05:00+09:00", config=q)
+        self.assertFalse(any("glob-empty" in p for p in self.posts()))
+        self.log("pleiades-fit-mcp-out-0.log", "")
+        self.ok(now="2026-11-10T08:10:00+09:00", config=q)
+        self.assertFalse(any("🟢" in p for p in self.posts()))
+        self.assertFalse(any(e["open"] for e in self.state()["fps"].values() if "glob-empty" in e["src"]))
+
+
+class QuietSeverity(Base):
+    """PR-2a 9-1 major(#713) — 지문 재료에 심각도가 없다: 조용히 처리한 지문에 더 높은 심각도가 오면 늦거나 묻혔다."""
+
+    E = "pleiades-fin-bot-error-0.log"
+    Q = {"quietWarnings": True}
+
+    def test_failure_after_quiet_warning_is_posted_at_once(self):
+        # 태그 없는 Warning 줄과 Error 줄은 세부가 같아 한 지문이다(#569)
+        self.ok(config=self.Q)
+        self.log(self.E, "2026-11-10 08:01:00: (node:1) Warning: thing\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=self.Q)
+        self.assertEqual(self.posts(), [])
+        self.log(self.E, "2026-11-10 08:06:00: (node:1) Error: real failure\n", append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00", config=self.Q)
+        posts = self.posts()
+        self.assertEqual(len(posts), 1, posts)
+        self.assertIn("🟠 실패", posts[0])
+        self.assertNotIn("직전 게시 뒤", posts[0])
+
+    def test_pending_failures_not_swallowed_by_a_later_warning(self):
+        self.ok(config=self.Q)
+        self.log(self.E, "2026-11-10 08:01:00: (node:1) Error: one\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=self.Q)
+        self.log(self.E, "2026-11-10 08:06:00: (node:1) Error: two\n", append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00", config=self.Q)
+        # 반복 시점(60분 뒤) 직전 회의 관측은 경고
+        self.log(self.E, "2026-11-10 09:06:00: (node:1) Warning: three\n", append=True)
+        self.ok(now="2026-11-10T09:10:00+09:00", config=self.Q)
+        rep = [p for p in self.posts() if "직전 게시 뒤" in p]
+        self.assertEqual(len(rep), 1, self.posts())
+        self.assertIn("🟠 실패", rep[0])
+
+    # 회귀: PR #714 Codex P2 — 폭주로 나간 지문의 조용함 표지가 지워지지 않아 5분마다 폭주가 다시 나갔다
+    def test_burst_escalation_clears_quiet_state(self):
+        q = {**self.Q, "burstLimit": 2}
+        self.ok(config=q)
+        tags = ["a", "b", "c"]
+        self.log(self.E, "".join(f"2026-11-10 08:01:0{i}: [{t}] Warning: w\n" for i, t in enumerate(tags)), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=q)
+        self.assertEqual(self.posts(), [])
+        self.log(self.E, "".join(f"2026-11-10 08:06:0{i}: [{t}] Warning: x\n" for i, t in enumerate(tags)).replace("Warning: x", "Error: x"), append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00", config=q)
+        self.assertEqual(sum("새 지문" in p for p in self.posts()), 1, self.posts())
+        self.log(self.E, "".join(f"2026-11-10 08:11:0{i}: [{t}] Error: y\n" for i, t in enumerate(tags)), append=True)
+        self.ok(now="2026-11-10T08:15:00+09:00", config=q)
+        self.assertEqual(sum("새 지문" in p for p in self.posts()), 1, self.posts())   # 반복 간격 안 — 다시 폭주하지 않는다
+
+    # 회귀: PR #714 Codex P2 — 요약의 경고 개수를 지금 심각도로 셌다
+    def test_daily_warning_count_is_per_observation_severity(self):
+        self.ok(config=self.Q)
+        self.log(self.E, "2026-11-10 08:01:00: (node:1) Warning: w1\n2026-11-10 08:01:01: (node:1) Warning: w2\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=self.Q)
+        self.log(self.E, "2026-11-10 08:06:00: (node:1) Error: e1\n", append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00", config=self.Q)   # 같은 지문 · 지금 심각도 = 실패
+        self.ok(now="2026-11-11T09:10:00+09:00", config={**self.Q, "summaryAt": "09:05"})
+        summ = [p for p in self.posts() if "일일 요약" in p][-1]
+        mine = [e for e in self.state()["fps"].values() if e["app"] == "fin" and e["role"] == "bot"]
+        self.assertEqual(len(mine), 1)
+        self.assertEqual(mine[0]["warnDays"]["2026-11-10"], 2)   # 경고 관측만
+        self.assertEqual(mine[0]["days"]["2026-11-10"], 3)
+
+    def test_silence_is_summary_only_in_quiet_mode(self):
+        # 사용자 결정(2026-11-16) — 침묵도 경고라 요약에만 · 열린 이상에는 남는다
+        self.ok(config=self.Q)
+        self.ok(now="2026-11-11T08:05:00+09:00", config=self.Q)
+        self.assertFalse(any("silent:" in p for p in self.posts()))
+        self.assertTrue(any(e["open"] and e["src"].startswith("silent:") for e in self.state()["fps"].values()))
+        self.ok(now="2026-11-11T09:10:00+09:00", config={**self.Q, "summaryAt": "09:05"})
+        summ = [p for p in self.posts() if "일일 요약" in p]
+        self.assertTrue(summ and "silent:fit-mcp" in summ[-1], summ)
+
+    def test_production_default_is_quiet(self):
+        self.ok(prod_defaults=True)
+        self.log(self.E, "2026-11-10 08:01:00: [Deprecated] historical()\n", append=True)
+        r = self.ok(now="2026-11-10T08:05:00+09:00", prod_defaults=True)
+        self.assertEqual(self.posts(), [])
+        self.assertIn("요약만 1", r.stdout)
