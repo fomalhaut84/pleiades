@@ -128,6 +128,7 @@
 | (다른 자원) `db-backup.cjs` · `db-offsite-pull.sh` | 자기 `.lock` — 배포 락과 다른 파일 | — | `db-backup.cjs:268` · `db-offsite-pull.sh:119` |
 | **(새) 통합 층 상주 프로세스** | 질문 시작에 `flock -n` 자식으로 **잠깐 잡았다 바로 놓는다**(시험) | 몇 ms | §3-5 |
 | **(새) 통합 층 배포 스크립트** | `flock -n` · 보유 · **자식에서 fd 닫기 필수**(G-R3) | 통합 층 배포 전체 | §3-4 |
+| **`deploy/advisor/adv-inplace.sh`**(4b-3b · #700 — 위 행의 구현) | 같은 파일 `flock -n` fd 9(테스트만 mkdir 폴백) · 못 잡으면 rc 1 · **락 뒤 본문 전체가 `( … ) 9>&-` 서브셸** — pm2 · npm · node · git · `claude --version` 모두 fd 9 없이 · `--dry-run` 은 락을 잡지 않는다 | 배포(C1b~C6) · `stop`(pm2 delete·save · 표지) · 확인 프롬프트 동안도 보유 | `adv-inplace.sh` `take_lock` · `main` 끝 서브셸 · 시험 `test_children_never_inherit_lock_fd` |
 
 **S2 — 허용 사용자 키 `DISCORD_ALLOWED_USER_IDS`**
 명령: `grep -rn "DISCORD_ALLOWED_USER_IDS" apps/*/src packages/*/src tools deploy .env.example .claude/rules docs/runbooks`(테스트·`__pycache__` 제외)
@@ -454,6 +455,15 @@
 > - **넘겨받은 6항목:** 자식 env = **허용 목록**(인증 키 포함 · 빠지면 사용액 0 또는 $1.00) · 지식 = argv 유지 + `ask` 안 100,000 B 가드(예약 뒤 거부 → 순 0) · 사용액 = **`usd` 안 예약 → 차분 정산**(파일 형식 무변경 · pm2 SIGINT 는 트리 전체 · 10초 유예) · 4014 = chat 선택 콜백 `onFatalClose`(FATAL 로그 줄 문구 불변 · 두 앱 동작 무변경 · 번들은 바뀐다) · CLI 세션 위치 = 공유 · `alive-adv` = 수집기 활성 앱 집합 `activeApps()`(adv = last-ok 있고 `-stopped` 없을 때 · 7곳 한 집합 · `all-missing` 은 fin·fit 만 · 재활성 회는 오프셋만 끝으로).
 > - **PR:** 4b-3a1 chat(두 앱 다음 릴리즈 재빌드 · revert **중간**) → 4b-3a2 advisor(5파일 · **중간**) → 4b-3b 스크립트·런북(**중간**) → 4b-3c 수집기(**중간** · 서버 재설치) → 릴리즈 minor(서버 조치 선택). 정지 **즉시**(락이 비어 있을 때).
 > - **이 블록이 고치는 위 서술:** §8 4b-3 행 "`collect.cjs` 역할 집합 분기 1" → 7곳 + 활성 집합 · §3-4 G-R1 의 "직접 `pm2 restart` 금지" 근거 — 옵션 없는 `pm2 restart` 는 저장 env 를 쓴다(`discord-inbound.sh:92,112`) · 셸 env 가 들어가는 길은 `--update-env`·`start`·`startOrRestart` — 런북 금지 문구는 그쪽으로.
+> 되돌리기: 문구 (**즉시**).
+
+> **진행 (2026-11-16) — 4b-3 코드 완료(4b-3a1 #694 · 4b-3a2 #696 · 4b-3b #700 · 4b-3c #705 · 미릴리즈).** 설계(위 확정 블록)와 다르게 된 곳:
+> - **"이미 배포됨" 조건 다섯째** — 위 상태 규칙(A)의 넷 + **도는 `pleiades-adv-bot` 이 이 셸 env 로 online**. 넷만이면 스크립트 밖 기동(W1)을 같은 태그 재실행으로 고치는 복구 경로가 "이미 배포됨" 에 막혔다(4b-3b 구현 중 발견).
+> - **배포도 pm2 데몬이 없으면 멈춘다**(`rpc.sock` 없음 → `jlist` 전에 rc 1) — `jlist` 가 빈 데몬을 띄운다.
+> - **dump 보호 셋**(4b-3b 9-1 major · PR #700 Codex P2): C5 에서 옛 adv delete 뒤 start 가 실패하면 `save --force` 로 목록을 맞춘다 · `stop` 은 목록에 없어도 dump 에 adv 가 남았으면 **두 앱이 도는 데몬에서만** save(아니면 rc 4) · 데몬에 adv 만 있으면 delete 뒤 save 하지 않는다(rc 4) — 빈·부분 데몬에서 `save --force` 가 두 앱 resurrect 목록을 지우는 길을 셋 다 막았다.
+> - **생존 표지 기준 시각** = 옛 adv delete 뒤(옛 봇 표지로 거짓 통과 · info).
+> - **수집기:** 감시에서 빠진 회에 그 앱의 열린 상태형 기록(앱 기록 + 수집기 자신의 `…:adv` 기록)을 **복구 게시 없이 닫는다**(4b-3c 9-1 major · PR #705 Codex P2 — 정지 뒤 "열린 이상" 이 일일 요약에 날마다 남았다).
+> - 수집기 재설치 완료(사용자 2026-11-16 · REF `70aab4e` · 시험 `rc=0`). 통합 층 첫 배포(런북 `advisor-inplace.md`)는 릴리즈 뒤 · 선택.
 > 되돌리기: 문구 (**즉시**).
 
 ---

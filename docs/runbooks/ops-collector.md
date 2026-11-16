@@ -21,6 +21,8 @@ pm2 상태 · MCP `/health` · web 응답 · pm2 로그 · 디스크를 5분마�
 
 `<REF>` 와 `<SHA256>` 은 Claude 가 머지 뒤 실값을 준다. 재설치 때도 검증 전에는 도는 파일을 덮지 않는다.
 
+**지금 설치된 판(2026-11-16 · #705 · 통합 층 감시 포함):** REF `70aab4ee07ad7018f8684c1e8aad5e2ffebcd5de` · SHA256 `b0a38f22da8abbc6f7edcbac8af2ea0110660bd5434d192c4aa5a751ba76fba0`. 되돌리기는 직전 판 REF `a56924c`(#591) 로 같은 명령 — SHA256 은 그 커밋의 `deploy/ops/collect.cjs` 에서 계산한다(`git show a56924c:deploy/ops/collect.cjs | sha256sum`).
+
 ```bash
 mkdir -p ~/pleiades-ops ~/pleiades-private/ops && chmod 700 ~/pleiades-ops ~/pleiades-private ~/pleiades-private/ops
 curl -fsSL https://raw.githubusercontent.com/fomalhaut84/pleiades/<REF>/deploy/ops/collect.cjs -o ~/pleiades-ops/collect.cjs.new \
