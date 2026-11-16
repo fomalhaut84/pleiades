@@ -134,7 +134,7 @@ class Base(unittest.TestCase):
             f.write(text)
         return p
 
-    def run_c(self, *args, now=NOW, config=None, timeout=60, **env):
+    def run_c(self, *args, now=NOW, config=None, timeout=60, prod_defaults=False, **env):
         e = {
             "PATH": "/usr/bin:/bin",
             "HOME": str(self.home),
@@ -145,7 +145,7 @@ class Base(unittest.TestCase):
             "OPS_NOW": now,
             "OPS_DISK_HOME": str(self.home),
             "OPS_DISK_BACKUP": str(self.tmp),
-            "OPS_CONFIG": json.dumps({"summaryAt": "23:59", "disk": {"warn": 101, "crit": 102}, "quietWarnings": False, **(config or {})}),
+            "OPS_CONFIG": json.dumps({"summaryAt": "23:59", "disk": {"warn": 101, "crit": 102}, **({} if prod_defaults else {"quietWarnings": False}), **(config or {})}),
         }
         e.update(env)
         argv = list(args) if args else ["--dry-run", f"--pm2-bin={self.bin}"]
@@ -1120,3 +1120,53 @@ class Quiet2a(Base):
         self.ok(now="2026-11-10T08:10:00+09:00", config=q)
         self.assertFalse(any("🟢" in p for p in self.posts()))
         self.assertFalse(any(e["open"] for e in self.state()["fps"].values() if "glob-empty" in e["src"]))
+
+
+class QuietSeverity(Base):
+    """PR-2a 9-1 major(#713) — 지문 재료에 심각도가 없다: 조용히 처리한 지문에 더 높은 심각도가 오면 늦거나 묻혔다."""
+
+    E = "pleiades-fin-bot-error-0.log"
+    Q = {"quietWarnings": True}
+
+    def test_failure_after_quiet_warning_is_posted_at_once(self):
+        # 태그 없는 Warning 줄과 Error 줄은 세부가 같아 한 지문이다(#569)
+        self.ok(config=self.Q)
+        self.log(self.E, "2026-11-10 08:01:00: (node:1) Warning: thing\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=self.Q)
+        self.assertEqual(self.posts(), [])
+        self.log(self.E, "2026-11-10 08:06:00: (node:1) Error: real failure\n", append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00", config=self.Q)
+        posts = self.posts()
+        self.assertEqual(len(posts), 1, posts)
+        self.assertIn("🟠 실패", posts[0])
+        self.assertNotIn("직전 게시 뒤", posts[0])
+
+    def test_pending_failures_not_swallowed_by_a_later_warning(self):
+        self.ok(config=self.Q)
+        self.log(self.E, "2026-11-10 08:01:00: (node:1) Error: one\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=self.Q)
+        self.log(self.E, "2026-11-10 08:06:00: (node:1) Error: two\n", append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00", config=self.Q)
+        # 반복 시점(60분 뒤) 직전 회의 관측은 경고
+        self.log(self.E, "2026-11-10 09:06:00: (node:1) Warning: three\n", append=True)
+        self.ok(now="2026-11-10T09:10:00+09:00", config=self.Q)
+        rep = [p for p in self.posts() if "직전 게시 뒤" in p]
+        self.assertEqual(len(rep), 1, self.posts())
+        self.assertIn("🟠 실패", rep[0])
+
+    def test_silence_is_summary_only_in_quiet_mode(self):
+        # 사용자 결정(2026-11-16) — 침묵도 경고라 요약에만 · 열린 이상에는 남는다
+        self.ok(config=self.Q)
+        self.ok(now="2026-11-11T08:05:00+09:00", config=self.Q)
+        self.assertFalse(any("silent:" in p for p in self.posts()))
+        self.assertTrue(any(e["open"] and e["src"].startswith("silent:") for e in self.state()["fps"].values()))
+        self.ok(now="2026-11-11T09:10:00+09:00", config={**self.Q, "summaryAt": "09:05"})
+        summ = [p for p in self.posts() if "일일 요약" in p]
+        self.assertTrue(summ and "silent:fit-mcp" in summ[-1], summ)
+
+    def test_production_default_is_quiet(self):
+        self.ok(prod_defaults=True)
+        self.log(self.E, "2026-11-10 08:01:00: [Deprecated] historical()\n", append=True)
+        r = self.ok(now="2026-11-10T08:05:00+09:00", prod_defaults=True)
+        self.assertEqual(self.posts(), [])
+        self.assertIn("요약만 1", r.stdout)

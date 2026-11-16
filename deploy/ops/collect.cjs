@@ -579,14 +579,20 @@ function plan(ctx) {
     e.days[today] = (e.days[today] || 0) + o.count
     e.ok = 0
     const wasDeferred = e.deferred
-    const isNew = wasDeferred || (e.kind === 'state' ? !e.open : e.posted === null)
+    // 조용히 처리한 지문에 경고보다 높은 심각도가 오면 첫 발생으로 낸다 — 지문 재료에 심각도가 없어 늦거나 묻혔다(PR-2a 9-1 major)
+    const louder = CONFIG.quietWarnings && e.postedQuiet === true && o.sev !== '경고'
+    const isNew = wasDeferred || louder || (e.kind === 'state' ? !e.open : e.posted === null)
     if (e.kind === 'state') e.open = true
     if (isNew) {
       e.deferred = true // 게시가 끝나면 지운다 — 한 회 상한에 걸리면 다음 회에 첫 발생으로 다시 나간다
       e.pending = 0
+      e.pendingSev = undefined
       e.firstCount = (wasDeferred ? e.firstCount || 0 : 0) + o.count // 미뤄진 동안의 횟수를 잃지 않는다(PR #569 Codex P2)
       fresh.push({ e, count: e.firstCount })
-    } else e.pending += o.count
+    } else {
+      e.pending += o.count
+      e.pendingSev = higherSev(e.pendingSev, o.sev) // 반복 게시·조용히 여부는 쌓인 것 중 최고로 판정한다
+    }
   }
   // 미뤄진 첫 발생이 이번 회에 다시 관측되지 않았을 때(9-1 major):
   // 로그형은 그대로 다시 내보내고 · 상태형은 판정한 회에 이미 풀렸으면 알린 적 없는 이상이라 조용히 닫는다
@@ -621,13 +627,22 @@ function plan(ctx) {
 
 // 경고는 일일 요약에만(#713) — 게시 대상(첫 발생 · 반복 · 복구)이어도 deliver 가 기록하지 않고 상태만 넘긴다
 const isQuiet = (e) => CONFIG.quietWarnings && e && e.sev === '경고'
+const higherSev = (a, b) => (!a || SEV_RANK[b] > SEV_RANK[a] ? b : a)
+// 게시 하나가 조용한가 — 첫 발생은 이번 심각도 · 반복은 쌓인 것 중 최고 · 복구는 그 이상을 조용히 냈을 때만(9-1 major)
+function quietPost(p) {
+  if (!CONFIG.quietWarnings || !p.e) return false
+  if (p.type === 'first') return p.e.sev === '경고'
+  if (p.type === 'repeat') return (p.e.pendingSev || p.e.sev) === '경고'
+  if (p.type === 'recover') return p.e.postedQuiet === true
+  return false
+}
 
 function firstPost({ e, count }, extra) {
   return { type: 'first', e, count, text: line(e, e.sev, extra), commit: (now) => Object.assign(e, { posted: now, deferred: false }) }
 }
 function repeatPost(e) {
   const count = e.pending
-  return { type: 'repeat', e, count, text: line(e, e.sev, ` · 직전 게시 뒤 ${count}회`), commit: (now) => Object.assign(e, { posted: now, pending: 0 }) }
+  return { type: 'repeat', e, count, text: line(e, e.pendingSev || e.sev, ` · 직전 게시 뒤 ${count}회`), commit: (now) => Object.assign(e, { posted: now, pending: 0 }) }
 }
 function recoverPost(e) {
   return { type: 'recover', e, count: 0, text: line(e, '복구'), commit: () => Object.assign(e, { open: false, ok: 0, pending: 0 }) }
@@ -804,7 +819,7 @@ function deliver(posts, ctx) {
   let deferred = 0
   let quiet = 0
   for (const p of posts) {
-    const silent = isQuiet(p.e)
+    const silent = quietPost(p)
     if (!silent && Date.now() >= deadline) {
       deferred += 1 // commit 하지 않는다 — 상태가 다음 회에 다시 고른다(P-9)
       continue
@@ -812,6 +827,7 @@ function deliver(posts, ctx) {
     if (silent) quiet += 1 // 요약에만 — 기록하지 않고 상태만 넘긴다(미뤄진 채 남지 않게 commit 은 한다)
     else out.push(`${stamp} ${p.text}`) // dry-run: 게시 대신 기록 · 템플릿 + 허용 칸뿐이다
     p.commit(ctx.now)
+    if (p.e && (p.type === 'first' || p.type === 'repeat')) Object.assign(p.e, { postedQuiet: silent, pendingSev: undefined })
     const e = p.e || {}
     events.push(JSON.stringify({ at: ctx.now, type: p.type, fp: e.fp || null, app: e.app || null, role: e.role || null, src: e.src || null, sev: e.sev || null, count: p.count, ...(silent ? { quiet: true } : {}) }))
   }
