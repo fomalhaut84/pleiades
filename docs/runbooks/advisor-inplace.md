@@ -42,6 +42,8 @@ bash ~/pleiades-adv/deploy/advisor/adv-inplace.sh "$V"             # y 로 확�
 
 스크립트가 하는 일: **0** OS(Linux) · 위치 `~/pleiades-adv` · **C1a** 셸 키 비우기 · `PLEIADES_ENV_FILE=~/pleiades-platform.env`(600) · **L** 배포 락 → (여기부터 락 fd 를 닫은 서브셸) **C1b** 두 앱 기록(`inplace-fin/fit-last-ok`)이 같은 위치에 있음 · pm2 데몬 있음 · `claude` 찾기(PATH → `~/.local/bin`) · 도는 fin·fit 의 `PLEIADES_ENV_FILE` 이 같음 · **A** 태그 받기 · 깨끗 · 규칙 3줄 · **C2** checkout · **C3** 빌드(루트 `npm ci` → chat ci·tsc → advisor `npm ci`·build) · **C4** `probe`(모델 호출 0 · 두 도메인 읽기 경로 · 락은 "busy(이 실행의 락)") · **C5** 옛 `pleiades-adv-bot` delete → `start --update-env` → `save --force` · **C6** 30초 뒤 online · cwd · env · `PLEIADES_PRIVATE_DIR` 없음 · 전체 `pleiades-*` same · 봇 키가 있으면 생존 표지 갱신.
 
+**확인 프롬프트(`y`)를 오래 열어 두지 않는다** — 그동안 락을 쥐고 있어 Release 자동 배포가 락에서 실패한다(두 앱 배포와 같다).
+
 **A 규칙(상태로 판정 · 별도 재시도 플래그 없음):**
 1. HEAD 가 태그가 아니면 **마지막 통과가 없을 때만**(첫 실행) 진행 — 있으면 rc 1(`git -C ~/pleiades-adv checkout <마지막 통과>` 뒤 다시).
 2. "이미 배포됨" rc 0 은 HEAD = V · 마지막 통과 = V · 끝나지 않은 시도 없음 · 정지 표지 없음 · **도는 `pleiades-adv-bot` 이 이 셸 env 로 online** — 다섯 다 참일 때만(다섯째가 거짓이면 같은 태그로 재기동해 고친다 · 4절 마지막 행).

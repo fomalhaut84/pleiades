@@ -502,6 +502,56 @@ class AdvInplace(unittest.TestCase):
         self.assertNotIn("pm2 delete", self.srv.calls())
         self.assertNotIn("pm2 save", self.srv.calls())
 
+    # 회귀: PR 9-1 major — delete 뒤 start 실패면 dump 에 옛 adv 가 남아 재부팅 때 되살아난다
+    def test_start_failure_after_delete_saves_the_list(self):
+        self.srv.release("v1.0.1")
+        self.assertForm(self.deploy(), 0)
+        self.srv.release("v1.0.2")
+        before = self.srv.calls()
+        self.assertForm(self.deploy("v1.0.2", STUB_START_FAIL="1"), 4, "C5")
+        new = self.srv.calls()[len(before):]
+        self.assertIn("pm2 delete pleiades-adv-bot", new)
+        self.assertIn("pm2 save --force", new)
+
+    def dump(self, with_adv: bool) -> None:
+        names = ["pleiades-fin-bot"] + (["pleiades-adv-bot"] if with_adv else [])
+        (self.srv.home / ".pm2" / "dump.pm2").write_text(json.dumps([{"name": n} for n in names]))
+
+    def test_stop_saves_when_dump_still_has_adv(self):
+        self.dump(with_adv=True)
+        r = self.srv.run("stop", "--yes")
+        self.assertForm(r, 0, "결과: 통과", "dump")
+        self.assertEqual(self.srv.calls().count("pm2 save --force"), 1)
+        self.assertNotIn("pm2 delete", self.srv.calls())
+
+    def test_stop_does_not_save_dump_on_empty_daemon(self):
+        # 빈 데몬(두 앱 없음) 위에서는 dump 에 adv 가 있어도 save 하지 않는다 — 두 앱 resurrect 목록을 지운다
+        self.dump(with_adv=True)
+        r = self.srv.run("stop", "--yes", STUB_NO_APPS="1")
+        self.assertForm(r, 4, "dump")
+        self.assertNotIn("pm2 save", self.srv.calls())
+
+    def test_stop_without_daemon_but_adv_in_dump_is_rc4(self):
+        (self.srv.home / ".pm2" / "rpc.sock").unlink()
+        self.dump(with_adv=True)
+        r = self.srv.run("stop", "--yes")
+        self.assertForm(r, 4, "dump")
+        self.assertNotIn("pm2", self.srv.calls())
+
+    def test_quoted_empty_bot_key_counts_as_absent(self):
+        self.srv.plat.write_text('DISCORD_BOT_TOKEN_ADVISOR=""\n')
+        self.srv.release("v1.0.1")
+        self.assertForm(self.deploy(), 0, "키 없음")
+
+    def test_alive_marker_from_old_bot_does_not_pass(self):
+        # 9-1 info — 옛 봇이 delete 전에 쓴 표지로 거짓 통과하지 않는다(delete 뒤 표지를 지운다)
+        self.srv.release("v1.0.1")
+        self.assertForm(self.deploy(STUB_ALIVE="1"), 0)
+        self.srv.plat.write_text("DISCORD_BOT_TOKEN_ADVISOR=x\n")
+        self.srv.release("v1.0.2")
+        r = self.deploy("v1.0.2")   # 새 봇은 표지를 쓰지 않는다
+        self.assertForm(r, 4, "생존 표지")
+
     def test_stop_ignores_app_records_and_env(self):
         # 정정 R2-1 — stop 은 PLEIADES_PRIVATE_DIR 거부 + 락만 · 두 앱 기록·env 대조 없이도 "즉시"
         for a in ("fin", "fit"):

@@ -55,6 +55,8 @@ stop() { local code=$1; shift; emit_form "중단 — $(printf '%s' "$*" | redact
 # 체크아웃 HEAD 의 vX.Y.Z 태그(없으면 빈 값)
 head_tag() { git -C "$1" tag --points-at HEAD 2>/dev/null | grep -E "$TAG_RE" | head -1; }
 mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null; }
+# pm2 저장본(resurrect 목록)에 통합 층이 있는지 — 이름만 본다
+dump_has_adv() { grep -q "\"$ADV_NAME\"" "${PM2_HOME:-$HOME/.pm2}/dump.pm2" 2>/dev/null; }
 
 JSON_OF='const jsonOf = (s) => { const i = s.indexOf("[{"); return i >= 0 ? s.slice(i) : s.slice(s.lastIndexOf("[]")) }'
 # 도는 pleiades-* 마다 PLEIADES_ENV_FILE 이 이 셸 값과 같은지 — release-inplace env_same 과 같은 식 · 값은 내지 않는다
@@ -192,12 +194,18 @@ deploy_body() {
 
   # C5 — 재기동. PATH 앞에 claude 디렉터리(B10) · 셸 env 를 넘기는 길은 start --update-env 하나(G-R1)
   local t0
-  t0=$(date +%s)
   if [[ -n "$adv" ]]; then
     (cd "$APPDIR" && pm2 delete "$ADV_NAME") >>"$LOG" 2>&1 || stop 4 "C5 — 옛 $ADV_NAME 삭제 실패 → $(recovery)"
   fi
-  (cd "$APPDIR" && PATH="$CLAUDE_DIR:$PATH" pm2 start "$CONFIG" --only "$ADV_NAME" --update-env) >>"$LOG" 2>&1 \
-    || stop 4 "C5 — pm2 start 실패 → $(recovery)"
+  # 옛 봇이 delete 전에 쓴 생존 표지로 C6 이 거짓 통과하지 않게 — 지우고 시각은 그 뒤에(9-1 info)
+  rm -f "$APPDIR/logs/alive-adv.json"
+  t0=$(date +%s)
+  if ! (cd "$APPDIR" && PATH="$CLAUDE_DIR:$PATH" pm2 start "$CONFIG" --only "$ADV_NAME" --update-env) >>"$LOG" 2>&1; then
+    # delete 만 되고 start 가 실패했다 — 저장 목록을 지금 상태로 맞춘다(dump 에 옛 adv 가 남으면 재부팅 때 되살아난다 · 9-1 major).
+    # C1b 가 두 앱 프로세스를 확인했으므로 빈 데몬 위의 save 가 아니다
+    [[ -z "$adv" ]] || pm2 save --force >>"$LOG" 2>&1 || form "   (주의) pm2 save 실패 — dump 에 옛 $ADV_NAME 가 남았을 수 있다(stop 으로 정리)"
+    stop 4 "C5 — pm2 start 실패 → $(recovery)"
+  fi
   pm2 save --force >>"$LOG" 2>&1 || stop 4 "C5 — pm2 save 실패 → $(recovery)"
   form "C5 $ADV_NAME 기동 · save: 예"
 
@@ -211,7 +219,8 @@ deploy_body() {
   form "C6 $ADV_NAME ${st[0]:-?} · cwd 이 체크아웃: ${st[1]:-?} · PLEIADES_ENV_FILE ${st[2]:-?} · PLEIADES_PRIVATE_DIR ${st[3]:-?} · 전체 pleiades-* same $n_same · DIFF/MISSING $n_bad"
   [[ "${st[0]:-}" == online && "${st[1]:-}" == 예 && "${st[2]:-}" == same && "${st[3]:-}" == 없음 && "$n_bad" == 0 ]] \
     || stop 4 "C6 — 확인 실패(위 줄) → $(recovery)"
-  if grep -qE "^[[:space:]]*(export[[:space:]]+)?$BOT_KEY=[^[:space:]]" "$PLEIADES_ENV_FILE" 2>/dev/null; then
+  # 값이 있는지만 — 빈 값 · 따옴표만 있는 빈 값("" · '')은 없음으로 본다(9-1 info)
+  if grep -qE "^[[:space:]]*(export[[:space:]]+)?$BOT_KEY=([^[:space:]\"']|\"[^\"]|'[^'])" "$PLEIADES_ENV_FILE" 2>/dev/null; then
     local m
     m=$(mtime "$APPDIR/logs/alive-adv.json")
     [[ -n "$m" && "$m" -ge "$t0" ]] || { form "   생존 표지 갱신: 아니오"; stop 4 "C6 — 생존 표지가 기동 뒤 갱신되지 않았다(gateway · 채널 · 허용 사용자 확인) → $(recovery)"; }
@@ -231,13 +240,24 @@ stop_body() {
   confirm "통합 층을 정지한다."
   if [[ ! -e "${PM2_HOME:-$HOME/.pm2}/rpc.sock" ]]; then
     # 빈 데몬을 띄워 save --force 하면 두 앱 resurrect 목록이 지워진다(r4 정정 3)
+    dump_has_adv && stop 4 "S — 데몬이 없는데 dump 에 $ADV_NAME 가 남아 있다(재부팅 복구 때 되살아난다) → 두 앱을 복구한 뒤 stop 다시"
     form "S  데몬 없음 — pm2 무변경"
   else
     local st
     read -r -a st <<<"$(adv_state)"
     case "${st[0]:-}" in
       PARSE_FAIL|'') stop 1 "S — pm2 목록을 읽지 못했다(바꾸지 않았다)" ;;
-      none) form "S  adv 없음 — pm2 무변경" ;;
+      none)
+        if dump_has_adv; then
+          # 목록에는 없지만 저장본에 남았다(C5 delete 뒤 실패 등 · 9-1 major) — 두 앱이 도는 데몬일 때만 save
+          grep -qE '^pleiades-(fin|fit)-' <<<"$(env_same)" \
+            || stop 4 "S — dump 에 $ADV_NAME 가 남았는데 두 앱이 없는 데몬이라 save 하지 않았다 → 두 앱을 복구한 뒤 stop 다시"
+          pm2 save --force >>"$LOG" 2>&1 || stop 4 "S — pm2 save 실패 → 같은 명령 재실행"
+          form "S  adv 없음 · dump 에 남은 adv 를 지웠다(save: 예)"
+        else
+          form "S  adv 없음 — pm2 무변경"
+        fi
+        ;;
       *)
         pm2 delete "$ADV_NAME" >>"$LOG" 2>&1 || stop 4 "S — pm2 delete 실패 → 같은 명령 재실행"
         pm2 save --force >>"$LOG" 2>&1 || stop 4 "S — pm2 save 실패 → 같은 명령 재실행"
