@@ -466,6 +466,72 @@ describe('4014 강등 (F1)', () => {
   });
 });
 
+// 012 4b-3a1 (#693) — 치명 close 선택 콜백. 통합 층이 4014 를 관리자에게 알리는 자리
+describe('치명 close 콜백 onFatalClose', () => {
+  const fatalLine = /\[discord-fit\] gateway 종료 코드 4014 — 다시 접속하지 않는다 — 포털에서 MESSAGE CONTENT INTENT 를 켠다/;
+
+  it.each([4004, 4014])('%s → 콜백 1회(코드) · 로그 줄 문구 그대로 · 콜백은 줄 뒤 · 재접속 없음', async (code) => {
+    const order: string[] = [];
+    const onFatalClose = vi.fn((c: number) => {
+      order.push(`cb:${c}`);
+    });
+    const { last, sockets, logger, ready } = setup(createRouter(), { onFatalClose });
+    logger.error.mockImplementation((m: string) => {
+      order.push(`log:${m}`);
+    });
+    await ready();
+    last().emit('close', code);
+    await tick();
+    expect(sockets).toHaveLength(1);
+    expect(onFatalClose).toHaveBeenCalledExactlyOnceWith(code);
+    expect(order[order.length - 1]).toBe(`cb:${code}`);
+    expect(order[order.length - 2]).toMatch(new RegExp(`gateway 종료 코드 ${code}`));
+    if (code === 4014) expect(order[order.length - 2]).toMatch(fatalLine);
+  });
+
+  it('콜백이 동기로 던지거나 거부해도 정지 그대로 · 경고 1줄', async () => {
+    for (const cb of [
+      () => {
+        throw new Error('sync down');
+      },
+      async () => {
+        throw new Error('async down');
+      },
+    ]) {
+      const { last, sockets, logger, ready } = setup(createRouter(), { onFatalClose: cb });
+      await ready();
+      last().emit('close', 4014);
+      await tick();
+      expect(sockets).toHaveLength(1);
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringMatching(/치명 종료 알림 실패/));
+      expect(logger.warn.mock.calls.flat().filter((m: string) => /치명 종료 알림 실패/.test(m))).toHaveLength(1);
+    }
+  });
+
+  it('강등(fallbackIntents)이 먼저 — 첫 4014 에서는 부르지 않고 낮춘 값의 4014 에서 부른다', async () => {
+    const onFatalClose = vi.fn();
+    const { last, ready, hello } = setup(createRouter(), { fallbackIntents: 0, onIntentsFallback: () => {}, onFatalClose });
+    await ready();
+    last().emit('close', 4014);
+    await tick();
+    expect(onFatalClose).not.toHaveBeenCalled();
+    await hello();
+    last().emit('close', 4014);
+    await tick();
+    expect(onFatalClose).toHaveBeenCalledExactlyOnceWith(4014);
+  });
+
+  it('비치명 close 에서는 부르지 않는다', async () => {
+    const onFatalClose = vi.fn();
+    const { last, sockets, ready } = setup(createRouter(), { onFatalClose });
+    await ready();
+    last().emit('close', 4000);
+    await tick();
+    expect(sockets).toHaveLength(2);
+    expect(onFatalClose).not.toHaveBeenCalled();
+  });
+});
+
 describe('중립 컨텍스트 확장 (C)', () => {
   it('sentAt: timestamp → 메시지 ID → 받은 시각', () => {
     expect(messageSentAt({ timestamp: '2026-10-28T05:00:00.000Z' }, 1)).toBe(Date.parse('2026-10-28T05:00:00.000Z'));

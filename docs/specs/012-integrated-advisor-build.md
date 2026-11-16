@@ -128,6 +128,7 @@
 | (다른 자원) `db-backup.cjs` · `db-offsite-pull.sh` | 자기 `.lock` — 배포 락과 다른 파일 | — | `db-backup.cjs:268` · `db-offsite-pull.sh:119` |
 | **(새) 통합 층 상주 프로세스** | 질문 시작에 `flock -n` 자식으로 **잠깐 잡았다 바로 놓는다**(시험) | 몇 ms | §3-5 |
 | **(새) 통합 층 배포 스크립트** | `flock -n` · 보유 · **자식에서 fd 닫기 필수**(G-R3) | 통합 층 배포 전체 | §3-4 |
+| **`deploy/advisor/adv-inplace.sh`**(4b-3b · #700 — 위 행의 구현) | 같은 파일 `flock -n` fd 9(테스트만 mkdir 폴백) · 못 잡으면 rc 1 · **락 뒤 본문 전체가 `( … ) 9>&-` 서브셸** — pm2 · npm · node · git · `claude --version` 모두 fd 9 없이 · `--dry-run` 은 락을 잡지 않는다 | 배포(C1b~C6) · `stop`(pm2 delete·save · 표지) · 확인 프롬프트 동안도 보유 | `adv-inplace.sh` `take_lock` · `main` 끝 서브셸 · 시험 `test_children_never_inherit_lock_fd` |
 
 **S2 — 허용 사용자 키 `DISCORD_ALLOWED_USER_IDS`**
 명령: `grep -rn "DISCORD_ALLOWED_USER_IDS" apps/*/src packages/*/src tools deploy .env.example .claude/rules docs/runbooks`(테스트·`__pycache__` 제외)
@@ -436,6 +437,34 @@
 
 **순서:** 4a-1 → 4a-2(분류 import) → 4a-3a(prompt 를 읽기 경로에 등록) · 4a-4 는 독립 · 4a-3b 는 선택(4a-3a 뒤 · 아무 때나) → (4a 릴리즈 · 묶어도 된다) → **4b-1(셋째 앱 등록 포함 — 로컬 가드가 먼저)** → 4b-2 → 4b-3 → 4b 실사용 → 4b-4 · 4b-5 · U4 결정 → 4c.
 **4c-1 과 Q122 의 묶음:** fin 은 한 함수(`handleDiscordText`)가 소비 → 거래(쓰기 입구) → 질문을 가른다. 스위치는 question 가지만 끈다 — trade 는 원장 입력이고, question 과 `!ai` 는 같은 함수 `decideAiQuestion`(쓰기 허용)이라 question 을 끄면 `!ai` 가 fin 쓰기 대화의 유일한 경로로 남는다(4d 전까지).
+
+> **진행 (2026-11-13 · #679 · #680 · #685 · #686) — 4b-1 · 4b-2 완료(미릴리즈 · 띄우는 곳 0).** 사용자 결정: 둘 다 PR 2개로 나눈다(등록·키 먼저) · 하루 사용액 = **비공개 파일**(`<비공개>/advisor/spend-<KST날짜>.json` 600 · 깨짐·쓰기 실패 = 상한) · `apps-adv` 필수 체크.
+> - 4b-1a #682 골격 + 셋째 앱 등록(N24 필수 7 + 선택 1) · 4b-1b #684 코어(X1 판정 함수는 **복사 이식** — X1 저장소 판·서버 설치본은 갱신하지 않는다) · 4b-2a #687 Q138 전용 허용 키 · 4b-2b #688 Discord 조립 · 하루 상한 · 관리자 알림.
+> - 사용액: 보고된 비용 · 없으면 init 단계 실패(모델 호출 전) 0 · 그 밖은 호출당 상한. 세션 토큰 상한은 컨텍스트(input + cache_read + cache_creation)로 — 같은 결함의 앱 쪽은 #683.
+> - **4b-3 으로 넘긴 것:** 자식 env 를 허용 목록으로 · 도메인 지식을 argv(`--system-prompt`) 대신 파일로(서버 CLI 옵션 확인 · Linux 인자 128 KiB) · pm2 `kill_timeout` 과 종료 때 진행 중 질문의 비용 기록 · 4014(MESSAGE CONTENT 꺼짐) 치명 알림 · CLI 세션 기록 위치(지금 `CLAUDE_CONFIG_DIR` = 개발용과 같은 곳) · 수집기 `alive-adv` 감시.
+> - **하지 않기로 한 것:** 미분류 도구 차단(읽기 경로가 구조로 보장 · 막으면 배포가 체크아웃보다 새로울 때 도메인 전체 탈락).
+> 되돌리기: 문구 (**즉시**).
+
+> **확정 (2026-11-13 · #691) — 4b-3 설계.** 근거 `_workspace/239/4b3/`(실측 `01_surveyor_4b3.md` → 초안 r1·r2·r3 + r4 블록 `02_writer_4b3*.md` → 감사 3회 `03_auditor_4b3*.md` · 정정 9 → 3 → 3 · 3회차 셋은 국소라 재감사 없이 반영 — 전례 #37). **정본 상세는 `02_writer_4b3_r3.md`(뒤 블록이 앞을 이긴다)** · 이 블록은 요약이다.
+> - **사용자 결정:** CLI 설정·세션 기록 위치 = **공유 유지**(분리는 env 만으로 안 된다 — 설정 검사가 CLI cwd 의 조상 `~/.claude` 를 project 범위로 읽어 서버의 켜진 플러그인 때문에 전 질문 거부 · `settings.ts:61-65,79-80` · 분리는 코드 변경 + 근거 미측정이라 별건) · PR **4개**.
+> - **배치:** 셋째 체크아웃 `~/pleiades-adv` · 스크립트 `deploy/advisor/adv-inplace.sh <vX.Y.Z> | stop` · pm2 정의 `deploy/advisor/pleiades-adv.config.cjs`(이름 `pleiades-adv-bot` 하나 · `kill_timeout 15000` 필수 — pm2 기본 1600 ms) · 시험 `deploy/test_adv_inplace.py` · 런북 `docs/runbooks/advisor-inplace.md`. 구조 4파일 무변경.
+> - **G-R1 확장:** 스크립트는 `PLEIADES_PRIVATE_DIR` 이 설정돼 있으면 거부(release-inplace unset 목록 밖이라 다르면 락 시험이 다른 파일을 본다) · fin·fit `inplace-*-last-ok` 존재 + 내용 대조로 같은 위치 확인 · `env_same` 사전 대조는 **락 뒤 · fin·fit 만**(`n_same > 0` · adv 자신은 정보 줄 — 자기 복구를 막지 않게).
+> - **G-R3:** 락 뒤 본문 전체를 `( … ) 9>&-` 서브셸로 · 바깥은 rc 만 · 트랩은 바깥 · 시험은 PATH 스텁이 fd 9 를 받으면 실패하는 **동적** 방식 · `git -c maintenance.auto=false -c gc.auto=0 fetch`.
+> - **상태 규칙(A):** 비태그 HEAD 는 last-ok 없을 때만(첫 실행) · "이미 배포됨" 은 HEAD = V · last-ok = V · pending 없음 · `-stopped` 없음일 때만 · **그 밖은 진행**(되돌리기 · 정지 뒤 다시 켜기 포함).
+> - **`stop`:** 락만 거친다 · 데몬 없음(`~/.pm2/rpc.sock` 없음) = pm2 무호출(빈 `save --force` 로 fin·fit resurrect 목록을 지우지 않게) · adv 있을 때만 delete·save · `-stopped` 표지 + `alive-adv.json` 삭제.
+> - **넘겨받은 6항목:** 자식 env = **허용 목록**(인증 키 포함 · 빠지면 사용액 0 또는 $1.00) · 지식 = argv 유지 + `ask` 안 100,000 B 가드(예약 뒤 거부 → 순 0) · 사용액 = **`usd` 안 예약 → 차분 정산**(파일 형식 무변경 · pm2 SIGINT 는 트리 전체 · 10초 유예) · 4014 = chat 선택 콜백 `onFatalClose`(FATAL 로그 줄 문구 불변 · 두 앱 동작 무변경 · 번들은 바뀐다) · CLI 세션 위치 = 공유 · `alive-adv` = 수집기 활성 앱 집합 `activeApps()`(adv = last-ok 있고 `-stopped` 없을 때 · 7곳 한 집합 · `all-missing` 은 fin·fit 만 · 재활성 회는 오프셋만 끝으로).
+> - **PR:** 4b-3a1 chat(두 앱 다음 릴리즈 재빌드 · revert **중간**) → 4b-3a2 advisor(5파일 · **중간**) → 4b-3b 스크립트·런북(**중간**) → 4b-3c 수집기(**중간** · 서버 재설치) → 릴리즈 minor(서버 조치 선택). 정지 **즉시**(락이 비어 있을 때).
+> - **이 블록이 고치는 위 서술:** §8 4b-3 행 "`collect.cjs` 역할 집합 분기 1" → 7곳 + 활성 집합 · §3-4 G-R1 의 "직접 `pm2 restart` 금지" 근거 — 옵션 없는 `pm2 restart` 는 저장 env 를 쓴다(`discord-inbound.sh:92,112`) · 셸 env 가 들어가는 길은 `--update-env`·`start`·`startOrRestart` — 런북 금지 문구는 그쪽으로.
+> 되돌리기: 문구 (**즉시**).
+
+> **진행 (2026-11-16) — 4b-3 코드 완료(4b-3a1 #694 · 4b-3a2 #696 · 4b-3b #700 · 4b-3c #705 · 미릴리즈).** 설계(위 확정 블록)와 다르게 된 곳:
+> - **"이미 배포됨" 조건 다섯째** — 위 상태 규칙(A)의 넷 + **도는 `pleiades-adv-bot` 이 이 셸 env 로 online**. 넷만이면 스크립트 밖 기동(W1)을 같은 태그 재실행으로 고치는 복구 경로가 "이미 배포됨" 에 막혔다(4b-3b 구현 중 발견).
+> - **배포도 pm2 데몬이 없으면 멈춘다**(`rpc.sock` 없음 → `jlist` 전에 rc 1) — `jlist` 가 빈 데몬을 띄운다.
+> - **dump 보호 셋**(4b-3b 9-1 major · PR #700 Codex P2): C5 에서 옛 adv delete 뒤 start 가 실패하면 `save --force` 로 목록을 맞춘다 · `stop` 은 목록에 없어도 dump 에 adv 가 남았으면 **두 앱이 도는 데몬에서만** save(아니면 rc 4) · 데몬에 adv 만 있으면 delete 뒤 save 하지 않는다(rc 4) — 빈·부분 데몬에서 `save --force` 가 두 앱 resurrect 목록을 지우는 길을 셋 다 막았다.
+> - **생존 표지 기준 시각** = 옛 adv delete 뒤(옛 봇 표지로 거짓 통과 · info).
+> - **수집기:** 감시에서 빠진 회에 그 앱의 열린 상태형 기록(앱 기록 + 수집기 자신의 `…:adv` 기록)을 **복구 게시 없이 닫는다**(4b-3c 9-1 major · PR #705 Codex P2 — 정지 뒤 "열린 이상" 이 일일 요약에 날마다 남았다).
+> - 수집기 재설치 완료(사용자 2026-11-16 · REF `70aab4e` · 시험 `rc=0`). 통합 층 첫 배포(런북 `advisor-inplace.md`)는 릴리즈 뒤 · 선택.
+> 되돌리기: 문구 (**즉시**).
 
 ---
 

@@ -4723,3 +4723,40 @@ HEAD `4fd10d3b62f0` · pleiades 추적 파일 정적 읽기만(봇·웹·MCP·`c
 | 셋째 앱을 모르는 곳(N12 밖) | `apps-ci.yml` · `security-audit.yml`(lockfile 5) · `workflow.md` 8절 · 루트 `.gitignore` · 4b-1 등록 = 필수 7 + 선택 1(`precheck.py` 무변경 — `node` 이미 허용) | AU A-10 · AU3 R3-2 |
 
 - **못 잰 값:** resume 대화 턴별 비용 · 셋째 체크아웃 서버 디스크 · 4c-2 넘김 경로 비용 비교 · 쿼터 형태·잔량 — 재는 방법은 012 §0-4.
+
+## 2026-11-13 — 012 4b-3 통합 층 서버 배치 실측 (#239)
+
+HEAD `48ccb68b03e6` · pleiades 추적 파일 정적 읽기 + 로컬 `claude --help`/`--version`(모델 호출 0) · 서버 0. 상세·줄 근거 `_workspace/239/4b3/01_surveyor_4b3.md`. 012 [N10]·[N20]·[N21]·§0-5 에 있는 값은 다시 적지 않는다.
+
+| 항목 | 값 | 명령 |
+|---|---|---|
+| `release-inplace.sh` C1 unset 목록 | `PLEIADES_PRIVATE_DIR` 은 **목록 밖** — 락 파일 위치는 셸 값을 따른다. 통합 층 락 시험 파일도 자기 env 의 `PLEIADES_PRIVATE_DIR` 로 정해진다 | `sed -n '21p;173p;181p' deploy/release-inplace.sh` · `apps/advisor/src/private-dir.ts:10-12` |
+| fin 도메인 지식(`knowledge-prompt.ts` 규칙으로 조립) | **7,904 B**([N10] 7,894) | `cd apps/finance && node -e '<extractSection + rules 2파일 join("\n\n---\n\n")>'` |
+| fit 지식 코드 기본값 | **12,509 B**([N10] 12,513) · 운영은 DB 활성 본문(미측정) | `node -e` 로 `SYSTEM_PROMPT_DEFAULT` 템플릿 리터럴 바이트 |
+| 통합 층 `BASE_SYSTEM_PROMPT` | 576 B · 도메인별 지식 상한 32,000 B(`domains.ts:14`) | `node -e` 로 `advisor.ts` 리터럴 바이트 |
+| 로컬 CLI | 2.1.323 · `--system-prompt-file`·`--append-system-prompt-file` = help 독립 항목 **없음**(`--bare` 설명에만) · 바이너리 문자열 6·12회 · `--settings`·`--setting-sources` 있음 · `--system-prompt-snapshot`(기본 on — resume 은 첫 요청의 기록본) | `~/.local/share/claude/versions/2.1.323 --help \| grep …` · `strings … \| grep -o -E -- "--(append-)?system-prompt-file" \| sort \| uniq -c` |
+| chat 치명 close | 4014 등 `FATAL_CLOSE` 는 `logger.error` 한 줄 뒤 정지 · 치명 콜백 0(콜백은 `onIntentsFallback` 뿐) | `packages/chat/src/gateway.ts:65,289-309` |
+| 통합 층 종료 | SIGTERM 은 gateway 만 멈춘다 · 진행 중 질문 대기·자식 종료 0 · 사용액은 답 뒤에만 기록 | `apps/advisor/src/main.ts:67-74` · `bot.ts:92-97` |
+| 자식 env | 상속 + 거부 목록 4형식(`DATABASE_URL`·`DISCORD_*`·`ANTHROPIC_MODEL`·`NOTIFY_*`) | `apps/advisor/src/cli.ts:44-57` |
+| 수집기에 adv 를 넣을 때 바꿀 곳 | 7(`APPS` · 역할 집합 · `LOG_NAME` · health · glob-empty · 배포 표지 · alive 는 경로 규칙 그대로) | `grep -n -E "APPS\|ROLES\|LOG_NAME\|alive" deploy/ops/collect.cjs` |
+| `deploy/` 시험(8절) | **508 통과 · 건너뜀 1** · 628 s(로컬 macOS) | `python3 -m unittest discover -s deploy` |
+
+- **못 잰 값:** 서버 CLI 2.1.311 의 `-file` 옵션 · pm2 기본 `kill_timeout`·트리 종료(로컬 pm2 패키지 없음) · 서버 CLI 인증 정보 위치(`CLAUDE_CONFIG_DIR` 분리 영향) · fit DB 활성 지식 크기 · 셋째 체크아웃 이름(미정).
+
+## 2026-11-16 — 012 4b-3 구현 · #622 재판정에서 나온 실측
+
+pleiades 추적 파일 정적 읽기 + 로컬 node_modules 소스 읽기 + 로컬 시험 실행. 서버 값은 **판정만**(원문은 저장소 밖 · 서버 운영 정보 비공개). 2026-11-13 4b-3 절의 "못 잰 값" 중 pm2 항목을 채운다.
+
+| 항목 | 값 | 출처 · 명령 |
+|---|---|---|
+| pm2 종료 신호 | 기본 `SIGINT` · `treekill` 기본 true(자식 `claude` 까지 같은 순간) · `kill_timeout` 기본 1600 ms — 로컬 pm2 **7.0.4** 소스 · 서버 pm2 버전 미측정 | `constants.js:105` · `lib/API/schema.json:156-159,327-331` · `lib/God/Methods.js:240-251` (4b-3 감사 1회차 정정 5) |
+| `pm2 dump` | 프로세스마다 `pm2_env` 통째를 `dump.pm2` 에 쓴다 — resurrect 가 같은 env(`PLEIADES_ENV_FILE` 포함)로 띄운다 · `save --force` 는 빈 목록 보호를 건너뛴다 | `lib/API.js:423-510` · pm2 `lib/API/Startup.js` save (PR #700 Codex P2) |
+| 옵션 없는 `pm2 restart` | 저장된 env 를 쓴다 — 셸 env 가 들어가는 길은 `--update-env` · `start` · `startOrRestart` | `deploy/discord-inbound.sh:92,112` |
+| `deploy/` 시험(8절) | **568 통과 · 건너뜀 1** · 741 s(로컬 macOS · 4b-3c 뒤) — `test_adv_inplace` 47 · `test_ops_collect` 68 | `python3 -m unittest discover -s deploy` |
+| Next.js 의 `x-forwarded-for` | **없을 때만** 소켓 주소로 채운다(`??=`) — nginx 가 넣은 값은 바꾸지 않는다 | `apps/finance/node_modules/next/dist/server/base-server.js:565` (#701 9-1) |
+| fin nginx 예시 프록시 헤더 | `X-Real-IP $remote_addr`(덮어씀) · `X-Forwarded-For $proxy_add_x_forwarded_for`(요청자 값 뒤에 덧붙임 — 첫 값은 요청자가 정한다) | `apps/finance/deploy/nginx/myfinance.conf:52-53` (#701) |
+| Auth.js 오류 로그 형식 | 첫 줄 = ANSI 색 + `[auth][error] <클래스 이름>: …` · 이어서 스택을 따로 찍는다(pm2 덩어리 2개) — 태그·낱말 정규식은 색 코드를 먼저 벗겨야 맞는다 | `apps/finance/node_modules/@auth/core/lib/utils/logger.js:2,9,20` |
+| Next.js Server Action 스캐너 문구 | 수집기 분류표(`server-action-ref`)는 `Server Reference ID did not match …` 하나만 잡는다 — `Failed to find Server Action …` 변형은 세부 없는 `실패` 지문으로 떨어진다(#622 재판정 · 하루 16건) | `deploy/ops/collect.cjs` `KNOWN_STDERR` |
+| fin MCP stdout 침묵 | 주말(fin AI 호출 0)에 24h 넘게 그대로 → `silent:fin-mcp` 오탐 275회(11-15~16) — 결정: 72h(PR-2) | #622 재판정 |
+
+- **못 잰 값:** 서버 pm2 버전(위 신호·dump 는 로컬 7.0.4 기준) · 서버 CLI 2.1.311 의 `--system-prompt-file` · 통합 층 첫 질문 `cost=`(첫 배포 뒤 런북 5절).

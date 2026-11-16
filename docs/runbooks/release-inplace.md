@@ -69,6 +69,7 @@ bash ~/pleiades-private/release-inplace.sh fit "$V" --checkout ~/pleiades-fit
 - **창 안 오류 줄의 한계:** pm2 는 쓰기 덩어리마다 시각을 붙여 여러 줄 스택의 뒷줄은 세지 않는다(적게 센다) · 시각은 pm2 데몬 TZ 기준. · `gateway 준비 완료`·`세션 이어받음`·`재접속 1000ms 후 (RESUME)`은 정상 줄이라 세지 않는다(#373 · #583 — 5000ms 이상 · 새 세션 재접속은 센다). · **`mcp 출력 오류`** = 창 안 mcp `-out` 의 pino 오류 줄(첫 키 `level` ≥ 50 · `"error"`·`"fatal"` — 수집기 기준의 근사 · JSON 파싱 없음 · #602). MCP 는 오류를 stdout 에 써서 `-error` 줄로는 늘 0 이었다. 통과 조건이 아니라 판정 정보다.
 - 봇 `409` 칸·게이트는 009 D-5 B1(#502)에서 지웠다 — 옛 채널 폴링 충돌 신호라 함께 사라졌다(대체 없음 · 009 §7 정정 · 같은 봇 이중 실행이 실제로 생기면 #250).
 - 스크립트가 멈추는 것(사람 판단 없이): 마이그레이션 · `mcp-config.json` 변경 · HEAD 가 태그가 아님 · 체크아웃 dirty · 플랫폼 설정 권한 ≠ 600 · 도는 프로세스의 `PLEIADES_ENV_FILE` 이 다름 · deploy.sh rc ≠ 0 · C5(3 online · mcp 200 · 재기동 `same`) 실패.
+- **C1 에서 `pleiades-adv-bot` 이 DIFF/MISSING 으로 멈추면**(012 4b-3 · #699) — 통합 층이 스크립트 밖에서 다른 셸 env 로 떴다. 두 앱은 그대로다(rc 1 · 바꾸기 전). `bash ~/pleiades-adv/deploy/advisor/adv-inplace.sh <그 마지막 통과 태그>` 로 재기동해 고친 뒤(정지 상태로 두려면 `… stop`) 이 배포를 다시 한다 — 런북 `advisor-inplace.md` 4절.
 - **사람이 하는 것:** C0 시각 고르기 · 양식의 "사람 확인" 줄(웹 화면 · Discord `현황`/`!today`) · 릴리즈별 확인(C6 처럼 그 릴리즈에 있으면).
 - 아래 A~C5 절은 **스크립트가 하는 일의 설명**이자 스크립트가 없을 때의 수동 경로다. 둘이 다르면 스크립트가 정본이다(테스트 `python3 -m unittest discover -s deploy`).
 

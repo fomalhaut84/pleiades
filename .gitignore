@@ -31,3 +31,4 @@ tools/ops/deny.local
 /apps/fitness/.omron-tokens
 /apps/fitness/.runtime
 /apps/fitness/logs
+/apps/advisor/logs

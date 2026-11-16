@@ -25,9 +25,13 @@ interface PathLike {
   dirname(p: string): string;
 }
 
-/** 플랫폼 키 — 스위치(`NOTIFY_*` · 앱은 안 읽음) · 웹훅 · 봇(M-6b-2 #149: 토큰 · 채널 ID · 허용 사용자). 앱 고유 키는 여기에 없다. */
+/**
+ * 플랫폼 키 — 스위치(`NOTIFY_*` · 앱은 안 읽음) · 웹훅 · 봇(M-6b-2 #149: 토큰 · 채널 ID · 허용 사용자). 앱 고유 키는 여기에 없다.
+ * 허용 사용자는 공유 목록 + 통합 층 전용 `DISCORD_ALLOWED_USER_IDS_ADVISOR`(#685 · 012 Q138 — 정확한 이름만).
+ * 바꾸면 `tools/local/check_env.py` `PLATFORM_KEY` · `DISCORD_ID_KEY` 도 같이(012 §0-5 S2).
+ */
 export const PLATFORM_KEY_RE =
-  /^(?:NOTIFY_[A-Z0-9_]+|DISCORD_WEBHOOK_[A-Z0-9_]+|DISCORD_BOT_TOKEN_[A-Z0-9_]+|DISCORD_CHANNEL_ID_[A-Z0-9_]+|DISCORD_ALLOWED_USER_IDS)$/;
+  /^(?:NOTIFY_[A-Z0-9_]+|DISCORD_WEBHOOK_[A-Z0-9_]+|DISCORD_BOT_TOKEN_[A-Z0-9_]+|DISCORD_CHANNEL_ID_[A-Z0-9_]+|DISCORD_ALLOWED_USER_IDS(?:_ADVISOR)?)$/;
 const LINE_RE = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/;
 const MAX_DEPTH = 12;
 

@@ -21,6 +21,8 @@ pm2 상태 · MCP `/health` · web 응답 · pm2 로그 · 디스크를 5분마�
 
 `<REF>` 와 `<SHA256>` 은 Claude 가 머지 뒤 실값을 준다. 재설치 때도 검증 전에는 도는 파일을 덮지 않는다.
 
+**지금 설치된 판(2026-11-16 · #705 · 통합 층 감시 포함):** REF `70aab4ee07ad7018f8684c1e8aad5e2ffebcd5de` · SHA256 `b0a38f22da8abbc6f7edcbac8af2ea0110660bd5434d192c4aa5a751ba76fba0`. 되돌리기는 직전 판 REF `a56924c`(#591) 로 같은 명령 — SHA256 은 그 커밋의 `deploy/ops/collect.cjs` 에서 계산한다(`git show a56924c:deploy/ops/collect.cjs | sha256sum`).
+
 ```bash
 mkdir -p ~/pleiades-ops ~/pleiades-private/ops && chmod 700 ~/pleiades-ops ~/pleiades-private ~/pleiades-private/ops
 curl -fsSL https://raw.githubusercontent.com/fomalhaut84/pleiades/<REF>/deploy/ops/collect.cjs -o ~/pleiades-ops/collect.cjs.new \
@@ -109,3 +111,15 @@ Discord 를 일부러 끈 봇(봇 토큰을 비움 등)은 표지가 낡은 채 
 pleiades 프로세스 6개가 모두 jlist 에 없었다는 뜻이다. 수집기는 데몬 소켓이 살아 있을 때만 pm2 를 부른다. 그래도 시험과 호출 사이에 데몬이 죽으면 pm2 CLI 가 **크론 환경으로 빈 데몬을 띄울 수 있다**(008 §2 확정 블록 Q97).
 
 그 데몬 위에서 `pm2 resurrect` 를 하면 앱이 크론 환경(빈 PATH · 다른 env)으로 뜰 수 있다. 크론 셸에서 바로 `resurrect` 하지 않는다. 데몬을 서비스 환경(서버 부팅 때 쓰는 pm2 자동 기동 유닛)으로 다시 띄운 뒤 복구하고, 판정을 Claude 에게 알린다.
+
+### 통합 층(`adv·bot`) 기록을 보면 (012 4b-3c · #704)
+
+수집기는 통합 층 `pleiades-adv-bot` 을 **수동 배포가 한 번이라도 통과했고(`~/pleiades-private/inplace-adv-last-ok`) 정지 표지(`inplace-adv-stopped`)가 없을 때만** 감시한다 — 처음 clone 한 뒤 · `adv-inplace.sh stop` 뒤에는 아무 기록도 나지 않는다. 다시 켠 첫 회는 정지 동안 쌓인 오류 로그를 건너뛴다.
+
+| 기록 | 뜻 · 할 일 |
+|---|---|
+| `adv·bot · pm2 · missing` · `status:<x>` | 감시 중인데 pm2 목록에 없다 · online 이 아니다. 띄우려면 `adv-inplace.sh <마지막 통과 태그>`(런북 `advisor-inplace.md`) · 내려 둘 것이면 `adv-inplace.sh stop`(다음 회부터 감시 밖 — 열려 있던 adv 기록은 복구 게시 없이 조용히 닫힌다) |
+| `adv·bot · gateway · stale` | 생존 표지(`~/pleiades-adv/apps/advisor/logs/alive-adv.json`)가 10분 넘게 그대로 — 위 `gateway · stale` 절과 같다. 4014(메시지 수신 권한 꺼짐)는 통합 층이 관리자 채널로 따로 알린다 |
+| `adv·bot · stderr · …` | 통합 층 프로세스의 크래시 stderr(통합 층의 정상 로그는 stdout 이라 보지 않는다) |
+
+`all-missing` 은 두 앱 6 프로세스로만 센다 — 통합 층 하나가 살아 있어도 두 앱이 모두 없으면 난다. 통합 층에는 health · 침묵 감지가 없다.
