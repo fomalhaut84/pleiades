@@ -807,8 +807,11 @@ function activeApps(ctx) {
   // 감시에서 빠진 앱(정지)의 열린 상태형 기록은 조용히 닫는다 — 판정하지 않는 scope 라 복구가 영영 안 나고 요약의 "열린 이상" 에
   // 날마다 남았다 · 다시 켰을 때 옛 이상의 복구가 뒤늦게 나가지도 않게(PR 9-1 major · #704). 정지는 사람이 한 일이라 게시하지 않는다
   for (const app of prev.filter((a) => !active.includes(a))) {
+    // 수집기 자신의 그 앱 기록(app = ops · src = deploy-stale:adv · alive-read:adv · log-read:adv-bot-error)도 같다(PR #705 Codex P2)
+    const own = new RegExp(`:${app}(-|$)`)
     for (const e of Object.values(ctx.state.fps)) {
-      if (e.app === app && e.kind === 'state' && (e.open || e.deferred)) Object.assign(e, { open: false, deferred: false, ok: 0, pending: 0 })
+      const mine = e.app === app || (e.app === 'ops' && e.role === 'collector' && own.test(e.src || ''))
+      if (mine && e.kind === 'state' && (e.open || e.deferred)) Object.assign(e, { open: false, deferred: false, ok: 0, pending: 0 })
     }
   }
   ctx.state.active = active

@@ -1004,6 +1004,26 @@ class Advisor(Base):
         self.ok(now="2026-11-10T09:20:00+09:00")
         self.assertFalse(any("🟢" in p and "adv" in p for p in self.posts()))
 
+    # 회귀: PR #705 Codex P2 — 수집기 자신의 adv 기록(app = ops)도 정지 때 닫는다
+    def test_collector_adv_records_close_when_stopped(self):
+        self.activate()
+        self.procs(adv="online")
+        self.ok()
+        t = datetime.fromisoformat("2026-11-10T07:30:00+09:00").timestamp()   # 보류 상한(20분) 넘김
+        for a in ("adv", "fin"):
+            pend = self.private / f"inplace-{a}-pending"
+            pend.write_text("v1.15.1\n")
+            os.utime(pend, (t, t))
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertIn("deploy-stale:adv", self.text())
+        self.assertIn("deploy-stale:fin", self.text())
+        (self.private / "inplace-adv-pending").unlink()
+        self.activate(on=False)
+        self.ok(now="2026-11-10T08:10:00+09:00")
+        opened = {e["src"] for e in self.state()["fps"].values() if e["kind"] == "state" and (e["open"] or e["deferred"])}
+        self.assertNotIn("deploy-stale:adv", opened)
+        self.assertIn("deploy-stale:fin", opened)   # 두 앱 쪽 수집기 기록은 그대로
+
     def test_adv_out_log_is_not_read(self):
         self.activate()
         self.procs(adv="online")
