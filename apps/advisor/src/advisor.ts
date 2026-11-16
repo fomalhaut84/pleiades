@@ -6,7 +6,7 @@ import path from "node:path";
 import { CALL_BUDGET_USD, Pin, childEnv, cliArgs, readPins, runCli } from "./cli";
 import { DomainDecl, DomainReady, loadDomains, prefixOf, prepareDomain, readUrlOf } from "./domains";
 import { LockState, lockFileOf, probeDeployLock } from "./deploy-lock";
-import { AnswerVerdict, judgeAnswer, judgeInit, safeName } from "./judge";
+import { AnswerVerdict, POST_INIT_HOOK_CODE, judgeAnswer, judgeInit, safeName } from "./judge";
 import { ensurePrivateDir, writePrivate } from "./private-dir";
 import { Session, SessionFrame, SessionStore } from "./session-store";
 import { SettingsDirs, checkSettings } from "./settings";
@@ -172,9 +172,10 @@ export class Advisor {
     // 세션 준비(MCP · 최대 10 s) 중 종료가 오면 CLI 를 새로 띄우지 않는다 — 신호 뒤 생긴 자식은 pm2 트리 종료가 못 본다(9-1 info 1)
     if (this.abort.signal.aborted) return { kind: "refused", reason: "shutting-down", text: MESSAGES.shuttingDown };
     let { v, run } = await this.runOnce(key, session, q, resumed);
-    if (resumed && v.status === "init") {
+    if (resumed && v.status === "init" && v.code !== POST_INIT_HOOK_CODE) {
       // 이어 묻던 세션의 init 실패 — 그 사이 배포로 읽기 도구가 바뀌면 세션 시작 때 고정한 허용 목록이 낡는다(9-1 info 1).
       // init 실패는 모델 호출 전에 끊으므로 비용 0 — 세션을 버리고 도메인을 다시 받아 한 번만 새로 묻는다. 진짜 위반이면 다시 걸린다.
+      // init 뒤 hook(violation:hook)은 빼다 — 모델 비용이 났을 수 있고 안전 위반이다. 다시 물으면 그 판정·비용을 덮어썼다(#711)
       this.store.reset(key);
       const started = await this.startOrRefuse(key);
       if ("kind" in started) return started;
