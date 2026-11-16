@@ -4742,3 +4742,21 @@ HEAD `48ccb68b03e6` · pleiades 추적 파일 정적 읽기 + 로컬 `claude --h
 | `deploy/` 시험(8절) | **508 통과 · 건너뜀 1** · 628 s(로컬 macOS) | `python3 -m unittest discover -s deploy` |
 
 - **못 잰 값:** 서버 CLI 2.1.311 의 `-file` 옵션 · pm2 기본 `kill_timeout`·트리 종료(로컬 pm2 패키지 없음) · 서버 CLI 인증 정보 위치(`CLAUDE_CONFIG_DIR` 분리 영향) · fit DB 활성 지식 크기 · 셋째 체크아웃 이름(미정).
+
+## 2026-11-16 — 012 4b-3 구현 · #622 재판정에서 나온 실측
+
+pleiades 추적 파일 정적 읽기 + 로컬 node_modules 소스 읽기 + 로컬 시험 실행. 서버 값은 **판정만**(원문은 저장소 밖 · 서버 운영 정보 비공개). 2026-11-13 4b-3 절의 "못 잰 값" 중 pm2 항목을 채운다.
+
+| 항목 | 값 | 출처 · 명령 |
+|---|---|---|
+| pm2 종료 신호 | 기본 `SIGINT` · `treekill` 기본 true(자식 `claude` 까지 같은 순간) · `kill_timeout` 기본 1600 ms — 로컬 pm2 **7.0.4** 소스 · 서버 pm2 버전 미측정 | `constants.js:105` · `lib/API/schema.json:156-159,327-331` · `lib/God/Methods.js:240-251` (4b-3 감사 1회차 정정 5) |
+| `pm2 dump` | 프로세스마다 `pm2_env` 통째를 `dump.pm2` 에 쓴다 — resurrect 가 같은 env(`PLEIADES_ENV_FILE` 포함)로 띄운다 · `save --force` 는 빈 목록 보호를 건너뛴다 | `lib/API.js:423-510` · pm2 `lib/API/Startup.js` save (PR #700 Codex P2) |
+| 옵션 없는 `pm2 restart` | 저장된 env 를 쓴다 — 셸 env 가 들어가는 길은 `--update-env` · `start` · `startOrRestart` | `deploy/discord-inbound.sh:92,112` |
+| `deploy/` 시험(8절) | **568 통과 · 건너뜀 1** · 741 s(로컬 macOS · 4b-3c 뒤) — `test_adv_inplace` 47 · `test_ops_collect` 68 | `python3 -m unittest discover -s deploy` |
+| Next.js 의 `x-forwarded-for` | **없을 때만** 소켓 주소로 채운다(`??=`) — nginx 가 넣은 값은 바꾸지 않는다 | `apps/finance/node_modules/next/dist/server/base-server.js:565` (#701 9-1) |
+| fin nginx 예시 프록시 헤더 | `X-Real-IP $remote_addr`(덮어씀) · `X-Forwarded-For $proxy_add_x_forwarded_for`(요청자 값 뒤에 덧붙임 — 첫 값은 요청자가 정한다) | `apps/finance/deploy/nginx/myfinance.conf:52-53` (#701) |
+| Auth.js 오류 로그 형식 | 첫 줄 = ANSI 색 + `[auth][error] <클래스 이름>: …` · 이어서 스택을 따로 찍는다(pm2 덩어리 2개) — 태그·낱말 정규식은 색 코드를 먼저 벗겨야 맞는다 | `apps/finance/node_modules/@auth/core/lib/utils/logger.js:2,9,20` |
+| Next.js Server Action 스캐너 문구 | 수집기 분류표(`server-action-ref`)는 `Server Reference ID did not match …` 하나만 잡는다 — `Failed to find Server Action …` 변형은 세부 없는 `실패` 지문으로 떨어진다(#622 재판정 · 하루 16건) | `deploy/ops/collect.cjs` `KNOWN_STDERR` |
+| fin MCP stdout 침묵 | 주말(fin AI 호출 0)에 24h 넘게 그대로 → `silent:fin-mcp` 오탐 275회(11-15~16) — 결정: 72h(PR-2) | #622 재판정 |
+
+- **못 잰 값:** 서버 pm2 버전(위 신호·dump 는 로컬 7.0.4 기준) · 서버 CLI 2.1.311 의 `--system-prompt-file` · 통합 층 첫 질문 `cost=`(첫 배포 뒤 런북 5절).
