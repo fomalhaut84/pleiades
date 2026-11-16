@@ -549,9 +549,11 @@ function merge(obs) {
   for (const o of obs) {
     const fp = fpOf(o.material)
     const cur = byFp.get(fp)
-    if (!cur) byFp.set(fp, { ...o, fp })
+    const warn = o.sev === '경고' ? o.count : 0 // 요약의 경고 개수는 관측 심각도로 센다(합친 뒤 높은 심각도가 아니라 · PR #714 Codex P2)
+    if (!cur) byFp.set(fp, { ...o, fp, warn })
     else {
       cur.count += o.count
+      cur.warn += warn
       if (SEV_RANK[o.sev] > SEV_RANK[cur.sev]) cur.sev = o.sev // 같은 지문 안에서는 높은 심각도(PR #569 Codex P2)
     }
   }
@@ -577,6 +579,7 @@ function plan(ctx) {
     if (o.scope) activeScopes.add(o.scope)
     const e = entryFor(table, o, now)
     e.days[today] = (e.days[today] || 0) + o.count
+    if (o.warn) (e.warnDays ||= {})[today] = (e.warnDays[today] || 0) + o.warn
     e.ok = 0
     const wasDeferred = e.deferred
     // 조용히 처리한 지문에 경고보다 높은 심각도가 오면 첫 발생으로 낸다 — 지문 재료에 심각도가 없어 늦거나 묻혔다(PR-2a 9-1 major)
@@ -656,7 +659,8 @@ function burstPost(list) {
     e: null,
     count: list.length,
     text: `[ops] ${SEV.실패} ${md(`새 지문 ${CONFIG.burstLimit}+ (${list.length}) · ${parts}`)}`,
-    commit: (now) => list.forEach(({ e }) => Object.assign(e, { posted: now, deferred: false })),
+    // 폭주로 나간 지문도 조용함 표지를 지운다 — 남으면 다음 회마다 "더 높은 심각도" 로 다시 폭주했다(PR #714 Codex P2)
+    commit: (now) => list.forEach(({ e }) => Object.assign(e, { posted: now, deferred: false, postedQuiet: false, pendingSev: undefined })),
   }
 }
 
@@ -672,8 +676,8 @@ function summaryPost(ctx, today) {
     .sort((a, b) => b.days[yesterday] - a.days[yesterday])
     .slice(0, 5)
     .map((e) => `${e.app}·${e.role}·${e.src} ${e.fp} ×${e.days[yesterday]}`)
-  const warned = all.filter((e) => e.sev === '경고' && e.days[yesterday])
-  const warnTotal = warned.reduce((n, e) => n + e.days[yesterday], 0)
+  const warned = all.filter((e) => (e.warnDays || {})[yesterday])
+  const warnTotal = warned.reduce((n, e) => n + e.warnDays[yesterday], 0)
   const warnPart = CONFIG.quietWarnings ? ` · 경고 어제 ${warned.length}종 ${warnTotal}회` : ''
   const text = `[ops] ${md(`일일 요약 · 살아 있음 · 열린 이상 ${open.length}${open.length ? ` (${open.slice(0, 10).join(' / ')})` : ''}${warnPart} · 어제 상위 ${top.length ? top.join(' / ') : '없음'}`)}`
   return { type: 'summary', e: null, count: open.length, text, commit: () => (ctx.state.summaryDate = today) }
@@ -702,7 +706,7 @@ function prune(state, now) {
   const days = new Set([kstDate(new Date(now)), kstDate(new Date(now - 86400000))])
   for (const [fp, e] of Object.entries(state.fps)) {
     if (!e.open && !e.deferred && e.last < keep) delete state.fps[fp]
-    else for (const d of Object.keys(e.days)) if (!days.has(d)) delete e.days[d]
+    else for (const t of [e.days, e.warnDays || {}]) for (const d of Object.keys(t)) if (!days.has(d)) delete t[d]
   }
   let text = JSON.stringify(state)
   const closed = Object.values(state.fps).filter((e) => !e.open && !e.deferred).sort((a, b) => a.last - b.last)

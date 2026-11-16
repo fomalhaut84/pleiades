@@ -1154,6 +1154,35 @@ class QuietSeverity(Base):
         self.assertEqual(len(rep), 1, self.posts())
         self.assertIn("🟠 실패", rep[0])
 
+    # 회귀: PR #714 Codex P2 — 폭주로 나간 지문의 조용함 표지가 지워지지 않아 5분마다 폭주가 다시 나갔다
+    def test_burst_escalation_clears_quiet_state(self):
+        q = {**self.Q, "burstLimit": 2}
+        self.ok(config=q)
+        tags = ["a", "b", "c"]
+        self.log(self.E, "".join(f"2026-11-10 08:01:0{i}: [{t}] Warning: w\n" for i, t in enumerate(tags)), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=q)
+        self.assertEqual(self.posts(), [])
+        self.log(self.E, "".join(f"2026-11-10 08:06:0{i}: [{t}] Warning: x\n" for i, t in enumerate(tags)).replace("Warning: x", "Error: x"), append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00", config=q)
+        self.assertEqual(sum("새 지문" in p for p in self.posts()), 1, self.posts())
+        self.log(self.E, "".join(f"2026-11-10 08:11:0{i}: [{t}] Error: y\n" for i, t in enumerate(tags)), append=True)
+        self.ok(now="2026-11-10T08:15:00+09:00", config=q)
+        self.assertEqual(sum("새 지문" in p for p in self.posts()), 1, self.posts())   # 반복 간격 안 — 다시 폭주하지 않는다
+
+    # 회귀: PR #714 Codex P2 — 요약의 경고 개수를 지금 심각도로 셌다
+    def test_daily_warning_count_is_per_observation_severity(self):
+        self.ok(config=self.Q)
+        self.log(self.E, "2026-11-10 08:01:00: (node:1) Warning: w1\n2026-11-10 08:01:01: (node:1) Warning: w2\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=self.Q)
+        self.log(self.E, "2026-11-10 08:06:00: (node:1) Error: e1\n", append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00", config=self.Q)   # 같은 지문 · 지금 심각도 = 실패
+        self.ok(now="2026-11-11T09:10:00+09:00", config={**self.Q, "summaryAt": "09:05"})
+        summ = [p for p in self.posts() if "일일 요약" in p][-1]
+        mine = [e for e in self.state()["fps"].values() if e["app"] == "fin" and e["role"] == "bot"]
+        self.assertEqual(len(mine), 1)
+        self.assertEqual(mine[0]["warnDays"]["2026-11-10"], 2)   # 경고 관측만
+        self.assertEqual(mine[0]["days"]["2026-11-10"], 3)
+
     def test_silence_is_summary_only_in_quiet_mode(self):
         # 사용자 결정(2026-11-16) — 침묵도 경고라 요약에만 · 열린 이상에는 남는다
         self.ok(config=self.Q)
