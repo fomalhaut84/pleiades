@@ -93,6 +93,14 @@ exit "$rc"
 """
 
 
+def without_log_line(out: str) -> str:
+    """판정 양식에서 "원본:" 줄을 뺀다 — 그 줄의 로그 이름에는 시각(HHMMSS)이 실린다.
+
+    회귀: #715 — 14:09:02 처럼 시각에 "409" 가 들어가면 409 칸 부재 확인이 시각 따라 실패했다.
+    """
+    return "\n".join(l for l in out.splitlines() if not l.startswith("원본:"))
+
+
 def git(cwd: Path, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True,
                           env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
@@ -195,6 +203,19 @@ class HumanCheckLine(unittest.TestCase):
         self.assertNotIn("/today", lines[0])
 
 
+class WithoutLogLine(unittest.TestCase):
+    """회귀: #715 — 원본 로그 이름의 시각이 409 칸 부재 확인을 흔들지 않는다."""
+
+    def test_drops_only_the_log_line(self):
+        form = "결과: 통과\n원본: ~/p/inplace-fin-20261116-140902.log (세션에 붙이지 않는다)\nC5 web 0"
+        self.assertNotIn("409", without_log_line(form))
+        self.assertIn("결과: 통과", without_log_line(form))
+        self.assertIn("C5 web 0", without_log_line(form))
+
+    def test_keeps_409_elsewhere(self):
+        self.assertIn("409", without_log_line("C3 409 0\n원본: x.log"))
+
+
 class ReleaseInplace(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -230,7 +251,7 @@ class ReleaseInplace(unittest.TestCase):
         self.assertIn("C2 v1.0.1 · 깨끗: 예", out)
         self.assertRegex(out, r"C4 plan rc 0 · 기본 실행 rc 0 · \d+s · 완료 안내: 예")
         self.assertIn("online 3/3 · mcp 200 · 재기동", out)
-        self.assertNotIn("409", out)  # 회귀: #502 — 409 칸·게이트는 옛 채널 폴링과 함께 지웠다(009 D-5 §5-3)
+        self.assertNotIn("409", without_log_line(out))  # 회귀: #502 — 409 칸·게이트는 옛 채널 폴링과 함께 지웠다(009 D-5 §5-3)
         # 회귀: #276 — 오류 로그 파일명에 pm2 id 가 붙는다. 창 안 2줄(경고 1)을 두 파일에서 센다
         self.assertIn("web 2(경고 1)", out)
         self.assertIn("bot 0(경고 0)", out)  # 회귀: #373 — 정상 기동 줄은 세지 않는다
