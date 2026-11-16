@@ -345,11 +345,13 @@ confirm_stable "pleiades-$APP-mcp"
 at_app pm2 save --force  # 이후 단계가 멈춰도 새 MCP 는 resurrect 대상이다
 
 step "5. 웹 · 봇"
-# startOrRestart 는 등록된 args(-p 포트)를 유지한다 — 포트가 바뀌었으면 지우고 새로 등록한다(PR #177 Codex P2)
-echo "+ (apps/$DIR) pm2 delete pleiades-$APP-web  # 등록된 args 가 'start -p $WEB_PORT' 가 아닐 때만"
+# startOrRestart 는 등록된 args(-H 주소 · -p 포트)를 유지한다 — 달라졌으면 지우고 새로 등록한다(PR #177 Codex P2 · #702 루프백)
+# 기대값은 pleiades.config.cjs webArgs 와 같아야 한다(test_deploy 가 대조한다)
+WEB_ARGS="start -H 127.0.0.1 -p $WEB_PORT"
+echo "+ (apps/$DIR) pm2 delete pleiades-$APP-web  # 등록된 args 가 '$WEB_ARGS' 가 아닐 때만"
 if [[ $DRY -eq 0 ]]; then
   WEB_STATE=$(pm2_state "pleiades-$APP-web")
-  if [[ -n "$WEB_STATE" && "${WEB_STATE#* * }" != "start -p $WEB_PORT" ]]; then
+  if [[ -n "$WEB_STATE" && "${WEB_STATE#* * }" != "$WEB_ARGS" ]]; then
     (cd "$APP_DIR" && pm2 delete "pleiades-$APP-web")
   fi
 fi

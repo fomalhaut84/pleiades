@@ -2,7 +2,7 @@
 // 스플릿 · 활동 컨텍스트처럼 Garmin 을 거치는 조회는 MCP 프로세스가 직접 하지 않고 웹 API 를 부른다.
 // claude-advisor 가 MCP env 로 APP_BASE_URL 을 전달.
 
-const DEFAULT_BASE_URL = "http://localhost:4200";
+const DEFAULT_BASE_URL = "http://127.0.0.1:4200"; // 웹은 루프백(IPv4)에만 듣는다 (#702)
 
 export type WebApiResult = { ok: true; body: unknown } | { ok: false; error: string };
 
