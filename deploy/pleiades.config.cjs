@@ -59,6 +59,10 @@ function ports(dir, env) {
 // 서버 node 의 family 자동 선택은 시도당 250 ms 에서 연결을 끊는다 — 서버의 IPv4 연결이 ~250 ms 이고 IPv6 경로가 없어
 // https·fetch·ws 가 ETIMEDOUT 으로 떨어진다(T-2 U13 · #191). node_args 라 그 프로세스에만 걸린다(자식 claude CLI 등은 제외)
 const NET_ARGS = '--network-family-autoselection-attempt-timeout=2000'
+// 웹은 루프백에만 묶는다 — nginx 가 127.0.0.1 로 proxy_pass 한다. 방화벽이 바뀌어도 nginx(보안 헤더 · X-Real-IP)를 건너뛰는
+// 직접 접속이 생기지 않게 하는 한 겹(#702). MCP 는 앱 코드가 이미 127.0.0.1 에서 듣는다. deploy.sh 5단계가 같은 args 를 대조한다
+const WEB_HOST = '127.0.0.1'
+const webArgs = (port) => `start -H ${WEB_HOST} -p ${port}`
 const COMMON = { instances: 1, autorestart: true, log_date_format: 'YYYY-MM-DD HH:mm:ss' }
 const WEB = { ...COMMON, script: 'node_modules/.bin/next', max_memory_restart: '1024M', node_args: `--max-old-space-size=1024 ${NET_ARGS}` }
 const LONG_RUNNING = {
@@ -72,7 +76,7 @@ const LONG_RUNNING = {
 
 function finApps(cwd, { PORT, MCP_PORT }) {
   return [
-    { ...WEB, name: 'pleiades-fin-web', cwd, args: `start -p ${PORT}`, env: { NODE_ENV: 'production', PORT } },
+    { ...WEB, name: 'pleiades-fin-web', cwd, args: webArgs(PORT), env: { NODE_ENV: 'production', PORT } },
     { ...LONG_RUNNING, name: 'pleiades-fin-bot', cwd, script: 'dist/bot/standalone.cjs', env: { NODE_ENV: 'production' } },
     {
       ...LONG_RUNNING,
@@ -87,9 +91,9 @@ function finApps(cwd, { PORT, MCP_PORT }) {
 function fitApps(cwd, { PORT, MCP_PORT }, env) {
   const base = { NODE_ENV: 'production', TZ: 'Asia/Seoul' }
   // MCP 는 Garmin 조회를 웹 API 로 위임한다 — 코드 기본값은 4200 고정(mcp/tools/web-api.ts)이라 PORT 에서 만든다 (PR #179 Codex P2)
-  const APP_BASE_URL = env.APP_BASE_URL || `http://localhost:${PORT}`
+  const APP_BASE_URL = env.APP_BASE_URL || `http://${WEB_HOST}:${PORT}`
   return [
-    { ...WEB, name: 'pleiades-fit-web', cwd, args: `start -p ${PORT}`, env: { ...base, PORT } },
+    { ...WEB, name: 'pleiades-fit-web', cwd, args: webArgs(PORT), env: { ...base, PORT } },
     {
       ...LONG_RUNNING,
       name: 'pleiades-fit-bot',

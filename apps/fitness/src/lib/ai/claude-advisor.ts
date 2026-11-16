@@ -145,7 +145,7 @@ function ensureMcpConfig(): string {
             DATABASE_URL: process.env.DATABASE_URL ?? "",
             // splits tool (src/mcp/tools/splits.ts) 이 APP_BASE_URL 참조. Claude CLI 는
             // stdio MCP subprocess env 에 부모 env 를 자동 상속 안 하므로 명시 pass.
-            APP_BASE_URL: `http://localhost:${process.env.PORT ?? "4200"}`,
+            APP_BASE_URL: `http://127.0.0.1:${process.env.PORT ?? "4200"}`, // 웹은 루프백(IPv4)에만 듣는다 (#702)
           },
         }
       : {
