@@ -975,6 +975,35 @@ class Advisor(Base):
         self.ok(now="2026-11-10T08:05:00+09:00")
         self.assertNotIn("adv·bot · pm2", self.text())
 
+    # 회귀: PR 9-1 major(#704) — 열린 adv 기록이 정지 뒤 영원히 열린 채 요약에 남았다
+    def test_open_adv_records_close_quietly_when_stopped(self):
+        self.activate()
+        self.procs(adv="online")
+        self.marker("2026-11-10T07:40:00+09:00")
+        self.ok()
+        self.procs(adv=None)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        opened = [e for e in self.state()["fps"].values() if e["app"] == "adv" and e["open"]]
+        self.assertEqual(len(opened), 2)   # pm2 missing · gateway stale
+        self.activate(on=False)
+        before = len(self.posts())
+        self.ok(now="2026-11-10T08:10:00+09:00")
+        self.ok(now="2026-11-10T08:15:00+09:00")
+        self.assertEqual([e for e in self.state()["fps"].values() if e["app"] == "adv" and (e["open"] or e["deferred"])], [])
+        self.assertFalse(any("🟢" in p for p in self.posts()[before:]))   # 조용히 — 복구 게시 없음
+        # 요약의 열린 이상에 adv 가 없다
+        self.ok(now="2026-11-10T09:10:00+09:00", config={"summaryAt": "09:05"})
+        summ = [p for p in self.posts() if "일일 요약" in p]
+        self.assertTrue(summ)
+        self.assertIn("열린 이상 0", summ[-1])
+        # 다시 켜도 옛 이상의 복구가 뒤늦게 나가지 않는다
+        self.activate()
+        self.procs(adv="online")
+        self.marker("2026-11-10T09:14:30+09:00")
+        self.ok(now="2026-11-10T09:15:00+09:00")
+        self.ok(now="2026-11-10T09:20:00+09:00")
+        self.assertFalse(any("🟢" in p and "adv" in p for p in self.posts()))
+
     def test_adv_out_log_is_not_read(self):
         self.activate()
         self.procs(adv="online")
