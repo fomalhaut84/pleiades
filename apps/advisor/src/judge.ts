@@ -2,11 +2,11 @@
 // X1 `deploy/advisor-x1/judge.cjs`(#632 · #634 · #645)를 대화용으로 옮겼다. 파일·프로세스·네트워크를 건드리지 않는다.
 // X1 저장소 판·서버 설치본은 그대로다(끝난 실험 — 이 파일과 따로 갱신하지 않는다).
 
-const NAME_OK = /^[A-Za-z0-9_]{1,80}$/;
-/** 로그·양식에 실을 수 있는 이름만 — 아니면 '?' (외부 문자열을 그대로 싣지 않는다) */
 /** init 뒤 hook(#635) — status 는 "init" 이지만 모델 비용이 났을 수 있다(costOf · 이어 묻기 재시도가 갈라 본다 · #711) */
 export const POST_INIT_HOOK_CODE = "violation:hook";
 
+const NAME_OK = /^[A-Za-z0-9_]{1,80}$/;
+/** 로그·양식에 실을 수 있는 이름만 — 아니면 '?' (외부 문자열을 그대로 싣지 않는다) */
 export const safeName = (s: unknown): string => (typeof s === "string" && NAME_OK.test(s) ? s : "?");
 
 export interface ToolCall {

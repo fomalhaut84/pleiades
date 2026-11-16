@@ -175,7 +175,7 @@ export class Advisor {
     if (resumed && v.status === "init" && v.code !== POST_INIT_HOOK_CODE) {
       // 이어 묻던 세션의 init 실패 — 그 사이 배포로 읽기 도구가 바뀌면 세션 시작 때 고정한 허용 목록이 낡는다(9-1 info 1).
       // init 실패는 모델 호출 전에 끊으므로 비용 0 — 세션을 버리고 도메인을 다시 받아 한 번만 새로 묻는다. 진짜 위반이면 다시 걸린다.
-      // init 뒤 hook(violation:hook)은 빼다 — 모델 비용이 났을 수 있고 안전 위반이다. 다시 물으면 그 판정·비용을 덮어썼다(#711)
+      // init 뒤 hook(violation:hook)은 뺀다 — 모델 비용이 났을 수 있고 안전 위반이다. 다시 물으면 그 판정·비용을 덮어썼다(#711)
       this.store.reset(key);
       const started = await this.startOrRefuse(key);
       if ("kind" in started) return started;

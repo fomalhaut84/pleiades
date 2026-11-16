@@ -99,7 +99,6 @@ export function fatalCloseAlert(deps: Pick<RouterDeps, "log" | "alert">): (code:
  * 그 밖(timeout · no-result · init 뒤 hook)은 호출당 상한(적게 세지 않는다). 거부(CLI 안 띄움)는 0.
  * 이어 묻기 재시도(advisor.ts)는 두 번째 결과만 돌아오지만 첫 시도는 init 단계 실패라 비용 0 이다 — init 뒤 hook 은 재시도하지 않는다(#711).
  */
-export { POST_INIT_HOOK_CODE }; // judge.ts 가 정본(advisor.ts 도 쓴다 · 순환 import 를 피한다)
 export function costOf(r: AskOutcome): number {
   if (r.kind === "refused" || !r.verdict) return 0;
   if (r.verdict.cost !== null) return r.verdict.cost;
