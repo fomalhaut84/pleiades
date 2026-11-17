@@ -122,7 +122,7 @@ export default function AIPage() {
             >
               {msg.role === "assistant" ? (
                 <div
-                  className="prose prose-invert prose-sm max-w-none"
+                  className="md-body"
                   dangerouslySetInnerHTML={{
                     __html: DOMPurify.sanitize(
                       marked.parse(msg.content, { async: false }) as string

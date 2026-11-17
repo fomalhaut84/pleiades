@@ -32,3 +32,42 @@ body {
   background: var(--background);
   font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
 }
+
+/* #753 (013 P1) — 리포트 · AI 답 마크다운 본문. `prose` 는 @tailwindcss/typography 없이는 아무 스타일도 없었다
+   (preflight 가 제목 크기 · 목록 기호 · 표 테두리를 지운다). fin `.ai-markdown` 과 같은 규칙 · fit 색 토큰. */
+.md-body { color: var(--text); font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4 { font-weight: 700; color: var(--bright); margin: 18px 0 8px; line-height: 1.4; }
+.md-body > :first-child { margin-top: 0; }
+.md-body h1 { font-size: 17px; }
+.md-body h2 { font-size: 16px; }
+.md-body h3 { font-size: 15px; }
+.md-body h4 { font-size: 14px; }
+.md-body p { margin: 8px 0; }
+.md-body strong { color: var(--bright); font-weight: 600; }
+.md-body em { color: var(--sub); }
+.md-body a { color: var(--accent); text-decoration: underline; overflow-wrap: anywhere; }
+.md-body ul,
+.md-body ol { padding-left: 22px; margin: 8px 0; }
+.md-body ul { list-style: disc; }
+.md-body ol { list-style: decimal; }
+.md-body li { margin: 4px 0; }
+.md-body li > ul,
+.md-body li > ol { margin: 2px 0; }
+.md-body ul ul { list-style: circle; }
+.md-body code { background: var(--surface); color: var(--bright); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+.md-body pre { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow-x: auto; margin: 10px 0; font-size: 12px; line-height: 1.6; max-width: 100%; }
+.md-body pre code { background: transparent; padding: 0; overflow-wrap: normal; }
+.md-body hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+.md-body blockquote { border-left: 2px solid var(--border-hover); padding-left: 12px; color: var(--sub); margin: 10px 0; }
+.md-body table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; border: 1px solid var(--border); }
+.md-body th { background: var(--surface); text-align: left; padding: 8px 10px; color: var(--sub); font-weight: 500; white-space: nowrap; }
+.md-body td { padding: 8px 10px; border-top: 1px solid var(--border); vertical-align: top; }
+.md-body th + th,
+.md-body td + td { border-left: 1px solid var(--border); }
+/* 좁은 화면에서는 표만 좌우로 넘긴다(fin #471 과 같은 이유 · 기본 규칙 뒤에 둔다) */
+@media (max-width: 640px) {
+  .md-body table { display: block; overflow-x: auto; max-width: 100%; }
+}
