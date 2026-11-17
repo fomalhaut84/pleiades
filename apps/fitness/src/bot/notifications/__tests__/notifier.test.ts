@@ -216,6 +216,17 @@ describe("호출부 — label 'bot' · first.ref 저장 (#48 I2 · D-a)", () => 
     expectBotLabelOnly(2);
   });
 
+  // 013 P2-c (#760) — 크론 리포트는 모델 마크다운 그대로(머리줄 **label** · 표는 정리기가 행 목록으로)
+  it("scheduler 리포트 성공 → markdown 본문(머리줄 굵게 · 표 → 행 목록)", async () => {
+    const { calls } = stubFetch(200);
+    vi.mocked(generateMorningReport).mockResolvedValue("## 요약\n| 지표 | 값 |\n|---|---|\n| 수면 | 81 |");
+    startBotScheduler(BOT_PROCESS);
+    const morning = vi.mocked(cron.schedule).mock.calls[0][1] as () => Promise<void>;
+    await morning();
+    expect(calls()).toHaveLength(1);
+    expect(JSON.parse(calls()[0][1].body).content).toBe("☀️ **모닝 리포트**\n\n## 요약\n- **수면** — 값: 81");
+  });
+
   it("auto-adjust 제안(키보드 · 봇)·에러 문구(웹훅) 전송 (호출 2건) 이 [bot] 으로 로그한다", async () => {
     const { calls } = stubFetch(403);
     arrangeProposal();

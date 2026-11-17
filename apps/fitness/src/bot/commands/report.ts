@@ -1,7 +1,6 @@
 import prisma from "../prisma";
-import { mdToHtml } from "../utils/html";
 import { generateMorningReport, generateEveningReport } from "../../lib/daily-report";
-import { htmlReply, plainReply, type ReplyOutput } from "../core/reply";
+import { markdownReply, plainReply, type ReplyOutput } from "../core/reply";
 import type { BotProcess } from "../notifications/notifier";
 import { sanitizeError } from "../utils/error";
 
@@ -31,8 +30,8 @@ export async function decideReport(
           type === "morning"
             ? await generateMorningReport(true, undefined, { notifyBot: options.bot })
             : await generateEveningReport(true, undefined, { notifyBot: options.bot });
-        const html = mdToHtml(result);
-        await out.reply(htmlReply(`✅ 재생성 완료\n\n${html}`, { long: true }));
+        // 013 P2-c (#760): 모델 마크다운 그대로(옛 mdToHtml 은 표 · 가로줄을 처리하지 못했다)
+        await out.reply(markdownReply(`✅ 재생성 완료\n\n${result}`, { long: true }));
       } catch (error) {
         console.error(`[bot/report] 재생성 실패: ${sanitizeError(error)}`);
         await out.reply(plainReply(REPORT_REGENERATE_FAILED_STATIC));
@@ -61,9 +60,8 @@ export async function decideReport(
     weekly_report: "📊 주간 리포트",
   };
 
-  const header = `<b>${typeLabels[latest.category] ?? latest.category}</b>`;
+  const header = `**${typeLabels[latest.category] ?? latest.category}**`;
   const date = latest.reportDate ? ` (${latest.reportDate})` : "";
-  const html = mdToHtml(latest.response);
 
-  await out.reply(htmlReply(`${header}${date}\n\n${html}`, { long: true }));
+  await out.reply(markdownReply(`${header}${date}\n\n${latest.response}`, { long: true }));
 }
