@@ -8,7 +8,7 @@ export function markdownToPdfText(md: string): string {
   const out: string[] = []
   let inFence = false
   for (const raw of md.replace(/\r\n?/g, '\n').split('\n')) {
-    if (/^\s*```/.test(raw)) {
+    if (/^\s*(```|~~~)/.test(raw)) {
       inFence = !inFence
       continue
     }
@@ -22,13 +22,23 @@ export function markdownToPdfText(md: string): string {
       continue
     }
     line = line
+      .replace(/^(\s*)>[ \t]?/, '$1') // 인용 기호(제목보다 먼저 — `> ## 제목`)
       .replace(/^(\s*)#{1,6}[ \t]+/, '$1') // 제목 기호
-      .replace(/^(\s*)>[ \t]?/, '$1') // 인용 기호
       .replace(/^(\s*)[-*+][ \t]+/, '$1• ') // 목록 기호 → 글머리
-      .replace(/\*\*([^*\n]+)\*\*/g, '$1') // 굵게
-      .replace(/__([^_\n]+)__/g, '$1')
-      .replace(/`([^`\n]+)`/g, '$1') // 인라인 코드
-      .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1 ($2)') // 링크
+    // 인라인 코드 안은 굵게 · 취소선을 걷어내지 않는다 — 코드 조각을 먼저 떼어 둔다(9-1 info)
+    line = line
+      .split(/(`[^`\n]+`)/)
+      .map((part) =>
+        /^`[^`\n]+`$/.test(part)
+          ? part.slice(1, -1)
+          : part
+              .replace(/\*\*([^*\n]+)\*\*/g, '$1') // 굵게
+              .replace(/__([^_\n]+)__/g, '$1')
+              .replace(/~~([^~\n]+)~~/g, '$1') // 취소선
+              .replace(/\\([*_`~#>[\]])/g, '$1') // escape 된 기호
+              .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1 ($2)'), // 링크
+      )
+      .join('')
     out.push(line)
   }
   return out.join('\n')

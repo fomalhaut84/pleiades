@@ -65,6 +65,13 @@ describe('안내문 표기 (P N20)', () => {
   })
 })
 
+// 013 P2-b (#758) — 모델 마크다운은 형식을 그대로 chat 에 넘긴다(명령 표기도 바꾸지 않는다)
+describe('markdown 형식', () => {
+  it('format 과 본문을 그대로 넘긴다', () => {
+    expect(toOutgoing({ text: '## 요약\n- /ai 예시', format: 'markdown', verbatim: true })).toEqual({ text: '## 요약\n- /ai 예시', format: 'markdown' })
+  })
+})
+
 describe('버튼 행 재배치 (B N18)', () => {
   it('한도 안 — 그대로 · 빈 행은 버린다', () => {
     const rows = [...cats(4), cancel, []]
