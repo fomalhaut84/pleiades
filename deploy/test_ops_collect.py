@@ -1191,6 +1191,7 @@ class QuietSeverity(Base):
         rep = [p for p in self.posts() if "직전 게시 뒤" in p]
         self.assertEqual(len(rep), 1, self.posts())
         self.assertIn("🟠 실패", rep[0])
+        self.assertEqual([e["sev"] for e in self.events() if e["type"] == "repeat"], ["실패"])  # 기록도 본문과 같은 심각도(#731)
 
     # 회귀: PR #714 Codex P2 — 폭주로 나간 지문의 조용함 표지가 지워지지 않아 5분마다 폭주가 다시 나갔다
     def test_burst_escalation_clears_quiet_state(self):
@@ -1442,3 +1443,14 @@ class Post(Base):
         self.assertRegex(self.sent()[1], r"^\[ops\] 게시 차단 · 지문 [0-9a-f]{12} · 사유 rejected$")
         self.live(now="2026-11-10T08:05:00+09:00")
         self.assertEqual(len(self.fetches()), 2)
+
+    # 회귀: PR #730 Codex P2(#731) — 미뤄진 첫 발생의 실패가 다음 회 같은 지문 경고에 덮여 조용히 commit 됐다
+    def test_deferred_failure_not_downgraded_by_later_warning(self):
+        self.log(self.E, "2026-11-10 07:59:00: (node:1) Error: failure\n", append=True)
+        r = self.live(status="429", prod_defaults=True)
+        self.assertIn("미룸 1", r.stdout)
+        self.log(self.E, "2026-11-10 08:01:00: (node:1) Warning: warning\n", append=True)
+        r = self.live(now="2026-11-10T08:05:00+09:00", status="429,204", prod_defaults=True)
+        self.assertIn("기록 1 · 미룸 0 · 요약만 0", r.stdout)
+        self.assertIn("🟠", self.sent()[-1])
+        self.assertIn("실패", self.sent()[-1])
