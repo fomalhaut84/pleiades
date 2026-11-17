@@ -66,6 +66,24 @@ describe('rest.send — 2000자를 넘어도 잃지 않는다 (R1 · 0-3)', () =
   });
 });
 
+// 013 P2-a (#756) — toChunks 한 곳이 답장 · 편집 · 인터랙션을 덮는다
+describe('markdown 형식 — escape 하지 않는다', () => {
+  it('send · edit 모두 정리기만 거친다(목록 · 제목이 산다 · `<` 는 막는다)', async () => {
+    const { rest, calls } = setup();
+    await rest.send(CH, { text: '## 요약\n- **AAPL** <@1>', format: 'markdown' });
+    await rest.edit(CH, '333333333333333333', { text: '- 수정 [x](https://a.b/c)', format: 'markdown' });
+    const c = calls();
+    expect(c[0].body?.content).toBe('## 요약\n- **AAPL** <\u200b@1>'); // 폭 없는 공백이 멘션 표기를 끊는다
+    expect(c[c.length - 1].body?.content).toBe('- 수정 x (https://a.b/c)');
+  });
+
+  it('형식이 없으면 plain(글자 그대로) — 무변경', async () => {
+    const { rest, calls } = setup();
+    await rest.send(CH, { text: '- 항목' });
+    expect(calls()[0].body?.content).toBe('\\- 항목');
+  });
+});
+
 describe('rest.edit / setButtons — 인터랙션 밖 편집 · 버튼 교체 (R3 · 0-3)', () => {
   it('한 조각 편집 — PATCH 1회 · 버튼을 주지 않으면 components 를 건드리지 않는다', async () => {
     const { rest, calls } = setup();

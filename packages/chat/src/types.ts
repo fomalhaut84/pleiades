@@ -7,8 +7,11 @@
 
 export type Logger = Pick<Console, 'warn' | 'error'>;
 
-/** 본문 형식 — `html` 은 앱이 지금 쓰는 태그 마크업(<b> · <i> · <code> · <a>)을 플랫폼 표기로 바꾼다. */
-export type TextFormat = 'plain' | 'html';
+/**
+ * 본문 형식 — `html` 은 앱이 지금 쓰는 태그 마크업(<b> · <i> · <code> · <a>)을 플랫폼 표기로 바꾼다 ·
+ * `markdown` 은 모델이 쓴 마크다운(AI 장문)을 서식은 살려 플랫폼 표기로 다듬는다(013 P2-a).
+ */
+export type TextFormat = 'plain' | 'html' | 'markdown';
 
 /** 버튼 하나. `action` 은 누르면 핸들러로 오는 값(1~100자) · `url` 은 링크 버튼. 둘 중 하나만. */
 export interface Button {

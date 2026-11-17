@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createDiscordBotTransport, toDiscordComponents } from './discord-bot';
 import type { FetchLike, FetchResponseLike } from './discord';
-import { html } from './types';
+import { html, markdown } from './types';
 
 // 가짜 토큰 — 실제 형식(<id>.<ts>.<hmac>)을 흉내 내되 소스에 그 모양의 리터럴을 두지 않는다(push protection 오탐 · #149)
 const TOKEN = ['MTIz' + '0'.repeat(20), 'Gabc' + 'DE', 'x'.repeat(30)].join('.');
@@ -76,6 +76,14 @@ describe('createDiscordBotTransport', () => {
       allowed_mentions: { parse: [] },
       components: [{ type: 1, components: [{ type: 2, style: 2, label: '✅ 확정', custom_id: 'vest:confirm:r1' }] }],
     });
+  });
+
+  // 013 P2-a (#756)
+  it('markdown 은 escape 하지 않는다 — 버튼도 그대로 붙는다', async () => {
+    const { t, bodies } = setup([ok('9')]);
+    await t.send('finance', markdown('- 첫째\n| a | b |\n|---|---|\n| x | 1 |', [[{ label: '확인', action: 'ok' }]]));
+    expect(bodies()[0].content).toBe('- 첫째\n- **x** — b: 1');
+    expect(bodies()[0].components).toBeDefined();
   });
 
   it('긴 본문은 나누고 버튼은 마지막 청크에만', async () => {
