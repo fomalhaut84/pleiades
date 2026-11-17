@@ -45,8 +45,6 @@ import {
   decideCustomStrategyDelete, decideCustomStrategyList, decideCustomStrategyRegister,
 } from '../custom-strategy'
 import { ALERT_CONFIG_RE, alertArgsFromMatch, decideAlertConfig } from '../alert'
-import { splitMessage } from '../../utils/formatter'
-import { markdownToHtml } from '../../utils/markdown'
 import { flush, recordingOutput, type Step } from './test-utils'
 
 const p = vi.mocked(prisma, { deep: true })
@@ -131,7 +129,8 @@ describe('브리핑', () => {
       vi.setSystemTime(new Date('2026-10-30T01:00:00Z'))
     })
 
-    it('안내 → advisor(프롬프트 · 옵션) → html 4096 이하면 html 한 번', async () => {
+    // 013 P2-b (#758): 옛 4096 경계 · html 실패 시 plain · 4096 단위 plain 분할 → 모델 마크다운 한 번(chat 이 2000 으로 나눈다)
+    it('안내 → advisor(프롬프트 · 옵션) → 모델 마크다운 그대로 markdown 한 번', async () => {
       m.ask.mockResolvedValueOnce({ response: '**NVDA** 요약 & <x>' } as never)
       const f = await briefingRun('브리핑 nvda')
       expect(m.ask).toHaveBeenCalledWith(buildTickerAnalysisPrompt('NVDA', new Date(), '수집 블록'), {
@@ -140,35 +139,16 @@ describe('브리핑', () => {
       })
       expect(f.steps).toEqual([
         ['reply', '🔍 NVDA 심층 분석 중... (통상 1~2분, 최대 10분 이상 걸릴 수 있어요)', 'plain'],
-        ['reply', markdownToHtml('**NVDA** 요약 & <x>'), 'html'],
+        ['reply', '**NVDA** 요약 & <x>', 'markdown'],
       ])
       expect(m.briefing).not.toHaveBeenCalled()
     })
 
-    it('html 전송 실패 → 원문 plain 한 번', async () => {
-      m.ask.mockResolvedValueOnce({ response: '**A**' } as never)
-      const r = recordingOutput()
-      const original = r.out.reply
-      // 옛 테스트처럼 기록은 하고 html 이면 던진다
-      r.out.reply = vi.fn(async (message: BotReply) => {
-        const key = await original(message)
-        if (message.format === 'html') throw new Error('parse')
-        return key
-      })
-      await decideBriefing(briefingArgsFromText('브리핑 A'), TARGET, r.out)
-      await flush()
-      expect(r.steps).toEqual([
-        ['reply', '🔍 A 심층 분석 중... (통상 1~2분, 최대 10분 이상 걸릴 수 있어요)', 'plain'],
-        ['reply', markdownToHtml('**A**'), 'html'],
-        ['reply', '**A**', 'plain'],
-      ])
-    })
-
-    it('html 이 4096 넘으면 원문을 4096 단위 plain 으로 나눠 보낸다', async () => {
+    it('길어도 나누지 않는다 — 긴 심층 분석도 escape 된 원문이 아니라 markdown', async () => {
       const long = `${'가'.repeat(3000)}\n${'나'.repeat(3000)}`
       m.ask.mockResolvedValueOnce({ response: long } as never)
       const f = await briefingRun('브리핑 B')
-      expect(f.steps.slice(1)).toEqual(splitMessage(long).map((c) => ['reply', c, 'plain']))
+      expect(f.steps.slice(1)).toEqual([['reply', long, 'markdown']])
     })
 
     it('AdvisorError → code 별 안내 · 그 외 → 정적 안내 · typing 5 s · 끝나면 멈춘다', async () => {

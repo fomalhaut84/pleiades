@@ -4,13 +4,12 @@ import { generateMorningReport, generateEveningReport } from "../../lib/daily-re
 import { generateWeeklyReport } from "../../lib/weekly-report";
 import { runAutoAdjustProposal } from "./auto-adjust";
 import { runAutoAdjustMaintenance } from "./auto-adjust-cron";
-import { mdToHtml } from "../utils/html";
 import { sanitizeError } from "../utils/error";
 import {
   formatUserFriendlyError,
   notifyAdminIfKnownFailure,
 } from "@/lib/monitoring/admin-alerts";
-import { Route, html as htmlContent } from "@pleiades/notify";
+import { Route, html as htmlContent, markdown as markdownContent } from "@pleiades/notify";
 import { BOT_NOTIFY_CTX, notifierFor } from "./notifier";
 
 /** 리포트 cron 콜백 공통 처리: 단계별 로그 + 실패 시 Discord 알림 (조용한 실패 차단) */
@@ -23,8 +22,8 @@ async function runReportCron(
   console.log(`[bot-cron] ${label} 시작`);
   try {
     const report = await generate();
-    const html = `${emoji} <b>${label}</b>\n\n${mdToHtml(report)}`;
-    const r = await notifierFor().notify(Route.ALLOWED, htmlContent(html), BOT_NOTIFY_CTX);
+    // 013 P2-c (#760): 모델 마크다운 그대로 — 표는 행 목록으로 · 제목 · 목록이 산다
+    const r = await notifierFor().notify(Route.ALLOWED, markdownContent(`${emoji} **${label}**\n\n${report}`), BOT_NOTIFY_CTX);
     if (r.total === 0) {
       console.warn(
         `[bot-cron] ${label} 전송 대상 없음 (DISCORD_WEBHOOK_FITNESS 미설정?)`

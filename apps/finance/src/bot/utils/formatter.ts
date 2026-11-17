@@ -46,33 +46,3 @@ export function profitEmoji(returnPct: number): string {
 export function formatUSD(amount: number): string {
   return `$${amount.toFixed(2)}`
 }
-
-const MAX_MESSAGE_LENGTH = 4096
-
-export function splitMessage(text: string, maxLength = MAX_MESSAGE_LENGTH): string[] {
-  if (text.length <= maxLength) return [text]
-
-  const lines = text.split('\n')
-  const chunks: string[] = []
-  let current = ''
-
-  for (const line of lines) {
-    if (line.length > maxLength) {
-      if (current) chunks.push(current)
-      for (let i = 0; i < line.length; i += maxLength) {
-        chunks.push(line.slice(i, i + maxLength))
-      }
-      current = ''
-      continue
-    }
-    if (current.length + line.length + 1 > maxLength) {
-      if (current) chunks.push(current)
-      current = line
-    } else {
-      current = current ? `${current}\n${line}` : line
-    }
-  }
-  if (current) chunks.push(current)
-
-  return chunks
-}

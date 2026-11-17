@@ -254,7 +254,7 @@ export default function SleepDetailClient({
           <div className="bg-card border border-border rounded-xl p-5">
             <div className="text-[11px] text-dim tracking-wider uppercase mb-3">AI 평가</div>
             <div
-              className="prose prose-invert prose-sm max-w-none"
+              className="md-body"
               dangerouslySetInnerHTML={{
                 __html: DOMPurify.sanitize(
                   marked.parse(aiEval, { async: false }) as string

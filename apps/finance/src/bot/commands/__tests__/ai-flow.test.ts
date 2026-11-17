@@ -30,8 +30,6 @@ import { askAdvisor, AdvisorError, AdvisorTimeoutError, describeAdvisorError } f
 import { aiFallbackRoute, decideAiCommand, decideAiQuestion, decideAiTradeButton, decideReset, decideTradeParse } from '../ai'
 import type { BotReply, ButtonOutput, MessageKey, ReplyOutput } from '../../core/reply'
 import { discordMessageKey, discordStateKey, type StateKey } from '../../core/state-key'
-import { splitMessage } from '../../utils/formatter'
-import { markdownToHtml } from '../../utils/markdown'
 import { buildTickerCheckLines } from '../../utils/trade-price-check'
 import {
   FLOW_CHANNEL,
@@ -220,7 +218,7 @@ describe('T13 /ai · /reset · 동시 1건 · 세션', () => {
     expect(mocked.ask.mock.calls[0][0]).toBe('안녕')
     expect(rec.steps).toEqual([
       ['reply', '🤔 생각 중...', 'plain'],
-      ['reply', markdownToHtml('답'), 'html'],
+      ['reply', '답', 'markdown'],
     ])
   })
 
@@ -336,42 +334,17 @@ describe('T13 /ai · /reset · 동시 1건 · 세션', () => {
   })
 })
 
-describe('T14 AI 대화 응답 — 분할 · 조각별 HTML · 실패 시 원문', () => {
+// 013 P2-b (#758): 옛 T14(4096 분할 · 조각별 HTML · 실패 시 원문 재전송)는 옛 채널 것 — Discord 는 chat 이 2000 으로 나눈다
+describe('T14 AI 대화 응답 — 모델 마크다운 한 번', () => {
   const longResponse = `**첫째** & <x>\n${'가'.repeat(3000)}\n${'나'.repeat(3000)}`
 
-  it('조각마다 markdown → HTML 로 보낸다', async () => {
+  it('길어도 나누지 않고 원문 그대로 markdown 한 번(분할은 chat)', async () => {
     mocked.ask.mockResolvedValueOnce({ response: longResponse } as never)
     const rec = say('길게 설명해줘?', { stateKey: freshKey() })
     await flush()
-    const chunks = splitMessage(longResponse)
-    expect(chunks.length).toBe(2)
     expect(rec.steps).toEqual([
       ['reply', '🤔 생각 중...', 'plain'],
-      ...chunks.map((c) => ['reply', markdownToHtml(c), 'html']),
-    ])
-  })
-
-  it('HTML 전송이 실패한 조각만 원문으로 다시 보낸다', async () => {
-    mocked.ask.mockResolvedValueOnce({ response: longResponse } as never)
-    const base = recordingOutput()
-    const original = base.out.reply
-    let htmlTries = 0
-    const out: ReplyOutput = {
-      ...base.out,
-      reply: async (message: BotReply) => {
-        const key = await original(message)
-        if (message.format === 'html' && htmlTries++ === 0) throw new Error('Bad Request: can\'t parse entities')
-        return key
-      },
-    }
-    say('길게 설명해줘?', { stateKey: freshKey(), rec: { ...base, out } })
-    await flush()
-    const chunks = splitMessage(longResponse)
-    expect(base.steps).toEqual([
-      ['reply', '🤔 생각 중...', 'plain'],
-      ['reply', markdownToHtml(chunks[0]), 'html'],
-      ['reply', chunks[0], 'plain'],
-      ['reply', markdownToHtml(chunks[1]), 'html'],
+      ['reply', longResponse, 'markdown'],
     ])
   })
 })

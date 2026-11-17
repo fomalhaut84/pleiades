@@ -2,11 +2,11 @@
 // 텍스트 estimator (estimate-nutrition.ts) 와 동일한 NutritionEstimate shape 반환.
 // #461: 이미지는 stream-json 본문으로 넘긴다 — `@<path>` 는 큰 사진이 모델에 닿지 않았다(운영 3회 · 로컬 재현).
 //
-// 응답 검증은 parseNutritionResponse 재사용 (item 별 4·4·9, macros null propagate).
+// 응답 검증은 parseNutritionResponseDetailed 재사용 (item 별 4·4·9, macros null propagate · 실패 사유 #626).
 
 import { spawn } from "child_process";
 import fs from "node:fs/promises";
-import { parseNutritionResponse, type NutritionEstimate } from "./estimate-nutrition";
+import { describeParseFailure, parseNutritionResponseDetailed, type NutritionEstimate } from "./estimate-nutrition";
 import { CLAUDE_CLI_ISOLATION_ARGS } from "@/lib/ai/cli-isolation";
 import { buildImageInputLine, parseStreamResult } from "@/lib/ai/cli-image-input";
 import { claudeModelId, claudeSpawnEnv, warnModelDrift } from "@/lib/ai/models";
@@ -52,7 +52,8 @@ function buildPhotoPrompt(input: NutritionPhotoInput): string {
     "- 사진에서 식별되는 각 음식 항목을 items 배열로 분해.",
     "- 양 추정: 그릇 크기·plate 배치·젓가락 등 스케일 단서 활용. 불분명하면 표준 1인분 가정.",
     "- 한식 표준 1인분 (밥 1공기 300kcal · P6g · C66g · F1g / 김치찌개 1대접 350kcal · P22g · C15g · F20g 등).",
-    "- 모르는 항목의 kcal/매크로는 해당 필드를 null 로.",
+    // #626: kcal 이 null 이면 검증이 응답 전체를 버린다 — kcal 은 늘 추정하게 한다
+    "- kcal 은 모든 항목에 정수로 추정 (불분명하면 표준 1인분 가정 · null 금지). 매크로만 모르면 그 필드를 null 로.",
     "- 매크로 4·4·9 kcal/g 규칙에 근접 (P·4 + C·4 + F·9 ≈ 항목 kcal, ±25% 오차 허용).",
     "- 사진에서 항목 특정이 어려우면 confidence: low. 표준 한식으로 명확하면 med. 잘 알려진 표준품 (예: 스타벅스 톨 라떼) 이면 high.",
     "- 응답은 오직 JSON 하나만. 설명·마크다운·코드펜스 금지.",
@@ -168,11 +169,10 @@ export async function estimateNutritionFromPhoto(
         return resolve(null);
       }
       const text = outer.result ?? "";
-      const parsed = parseNutritionResponse(text);
-      if (!parsed) {
-        console.warn(`[nutrition-photo] AI 응답 파싱/검증 실패: ${text.slice(0, 200)}`);
-      }
-      resolve(parsed);
+      const r = parseNutritionResponseDetailed(text);
+      // #626: 응답 원문을 로그에 남기지 않는다 — 어느 검증이 막았는지만
+      if (!r.ok) console.warn(`[nutrition-photo] AI 응답 검증 실패 ${describeParseFailure(r, text)}`);
+      resolve(r.ok ? r.estimate : null);
     });
   });
 }

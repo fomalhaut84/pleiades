@@ -69,7 +69,8 @@ function buildPrompt(input: NutritionEstimateInput): string {
     "",
     "규칙:",
     "- 한식 표준 1인분 기준 (밥 1공기 300kcal · P6g · C66g · F1g / 김치찌개 1대접 350kcal · P22g · C15g · F20g 등).",
-    "- 모르는 항목의 kcal/매크로는 해당 필드를 null 로.",
+    // #626: kcal 이 null 이면 parseNutritionResponse 가 응답 전체를 버린다 — kcal 은 늘 추정하게 한다
+    "- kcal 은 모든 항목에 정수로 추정 (불분명하면 표준 1인분 가정 · null 금지). 매크로만 모르면 그 필드를 null 로.",
     "- 매크로 4·4·9 kcal/g 규칙에 근접해야 함 (P·4 + C·4 + F·9 ≈ 항목 kcal, ±25% 오차 허용).",
     "- confidence: low (불분명) | med (표준 한식) | high (kcal/매크로 잘 알려진 표준품).",
     "- 응답은 오직 JSON 하나만. 설명·마크다운·코드펜스 금지.",
@@ -161,8 +162,36 @@ function macrosConsistentWithKcal(it: NutritionItem): boolean {
   return knownLowerBound <= it.kcal + tol;
 }
 
+/** #626 검증 실패 사유 — 로그에 응답 원문 대신 남긴다(어느 검증이 막았는지) */
+export type NutritionParseReason =
+  | "empty" // 빈 응답
+  | "json" // JSON 을 찾지 못했다
+  | "shape" // 객체가 아니다
+  | "total" // total_kcal 없음 · 범위 밖
+  | "items" // items 없음 · 상한 초과
+  | "item-shape" // 항목 이름 없음 등
+  | "kcal-null" // 항목 kcal null · 숫자 아님("300" · NaN 도 toItem 이 null 로 바꾼다)
+  | "item-range" // 항목 kcal 범위 밖
+  | "sum" // 항목 합 ≠ total
+  | "macro"; // 항목 매크로 4·4·9 불일치
+
+export type NutritionParse =
+  | { ok: true; estimate: NutritionEstimate }
+  | { ok: false; reason: NutritionParseReason; items: number };
+
+/** 실패 로그 꼬리 — 원문 없이 사유 · 길이 · 항목 수만(#626) */
+export function describeParseFailure(r: Extract<NutritionParse, { ok: false }>, text: string): string {
+  return `reason=${r.reason} len=${text.length} items=${r.items}`;
+}
+
 export function parseNutritionResponse(rawText: string): NutritionEstimate | null {
-  if (!rawText) return null;
+  const r = parseNutritionResponseDetailed(rawText);
+  return r.ok ? r.estimate : null;
+}
+
+export function parseNutritionResponseDetailed(rawText: string): NutritionParse {
+  const fail = (reason: NutritionParseReason, items = 0): NutritionParse => ({ ok: false, reason, items });
+  if (!rawText) return fail("empty");
   const trimmed = rawText.trim();
   const stripped = trimmed
     .replace(/^```(?:json)?\s*/i, "")
@@ -173,37 +202,38 @@ export function parseNutritionResponse(rawText: string): NutritionEstimate | nul
     parsedUnknown = JSON.parse(stripped);
   } catch {
     const m = stripped.match(/\{[\s\S]*\}/);
-    if (!m) return null;
+    if (!m) return fail("json");
     try {
       parsedUnknown = JSON.parse(m[0]);
     } catch {
-      return null;
+      return fail("json");
     }
   }
   if (!parsedUnknown || typeof parsedUnknown !== "object" || Array.isArray(parsedUnknown)) {
-    return null;
+    return fail("shape");
   }
   const body = parsedUnknown as AiJson;
   const totalRaw = body.total_kcal;
   const total =
     typeof totalRaw === "number" && Number.isFinite(totalRaw) ? Math.round(totalRaw) : null;
-  if (total === null || total < 0 || total > MAX_KCAL_SANITY) return null;
-  if (!Array.isArray(body.items) || body.items.length === 0) return null;
+  const n = Array.isArray(body.items) ? body.items.length : 0;
+  if (total === null || total < 0 || total > MAX_KCAL_SANITY) return fail("total", n);
+  if (!Array.isArray(body.items) || body.items.length === 0) return fail("items", n);
   // #322 사전 리뷰 P0: items 상한. MFDS 와 동일 (MAX_ITEMS=15).
-  if (body.items.length > MAX_ITEMS) return null;
+  if (body.items.length > MAX_ITEMS) return fail("items", n);
   const rawCount = body.items.length;
   const items = body.items.map(toItem).filter((x): x is NutritionItem => x !== null);
-  if (items.length !== rawCount) return null;
+  if (items.length !== rawCount) return fail("item-shape", n);
   // kcal null 있으면 응답 부분합 신뢰 불가.
-  if (items.some((it) => it.kcal === null)) return null;
+  if (items.some((it) => it.kcal === null)) return fail("kcal-null", n);
   if (items.some((it) => it.kcal !== null && (it.kcal! < 0 || it.kcal! > MAX_ITEM_KCAL))) {
-    return null;
+    return fail("item-range", n);
   }
   const itemsSum = items.reduce((s, it) => s + (it.kcal ?? 0), 0);
   const kcalTolerance = Math.max(30, Math.round(total * 0.05));
-  if (Math.abs(itemsSum - total) > kcalTolerance) return null;
+  if (Math.abs(itemsSum - total) > kcalTolerance) return fail("sum", n);
   // 각 item 의 macros 가 non-null 이면 4·4·9 규칙 정합 확인. 실패 시 응답 무효.
-  if (!items.every(macrosConsistentWithKcal)) return null;
+  if (!items.every(macrosConsistentWithKcal)) return fail("macro", n);
 
   // 총 매크로 = 모든 item macro non-null 일 때만 합계. 하나라도 null → null propagate.
   const allP = items.every((it) => it.proteinG !== null);
@@ -219,7 +249,7 @@ export function parseNutritionResponse(rawText: string): NutritionEstimate | nul
     ? Math.round(items.reduce((s, it) => s + (it.fatG ?? 0), 0) * 10) / 10
     : null;
 
-  return {
+  const estimate: NutritionEstimate = {
     kcal: total,
     proteinG: sumP,
     carbsG: sumC,
@@ -229,6 +259,7 @@ export function parseNutritionResponse(rawText: string): NutritionEstimate | nul
     notes: typeof body.notes === "string" ? body.notes : undefined,
     raw: stripped,
   };
+  return { ok: true, estimate };
 }
 
 export async function estimateNutritionFromText(
@@ -300,11 +331,10 @@ export async function estimateNutritionFromText(
         return resolve(null);
       }
       const text = outer.result ?? "";
-      const parsed = parseNutritionResponse(text);
-      if (!parsed) {
-        console.warn(`[nutrition] AI 응답 파싱/검증 실패: ${text.slice(0, 200)}`);
-      }
-      resolve(parsed);
+      const r = parseNutritionResponseDetailed(text);
+      // #626: 응답 원문을 로그에 남기지 않는다 — 어느 검증이 막았는지만
+      if (!r.ok) console.warn(`[nutrition] AI 응답 검증 실패 ${describeParseFailure(r, text)}`);
+      resolve(r.ok ? r.estimate : null);
     });
   });
 }

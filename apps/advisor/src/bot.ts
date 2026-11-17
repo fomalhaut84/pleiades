@@ -20,7 +20,6 @@ import {
 import { AskOutcome } from "./advisor";
 import { CALL_BUDGET_USD } from "./cli";
 import { POST_INIT_HOOK_CODE } from "./judge";
-import { answerToHtml } from "./format";
 import { BotConfig } from "./platform";
 import { sessionKey } from "./session-store";
 import { DailySpend } from "./spend";
@@ -154,7 +153,8 @@ export function createAdvisorRouter(deps: RouterDeps): Router {
       deps.log("[advisor] daily-cap 기록 실패 — 오늘 남은 질문은 거부한다");
       await capAlert(after.date, "기록 실패");
     } else if (after.usd >= deps.spend.cap) await capAlert(after.date, "도달");
-    await ctx.reply(r.kind === "answer" ? { text: answerToHtml(r.text), format: "html" } : r.text);
+    // 013 P2-d (#764): 모델 마크다운 그대로 — chat 정리기가 서식은 살리고 해로운 것(표기 · 가짜 링크)만 막는다(옛 answerToHtml 제거)
+    await ctx.reply(r.kind === "answer" ? { text: r.text, format: "markdown" } : r.text);
   }
 }
 

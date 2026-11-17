@@ -143,13 +143,13 @@ describe("명령 판단 11", () => {
     expect(arg.endDate).toEqual(new Date(2026, 9, 28));
   });
 
-  it("report — 인자는 플랫폼 접두를 뗀 문자열 · 재생성 본문은 long html", async () => {
+  it("report — 인자는 플랫폼 접두를 뗀 문자열 · 재생성 본문은 long markdown(013 P2-c)", async () => {
     vi.mocked(generateMorningReport).mockResolvedValueOnce("본문");
     const { out, log } = sink();
     await decideReport(" regenerate morning ", out, { bot: discordBot });
     expect(log).toEqual([
       { text: "🔄 모닝 리포트 재생성 중...", format: "plain" },
-      { text: "✅ 재생성 완료\n\n본문", format: "html", long: true },
+      { text: "✅ 재생성 완료\n\n본문", format: "markdown", long: true },
     ]);
     expect(generateMorningReport).toHaveBeenLastCalledWith(true, undefined, { notifyBot: discordBot });
   });
@@ -165,7 +165,7 @@ describe("명령 판단 11", () => {
     expect(askAdvisor).toHaveBeenLastCalledWith("질문", { channel: "discord" });
     expect(b.log).toEqual([
       { text: "🤔 분석 중...", format: "plain" },
-      { text: "답", format: "html", long: true },
+      { text: "답", format: "markdown", long: true },
     ]);
   });
 
@@ -475,7 +475,7 @@ describe("특성 테스트 이관 — 명령", () => {
     });
     const a = sink();
     await decideReport(undefined, a.out, {});
-    expect(view(a.log)).toEqual([{ text: "<b>☀️ 모닝 리포트</b> (2026-10-28)\n\n<b>제목</b>\n<b>굵게</b>", format: "html" }]);
+    expect(view(a.log)).toEqual([{ text: "**☀️ 모닝 리포트** (2026-10-28)\n\n## 제목\n**굵게**", format: "markdown" }]); // 013 P2-c — 모델 마크다운 그대로
 
     db.aIAdvice.findFirst.mockResolvedValueOnce(null);
     const b = sink();
@@ -497,13 +497,13 @@ describe("특성 테스트 이관 — 명령", () => {
     ]);
   });
 
-  it("ai — 답은 HTML · 실패면 친절한 문구", async () => {
+  it("ai — 답은 모델 마크다운 그대로 · 실패면 친절한 문구", async () => {
     vi.mocked(askAdvisor).mockResolvedValueOnce({ result: "**답**" } as never);
     const a = sink();
     await decideAi("러닝 분석", a.out, { channel: "discord", bot: BOT_PROCESS });
     expect(view(a.log)).toEqual([
       { text: "🤔 분석 중...", format: "plain" },
-      { text: "<b>답</b>", format: "html" },
+      { text: "**답**", format: "markdown" },
     ]);
 
     vi.mocked(askAdvisor).mockRejectedValueOnce(new Error("auth expired"));
@@ -558,7 +558,7 @@ describe("특성 테스트 이관 — 자유 텍스트 · food: 버튼", () => {
     await decideFreeText("모닝 리포트 만들어줘", out, opts);
     expect(view(log)).toEqual([
       { text: "🤔 분석 중...", format: "plain" },
-      { text: "답", format: "html" },
+      { text: "답", format: "markdown" },
     ]);
     expect(generateMorningReport).not.toHaveBeenCalled();
   });
@@ -647,7 +647,7 @@ describe("특성 테스트 이관 — 사전 리뷰 빈 칸", () => {
     await decideAi("모닝 리포트 만들어줘", out, { channel: "discord", bot: BOT_PROCESS });
     expect(view(log)).toEqual([
       { text: "📝 모닝 리포트 생성 중...", format: "plain" },
-      { text: "리포트", format: "html" },
+      { text: "리포트", format: "markdown" },
       { text: "✅ 모닝 리포트 저장 완료", format: "plain" },
     ]);
     expect(generateMorningReport).toHaveBeenLastCalledWith(true, undefined, { notifyBot: BOT_PROCESS });
@@ -661,7 +661,7 @@ describe("특성 테스트 이관 — 사전 리뷰 빈 칸", () => {
     await decideReport("Regenerate Morning", out, { bot: BOT_PROCESS });
     expect(view(log)).toEqual([
       { text: "🔄 모닝 리포트 재생성 중...", format: "plain" },
-      { text: "✅ 재생성 완료\n\n본문", format: "html" },
+      { text: "✅ 재생성 완료\n\n본문", format: "markdown" },
     ]);
   });
 
