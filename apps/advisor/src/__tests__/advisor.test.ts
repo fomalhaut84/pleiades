@@ -76,7 +76,7 @@ describe("Advisor.ask — 정상", () => {
     const mcp = JSON.parse(fs.readFileSync(call.argv[call.argv.indexOf("--mcp-config") + 1], "utf8"));
     expect(mcp.mcpServers.myfinance.url).toBe(`http://127.0.0.1:${fin.port}/mcp/read`);
     const line = logs.find((l) => l.includes("status="))!;
-    expect(line).toMatch(/status=완료 model=sonnet drift=판정 불가 cost=\$0\.1234 cap=\$1\.0000 turns=3 tools=myfinance:1\/1,myfitness:1\/1 outside=0 context=1200/);
+    expect(line).toMatch(/status=완료 model=sonnet drift=판정 불가 cost=\$0\.1234 cap=\$1\.0000 turns=3 tools=myfinance:1\/1,myfitness:1\/1 outside=0 context=400/); // 1200 ÷ turns 3(#721)
     expect(logs.join("\n")).not.toContain("지출");
     expect(logs.join("\n")).not.toContain(KEY); // 채널·사용자 ID 는 해시로만
   });
@@ -251,11 +251,21 @@ describe("Advisor.ask — 거부 · 실패", () => {
 
   it("컨텍스트(캐시 포함)가 100k 를 넘으면 다음 질문은 새 세션(9-1 M3)", async () => {
     setCli([initLine([FIN_TOOL, FIT_TOOL], ["myfinance", "myfitness"]),
-      resultLine({ usage: { input_tokens: 5, cache_read_input_tokens: 100_000, cache_creation_input_tokens: 0 } })]);
+      resultLine({ num_turns: 1, usage: { input_tokens: 5, cache_read_input_tokens: 100_000, cache_creation_input_tokens: 0 } })]);
     const a = advisor();
     await a.ask(KEY, "q1");
     await a.ask(KEY, "q2");
     expect(cliCalls()[1].argv).not.toContain("--resume");
+  });
+
+  // 회귀: #721 — 결과 usage 는 내부 턴 합산이다(fit 실측 14턴 ≈168k) · 합 그대로면 도구를 많이 쓴 한 번에 세션이 끊겼다
+  it("도구 왕복이 많아 usage 합이 100k 를 넘어도 턴 평균이 작으면 세션을 잇는다", async () => {
+    setCli([initLine([FIN_TOOL, FIT_TOOL], ["myfinance", "myfitness"]),
+      resultLine({ num_turns: 14, usage: { input_tokens: 14_000, cache_read_input_tokens: 140_000, cache_creation_input_tokens: 14_000 } })]);
+    const a = advisor();
+    await a.ask(KEY, "q1");
+    await a.ask(KEY, "q2");
+    expect(cliCalls()[1].argv).toContain("--resume");
   });
 
   it("처리 중에 온 질문은 기다리게 한다(전역 1 · [D4])", async () => {

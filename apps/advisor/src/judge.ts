@@ -135,7 +135,7 @@ export interface AnswerVerdict {
   sessionId: string | null;
   cost: number | null;
   turns: number | null;
-  /** 이번 호출의 컨텍스트 크기 = input + cache_read + cache_creation(--resume 대화는 대부분 캐시다 · 9-1 major M3) */
+  /** 이번 호출의 컨텍스트 크기 = (input + cache_read + cache_creation) ÷ num_turns(--resume 대화는 대부분 캐시다 · 9-1 major M3 · 턴 평균 #721) */
   contextTokens: number | null;
   drift: Drift;
   /** init 위반(→ 안전 문구) — 형식·실행 오류와 나눈다(9-1 info 2) */
@@ -154,11 +154,16 @@ export interface RawRun {
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
+// 결과 usage 는 한 호출 안 내부 턴(도구 왕복)의 합이다 — fit 실측(#721 · 2026-11-17: 14턴 ≈168k · 턴당 12~16k).
+// 그대로 쓰면 세션 상한(100k)이 일찍 걸린다 → 턴 평균(fit #683 contextTokensOf 와 같은 기준 · 마지막 호출보다 조금 작게 잡는다)
 function contextOf(result: StreamResult | null): number | null {
   const u = result && isObj(result.usage) ? result.usage : null;
   if (!u) return null;
   const parts = [u.input_tokens, u.cache_read_input_tokens, u.cache_creation_input_tokens].map(num);
-  return parts[0] === null ? null : parts.reduce<number>((a, b) => a + (b ?? 0), 0);
+  if (parts[0] === null) return null;
+  const sum = parts.reduce<number>((a, b) => a + (b ?? 0), 0);
+  const turns = num(result?.num_turns);
+  return turns !== null && turns > 1 ? Math.round(sum / turns) : sum;
 }
 
 export interface ModelPin {
