@@ -187,3 +187,79 @@ tail -2 ~/pleiades-private/ops/collect.log | grep -o '[0-9-]* [0-9:]* \(수집 �
 줄 끝이 `· 차단 0 (게시)` 이고 `웹훅` · `비밀 읽기 실패` · `dotenv 없음` · `게시 실패` 가 없으면 통과다(`HTTP 429` 한 번은 다음 회에 이어 보내므로 통과로 본다). dry-run 동안 쌓인 것은 다시 나가지 않는다(dry-run 도 기록한 것으로 넘겼다). 다음 09:05 에 일일 요약이 `#ops` 에 와야 한다 — **안 오면 그것이 신호다**(수집기 · 크론 · 웹훅 중 하나가 멈췄다 · 008 §2-4).
 
 **되돌리기:** 3절 명령(줄에 `--dry-run`)을 다시 돌린다 — **즉시**. 이미 보낸 메시지는 Discord 에서 지운다(**중간**). 웹훅을 지우면 다음 회부터 `게시 실패 HTTP 404` 로 미룬다 — 미룬 것이 상태 파일에 쌓이므로 웹훅을 지울 때는 크론도 `--dry-run` 으로 되돌린다.
+
+## 5. 확인 (PR-3 · #739)
+
+게시 판을 켠 뒤 평소에 보는 것은 **`#ops` 의 일일 요약 하나**다. 아래 5-4 양식은 요약이 안 왔을 때 · 차단·보류 문구가 왔을 때 · `건너뜀` 이 이어질 때만 돌린다.
+
+### 5-1. 일일 요약 도착
+
+매일 **09:05 뒤 첫 수집(09:07 무렵)** 에 `[ops] 일일 요약 · 살아 있음 · 열린 이상 N …` 이 온다. 이 한 줄이 수집기 · 크론 · 웹훅 · 서버가 모두 살아 있다는 표지다(008 Q90 — PR-4 외부 ping 전까지 탐지 상한은 사람이 알아채는 때다).
+
+| 보이는 것 | 뜻 · 할 일 |
+|---|---|
+| 요약이 왔다 · `열린 이상 0` | 정상 |
+| `열린 이상 N (…)` | 아직 복구되지 않은 상태형 이상(pm2 · health · 디스크 · gateway 등) — 지문 짧은 ID 를 Claude 에게 알린다 |
+| `경고 어제 N종 M회` | 경고는 게시하지 않고 여기에만 센다(#713) — 평소보다 크게 늘었을 때만 5-4 양식을 붙인다 |
+| **10:00 까지 요약이 없다** | 수집기 · 크론 · 웹훅 · 서버 중 하나가 멈췄다 — 5-4 양식을 붙인다 |
+
+### 5-2. 차단 · 보류 문구
+
+| 문구 | 뜻 · 할 일 |
+|---|---|
+| `[ops] 게시 차단 · 지문 <ID> · 사유 secret-match` | 본문에 비밀 키 값(①)이 들어 있었다 — 본문은 보내지 않았다. 지문 ID 만 Claude 에게 알린다. 로그를 찾아 붙이지 않는다(값이 거기 있다). 어떤 줄인지 알아야 하면 Claude 가 판정 스크립트를 따로 만든다 |
+| `… · 사유 token` | 토큰 모양(②) — 위와 같다 |
+| `… · 사유 length` | 2000자 넘음(③) — 해롭지 않다 · 반복되면 알린다 |
+| `… · 사유 rejected` | Discord 가 본문을 거절했다(HTTP 400 · 413) — 고정 문구로 한 번 보내고 넘어갔다 · 반복되면 알린다 |
+| `[ops] 게시 보류 · 사유 secret-load · 미룸 N` | 두 앱 `.env` · 플랫폼 설정 중 하나를 못 읽어 **아무것도 보내지 않고 있다**(한 시간에 한 번 온다). 배포 중이면 끝난 뒤 사라진다 · 계속되면 4-2 의 `비밀 읽기 실패` · `dotenv 없음` 줄 |
+
+`secret-match` · `token` 이 왔으면 **그 값이 로그에 있다는 뜻**이다 — 교체는 사용자가 한다(008 §5-2 P-6). 교체 뒤에도 같은 지문으로 또 오면 그 줄을 쓰는 코드가 값을 찍고 있다.
+
+### 5-3. 남은 잠금
+
+잠금은 디렉터리 `~/pleiades-private/ops/collect.lock` 이다. 한 회가 죽어 남아도 **15분 뒤 다음 실행이 넘겨받는다**(`lock-stale` 기록 1건 · 2절) — 평소에는 손대지 않는다.
+
+`건너뜀 — 이전 실행이 아직 돈다` 가 **20분 넘게 이어지면** 5-4 양식의 `잠금` 칸을 보고:
+- **수집기가 실제로 돌고 있다**(`pgrep -fc 'pleiades-ops/collect.cjs'` 가 1 이상) — 한 회 상한(2분)을 넘겨 멈춘 것이다. 그 프로세스를 끝내고(`pkill -f 'pleiades-ops/collect.cjs'`) 다음 회를 본다. 판정은 Claude 에게 알린다.
+- **돌고 있지 않은데 잠금이 15분보다 오래됐다** — 넘겨받기가 실패하고 있다(권한 · 디스크 가득 · 시계). `collect.log` 의 `결과: 실패 — 예외 <코드>` 줄의 코드만 Claude 에게 알린다. 프로세스가 없을 때만 `rmdir ~/pleiades-private/ops/collect.lock ~/pleiades-private/ops/collect.lock.takeover 2>/dev/null` 로 치운다 — **돌고 있는 동안 지우면 두 회가 겹친다.**
+
+### 5-4. 확인 양식
+
+새 셸에서 실행해 **출력 전체를 세션에 붙인다.** 읽기만 한다. 출력은 개수 · 날짜 · 사유 코드 · 지문 수뿐이다(경로 · 원문 없음). `collect.log` 는 최근 288줄(5분 주기면 24시간)만 센다.
+
+```bash
+"$(command -v node)" -e '
+const fs=require("fs"),D=process.env.HOME+"/pleiades-private/ops/",now=Date.now(),pad=n=>String(n).padStart(2,"0")
+const ymd=t=>{const d=new Date(t);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`},ago=t=>t==null?"없음":Math.round((now-t)/6e4)+"분 전"
+const read=n=>{try{return fs.readFileSync(D+n,"utf8")}catch{return null}}
+const st=(()=>{try{return JSON.parse(read("state.json"))}catch{return null}})()
+const hm=(()=>{const d=new Date();return pad(d.getHours())+":"+pad(d.getMinutes())})()
+console.log("== 수집기 확인 ==",ymd(now),hm)
+if(!st)console.log("상태: 읽지 못함")
+else{const fps=Object.values(st.fps||{})
+ console.log("직전 수집",ago(st.lastRunAt),"· 일일 요약 마지막",st.summaryDate||"없음",st.summaryDate===ymd(now)?"(오늘 나감)":hm>="09:05"?"(오늘 아직 — 신호)":"(09:05 전)")
+ console.log("열린 이상",fps.filter(e=>e.kind==="state"&&e.open).length,"· 미뤄진 첫 발생",fps.filter(e=>e.deferred).length,"· 반복 대기",fps.filter(e=>e.pending>0).length,"· 지문",fps.length)}
+const lines=(read("collect.log")||"").split("\n").filter(Boolean).slice(-288)
+const c={통과:0,건너뜀:0,예외:0,기타:0},why={}
+for(const l of lines){if(/ 수집 통과 /.test(l)){c.통과++;const m=l.match(/ · 차단 \d+ · (.+) \(게시\)$/);if(m)why[m[1]]=(why[m[1]]||0)+1}else if(/ 건너뜀 /.test(l))c.건너뜀++;else if(/^결과: 실패/.test(l))c.예외++;else c.기타++}
+const last=[...lines].reverse().find(l=>/ (수집 통과|건너뜀) /.test(l))
+console.log("collect.log 최근",lines.length,"줄",JSON.stringify(c),"· 실패 사유",JSON.stringify(why))
+console.log("마지막 줄",last?last.match(/[0-9-]+ [0-9:]+ (수집 통과|건너뜀).*/)[0]:"없음")
+const ev=(read("events.jsonl")||"").split("\n").filter(Boolean).flatMap(l=>{try{return [JSON.parse(l)]}catch{return []}}).filter(e=>e.at>=now-864e5&&e.type!=="obs")
+const by=(k,xs)=>xs.reduce((m,e)=>(m[k(e)]=(m[k(e)]||0)+1,m),{})
+console.log("24h 기록",JSON.stringify(by(e=>e.type,ev.filter(e=>!e.quiet))),"· 요약만",ev.filter(e=>e.quiet).length,"· 차단",JSON.stringify(by(e=>e.blocked,ev.filter(e=>e.blocked))))
+const lk=n=>{try{return Math.round((now-fs.statSync(D+n).mtimeMs)/6e4)+"분"}catch{return "없음"}}
+console.log("잠금",lk("collect.lock"),"· 넘겨받기",lk("collect.lock.takeover"))
+console.log("크기 KB",JSON.stringify(Object.fromEntries(["state.json","events.jsonl","posted.log","collect.log"].map(n=>{try{return [n,Math.round(fs.statSync(D+n).size/1024)]}catch{return [n,null]}}))))'
+```
+
+| 줄 | 정상 |
+|---|---|
+| `직전 수집` | 5분 안팎 — 15분 넘으면 크론이 돌지 않는다(3절 끝의 두 숫자 확인 명령) |
+| `일일 요약 마지막` | 09:05 뒤면 오늘 날짜(`오늘 나감`) — `오늘 아직 — 신호` 면 수집은 도는데 요약을 못 보냈다(`실패 사유` · `미룸` 을 본다) |
+| `미뤄진 첫 발생` · `실패 사유` | 0 · `{}` — `게시 실패 HTTP 429` 한두 번은 다음 회에 이어 보내므로 정상 · 그 밖의 사유는 4-2 표 |
+| `건너뜀` · `예외` | 0 — 이어지면 5-3 |
+| `잠금` | `없음` 또는 몇 분 — 15분 넘게 남았으면 5-3 |
+| `크기 KB` | `state.json` 1024 아래(상한 1 MB) · `collect.log` · `posted.log` 는 정리하지 않는다 — 수십 MB 가 되면 알린다 |
+
+되돌리기: 이 절은 문구다(**즉시**). 양식은 상태 파일을 읽기만 한다.
