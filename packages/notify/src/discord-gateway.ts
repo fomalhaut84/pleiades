@@ -12,10 +12,11 @@
  * 소비자 `prepare` 는 @types/node 없이 컴파일된다(build-config M3) — `ws` 는 런타임 require · 타입은 최소 선언.
  */
 import { DISCORD_API_BASE } from './discord-bot';
-import { escapeDiscordMarkdown, htmlToDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
+import { splitDiscordMarkdown } from './discord-md';
+import { toDiscordMarkdown } from './discord-markdown';
 import { defaultFetch, type FetchLike } from './discord';
 import { sanitizeError } from './error';
-import type { Logger } from './types';
+import type { BodyFormat, Logger } from './types';
 
 declare const require: (id: string) => unknown;
 declare function setTimeout(fn: () => void, ms: number): unknown;
@@ -205,8 +206,8 @@ export function createDiscordGateway(opts: DiscordGatewayOptions): DiscordGatewa
     if (!res.ok) throw new Error(`Discord 인터랙션 ${what} 응답 ${res.status}`);
   };
   /** 본문을 Discord md 로 바꿔 한 메시지에 담는다 — 비면 보내지 않고 오류 · 2000자를 넘어 자르면 경고(#149 사전 리뷰 info). */
-  const callText = (text: string, format: 'html' | 'plain', send: (content: string) => Promise<void>): Promise<void> => {
-    const chunks = splitDiscordMarkdown(format === 'html' ? htmlToDiscordMarkdown(text) : escapeDiscordMarkdown(text), 2000);
+  const callText = (text: string, format: BodyFormat, send: (content: string) => Promise<void>): Promise<void> => {
+    const chunks = splitDiscordMarkdown(toDiscordMarkdown(text, format), 2000);
     const content = chunks[0] ?? '';
     if (content.trim() === '') return Promise.reject(new Error('Discord 인터랙션 본문이 비었다'));
     if (chunks.length > 1) logger.warn(`[${label}] 인터랙션 본문이 2000자를 넘어 첫 조각만 보낸다`);
