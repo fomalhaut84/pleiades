@@ -27,11 +27,6 @@ export type ButtonRows = readonly (readonly NotifyButton[])[];
 export type Components = ButtonRows;
 
 /**
- * 전송 본문 (1a-1 계획 D-1 · 003 은 이 타입을 참조만 하고 정의하지 않았다).
- * `format` 은 코어가 만든다 — 파싱 실패 폴백이 같은 본문을 `'plain'` 으로 재전송한다 (003 §4-1(b) "폴백은 채널 무관 로직").
- * Discord transport 는 html 을 마크다운으로 바꾼다(`htmlToDiscordMarkdown`).
- */
-/**
  * 본문 형식(013 P2-a · #756).
  *   - `html` — HTML 부분집합(b · i · u · s · code · pre · a · blockquote — `discord-md` 지원 태그) · 텔레그램 시절 템플릿
  *   - `plain` — 글자 그대로 보인다(서식 문자 escape)
@@ -39,6 +34,11 @@ export type Components = ButtonRows;
  */
 export type BodyFormat = 'html' | 'plain' | 'markdown';
 
+/**
+ * 전송 본문 (1a-1 계획 D-1 · 003 은 이 타입을 참조만 하고 정의하지 않았다).
+ * `format` 은 코어가 만든다 — 파싱 실패 폴백이 같은 본문을 `'plain'` 으로 재전송한다 (003 §4-1(b) "폴백은 채널 무관 로직").
+ * Discord transport 는 html 을 마크다운으로 바꾼다(`htmlToDiscordMarkdown`).
+ */
 export interface Content {
   /** 본문 — 형식은 `format`. */
   text: string;

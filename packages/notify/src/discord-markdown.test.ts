@@ -78,6 +78,53 @@ describe('discordMarkdown — 해가 되는 것만 막는다(013 §4-2)', () => 
     expect(discordMarkdown(block)).toBe(block);
   });
 
+  // 회귀: #756 9-1 critical — 같은 줄에서 닫히는 ```a``` 가 코드 블록을 연 것으로 세져 그 뒤 정리가 꺼졌다
+  it('한 줄 ```a``` 는 인라인 코드 — 다음 줄의 정리가 꺼지지 않고 진짜 코드 블록 안은 그대로', () => {
+    expect(discordMarkdown('```a```\n<t:0> [t](https://evil)\n```\n<@1>\n```')).toBe(
+      '```a```\n\\<t:0> t (https://evil)\n```\n<@1>\n```',
+    );
+  });
+
+  // 회귀: #756 9-1 critical — 제목 정규식 역추적(8천 자 100 초)
+  it('긴 줄도 빠르다 — 제목 · 가로줄 · 표 구분 · 링크 · 코드', () => {
+    const pad = ' '.repeat(20000);
+    const inputs = [`#### a${pad}b`, `- - -${pad}x`, `|${'-'.repeat(20000)}x`, `[${'a'.repeat(20000)}](https://x`, `${'`'.repeat(5000)}a`];
+    for (const s of inputs) {
+      const t0 = Date.now();
+      discordMarkdown(s);
+      expect(Date.now() - t0).toBeLessThan(200);
+    }
+  });
+
+  it('`####` 제목의 끝 `#` 는 공백 뒤일 때만 뗀다', () => {
+    expect(discordMarkdown('#### C#')).toBe('**C#**');
+    expect(discordMarkdown('#### 요약 ###')).toBe('**요약**');
+  });
+
+  // 회귀: #756 9-1 major — Discord 가 렌더하는 가짜 링크 꼴
+  it('제목 붙은 링크 · 대문자 스킴은 펼치고 · 펼치지 못한 꼴은 `](` 를 끊는다', () => {
+    expect(discordMarkdown('[t](https://x "title")')).toBe('t (https://x)');
+    expect(discordMarkdown("[t](HTTPS://x 't')")).toBe('t (HTTPS://x)');
+    expect(discordMarkdown('[a [b] c](https://x)')).toBe('[a [b] c]\\(https://x)');
+    expect(discordMarkdown('[`x`](https://evil)')).toBe('[`x`]\\(https://evil)');
+    expect(discordMarkdown('[a]b](https://evil)')).toBe('[a]b]\\(https://evil)');
+  });
+
+  // 회귀: #756 9-1 info — 맨 주소 끝의 `>` 를 꺾쇠로 잘못 먹지 않는다
+  it('맨 주소 안의 `<` `>` 는 지키고 `<` 는 막는다', () => {
+    expect(discordMarkdown('[t](https://a.b/<@1>)')).toBe('t (https://a.b/\\<@1>)');
+  });
+
+  // 회귀: #756 9-1 major — Discord 의 인라인 코드 판정(닫는 백틱 뒤에 백틱이 더 있으면 코드가 아니다)
+  it('`<t:0>`` 는 코드가 아니다 — `<` 를 막는다', () => {
+    expect(discordMarkdown('`<t:0>``')).toBe('`\\<t:0>``');
+    expect(discordMarkdown('``a`b`` <x')).toBe('``a`b`` \\<x');
+  });
+
+  it('행이 없는 표는 머리 줄을 글로 남긴다', () => {
+    expect(discordMarkdown('| a | b |\n|---|---|')).toBe('| a | b |');
+  });
+
   it('CRLF 를 LF 로', () => {
     expect(discordMarkdown('a\r\nb\rc')).toBe('a\nb\nc');
   });
