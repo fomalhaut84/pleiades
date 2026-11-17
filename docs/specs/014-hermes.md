@@ -36,7 +36,7 @@
 | N9 | Release 자동 배포는 두 앱 뒤 `## adv` 단계를 돈다 — 셋째 체크아웃이 없거나 · 첫 배포 전이거나 · 정지됐거나 · 입력 경로(`auto-inputs.txt`)가 안 바뀌었으면 건너뛴다 · 그 실패는 두 앱 rc 를 바꾸지 않는다 | `deploy/ssh-deploy.sh:9-12,53,59-90` · `deploy/advisor/auto-inputs.txt` · 012 G-R4 |
 | N10 | 로컬 pm2 리허설은 `pleiades-<app>-<역할>` 정규식 · `run.sh` 경유만 — 셋째 앱(adv)은 pm2 리허설이 없다 | `tools/local/precheck.py:111,126` · `workflow.md` 8절 `apps/advisor` 행 |
 | N11 | 두 앱 웹은 루프백에만 묶인다 · nginx 가 `127.0.0.1` 로 proxy_pass 한다 | `deploy/pleiades.config.cjs`(WEB_HOST 주석 · #702) |
-| N12 | 서버 node = **v24.12.0** · 로컬(사용자 맥) node = v20.18.0 **(2026-10-20 측정 · 낡았다 — 그 뒤 fin `yahoo-finance2` 4.x 가 Node 22+ 요구 · fit `.nvmrc` 24 · 재측정 필요)** · CI 앱 잡은 이미 전부 `24.x` | `measured-facts.md:3724` · `:4231` · `apps-ci.yml:56,114,163,205` |
+| N12 | 서버 · 로컬(개발 환경) node = **v24.12.0** · CI 앱 잡도 `24.x` — 옛 측정(로컬 v20.18.0 · 2026-10-20)은 낡았다 | 사용자 2026-11-17 · `measured-facts.md:3724` · `apps-ci.yml:56,114,163,205` |
 | N13 | 버전 기준: **major = 서버와의 약속이 깨지는 릴리즈**(서버 `.env` 필수 키 · pm2 이름·포트 변경 등) · 셋째 상주(adv)는 **"전부 선택이고 없으면 통합 층만 안 뜬다 → minor"** 로 판정됐다 | `workflow.md` 릴리즈 전략 확정 블록(#199) · 012 §3-3 G7 행 |
 | N14 | 통합 층 배포 C6 은 **모든 `pleiades-*`** 의 `PLEIADES_ENV_FILE` 대조 `n_bad == 0` 을 기동 **뒤에** 요구한다 — 넷째 상주가 G-R1 을 어기면 **adv 배포도 rc 4** | `deploy/advisor/adv-inplace.sh:217-221` |
 | N15 | 두 앱 배포 점유 검사: 그 앱의 web·mcp 포트를 `pleiades-<app>-*` 가 아닌 프로세스가 잡고 있으면 die — hermes 포트가 fin·fit 포트와 겹치면 **두 앱 배포가 멈춘다** | `deploy/deploy.sh:125-143` |
@@ -52,7 +52,7 @@
 |---|---|---|
 | U1 서버에서 쓰는 포트 목록 | hermes 포트 선택(I-12 로컬 금지 포트와 별개로 서버 충돌) | 사용자 서버 판정 양식(`.server-scripts/` · 값은 판정만) |
 | U2 서버 nginx 에 hermes 경로를 더할 수 있는 server 블록 · TLS 도메인 | 입구 2단계(B2) 비용 | 사용자 확인 |
-| U3 `node:sqlite` 가 서버 node 24.12 에서 `ExperimentalWarning` 을 내는지(N19) · 로컬 node 현재 버전(N12) | 대기열 C3 의 의존 · 수집기 경고 분류와의 관계(`--disable-warning=ExperimentalWarning` 검토) · 로컬 시험 경로 | 로컬 node 재측정 · 구현 PR 첫 커밋 · 서버는 배포 판정 양식 |
+| U3 `node:sqlite` 가 node 24.12 에서 `ExperimentalWarning` 을 내는지(N19) — 노드 버전 자체는 확정(N12) | 대기열 C3 의 의존 · 수집기 경고 분류와의 관계(`--disable-warning=ExperimentalWarning` 검토) · 로컬 시험 경로 | 로컬에서 `node -e "require('node:sqlite')"` 한 줄 · 구현 PR 첫 커밋 |
 | U4 주문 앱의 시즌 시작일 · 하루 주문 건수 | §5 임시 경로가 필요한지 · 속도 제한 기본값 | 사용자 |
 
 ## 1. 무엇을 만드나
@@ -156,7 +156,7 @@ Idempotency-Key: <출처가 정한 문자열 · 선택 · 최대 128자>
 
 **교체 자리:** 대기열은 인터페이스(`enqueue` · `claimNext` · `markSent` · `markRetry` · `markDead` · `purge`) 뒤에 둔다 — 처리량이 필요해지면 C4·C5 로 갈아 끼운다(§9 유효기간).
 
-**U3 가 막으면:** `node:sqlite` 는 node 22.5+ 에만 있고 실험 기능 경고를 낸다(N19). ① 로컬 node 확인(N12 재측정 · 22+ 면 그대로) — **CI 앱 잡은 이미 24.x 라 바꿀 것이 없다**(N12) · 경고는 `--disable-warning=ExperimentalWarning` 또는 수집기 분류표 한 줄 ② `better-sqlite3`(네이티브 빌드 · 서버 `npm ci` 에 컴파일) ③ C2 로 내림 — 구현 PR 첫 커밋에서 정한다(§8 Q-H3).
+**U3 가 막으면:** `node:sqlite` 는 node 22.5+ 에만 있고 실험 기능 경고를 낸다(N19). ① 그대로 쓴다 — 서버 · 로컬 · CI 모두 node 24 라 `node:sqlite` 가 있다(N12) · 경고는 `--disable-warning=ExperimentalWarning` 또는 수집기 분류표 한 줄 ② `better-sqlite3`(네이티브 빌드 · 서버 `npm ci` 에 컴파일) ③ C2 로 내림 — 구현 PR 첫 커밋에서 정한다(§8 Q-H3).
 
 **동작 규칙(C3 기준):**
 - 받기: 한 트랜잭션에 행 삽입(`queued`) → 커밋 → `202`. `Idempotency-Key` 는 (출처, 키) 유일 · 보존 창 7일(설계 변수).
