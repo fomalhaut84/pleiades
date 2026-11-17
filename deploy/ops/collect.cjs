@@ -580,7 +580,10 @@ function plan(ctx) {
   for (const o of merge(ctx.obs)) {
     active.add(o.fp)
     if (o.scope) activeScopes.add(o.scope)
+    const prevSev = table[o.fp] && table[o.fp].deferred ? table[o.fp].sev : undefined
     const e = entryFor(table, o, now)
+    // 미뤄진 첫 발생은 아직 보내지 못했다 — 같은 지문의 더 낮은 심각도가 덮으면 실패가 조용한 경고로 commit 된다(#731 · PR #730 Codex P2)
+    if (prevSev) e.sev = higherSev(prevSev, o.sev)
     e.days[today] = (e.days[today] || 0) + o.count
     if (o.warn) (e.warnDays ||= {})[today] = (e.warnDays[today] || 0) + o.warn
     e.ok = 0
@@ -950,9 +953,10 @@ async function deliver(posts, ctx, live) {
       out.push(`${stamp} ${text}`) // 보낸 그대로(검사를 통과한 본문 또는 고정 문구)
     }
     p.commit(ctx.now)
+    const sev = p.e ? (p.type === 'repeat' && p.e.pendingSev) || p.e.sev : null // 반복은 본문과 같은 심각도로 기록한다(#731 9-1 info)
     if (p.e && (p.type === 'first' || p.type === 'repeat')) Object.assign(p.e, { postedQuiet: silent, pendingSev: undefined })
     const e = p.e || {}
-    events.push(JSON.stringify({ at: ctx.now, type: p.type, fp: e.fp || null, app: e.app || null, role: e.role || null, src: e.src || null, sev: e.sev || null, count: p.count, ...(silent ? { quiet: true } : {}), ...(blocked ? { blocked } : {}) }))
+    events.push(JSON.stringify({ at: ctx.now, type: p.type, fp: e.fp || null, app: e.app || null, role: e.role || null, src: e.src || null, sev: sev || null, count: p.count, ...(silent ? { quiet: true } : {}), ...(blocked ? { blocked } : {}) }))
   }
   if (live && sec.webhook && !sec.ok && r.deferred > 0) await secretLoadNotice(ctx, sec.webhook, r.deferred, deadline)
   appendLines(live ? 'posted.log' : 'dry-run.log', out)
