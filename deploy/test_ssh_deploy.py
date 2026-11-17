@@ -111,6 +111,255 @@ class SshDeploy(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
 
+ADV_STUB = """#!/bin/bash
+echo "adv $1 $2 stdin=$( [ -t 0 ] && echo tty || echo none )" >> "$STUB_LOG"
+echo "=== 판정 양식 adv ==="
+[[ ${STUB_RC_adv:-0} -eq 0 ]] && echo "결과: 통과" || echo "결과: 중단 — C3 — 빌드 실패 (/home/svc/x)"
+exit "${STUB_RC_adv:-0}"
+"""
+NOTIFY_STUB = "require('fs').appendFileSync(process.env.STUB_LOG, 'notify ' + process.argv.slice(2).join('|') + '\\n')\n"
+INPUTS = HERE / "advisor" / "auto-inputs.txt"
+NODE_DIR = str(Path(__import__("shutil").which("node") or "/usr/bin/node").parent)
+
+
+class AdvAuto(unittest.TestCase):
+    """012 4b-5 (#744) — 두 앱 뒤 통합 층은 켜져 있고 입력이 바뀌었을 때만 · 실패는 rc 를 바꾸지 않는다(G-R4)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = Path(self._tmp.name)
+        for app in ("fin", "fit"):
+            d = self.base / f"pleiades-{app}" / "deploy"
+            d.mkdir(parents=True)
+            (d / "release-inplace.sh").write_text(RELEASE_STUB)
+        (self.base / "pleiades-fin" / "deploy" / "notify-deploy.cjs").write_text(NOTIFY_STUB)
+        self.log = self.base / "calls"
+        self.log.write_text("")
+        self.priv = self.base / "pleiades-private"
+        self.priv.mkdir()
+        self.adv = self.base / "pleiades-adv"
+        self.adv.mkdir()
+        self.git("init", "-q")
+        self.write("deploy/advisor/adv-inplace.sh", ADV_STUB)
+        self.write("deploy/advisor/auto-inputs.txt", INPUTS.read_text())
+        self.write("apps/advisor/src/main.ts", "1")
+        self.write("README.md", "1")
+        self.commit_tag("v1.0.0")
+        self.write("README.md", "2")              # 입력 밖
+        self.commit_tag("v1.0.1")
+        self.write("apps/advisor/src/main.ts", "2")  # 입력 안
+        self.commit_tag("v1.0.2")
+        self.git("checkout", "-q", "v1.0.0")
+        self.last_ok("v1.0.0")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def git(self, *args: str) -> str:
+        return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+                               "-c", "tag.gpgsign=false", "-C", str(self.adv), *args],
+                              check=True, capture_output=True, text=True).stdout
+
+    def write(self, rel: str, text: str) -> None:
+        f = self.adv / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(text)
+
+    def commit_tag(self, tag: str) -> None:
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", tag)
+        self.git("tag", tag)
+
+    def last_ok(self, tag: str) -> None:
+        (self.priv / "inplace-adv-last-ok").write_text(tag + "\n")
+
+    def run_cmd(self, tag: str, **extra: str) -> subprocess.CompletedProcess:
+        env = {"PATH": f"{NODE_DIR}:{BASE_PATH}", "HOME": str(self.base), "PLEIADES_TEST": "1",
+               "PLEIADES_CHECKOUT_BASE": str(self.base), "STUB_LOG": str(self.log), "SSH_ORIGINAL_COMMAND": f"deploy {tag}", **extra}
+        return subprocess.run(["bash", str(SCRIPT)], capture_output=True, text=True, env=env, timeout=60)
+
+    def calls(self) -> list[str]:
+        return [line for line in self.log.read_text().splitlines() if line]
+
+    def adv_calls(self) -> list[str]:
+        return [c for c in self.calls() if c.startswith("adv ")]
+
+    def test_changed_input_deploys_after_both_apps(self):
+        r = self.run_cmd("v1.0.2")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        runs = [c for c in self.calls() if not c.startswith("notify ")]
+        self.assertEqual(runs, ["fin v1.0.2 --yes stdin=none", "fit v1.0.2 --yes stdin=none", "adv v1.0.2 --yes stdin=none"])
+        self.assertIn("adv 배포 — 입력 변경 있음(v1.0.0 → v1.0.2)", r.stdout)
+        self.assertIn("notify adv|ok|v1.0.2|통과", self.calls())
+
+    def test_unchanged_input_is_skipped(self):
+        r = self.run_cmd("v1.0.1")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.adv_calls(), [])
+        self.assertIn("adv 건너뜀 — 입력 변경 없음 · v1.0.0 유지", r.stdout)
+        self.assertFalse([c for c in self.calls() if c.startswith("notify adv")], "건너뜀은 알리지 않는다")
+
+    # 회귀: 9-1 major — 릴리즈마다 버전 커밋이 루트 · packages 의 package 파일을 바꾼다. 그것만이면 건너뛴다
+    def test_version_bump_only_is_skipped_but_dependency_change_deploys(self):
+        pkg = '{\n  "name": "pleiades",\n  "version": "%s",\n  "dependencies": {\n    "ws": "%s"\n  }\n}\n'
+        lock = '{\n  "name": "pleiades",\n  "version": "%s",\n  "packages": {\n    "": {\n      "version": "%s"\n    },\n' \
+               '    "node_modules/ws": {\n      "version": "%s",\n      "resolved": "https://r/ws-%s.tgz"\n    }\n  }\n}\n'
+        def release(tag: str, v: str, ws: str) -> None:
+            self.git("checkout", "-q", "v1.0.0")
+            for rel in ("package.json", "packages/chat/package.json"):
+                self.write(rel, pkg % (v, "^" + ws))
+            for rel in ("package-lock.json", "packages/notify/package-lock.json"):
+                self.write(rel, lock % (v, v, ws, ws))
+            self.commit_tag(tag)
+        release("v3.0.0", "1.0.0", "8.0.0")
+        self.git("checkout", "-q", "v3.0.0")
+        self.last_ok("v3.0.0")
+        release("v3.0.1", "1.0.1", "8.0.0")   # 버전 줄만
+        release("v3.0.2", "1.0.2", "8.1.0")   # 의존도
+        self.git("checkout", "-q", "v3.0.0")
+        r = self.run_cmd("v3.0.1")
+        self.assertIn("adv 건너뜀 — 입력 변경 없음 · v3.0.0 유지", r.stdout)
+        r = self.run_cmd("v3.0.2")
+        self.assertIn("adv 배포 — 입력 변경 있음(v3.0.0 → v3.0.2)", r.stdout)
+        self.assertEqual(self.adv_calls(), ["adv v3.0.2 --yes stdin=none"])
+
+    def test_malformed_last_ok_is_not_echoed_or_used(self):
+        self.last_ok("--output=/tmp/x /home/svc")
+        r = self.run_cmd("v1.0.1")
+        self.assertIn("adv 배포 — 판정 불능(마지막 통과 기록 형식)", r.stdout)
+        self.assertNotIn("/home/svc", r.stdout)
+
+    def test_inputs_list_trims_only_line_ends(self):
+        self.git("checkout", "-q", "v1.0.0")
+        self.write("deploy/advisor/auto-inputs.txt", "  README.md   # 끝 주석\n\t\n")
+        self.write("README.md", "9")
+        self.commit_tag("v1.2.0")
+        self.git("checkout", "-q", "v1.0.0")
+        r = self.run_cmd("v1.2.0")
+        self.assertIn("adv 배포 — 입력 변경 있음", r.stdout)
+
+    def test_compares_from_last_ok_not_from_previous_release(self):
+        # 건너뛴 릴리즈의 변경도 다음 판정에 들어간다 — 마지막 통과(v1.0.0)부터 본다(v1.0.2 → v1.0.3 은 입력 밖)
+        self.git("checkout", "-q", "v1.0.2")
+        self.write("README.md", "3")
+        self.commit_tag("v1.0.3")
+        self.git("checkout", "-q", "v1.0.0")
+        r = self.run_cmd("v1.0.3")
+        self.assertEqual(self.adv_calls(), ["adv v1.0.3 --yes stdin=none"], r.stdout)
+
+    def test_every_listed_input_triggers(self):
+        specs = [l.strip() for l in INPUTS.read_text().splitlines() if l.strip() and not l.strip().startswith("#")]
+        for i, spec in enumerate(specs):
+            tag = f"v2.0.{i}"
+            rel = spec + "probe.txt" if spec.endswith("/") else spec
+            self.git("checkout", "-q", "v1.0.0")
+            self.write(rel, f"change {i}")
+            self.commit_tag(tag)
+            self.git("checkout", "-q", "v1.0.0")
+            self.log.write_text("")
+            r = self.run_cmd(tag)
+            self.assertEqual(self.adv_calls(), [f"adv {tag} --yes stdin=none"], spec + r.stdout)
+
+    def test_not_started_or_stopped_or_missing_checkout_is_left_alone(self):
+        (self.priv / "inplace-adv-last-ok").unlink()
+        r = self.run_cmd("v1.0.2")
+        self.assertIn("adv 건너뜀 — 첫 배포 전", r.stdout)
+        self.last_ok("v1.0.0")
+        (self.priv / "inplace-adv-stopped").write_text("x")
+        r = self.run_cmd("v1.0.2")
+        self.assertIn("adv 건너뜀 — 정지됨(stop) · 마지막 통과 v1.0.0 유지", r.stdout)
+        (self.priv / "inplace-adv-stopped").unlink()
+        (self.adv / "deploy" / "advisor" / "adv-inplace.sh").unlink()
+        r = self.run_cmd("v1.0.2")
+        self.assertIn("adv 건너뜀 — 셋째 체크아웃 없음", r.stdout)
+        self.assertEqual(self.adv_calls(), [])
+        self.assertEqual(r.returncode, 0)
+
+    def test_app_failure_never_reaches_adv(self):
+        for var in ("STUB_RC_fin", "STUB_RC_fit"):
+            self.log.write_text("")
+            r = self.run_cmd("v1.0.2", **{var: "4"})
+            self.assertEqual(r.returncode, 4)
+            self.assertEqual(self.adv_calls(), [], var)
+            self.assertNotIn("## adv", r.stdout, var)
+
+    def test_adv_failure_keeps_exit_code_and_is_reported(self):
+        # G-R4 — 통합 층 실패가 두 앱 결과를 바꾸지 않는다 · 대신 줄과 알림으로 드러난다
+        r = self.run_cmd("v1.0.2", STUB_RC_adv="4")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("adv 실패 rc 4 — 두 앱 배포 결과는 그대로다", r.stdout)
+        notes = [c for c in self.calls() if c.startswith("notify adv")]
+        self.assertEqual(len(notes), 1)
+        self.assertTrue(notes[0].startswith("notify adv|fail|v1.0.2|rc 4 · 중단 — C3"), notes[0])
+        self.assertNotIn("/home/svc", r.stdout + notes[0])
+
+    def test_unknown_state_deploys(self):
+        # 판정하지 못하면 배포한다 — 끝나지 않은 시도 · 같은 태그 · 태그를 못 받음 · 목록 없음
+        (self.priv / "inplace-adv-pending").write_text("v1.0.1\n")
+        r = self.run_cmd("v1.0.1")
+        self.assertIn("adv 배포 — 끝나지 않은 시도가 있다", r.stdout)
+        (self.priv / "inplace-adv-pending").unlink()
+        self.last_ok("v1.0.1")
+        r = self.run_cmd("v1.0.1")
+        self.assertIn("adv 배포 — 같은 태그 — 상태 확인", r.stdout)
+        self.last_ok("v1.0.0")
+        r = self.run_cmd("v9.9.9")
+        self.assertIn("adv 배포 — 판정 불능(태그를 받지 못했다)", r.stdout)
+        self.git("rm", "-q", "deploy/advisor/auto-inputs.txt")
+        self.commit_tag("v1.1.0")
+        self.git("checkout", "-q", "v1.0.0")
+        r = self.run_cmd("v1.1.0")
+        self.assertIn("adv 배포 — 판정 불능(입력 목록 없음)", r.stdout)
+        self.assertEqual(len(self.adv_calls()), 4)
+
+    def test_does_not_move_the_third_checkout(self):
+        # 판정은 git fetch · diff · show 만 — 체크아웃을 옮기는 것은 adv-inplace.sh 의 일이다
+        head = self.git("rev-parse", "HEAD")
+        self.run_cmd("v1.0.1")
+        self.run_cmd("v1.0.2")
+        self.assertEqual(self.git("rev-parse", "HEAD"), head)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+
+class AutoInputs(unittest.TestCase):
+    """auto-inputs.txt 가 통합 층이 자기 체크아웃에서 읽는 곳을 덮는다 — 빠지면 그 변경이 운영에 들어가지 않는다."""
+
+    def setUp(self):
+        self.specs = [l.strip() for l in INPUTS.read_text().splitlines() if l.strip() and not l.strip().startswith("#")]
+        self.src = HERE.parent / "apps" / "advisor" / "src"
+
+    def covered(self, rel: str) -> bool:
+        return any(rel == s or (s.endswith("/") and rel.startswith(s)) for s in self.specs)
+
+    def test_domain_declarations_and_model_pins(self):
+        dirs = re.findall(r'"(\w+)"', re.search(r"DOMAIN_DIRS = \[([^\]]*)\]", (self.src / "domains.ts").read_text()).group(1))
+        pins = re.findall(r'dir: "(\w+)"', (self.src / "cli.ts").read_text())
+        self.assertEqual(sorted(dirs), ["finance", "fitness"])
+        self.assertEqual(sorted(pins), sorted(dirs))
+        for d in dirs:
+            self.assertTrue(self.covered(f"apps/{d}/domain.json"), d)
+        for d in pins:
+            self.assertTrue(self.covered(f"apps/{d}/src/lib/ai/models.ts"), d)
+
+    def test_code_dependencies_and_deploy_script(self):
+        pkg = __import__("json").loads((HERE.parent / "apps" / "advisor" / "package.json").read_text())
+        for spec in pkg["dependencies"].values():
+            self.assertTrue(spec.startswith("file:../../packages/"), spec)   # 새 의존 형식이면 목록을 다시 본다
+            self.assertTrue(self.covered(spec.replace("file:../../", "") + "/"), spec)
+        for rel in ("apps/advisor/src/main.ts", "apps/advisor/package-lock.json", "package.json", "package-lock.json",
+                    "deploy/advisor/adv-inplace.sh", "deploy/advisor/pleiades-adv.config.cjs"):
+            self.assertTrue(self.covered(rel), rel)
+
+    def test_every_spec_exists(self):
+        for s in self.specs:
+            self.assertTrue((HERE.parent / s).exists(), s)
+
+    def test_app_code_is_not_an_input(self):
+        # 도구 목록 · 지식은 도는 두 앱에서 질문마다 받는다 — 두 앱 코드 전체를 넣으면 거의 모든 릴리즈가 배포된다
+        self.assertFalse(self.covered("apps/finance/src/mcp/server.ts"))
+        self.assertFalse(self.covered("apps/fitness/src/app/page.tsx"))
+
+
 class Workflow(unittest.TestCase):
     def setUp(self):
         self.text = WORKFLOW.read_text()

@@ -3,7 +3,7 @@
 #
 # 사용:  deploy/advisor/adv-inplace.sh <vX.Y.Z> [--dry-run] [--yes]
 #        deploy/advisor/adv-inplace.sh stop [--yes]
-#   서버의 ~/pleiades-adv 안의 이 스크립트를 서비스 계정으로 사용자가 직접 부른다 — 자동 배포 없음(4b-5) · 로컬(Darwin)은 --dry-run 만(I-3).
+#   서버의 ~/pleiades-adv 안의 이 스크립트를 서비스 계정으로 사용자가 직접 부른다 — Release 자동 배포(ssh-deploy.sh · 4b-5 #744)도 켜져 있고 입력이 바뀌었을 때 --yes 로 부른다 · 로컬(Darwin)은 --dry-run 만(I-3).
 #   --yes       확인을 묻지 않는다
 #   --dry-run   A(태그 대조)까지만 · 락을 잡지 않는다 · 바꾸지 않는다
 #   되돌리기 = 직전 태그(양식의 "마지막 통과")로 같은 명령 · 첫 실행이 실패했으면 stop.

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // notify-deploy.cjs — 자동 배포(ssh-deploy.sh) 결과를 Discord 배포 채널로 보낸다 (#304 · T-10 #314 · 009 D-5 B1 #502).
 //
-// 사용:  node deploy/notify-deploy.cjs <fin|fit> <ok|fail> <tag> <요약 한 줄>
+// 사용:  node deploy/notify-deploy.cjs <fin|fit|adv> <ok|fail> <tag> <요약 한 줄>   (adv = 통합 층 · 012 4b-5 · #744)
 //   웹훅: 플랫폼 설정의 DISCORD_WEBHOOK_DEPLOY(ADMIN 과 같은 채널이어도 된다 · #321). 플랫폼 설정 = PLEIADES_ENV_FILE 또는
 //   ~/pleiades-platform.env (ssh-deploy 는 그 변수를 넘기지 않는다 — release-inplace.sh C1 과 같은 위치). GitHub secrets 에 두지 않는다(I-9).
 //   스위치(NOTIFY_DEPLOY_CHANNEL)는 읽지 않는다 — 늘 Discord. 옛 채널 대체 전송은 B1 에서 지웠다(돌아갈 옛 채널이 없다).
@@ -16,6 +16,8 @@ const path = require('path')
 
 const ROOT = path.resolve(__dirname, '..')
 const APPS = { fin: 'finance', fit: 'fitness' }
+// dotenv 를 빌릴 앱 — 통합 층 체크아웃에는 dotenv 가 없어서 ssh-deploy 가 fin 체크아웃의 이 파일을 adv 로 부른다
+const ENV_FROM = { ...APPS, adv: 'finance' }
 const TAG_RE = /^v\d+\.\d+\.\d+$/
 const RELEASE_URL = 'https://github.com/fomalhaut84/pleiades/releases/tag/'
 const SUMMARY_MAX = 300
@@ -79,8 +81,8 @@ async function postJson(url, body) {
 
 async function main() {
   const [app, status, tag, ...rest] = process.argv.slice(2)
-  const dir = APPS[app]
-  if (!dir || !['ok', 'fail'].includes(status) || !TAG_RE.test(tag || '')) fail('사용법: <fin|fit> <ok|fail> <vX.Y.Z> <요약>')
+  const dir = Object.hasOwn(ENV_FROM, app) ? ENV_FROM[app] : undefined // constructor 같은 상속 이름을 앱으로 받지 않는다
+  if (!dir || !['ok', 'fail'].includes(status) || !TAG_RE.test(tag || '')) fail('사용법: <fin|fit|adv> <ok|fail> <vX.Y.Z> <요약>')
   const summary = rest.join(' ').trim() || (status === 'ok' ? '통과' : '중단')
 
   const text = buildText(app, status, tag, summary)

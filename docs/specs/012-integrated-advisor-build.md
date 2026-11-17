@@ -468,6 +468,12 @@
 
 > **결과 (2026-11-17 · 사용자 서버 실행 · #742) — 통합 층 첫 배포 통과 · 운영 가동.** `adv-inplace.sh v1.16.1`(두 앱과 같은 태그 · 첫 실행 HEAD `dev` 허용) — dry-run → 실행 · C1 셸 키 0 · platform 600 · fin·fit env same · C4 fin 준비됨(읽기 도구 25 · 지식 7904 B) · fit 준비됨(읽기 도구 27 · 지식 12509 B) · C6 `pleiades-adv-bot` online · 전체 `pleiades-*` 7 개 env same(DIFF/MISSING 0 — 다음 Release 자동 배포의 C1 을 막지 않는다) · 생존 표지 갱신 예 · **결과 통과**. 사람 확인: 통합 채널 질문 1회 → 답 확인 · 완료 로그 `status=완료 · drift=없음 · cost=$0.0991(상한 $1.00) · turns=1 · context=23677 · outside=0 · domains=2`(도구 호출 0 — 도구 없이 답할 질문). #733(턴 평균)이 함께 들어갔다. 수집기는 다음 회부터 `adv·bot` 을 감시한다(4b-3c). 되돌리기: `adv-inplace.sh stop`(**즉시**) · 쓴 비용 **편도**.
 
+> **확정 (2026-11-17 · 사용자 · #744) — 4b-5 = 조건부 자동 배포.** 사용자: "항상 같이 배포될 필요는 없지만 내가 따로 돌릴 필요 없이 필요시에만" → **조건부**(옵션: 켜져 있으면 매 릴리즈 배포 — 택하지 않음).
+> - `deploy/ssh-deploy.sh` 가 fin → fit **둘 다 통과한 뒤** 통합 층 단계를 돈다. 배포 조건 = 셋째 체크아웃 있음 · 마지막 통과 기록 있음(첫 배포는 손) · 정지 표지 없음 · **마지막 통과 태그 → 새 태그 사이에 입력 경로 변경**. 입력 경로는 `deploy/advisor/auto-inputs.txt`(새 태그의 판을 `git show` 로 읽는다) — 통합 층 코드 · `packages/` · 루트 package · `deploy/advisor/` · 두 앱 `domain.json` · `models.ts`(질문마다 체크아웃에서 읽는 것 · 실측 `domains.ts` `DOMAIN_DIRS` · `cli.ts` `PIN_SOURCES`). 도구 목록 · 지식은 도는 두 앱 읽기 경로에서 질문마다 받으므로 두 앱 코드는 입력이 아니다. 릴리즈 버전 커밋의 `"version"` 줄만 바뀐 묶음은 무시한다(`git diff -I` · 9-1 major — 없으면 매 릴리즈가 배포됐다).
+> - **판정 불능이면 배포**(끝나지 않은 시도 · 같은 태그 · 태그를 못 받음 · 목록 없음 · 비교 실패) — 같은 태그면 adv-inplace 가 "이미 배포됨" 으로 끝난다.
+> - G-R4 그대로 — 실패는 rc 를 바꾸지 않고 `## adv` 줄 + 배포 알림(fin 체크아웃의 `notify-deploy.cjs` 를 `adv` 로 — 셋째 체크아웃에는 dotenv 가 없다). 시험 `deploy/test_ssh_deploy.py` `AdvAuto` · `AutoInputs` · `test_notify_deploy.py`.
+> - 효력: 이 PR 을 담은 릴리즈의 **다음** Release 부터. 되돌리기: `stop`(**즉시** · 자동 단계도 건너뜀) · revert + 릴리즈(**중간**).
+
 ---
 
 ## 9. 정본 형태 (U5)

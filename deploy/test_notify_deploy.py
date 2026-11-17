@@ -70,6 +70,19 @@ class NotifyDeploy(unittest.TestCase):
         self.assertIn("소요 129s", r.stdout)
         self.assertNotIn("Actions 실행 요약", r.stdout)
 
+    # 012 4b-5 (#744) — 통합 층은 fin 체크아웃의 이 파일을 adv 로 부른다(셋째 체크아웃에는 dotenv 가 없다)
+    def test_adv_reads_platform_file_through_finance_dotenv(self):
+        r = self.run_notify("adv", "ok", "v1.17.1", "통과", PLEIADES_ENV_FILE=self.platform(self.HOOK))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("✅ **adv v1.17.1 배포 완료**", r.stdout)
+        self.assertNotIn("SECRETHOOK", r.stdout + r.stderr)
+
+    def test_inherited_names_are_not_apps(self):
+        for app in ("constructor", "toString", "__proto__", "hasOwnProperty"):
+            r = self.run_notify(app, "ok", "v1.0.5", "x", PLEIADES_ENV_FILE=self.platform(self.HOOK))
+            self.assertEqual(r.returncode, 0)
+            self.assertIn("보내지 않았다 — 사용법", r.stdout, app)
+
     # 회귀: #502 — 스위치를 읽지 않는다(R2 뒤 앱과 같다) · 옛 채널 키가 있어도 옛 채널로 가지 않는다
     def test_switch_is_ignored_and_legacy_channel_is_never_used(self):
         self.env_file("finance", "TELEGRAM_BOT_TOKEN=1:SECRETTOKEN\nTELEGRAM_ADMIN_CHAT_IDS=9\n")
