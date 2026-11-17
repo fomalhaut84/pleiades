@@ -145,7 +145,7 @@ function ensureMcpConfig(): string {
             DATABASE_URL: process.env.DATABASE_URL ?? "",
             // splits tool (src/mcp/tools/splits.ts) 이 APP_BASE_URL 참조. Claude CLI 는
             // stdio MCP subprocess env 에 부모 env 를 자동 상속 안 하므로 명시 pass.
-            APP_BASE_URL: `http://localhost:${process.env.PORT ?? "4200"}`,
+            APP_BASE_URL: `http://127.0.0.1:${process.env.PORT ?? "4200"}`, // 웹은 루프백(IPv4)에만 듣는다 (#702)
           },
         }
       : {
@@ -379,7 +379,7 @@ async function askAdvisorOnce(
         errors?: string[];
         api_error_status?: number;
         total_cost_usd?: number;
-        usage?: { input_tokens?: number };
+        usage?: { input_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
       } | null = null;
       try {
         parsed = JSON.parse(stdout);
@@ -428,13 +428,10 @@ async function askAdvisorOnce(
       }
 
       if (parsed) {
-        // 세션 ID + 누적 입력 토큰 저장 (채널별)
+        // 세션 ID + 컨텍스트 크기 저장 (채널별 · pleiades#683 — 캐시 토큰 포함 · 턴 평균)
+        const contextTokens = SessionStore.contextTokensOf(parsed.usage, parsed.num_turns);
         if (parsed.session_id) {
-          const inputTokens =
-            typeof parsed.usage?.input_tokens === "number"
-              ? parsed.usage.input_tokens
-              : 0;
-          SessionStore.setSession(channel, parsed.session_id, inputTokens, system.versionId);
+          SessionStore.setSession(channel, parsed.session_id, contextTokens, system.versionId);
         }
 
         // 완료 요약 로그 (pm2 logs 에서 채널별 정상 완료 확인용).
@@ -444,7 +441,7 @@ async function askAdvisorOnce(
         const turns = parsed.num_turns ?? "?";
         const isError = parsed.is_error === true;
         console.log(
-          `[askAdvisor] channel=${channel} model=${ADVISOR_MODEL} duration=${durationMs}ms turns=${turns} session=${sessionShort} cost=$${cost} cap=$${budgetUsd.toFixed(4)}${
+          `[askAdvisor] channel=${channel} model=${ADVISOR_MODEL} duration=${durationMs}ms turns=${turns} context=${contextTokens ?? "?"} session=${sessionShort} cost=$${cost} cap=$${budgetUsd.toFixed(4)}${
             isError ? " is_error=true" : ""
           }`
         );

@@ -6,6 +6,7 @@
 """
 
 import io
+import json
 import os
 import sys
 import tempfile
@@ -252,6 +253,28 @@ class CliTest(unittest.TestCase):
         rc, _, err = self.run_cli(["/nonexistent/body.md"], deny_text="")
         self.assertEqual(rc, 2)
         self.assertTrue(err)
+
+
+def expand(parts):
+    """공통 시험 벡터 한 건을 문자열로 — 조각은 문자열 또는 [문자열, 반복 수]."""
+    return "".join(p if isinstance(p, str) else p[0] * p[1] for p in parts)
+
+
+VECTORS = json.loads((HERE / "token_vectors.json").read_text())
+
+
+class SharedTokenVectorTest(unittest.TestCase):
+    """deploy/ops/collect.cjs 게시 전 검사 ② 와 같은 벡터(#725) — 두 판이 갈라지면 어느 한쪽이 실패한다."""
+
+    def test_token_vectors_flagged(self):
+        for parts in VECTORS["token"]:
+            with self.subTest(i=VECTORS["token"].index(parts)):
+                self.assertIn("TOKEN", codes(expand(parts)))
+
+    def test_clean_vectors_not_token(self):
+        for parts in VECTORS["clean"]:
+            with self.subTest(text=expand(parts)):
+                self.assertNotIn("TOKEN", codes(expand(parts)))
 
 
 if __name__ == "__main__":

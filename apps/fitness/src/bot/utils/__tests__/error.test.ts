@@ -15,7 +15,7 @@ describe("sanitizeMessage", () => {
     expect(sanitizeMessage("plain message")).toBe("plain message");
   });
 
-  // 회귀: pleiades#540 — 옛 앱 판은 텔레그램 봇 토큰만 가렸다. 패키지 판과 같아야 한다.
+  // 회귀: pleiades#540 — 옛 앱 판은 옛 채널 봇 토큰만 가렸다. 패키지 판과 같아야 한다.
   it("패키지 함수를 그대로 쓴다", () => {
     expect(sanitizeMessage).toBe(notify.sanitizeMessage);
     expect(sanitizeError).toBe(notify.sanitizeError);

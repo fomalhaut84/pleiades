@@ -84,7 +84,7 @@ class Config(unittest.TestCase):
         self.assertEqual(set(apps), {"pleiades-fin-web", "pleiades-fin-bot", "pleiades-fin-mcp"})
         for a in apps.values():
             self.assertEqual(Path(a["cwd"]).resolve(), (self.root / "apps/finance").resolve())
-        self.assertEqual(apps["pleiades-fin-web"]["args"], "start -p 4510")
+        self.assertEqual(apps["pleiades-fin-web"]["args"], "start -H 127.0.0.1 -p 4510")
         self.assertEqual(str(apps["pleiades-fin-web"]["env"]["PORT"]), "4510")
         self.assertEqual(apps["pleiades-fin-mcp"]["env"]["MCP_PORT"], "4511")
         self.assertEqual(apps["pleiades-fin-mcp"]["env"]["MCP_TRANSPORT"], "http")
@@ -98,9 +98,14 @@ class Config(unittest.TestCase):
         self.assertEqual(apps["pleiades-fit-bot"]["env"]["MCP_PORT"], "4521")
         self.assertEqual(apps["pleiades-fit-mcp"]["env"]["MCP_PORT"], "4521")
 
+    def test_web_listens_on_loopback_only(self):
+        # 회귀: #702 — 웹이 모든 인터페이스에서 들으면 방화벽이 바뀔 때 nginx(보안 헤더 · X-Real-IP)를 건너뛴 직접 접속이 생긴다
+        self.assertEqual(self.apps("fit")["pleiades-fit-web"]["args"], "start -H 127.0.0.1 -p 4520")
+        self.assertEqual(self.apps("fin")["pleiades-fin-web"]["args"], "start -H 127.0.0.1 -p 4510")
+
     def test_fit_mcp_gets_web_url_from_port(self):
         # 회귀: PR #179 Codex P2 — MCP 의 웹 API 기본값은 localhost:4200 고정이라 다른 PORT 에서 Garmin 경유 도구가 끊긴다
-        self.assertEqual(self.apps("fit")["pleiades-fit-mcp"]["env"]["APP_BASE_URL"], "http://localhost:4520")
+        self.assertEqual(self.apps("fit")["pleiades-fit-mcp"]["env"]["APP_BASE_URL"], "http://127.0.0.1:4520")  # #702 — 웹이 루프백에만 듣는다
         self.assertEqual(self.apps("fit", {"APP_BASE_URL": "http://127.0.0.1:9"})["pleiades-fit-mcp"]["env"]["APP_BASE_URL"],
                          "http://127.0.0.1:9")
 
@@ -146,7 +151,7 @@ class Config(unittest.TestCase):
     def test_shell_env_wins_over_dotenv(self):
         # dotenv 는 이미 있는 process.env 를 덮지 않는다 — check_env.effective_env 와 같은 우선순위
         apps = self.apps("fin", {"PORT": "4530"})
-        self.assertEqual(apps["pleiades-fin-web"]["args"], "start -p 4530")
+        self.assertEqual(apps["pleiades-fin-web"]["args"], "start -H 127.0.0.1 -p 4530")
 
     def test_refuses_without_ports(self):
         for missing in ("PORT", "MCP_PORT"):
@@ -200,6 +205,19 @@ class DeployDryRun(unittest.TestCase):
         self.assertNotIn("startOrReload", out)  # #170 — 웹도 restart
         self.assertLess(out.index("pleiades-fin-mcp"), out.index("pleiades-fin-web"))
         self.assertLess(out.index("pleiades-fin-web"), out.index("pleiades-fin-bot"))
+
+    def test_web_reregister_args_match_config(self):
+        # 회귀: #702 — 5단계는 등록된 args 가 기대값과 다를 때만 지우고 새로 등록한다(startOrRestart 는 args 를 유지한다).
+        # 기대값이 pm2 정의와 어긋나면 바뀐 args(-H 루프백)가 운영에 영영 들어가지 않거나 배포마다 웹을 지운다
+        for app in ("fin", "fit"):
+            r = deploy(self.root, app, "--dry-run")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            m = re.search(r"등록된 args 가 '([^']+)' 가 아닐 때만", r.stdout)
+            self.assertIsNotNone(m, r.stdout)
+            c = load_config(self.root, app)
+            self.assertEqual(c.returncode, 0, c.stderr)
+            web = next(a for a in json.loads(c.stdout)["apps"] if a["name"] == f"pleiades-{app}-web")
+            self.assertEqual(m.group(1), web["args"])
 
     def test_install_order_root_then_chat_then_app(self):
         # 009 D-1 PR-1(#345) — chat 은 notify dist(루트 prepare) 뒤에 설치·빌드하고, 앱 봇 번들보다 먼저 dist 가 있어야 한다
@@ -372,7 +390,8 @@ if (argv[0] === 'jlist') {
   const names = new Set([...Object.keys(preset), ...Object.keys(st.online)])
   const list = [...names].map((name) => {
     if (flap.includes(name)) st.restarts[name] = (st.restarts[name] || 0) + 1
-    const args = name.endsWith('-web') && st.reg[name] ? ['start', '-p', st.reg[name]] : []
+    // 등록 형식 — 지금은 -H 루프백 포함(#702) · st.legacy 면 그 전 형식(-p 만)
+    const args = name.endsWith('-web') && st.reg[name] ? (st.legacy ? ['start', '-p', st.reg[name]] : ['start', '-H', '127.0.0.1', '-p', st.reg[name]]) : []
     return { name, pm2_env: { status: st.online[name] ? 'online' : preset[name] || 'stopped', restart_time: st.restarts[name] || 0, args } }
   })
   process.stdout.write(JSON.stringify(list))
@@ -381,7 +400,7 @@ if (argv[0] === 'jlist') {
   // pm2 는 이미 등록된 앱의 args 를 유지한다(PR #177 Codex P2) — 처음 등록할 때만 새 포트
   if (only.endsWith('-web') && !st.reg[only]) st.reg[only] = process.env.STUB_WEB_NEW || '4510'
 } else if (argv[0] === 'stop') delete st.online[argv[1]]
-else if (argv[0] === 'delete') { delete st.online[argv[1]]; delete st.reg[argv[1]] }
+else if (argv[0] === 'delete') { delete st.online[argv[1]]; delete st.reg[argv[1]]; st.legacy = false }
 fs.writeFileSync(file, JSON.stringify(st))
 """
 
@@ -671,10 +690,10 @@ class ServerPathWithStubs(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertNotIn("pm2 delete pleiades-fin-web", log)
 
-    def seed(self, *, web_port: str) -> None:
+    def seed(self, *, web_port: str, legacy: bool = False) -> None:
         (self.stub / "state.json").write_text(json.dumps({
             "online": {"pleiades-fin-mcp": True, "pleiades-fin-web": True}, "restarts": {},
-            "reg": {"pleiades-fin-web": web_port}}))
+            "reg": {"pleiades-fin-web": web_port}, "legacy": legacy}))
 
     def test_non_http_listener_counts_as_occupied(self):
         # 회귀: PR #177 Codex P2 — HTTP 가 아니거나 빈 응답(curl 52)인 리스너를 "비었다" 로 읽었다
@@ -685,6 +704,13 @@ class ServerPathWithStubs(unittest.TestCase):
     def test_web_port_change_recreates_web(self):
         # 회귀: PR #177 Codex P2 — startOrRestart 는 등록된 args(-p 옛 포트)를 유지한다
         self.seed(web_port="4500")
+        r, log = self.run_fin()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertLess(log.index("pm2 delete pleiades-fin-web"), log.index("--only pleiades-fin-web"))
+
+    def test_legacy_all_interfaces_registration_recreates_web(self):
+        # 회귀: #702 — 운영의 웹은 -H 없이(모든 인터페이스) 등록돼 있다. 같은 포트여도 지우고 새로 등록해야 루프백이 들어간다
+        self.seed(web_port="4510", legacy=True)
         r, log = self.run_fin()
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertLess(log.index("pm2 delete pleiades-fin-web"), log.index("--only pleiades-fin-web"))

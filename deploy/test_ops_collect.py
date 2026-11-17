@@ -36,6 +36,21 @@ process.stdout.write(fs.readFileSync(process.env.STUB_JLIST, 'utf8'))
 """
 
 
+FETCH_STUB = r"""
+const fs = require('fs')
+const path = require('path')
+globalThis.fetch = async (url, opts) => {
+  const log = path.join(path.dirname(__filename), 'fetch.jsonl')
+  fs.appendFileSync(log, JSON.stringify({ url: String(url), body: JSON.parse(opts.body) }) + '\n')
+  const n = fs.readFileSync(log, 'utf8').trim().split('\n').length
+  const codes = (process.env.STUB_FETCH_STATUS || '204').split(',')
+  const st = Number(codes[Math.min(n - 1, codes.length - 1)])
+  if (st === 0) throw Object.assign(new Error('connect failed ' + url), { name: 'TypeError' })
+  return { ok: st >= 200 && st < 300, status: st, body: null }
+}
+"""
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802
         spec = self.server.spec.get(self.path, (200, ""))
@@ -134,7 +149,7 @@ class Base(unittest.TestCase):
             f.write(text)
         return p
 
-    def run_c(self, *args, now=NOW, config=None, timeout=60, **env):
+    def run_c(self, *args, now=NOW, config=None, timeout=60, prod_defaults=False, **env):
         e = {
             "PATH": "/usr/bin:/bin",
             "HOME": str(self.home),
@@ -145,7 +160,7 @@ class Base(unittest.TestCase):
             "OPS_NOW": now,
             "OPS_DISK_HOME": str(self.home),
             "OPS_DISK_BACKUP": str(self.tmp),
-            "OPS_CONFIG": json.dumps({"summaryAt": "23:59", "disk": {"warn": 101, "crit": 102}, **(config or {})}),
+            "OPS_CONFIG": json.dumps({"summaryAt": "23:59", "disk": {"warn": 101, "crit": 102}, **({} if prod_defaults else {"quietWarnings": False}), **(config or {})}),
         }
         e.update(env)
         argv = list(args) if args else ["--dry-run", f"--pm2-bin={self.bin}"]
@@ -160,6 +175,19 @@ class Base(unittest.TestCase):
         p = self.ops / "dry-run.log"
         # 템플릿은 마크다운 escape 를 한다(\\-) — 비교는 escape 를 벗겨서
         return p.read_text().replace("\\", "").splitlines() if p.exists() else []
+
+    def fetch_stub(self):
+        """global fetch 스텁 — 호출을 파일에 적고 STUB_FETCH_STATUS(쉼표 · 호출 순서 · 마지막 값 반복 · 0 = 예외)로 답한다."""
+        stub = self.tmp / "fetch-stub.cjs"
+        if not stub.exists():
+            self.fetch_log = self.tmp / "fetch.jsonl"
+            self.fetch_log.touch()
+            stub.write_text(FETCH_STUB)
+        return stub
+
+    def fetches(self):
+        log = self.tmp / "fetch.jsonl"
+        return [json.loads(l) for l in log.read_text().splitlines()] if log.exists() else []
 
     def events(self):
         p = self.ops / "events.jsonl"
@@ -179,11 +207,18 @@ class Base(unittest.TestCase):
 
 
 class Cli(Base):
-    def test_requires_dry_run(self):
-        r = self.run_c(f"--pm2-bin={self.bin}")
-        self.assertEqual(r.returncode, 2)
-        self.assertIn("--dry-run 만", r.stderr)
-        self.assertEqual(self.pm2_calls(), [])
+    def test_no_dry_run_without_webhook_defers_and_sends_nothing(self):
+        # 게시 판(#725) — 플랫폼 설정이 없으면 웹훅이 없다: 폴백 없이 미룬다(commit 안 함) · 외부 호출 0
+        self.ok(now="2026-11-10T07:55:00+09:00")  # 상태 없는 첫 회는 로그 끝에서 시작한다
+        self.log("pleiades-fin-bot-error-0.log", "2026-11-10 07:59:00: [bot] TypeError: x\n", append=True)
+        r = self.run_c(f"--pm2-bin={self.bin}", NODE_OPTIONS=f"--require={self.fetch_stub()}")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("기록 0 · 미룸 1 · 요약만 0 · 차단 0 · 웹훅 없음 (게시)", r.stdout)
+        self.assertEqual(self.fetches(), [])
+        self.assertTrue(self.state()["fps"][next(iter(self.state()["fps"]))]["deferred"])
+
+    def test_dry_run_with_test_alert_rejected(self):
+        self.assertEqual(self.run_c("--dry-run", "--test-alert").returncode, 2)
 
     def test_unknown_arg(self):
         self.assertEqual(self.run_c("--dry-run", "--post").returncode, 2)
@@ -205,8 +240,11 @@ class Cli(Base):
         src = SCRIPT.read_text()
         self.assertNotIn("deploy.lock", src)  # E-3 — 배포가 flock -n 이다
         self.assertNotIn("flock", src.replace("flock -n 이라", ""))
-        for word in ("fetch(", "https", "discord.com", "webhook"):
-            self.assertNotIn(word, src)  # PR-1 은 외부로 나가는 것 0
+        # 외부로 나가는 길은 웹훅 게시 하나다(#725) — 주소는 플랫폼 설정에서만 온다(코드에 박지 않는다)
+        self.assertEqual(src.count("fetch("), 1)
+        self.assertIn("await fetch(target, {", src)
+        self.assertNotIn("discord.com", src)
+        self.assertIn("allowed_mentions: { parse: [] }", src)
         # 외부 프로세스 호출은 pm2 jlist 하나뿐이다(Q97 — 코드가 지키는 규칙)
         self.assertEqual(src.count("spawnSync("), 1)
         self.assertIn("spawnSync(process.execPath, [bin, 'jlist']", src)
@@ -651,11 +689,16 @@ class Logs(Base):
         # 회귀: #587 — 기준 24시간. dry-run 판정에서 bot·mcp out 은 낮에도 6시간씩 조용했다
         self.ok(now="2026-11-10T15:00:00+09:00", config={"burstLimit": 20})
         self.assertNotIn("silent:", "\n".join(self.posts()))
-        # 침묵: fin bot out 이 24시간 늘지 않음 · fin web out 은 기본 꺼짐
+        # 침묵: 24시간 — fit web·mcp 는 나고 · bot 역할은 끔(생존 표지가 본다 · #713) · fin web 은 기본 꺼짐 · fin mcp 는 72h(주말 · #713)
         self.ok(now="2026-11-11T08:05:00+09:00", config={"burstLimit": 20})
         text = "\n".join(self.posts())
-        self.assertIn("silent:fin-bot", text)
-        self.assertNotIn("silent:fin-web", text)
+        self.assertIn("silent:fit-mcp", text)
+        for off in ("silent:fin-bot", "silent:fit-bot", "silent:fin-web", "silent:fin-mcp"):
+            self.assertNotIn(off, text)
+        self.ok(now="2026-11-13T08:00:00+09:00", config={"burstLimit": 20})
+        self.assertNotIn("silent:fin-mcp", "\n".join(self.posts()))   # 정확히 72h — 아직
+        self.ok(now="2026-11-13T08:10:00+09:00", config={"burstLimit": 20})
+        self.assertIn("silent:fin-mcp", "\n".join(self.posts()))
 
     def test_known_stderr_kinds_and_deprecated_are_warnings(self):
         # 회귀: #587 — 세부 칸이 빈 web 줄(스캐너 Server Action · Recharts 크기)이 한 '실패' 지문으로 묶였다
@@ -1032,3 +1075,382 @@ class Advisor(Base):
         self.log("pleiades-adv-bot-out-9.log", '2026-11-10 08:01:00: [advisor] key=abc status=answer TypeError\n', append=True)
         self.ok(now="2026-11-10T08:05:00+09:00")
         self.assertNotIn("adv", self.text())
+
+
+class Quiet2a(Base):
+    """008 PR-2a(#713) — #622 재판정 보정: 스캐너·인증 탐색 분류 · 스택 연속 덩어리 · 경고는 일일 요약에만."""
+
+    W = "pleiades-fin-web-error-0.log"
+    E = "pleiades-fin-bot-error-0.log"
+
+    def test_failed_to_find_server_action_is_scanner(self):
+        self.ok()
+        self.log(self.W, '2026-11-10 08:01:00: Error: Failed to find Server Action "abc". This request might be from an older or newer deployment.\n'
+                 "Read more: https://nextjs.org/docs/messages/failed-to-find-server-action\n", append=True)   # 실측 SA+O — 뒷줄은 시각 없는 연속 줄
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        posts = self.posts()
+        self.assertTrue(any("🟡 경고 · fin·web · stderr · server-action-ref" in p for p in posts), posts)
+        self.assertFalse(any("🟠" in p for p in posts), posts)
+
+    def test_authjs_unknown_action_with_ansi_and_split_stack(self):
+        # 08:11 실측 모양 — 색 코드로 시작하는 첫 줄 1 덩어리 + 같은 초 스택 10 줄 덩어리(pm2 가 따로 시각을 붙였다)
+        self.ok()
+        head = "2026-11-10 08:01:17: \x1b[31m[auth][error]\x1b[0m UnknownAction: Unsupported action. Read more at https://errors.authjs.dev#unknownaction\n"
+        stack = "2026-11-10 08:01:17:     at a (/srv/x/node_modules/@auth/core/x.js:1:2)\n" + "".join(f"    at f{i} (/srv/x/.next/server/app/api/auth/[...nextauth]/route.js:{i}:1)\n" for i in range(9))
+        self.log(self.W, head + stack + head.replace("08:01:17", "08:01:19") + stack.replace("08:01:17", "08:01:19"), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        posts = self.posts()
+        mine = [p for p in posts if "auth-unknown-action" in p]
+        self.assertEqual(len(mine), 1, posts)
+        self.assertIn("🟡 경고 · fin·web · stderr · auth-unknown-action", mine[0])
+        self.assertIn("2회", mine[0])
+        self.assertFalse(any("🟠" in p for p in posts), posts)   # 스택 덩어리가 따로 실패로 나오지 않는다
+        self.assert_no_raw("errors.authjs.dev")
+
+    def test_stack_chunk_at_other_second_still_counts(self):
+        self.ok()
+        self.log(self.W, "2026-11-10 08:01:00: [x] TypeError: boom\n2026-11-10 08:01:05:     at y (/srv/x/a.js:1:1)\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertEqual(sum("🟠" in p for p in self.posts()), 2)
+
+    def test_warnings_go_to_daily_summary_only(self):
+        q = {"quietWarnings": True}
+        self.ok(config=q)
+        self.log(self.E, "2026-11-10 08:01:00: [Deprecated] historical() is deprecated\n", append=True)
+        self.log(self.E, "2026-11-10 08:02:00: [bot] TypeError: real\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=q)
+        posts = self.posts()
+        self.assertFalse(any("🟡" in p for p in posts), posts)
+        self.assertTrue(any("🟠 실패 · fin·bot" in p for p in posts), posts)
+        quiet = [e for e in self.events() if e.get("quiet")]
+        self.assertEqual(len(quiet), 1)
+        self.assertEqual(quiet[0]["sev"], "경고")
+        # 같은 지문 반복도 조용히 · 미뤄진 채로 남지 않는다
+        self.log(self.E, "2026-11-10 09:30:00: [Deprecated] again\n", append=True)
+        self.ok(now="2026-11-10T09:35:00+09:00", config=q)
+        self.assertFalse(any("🟡" in p for p in self.posts()))
+        self.assertFalse(any(e["deferred"] for e in self.state()["fps"].values()))
+        # 다음 날 요약에 경고 개수
+        self.ok(now="2026-11-11T09:10:00+09:00", config={**q, "summaryAt": "09:05"})
+        summ = [p for p in self.posts() if "일일 요약" in p]
+        self.assertEqual(len(summ), 1)
+        self.assertRegex(summ[0], r"경고 어제 [1-9]\d*종 [2-9]\d*회")   # Deprecated 2회 + 수집기 late 등
+        self.assertIn("fin·bot·stderr e682dc78fef1 ×2", summ[0])   # 운영 Deprecated 지문과 같은 값
+
+    def test_quiet_warnings_do_not_count_toward_burst(self):
+        q = {"quietWarnings": True, "burstLimit": 2}
+        self.ok(config=q)
+        lines = "".join(f"2026-11-10 08:01:0{i}: [w{i}] Warning: thing{i}\n" for i in range(5))
+        lines += "2026-11-10 08:02:00: [bot] TypeError: one\n"
+        self.log(self.E, lines, append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=q)
+        posts = self.posts()
+        self.assertFalse(any("새 지문" in p for p in posts), posts)
+        self.assertTrue(any("TypeError" in p for p in posts), posts)
+
+    def test_quiet_state_warning_open_and_recover_silently(self):
+        q = {"quietWarnings": True, "recoverRuns": 1}
+        self.ok(config=q)
+        (self.pm2 / "logs" / "pleiades-fit-mcp-out-0.log").unlink()
+        self.ok(now="2026-11-10T08:05:00+09:00", config=q)
+        self.assertFalse(any("glob-empty" in p for p in self.posts()))
+        self.log("pleiades-fit-mcp-out-0.log", "")
+        self.ok(now="2026-11-10T08:10:00+09:00", config=q)
+        self.assertFalse(any("🟢" in p for p in self.posts()))
+        self.assertFalse(any(e["open"] for e in self.state()["fps"].values() if "glob-empty" in e["src"]))
+
+
+class QuietSeverity(Base):
+    """PR-2a 9-1 major(#713) — 지문 재료에 심각도가 없다: 조용히 처리한 지문에 더 높은 심각도가 오면 늦거나 묻혔다."""
+
+    E = "pleiades-fin-bot-error-0.log"
+    Q = {"quietWarnings": True}
+
+    def test_failure_after_quiet_warning_is_posted_at_once(self):
+        # 태그 없는 Warning 줄과 Error 줄은 세부가 같아 한 지문이다(#569)
+        self.ok(config=self.Q)
+        self.log(self.E, "2026-11-10 08:01:00: (node:1) Warning: thing\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=self.Q)
+        self.assertEqual(self.posts(), [])
+        self.log(self.E, "2026-11-10 08:06:00: (node:1) Error: real failure\n", append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00", config=self.Q)
+        posts = self.posts()
+        self.assertEqual(len(posts), 1, posts)
+        self.assertIn("🟠 실패", posts[0])
+        self.assertNotIn("직전 게시 뒤", posts[0])
+
+    def test_pending_failures_not_swallowed_by_a_later_warning(self):
+        self.ok(config=self.Q)
+        self.log(self.E, "2026-11-10 08:01:00: (node:1) Error: one\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=self.Q)
+        self.log(self.E, "2026-11-10 08:06:00: (node:1) Error: two\n", append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00", config=self.Q)
+        # 반복 시점(60분 뒤) 직전 회의 관측은 경고
+        self.log(self.E, "2026-11-10 09:06:00: (node:1) Warning: three\n", append=True)
+        self.ok(now="2026-11-10T09:10:00+09:00", config=self.Q)
+        rep = [p for p in self.posts() if "직전 게시 뒤" in p]
+        self.assertEqual(len(rep), 1, self.posts())
+        self.assertIn("🟠 실패", rep[0])
+        self.assertEqual([e["sev"] for e in self.events() if e["type"] == "repeat"], ["실패"])  # 기록도 본문과 같은 심각도(#731)
+
+    # 회귀: PR #714 Codex P2 — 폭주로 나간 지문의 조용함 표지가 지워지지 않아 5분마다 폭주가 다시 나갔다
+    def test_burst_escalation_clears_quiet_state(self):
+        q = {**self.Q, "burstLimit": 2}
+        self.ok(config=q)
+        tags = ["a", "b", "c"]
+        self.log(self.E, "".join(f"2026-11-10 08:01:0{i}: [{t}] Warning: w\n" for i, t in enumerate(tags)), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=q)
+        self.assertEqual(self.posts(), [])
+        self.log(self.E, "".join(f"2026-11-10 08:06:0{i}: [{t}] Warning: x\n" for i, t in enumerate(tags)).replace("Warning: x", "Error: x"), append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00", config=q)
+        self.assertEqual(sum("새 지문" in p for p in self.posts()), 1, self.posts())
+        self.log(self.E, "".join(f"2026-11-10 08:11:0{i}: [{t}] Error: y\n" for i, t in enumerate(tags)), append=True)
+        self.ok(now="2026-11-10T08:15:00+09:00", config=q)
+        self.assertEqual(sum("새 지문" in p for p in self.posts()), 1, self.posts())   # 반복 간격 안 — 다시 폭주하지 않는다
+
+    # 회귀: PR #714 Codex P2 — 요약의 경고 개수를 지금 심각도로 셌다
+    def test_daily_warning_count_is_per_observation_severity(self):
+        self.ok(config=self.Q)
+        self.log(self.E, "2026-11-10 08:01:00: (node:1) Warning: w1\n2026-11-10 08:01:01: (node:1) Warning: w2\n", append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00", config=self.Q)
+        self.log(self.E, "2026-11-10 08:06:00: (node:1) Error: e1\n", append=True)
+        self.ok(now="2026-11-10T08:10:00+09:00", config=self.Q)   # 같은 지문 · 지금 심각도 = 실패
+        self.ok(now="2026-11-11T09:10:00+09:00", config={**self.Q, "summaryAt": "09:05"})
+        summ = [p for p in self.posts() if "일일 요약" in p][-1]
+        mine = [e for e in self.state()["fps"].values() if e["app"] == "fin" and e["role"] == "bot"]
+        self.assertEqual(len(mine), 1)
+        self.assertEqual(mine[0]["warnDays"]["2026-11-10"], 2)   # 경고 관측만
+        self.assertEqual(mine[0]["days"]["2026-11-10"], 3)
+
+    def test_silence_is_summary_only_in_quiet_mode(self):
+        # 사용자 결정(2026-11-16) — 침묵도 경고라 요약에만 · 열린 이상에는 남는다
+        self.ok(config=self.Q)
+        self.ok(now="2026-11-11T08:05:00+09:00", config=self.Q)
+        self.assertFalse(any("silent:" in p for p in self.posts()))
+        self.assertTrue(any(e["open"] and e["src"].startswith("silent:") for e in self.state()["fps"].values()))
+        self.ok(now="2026-11-11T09:10:00+09:00", config={**self.Q, "summaryAt": "09:05"})
+        summ = [p for p in self.posts() if "일일 요약" in p]
+        self.assertTrue(summ and "silent:fit-mcp" in summ[-1], summ)
+
+    def test_production_default_is_quiet(self):
+        self.ok(prod_defaults=True)
+        self.log(self.E, "2026-11-10 08:01:00: [Deprecated] historical()\n", append=True)
+        r = self.ok(now="2026-11-10T08:05:00+09:00", prod_defaults=True)
+        self.assertEqual(self.posts(), [])
+        self.assertIn("요약만 1", r.stdout)
+
+
+def expand(parts):
+    return "".join(p if isinstance(p, str) else p[0] * p[1] for p in parts)
+
+
+VECTORS = json.loads((HERE.parent / "tools" / "ops" / "token_vectors.json").read_text())
+HOOK = "https://discord.com/api/" + "webhooks/1/" + "HOOKSECRETabcdef"  # 시험용 가짜 주소
+ERR_LINE = "2026-11-10 07:59:00: [bot] TypeError: x\n"
+
+
+class Post(Base):
+    """게시 판(PR-2b · #725) — 웹훅 · 게시 전 검사 ①~③ · 차단 고정 문구 · 실패 = 미룸 · 시험 게시."""
+
+    def setUp(self):
+        super().setUp()
+        self.platform = self.tmp / "platform.env"
+        self.platform.write_text(f'DISCORD_WEBHOOK_OPS="{HOOK}"\nDISCORD_CHANNEL_ID_FINANCE=123456789012345678\n')
+        self.E = "pleiades-fin-bot-error-0.log"
+        self.ok(now="2026-11-10T07:55:00+09:00")  # 상태 없는 첫 회는 로그 끝에서 시작한다 — 먼저 한 번(dry-run · 외부 0)
+
+    def live(self, *extra, status="204", **kw):
+        env = {"PLEIADES_ENV_FILE": str(self.platform), "NODE_OPTIONS": f"--require={self.fetch_stub()}", "STUB_FETCH_STATUS": status}
+        env.update(kw.pop("env", {}))
+        return self.run_c(f"--pm2-bin={self.bin}", *extra, **env, **kw)
+
+    def sent(self):
+        return [f["body"]["content"] for f in self.fetches()]
+
+    def posted_log(self):
+        p = self.ops / "posted.log"
+        return p.read_text().splitlines() if p.exists() else []
+
+    def test_posts_first_once_with_mentions_off(self):
+        self.log(self.E, ERR_LINE, append=True)
+        r = self.live()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("기록 1 · 미룸 0 · 요약만 0 · 차단 0 (게시)", r.stdout)
+        calls = self.fetches()
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["url"], HOOK + "?wait=true")  # 회귀: PR #726 Codex P2 — 저장 확인 뒤에만 commit
+        self.assertEqual(calls[0]["body"]["allowed_mentions"], {"parse": []})
+        self.assertIn("TypeError", calls[0]["body"]["content"])
+        self.assertEqual(len(self.posted_log()), 1)
+        self.assertFalse((self.ops / "dry-run.log").exists())
+        self.live(now="2026-11-10T08:05:00+09:00")  # 같은 지문 · 새 줄 없음 → 다시 보내지 않는다
+        self.assertEqual(len(self.fetches()), 1)
+        self.assert_no_raw(HOOK, "HOOKSECRET")
+
+    def test_dry_run_never_fetches_even_with_webhook(self):
+        self.log(self.E, ERR_LINE, append=True)
+        self.run_c("--dry-run", f"--pm2-bin={self.bin}", PLEIADES_ENV_FILE=str(self.platform), NODE_OPTIONS=f"--require={self.fetch_stub()}")
+        self.assertEqual(self.fetches(), [])
+        self.assertEqual(len(self.posts()), 1)
+
+    def test_missing_webhook_defers_then_posts_when_set(self):
+        self.platform.write_text("DISCORD_WEBHOOK_DEPLOY=x\n")  # 폴백 없음 — DEPLOY 로 보내지 않는다
+        self.log(self.E, ERR_LINE, append=True)
+        r = self.live()
+        self.assertIn("웹훅 없음", r.stdout)
+        self.assertEqual(self.fetches(), [])
+        self.platform.write_text(f'DISCORD_WEBHOOK_OPS="{HOOK}"\n')
+        r = self.live(now="2026-11-10T08:05:00+09:00")
+        self.assertIn("기록 1", r.stdout)
+        self.assertEqual(len(self.sent()), 1)
+        self.assertIn("TypeError", self.sent()[0])
+
+    def test_http_failure_defers_and_stops_run_then_retries(self):
+        # 회귀 대상: 429·장애에 연달아 두드리지 않는다 — 첫 실패 뒤 남은 것은 이번 회에 보내지 않는다
+        self.log(self.E, "2026-11-10 07:59:00: [a] TypeError: x\n2026-11-10 07:59:01: [b] RangeError: y\n", append=True)
+        r = self.live(status="429")
+        self.assertIn("기록 0 · 미룸 2", r.stdout)
+        self.assertIn("게시 실패 HTTP 429", r.stdout)
+        self.assertEqual(len(self.fetches()), 1)
+        self.assertNotIn("HOOKSECRET", r.stdout + r.stderr)
+        r = self.live(now="2026-11-10T08:05:00+09:00", status="429,204")
+        self.assertIn("기록 2 · 미룸 0", r.stdout)
+
+    def test_network_error_prints_name_only(self):
+        self.log(self.E, ERR_LINE, append=True)
+        r = self.live(status="0")
+        self.assertIn("게시 실패 TypeError", r.stdout)
+        self.assertNotIn("HOOKSECRET", r.stdout + r.stderr)
+        self.assert_no_raw(HOOK, "HOOKSECRET")
+
+    def test_secret_match_blocked_even_when_escape_splits_value(self):
+        # md() 가 '-' 앞에 \\ 를 넣어 값이 본문에서 끊긴다 — 벗긴 본문으로도 대조해야 잡힌다
+        env_file = self.home / "pleiades-fin" / "apps" / "finance" / ".env"
+        env_file.write_text(env_file.read_text() + 'AUTH_SECRET="my-secret-tag"\n')
+        self.log(self.E, "2026-11-10 07:59:00: [my-secret-tag] TypeError: x\n", append=True)
+        r = self.live()
+        self.assertIn("차단 1", r.stdout)
+        [text] = self.sent()
+        self.assertRegex(text, r"^\[ops\] 게시 차단 · 지문 [0-9a-f]{12} · 사유 secret-match$")
+        self.assertTrue(any(e.get("blocked") == "secret-match" for e in self.events()))
+        # 보낸 것과 posted.log 에 그 값이 없다(state.json 의 지문 재료는 PR-1 그대로 · 비공개 600)
+        for t in [*self.sent(), *self.posted_log()]:
+            self.assertNotIn("my-secret", t)
+            self.assertNotIn("my\\-secret", t)  # escape 된 형태
+
+    def test_short_and_non_secret_values_not_matched(self):
+        # P-10 8자 미만 · 비밀 아닌 키(채널 ID · PORT)는 대조하지 않는다 — 거짓 차단
+        env_file = self.home / "pleiades-fin" / "apps" / "finance" / ".env"
+        env_file.write_text(env_file.read_text() + 'AUTH_PIN="bot"\nBASE_URL="TypeError"\n')
+        self.log(self.E, ERR_LINE, append=True)
+        r = self.live()
+        self.assertIn("차단 0", r.stdout)
+        self.assertIn("TypeError", self.sent()[0])
+
+    def test_secret_load_failure_fail_closed_with_notice(self):
+        (self.home / "pleiades-fit" / "apps" / "fitness" / ".env").unlink()
+        self.log(self.E, ERR_LINE, append=True)
+        r = self.live()
+        self.assertIn("기록 0 · 미룸 2", r.stdout)  # 그 줄 + fit env-read
+        self.assertIn("비밀 읽기 실패", r.stdout)
+        self.assertEqual(self.sent(), ["[ops] 게시 보류 · 사유 secret-load · 미룸 2"])
+        self.live(now="2026-11-10T08:05:00+09:00")  # P-1 안 — 알림을 되풀이하지 않는다
+        self.assertEqual(len(self.sent()), 1)
+        self.live(now="2026-11-10T09:01:00+09:00")
+        self.assertEqual(len(self.sent()), 2)
+
+    def test_quiet_warnings_still_not_posted(self):
+        self.log(self.E, "2026-11-10 07:59:00: [Deprecated] historical()\n", append=True)
+        r = self.live(prod_defaults=True)
+        self.assertIn("요약만 1", r.stdout)
+        self.assertEqual(self.fetches(), [])
+
+    def test_shared_token_vectors_and_length(self):
+        texts = [expand(v) for v in VECTORS["token"]] + [expand(v) for v in VECTORS["clean"]] + ["x" * 2001, "x" * 2000]
+        r = subprocess.run([NODE, str(SCRIPT)], input=json.dumps(texts), capture_output=True, text=True,
+                           env={"PATH": "/usr/bin:/bin", "PLEIADES_TEST": "1", "OPS_SELFCHECK": "1", "HOME": str(self.home)}, timeout=30)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        got = json.loads(r.stdout)
+        n = len(VECTORS["token"])
+        self.assertEqual(got[:n], ["token"] * n)
+        self.assertEqual(got[n:-2], [None] * len(VECTORS["clean"]))
+        self.assertEqual(got[-2:], ["length", None])
+
+    def test_secret_keys_cover_template_secrets(self):
+        # ① 대조 키 = 서버 템플릿 키 중 비밀인 것 — 템플릿에 비밀 키를 더하면 이 목록을 함께 본다(#725)
+        import re
+        src = SCRIPT.read_text()
+        pat = re.compile(re.search(r"const SECRET_KEY = /(.+?)/ ", src).group(1))
+        root = HERE.parent
+        keys = set()
+        for f in (root / "deploy/env/finance.env.template", root / "deploy/env/fitness.env.template", root / ".env.example"):
+            keys |= {m.group(1) for m in re.finditer(r"^#? ?([A-Z][A-Z0-9_]+)=", f.read_text(), re.M)}
+        self.assertEqual(sorted(k for k in keys if pat.search(k)), sorted([
+            "AUTH_PIN", "AUTH_SECRET", "DATABASE_URL", "DISCORD_BOT_TOKEN_FINANCE", "DISCORD_BOT_TOKEN_FITNESS",
+            "DISCORD_WEBHOOK_ADMIN", "DISCORD_WEBHOOK_DEPLOY", "DISCORD_WEBHOOK_FINANCE", "DISCORD_WEBHOOK_FITNESS",
+            "GARMIN_EMAIL", "GARMIN_PASSWORD", "MFDS_API_KEY", "OMRON_APP_KEY", "OMRON_EMAIL", "OMRON_PASSWORD",
+            "OPENDART_API_KEY", "WHOOING_WEBHOOK_URL"]))
+        self.assertTrue(pat.search("DISCORD_WEBHOOK_OPS"))
+
+    def test_test_alert(self):
+        before = (len(self.pm2_calls()), (self.ops / "state.json").read_text())
+        env = {"PLEIADES_ENV_FILE": str(self.platform), "NODE_OPTIONS": f"--require={self.fetch_stub()}"}
+        r = self.run_c("--test-alert", **env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("시험 게시 통과", r.stdout)
+        [text] = self.sent()
+        self.assertIn("시험", text)
+        self.assertEqual((len(self.pm2_calls()), (self.ops / "state.json").read_text()), before)  # 수집하지 않는다 · 상태 무변경
+        r = self.run_c("--test-alert", **env, STUB_FETCH_STATUS="401")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("게시 실패 HTTP 401", r.stdout)
+        self.platform.write_text("X=1\n")
+        r = self.run_c("--test-alert", **env)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("웹훅 없음", r.stdout)
+        self.platform.write_text(f'DISCORD_WEBHOOK_OPS="{HOOK}"\n')
+        (self.home / "pleiades-fin" / "apps" / "finance" / ".env").unlink()
+        r = self.run_c("--test-alert", **env)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("비밀 읽기 실패", r.stdout)
+        self.assertEqual(len(self.fetches()), 2)  # 웹훅 없음 · 비밀 실패는 보내지 않는다
+
+    # 회귀: PR-2b 9-1 major — dotenv 를 못 찾으면 "웹훅 없음" 이 아니라 그 사유를 낸다
+    def test_dotenv_missing_is_not_reported_as_missing_webhook(self):
+        self.log(self.E, ERR_LINE, append=True)
+        for d in APPS.values():
+            (self.home / f"pleiades-{'fin' if d == 'finance' else 'fit'}" / "apps" / d / "node_modules" / "dotenv").unlink()
+        r = self.live()
+        self.assertIn("dotenv 없음 (게시)", r.stdout)
+        self.assertNotIn("웹훅 없음", r.stdout)
+        self.assertEqual(self.fetches(), [])
+        r = self.run_c("--test-alert", PLEIADES_ENV_FILE=str(self.platform), NODE_OPTIONS=f"--require={self.fetch_stub()}")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("dotenv 없음", r.stdout)
+
+    def test_non_https_webhook_never_fetched(self):
+        self.platform.write_text('DISCORD_WEBHOOK_OPS="http://example.com/hook"\n')
+        self.log(self.E, ERR_LINE, append=True)
+        r = self.live()
+        self.assertIn("웹훅 형식 오류", r.stdout)
+        self.assertEqual(self.fetches(), [])
+
+    def test_body_rejected_400_becomes_fixed_phrase_and_commits(self):
+        # 본문 때문에 거절된 글이 매 회 맨 앞에서 막지 않게(9-1 info) — 고정 문구로 한 번 · commit
+        self.log(self.E, ERR_LINE, append=True)
+        r = self.live(status="400,204")
+        self.assertIn("기록 1 · 미룸 0 · 요약만 0 · 차단 1", r.stdout)
+        self.assertRegex(self.sent()[1], r"^\[ops\] 게시 차단 · 지문 [0-9a-f]{12} · 사유 rejected$")
+        self.live(now="2026-11-10T08:05:00+09:00")
+        self.assertEqual(len(self.fetches()), 2)
+
+    # 회귀: PR #730 Codex P2(#731) — 미뤄진 첫 발생의 실패가 다음 회 같은 지문 경고에 덮여 조용히 commit 됐다
+    def test_deferred_failure_not_downgraded_by_later_warning(self):
+        self.log(self.E, "2026-11-10 07:59:00: (node:1) Error: failure\n", append=True)
+        r = self.live(status="429", prod_defaults=True)
+        self.assertIn("미룸 1", r.stdout)
+        self.log(self.E, "2026-11-10 08:01:00: (node:1) Warning: warning\n", append=True)
+        r = self.live(now="2026-11-10T08:05:00+09:00", status="429,204", prod_defaults=True)
+        self.assertIn("기록 1 · 미룸 0 · 요약만 0", r.stdout)
+        self.assertIn("🟠", self.sent()[-1])
+        self.assertIn("실패", self.sent()[-1])
