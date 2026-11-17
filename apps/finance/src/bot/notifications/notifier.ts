@@ -25,7 +25,7 @@ import {
   type NotifyContext,
 } from '@pleiades/notify'
 
-export { Route, html as htmlContent } from '@pleiades/notify'
+export { Route, html as htmlContent, markdown as markdownContent } from '@pleiades/notify'
 import type { BroadcastResult } from '@pleiades/notify'
 export type { BroadcastResult }
 

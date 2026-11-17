@@ -5,8 +5,7 @@
  */
 
 import { askAdvisor } from '@/lib/ai/claude-advisor'
-import { markdownToHtml } from '@/bot/utils/markdown'
-import { notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
+import { notifierFor, Route, htmlContent, markdownContent, NOTIFY_CTX } from './notifier'
 import { sanitizeError } from '@/bot/utils/error'
 
 function getPrevMonth(): { year: number; month: number } {
@@ -46,9 +45,8 @@ export async function sendMonthlyReport(): Promise<void> {
       overallTimeoutMs: 900_000,
     })
 
-    const html = markdownToHtml(result.response)
-
-    await notifierFor().notify(Route.ALLOWED, htmlContent(html), NOTIFY_CTX)
+    // 013 P2-b (#758): 모델 마크다운을 그대로 — 옛 MD → HTML → Discord MD 이중 변환 대신(표 → 행 목록 · 제목 · 목록이 산다)
+    await notifierFor().notify(Route.ALLOWED, markdownContent(result.response), NOTIFY_CTX)
 
     console.log(`[notification] ${year}년 ${month}월 월간 리포트 발송 완료`)
   } catch (error) {

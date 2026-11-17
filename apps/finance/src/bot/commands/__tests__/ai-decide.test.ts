@@ -159,13 +159,13 @@ describe('대화 상태 키 격리', () => {
     expect(sent).toEqual([])
   })
 
-  it('AI 대화 응답은 조각마다 html 로 · 실패한 조각만 plain 으로', async () => {
+  // 013 P2-b (#758): 옛 4096 분할 · 조각별 html · 실패 시 plain 재전송 → 모델 마크다운 한 번(chat 이 2000 으로 나눈다)
+  it('AI 대화 응답은 모델 마크다운 그대로 markdown 한 번', async () => {
     ask.mockResolvedValueOnce({ response: '**굵게**' } as never)
     const sent: BotReply[] = []
     const out: ReplyOutput = {
       reply: async (m) => {
         sent.push(m)
-        if (m.format === 'html') throw new Error('html 거부')
         return 'k'
       },
       replyLong: async () => { throw new Error('replyLong 은 이 판단에서 쓰지 않는다') },
@@ -177,8 +177,7 @@ describe('대화 상태 키 격리', () => {
     await flush()
     expect(sent.map((m) => [m.format, m.text])).toEqual([
       ['plain', '🤔 생각 중...'],
-      ['html', '<b>굵게</b>'],
-      ['plain', '**굵게**'],
+      ['markdown', '**굵게**'],
     ])
   })
 })

@@ -8,8 +8,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { askAdvisor, describeAdvisorError } from '@/lib/ai/claude-advisor'
-import { markdownToHtml } from '@/bot/utils/markdown'
-import { notifierFor, Route, htmlContent } from './notifier'
+import { notifierFor, Route, htmlContent, markdownContent } from './notifier'
 import { sanitizeError } from '@/bot/utils/error'
 import { formatKstDate } from '@/lib/kst-date'
 import { newsSearchRules } from '@/lib/ai/news-rules'
@@ -153,9 +152,8 @@ async function sendReview(
       overallTimeoutMs: 900_000,
     })
 
-    const html = markdownToHtml(result.response)
-
-    await notifierFor().notify(Route.ALLOWED, htmlContent(html), { label: 'active-review' })
+    // 013 P2-b (#758): 모델 마크다운을 그대로 — 옛 MD → HTML → Discord MD 이중 변환 대신(표 → 행 목록 · 제목 · 목록이 산다)
+    await notifierFor().notify(Route.ALLOWED, markdownContent(result.response), { label: 'active-review' })
 
     console.log(`[active-review] ${label} 발송 완료`)
   } catch (error) {
