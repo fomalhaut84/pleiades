@@ -17,7 +17,8 @@ function sources(dir: string): string[] {
 
 describe("마크다운 본문 스타일(md-body)", () => {
   it("typography 플러그인이 없으므로 prose 클래스를 쓰지 않는다", () => {
-    const users = sources(SRC).filter((f) => /className=["'`][^"'`]*\bprose\b/.test(readFileSync(f, "utf8")));
+    // 문자열 리터럴 안의 prose · prose-* 를 모두 본다(className="…" · {"…"} · {`…`} · cn("…")) — 대문자 PROSE 상수 이름은 제외
+    const users = sources(SRC).filter((f) => /["'`][^"'`\n]*\bprose(?:-[\w-]+)?\b[^"'`\n]*["'`]/.test(readFileSync(f, "utf8")));
     expect(users).toEqual([]);
   });
 
@@ -26,7 +27,13 @@ describe("마크다운 본문 스타일(md-body)", () => {
     expect(files.length).toBeGreaterThanOrEqual(5);
     // AiEvalCard 는 카드 크기에 맞춘 자체 스타일(PROSE 상수 · [&_ul]:list-disc 등)을 이미 쓴다
     const OWN_STYLE = ["AiEvalCard.tsx"];
-    const missing = files.filter((f) => !OWN_STYLE.some((n) => f.endsWith(n)) && !/\bmd-body\b/.test(readFileSync(f, "utf8")));
+    // 렌더 지점마다 — md-body 를 쓰는 className 수가 dangerouslySetInnerHTML 수보다 적으면 빠진 곳이 있다(주석만으로 통과하지 않게)
+    const count = (s: string, re: RegExp) => (s.match(re) ?? []).length;
+    const missing = files.filter((f) => {
+      if (OWN_STYLE.some((n) => f.endsWith(n))) return false;
+      const s = readFileSync(f, "utf8");
+      return count(s, /className=["'`{][^>]*\bmd-body\b/g) < count(s, /dangerouslySetInnerHTML/g);
+    });
     expect(missing).toEqual([]);
   });
 
@@ -34,7 +41,8 @@ describe("마크다운 본문 스타일(md-body)", () => {
     [".md-body h2", "font-size"],
     [".md-body ul", "list-style: disc"],
     [".md-body ol", "list-style: decimal"],
-    [".md-body table", "border"],
+    [".md-body table", "overflow-x: auto"],
+    [".md-body > :last-child", "margin-bottom: 0"],
     [".md-body td", "border-top"],
   ])("%s 에 %s 가 있다", (sel, rule) => {
     const re = new RegExp(`${sel.replace(/[.]/g, "\\.")}[^{]*\\{[^}]*${rule}`);

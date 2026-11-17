@@ -41,6 +41,7 @@ body {
 .md-body h3,
 .md-body h4 { font-weight: 700; color: var(--bright); margin: 18px 0 8px; line-height: 1.4; }
 .md-body > :first-child { margin-top: 0; }
+.md-body > :last-child { margin-bottom: 0; }
 .md-body h1 { font-size: 17px; }
 .md-body h2 { font-size: 16px; }
 .md-body h3 { font-size: 15px; }
@@ -62,12 +63,9 @@ body {
 .md-body pre code { background: transparent; padding: 0; overflow-wrap: normal; }
 .md-body hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
 .md-body blockquote { border-left: 2px solid var(--border-hover); padding-left: 12px; color: var(--sub); margin: 10px 0; }
-.md-body table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; border: 1px solid var(--border); }
+/* 표는 늘 자기 폭 안에서 좌우로 넘긴다 — 2열 그리드 카드(약 350px)에서 열 많은 표가 카드 밖으로 나가지 않게(9-1 info) */
+.md-body table { display: block; overflow-x: auto; max-width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; border: 1px solid var(--border); }
 .md-body th { background: var(--surface); text-align: left; padding: 8px 10px; color: var(--sub); font-weight: 500; white-space: nowrap; }
 .md-body td { padding: 8px 10px; border-top: 1px solid var(--border); vertical-align: top; }
 .md-body th + th,
 .md-body td + td { border-left: 1px solid var(--border); }
-/* 좁은 화면에서는 표만 좌우로 넘긴다(fin #471 과 같은 이유 · 기본 규칙 뒤에 둔다) */
-@media (max-width: 640px) {
-  .md-body table { display: block; overflow-x: auto; max-width: 100%; }
-}
