@@ -92,9 +92,10 @@ function proseBlock(seg: string, atLineStart: boolean): string {
       const rows: string[] = [];
       for (; j < lines.length && isTableRow(lines[j]) && !isTableSep(lines[j]); j++) rows.push(rowItem(header, cells(lines[j])));
       // 행이 없는 표는 머리 줄을 글로 남긴다(통째로 사라지지 않게 · 9-1 info)
-      out.push(...(rows.length > 0 ? rows : [inline(line)]));
+      const items = rows.length > 0 ? rows : [inline(line)];
+      // `>>> ` 인용 안의 표는 인용으로 남긴다 — 인용한 글이 봇의 말처럼 보이지 않게(PR #757 Codex P2)
+      out.push(...(quoting ? items.map((r) => `> ${r}`) : items));
       i = j - 1;
-      quoting = false;
       continue;
     }
     if (line.trim() === '') quoting = false;
@@ -150,8 +151,12 @@ function inline(s: string): string {
   return out + prose(s.slice(last));
 }
 
-/** 흔한 링크 꼴 — `[글](주소)` · `[글](<주소>)` · 끝의 제목 `"…"` `'…'` · 스킴 대소문자 무관 */
-const LINK_RE = /\[([^\]\n]*)\]\(\s*(?:<(https?:\/\/[^\s<>]+)>|(https?:\/\/[^\s)]+))(?:\s+(?:"[^"\n]*"|'[^'\n]*'))?\s*\)/gi;
+/**
+ * 흔한 링크 꼴 — `[글](주소)` · `[글](<주소>)` · 끝의 제목 `"…"` `'…'` · 스킴 대소문자 무관.
+ * 라벨에 `[` 를 받지 않는다 — 받으면 짝 없는 `[` 마다 줄 나머지를 다시 훑어 제곱 시간(8만 자 10 초 · PR #757 Codex P2).
+ * 괄호가 중첩된 라벨은 펼치지 않는다(`](` 는 `neutralize` 가 끊는다).
+ */
+const LINK_RE = /\[([^[\]\n]*)\]\(\s*(?:<(https?:\/\/[^\s<>]+)>|(https?:\/\/[^\s)]+))(?:\s+(?:"[^"\n]*"|'[^'\n]*'))?\s*\)/gi;
 
 function prose(s: string): string {
   const linked = s

@@ -154,6 +154,20 @@ describe('discordMarkdown — 해가 되는 것만 막는다(013 §4-2)', () => 
     }
   });
 
+  // 회귀: PR #757 Codex P2 — 짝 없는 `[` 반복이 제곱 시간
+  it('짝 없는 `[` 반복도 빠르다(8만 자)', () => {
+    const t0 = Date.now();
+    discordMarkdown('['.repeat(80000));
+    expect(Date.now() - t0).toBeLessThan(200);
+  });
+
+  // 회귀: PR #757 Codex P2 — `>>>` 인용 안의 표가 인용 밖으로 나왔다
+  it('`>>>` 인용 안의 표는 인용으로 남고 · 인용은 빈 줄까지 이어진다', () => {
+    expect(discordMarkdown('>>> 인용\n| A | B |\n|---|---|\n| x | y |\n아직 인용\n\n밖')).toBe(
+      '> 인용\n> - **x** — B: y\n> 아직 인용\n\n밖',
+    );
+  });
+
   it('CRLF 를 LF 로', () => {
     expect(discordMarkdown('a\r\nb\rc')).toBe('a\nb\nc');
   });
