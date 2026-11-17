@@ -21,7 +21,7 @@ pm2 상태 · MCP `/health` · web 응답 · pm2 로그 · 디스크를 5분마�
 
 `<REF>` 와 `<SHA256>` 은 Claude 가 머지 뒤 실값을 준다. 재설치 때도 검증 전에는 도는 파일을 덮지 않는다.
 
-**지금 설치된 판(2026-11-16 · #714 · PR-2a 보정 · dry-run):** REF `e0b98d23` · SHA256 `d52ec075c3f7daa0ab9487f40b13a505ba867166807cb143a56e797a5946a863`. 되돌리기는 직전 판 REF `70aab4ee07ad7018f8684c1e8aad5e2ffebcd5de`(#705) · SHA256 `b0a38f22da8abbc6f7edcbac8af2ea0110660bd5434d192c4aa5a751ba76fba0` 로 같은 명령. 게시 판(PR-2b · #725)의 REF · SHA256 은 머지 뒤 Claude 가 준다(4절).
+**지금 설치된 판(2026-11-17 · #732 · 게시 판 · 크론 `--dry-run` 없음):** REF `d73e5dcd48cd3ff029c1b75f92fceaa5dfae927e` · SHA256 `8dccc6a34421e1c3af56f0d29c25de9066910feeb5a946bb4233bec5e125bf23`. 되돌리기: 게시만 멈추려면 3절(크론 줄에 `--dry-run`) · 판을 되돌리려면 직전 판 REF `b7ba56715e8eb69343ac0b9f5ff947b60c8ed02d`(#726) · SHA256 `33c815fd5f1406cacf56cc8f4d29e2671053baf73b09cbf1838644f8ee562e66` 로 같은 명령(dry-run 판은 REF `e0b98d23` · SHA256 `d52ec075c3f7daa0ab9487f40b13a505ba867166807cb143a56e797a5946a863` — 게시 판의 크론 줄과 함께 쓰면 "게시는 아직 없다" 로 멈춘다 · 3절 줄로).
 
 ```bash
 mkdir -p ~/pleiades-ops ~/pleiades-private/ops && chmod 700 ~/pleiades-ops ~/pleiades-private ~/pleiades-private/ops
