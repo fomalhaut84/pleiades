@@ -62,7 +62,7 @@ describe('createDiscordTransport', () => {
   it('markdown 은 escape 하지 않고 정리기만 거친다 — 목록 · 제목이 산다', async () => {
     const { transport, bodies } = setup([res(200, { id: 'm1' })]);
     await transport.send('finance', markdown('## 요약\n- **AAPL** <@1>'));
-    expect(bodies()[0].content).toBe('## 요약\n- **AAPL** \\<@1>');
+    expect(bodies()[0].content).toBe('## 요약\n- **AAPL** <\u200b@1>'); // 폭 없는 공백이 멘션 표기를 끊는다
   });
 
   it('plain 은 글자 그대로 보이게 escape 한다', async () => {

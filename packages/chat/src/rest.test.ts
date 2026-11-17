@@ -73,7 +73,7 @@ describe('markdown 형식 — escape 하지 않는다', () => {
     await rest.send(CH, { text: '## 요약\n- **AAPL** <@1>', format: 'markdown' });
     await rest.edit(CH, '333333333333333333', { text: '- 수정 [x](https://a.b/c)', format: 'markdown' });
     const c = calls();
-    expect(c[0].body?.content).toBe('## 요약\n- **AAPL** \\<@1>');
+    expect(c[0].body?.content).toBe('## 요약\n- **AAPL** <\u200b@1>'); // 폭 없는 공백이 멘션 표기를 끊는다
     expect(c[c.length - 1].body?.content).toBe('- 수정 x (https://a.b/c)');
   });
 

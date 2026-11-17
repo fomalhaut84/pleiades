@@ -8,10 +8,11 @@
  * 굵게 · 인용 · 코드)은 살리고, 해가 되는 것만 막는다(013 §4-2):
  *   - 표 → 행마다 목록 `- **첫 열** — 헤더: 값 · 헤더: 값`(F1 · Discord 는 표가 없다)
  *   - 가짜 링크 `[보이는 글](주소)` → `보이는 글 (주소)` — 주소가 늘 보인다(R2)
- *   - `<` 는 모두 escape — `<@…>` `<#…>` `<t:…>` `</cmd:id>` `<:e:id>` 표기가 되지 않게(R3 · `escapeDiscordMarkdown` 과 같다)
+ *   - 모든 `<` 뒤 · 남은 `](` 사이에 폭 없는 공백 — `<@…>` `<#…>` `<t:…>` `</cmd:id>` `<:e:id>` 표기 · 가짜 링크가 되지 않게(R3 · R2) ·
+ *     **코드 안에도 건다**(보이지 않는다 — 코드 판정이 Discord 와 어긋나도 안전은 그대로 · `neutralize`)
  *   - `>>> ` 는 다음 빈 줄까지 각 줄 `> ` 로 — 조각 나머지 전체를 삼키지 않게(R4)
  *   - `####` 이하 제목 → 굵은 줄(Discord 는 `#`~`###` 만) · 가로줄 → 빈 줄(Discord 는 가로줄이 없다)
- *   - 코드 블록 · 인라인 코드 안은 바꾸지 않는다(R8)
+ *   - 코드 블록 · 인라인 코드 안은 겉모양 규칙(표 · 제목 · 링크 펼침)을 걸지 않는다(R8) — 위 폭 없는 공백만 들어간다
  * 멘션은 발신 쪽 `allowed_mentions: { parse: [] }` 가 막는다(글자는 남는다 · R6).
  */
 import { escapeDiscordMarkdown, htmlToDiscordMarkdown } from './discord-md';
@@ -55,7 +56,20 @@ export function discordMarkdown(md: string): string {
     out += proseBlock(text.slice(last, m.index), last === 0 || text[last - 1] === '\n') + m[0];
     last = m.index + m[0].length;
   }
-  return out + proseBlock(text.slice(last), last === 0 || text[last - 1] === '\n');
+  return neutralize(out + proseBlock(text.slice(last), last === 0 || text[last - 1] === '\n'));
+}
+
+/** U+200B(폭 없는 공백) — 보이지 않고 Discord 문법만 끊는다 */
+const ZWSP = '\u200b';
+
+/**
+ * R2 · R3 차단 — **코드 판정과 무관하게 글 전체에**(#756 9-1 critical 3회 · 같은 계열). 코드 영역을 Discord 와 똑같이 가르려
+ * 할 때마다 다른 우회가 나왔다(한 줄 펜스 · 줄 중간 펜스 · 인라인 코드가 먹은 펜스 · escape 된 백틱 · 인용 경계). 판정이
+ * 틀려도 안전은 그대로이게 한다: `<` 뒤와 `](` 사이에 보이지 않는 문자를 넣어 표기 · 가짜 링크 문법을 끊는다 — 코드 안에서도
+ * 보이지 않는다(백슬래시는 코드 안에서 글자로 보였다). 코드 판정은 이제 겉모양(표 · 제목 · 링크 펼침)에만 쓰인다.
+ */
+function neutralize(s: string): string {
+  return s.replace(/</g, `<${ZWSP}`).replace(/\]\(/g, `]${ZWSP}(`);
 }
 
 /**
@@ -144,11 +158,9 @@ function prose(s: string): string {
       const url = angled ?? bare ?? '';
       const text = label.trim();
       return text === '' || text === url ? url : `${text} (${url})`;
-    })
-    // 펼치지 못한 꼴(괄호 중첩 · 라벨 안 코드 등)이 링크가 되지 않게 남은 `](` 를 끊는다(9-1 major)
-    .replace(/\]\(/g, ']\\(');
-  // 이미 `\<` 인 것은 두 번 막지 않는다(lookbehind 없이 — ES2017 대상)
-  return linked.replace(/(\\*)</g, (whole, bs: string) => (bs.length % 2 === 1 ? whole : `${bs}\\<`));
+    });
+  // 펼치지 못한 꼴(괄호 중첩 · 라벨 안 코드 등)의 `](` 와 모든 `<` 는 마지막에 글 전체에서 끊는다(`neutralize`)
+  return linked;
 }
 
 function isTableRow(line: string): boolean {

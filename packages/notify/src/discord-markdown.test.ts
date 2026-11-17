@@ -4,6 +4,10 @@ import { discordMarkdown, toDiscordMarkdown } from './discord-markdown';
 import { escapeDiscordMarkdown, htmlToDiscordMarkdown } from './discord-md';
 import type { BodyFormat } from './types';
 
+/** 기대값: 모든 `<` 뒤 · `](` 사이에 폭 없는 공백(neutralize · 코드 안 포함) */
+const Z = '\u200b';
+const z = (s: string): string => s.replace(/</g, `<${Z}`).replace(/\]\(/g, `]${Z}(`);
+
 describe('toDiscordMarkdown — 형식마다 한 길', () => {
   it('html · plain 은 옛 변환과 같다(무변경)', () => {
     const h = '<b>제목</b>\n- 항목 *별*';
@@ -52,12 +56,12 @@ describe('discordMarkdown — 해가 되는 것만 막는다(013 §4-2)', () => 
     expect(discordMarkdown('[공시](<https://dart.fss.or.kr/x>)')).toBe('공시 (https://dart.fss.or.kr/x)');
   });
 
-  it('R3 `<` 는 모두 escape — 멘션 · 채널 · 타임스탬프 · 명령 · 이모지 표기가 되지 않는다', () => {
+  it('R3 모든 `<` 뒤에 폭 없는 공백 — 멘션 · 채널 · 타임스탬프 · 명령 · 이모지 표기가 되지 않는다', () => {
     expect(discordMarkdown('<@123> <#456> <t:1700000000:R> </cmd:1> <:e:1> <a:x:2>')).toBe(
-      '\\<@123> \\<#456> \\<t:1700000000:R> \\</cmd:1> \\<:e:1> \\<a:x:2>',
+      z('<@123> <#456> <t:1700000000:R> </cmd:1> <:e:1> <a:x:2>'),
     );
-    expect(discordMarkdown('a < b · <5%')).toBe('a \\< b · \\<5%');
-    expect(discordMarkdown('이미 \\<x')).toBe('이미 \\<x'); // 두 번 막지 않는다
+    expect(discordMarkdown('a < b · <5%')).toBe(z('a < b · <5%'));
+    expect(discordMarkdown('이미 \\<x')).toBe(`이미 \\<${Z}x`); // 앞의 백슬래시는 그대로
   });
 
   it('R4 `>>> ` 는 다음 빈 줄까지 각 줄 `> `', () => {
@@ -72,25 +76,25 @@ describe('discordMarkdown — 해가 되는 것만 막는다(013 §4-2)', () => 
     expect(discordMarkdown('# A\n### C\n#### D ##\n---\n***\n본문')).toBe('# A\n### C\n**D**\n\n\n본문');
   });
 
-  it('R8 코드 안은 바꾸지 않는다 — 인라인 코드 · 코드 블록', () => {
-    expect(discordMarkdown('`<@1> [a](https://x.y)` 밖 <b>')).toBe('`<@1> [a](https://x.y)` 밖 \\<b>');
+  it('R8 코드 안은 겉모양 규칙을 걸지 않는다 — 폭 없는 공백만(보이지 않는다)', () => {
+    expect(discordMarkdown('`<@1> [a](https://x.y)` 밖 <b>')).toBe(z('`<@1> [a](https://x.y)` 밖 <b>')); // 코드 안에도 들어간다(보이지 않는다)
     const block = '```ts\nconst a = b < c;\n[x](https://y.z)\n```';
-    expect(discordMarkdown(block)).toBe(block);
+    expect(discordMarkdown(block)).toBe(z(block));
   });
 
   // 회귀: #756 9-1 critical — 같은 줄에서 닫히는 ```a``` 가 코드 블록을 연 것으로 세져 그 뒤 정리가 꺼졌다
   it('한 줄 ```a``` 는 인라인 코드 — 다음 줄의 정리가 꺼지지 않고 진짜 코드 블록 안은 그대로', () => {
     expect(discordMarkdown('```a```\n<t:0> [t](https://evil)\n```\n<@1>\n```')).toBe(
-      '```a```\n\\<t:0> t (https://evil)\n```\n<@1>\n```',
+      z('```a```\n<t:0> t (https://evil)\n```\n<@1>\n```'),
     );
   });
 
   // 회귀: #756 9-1 critical(2회차) — 코드 블록은 Discord 처럼 아무 위치의 ``` 첫 짝으로 자른다
   it('닫는 펜스 줄의 꼬리 · 줄 중간 펜스 · 인용 안 펜스에서도 정리가 꺼지지 않는다', () => {
-    expect(discordMarkdown('```\nx\n``` <t:0> [t](https://evil)')).toBe('```\nx\n``` \\<t:0> t (https://evil)');
-    expect(discordMarkdown('a ```\ncode\n```\n<t:0> [t](https://evil)')).toBe('a ```\ncode\n```\n\\<t:0> t (https://evil)');
-    expect(discordMarkdown('```\nfoo ``` <t:0>\n```')).toBe('```\nfoo ``` \\<t:0>\n```');
-    expect(discordMarkdown('>>> ```\n<t:0>\n```')).toBe('> ```\n<t:0>\n```');
+    expect(discordMarkdown('```\nx\n``` <t:0> [t](https://evil)')).toBe(z('```\nx\n``` <t:0> t (https://evil)'));
+    expect(discordMarkdown('a ```\ncode\n```\n<t:0> [t](https://evil)')).toBe(z('a ```\ncode\n```\n<t:0> t (https://evil)'));
+    expect(discordMarkdown('```\nfoo ``` <t:0>\n```')).toBe(z('```\nfoo ``` <t:0>\n```'));
+    expect(discordMarkdown('>>> ```\n<t:0>\n```')).toBe(z('> ```\n<t:0>\n```'));
   });
 
   it('코드 블록 바로 뒤 같은 줄 조각에는 줄 규칙(제목 · 표)을 걸지 않는다', () => {
@@ -121,24 +125,33 @@ describe('discordMarkdown — 해가 되는 것만 막는다(013 §4-2)', () => 
   it('제목 붙은 링크 · 대문자 스킴은 펼치고 · 펼치지 못한 꼴은 `](` 를 끊는다', () => {
     expect(discordMarkdown('[t](https://x "title")')).toBe('t (https://x)');
     expect(discordMarkdown("[t](HTTPS://x 't')")).toBe('t (HTTPS://x)');
-    expect(discordMarkdown('[a [b] c](https://x)')).toBe('[a [b] c]\\(https://x)');
-    expect(discordMarkdown('[`x`](https://evil)')).toBe('[`x`]\\(https://evil)');
-    expect(discordMarkdown('[a]b](https://evil)')).toBe('[a]b]\\(https://evil)');
+    expect(discordMarkdown('[a [b] c](https://x)')).toBe(z('[a [b] c](https://x)'));
+    expect(discordMarkdown('[`x`](https://evil)')).toBe(z('[`x`](https://evil)'));
+    expect(discordMarkdown('[a]b](https://evil)')).toBe(z('[a]b](https://evil)'));
   });
 
   // 회귀: #756 9-1 info — 맨 주소 끝의 `>` 를 꺾쇠로 잘못 먹지 않는다
   it('맨 주소 안의 `<` `>` 는 지키고 `<` 는 막는다', () => {
-    expect(discordMarkdown('[t](https://a.b/<@1>)')).toBe('t (https://a.b/\\<@1>)');
+    expect(discordMarkdown('[t](https://a.b/<@1>)')).toBe(z('t (https://a.b/<@1>)'));
   });
 
   // 회귀: #756 9-1 major — Discord 의 인라인 코드 판정(닫는 백틱 뒤에 백틱이 더 있으면 코드가 아니다)
   it('`<t:0>`` 는 코드가 아니다 — `<` 를 막는다', () => {
-    expect(discordMarkdown('`<t:0>``')).toBe('`\\<t:0>``');
-    expect(discordMarkdown('``a`b`` <x')).toBe('``a`b`` \\<x');
+    expect(discordMarkdown('`<t:0>``')).toBe(z('`<t:0>``'));
+    expect(discordMarkdown('``a`b`` <x')).toBe(z('``a`b`` <x'));
   });
 
   it('행이 없는 표는 머리 줄을 글로 남긴다', () => {
     expect(discordMarkdown('| a | b |\n|---|---|')).toBe('| a | b |');
+  });
+
+  // 회귀: #756 9-1 critical(3회차) — 코드 판정이 Discord 와 어긋나도 차단은 그대로(글 전체에 건다)
+  it('인라인 코드가 먹은 펜스 · escape 된 백틱 · 인용 경계를 넘는 짝 — 어느 쪽으로 읽혀도 표기 · 링크가 끊긴다', () => {
+    for (const s of ['`x ``` y` <t:0> ```', '``a```b`` <t:0> ```', '\\``` <t:0> ```', '> ```\n<t:0> [t](https://evil)\n```', '- ```\n<t:0>\n```']) {
+      const out = discordMarkdown(s);
+      expect(out).not.toMatch(/<t:0>/);
+      expect(out).not.toMatch(/\]\(/);
+    }
   });
 
   it('CRLF 를 LF 로', () => {
