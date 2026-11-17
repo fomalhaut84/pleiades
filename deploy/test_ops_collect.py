@@ -41,7 +41,7 @@ const fs = require('fs')
 const path = require('path')
 globalThis.fetch = async (url, opts) => {
   const log = path.join(path.dirname(__filename), 'fetch.jsonl')
-  fs.appendFileSync(log, JSON.stringify({ url, body: JSON.parse(opts.body) }) + '\n')
+  fs.appendFileSync(log, JSON.stringify({ url: String(url), body: JSON.parse(opts.body) }) + '\n')
   const n = fs.readFileSync(log, 'utf8').trim().split('\n').length
   const codes = (process.env.STUB_FETCH_STATUS || '204').split(',')
   const st = Number(codes[Math.min(n - 1, codes.length - 1)])
@@ -242,7 +242,7 @@ class Cli(Base):
         self.assertNotIn("flock", src.replace("flock -n 이라", ""))
         # 외부로 나가는 길은 웹훅 게시 하나다(#725) — 주소는 플랫폼 설정에서만 온다(코드에 박지 않는다)
         self.assertEqual(src.count("fetch("), 1)
-        self.assertIn("await fetch(url, {", src)
+        self.assertIn("await fetch(target, {", src)
         self.assertNotIn("discord.com", src)
         self.assertIn("allowed_mentions: { parse: [] }", src)
         # 외부 프로세스 호출은 pm2 jlist 하나뿐이다(Q97 — 코드가 지키는 규칙)
@@ -1277,7 +1277,7 @@ class Post(Base):
         self.assertIn("기록 1 · 미룸 0 · 요약만 0 · 차단 0 (게시)", r.stdout)
         calls = self.fetches()
         self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0]["url"], HOOK)
+        self.assertEqual(calls[0]["url"], HOOK + "?wait=true")  # 회귀: PR #726 Codex P2 — 저장 확인 뒤에만 commit
         self.assertEqual(calls[0]["body"]["allowed_mentions"], {"parse": []})
         self.assertIn("TypeError", calls[0]["body"]["content"])
         self.assertEqual(len(self.posted_log()), 1)

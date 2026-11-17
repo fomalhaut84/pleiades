@@ -891,7 +891,10 @@ async function postWebhook(url, content, ms) {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), Math.max(1, ms))
   try {
-    const res = await fetch(url, {
+    // wait=true — 없으면 Discord 가 저장하지 못한 메시지에도 성공으로 답한다(commit 이 앞서 재시도를 잃는다 · PR #726 Codex P2)
+    const target = new URL(url)
+    target.searchParams.set('wait', 'true')
+    const res = await fetch(target, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
