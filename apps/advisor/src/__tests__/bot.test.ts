@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AskOutcome, MESSAGES } from "../advisor";
 import { BOT_MESSAGES, costOf, createAdvisorRouter, fatalCloseAlert, Inflight, startBot, startBotWhenReady } from "../bot";
 import { CALL_BUDGET_USD } from "../cli";
-import { answerToHtml } from "../format";
 import { AnswerVerdict } from "../judge";
 import { botConfig, createAdminAlert } from "../platform";
 import { DailySpend, kstDate } from "../spend";
@@ -114,17 +113,7 @@ describe("DailySpend (비공개 파일 · KST)", () => {
   });
 });
 
-describe("answerToHtml", () => {
-  it("먼저 이스케이프한 뒤 굵게·코드·목록만 바꾼다", () => {
-    expect(answerToHtml("**결론** <script> & `x`\n- 하나")).toBe("<b>결론</b> &lt;script&gt; &amp; <code>x</code>\n• 하나");
-  });
-
-  // 회귀: #686 9-1 info 5 — 코드 스팬 안은 그대로 · * 목록 안 기울임
-  it("코드 스팬 안의 ** 는 굵게가 아니다 · * 목록 안의 기울임", () => {
-    expect(answerToHtml("`a**b**c` **d**")).toBe("<code>a**b**c</code> <b>d</b>");
-    expect(answerToHtml("* 항목 *강조*")).toBe("• 항목 <i>강조</i>");
-  });
-});
+// answerToHtml 은 013 P2-d(#764)에서 지웠다 — 답은 markdown 형식으로 chat 정리기를 거친다.
 
 const verdict = (cost: number | null): AnswerVerdict => ({
   status: "완료", code: "", text: "답", sessionId: null, cost, turns: 1, contextTokens: 1, drift: "없음", violation: false, byPrefix: {}, outside: 0 });
@@ -192,12 +181,12 @@ describe("createAdvisorRouter", () => {
     return { router, asks, alerts, logs, spend, inflight, onAsk: (f: () => unknown) => (hook = f) };
   };
 
-  it("자유 텍스트 → 코어(키 discord:<채널>:<사용자>) → html 답 · 사용액 더함", async () => {
+  it("자유 텍스트 → 코어(키 discord:<채널>:<사용자>) → 모델 마크다운 답 · 사용액 더함", async () => {
     const s = setup({ kind: "answer", text: "**네**", verdict: verdict(0.42) });
     const { ctx, replies } = fakeCtx("지출과 수면");
     expect(await s.router.handleMessage(ctx)).toBe(true);
     expect(s.asks).toEqual([["discord:123456:222222", "지출과 수면"]]);
-    expect(replies).toEqual([{ text: "<b>네</b>", format: "html" }]);
+    expect(replies).toEqual([{ text: "**네**", format: "markdown" }]); // 013 P2-d — 변환 없이 정리기에
     expect(s.spend.read().usd).toBe(0.42);
     expect(ctx.typing).toHaveBeenCalled();
   });
@@ -249,7 +238,7 @@ describe("createAdvisorRouter", () => {
     try {
       const first = fakeCtx("q1");
       await s.router.handleMessage(first.ctx);
-      expect(first.replies).toEqual([{ text: "답", format: "html" }]);
+      expect(first.replies).toEqual([{ text: "답", format: "markdown" }]);
       expect(s.alerts).toEqual([expect.stringContaining("기록 실패")]);
     } finally {
       fs.chmodSync(tmp, 0o700);
