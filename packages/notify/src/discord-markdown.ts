@@ -33,39 +33,50 @@ export function toDiscordMarkdown(text: string, format: BodyFormat): string {
   }
 }
 
-/** 코드 블록을 여닫는 줄 — 같은 줄에서 다시 닫히는 ```` ```a``` ```` 는 인라인 코드다(상태를 바꾸지 않는다 · 9-1 critical) */
-const FENCE_OPEN_RE = /^\s*```/;
-const isFenceToggle = (line: string, inFence: boolean): boolean =>
-  FENCE_OPEN_RE.test(line) && (inFence || line.trim().slice(3).indexOf('```') < 0);
+/**
+ * 코드 블록 — Discord 처럼 **아무 위치의 ```` ``` ```` 부터 다음 ```` ``` ```` 까지**(첫 짝). 줄 단위로 여닫으면 닫는 줄의 꼬리 ·
+ * 줄 중간 펜스 · 인용 안 펜스에서 Discord 와 어긋나 정리가 꺼졌다(#756 9-1 critical 2회). 짝 없는 ```` ``` ```` 는 글자다.
+ */
+const FENCE_BLOCK_RE = /```[\s\S]*?```/g;
 const HR_RE = /^\s*([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
 const DEEP_HEADING_RE = /^(\s*)#{4,}[ \t]+/;
 const BLOCK_QUOTE_RE = /^(\s*)>>>\s?/;
-/** 표 구분 줄 — `| --- | :---: |` · `--- | ---` (칸마다 대시 하나 이상 · 콜론 정렬 허용) */
-const TABLE_SEP_RE = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)+\|?\s*$|^\s*\|\s*:?-+:?\s*\|\s*$/;
+/** 표 구분 줄(앞뒤 공백을 뗀 줄에) — `| --- | :---: |` · `--- | ---` · `|---|` */
+const TABLE_SEP_RE = /^\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)+\|?$|^\|[ \t]*:?-+:?[ \t]*\|$/;
+const isTableSep = (line: string): boolean => TABLE_SEP_RE.test(line.trim());
 
 /** 모델 마크다운 → Discord 마크다운(위 규칙). */
 export function discordMarkdown(md: string): string {
-  const lines = md.replace(/\r\n?/g, '\n').split('\n');
+  const text = md.replace(/\r\n?/g, '\n');
+  let out = '';
+  let last = 0;
+  FENCE_BLOCK_RE.lastIndex = 0;
+  for (let m = FENCE_BLOCK_RE.exec(text); m !== null; m = FENCE_BLOCK_RE.exec(text)) {
+    out += proseBlock(text.slice(last, m.index), last === 0 || text[last - 1] === '\n') + m[0];
+    last = m.index + m[0].length;
+  }
+  return out + proseBlock(text.slice(last), last === 0 || text[last - 1] === '\n');
+}
+
+/**
+ * 코드 블록 밖 한 구간 — 줄 규칙(표 · 인용 · 제목 · 가로줄)은 진짜 줄 머리에서만 · 나머지는 인라인 규칙만.
+ * `atLineStart` 가 거짓이면 첫 줄은 코드 블록 뒤에 이어진 줄 조각이다.
+ */
+function proseBlock(seg: string, atLineStart: boolean): string {
+  const lines = seg.split('\n');
   const out: string[] = [];
-  let inFence = false;
-  let quoting = false; // `>>> ` 가 연 인용이 이어지는 중
+  let quoting = false; // `>>> ` 가 연 인용이 이어지는 중(이 구간 안에서만)
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (isFenceToggle(line, inFence)) {
-      inFence = !inFence;
-      quoting = false;
-      out.push(line);
+    if (i === 0 && !atLineStart) {
+      out.push(inline(line));
       continue;
     }
-    if (inFence) {
-      out.push(line);
-      continue;
-    }
-    if (isTableRow(line) && i + 1 < lines.length && TABLE_SEP_RE.test(lines[i + 1])) {
+    if (isTableRow(line) && i + 1 < lines.length && isTableSep(lines[i + 1])) {
       const header = cells(line);
       let j = i + 2;
       const rows: string[] = [];
-      for (; j < lines.length && isTableRow(lines[j]) && !TABLE_SEP_RE.test(lines[j]); j++) rows.push(rowItem(header, cells(lines[j])));
+      for (; j < lines.length && isTableRow(lines[j]) && !isTableSep(lines[j]); j++) rows.push(rowItem(header, cells(lines[j])));
       // 행이 없는 표는 머리 줄을 글로 남긴다(통째로 사라지지 않게 · 9-1 info)
       out.push(...(rows.length > 0 ? rows : [inline(line)]));
       i = j - 1;
@@ -104,7 +115,7 @@ function blockLine(line: string): string {
     let end = text.length;
     while (end > 0 && text[end - 1] === '#') end--;
     if (end < text.length && (end === 0 || /\s/.test(text[end - 1]))) text = rtrim(text.slice(0, end));
-    return `${h[1]}**${inline(text)}**`;
+    return text === '' ? '' : `${h[1]}**${inline(text)}**`;
   }
   return inline(line);
 }
@@ -141,7 +152,7 @@ function prose(s: string): string {
 }
 
 function isTableRow(line: string): boolean {
-  return line.indexOf('|') >= 0 && line.trim() !== '' && !FENCE_OPEN_RE.test(line);
+  return line.indexOf('|') >= 0 && line.trim() !== '';
 }
 
 /** 표 한 줄 → 칸들. 바깥 `|` 는 벗기고 `\|` 는 칸 안의 글자로 둔다. */

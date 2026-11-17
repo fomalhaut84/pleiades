@@ -85,10 +85,26 @@ describe('discordMarkdown — 해가 되는 것만 막는다(013 §4-2)', () => 
     );
   });
 
+  // 회귀: #756 9-1 critical(2회차) — 코드 블록은 Discord 처럼 아무 위치의 ``` 첫 짝으로 자른다
+  it('닫는 펜스 줄의 꼬리 · 줄 중간 펜스 · 인용 안 펜스에서도 정리가 꺼지지 않는다', () => {
+    expect(discordMarkdown('```\nx\n``` <t:0> [t](https://evil)')).toBe('```\nx\n``` \\<t:0> t (https://evil)');
+    expect(discordMarkdown('a ```\ncode\n```\n<t:0> [t](https://evil)')).toBe('a ```\ncode\n```\n\\<t:0> t (https://evil)');
+    expect(discordMarkdown('```\nfoo ``` <t:0>\n```')).toBe('```\nfoo ``` \\<t:0>\n```');
+    expect(discordMarkdown('>>> ```\n<t:0>\n```')).toBe('> ```\n<t:0>\n```');
+  });
+
+  it('코드 블록 바로 뒤 같은 줄 조각에는 줄 규칙(제목 · 표)을 걸지 않는다', () => {
+    expect(discordMarkdown('```a``` #### 제목')).toBe('```a``` #### 제목');
+  });
+
+  it('`####` 뒤가 비면 빈 줄', () => {
+    expect(discordMarkdown('#### ##')).toBe('');
+  });
+
   // 회귀: #756 9-1 critical — 제목 정규식 역추적(8천 자 100 초)
   it('긴 줄도 빠르다 — 제목 · 가로줄 · 표 구분 · 링크 · 코드', () => {
     const pad = ' '.repeat(20000);
-    const inputs = [`#### a${pad}b`, `- - -${pad}x`, `|${'-'.repeat(20000)}x`, `[${'a'.repeat(20000)}](https://x`, `${'`'.repeat(5000)}a`];
+    const inputs = [`#### a${pad}b`, `- - -${pad}x`, `|${'-'.repeat(20000)}x`, `| a |\n${pad}x`, `[${'a'.repeat(20000)}](https://x`, `${'`'.repeat(5000)}a`, '```'.repeat(3000)];
     for (const s of inputs) {
       const t0 = Date.now();
       discordMarkdown(s);
