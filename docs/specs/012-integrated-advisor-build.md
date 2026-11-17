@@ -466,6 +466,8 @@
 > - 수집기 재설치 완료(사용자 2026-11-16 · REF `70aab4e` · 시험 `rc=0`). 통합 층 첫 배포(런북 `advisor-inplace.md`)는 릴리즈 뒤 · 선택.
 > 되돌리기: 문구 (**즉시**).
 
+> **결과 (2026-11-17 · 사용자 서버 실행 · #742) — 통합 층 첫 배포 통과 · 운영 가동.** `adv-inplace.sh v1.16.1`(두 앱과 같은 태그 · 첫 실행 HEAD `dev` 허용) — dry-run → 실행 · C1 셸 키 0 · platform 600 · fin·fit env same · C4 fin 준비됨(읽기 도구 25 · 지식 7904 B) · fit 준비됨(읽기 도구 27 · 지식 12509 B) · C6 `pleiades-adv-bot` online · 전체 `pleiades-*` 7 개 env same(DIFF/MISSING 0 — 다음 Release 자동 배포의 C1 을 막지 않는다) · 생존 표지 갱신 예 · **결과 통과**. 사람 확인: 통합 채널 질문 1회 → 답 확인 · 완료 로그 `status=완료 · drift=없음 · cost=$0.0991(상한 $1.00) · turns=1 · context=23677 · outside=0 · domains=2`(도구 호출 0 — 도구 없이 답할 질문). #733(턴 평균)이 함께 들어갔다. 수집기는 다음 회부터 `adv·bot` 을 감시한다(4b-3c). 되돌리기: `adv-inplace.sh stop`(**즉시**) · 쓴 비용 **편도**.
+
 ---
 
 ## 9. 정본 형태 (U5)
