@@ -136,7 +136,8 @@ function blockLine(line: string): string {
 
 /**
  * 인라인 코드(Discord 규칙: 같은 길이의 백틱 짝 · 내용이 비지 않음 · 닫는 백틱 뒤에 백틱이 더 없음 · 9-1 major) 밖에만
- * 링크 펼침 · `<` escape. 짝 없는 백틱은 글자로 둔다. 여러 줄에 걸친 인라인 코드는 줄마다 보므로 그 안의 `<` 는 `\<` 로 보인다(외관만).
+ * 링크 펼침(겉모양). 짝 없는 백틱은 글자로 둔다. `<` · `](` 차단은 여기가 아니라 마지막 `neutralize` 가 글 전체에 건다 —
+ * 이 판정이 Discord 와 어긋나도 안전은 그대로다.
  */
 function inline(s: string): string {
   let out = '';
