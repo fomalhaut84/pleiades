@@ -66,7 +66,7 @@ describe("judgeAnswer", () => {
 
   it("완료 — 텍스트 · 세션 id · 비용 · 도메인별 호출", () => {
     const v = judgeAnswer({ out: lines(toolUse("a", FIN), toolResult("a"), resultLine()), timedOut: false, init: ok }, ALLOW, prefixes, PIN);
-    expect(v).toMatchObject({ status: "완료", text: "답입니다", cost: 0.1234, turns: 3, contextTokens: 1200, outside: 0, violation: false });
+    expect(v).toMatchObject({ status: "완료", text: "답입니다", cost: 0.1234, turns: 3, contextTokens: 400, outside: 0, violation: false });
     expect(v.sessionId).toBe("11111111-2222-3333-4444-555555555555");
     expect(v.byPrefix["mcp__myfinance__"]).toEqual({ n: 1, ok: 1 });
   });
@@ -107,10 +107,18 @@ describe("judgeAnswer — 9-1 반영", () => {
     expect(run(lines(resultLine({ modelUsage: { "claude-x": {} } }))).drift).toBe("있음");
   });
 
-  it("컨텍스트 = input + cache_read + cache_creation", () => {
+  it("컨텍스트 = (input + cache_read + cache_creation) — 한 턴이면 그대로", () => {
     const usage = { input_tokens: 10, cache_read_input_tokens: 90_000, cache_creation_input_tokens: 15_000 };
-    expect(run(lines(resultLine({ usage }))).contextTokens).toBe(105_010);
+    expect(run(lines(resultLine({ usage, num_turns: 1 }))).contextTokens).toBe(105_010);
     expect(run(lines(resultLine({ usage: {} }))).contextTokens).toBeNull();
+  });
+
+  // 회귀: #721 — 결과 usage 는 내부 턴(도구 왕복) 합산이다(fit 실측 2026-11-17 · 14턴 ≈168k) · 합 그대로면 100k 상한에 일찍 걸린다
+  it("컨텍스트 = 합 ÷ num_turns(턴 평균 · fit #683 과 같은 기준)", () => {
+    const usage = { input_tokens: 14_000, cache_read_input_tokens: 140_000, cache_creation_input_tokens: 14_000 };
+    expect(run(lines(resultLine({ usage, num_turns: 14 }))).contextTokens).toBe(12_000);
+    expect(run(lines(resultLine({ usage, num_turns: 0 }))).contextTokens).toBe(168_000); // 턴 수가 이상하면 합(작게 잡지 않는다)
+    expect(run(lines(resultLine({ usage, num_turns: "x" }))).contextTokens).toBe(168_000);
   });
 
   it("init 뒤 hook 이벤트도 위반 — 답을 내지 않는다", () => {
