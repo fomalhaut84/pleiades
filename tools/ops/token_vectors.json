@@ -1,0 +1,25 @@
+{
+  "_doc": "게시 전 검사 ② 토큰 형식의 공통 시험 벡터(#725) — tools/ops/test_promote_check.py(promote_check.py)와 deploy/test_ops_collect.py(deploy/ops/collect.cjs) 가 함께 읽는다. 두 판이 갈라지면 한쪽 시험이 실패한다. 벡터 = 조각 목록 · 조각은 문자열 또는 [문자열, 반복 수] — 저장소에 토큰 모양 문자열을 그대로 두지 않는다(push protection).",
+  "token": [
+    ["토큰 ", "123456789", ":", "AA", ["x", 33]],
+    ["token ", "M", ["x", 23], ".", ["y", 6], ".", ["z", 27]],
+    ["jwt ", "ey", "J", ["a", 20], ".", ["b", 20], ".", ["c", 20]],
+    ["pat ", "gh", "p_", ["A1", 18]],
+    ["key ", "s", "k-", "ant-", ["Ab1", 10]],
+    ["키 ", "AK", "IA", "ABCDEFGHIJ234567", "를"],
+    ["slack ", "xo", "xb-", "1234-abcd"],
+    ["값 ", ["gK7", 12], "를 넣었다"],
+    ["https://discord.com/api/", "web", "hooks/123/", ["abcDEF", 6]],
+    ["fin·web · stderr · ", ["Qz9", 11], " · 지문 0123456789ab"]
+  ],
+  "clean": [
+    ["[ops] 🟠 실패 · fit·bot · stderr · weather · 지문 8593b98bc9c0"],
+    ["[ops] 일일 요약 · 살아 있음 · 열린 이상 0 · 경고 어제 1종 1회 · 어제 상위 fin·bot·stderr e682dc78fef1 ×1"],
+    ["커밋 ", ["0123456789abcdef", 3]],
+    ["산출물 .next/server/app/api/stats/route.js"],
+    ["파일 some-long-hyphenated-file-name-for-test.js"],
+    ["pleiades-fin-web · pleiades-fit-mcp · pleiades-adv-bot"],
+    ["마이그레이션 20261113150000_add_health_checkup"],
+    ["코드 ECONNREFUSED · ETIMEDOUT · 직전 게시 뒤 12회"]
+  ]
+}

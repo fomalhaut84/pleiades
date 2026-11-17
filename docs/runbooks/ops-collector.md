@@ -2,14 +2,14 @@
 
 pm2 상태 · MCP `/health` · web 응답 · pm2 로그 · 디스크를 5분마다 읽어 지문으로 묶고 억제한다. 정본 설계는 `docs/specs/008-monitoring.md` §2 아래 2026-11-10 확정 블록이다.
 
-**지금 판(PR-1)은 `--dry-run` 만이다.** 외부로 나가는 것이 0 이고, 게시할 메시지는 서버의 dry-run 로그에만 쓴다. Discord `#ops` 게시는 PR-2 에서 이 런북 4절과 함께 켠다. 며칠 돌린 dry-run 결과로 설계 파라미터(008 Q100)를 정한다.
+**PR-2b(#725)부터 게시 판이다.** 크론 줄에 `--dry-run` 이 있으면 지금처럼 외부로 나가는 것이 0 이고(게시할 메시지는 dry-run 로그에만) · 빼면 Discord `#ops` 에 보낸다(4절). 게시를 켜기 전까지는 dry-run 그대로 둔다.
 
 실행은 전부 사용자가 서버에서 한다(Claude 서버 접근 금지 · I-3). 세션에는 판정 양식과 결과 줄만 붙인다.
 
 | 항목 | 값 |
 |---|---|
 | 스크립트 | `deploy/ops/collect.cjs` — 커밋을 고정해 `~/pleiades-ops/` 에 둔다(db-backup 과 같은 곳). 체크아웃 안에서 부르면 R-8 로 옛 태그를 꺼낼 때 파일이 사라지고, 배포가 도는 파일을 바꾼다 |
-| 상태 | `~/pleiades-private/ops/`(700) — `state.json` · `events.jsonl`(요약 이벤트 · 원문 없음) · `dry-run.log`(템플릿 메시지) · `collect.log`(크론 출력) · 파일 600 |
+| 상태 | `~/pleiades-private/ops/`(700) — `state.json` · `events.jsonl`(요약 이벤트 · 원문 없음) · `dry-run.log`(dry-run 때 템플릿 메시지) · `posted.log`(게시 때 보낸 그대로 · #725) · `collect.log`(크론 출력) · 파일 600 |
 | 계정 | 서비스 계정 crontab 한 줄(008 Q97) |
 | pm2 | `jlist` 하나만 부른다. 데몬 소켓 연결 시험이 통과한 회에만 부른다. **배포 잠금은 열지 않는다** |
 | 크기 | `state.json` 은 상한 1 MB · `events.jsonl` 은 14일 보존(하루 한 번 정리) · `collect.log` · `dry-run.log` 는 정리하지 않는다 — 크기는 dry-run 판정 때 함께 본다(PR-2 에서 다시 정한다) |
@@ -21,7 +21,7 @@ pm2 상태 · MCP `/health` · web 응답 · pm2 로그 · 디스크를 5분마�
 
 `<REF>` 와 `<SHA256>` 은 Claude 가 머지 뒤 실값을 준다. 재설치 때도 검증 전에는 도는 파일을 덮지 않는다.
 
-**지금 설치된 판(2026-11-16 · #705 · 통합 층 감시 포함):** REF `70aab4ee07ad7018f8684c1e8aad5e2ffebcd5de` · SHA256 `b0a38f22da8abbc6f7edcbac8af2ea0110660bd5434d192c4aa5a751ba76fba0`. 되돌리기는 직전 판 REF `a56924c`(#591) 로 같은 명령 — SHA256 은 그 커밋의 `deploy/ops/collect.cjs` 에서 계산한다(`git show a56924c:deploy/ops/collect.cjs | sha256sum`).
+**지금 설치된 판(2026-11-16 · #714 · PR-2a 보정 · dry-run):** REF `e0b98d23` · SHA256 `d52ec075c3f7daa0ab9487f40b13a505ba867166807cb143a56e797a5946a863`. 되돌리기는 직전 판 REF `70aab4ee07ad7018f8684c1e8aad5e2ffebcd5de`(#705) · SHA256 `b0a38f22da8abbc6f7edcbac8af2ea0110660bd5434d192c4aa5a751ba76fba0` 로 같은 명령. 게시 판(PR-2b · #725)의 REF · SHA256 은 머지 뒤 Claude 가 준다(4절).
 
 ```bash
 mkdir -p ~/pleiades-ops ~/pleiades-private/ops && chmod 700 ~/pleiades-ops ~/pleiades-private ~/pleiades-private/ops
@@ -132,3 +132,58 @@ pleiades 프로세스 6개가 모두 jlist 에 없었다는 뜻이다. 수집기
 - **재설치 직후 한 번:** 색 코드로 시작하던 줄은 태그를 새로 읽어 지문이 바뀐다 — 그런 줄이 "새 지문" 으로 한 번 나온다(경고면 요약에만).
 - **침묵 · `glob-empty` · 수집기 자신의 경고도 경고다** — 게시되지 않고 일일 요약의 "열린 이상" 에 나온다.
 - **스택 연속 덩어리:** 같은 초에 `    at …` 로 시작하는 덩어리는 앞 덩어리의 뒷부분으로 보고 따로 세지 않는다(pm2 가 따로 쓴 스택에 시각을 따로 붙인다).
+
+## 4. 게시 켜기 (PR-2b · #725)
+
+수집기가 Discord `#ops` 로 보낸다. 웹훅은 **플랫폼 설정의 `DISCORD_WEBHOOK_OPS` 하나뿐이다** — 배포 채널로 넘어가지 않는다(008 Q98 · 폴백 없음).
+
+**보내기 전 검사(008 §1-4 ⓪~③):** ⓪ 로그에서 뽑은 칸은 허용 문자일 때만 · ① 두 앱 `.env` 와 플랫폼 설정의 **비밀 키 값**(이름에 `TOKEN`·`SECRET`·`PASSWORD`·`EMAIL`·`WEBHOOK` · `_KEY` · `_PIN` · `DATABASE_URL` — 8자 미만은 건너뜀)이 본문에 들어 있으면 차단 · ② 토큰 형식(`promote_check.py` 와 같은 패턴) · ③ 2000자. 걸리면 본문 대신 **`[ops] 게시 차단 · 지문 <ID> · 사유 <secret-match|token|length>`** 만 보낸다. **세 파일 중 하나라도 못 읽으면 본문을 보내지 않고 미룬다** — 그동안 `[ops] 게시 보류 · 사유 secret-load · 미룸 N` 이 한 시간에 한 번 온다.
+
+**게시 실패(웹훅 없음 · 비밀 읽기 실패 · 네트워크 · HTTP)는 미룸이다** — 다음 회에 다시 보낸다. 실패한 회는 남은 것을 더 보내지 않는다. `collect.log` 의 줄 끝에 이유가 붙는다(`· 웹훅 없음` · `· 웹훅 형식 오류` · `· 비밀 읽기 실패` · `· dotenv 없음` · `· 게시 실패 HTTP 429` — 주소는 찍지 않는다). 한 회 안에서는 0.5초 간격으로 보낸다 — 그래도 429 가 나면 남은 것은 다음 회에 이어 보낸다(잃지 않는다). **본문 때문에 거절(HTTP 400 · 413)** 되면 `사유 rejected` 고정 문구로 바꿔 한 번 보내고 넘어간다.
+
+### 4-1. 웹훅 등록(사용자 · Discord)
+
+`#ops` 채널 → 연동 → 웹후크 만들기 → URL 복사. 플랫폼 설정 파일에 한 줄 더한다(편집기로 · 값을 명령줄·히스토리에 남기지 않는다).
+
+```bash
+${EDITOR:-nano} ~/pleiades-platform.env    # DISCORD_WEBHOOK_OPS=<복사한 URL>
+chmod 600 ~/pleiades-platform.env && grep -cE '^DISCORD_WEBHOOK_OPS=["'"'"']?https://discord(app)?\.com/api/webhooks/' ~/pleiades-platform.env
+```
+
+마지막 숫자는 `1` 이어야 한다.
+
+### 4-2. 게시 판 설치 · 시험
+
+1절 명령을 **게시 판 REF · SHA256** 으로 돌린다(머지 뒤 Claude 가 준다). 2절의 `NODE_BIN` · `PM2_BIN` 을 같은 셸에 둔 채로:
+
+```bash
+env -i HOME="$HOME" PATH=/usr/bin:/bin "$NODE_BIN" --network-family-autoselection-attempt-timeout=2000 ~/pleiades-ops/collect.cjs --test-alert; echo "rc=$?"
+```
+
+**기대:** `시험 게시 통과 — #ops 에 시험 문구 1건` · `rc=0` · `#ops` 에 🟢 시험 문구. 수집하지 않고 상태 파일도 바꾸지 않는다.
+- `웹훅 없음` · `웹훅 형식 오류`(https:// 로 시작하지 않는다) → 4-1 · `비밀 읽기 실패` → 두 앱 `.env` · 플랫폼 설정의 읽기 권한 · `dotenv 없음` → 두 앱 체크아웃의 `node_modules`(배포 중이면 끝난 뒤 다시) · `게시 실패 HTTP 401/404` → 웹훅 URL(지워졌거나 잘렸다).
+
+### 4-3. 크론에서 `--dry-run` 빼기
+
+3절과 같은 방식으로 줄을 바꾼다(db-backup 줄 보존 · 다시 돌려도 줄이 늘지 않는다).
+
+```bash
+[[ "$NODE_BIN" == /* && "$PM2_BIN" == /* ]] || { echo "[중단] 2절의 경로 변수가 없다 — 2절부터"; false; } && \
+if CUR=$(crontab -l 2>&1) || [[ "$CUR" == *"no crontab"* ]]; then
+  [[ "$CUR" == *"no crontab"* ]] && CUR=
+  { printf '%s\n' "$CUR" | grep -v collect.cjs; echo "2-59/5 * * * * $NODE_BIN --network-family-autoselection-attempt-timeout=2000 $HOME/pleiades-ops/collect.cjs --pm2-bin=$PM2_BIN >> $HOME/pleiades-private/ops/collect.log 2>&1"; } | crontab -
+else
+  echo "[중단] crontab 을 읽지 못했다 — 바꾸지 않았다"
+fi
+crontab -l | grep -c 'collect.cjs --pm2-bin'; crontab -l | grep -c db-backup.cjs
+```
+
+마지막 두 숫자는 `1` · `1`. **10분 뒤:**
+
+```bash
+tail -2 ~/pleiades-private/ops/collect.log | grep -o '[0-9-]* [0-9:]* \(수집 통과\|건너뜀\).*'
+```
+
+줄 끝이 `· 차단 0 (게시)` 이고 `웹훅` · `비밀 읽기 실패` · `dotenv 없음` · `게시 실패` 가 없으면 통과다(`HTTP 429` 한 번은 다음 회에 이어 보내므로 통과로 본다). dry-run 동안 쌓인 것은 다시 나가지 않는다(dry-run 도 기록한 것으로 넘겼다). 다음 09:05 에 일일 요약이 `#ops` 에 와야 한다 — **안 오면 그것이 신호다**(수집기 · 크론 · 웹훅 중 하나가 멈췄다 · 008 §2-4).
+
+**되돌리기:** 3절 명령(줄에 `--dry-run`)을 다시 돌린다 — **즉시**. 이미 보낸 메시지는 Discord 에서 지운다(**중간**). 웹훅을 지우면 다음 회부터 `게시 실패 HTTP 404` 로 미룬다 — 미룬 것이 상태 파일에 쌓이므로 웹훅을 지울 때는 크론도 `--dry-run` 으로 되돌린다.

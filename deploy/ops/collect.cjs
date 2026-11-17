@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // collect.cjs — 008 단계 1 수집기 (#568 · 설계 008 §2 확정 블록 · 세부 _workspace/250/02_writer_stage1_r2.md).
 //
-// 사용:  node collect.cjs --dry-run [--pm2-bin=<절대 경로>]   수집 1회(crontab 이 부른다)
+// 사용:  node collect.cjs [--dry-run] [--pm2-bin=<절대 경로>]   수집 1회(crontab 이 부른다)
+//        node collect.cjs --test-alert                             설치 시험 — 고정 문구 1건을 게시 경로로(런북 4절)
 //
-// PR-1 은 --dry-run 만이다 — 외부로 나가는 것이 0 이다. 게시할 메시지는 상태 디렉터리의 dry-run.log 에 쓴다(Discord 게시는 PR-2).
+// 게시(PR-2b · #725): 플랫폼 설정의 DISCORD_WEBHOOK_OPS 로 Discord #ops 에 보낸다(폴백 없음) · 보낸 본문은 posted.log.
+// --dry-run 은 외부로 나가는 것이 0 이다 — 게시할 메시지는 상태 디렉터리의 dry-run.log 에 쓴다(PR-1 판과 같다).
 // 서비스 계정으로 돈다(Q97). 체크아웃 밖(~/pleiades-ops/)에 커밋 고정으로 설치한다 — 런북 docs/runbooks/ops-collector.md.
 //
 // 코드가 지키는 규칙(008 §4-6 "없음" 행의 단계 1 판):
@@ -53,6 +55,7 @@ const DEFAULTS = {
   socketMs: 2000,
   jlistMs: 20000,
   httpMs: 5000,
+  postGapMs: 500, // 한 회 안 게시 사이 간격(#725)
 }
 const CONFIG = TEST && process.env.OPS_CONFIG ? { ...DEFAULTS, ...JSON.parse(process.env.OPS_CONFIG) } : DEFAULTS
 const MIN = 60000
@@ -814,29 +817,171 @@ function releaseLock(lock, id) {
   }
 }
 
+// ── 게시 · 게시 전 검사(§1-4 ⓪~③ · PR-2b #725) ─────────────────────────
+// ⓪ 칸 허용 문자는 관측을 만들 때 이미 거쳤다(field · FIELD_OK). 여기서는 완성된 본문에 ①~③ 을 건다.
+// 걸리면 본문 대신 고정 문구(지문 · 사유 코드만)를 보낸다 — 재작성 재시도 없음(008 §5-1 · 우회 학습 경로).
+const POST_MAX = 2000 // ③ Discord 메시지 한 건 상한
+const SECRET_MIN = 8 // P-10 비밀 대조 최소 길이 — 짧은 값은 템플릿 문구·숫자와 우연히 맞는다(거짓 차단)
+// ① 대조할 키 — 비밀인 것만(PORT · NODE_ENV · 채널·사용자 ID 같은 비밀 아닌 값은 대조하지 않는다 · 거짓 차단)
+// 서버 템플릿 키 전수(deploy/env/*.template · 루트 .env.example)와 대조해 정했다(#725) — 시험이 두 목록을 함께 본다
+const SECRET_KEY = /TOKEN|SECRET|PASSWORD|EMAIL|WEBHOOK|_KEY(?:_|$)|_PIN$|^DATABASE_URL$/ // 접미가 붙는 키가 있다(DISCORD_BOT_TOKEN_FINANCE)
+const W = 'A-Za-z0-9_'
+// ② 토큰 형식 — tools/ops/promote_check.py 의 TOKEN 패턴을 옮긴 것이다. 두 판은 tools/ops/token_vectors.json 을 함께 시험한다
+const TOKEN_RES = [
+  new RegExp(`(?<![${W}])(?:bot)?\\d{6,}:[A-Za-z0-9_-]{30,}`), // 옛 채널 봇 토큰
+  new RegExp(`(?<![${W}-])[MNO][A-Za-z\\d_-]{20,}\\.[A-Za-z\\d_-]{5,}\\.[A-Za-z\\d_-]{25,}`), // Discord 봇
+  new RegExp(`(?<![${W}-])eyJ[${W}-]{10,}\\.[${W}-]{10,}\\.[${W}-]{10,}`), // JWT
+  new RegExp(`(?<![${W}])(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[${W}]{20,})`),
+  new RegExp(`(?<![${W}-])sk-[A-Za-z0-9_-]{20,}`),
+  new RegExp(`(?<![${W}])AKIA[0-9A-Z]{16}(?![${W}])`),
+  new RegExp(`(?<![${W}])xox[abposr]-[A-Za-z0-9-]{4,}`),
+  /\/(?:webhooks|interactions)\/[^/\s]*\/[A-Za-z0-9_-]{20,}/,
+]
+const GENERIC_TOKEN = new RegExp(`(?<![${W}-])[${W}-]{32,}(?![${W}-])`, 'g')
+const MIN_TOKEN_PIECE = 16 // promote_check.py 와 같다 — 하이픈 파일 이름 제외
+const isGenericToken = (s) =>
+  !/^[0-9a-fA-F]+$/.test(s) && /\d/.test(s) && /[A-Za-z]/.test(s) && Math.max(...s.split(/[-_]/).map((p) => p.length)) >= MIN_TOKEN_PIECE
+const hasToken = (s) => TOKEN_RES.some((re) => re.test(s)) || [...s.matchAll(GENERIC_TOKEN)].some((m) => isGenericToken(m[0]))
+const unescapeMd = (s) => s.replace(/\\(.)/g, '$1') // md() 가 넣은 \ 가 값을 끊는다 — 대조는 벗긴 본문으로도 한다
+
+// 게시 본문 검사 — null = 통과 · 아니면 사유 코드
+function checkPost(text, secrets) {
+  if (text.length > POST_MAX) return 'length'
+  const plain = unescapeMd(text)
+  if (hasToken(text) || hasToken(plain)) return 'token'
+  if (secrets.some((v) => text.includes(v) || plain.includes(v))) return 'secret-match'
+  return null
+}
+
+const blockedText = (p, code) => `[ops] 게시 차단 · ${p.e ? `지문 ${p.e.fp}` : p.type} · 사유 ${code}`
+
+function platformFile() {
+  return process.env.PLEIADES_ENV_FILE || (TEST ? '' : path.join(HOME, 'pleiades-platform.env')) // notify-deploy.cjs 와 같은 위치
+}
+
+// ① 의 재료와 웹훅 — 두 앱 .env + 플랫폼 설정. 값은 메모리에만 둔다(파일·출력에 쓰지 않는다).
+// 하나라도 못 읽으면 ok=false(fail-closed) — 그래도 웹훅은 돌려준다(본문 없는 고정 문구를 보낼 수 있게)
+function loadSecrets() {
+  const dotenv = dotenvFor('fin')
+  // 해석기가 없으면 웹훅도 못 읽는다 — "웹훅 없음" 으로 오진하지 않게 사유를 따로 낸다(PR-2b 9-1 major)
+  if (!dotenv) return { ok: false, values: [], webhook: '', why: 'dotenv 없음' }
+  const read = (file) => {
+    try {
+      return file ? dotenv.parse(fs.readFileSync(file)) : null
+    } catch {
+      return null
+    }
+  }
+  const platform = read(platformFile())
+  const envs = [...Object.values(APPS).map((dir) => read(path.join(dir, '.env'))), platform]
+  const raw = (platform && platform.DISCORD_WEBHOOK_OPS) || ''
+  const webhook = /^https:\/\//.test(raw) ? raw : '' // 잘못 넣은 값으로 본문이 다른 곳에 가지 않게 — https 만
+  const missing = raw ? '웹훅 형식 오류' : '웹훅 없음'
+  if (envs.some((e) => e === null)) return { ok: false, values: [], webhook, why: webhook ? '비밀 읽기 실패' : missing }
+  const values = new Set()
+  for (const env of envs) for (const [k, v] of Object.entries(env)) if (SECRET_KEY.test(k) && v.length >= SECRET_MIN) values.add(v)
+  return { ok: true, values: [...values], webhook, why: webhook ? '' : missing }
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+// 요청 하나의 상한 — 느린 응답 하나가 한 회 예산(P-9)을 다 쓰지 않게
+const postMs = (deadline) => Math.min(CONFIG.httpMs * 2, deadline - Date.now())
+
+async function postWebhook(url, content, ms) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), Math.max(1, ms))
+  try {
+    // wait=true — 없으면 Discord 가 저장하지 못한 메시지에도 성공으로 답한다(commit 이 앞서 재시도를 잃는다 · PR #726 Codex P2)
+    const target = new URL(url)
+    target.searchParams.set('wait', 'true')
+    const res = await fetch(target, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
+      signal: ctrl.signal,
+    })
+    if (res.body && typeof res.body.cancel === 'function') await res.body.cancel().catch(() => {})
+    return res.ok ? null : `HTTP ${res.status}`
+  } catch (err) {
+    return err && typeof err.name === 'string' && /^[A-Za-z]{1,32}$/.test(err.name) ? err.name : 'error' // 메시지에 웹훅 URL 이 실릴 수 있다 — 이름만
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 // ── 실행 ─────────────────────────────────────────────────────────────
-function deliver(posts, ctx) {
+// 게시 실패(웹훅 없음 · 비밀 못 읽음 · 네트워크 · HTTP) = 미룸 — commit 하지 않으면 상태가 다음 회에 다시 고른다(P-9 와 같은 길)
+async function deliver(posts, ctx, live) {
   const deadline = ctx.started + CONFIG.maxRunMs
   const stamp = kstMinute(new Date(ctx.now))
   const out = []
   const events = []
-  let deferred = 0
-  let quiet = 0
+  const r = { deferred: 0, quiet: 0, blocked: 0, why: '' }
+  const sec = live ? loadSecrets() : null
+  if (live) r.why = sec.why
+  let sentAny = false
   for (const p of posts) {
     const silent = quietPost(p)
-    if (!silent && Date.now() >= deadline) {
-      deferred += 1 // commit 하지 않는다 — 상태가 다음 회에 다시 고른다(P-9)
+    if (!silent && (Date.now() >= deadline || r.why)) {
+      r.deferred += 1
       continue
     }
-    if (silent) quiet += 1 // 요약에만 — 기록하지 않고 상태만 넘긴다(미뤄진 채 남지 않게 commit 은 한다)
-    else out.push(`${stamp} ${p.text}`) // dry-run: 게시 대신 기록 · 템플릿 + 허용 칸뿐이다
+    let blocked = null
+    if (silent) r.quiet += 1 // 요약에만 — 기록하지 않고 상태만 넘긴다(미뤄진 채 남지 않게 commit 은 한다)
+    else if (!live) out.push(`${stamp} ${p.text}`) // dry-run: 게시 대신 기록 · 템플릿 + 허용 칸뿐이다
+    else {
+      if (sentAny) await sleep(CONFIG.postGapMs) // 웹훅 속도 제한(약 5건/2초)에 연달아 걸리지 않게
+      sentAny = true
+      blocked = checkPost(p.text, sec.values)
+      let text = blocked ? blockedText(p, blocked) : p.text
+      let err = await postWebhook(sec.webhook, text, postMs(deadline))
+      if (!blocked && /^HTTP (400|413)$/.test(err || '')) {
+        // 본문 때문에 거절됐다 — 미루면 같은 글이 매 회 맨 앞에서 막아 요약까지 멈춘다(9-1 info) · 고정 문구로 바꿔 한 번
+        blocked = 'rejected'
+        text = blockedText(p, blocked)
+        err = await postWebhook(sec.webhook, text, postMs(deadline))
+      }
+      if (err) {
+        r.why = `게시 실패 ${err}` // 남은 것은 이번 회에 보내지 않는다(429 · 장애에 연달아 두드리지 않는다)
+        r.deferred += 1
+        continue
+      }
+      if (blocked) r.blocked += 1
+      out.push(`${stamp} ${text}`) // 보낸 그대로(검사를 통과한 본문 또는 고정 문구)
+    }
     p.commit(ctx.now)
     if (p.e && (p.type === 'first' || p.type === 'repeat')) Object.assign(p.e, { postedQuiet: silent, pendingSev: undefined })
     const e = p.e || {}
-    events.push(JSON.stringify({ at: ctx.now, type: p.type, fp: e.fp || null, app: e.app || null, role: e.role || null, src: e.src || null, sev: e.sev || null, count: p.count, ...(silent ? { quiet: true } : {}) }))
+    events.push(JSON.stringify({ at: ctx.now, type: p.type, fp: e.fp || null, app: e.app || null, role: e.role || null, src: e.src || null, sev: e.sev || null, count: p.count, ...(silent ? { quiet: true } : {}), ...(blocked ? { blocked } : {}) }))
   }
-  appendLines('dry-run.log', out)
-  return { events, posted: out.length, deferred, quiet }
+  if (live && sec.webhook && !sec.ok && r.deferred > 0) await secretLoadNotice(ctx, sec.webhook, r.deferred, deadline)
+  appendLines(live ? 'posted.log' : 'dry-run.log', out)
+  return { events, posted: out.length, ...r }
+}
+
+// 비밀을 못 읽는 동안 게시가 멈췄다는 것만 알린다 — 본문 없는 고정 문구라 ① 없이 보낼 수 있다 · P-1 간격으로 한 번
+async function secretLoadNotice(ctx, webhook, deferred, deadline) {
+  if (ctx.now - (ctx.state.secretNoticeAt || 0) < CONFIG.repeatMin * MIN) return
+  const err = await postWebhook(webhook, `[ops] 게시 보류 · 사유 secret-load · 미룸 ${deferred}`, postMs(deadline))
+  if (!err) ctx.state.secretNoticeAt = ctx.now
+}
+
+// 설치 시험(런북 4절) — 수집 없이 고정 문구 1건을 같은 검사·같은 경로로 보낸다. 상태 파일을 건드리지 않는다
+async function testAlert() {
+  const sec = loadSecrets()
+  const hint = { '웹훅 없음': ' — 플랫폼 설정의 DISCORD_WEBHOOK_OPS', '웹훅 형식 오류': ' — https:// 로 시작해야 한다', '비밀 읽기 실패': ' — 두 앱 .env · 플랫폼 설정을 모두 읽어야 게시한다', 'dotenv 없음': ' — 두 앱 체크아웃의 node_modules 를 확인한다' }
+  if (sec.why) return fail(sec.why + (hint[sec.why] || ''))
+  const text = `[ops] ${SEV.복구} ${md(`시험 · 수집기 게시 경로 확인 · ${kstMinute(new Date())}`)}`
+  const blocked = checkPost(text, sec.values)
+  if (blocked) return fail(`검사 차단 ${blocked} — 시험 문구가 비밀 값과 겹친다`)
+  const err = await postWebhook(sec.webhook, text, CONFIG.httpMs * 2)
+  if (err) return fail(`게시 실패 ${err}`)
+  console.log('시험 게시 통과 — #ops 에 시험 문구 1건')
+  return 0
+  function fail(why) {
+    console.log(`시험 게시 실패 — ${why}`)
+    return 1
+  }
 }
 
 // 이번 회에 감시하는 앱 — 한 회에 한 번만 정하고 모든 판정이 이것만 쓴다(4b-3 R2-3).
@@ -873,7 +1018,7 @@ async function collect(ctx, pm2Bin) {
   collectDisk(ctx)
 }
 
-async function run(pm2Bin) {
+async function run(pm2Bin, live) {
   if (CONFIG.lockStaleRuns * CONFIG.periodMin * MIN <= CONFIG.maxRunMs) {
     console.error('collect.cjs: 설정 오류 — P-8×주기 > P-9 가 아니다')
     return 2
@@ -895,13 +1040,14 @@ async function run(pm2Bin) {
     await collect(ctx, pm2Bin)
     const posts = plan(ctx)
     const summaryRun = posts.some((p) => p.type === 'summary')
-    const r = deliver(posts, ctx)
+    const r = await deliver(posts, ctx, live)
     const obsLines = merge(ctx.obs).map((o) => JSON.stringify({ at: ctx.now, type: 'obs', fp: o.fp, app: o.app, role: o.role, src: o.src, sev: o.sev, count: o.count }))
     appendLines('events.jsonl', [...obsLines, ...r.events])
     if (summaryRun && state.summaryDate === kstDate(nowDate)) pruneEvents(ctx.now)
     state.lastRunAt = ctx.now
     writeAtomic(STATE(), prune(state, ctx.now))
-    console.log(`${kstMinute(nowDate)} 수집 통과 · 관측 ${obsLines.length} · 기록 ${r.posted} · 미룸 ${r.deferred} · 요약만 ${r.quiet} (dry-run)`)
+    const tail = live ? ` · 차단 ${r.blocked}${r.why ? ` · ${r.why}` : ''} (게시)` : ' (dry-run)'
+    console.log(`${kstMinute(nowDate)} 수집 통과 · 관측 ${obsLines.length} · 기록 ${r.posted} · 미룸 ${r.deferred} · 요약만 ${r.quiet}${tail}`)
     return 0
   } finally {
     releaseLock(lock, got.id)
@@ -910,23 +1056,33 @@ async function run(pm2Bin) {
 
 function parseArgs(argv) {
   let dry = false
+  let testAlert = false
   let pm2Bin = path.join(path.dirname(path.dirname(process.execPath)), 'lib', 'node_modules', 'pm2', 'bin', 'pm2') // npm 전역 기본 위치(V16)
   for (const a of argv) {
     if (a === '--dry-run') dry = true
+    else if (a === '--test-alert') testAlert = true
     else if (a.startsWith('--pm2-bin=')) pm2Bin = a.slice('--pm2-bin='.length)
     else return null
   }
-  return { dry, pm2Bin }
+  if (dry && testAlert) return null // 시험 게시는 게시 경로를 시험한다 — dry-run 과 함께 쓰지 않는다
+  return { dry, testAlert, pm2Bin }
+}
+
+const USAGE = '사용법: node collect.cjs [--dry-run] [--pm2-bin=<절대 경로>]   |   node collect.cjs --test-alert'
+
+// 시험 전용(PLEIADES_TEST=1) — 공통 시험 벡터를 게시 전 검사 ②·③ 에 통과시켜 사유 코드를 낸다(tools/ops/token_vectors.json)
+function selfCheck() {
+  const texts = JSON.parse(fs.readFileSync(0, 'utf8'))
+  const secrets = JSON.parse(process.env.OPS_SELFCHECK_SECRETS || '[]')
+  console.log(JSON.stringify(texts.map((t) => checkPost(t, secrets))))
+  return 0
 }
 
 async function main() {
+  if (TEST && process.env.OPS_SELFCHECK === '1') return selfCheck()
   const args = parseArgs(process.argv.slice(2))
   if (!args) {
-    console.error('사용법: node collect.cjs --dry-run [--pm2-bin=<절대 경로>]')
-    return 2
-  }
-  if (!args.dry) {
-    console.error('collect.cjs: 게시는 아직 없다(PR-2) — --dry-run 만')
+    console.error(USAGE)
     return 2
   }
   if (process.platform === 'darwin' && !TEST) {
@@ -934,7 +1090,8 @@ async function main() {
     return 1
   }
   process.umask(0o077)
-  return run(args.pm2Bin)
+  if (args.testAlert) return testAlert()
+  return run(args.pm2Bin, !args.dry)
 }
 
 main().then(
