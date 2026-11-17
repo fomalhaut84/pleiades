@@ -8,8 +8,7 @@ import {
   formatUserFriendlyError,
   notifyAdminIfKnownFailure,
 } from "../../lib/monitoring/admin-alerts";
-import { mdToHtml } from "../utils/html";
-import { htmlReply, plainReply, type BotReply, type ReplyOutput } from "../core/reply";
+import { markdownReply, plainReply, type BotReply, type ReplyOutput } from "../core/reply";
 import type { BotProcess } from "../notifications/notifier";
 
 // 전역 락 — 플랫폼 공유(009 D-2 설계 S · AI 락 공유 유지).
@@ -128,15 +127,13 @@ export async function decideAiQuestion(
     if (reportType) {
       await out.reply(plainReply(`📝 ${REPORT_LABEL[reportType]} 리포트 생성 중...`));
       const result = await runReportFromAiCommand(reportType, options.bot);
-      const html = mdToHtml(result);
-      await out.reply(htmlReply(html, { long: true }));
+      await out.reply(markdownReply(result, { long: true })); // 013 P2-c (#760)
       await out.reply(plainReply(`✅ ${REPORT_LABEL[reportType]} 리포트 저장 완료`));
       return;
     }
     await out.reply(plainReply("🤔 분석 중..."));
     const { result } = await askAdvisor(question, { channel: options.channel });
-    const html = mdToHtml(result);
-    await out.reply(htmlReply(html, { long: true }));
+    await out.reply(markdownReply(result, { long: true }));
   } catch (error) {
     // #253: 원본 message 는 서버 로그, 사용자에게는 카테고리 매핑 문구.
     // 인증 만료·MCP 다운·비용 상한이면 관리자에게 rate-limited alert — 결과를 받아 문구에 반영한다(#673).

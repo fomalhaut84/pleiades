@@ -3,8 +3,11 @@
 // Discord 어댑터(PR-3 · chat `reply({ format, buttons })`)가 이 모델을 그대로 옮긴다.
 // 버튼 action 은 옛 메시지와 같은 문자열(`food:` · `auto_adjust:` 접두 — Discord custom_id 한도 100자 안).
 
-/** 본문 형식 — `html` 은 HTML 부분집합(<b> <i> <code> · chat 이 Discord 마크다운으로 바꾼다) · `plain` 은 그대로. */
-export type ReplyFormat = "html" | "plain";
+/**
+ * 본문 형식 — `html` 은 HTML 부분집합(<b> <i> <code> · chat 이 Discord 마크다운으로 바꾼다) · `plain` 은 그대로 ·
+ * `markdown` 은 모델이 쓴 마크다운(AI 답 · 리포트 — 013 P2-c · #760).
+ */
+export type ReplyFormat = "html" | "plain" | "markdown";
 
 /** 인라인 버튼 하나 — 누르면 `action` 이 같은 판단 함수(decideFoodButton 등)로 돌아온다. */
 export interface ReplyButton {
@@ -43,4 +46,9 @@ export function plainReply(text: string, extra: Omit<BotReply, "text" | "format"
 
 export function htmlReply(text: string, extra: Omit<BotReply, "text" | "format"> = {}): BotReply {
   return { text, format: "html", ...extra };
+}
+
+/** 모델 마크다운(AI 답 · 리포트 · 013 P2-c) — 서식은 살리고 chat 정리기가 해로운 것만 막는다. */
+export function markdownReply(text: string, extra: Omit<BotReply, "text" | "format"> = {}): BotReply {
+  return { text, format: "markdown", ...extra };
 }
