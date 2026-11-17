@@ -363,7 +363,7 @@ export default function ReportsClient({ initialReports, initialNextCursor }: Pro
                   )}
                 </div>
                 <div
-                  className="prose prose-invert prose-sm max-w-none"
+                  className="md-body"
                   dangerouslySetInnerHTML={{
                     __html: DOMPurify.sanitize(
                       marked.parse(r.response, { async: false }) as string

@@ -19,7 +19,7 @@ export default function ReportBody({ title, markdown }: ReportBodyProps) {
         <span className="text-[12px] font-normal text-sub group-open:hidden">펼치기</span>
         <span className="hidden text-[12px] font-normal text-sub group-open:inline">접기</span>
       </summary>
-      <div className="prose prose-invert prose-sm mt-2 max-w-[62ch]" dangerouslySetInnerHTML={{ __html: html }} />
+      <div className="md-body mt-2 max-w-[62ch]" dangerouslySetInnerHTML={{ __html: html }} />
     </details>
   );
 }
