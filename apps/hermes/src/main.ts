@@ -20,28 +20,12 @@ import { createRegistry } from "./registry";
 import { createHermesServer } from "./server";
 import { runCheck, WEBHOOK_KEY } from "./check";
 import { runKeyCli } from "./key-cli";
+import { nextPaused, pauseAfter } from "./loop";
 
 const HOST = "127.0.0.1";
 const PURGE_EVERY_MS = 60 * 60 * 1000;
 /** 상태 파일을 다시 쓰는 간격(결과가 바뀌면 바로) */
 const STATE_EVERY_MS = 10_000;
-
-/** 결과별 다음 걸음까지 — 보낼 것이 있으면 바로 · 기다릴 때는 최대 5 s 씩 끊어 다시 본다(종료 · 설정 변경에 빨리 반응) */
-function pauseAfter(r: StepResult | null): number {
-  if (r === null) return 5_000;
-  switch (r.kind) {
-    case "idle":
-      return 1_000;
-    case "paused":
-      return 5_000;
-    case "wait":
-      return Math.min(r.ms, 5_000);
-    case "retry":
-      return Math.min(r.delayMs, 5_000);
-    default:
-      return 0;
-  }
-}
 
 function required(name: string): string {
   const v = process.env[name]?.trim();
@@ -120,18 +104,19 @@ function serve(): void {
       }
       const now = Date.now();
       // 멈춤은 다른 결과가 나올 때까지 이어진다 — 기다림 · 할 일 없음 · 루프 오류(9-1 info)는 멈춤을 풀지 않는다
-      const nextPaused =
-        r?.kind === "paused" ? r.why : r === null || r.kind === "idle" || r.kind === "wait" ? paused : null;
+      const nextP = nextPaused(r, paused);
       if (r?.kind === "sent" && poster.lastLinkDropped()) {
         const day = kstDayStart(now);
         linkDropped = { day, n: (linkDropped.day === day ? linkDropped.n : 0) + 1 };
       }
-      const changed = nextPaused !== paused || (r !== null && r.kind !== "idle" && r.kind !== "paused" && r.kind !== "wait");
-      if (nextPaused !== paused && nextPaused !== null) console.warn(`[hermes] 게시 멈춤 — ${nextPaused === "webhook" ? "웹훅 없음 · 형식 오류" : "비밀 대조 재료를 못 읽음"}`);
-      paused = nextPaused;
+      const changed = nextP !== paused || (r !== null && r.kind !== "idle" && r.kind !== "paused" && r.kind !== "wait");
+      if (nextP !== paused && nextP !== null) console.warn(`[hermes] 게시 멈춤 — ${nextP === "webhook" ? "웹훅 없음 · 형식 오류" : "비밀 대조 재료를 못 읽음"}`);
+      paused = nextP;
       if (changed || now - lastState >= STATE_EVERY_MS) saveState(now);
       const wait = pauseAfter(r);
       if (wait > 0 && !stopping) await nap(wait);
+      // 쉬지 않고 이어갈 때도 한 번 양보한다 — 오래된 메시지가 몰려 만료될 때 받기(HTTP)가 굶지 않게(#807 9-1 info)
+      else await new Promise<void>((res) => setImmediate(res));
     }
   };
 
