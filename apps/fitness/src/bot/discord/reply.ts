@@ -1,5 +1,5 @@
 // pleiades 009 D-2 PR-3 (pleiades#367 · 설계 H2): 중립 응답 모델(`../core/reply`) → `@pleiades/chat` 컨텍스트.
-//   format · buttons → `reply({ text, format, buttons })`(html 변환 · 2000자 분할 · 버튼은 마지막 조각 = chat)
+//   format · buttons → `reply({ text, format, buttons })`(형식별 변환 html · plain · markdown · 2000자 분할 · 버튼은 마지막 조각 = chat)
 //   long → chat 분할에 맡긴다 · 명령 표기를 바꾸지 않는다
 //   버튼 컨텍스트: notice → 본인 전용 안내(text 없으면 무표시 — chat 이 이미 지연 응답했다) · removeButtons → setButtons([]) · reply → 같은 채널 새 메시지
 

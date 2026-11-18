@@ -8,6 +8,7 @@ import React from 'react'
 import path from 'path'
 import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer'
 import type { QuarterlyData } from './data-collector'
+import { markdownToPdfText } from './pdf-text'
 
 const FONT_DIR = path.join(process.cwd(), 'assets', 'fonts')
 
@@ -151,7 +152,7 @@ export function QuarterlyReportPDF({ data, aiComment }: Props) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>5. AI 종합 분석</Text>
           <View style={styles.aiBox}>
-            <Text style={styles.aiText}>{aiComment}</Text>
+            <Text style={styles.aiText}>{markdownToPdfText(aiComment)}</Text>
           </View>
           <Text style={styles.disclaimer}>※ 투자 권유가 아닌 정보 제공입니다.</Text>
         </View>

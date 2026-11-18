@@ -48,7 +48,7 @@ describe('sendBriefing 응답 대상', () => {
     expect(target).toHaveBeenCalledTimes(1)
     expect(target).toHaveBeenCalledWith()
     expect(notifierFor).not.toHaveBeenCalled()
-    expect(notifier.notify).toHaveBeenCalledWith('ALLOWED', { text: '<b>브리핑</b>', format: 'html' }, { label: 'briefing' })
+    expect(notifier.notify).toHaveBeenCalledWith('ALLOWED', { text: '**브리핑**', format: 'markdown' }, { label: 'briefing' }) // 013 P2-b — 모델 마크다운 그대로
   })
 
   it('대상이 없으면 크론 경로(notifierFor)', async () => {

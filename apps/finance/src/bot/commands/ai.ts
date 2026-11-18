@@ -6,10 +6,9 @@ import {
 } from '@/lib/ai/claude-advisor'
 import { prisma } from '@/lib/prisma'
 import { createTrade } from '@/lib/trade-service'
-import { splitMessage, formatKRWFull, formatUSD } from '../utils/formatter'
+import { formatKRWFull, formatUSD } from '../utils/formatter'
 import { isAiQuestion } from '../utils/ai-trigger'
 import { isTradeMessage } from '../utils/trade-trigger'
-import { markdownToHtml } from '../utils/markdown'
 import { sanitizeError } from '../utils/error'
 import { buildTickerCheckLines } from '../utils/trade-price-check'
 import {
@@ -83,15 +82,8 @@ export function decideAiQuestion(question: string, stateKey: StateKey | undefine
   })
     .then(async (result) => {
       if (result.sessionId) chatSessions.set(stateKey, { sessionId: result.sessionId, lastUsed: Date.now() })
-      const chunks = splitMessage(result.response)
-      for (const chunk of chunks) {
-        const chunkHtml = markdownToHtml(chunk)
-        try {
-          await out.reply(modelReply(chunkHtml, 'html'))
-        } catch {
-          await out.reply(modelReply(chunk, 'plain'))
-        }
-      }
+      // 013 P2-b (#758): 모델 마크다운을 한 번에 — chat 이 2000 자로 나눈다(옛 4096 선분할 · html 실패 plain 재전송은 옛 채널 것)
+      await out.reply(modelReply(result.response, 'markdown'))
     })
     .catch(async (error) => {
       if (error instanceof AdvisorTimeoutError) {

@@ -27,20 +27,32 @@ export type ButtonRows = readonly (readonly NotifyButton[])[];
 export type Components = ButtonRows;
 
 /**
+ * 본문 형식(013 P2-a · #756).
+ *   - `html` — HTML 부분집합(b · i · u · s · code · pre · a · blockquote — `discord-md` 지원 태그) · 텔레그램 시절 템플릿
+ *   - `plain` — 글자 그대로 보인다(서식 문자 escape)
+ *   - `markdown` — 모델이 쓴 마크다운(AI 장문) · 서식을 살리고 해가 되는 것만 막는다(`discordMarkdown`)
+ */
+export type BodyFormat = 'html' | 'plain' | 'markdown';
+
+/**
  * 전송 본문 (1a-1 계획 D-1 · 003 은 이 타입을 참조만 하고 정의하지 않았다).
  * `format` 은 코어가 만든다 — 파싱 실패 폴백이 같은 본문을 `'plain'` 으로 재전송한다 (003 §4-1(b) "폴백은 채널 무관 로직").
  * Discord transport 는 html 을 마크다운으로 바꾼다(`htmlToDiscordMarkdown`).
  */
 export interface Content {
-  /** 본문. `format === 'html'` 이면 HTML 부분집합(b · i · u · s · code · pre · a · blockquote — `discord-md` 지원 태그). */
+  /** 본문 — 형식은 `format`. */
   text: string;
-  format: 'html' | 'plain';
+  format: BodyFormat;
   components?: Components;
 }
 
 /** HTML 본문 `Content` 를 만드는 헬퍼 — 호출부 대부분은 이것만 쓴다. */
 export const html = (text: string, components?: Components): Content =>
   components === undefined ? { text, format: 'html' } : { text, format: 'html', components };
+
+/** 마크다운 본문 `Content` — AI 장문(013 P2). */
+export const markdown = (text: string, components?: Components): Content =>
+  components === undefined ? { text, format: 'markdown' } : { text, format: 'markdown', components };
 
 /**
  * 포트 — 어댑터가 구현한다.

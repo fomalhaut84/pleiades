@@ -19,7 +19,8 @@ export type {
   Transport,
   TransportRef,
 } from './types';
-export { Route, html } from './types';
+export { Route, html, markdown } from './types';
+export type { BodyFormat } from './types';
 
 export { createNotifier } from './notifier';
 export {
@@ -44,6 +45,7 @@ export type {
   PostConfig,
 } from './discord';
 export { htmlToDiscordMarkdown, escapeDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
+export { discordMarkdown, toDiscordMarkdown } from './discord-markdown';
 export {
   createDiscordBotTransport,
   toDiscordComponents,

@@ -8,7 +8,8 @@
  * **target = 채널 별칭**(예 `finance`). 웹훅 URL 에는 토큰이 들어 있으므로 target·로그·오류 메시지에 URL 을 두지 않는다 —
  * 별칭 → URL 맵은 옵션으로만 받는다.
  */
-import { htmlToDiscordMarkdown, escapeDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
+import { escapeDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
+import { toDiscordMarkdown } from './discord-markdown';
 import { getErrorCode, isNetworkError, sanitizeError } from './error';
 import { DEFAULT_RETRY_DELAYS_MS } from './deliver';
 import type { Content, Logger, MessageRef, Transport } from './types';
@@ -81,9 +82,9 @@ export function defaultFetch(): FetchLike {
   return f;
 }
 
-/** 본문을 Discord `content` 로 — html 은 역변환, plain 은 글자 그대로 보이게 escape. */
+/** 본문을 Discord `content` 로 — 형식마다 한 길(`toDiscordMarkdown` · 013 P2-a). */
 export function toDiscordContent(content: Content): string {
-  return content.format === 'html' ? htmlToDiscordMarkdown(content.text) : escapeDiscordMarkdown(content.text);
+  return toDiscordMarkdown(content.text, content.format);
 }
 
 export function createDiscordTransport(opts: DiscordTransportOptions): Transport {

@@ -1,7 +1,5 @@
 import { sendBriefing, type BriefingOptions, type BriefingTarget } from '@/bot/notifications/briefing'
 import { askAdvisor, AdvisorError, describeAdvisorError } from '@/lib/ai/claude-advisor'
-import { splitMessage } from '@/bot/utils/formatter'
-import { markdownToHtml } from '@/bot/utils/markdown'
 import { formatKstDate } from '@/lib/kst-date'
 import { newsSearchRules } from '@/lib/ai/news-rules'
 import { gatherTickerNews } from '@/lib/news/prompt-news'
@@ -120,20 +118,9 @@ function fireTickerAnalysis(out: ReplyOutput, ticker: string): void {
       overallTimeoutMs: 900_000,
     }))
     .then(async (result) => {
-      // 4096 경계·plain 분할은 옛 채널 시절 그대로다(Discord 는 chat 이 2000 으로 다시 나눈다 — 무해 · 설계 D)
-      const html = markdownToHtml(result.response)
-      if (html.length <= 4096) {
-        try {
-          await out.reply(modelReply(html, 'html'))
-        } catch {
-          await out.reply(modelReply(result.response, 'plain'))
-        }
-      } else {
-        const chunks = splitMessage(result.response)
-        for (const chunk of chunks) {
-          await out.reply(modelReply(chunk, 'plain'))
-        }
-      }
+      // 013 P2-b (#758): 모델 마크다운을 한 번에 — chat 이 2000 자로 나눈다(옛 4096 경계 · plain 분할 · 재전송 제거 —
+      // 긴 심층 분석이 escape 된 원문으로 나가던 것도 함께 사라진다)
+      await out.reply(modelReply(result.response, 'markdown'))
     })
     .catch(async (error) => {
       if (error instanceof AdvisorError) {

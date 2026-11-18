@@ -11,10 +11,9 @@ import {
   DISCORD_DEFAULT_MAX_FILE_BYTES,
   DISCORD_MAX_LENGTH,
   defaultSleep,
-  escapeDiscordMarkdown,
-  htmlToDiscordMarkdown,
   requestDiscord,
   splitDiscordMarkdown,
+  toDiscordMarkdown,
   type FormDataLike,
   type PostConfig,
 } from '@pleiades/notify';
@@ -96,7 +95,7 @@ export function normalize(msg: Outgoing): OutgoingMessage {
 
 /** 본문 → Discord md 조각들(빈 조각 제외). 전부 비면 던진다. */
 export function toChunks(msg: OutgoingMessage): string[] {
-  const md = msg.format === 'html' ? htmlToDiscordMarkdown(msg.text) : escapeDiscordMarkdown(msg.text);
+  const md = toDiscordMarkdown(msg.text, msg.format ?? 'plain'); // 형식마다 한 길 — 답장 · 편집 · 인터랙션이 모두 여기를 거친다
   const chunks = splitDiscordMarkdown(md, DISCORD_MAX_LENGTH).filter((c) => c.trim() !== '');
   if (chunks.length === 0) throw new Error('@pleiades/chat: 보낼 본문이 비었다');
   return chunks;
