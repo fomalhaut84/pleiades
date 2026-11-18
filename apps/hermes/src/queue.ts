@@ -34,6 +34,16 @@ export interface QueuedMessage extends NewMessage {
 
 export type Counts = Readonly<Record<Status, number>>;
 
+/** 상태 파일 재료(§3-G) — 수치 · 시각만 */
+export interface QueueStats {
+  readonly queued: number;
+  readonly oldestQueuedAt: number | null;
+  readonly dead: number;
+  readonly deadSince: number;
+  readonly blockedSince: number;
+  readonly lastSentAt: number | null;
+}
+
 export interface Queue {
   enqueue(m: NewMessage, now: number): { id: string; duplicate: boolean };
   /** 다음에 보낼 행(받은 순서 · 다음 시도 시각이 지난 것) — 상태는 그대로 */
@@ -46,6 +56,8 @@ export interface Queue {
   /** 끝난 행(sent · dead · blocked)을 보존 기간 뒤 지운다 — 지운 수 */
   purge(now: number): number;
   counts(): Counts;
+  /** since 이후 끝난 dead · blocked 수 · 누적 dead · 적체 · 마지막 성공 */
+  stats(since: number): QueueStats;
   journalMode(): string;
   close(): void;
 }
@@ -140,6 +152,16 @@ export function openQueue(file: string, opts: QueueOptions = {}): Queue {
   );
   const purgeStmt = db.prepare("DELETE FROM messages WHERE status != 'queued' AND done_at <= ?");
   const countStmt = db.prepare("SELECT status, COUNT(*) AS n FROM messages GROUP BY status");
+  const statsStmt = db.prepare(
+    `SELECT
+       SUM(status = 'queued') AS queued,
+       MIN(CASE WHEN status = 'queued' THEN received_at END) AS oldest,
+       SUM(status = 'dead') AS dead,
+       SUM(status = 'dead' AND done_at >= ?) AS dead_since,
+       SUM(status = 'blocked' AND done_at >= ?) AS blocked_since,
+       MAX(CASE WHEN status = 'sent' THEN done_at END) AS last_sent
+     FROM messages`,
+  );
 
   /** 한 트랜잭션 — 실패하면 되돌리고 던진다(받기 쪽이 503) */
   const tx = <T>(fn: () => T): T => {
@@ -204,6 +226,19 @@ export function openQueue(file: string, opts: QueueOptions = {}): Queue {
       const out: Record<Status, number> = { queued: 0, sent: 0, dead: 0, blocked: 0 };
       for (const r of countStmt.all() as { status: Status; n: number }[]) out[r.status] = Number(r.n);
       return out;
+    },
+    stats(since) {
+      const r = statsStmt.get(since, since) as Record<string, number | null>;
+      const n = (v: number | null) => Number(v ?? 0);
+      const t = (v: number | null) => (v === null ? null : Number(v));
+      return {
+        queued: n(r.queued),
+        oldestQueuedAt: t(r.oldest),
+        dead: n(r.dead),
+        deadSince: n(r.dead_since),
+        blockedSince: n(r.blocked_since),
+        lastSentAt: t(r.last_sent),
+      };
     },
     journalMode() {
       return String((db.prepare("PRAGMA journal_mode").get() as { journal_mode: string }).journal_mode);

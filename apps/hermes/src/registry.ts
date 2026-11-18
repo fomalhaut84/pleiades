@@ -33,6 +33,8 @@ export interface RegistryStatus {
 export interface Registry {
   authenticate(authorization: string | undefined, now: number): AuthResult;
   status(now: number): RegistryStatus;
+  /** 게시 때 표시 이름 · 링크 호스트 — 없거나 레지스트리 오류면 null(링크는 빼고 id 로 보낸다) */
+  byId(id: string): Source | null;
 }
 
 /** 출처 키 형식(§3-H) — `hrm_` + base62 43자. 형식이 다르면 해시하지 않고 401 */
@@ -150,6 +152,10 @@ export function createRegistry(file: string): Registry {
       if (found === null) return { ok: false, status: 401 };
       if (!found.enabled || expired(found, now)) return { ok: false, status: 403 };
       return { ok: true, source: found };
+    },
+    byId(id) {
+      const reg = current();
+      return reg.ok ? (reg.sources.find((s) => s.id === id) ?? null) : null;
     },
     status(now) {
       const reg = current();

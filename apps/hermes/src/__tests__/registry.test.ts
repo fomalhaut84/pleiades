@@ -127,3 +127,25 @@ describe("createRegistry 인증", () => {
     expect(createRegistry(file).status(NOW)).toEqual({ sources: 2, error: false, expiringSoon: ["orders"] });
   });
 });
+
+describe("byId", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), "hermes-reg2-"));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    rmSync(dir, { recursive: true, force: true });
+  });
+  it("id 로 찾는다 · 없거나 오류면 null", () => {
+    const file = path.join(dir, "s.json");
+    writeFileSync(file, doc(src()));
+    const reg = createRegistry(file);
+    expect(reg.byId("orders")?.name).toBe("주문");
+    expect(reg.byId("x")).toBeNull();
+    writeFileSync(file, "{");
+    utimesSync(file, 9999, 9999);
+    expect(reg.byId("orders")).toBeNull();
+  });
+});
