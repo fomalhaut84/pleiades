@@ -55,14 +55,22 @@ bash ~/pleiades-hermes/deploy/hermes/hrm-inplace.sh "$V"             # y 로 확
 - [ ] 한시 출처면 **만료일**(`--expires`)을 둔다 — 그날(KST) 끝까지 받고 다음 날부터 403
 - [ ] 링크를 보낼 출처면 **허용 호스트**를 정한다(`--link-host` 여러 번) — 밖이면 링크 줄만 빠진다
 
+등록(한 줄 · `<…>` 를 실제 값으로):
+
 ```bash
-bash ~/pleiades-hermes/deploy/hermes/hermes-key.sh add orders --name 주문 --expires 2027-02-28 --link-host shop.example.com
-#   → 키가 한 번 보인다 — 출처(주문 앱) 설정에 넣고 화면을 닫는다
-bash ~/pleiades-hermes/deploy/hermes/hermes-key.sh list          # 해시 · 키는 보이지 않는다
-bash ~/pleiades-hermes/deploy/hermes/hermes-key.sh disable orders # 403 · enable 로 되돌린다
-bash ~/pleiades-hermes/deploy/hermes/hermes-key.sh rotate orders  # 새 키 · 옛 키는 바로 401
-bash ~/pleiades-hermes/deploy/hermes/hermes-key.sh remove orders  # 401
+bash ~/pleiades-hermes/deploy/hermes/hermes-key.sh add <id> --name <표시 이름> --expires <YYYY-MM-DD> --link-host <관리 화면 호스트>
 ```
+
+키가 **한 번** 보인다 — 출처(예: 주문 앱) 설정에 넣고 화면을 닫는다. **키가 찍힌 화면은 세션 · 이슈 · 채팅에 붙이지 않는다**(붙였으면 `rotate`).
+
+> **블록을 통째로 붙이지 않는다(#809).** 아래는 명령 표다 — 필요한 한 줄만 실행한다. 2026-11-18 첫 설치 때 옛 예시 블록을 통째로 붙여 add → disable → rotate → remove 가 연달아 돌았다.
+
+| 하려는 것 | 명령(`hermes-key.sh` = `bash ~/pleiades-hermes/deploy/hermes/hermes-key.sh`) | 결과 |
+|---|---|---|
+| 목록 | `hermes-key.sh list` | id · 이름 · 켜짐 · 만료 · 링크 · 분당(해시 · 키 없음) |
+| 잠시 끄기 / 다시 켜기 | `hermes-key.sh disable <id>` / `enable <id>` | 끄면 403 |
+| 키 바꾸기(샜을 때) | `hermes-key.sh rotate <id>` | 새 키 한 번 · 옛 키는 바로 401 |
+| 지우기 | `hermes-key.sh remove <id>` | 401 |
 
 hermes 는 레지스트리 수정 시각으로 다시 읽는다 — **재기동하지 않는다**. 키 명령은 **한 번에 하나**(잠금 없이 읽고 고쳐 쓴다 — 동시에 돌리면 한쪽 변경이 사라진다). id 는 소문자 · 숫자 · `-`(32자) · 표시 이름(1~32자)은 `#hermes` 의 게시 이름 `hermes·<이름>` 이 된다(`discord` · `clyde` 금지).
 
@@ -90,19 +98,37 @@ bash ~/pleiades-hermes/deploy/hermes/hrm-inplace.sh stop   # y 로 확인
 
 ## 6. 첫 게시 확인 (D · 띄운 뒤 1회 · 사용자)
 
-시험 출처를 하나 만들어(3절 · 예 `smoke` · 만료 오늘) 같은 서버에서 한 건 보낸다:
+**한 줄씩** 실행한다 — 블록을 통째로 붙이면 ② 의 `read` 가 다음 줄을 키로 읽는다(#809).
+
+① 시험 출처(만료 = 오늘) — 키가 한 번 보인다(붙이지 않는다):
 
 ```bash
-read -rs KEY   # add 가 보여 준 키를 붙인다(화면 · 셸 기록에 남지 않는다)
-# 키를 명령줄 인자로 넘기지 않는다 — 같은 서버의 다른 계정이 ps 로 볼 수 있다(#800 9-1). 헤더는 표준 입력으로
-printf 'header = "Authorization: Bearer %s"\n' "$KEY" | curl -sS -K - -X POST http://127.0.0.1:4700/v1/messages \
-  -H 'Content-Type: application/json' -H 'Idempotency-Key: smoke-1' -d '{"title":"hermes 첫 게시","text":"서버 배치 확인"}'
-unset KEY
-#   → {"id":"…","duplicate":false} · #hermes 에 "hermes·<이름>" 으로 굵은 제목 + 한 줄
+bash ~/pleiades-hermes/deploy/hermes/hermes-key.sh add smoke --name 시험 --expires "$(TZ=Asia/Seoul date +%F)"
+```
+
+② 이 줄**만** 실행하고, 입력을 기다리면 ① 의 키를 붙이고 Enter(화면에 보이지 않는 게 정상 · 셸 기록에 남지 않는다):
+
+```bash
+read -rs KEY
+```
+
+③ 한 건 보낸다 — 키는 명령줄 인자가 아니라 표준 입력으로(같은 서버의 다른 계정이 `ps` 로 볼 수 있다 · #800 9-1):
+
+```bash
+printf 'header = "Authorization: Bearer %s"\n' "$KEY" | curl -sS -K - -X POST http://127.0.0.1:4700/v1/messages -H 'Content-Type: application/json' -H 'Idempotency-Key: smoke-1' -d '{"title":"hermes 첫 게시","text":"서버 배치 확인"}'; echo; unset KEY
+```
+
+응답 `{"id":"…","duplicate":false}` · `#hermes` 에 **`hermes·시험`**(게시 이름 = `hermes·<표시 이름>` · Discord 가 "앱" 배지를 붙인다)으로 굵은 제목 + 한 줄.
+
+④ 시험 출처를 지운다:
+
+```bash
 bash ~/pleiades-hermes/deploy/hermes/hermes-key.sh remove smoke
 ```
 
 양식의 "사람 확인" 줄에 예/아니오를 덧붙인다.
+
+**첫 설치(2026-11-18 · `v1.20.0`):** 2절 통과(C4 WAL · 레지스트리 0 · 웹훅 있음 · C6 online · health 200 · 상태 파일 갱신) · D 통과(202 · `#hermes` 에 `hermes·시험` 게시 확인 — 사용자).
 
 ## 판정 양식
 
