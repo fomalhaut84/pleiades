@@ -72,6 +72,26 @@ describe('markdown 형식', () => {
   })
 })
 
+// 013 P3-a2 (#775) — 카드는 그대로 chat 에 넘긴다(소비자는 P3-b)
+describe('카드', () => {
+  const card = { title: '보유', description: '• **AAPL** — 10주', descriptionFormat: 'markdown' as const, color: 0x2f9e44 }
+
+  it('cards 를 그대로 넘긴다 · 없으면 키도 없다(전과 같다)', () => {
+    expect(toOutgoing({ text: '📊 요약', format: 'plain', cards: [card] })).toEqual({ text: '📊 요약', format: 'plain', cards: [card] })
+    expect(toOutgoing({ text: 'x', format: 'plain' })).not.toHaveProperty('cards')
+  })
+
+  it('버튼과 함께 넘긴다', () => {
+    const out = toOutgoing({ text: 'x', format: 'plain', cards: [card], buttons: [[{ label: 'ok', action: 'a' }]] })
+    expect(out).toMatchObject({ cards: [card], buttons: [[{ label: 'ok', action: 'a' }]] })
+  })
+
+  it('버튼이 한도를 넘어 안내로 바뀌면 카드도 보내지 않는다(그 기록은 진행되지 않는다)', () => {
+    const many = Array.from({ length: 30 }, (_, i) => [{ label: `b${i}`, action: `a${i}` }])
+    expect(toOutgoing({ text: 'x', format: 'plain', cards: [card], buttons: many })).toEqual({ text: TOO_MANY_BUTTONS_TEXT, format: 'plain' })
+  })
+})
+
 describe('버튼 행 재배치 (B N18)', () => {
   it('한도 안 — 그대로 · 빈 행은 버린다', () => {
     const rows = [...cats(4), cancel, []]

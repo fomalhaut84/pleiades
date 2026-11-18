@@ -2,7 +2,7 @@
  * pleiades 009 D-3 PR-3 (pleiades#398 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 H2 · B · P · D): 중립 응답 모델(`../core/reply`) → `@pleiades/chat`.
  *
  * 판단 응답 모델(`../core/reply`)의 Discord 어댑터(옛 채널 어댑터는 009 D-5 B3b 에서 지웠다). fit `discord/reply.ts` 를 본떴다(앱 사이 import 없음).
- *   reply     → `ctx.reply({ text, format, buttons })`(html 변환 · 2000자 분할 · 버튼은 마지막 조각 = chat) · 키 = 마지막 조각의 메시지
+ *   reply     → `ctx.reply({ text, format, buttons, cards })`(html 변환 · 2000자 분할 · 버튼은 마지막 조각 = chat) · 키 = 마지막 조각의 메시지
  *   replyLong → 같은 `reply`(html · 분할은 chat — 옛 plain 재전송 분기는 옮기지 않는다)
  *   replyFile → `ctx.replyFile` · 10 MiB 초과는 보내기 전에 정적 안내(chat 이 던지기 전 · 설계 D)
  *   typing    → `ctx.typing()` · 주기 9 s(Discord 표시 약 10 s · 설계 Q)
@@ -75,10 +75,12 @@ export const TOO_MANY_BUTTONS_TEXT = '⚠️ 선택지가 많아 버튼으로 �
 /** 응답 모델 → chat 메시지. */
 export function toOutgoing(message: BotReply): OutgoingMessage {
   const text = message.verbatim ? message.text : toDiscordCommandText(message.text)
-  if (message.buttons === undefined) return { text, format: message.format }
+  const cards = message.cards === undefined ? {} : { cards: message.cards } // 013 P3-a2 — 그대로 넘긴다(chat 이 embed · 한도 대체)
+  if (message.buttons === undefined) return { text, format: message.format, ...cards }
   const buttons = toDiscordButtonRows(message.buttons)
+  // 안내로 바뀌면 그 기록은 진행되지 않는다 — 카드도 보내지 않는다
   if (buttons === undefined) return { text: TOO_MANY_BUTTONS_TEXT, format: 'plain' }
-  return { text, format: message.format, buttons }
+  return { text, format: message.format, buttons, ...cards }
 }
 
 /** chat 보내는 파일 상한과 같다(`packages/chat` rest 기본 10 MiB). */

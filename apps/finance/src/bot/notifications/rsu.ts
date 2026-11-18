@@ -12,9 +12,9 @@
 
 import type { ButtonRows } from '@pleiades/notify'
 import { prisma } from '@/lib/prisma'
-import { formatKRWFull } from '@/bot/utils/formatter'
-import { escapeHtml, h } from '@/bot/utils/html'
-import { interactiveNotifierFor, notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
+import type { ReplyCard } from '@/bot/core/reply'
+import { interactiveNotifierFor, notifierFor, Route, NOTIFY_CTX } from './notifier'
+import { optionReminderCard, rsuDdayContent, rsuReminderCard, type DdayPrice } from './cards'
 import { getRsuVestPreview } from '@/lib/rsu-vest-service'
 import { sanitizeError } from '@/bot/utils/error'
 
@@ -47,7 +47,8 @@ export function buildVestButtons(rsuId: string): ButtonRows {
  * D-day 처리 키보드는 마감 후 sendRSUVestConfirmations 가 발송.
  */
 export async function sendRSUReminders(): Promise<void> {
-  const lines: string[] = []
+  // 013 P3-b2 (#779) — 항목마다 카드 1장(`./cards`) · 10장을 넘으면 notify 가 행 목록 글로 대체한다
+  const cards: ReplyCard[] = []
 
   // D-7 ~ D-1 범위 (KST 기준 오늘 + 1일 ~ 오늘 + 7일)
   const now = new Date()
@@ -71,14 +72,13 @@ export async function sendRSUReminders(): Promise<void> {
   for (const rsu of pendingRSU) {
     const daysLeft = diffDays(rsu.vestingDate)
     if (daysLeft === 7 || daysLeft === 1) {
-      const label = daysLeft === 1 ? '⚠️ D-1' : '📅 D-7'
-      lines.push(
-        `${h.b(label + ' RSU 베스팅')}\n` +
-        `  ${escapeHtml(rsu.account.name)} | ${rsu.shares}주\n` +
-        `  베스팅일: ${formatDate(rsu.vestingDate)}\n` +
-        `  기준가: ${formatKRWFull(rsu.basisValue)}` +
-        (daysLeft === 1 ? `\n  <i>내일 15:35 KST 이후 [확정] 알림 발송됨</i>` : '')
-      )
+      cards.push(rsuReminderCard({
+        daysLeft,
+        accountName: rsu.account.name,
+        shares: rsu.shares,
+        vestingDate: formatDate(rsu.vestingDate),
+        basisValue: rsu.basisValue,
+      }))
     }
   }
 
@@ -99,23 +99,22 @@ export async function sendRSUReminders(): Promise<void> {
   for (const vest of pendingOptions) {
     const daysLeft = diffDays(vest.vestingDate)
     if (daysLeft === 7 || daysLeft === 1) {
-      const label = daysLeft === 1 ? '⚠️ D-1' : '📅 D-7'
-      lines.push(
-        `${h.b(label + ' 스톡옵션 행사 가능')}\n` +
-        `  ${escapeHtml(vest.stockOption.displayName)} | ${vest.shares}주\n` +
-        `  행사가: ${formatKRWFull(vest.stockOption.strikePrice)}\n` +
-        `  행사 가능일: ${formatDate(vest.vestingDate)}`
-      )
+      cards.push(optionReminderCard({
+        daysLeft,
+        name: vest.stockOption.displayName,
+        shares: vest.shares,
+        strikePrice: vest.stockOption.strikePrice,
+        vestingDate: formatDate(vest.vestingDate),
+      }))
     }
   }
 
-  if (lines.length === 0) {
+  if (cards.length === 0) {
     console.log('[notification] RSU/스톡옵션 리마인더 대상 없음')
     return
   }
 
-  const fullMessage = `🔔 ${h.b('RSU/스톡옵션 리마인더')}\n\n${lines.join('\n\n')}`
-  await notifierFor().notify(Route.ALLOWED, htmlContent(fullMessage), NOTIFY_CTX)
+  await notifierFor().notify(Route.ALLOWED, { text: `🔔 RSU/스톡옵션 리마인더 · ${cards.length}건`, format: 'plain', cards }, NOTIFY_CTX)
   console.log('[notification] RSU/스톡옵션 리마인더 발송 완료')
 }
 
@@ -147,39 +146,29 @@ export async function sendRSUVestConfirmations(): Promise<void> {
   if (todayRsus.length === 0) return
 
   for (const rsu of todayRsus) {
-    let priceLine = `  종가: <i>조회 중...</i>`
-    let autoSellLine = (rsu.sellShares ?? 0) > 0
-      ? `  매도 예정: ${rsu.sellShares}주 (autoSell=✓)`
-      : `  매도 예정: 없음 (autoSell=✗)`
+    let price: DdayPrice = { kind: 'missing' }
+    let sellShares = rsu.sellShares ?? 0
+    let autoSell = sellShares > 0
     try {
       const preview = await getRsuVestPreview(rsu.id)
-      if (preview.vestPrice != null) {
-        priceLine = `  종가 (자동조회): ${formatKRWFull(Math.round(preview.vestPrice))} <i>(${preview.vestPriceSource})</i>`
-      } else {
-        priceLine = `  종가: <i>자동 조회 실패 — 웹에서 직접 처리</i>`
-      }
-      autoSellLine = preview.autoSellDefault
-        ? `  매도 예정: ${preview.sellShares ?? 0}주 (autoSell=✓)`
-        : `  매도 예정: 없음 (autoSell=✗)`
+      price = preview.vestPrice != null ? { kind: 'ok', value: preview.vestPrice, source: preview.vestPriceSource } : { kind: 'missing' }
+      autoSell = preview.autoSellDefault
+      sellShares = preview.sellShares ?? 0
     } catch (err) {
       console.error(`[notification] vest-preview 실패 (${rsu.id}): ${sanitizeError(err)}`)
-      priceLine = `  종가: <i>조회 실패</i>`
+      price = { kind: 'error' }
     }
-
-    const msg =
-      `🎯 ${h.b('D-day RSU 베스팅 — 오늘 처리 가능')}\n` +
-      `  ${escapeHtml(rsu.account.name)} | ${rsu.shares}주\n` +
-      `  베스팅일: ${formatDate(rsu.vestingDate)}\n` +
-      `  기준가: ${formatKRWFull(rsu.basisValue)}\n` +
-      `${priceLine}\n` +
-      `${autoSellLine}\n\n` +
-      `<i>아래 [확정] 한 번 탭으로 BUY/SELL Trade + Holding 자동 반영됩니다.</i>`
 
     const keyboard = buildVestButtons(rsu.id)
 
     // 003 Q27 흡수(사용자 2026-10-15): 재시도·plain 폴백을 파사드가 소유 — 키보드는 폴백에도 유지된다.
     // 중복 전송 시 버튼을 두 번 눌러도 rsu-vest-service 의 ALREADY_VESTED 가 이중 반영을 막는다.
-    const r = await interactiveNotifierFor().notify(Route.ALLOWED, htmlContent(msg, keyboard), NOTIFY_CTX)
+    // 013 P3-b2 (#779) — 위 한 줄 + 처리 정보 카드 + 버튼(`./cards`)
+    const content = rsuDdayContent(
+      { accountName: rsu.account.name, shares: rsu.shares, vestingDate: formatDate(rsu.vestingDate), basisValue: rsu.basisValue, price, sellShares, autoSell },
+      keyboard,
+    )
+    const r = await interactiveNotifierFor().notify(Route.ALLOWED, content, NOTIFY_CTX)
     if (r.total === 0) {
       // 버튼은 fin Discord 봇으로 — 봇 토큰·채널이 비었다(#155)
       console.warn(`[notification] D-day RSU 확정 알림 수신자 0 — Discord 봇 설정 미비 (${rsu.id})`)

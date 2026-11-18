@@ -5,6 +5,10 @@
  * 이 파일과 index 가 내보내는 이름에 특정 메신저의 어휘를 두지 않는다 — `dist/*.d.ts` 를 테스트가 검사한다.
  */
 
+import type { Card } from '@pleiades/notify';
+
+export type { Card, CardField } from '@pleiades/notify';
+
 export type Logger = Pick<Console, 'warn' | 'error'>;
 
 /**
@@ -28,6 +32,11 @@ export interface OutgoingMessage {
   format?: TextFormat;
   /** 마지막 조각에만 붙는다. 편집에서 `undefined` = 기존 버튼 유지 · `[]` = 버튼 제거. */
   buttons?: ButtonRows;
+  /**
+   * 카드(013 P3-a2) — 마지막 조각에 붙는다 · 본문이 비어도 카드만 보낼 수 있다 · 한도를 넘으면 행 목록 글로.
+   * 편집은 버튼과 다르다 — `undefined` 면 기존 카드를 **지운다**(본문과 같이 메시지 전체를 바꾼다).
+   */
+  cards?: readonly Card[];
 }
 /** 문자열은 `{ text, format: 'plain' }` 과 같다. */
 export type Outgoing = string | OutgoingMessage;

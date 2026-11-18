@@ -96,6 +96,22 @@ describe('createDiscordBotTransport', () => {
     expect(bodies()[1].components).toBeDefined();
   });
 
+  // 013 P3-a1 (#773)
+  it('카드와 버튼이 함께 마지막 조각에 · 카드만이면 content 없이', async () => {
+    const { t, bodies } = setup([ok('a'), ok('b'), ok('c')]);
+    const text = Array.from({ length: 40 }, (_, i) => `${i} ${'가'.repeat(80)}`).join('\n');
+    const kb = [[{ label: 'ok', action: 'c' }]];
+    await t.send('finance', { ...html(text, kb), cards: [{ title: '보유' }] });
+    expect(bodies()[0].embeds).toBeUndefined();
+    expect(bodies()[1]).toMatchObject({ embeds: [{ title: '보유' }], components: expect.any(Array) });
+    await t.send('finance', { ...html('', kb), cards: [{ description: '카드만' }] });
+    expect(bodies()[2]).toEqual({
+      embeds: [{ description: '카드만' }],
+      allowed_mentions: { parse: [] },
+      components: [{ type: 1, components: [{ type: 2, style: 2, label: 'ok', custom_id: 'c' }] }],
+    });
+  });
+
   it('모르는 별칭 · 형식이 틀린 채널 ID · 빈 토큰은 보내지 않고 오류(값 비노출)', async () => {
     const fetch = vi.fn<FetchLike>();
     await expect(

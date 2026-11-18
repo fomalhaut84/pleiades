@@ -4760,3 +4760,9 @@ pleiades 추적 파일 정적 읽기 + 로컬 node_modules 소스 읽기 + 로�
 | fin MCP stdout 침묵 | 주말(fin AI 호출 0)에 24h 넘게 그대로 → `silent:fin-mcp` 오탐 275회(11-15~16) — 결정: 72h(PR-2) | #622 재판정 |
 
 - **못 잰 값:** 서버 pm2 버전(위 신호·dump 는 로컬 7.0.4 기준) · 서버 CLI 2.1.311 의 `--system-prompt-file` · 통합 층 첫 질문 `cost=`(첫 배포 뒤 런북 5절).
+
+## 2026-11-17 — node 버전 (사용자 확인 · #759)
+
+로컬(개발 환경)·서버 node = **v24.12.0**(사용자 2026-11-17). 이 파일의 로컬 v20.18.0 기록(2026-10-20 이전)은 낡았다. CI 앱 잡은 `24.x`(`.github/workflows/apps-ci.yml:56,114,163,205`).
+
+> **정정 (2026-11-18 · #761).** 로컬은 node 가 둘이다 — `which -a node` → 셸 기본 `~/.nvm/versions/node/v20.18.0/bin/node`(**v20.18.0** · `node:sqlite` 없음 `ERR_UNKNOWN_BUILTIN_MODULE`) · `/usr/local/bin/node`(**v24.22.0** · `node -e "const {DatabaseSync}=require('node:sqlite'); new DatabaseSync(':memory:').exec('create table t(x)')"` stderr 0 · rc 0). Claude 세션의 검증 명령은 v20.18 로 돈다. 서버 v24.12.0 은 사용자 확인 그대로.

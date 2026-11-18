@@ -68,7 +68,7 @@ const ZWSP = '\u200b';
  * 틀려도 안전은 그대로이게 한다: `<` 뒤와 `](` 사이에 보이지 않는 문자를 넣어 표기 · 가짜 링크 문법을 끊는다 — 코드 안에서도
  * 보이지 않는다(백슬래시는 코드 안에서 글자로 보였다). 코드 판정은 이제 겉모양(표 · 제목 · 링크 펼침)에만 쓰인다.
  */
-function neutralize(s: string): string {
+export function neutralize(s: string): string {
   return s.replace(/</g, `<${ZWSP}`).replace(/\]\(/g, `]${ZWSP}(`);
 }
 
