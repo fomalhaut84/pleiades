@@ -132,7 +132,7 @@ pleiades 프로세스 6개가 모두 jlist 에 없었다는 뜻이다. 수집기
 | 기록 | 뜻 · 할 일 |
 |---|---|
 | `hrm·api · pm2 · missing` · `status:<x>` · `restart` | 감시 중인데 없다 · online 이 아니다 · 재시작했다. 띄우려면 `hrm-inplace.sh <마지막 통과 태그>` · 내려 둘 것이면 `hrm-inplace.sh stop` |
-| 🔴 `hrm·api · state · stale` | 상태 파일이 5분 넘게 갱신되지 않았다 — 게시 루프가 멈췄거나 프로세스가 떠 있지만 응답하지 않는다. `pm2 logs pleiades-hrm-api --lines 50`(판정만) · 같은 태그로 `hrm-inplace.sh` |
+| 🔴 `hrm·api · state · stale` | 상태 파일이 5분 넘게 갱신되지 않았다 — 게시 루프가 멈췄거나 프로세스가 떠 있지만 응답하지 않는다(그동안 다른 상태 판정은 하지 않는다). 파일을 못 읽으면 수집기 경고 `state-read:hrm`. `pm2 logs pleiades-hrm-api --lines 50`(판정만) · 같은 태그로 `hrm-inplace.sh` |
 | 🔴 `hrm·api · registry · error` | 출처 레지스트리가 깨졌다 — **받기가 503**(출처가 재시도한다). `hermes-key.sh list` · 손으로 고친 파일을 되돌린다 |
 | 🟠 `hrm·api · webhook · none` · `secrets` | `DISCORD_WEBHOOK_HERMES` 없음·형식 오류 / 비밀 대조 재료를 못 읽음 — **받기만 하고 게시는 멈춘다**(대기열에 쌓인다 · 24 h 넘으면 dead). 플랫폼 설정을 고치면 다음 걸음부터 게시 |
 | 🟠 `hrm·api · queue · backlog` | 가장 오래된 대기 메시지가 30분 넘었다 — Discord 장애 · 429 · 웹훅 문제. 위 줄과 함께 본다 |

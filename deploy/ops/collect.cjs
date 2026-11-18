@@ -534,20 +534,26 @@ function collectAlive(ctx) {
 // 파일은 수치만 담는다 — 출처 id 만 칸에 쓴다(허용 문자 칸 · §1-4 ⓪)
 function collectHermes(ctx) {
   if (!ctx.active.includes('hrm') || ctx.deploy.hrm.held) return
-  ctx.evaluated.add('ops · collector · hrm-state-read')
+  // 이름은 `<무엇>:hrm` — 정지 때 activeApps 가 이 기록도 조용히 닫는다(`:${app}` 규칙 · #802 9-1 major)
+  ctx.evaluated.add('ops · collector · state-read:hrm')
   let st
   try {
     st = JSON.parse(fs.readFileSync(HRM_STATE, 'utf8'))
     if (!st || typeof st !== 'object' || Array.isArray(st)) throw new Error('shape')
   } catch {
-    ctx.obs.push(collector('hrm-state-read')) // 읽지 못한 회는 상태를 판정하지 않는다(열린 기록을 거짓 복구로 닫지 않게)
+    ctx.obs.push(collector('state-read:hrm')) // 읽지 못한 회는 상태를 판정하지 않는다(열린 기록을 거짓 복구로 닫지 않게)
     return
   }
   const num = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0)
   const push = (src, detail, sev, kind = 'state', count = 1) => ctx.obs.push(observation('hrm', 'api', src, detail, sev, kind, count))
-  for (const src of ['state', 'registry', 'webhook', 'queue', 'expiry']) ctx.evaluated.add(`hrm · api · ${src}`)
+  ctx.evaluated.add('hrm · api · state')
   const updated = Date.parse(st.updatedAt)
-  if (!Number.isFinite(updated) || ctx.now - updated > CONFIG.hrmStaleMin * MIN) push('state', ['stale'], '장애')
+  if (!Number.isFinite(updated) || ctx.now - updated > CONFIG.hrmStaleMin * MIN) {
+    // 멈춘 파일의 수치로 다른 판정을 하지 않는다 — 낡은 값으로 열리거나 닫히지 않게(9-1 info) · 기준값도 그대로
+    push('state', ['stale'], '장애')
+    return
+  }
+  for (const src of ['registry', 'webhook', 'queue', 'expiry']) ctx.evaluated.add(`hrm · api · ${src}`)
   if (st.registryError === true) push('registry', ['error'], '장애')
   if (st.paused === 'secrets') push('webhook', ['secrets'], '실패')
   else if (st.webhook !== true || st.paused === 'webhook') push('webhook', ['none'], '실패')
@@ -555,13 +561,15 @@ function collectHermes(ctx) {
   if (num(st.queued) > 0 && Number.isFinite(oldest) && ctx.now - oldest > CONFIG.hrmBacklogMin * MIN) push('queue', ['backlog'], '실패')
   for (const id of Array.isArray(st.expiringSoon) ? st.expiringSoon : []) if (field(id)) push('expiry', [field(id)], '경고')
 
-  const day = kstDate(new Date(ctx.now))
+  // "오늘" 은 hermes 가 그 수치를 쓴 시각의 KST 날 — 자정 직후 회가 23:59 에 쓴 어제 누계를 오늘 증가로 세지 않게(9-1 major)
+  const day = kstDate(new Date(updated))
   const prev = ctx.state.hrm || null
   const cur = { day, dead: num(st.dead), blocked: num(st.blockedToday), linkDropped: num(st.linkDroppedToday) }
   // 첫 회 · 정지 뒤 다시 켠 회는 기준값만 남긴다(정지 동안의 변화를 한꺼번에 내지 않게 · 로그의 끝에서 시작과 같다)
   if (prev && !ctx.reactivated.has('hrm')) {
     if (cur.dead > prev.dead) push('dead', [], '실패', 'event', cur.dead - prev.dead)
-    const base = (k) => (prev.day === day ? prev[k] : 0)
+    // 같은 날인데 줄었다 = hermes 재시작(링크 뺌은 메모리 수치) — 그때는 0 부터(9-1 info)
+    const base = (k) => (prev.day === day && cur[k] >= prev[k] ? prev[k] : 0)
     if (cur.blocked > base('blocked')) push('blocked', [], '경고', 'event', cur.blocked - base('blocked'))
     if (cur.linkDropped > base('linkDropped')) push('link-dropped', [], '경고', 'event', cur.linkDropped - base('linkDropped'))
   }

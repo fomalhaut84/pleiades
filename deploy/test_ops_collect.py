@@ -1175,7 +1175,7 @@ class Hermes(Base):
         self.procs()
         self.state_file.write_text("{")
         self.ok()
-        self.assertIn("hrm-state-read", self.text())
+        self.assertIn("state-read:hrm", self.text())
 
     def test_webhook_none_secrets_registry_backlog(self):
         self.activate()
@@ -1232,6 +1232,65 @@ class Hermes(Base):
         t = self.text()
         self.assertIn("hrm·api · expiry · orders", t)
         self.assertNotIn("bad id", t)   # 허용 문자 밖 값은 칸에 오지 않는다
+
+    # 회귀: #802 9-1 major — 정지하면 수집기 자신의 hrm 기록(state-read:hrm)도 조용히 닫힌다(요약 "열린 이상" 에 남지 않게)
+    def test_stop_closes_own_state_read_record(self):
+        self.activate()
+        self.procs()
+        self.state_file.write_text("{")
+        self.ok()
+        opened = [e for e in self.state()["fps"].values() if e.get("src") == "state-read:hrm"]
+        self.assertTrue(opened and opened[0]["open"])
+        self.activate(on=False)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertFalse([e for e in self.state()["fps"].values() if e.get("src") == "state-read:hrm" and e["open"]])
+        self.assertNotIn("🟢", self.text())   # 정지는 사람이 한 일 — 복구 게시 없음
+
+    # 회귀: #802 9-1 major — 자정 직후 회가 23:59 에 쓴 어제 누계를 오늘 증가로 세지 않는다
+    def test_midnight_reads_yesterday_file_without_recount(self):
+        self.activate()
+        self.procs()
+        self.hstate(at="2026-11-10T23:54:55+09:00", blockedToday=4)
+        self.ok(now="2026-11-10T23:55:00+09:00")
+        self.hstate(at="2026-11-10T23:59:55+09:00", blockedToday=4)
+        self.ok(now="2026-11-11T00:00:05+09:00")
+        self.hstate(at="2026-11-11T00:04:55+09:00", blockedToday=1)
+        self.ok(now="2026-11-11T00:05:00+09:00")
+        ev = [e for e in self.events() if e.get("type") == "obs" and e.get("src") == "blocked"]
+        self.assertEqual([e["count"] for e in ev], [1])
+
+    def test_link_dropped_restart_counts_from_zero(self):
+        # 링크 뺌은 hermes 메모리 수치 — 같은 날 줄었다 = 재시작 · 그 뒤 증가는 0 부터 센다(9-1 info)
+        self.activate()
+        self.procs()
+        self.hstate(linkDroppedToday=5)
+        self.ok()
+        self.hstate(at="2026-11-10T08:04:55+09:00", linkDroppedToday=2)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        ev = [e for e in self.events() if e.get("type") == "obs" and e.get("src") == "link-dropped"]
+        self.assertEqual([e["count"] for e in ev], [2])
+
+    def test_stale_skips_other_state_judgments(self):
+        self.activate()
+        self.procs()
+        self.hstate(at="2026-11-10T07:40:00+09:00", webhook=False, registryError=True)
+        self.ok()
+        t = self.text()
+        self.assertIn("state · stale", t)
+        self.assertNotIn("webhook", t)
+        self.assertNotIn("registry", t)
+
+    def test_registry_error_line_is_warning(self):
+        self.activate()
+        self.procs()
+        self.hstate()
+        self.log(self.E, "")
+        self.ok()
+        self.log(self.E, "2026-11-10 08:01:00: [hermes] 레지스트리 오류 — 받기를 503 으로 멈춘다: JSON 이 아니다\n", append=True)
+        self.hstate(at="2026-11-10T08:04:55+09:00")
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        reg = [p for p in self.posts() if "hermes-registry" in p]
+        self.assertTrue(reg and all("🟡" in p for p in reg))
 
     def test_held_during_deploy(self):
         self.activate()
