@@ -564,12 +564,14 @@ function collectHermes(ctx) {
   // "오늘" 은 hermes 가 그 수치를 쓴 시각의 KST 날 — 자정 직후 회가 23:59 에 쓴 어제 누계를 오늘 증가로 세지 않게(9-1 major)
   const day = kstDate(new Date(updated))
   const prev = ctx.state.hrm || null
-  const cur = { day, dead: num(st.dead), blocked: num(st.blockedToday), linkDropped: num(st.linkDroppedToday) }
+  // dead 는 오늘 수치(deadToday — 대기열 done_at 기준 · 재시작에도 그대로)로 센다. 보관 중인 dead 수는 30일 보존 정리로 줄어
+  // 같은 회에 정리와 새 dead 가 겹치면 증가를 놓친다(#803 Codex P2)
+  const cur = { day, dead: num(st.deadToday), blocked: num(st.blockedToday), linkDropped: num(st.linkDroppedToday) }
   // 첫 회 · 정지 뒤 다시 켠 회는 기준값만 남긴다(정지 동안의 변화를 한꺼번에 내지 않게 · 로그의 끝에서 시작과 같다)
   if (prev && !ctx.reactivated.has('hrm')) {
-    if (cur.dead > prev.dead) push('dead', [], '실패', 'event', cur.dead - prev.dead)
     // 같은 날인데 줄었다 = hermes 재시작(링크 뺌은 메모리 수치) — 그때는 0 부터(9-1 info)
-    const base = (k) => (prev.day === day && cur[k] >= prev[k] ? prev[k] : 0)
+    const base = (k) => (prev.day === day && cur[k] >= (prev[k] ?? 0) ? (prev[k] ?? 0) : 0)
+    if (cur.dead > base('dead')) push('dead', [], '실패', 'event', cur.dead - base('dead'))
     if (cur.blocked > base('blocked')) push('blocked', [], '경고', 'event', cur.blocked - base('blocked'))
     if (cur.linkDropped > base('linkDropped')) push('link-dropped', [], '경고', 'event', cur.linkDropped - base('linkDropped'))
   }

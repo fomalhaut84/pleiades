@@ -136,7 +136,7 @@ pleiades 프로세스 6개가 모두 jlist 에 없었다는 뜻이다. 수집기
 | 🔴 `hrm·api · registry · error` | 출처 레지스트리가 깨졌다 — **받기가 503**(출처가 재시도한다). `hermes-key.sh list` · 손으로 고친 파일을 되돌린다 |
 | 🟠 `hrm·api · webhook · none` · `secrets` | `DISCORD_WEBHOOK_HERMES` 없음·형식 오류 / 비밀 대조 재료를 못 읽음 — **받기만 하고 게시는 멈춘다**(대기열에 쌓인다 · 24 h 넘으면 dead). 플랫폼 설정을 고치면 다음 걸음부터 게시 |
 | 🟠 `hrm·api · queue · backlog` | 가장 오래된 대기 메시지가 30분 넘었다 — Discord 장애 · 429 · 웹훅 문제. 위 줄과 함께 본다 |
-| 🟠 `hrm·api · dead` | 메시지가 dead 가 됐다(시도 20회 · 24 h · Discord 400) — 그 메시지는 게시되지 않는다. 출처에 알린다 |
+| 🟠 `hrm·api · dead` | 메시지가 dead 가 됐다(시도 20회 · 24 h · Discord 400) — 그 메시지는 게시되지 않는다. 출처에 알린다(오늘 dead 수의 증가로 센다 · 보존 정리와 무관) |
 | 🟡 `blocked` · `link-dropped` · `expiry · <출처>` | 게시 전 검사 차단(`#hermes` 에 고정 문구) · 허용 밖 링크 줄을 뺐다 · 출처 키가 7일 안에 만료된다 — **일일 요약에만** |
 | 🟠 `hrm·api · stderr · hermes · …` | hermes 의 stderr(대기열 쓰기 실패 · 게시 루프 오류 등). 상태 전환 줄(`게시 멈춤` · `레지스트리 오류`)은 위 상태형 기록과 겹치므로 경고(`hermes-paused` · `hermes-registry`)로만 |
 

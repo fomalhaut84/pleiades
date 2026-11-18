@@ -1201,10 +1201,10 @@ class Hermes(Base):
     def test_dead_blocked_link_dropped_increase_are_events(self):
         self.activate()
         self.procs()
-        self.hstate(dead=1, blockedToday=2, linkDroppedToday=0)
+        self.hstate(dead=1, deadToday=1, blockedToday=2, linkDroppedToday=0)
         self.ok()
         self.assertEqual(self.posts(), [])   # 첫 회는 기준값만
-        self.hstate(at="2026-11-10T08:04:55+09:00", dead=3, blockedToday=3, linkDroppedToday=1)
+        self.hstate(at="2026-11-10T08:04:55+09:00", dead=3, deadToday=3, blockedToday=3, linkDroppedToday=1)
         self.ok(now="2026-11-10T08:05:00+09:00")
         t = self.text()
         self.assertIn("hrm·api · dead", t)
@@ -1212,6 +1212,17 @@ class Hermes(Base):
         self.assertIn("hrm·api · link-dropped", t)
         ev = [e for e in self.events() if e.get("type") == "obs" and e.get("app") == "hrm"]
         self.assertEqual({e["src"]: e["count"] for e in ev}, {"dead": 2, "blocked": 1, "link-dropped": 1})
+
+    # 회귀: #803 Codex P2 — 보존 정리로 보관 dead 수가 줄어도 오늘 새 dead 는 센다
+    def test_dead_counted_from_today_not_retained_total(self):
+        self.activate()
+        self.procs()
+        self.hstate(dead=5, deadToday=0)
+        self.ok()
+        self.hstate(at="2026-11-10T08:04:55+09:00", dead=5, deadToday=2)   # 옛 dead 2 정리 + 새 dead 2
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        ev = [e for e in self.events() if e.get("type") == "obs" and e.get("src") == "dead"]
+        self.assertEqual([e["count"] for e in ev], [2])
 
     def test_today_counters_reset_on_new_day(self):
         self.activate()
@@ -1303,16 +1314,16 @@ class Hermes(Base):
     def test_stopped_is_not_judged_and_reactivation_resets_baseline(self):
         self.activate()
         self.procs()
-        self.hstate(dead=0)
+        self.hstate(deadToday=0)
         self.ok()
         self.activate(on=False)
         self.procs(hrm=None)
-        self.hstate(at="2026-11-10T07:40:00+09:00", dead=5)
+        self.hstate(at="2026-11-10T07:40:00+09:00", deadToday=5)
         self.ok(now="2026-11-10T08:05:00+09:00")
         self.assertNotIn("hrm", self.text())
         self.activate()
         self.procs()
-        self.hstate(at="2026-11-10T08:09:55+09:00", dead=7)
+        self.hstate(at="2026-11-10T08:09:55+09:00", deadToday=7)
         self.ok(now="2026-11-10T08:10:00+09:00")
         self.assertNotIn("hrm·api · dead", self.text())   # 정지 동안의 변화를 한꺼번에 내지 않는다
 
