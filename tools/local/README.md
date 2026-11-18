@@ -77,7 +77,7 @@ node tools/local/hermes-live-check.cjs run "$S" 4700        # 다른 터미널 �
 ```
 
 - 웹훅 해시: `cd apps/hermes && PLEIADES_ENV_FILE="$S/platform.env" python3 ../../tools/local/check_env.py hrm --discord-hashes`. **검증 채널 웹훅인지는 넣는 사람이 확인한다.**
-- 화면(검증 `#hermes`)에서 볼 것: 굵은 제목 · ⚠️ · `🔗 관리 화면 · https://example.com/…` · 링크 줄이 빠진 메시지 · 서식이 글자로 보이는 메시지(맨 주소가 링크가 아니다) · `[hermes] 게시 차단 · live · 사유 pii` · 중복 키 메시지는 한 번만 · 미리보기 없음.
+- 화면(검증 `#hermes`)에서 볼 것: 게시 이름 `hermes` · 첫 줄 굵게 `[실측] 제목`(제목 없으면 `[실측]` 뒤에 본문 · #811) · ⚠️ · `🔗 관리 화면 · https://example.com/…` · 링크 줄이 빠진 메시지 · 서식이 글자로 보이는 메시지(맨 주소가 링크가 아니다) · `[hermes] 게시 차단 · live · 사유 pii` · 중복 키 메시지는 한 번만 · 미리보기 없음.
 - 루프백(`127.0.0.1`)에만 묶인다. 백그라운드로 띄웠으면 바깥 셸이 아니라 **node 프로세스**에 SIGTERM 을 보낸다(`lsof -iTCP:4700 -sTCP:LISTEN`).
 - 되돌리기: 프로세스 정지 · `rm -rf "$S"` · `apps/hermes/.env` 에서 `HERMES_*` 줄 삭제(**즉시**).
 - 첫 실측: 2026-11-18 — 받기 9/9 · 게시 sent 5(링크 뺌 1 포함) · blocked 1(pii) · dead 0 · 로그에 키 · 본문 · 웹훅 0건 · SIGTERM 즉시 종료 · 검증 `#hermes` 화면 6건 사용자 확인(#798).

@@ -48,7 +48,7 @@ const isGenericToken = (s: string): boolean =>
 export const hasToken = (s: string): boolean =>
   TOKEN_RES.some((re) => re.test(s)) || [...s.matchAll(GENERIC_TOKEN)].some((m) => isGenericToken(m[0]));
 
-const hasPii = (s: string): boolean =>
+export const hasPii = (s: string): boolean =>
   PHONE_RE.test(s) || [...s.matchAll(EMAIL_RE)].some((m) => !FILE_EXT.has(m[1].toLowerCase()));
 
 /** escape 가 넣은 `\` 가 값을 끊는다 — 대조는 벗긴 본문으로도 한다 */

@@ -50,6 +50,8 @@ describe("parseRegistry 검증", () => {
     ["속도 범위", doc(src({ ratePerMinute: 0 }))],
     ["링크 호스트 타입", doc(src({ linkHosts: "a.com" }))],
     ["모르는 칸", doc(src({ secret: "x" }))],
+    ["이름이 전화번호 모양(#811)", doc(src({ name: "010-1234-5678" }))],
+    ["이름이 이메일 모양", doc(src({ name: "a@b.co" }))],
   ])("%s → 거부", (_name, text) => {
     expect(parseRegistry(text).ok).toBe(false);
   });

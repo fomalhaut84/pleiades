@@ -64,7 +64,7 @@ describe("createPoster.step", () => {
     expect(calls).toEqual([
       {
         url: `${HOOK}?wait=true`,
-        body: { content: "**새 주문**\n주문 #1", username: "hermes·주문", allowed_mentions: { parse: [] }, flags: 4 },
+        body: { content: "**[주문] 새 주문**\n주문 #1", username: "hermes", allowed_mentions: { parse: [] }, flags: 4 },
       },
     ]);
     expect(q.counts()).toMatchObject({ queued: 0, sent: 1 });
@@ -202,7 +202,7 @@ describe("createPoster.step", () => {
   it("레지스트리에서 빠진 출처 — 링크는 빼고 id 이름으로 보낸다", async () => {
     q.enqueue({ source: "gone", text: "a", level: "info", link: { label: "x", url: "https://a.example/" } }, now);
     await createPoster(deps).step();
-    expect(calls[0].body).toMatchObject({ content: "a", username: "hermes·gone" });
+    expect(calls[0].body).toMatchObject({ content: "**[gone]** a", username: "hermes" });
   });
 
   it("로그에 본문 · 웹훅 주소를 남기지 않는다", async () => {

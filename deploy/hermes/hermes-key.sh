@@ -2,7 +2,7 @@
 # hermes-key.sh — hermes 출처 키 관리(014 §3-D · H-2 #800 · 런북 docs/runbooks/hermes.md B).
 #
 # 사용:  deploy/hermes/hermes-key.sh add <id> --name <표시 이름> [--expires YYYY-MM-DD] [--link-host <호스트>]… [--rate <분당>]
-#        deploy/hermes/hermes-key.sh list | disable <id> | enable <id> | remove <id> | rotate <id>
+#        deploy/hermes/hermes-key.sh list | disable <id> | enable <id> | remove <id> | rotate <id> | expires <id> <YYYY-MM-DD|none>
 #   서버의 ~/pleiades-hermes 안에서 사용자가 직접 부른다(Claude 서버 접근 금지 · I-3). 빌드된 dist 가 있어야 한다(hrm-inplace.sh 통과 뒤).
 #   레지스트리 = ~/pleiades-hermes-data/sources.json(pm2 정의와 같은 자리) · 0600 · 키의 SHA-256 만 저장한다.
 #   add · rotate 는 키를 **한 번만** 출력한다 — 출처 쪽 설정에 넣고 화면을 닫는다(세션 · 이슈 · 채팅에 붙이지 않는다).

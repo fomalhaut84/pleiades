@@ -80,6 +80,7 @@ const USAGE = [
   "      hermes key list",
   "      hermes key disable <id> | enable <id> | remove <id>",
   "      hermes key rotate <id>        (새 키 발급 · 옛 키는 바로 무효)",
+  "      hermes key expires <id> <YYYY-MM-DD|none>   (만료일만 바꾼다 · 키 그대로 · 시즌 연장)",
 ];
 
 export function runKeyCli(args: readonly string[], registryFile: string, io: Io): number {
@@ -158,6 +159,22 @@ export function runKeyCli(args: readonly string[], registryFile: string, io: Io)
       const rc = write({ sources: next }, `새 키: ${id}(옛 키는 지금부터 401)`);
       if (rc === 0) printKey(io, id, key);
       return rc;
+    }
+    case "expires": {
+      // #811 — 시즌 연장 등: 키는 그대로 · 만료일만. 검증은 save 의 parseRegistry(받기 쪽과 같은 규칙)
+      const value = parsed.pos[2];
+      if (id === undefined || value === undefined || parsed.pos.length > 3) {
+        USAGE.forEach(io.err);
+        return 2;
+      }
+      const i = find();
+      if (i < 0) {
+        io.err(`없다: ${id}`);
+        return 1;
+      }
+      const expires = value === "none" ? null : value;
+      const next = doc.sources.map((s, j) => (j === i ? { ...s, expires } : s));
+      return write({ sources: next }, `만료: ${id} → ${expires ?? "없음"}(키 그대로)`);
     }
     case "disable":
     case "enable": {

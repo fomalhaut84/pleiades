@@ -21,11 +21,11 @@ export interface Formatted {
   readonly linkDropped: boolean;
 }
 
-/** 채널 `#hermes`(#796 · 014 D4 정정) — 게시 이름은 `hermes·<출처 표시 이름>` */
-const USERNAME_PREFIX = "hermes·";
-/** 차단 고정 문구 · 이름을 쓸 수 없을 때의 이름 */
+/**
+ * 게시 이름(웹훅 username)은 **hermes 고정** — hermes 는 여러 앱의 메시지를 채널로 전달하는 중계다. 출처는 본문 첫 줄의
+ * `[표시 이름]`(굵게)으로 보인다(사용자 2026-11-18 · #811 — 옛 `hermes·<표시 이름>` 대신).
+ */
 export const HERMES_USERNAME = "hermes";
-const FORBIDDEN_NAME_RE = /discord|clyde/i;
 const ELLIPSIS = "…";
 /** 본문에 최소한 남길 자리 — 링크 줄이 이보다 많이 먹으면 링크 줄을 뺀다 */
 const MIN_BODY_ROOM = 200;
@@ -67,20 +67,17 @@ function fitText(text: string, room: number): string {
   return plain(chars.slice(0, lo).join("")) + ELLIPSIS;
 }
 
-function usernameOf(m: QueuedMessage, source: Source | null): string {
-  const name = source?.name ?? m.source;
-  return FORBIDDEN_NAME_RE.test(name) ? HERMES_USERNAME : USERNAME_PREFIX + name;
-}
-
 export function formatMessage(m: QueuedMessage, source: Source | null): Formatted {
   const warn = m.level === "warn" ? "⚠️ " : "";
-  const head = m.title !== undefined ? `${warn}**${plain(m.title)}**\n` : warn;
+  // 출처 = 레지스트리 표시 이름(못 찾으면 id) — 제목이 있으면 `**[이름] 제목**` 줄 · 없으면 `**[이름]** ` 뒤에 본문
+  const tag = `[${plain(source?.name ?? m.source)}]`;
+  const head = m.title !== undefined ? `${warn}**${tag} ${plain(m.title)}**\n` : `${warn}**${tag}** `;
   const href = m.link !== undefined ? allowedHref(m.link.url, source) : null;
   let tail = m.link !== undefined && href !== null ? `\n🔗 ${plain(m.link.label)} · ${href}` : "";
   if (POST_MAX - head.length - tail.length < MIN_BODY_ROOM) tail = "";
   const linkDropped = m.link !== undefined && tail === "";
   const body = fitText(m.text, POST_MAX - head.length - tail.length);
-  return { content: head + body + tail, username: usernameOf(m, source), linkDropped };
+  return { content: head + body + tail, username: HERMES_USERNAME, linkDropped };
 }
 
 export function blockedNotice(sourceId: string, reason: string): { content: string; username: string } {

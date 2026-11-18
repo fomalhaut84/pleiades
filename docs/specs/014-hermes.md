@@ -24,6 +24,8 @@
 
 > **정정 (2026-11-18 · 사용자 · #796) — 채널 `#spot` → `#hermes`.** 운영 · 검증 채널 모두 `#hermes` 다. 플랫폼 키 **`DISCORD_WEBHOOK_SPOT` → `DISCORD_WEBHOOK_HERMES`**(앱별 웹훅 키 `DISCORD_WEBHOOK_<APP>` 와 같은 규칙) · 게시 이름 접두 `spot·` → **`hermes·`**(§3-E) · 차단 고정 문구 · 이름을 쓸 수 없을 때의 이름 = **`hermes`**. 이 문서의 `#spot` · `DISCORD_WEBHOOK_SPOT` · `spot·` 은 이 블록으로 읽는다(D4 의 "웹훅 하나" 는 그대로). §5 임시 경로의 채널도 `#hermes` 다. 배치 전이라 서버 조치 없음. 되돌리기: revert (**즉시**).
 
+> **정정 (2026-11-18 · 사용자 · #811) — 게시 이름 `hermes` 고정 · 출처는 첫 줄 `[표시 이름]`.** hermes 는 내·외부 앱의 메시지를 Discord 채널로 **전달**하는 중계다 — 웹훅 username 은 늘 **`hermes`**(위 #796 블록의 `hermes·<표시 이름>` 접두는 소진) · 출처는 본문 첫 줄에 굵게: 제목이 있으면 `**[표시 이름] 제목**` 줄 · 없으면 `**[표시 이름]** 본문` · `level=warn` 은 그 앞에 ⚠️(§3-E). 출처를 못 찾으면(레지스트리에서 빠짐) id. 차단 고정 문구는 그대로(`[hermes] 게시 차단 · <출처 id> · 사유 <code>`). 함께: 키 도구 `expires <id> <YYYY-MM-DD|none>`(키 그대로 만료일만 · 시즌 연장). 서버 조치: patch 릴리즈 뒤 `hrm-inplace.sh <태그>`. 되돌리기: revert + 같은 명령 (**중간**).
+
 **첫 출처의 시기:** 주문 앱은 곧 시즌을 시작한다(사용자). hermes 가 그 전에 준비되지 않으면 §5 의 임시 경로를 쓴다.
 
 ## 0. 대장
@@ -244,6 +246,8 @@ Idempotency-Key: <출처가 정한 문자열 · 선택 · 최대 128자>
 > **진행 (2026-11-18 · #800 · H-2).** 서버 확인(사용자 · 판정만): **U1** 후보 4700 비어 있음 · fin·fit 포트와 겹치지 않음 → **포트 4700**(pm2 정의 고정 · D9) · **U3** 서버 node 24.12 는 `node:sqlite` 경고 1줄 → `--disable-warning=ExperimentalWarning` 로 0줄(D10 그대로 · pm2 `node_args`). 배치 = `deploy/hermes/hrm-inplace.sh`(adv 판 복사 + ① env 대조 adv 까지 ② 포트 가드 ③ C4 `hermes check` · C6 health + 상태 파일) · `pleiades-hrm.config.cjs`(데이터 `~/pleiades-hermes-data/` · 앱 `.env` 없음) · 출처 키 `hermes key …` + `hermes-key.sh` · 런북 `docs/runbooks/hermes.md`. 되돌리기: 문구 (**즉시**).
 
 > **진행 (2026-11-18 · #802 · H-3).** 수집기 `collect.cjs` — 곁가지 앱 일반화(`SIDE_APPS` adv · hrm · 표지 `inplace-<앱>-last-ok`·`-stopped`) · `ROLES_OF.hrm = ['api']` · 로그 이름 정규식 · 생존 표지 판정은 bot 역할만 · 상태 파일 판정 `collectHermes`(stale 5분 · 적체 30분 · 기준값 `state.hrm` · 다시 켠 회는 기준값만) · hermes 상태 전환 stderr 2줄은 알려진 줄(경고). 서버 조치 = 수집기 재설치(사용자). 되돌리기: 문구 (**즉시**).
+
+> **배치 (2026-11-18 · `v1.20.0` · 사용자).** 운영 서버에 첫 설치 — `hrm-inplace.sh v1.20.0` 통과 · 첫 게시 확인(D) 통과(`#hermes`). 수집기 재설치(hermes 감시 판 · REF `18bab57f`) 설치 통과(사용자). 런북 D 절 정정 #809(블록을 통째로 붙이면 `read` 가 다음 줄을 키로 읽었다). 다음 = 주문 앱 출처 등록 · §5 임시 경로에서 전환 · H-4(자동 배포 단계 · 수동 몇 회 뒤) · H-5(외부 입구 · 필요할 때). 되돌리기: 문구 (**즉시**).
 
 H-1~H-3 은 서로의 PR 이 머지돼야 다음이 돈다 — 순서대로. H-1 이 9-1 에이전트 리뷰 필수(실행 코드 · 보안 sensitive) · H-2·H-3 도 필수(`deploy/` 는 서버 경로).
 
