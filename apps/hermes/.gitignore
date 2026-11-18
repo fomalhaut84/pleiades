@@ -1,0 +1,10 @@
+/node_modules
+/dist
+/logs
+.env
+.env*.local
+# 014 C3 — 로컬 대기열 · 상태(서버는 체크아웃 밖 상태 디렉터리)
+/state
+*.db
+*.db-wal
+*.db-shm
