@@ -16,6 +16,8 @@ import {
   toDiscordMarkdown,
   type FormDataLike,
   type PostConfig,
+  planDiscordMessages,
+  type DiscordMessagePart,
 } from '@pleiades/notify';
 import { toComponents } from './buttons';
 import type { ButtonRows, Logger, Outgoing, OutgoingFile, OutgoingMessage, SentMessage } from './types';
@@ -93,7 +95,15 @@ export function normalize(msg: Outgoing): OutgoingMessage {
   return typeof msg === 'string' ? { text: msg, format: 'plain' } : msg;
 }
 
-/** 본문 → Discord md 조각들(빈 조각 제외). 전부 비면 던진다. */
+/**
+ * 본문 + 카드 → 보낼 메시지들(013 P3-a2) — notify `planDiscordMessages` 한 길: 형식 변환 · 2000자 조각 · 카드는 마지막 조각 ·
+ * 한도 넘는 카드는 행 목록 글로 · 본문도 카드도 없으면 던진다. 답장 · 편집 · 인터랙션 편집이 모두 여기를 거친다.
+ */
+export function toParts(msg: OutgoingMessage, logger: Logger): DiscordMessagePart[] {
+  return planDiscordMessages({ text: msg.text, format: msg.format ?? 'plain', ...(msg.cards ? { cards: msg.cards } : {}) }, logger);
+}
+
+/** 본문 → Discord md 조각들(빈 조각 제외 · 카드 무시). 전부 비면 던진다. 한 메시지 문구(파일 설명 · 본인 안내)용. */
 export function toChunks(msg: OutgoingMessage): string[] {
   const md = toDiscordMarkdown(msg.text, msg.format ?? 'plain'); // 형식마다 한 길 — 답장 · 편집 · 인터랙션이 모두 여기를 거친다
   const chunks = splitDiscordMarkdown(md, DISCORD_MAX_LENGTH).filter((c) => c.trim() !== '');
@@ -155,16 +165,18 @@ export function createRest(opts: RestOptions): Rest {
     delete: () => rest.delete(channelId, id),
   });
 
-  /** 여러 조각을 채널에 보낸다 — 버튼은 마지막에. 마지막 메시지 id. */
-  const sendChunks = async (channelId: string, chunks: readonly string[], buttons: ButtonRows | undefined): Promise<string> => {
+  const logger = (): Logger => opts.logger ?? console;
+
+  /** 여러 조각을 채널에 보낸다 — 버튼 · 카드는 마지막에(카드는 `toParts` 가 이미 마지막 조각에 둔다). 마지막 메시지 id. */
+  const sendParts = async (channelId: string, parts: readonly DiscordMessagePart[], buttons: ButtonRows | undefined): Promise<string> => {
     const components = buttons === undefined ? undefined : toComponents(buttons);
     let id = '';
-    for (let i = 0; i < chunks.length; i++) {
-      const last = i === chunks.length - 1;
+    for (let i = 0; i < parts.length; i++) {
+      const last = i === parts.length - 1;
       id = await request(
         channelUrl(channelId),
         botJson('POST', {
-          content: chunks[i],
+          ...parts[i],
           allowed_mentions: NO_PINGS,
           ...(last && components !== undefined ? { components } : {}),
         }),
@@ -174,7 +186,7 @@ export function createRest(opts: RestOptions): Rest {
   };
 
   /**
-   * 편집 공통 — 한 조각이면 그대로 바꾼다. 여러 조각이면 원본을 첫 조각으로 바꾸고 나머지를 이어 보낸다.
+   * 편집 공통 — 한 조각이면 그대로 바꾼다. 여러 조각이면 원본을 첫 조각으로 바꾸고 나머지를 이어 보낸다(카드는 마지막 조각 · 원본 embeds 는 비운다).
    * 버튼: `undefined` = 원본 버튼 유지(이어 보낸 조각엔 없음) · 주어지면 마지막 조각에(원본이 마지막이 아니면 원본 버튼은 지운다).
    */
   const editWith = async (
@@ -183,21 +195,23 @@ export function createRest(opts: RestOptions): Rest {
     msg: Outgoing,
   ): Promise<void> => {
     const m = normalize(msg);
-    const chunks = toChunks(m);
+    const parts = toParts(m, logger());
     const components = m.buttons === undefined ? undefined : toComponents(m.buttons);
-    const single = chunks.length === 1;
+    const single = parts.length === 1;
     await patch({
-      content: chunks[0],
+      // 카드만으로 바꾸면 옛 본문을 지운다('') · embeds 는 늘 명시 — 빼면 옛 카드가 남는다(013 §4-1 P3-a)
+      content: parts[0].content ?? '',
+      embeds: single ? (parts[0].embeds ?? []) : [],
       allowed_mentions: NO_PINGS,
       ...(components === undefined ? {} : { components: single ? components : [] }),
     });
-    if (!single) await sendChunks(channelId, chunks.slice(1), m.buttons);
+    if (!single) await sendParts(channelId, parts.slice(1), m.buttons);
   };
 
   const rest: Rest = {
     async send(channelId, msg) {
       const m = normalize(msg);
-      return sent(channelId, await sendChunks(channelId, toChunks(m), m.buttons));
+      return sent(channelId, await sendParts(channelId, toParts(m, logger()), m.buttons));
     },
     edit(channelId, messageId, msg) {
       return editWith(

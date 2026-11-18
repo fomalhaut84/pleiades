@@ -26,12 +26,28 @@ export interface ReplyButton {
  */
 export type ReplyButtonRows = readonly (readonly ReplyButton[])[]
 
+/**
+ * 카드 하나(013 P3-a2 · #775) — Discord 는 embed. 플랫폼 중립 모양이라 이 계층에 둔다(패키지를 import 하지 않는다 · chat `Card` 와 같은 모양).
+ * 표는 설명 칸 행 목록으로(F8 — inline 칸은 모바일에서 세로로 무너진다) · 색은 앱 고정 + 손익만 덮기(F6).
+ */
+export interface ReplyCard {
+  readonly title?: string
+  readonly description?: string
+  /** `markdown` 이면 템플릿 서식이 산다 — 외부 값은 escape 해 넣는다. 기본 plain. */
+  readonly descriptionFormat?: 'plain' | 'markdown'
+  /** `0xRRGGBB` */
+  readonly color?: number
+  readonly footer?: string
+}
+
 /** 보낼(또는 바꿀) 메시지 하나. */
 export interface BotReply {
   readonly text: string
   readonly format: ReplyFormat
   /** 없으면 버튼 없음. */
   readonly buttons?: ReplyButtonRows
+  /** 카드 — 마지막 조각에 붙는다 · 본문이 비어도 된다(013 P3-a2). 편집에서 없으면 기존 카드를 지운다. */
+  readonly cards?: readonly ReplyCard[]
   /**
    * 모델 출력(AI 답 · 종목 심층 분석) — Discord 어댑터가 명령 표기(`/ai` → `!ai`)를 바꾸지 않는다(설계 P N20 · fit `long` 과 같다).
    * pleiades 009 D-3 PR-3 (pleiades#398).
