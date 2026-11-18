@@ -15,7 +15,7 @@ export function createRateLimiter(): RateLimiter {
   return {
     take(source, perMinute, now) {
       const prev = buckets.get(source) ?? { tokens: perMinute, at: now };
-      const refilled = Math.min(perMinute, prev.tokens + ((now - prev.at) * perMinute) / MINUTE_MS);
+      const refilled = Math.min(perMinute, prev.tokens + (Math.max(0, now - prev.at) * perMinute) / MINUTE_MS);
       if (refilled >= 1) {
         buckets.set(source, { tokens: refilled - 1, at: now });
         return { ok: true };

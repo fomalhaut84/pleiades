@@ -1,5 +1,5 @@
 // 014 §3-C C3 — SQLite outbox 대기열(H-1a · #791)
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -112,7 +112,8 @@ describe("openQueue", () => {
     expect(q.enqueue(msg({ idempotencyKey: "k" }), 1).duplicate).toBe(true);
   });
 
-  it("WAL 모드로 연다", () => {
+  it("WAL 모드로 연다 · 파일은 0600", () => {
     expect(q.journalMode()).toBe("wal");
+    expect(statSync(file()).mode & 0o777).toBe(0o600);
   });
 });

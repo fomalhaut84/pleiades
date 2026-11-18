@@ -13,6 +13,9 @@ import type { Registry } from "./registry";
 import { validateIdempotencyKey, validateMessage } from "./validate";
 
 export const MAX_BODY_BYTES = 16 * 1024;
+/** 종료 때 진행 중 응답을 기다리는 시간 — 그 뒤 남은 연결을 끊는다(9-1 info · 커밋된 202 를 잃지 않게) */
+export const DRAIN_MS = 1000;
+const UTF8 = new TextDecoder("utf-8", { fatal: true });
 
 export interface HermesDeps {
   readonly registry: Registry;
@@ -103,7 +106,13 @@ export function createHermesServer(deps: HermesDeps): HermesServer {
     });
     const idem = validateIdempotencyKey(req.headers["idempotency-key"]);
     if (!idem.ok) return done(400, { error: "invalid", reason: idem.reason });
-    const msg = validateMessage(body.toString("utf8"));
+    let raw: string;
+    try {
+      raw = UTF8.decode(body); // 잘못된 UTF-8 을 U+FFFD 로 바꿔 받지 않는다(9-1 info)
+    } catch {
+      return done(400, { error: "invalid", reason: "json" });
+    }
+    const msg = validateMessage(raw);
     if (!msg.ok) return done(400, { error: "invalid", reason: msg.reason });
     try {
       const r = deps.queue.enqueue(
@@ -150,7 +159,8 @@ export function createHermesServer(deps: HermesDeps): HermesServer {
       shuttingDown = true;
       return new Promise((resolve) => {
         server.close(() => resolve());
-        server.closeAllConnections();
+        server.closeIdleConnections();
+        setTimeout(() => server.closeAllConnections(), DRAIN_MS).unref();
       });
     },
   };

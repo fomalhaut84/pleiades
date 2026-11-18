@@ -6,6 +6,7 @@
  * 교체 자리: 이 인터페이스 뒤에서 C4 · C5 로 갈아 끼운다(§9).
  */
 import { randomUUID } from "node:crypto";
+import { chmodSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
 export type Level = "info" | "warn";
@@ -111,6 +112,14 @@ export function openQueue(file: string, opts: QueueOptions = {}): Queue {
   const retentionMs = opts.retentionMs ?? 30 * DAY_MS;
   const db = new DatabaseSync(file);
   db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000;");
+  // WAL 이 안 되는 파일 시스템이면 조용히 다른 모드로 돈다 — 멈춘다(9-1 info)
+  const mode = String((db.prepare("PRAGMA journal_mode").get() as { journal_mode: string }).journal_mode);
+  if (mode !== "wal") {
+    db.close();
+    throw new Error(`hermes 대기열: WAL 모드가 아니다(${mode})`);
+  }
+  // 본문이 담기는 파일 — 상태 디렉터리 권한과 따로 0600(§3-I · 9-1 info) · 메모리 DB 는 건너뛴다
+  if (file !== ":memory:") chmodSync(file, 0o600);
   db.exec(SCHEMA);
 
   const findIdem = db.prepare("SELECT id, received_at FROM messages WHERE source = ? AND idem_key = ?");

@@ -30,6 +30,8 @@ const LINK_FIELDS = new Set(["label", "url"]);
 const CONTROL_RE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
 // eslint-disable-next-line no-control-regex
 const ONE_LINE_BAD_RE = /[\u0000-\u001f\u007f]/;
+// eslint-disable-next-line no-control-regex
+const URL_BAD_CHAR_RE = /[\s\u0000-\u001f\u007f]/;
 /** 보이는 ASCII(공백 없음) */
 const IDEM_RE = /^[\x21-\x7e]+$/;
 
@@ -44,6 +46,9 @@ function oneLine(v: unknown, max: number): v is string {
 function validLink(v: unknown): v is Link {
   if (!isObject(v) || Object.keys(v).some((k) => !LINK_FIELDS.has(k))) return false;
   if (!oneLine(v.label, LIMITS.linkLabel) || typeof v.url !== "string" || v.url.length > LIMITS.linkUrl) return false;
+  // URL 파서는 탭 · 줄바꿈을 지우고 앞뒤 공백을 자른 뒤 판정한다 — 원문을 저장하므로 원문에 그런 글자가 있으면 거절(#791 9-1 major ·
+  // 게시 때 링크 줄에서 가짜 줄이 된다)
+  if (URL_BAD_CHAR_RE.test(v.url)) return false;
   let u: URL;
   try {
     u = new URL(v.url);

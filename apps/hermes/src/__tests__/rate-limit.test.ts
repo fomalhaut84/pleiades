@@ -17,6 +17,13 @@ describe("createRateLimiter", () => {
     expect(rl.take("a", 3, 20_000).ok).toBe(true);
   });
 
+  it("시계가 뒤로 가도 잠기지 않는다(9-1 info)", () => {
+    const rl = createRateLimiter();
+    rl.take("a", 3, 100_000);
+    const r = rl.take("a", 3, 0);
+    expect(r.ok).toBe(true);
+  });
+
   it("한도를 넘게 쌓지 않는다", () => {
     const rl = createRateLimiter();
     rl.take("a", 2, 0);

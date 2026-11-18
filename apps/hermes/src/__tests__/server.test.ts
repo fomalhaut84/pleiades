@@ -103,6 +103,16 @@ describe("hermes 받기 API", () => {
     q = openQueue(path.join(dir, "hermes.db"));
   });
 
+  it("잘못된 UTF-8 → 400 json(9-1 info)", async () => {
+    const r = await fetch(`${base}/v1/messages`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+      body: Buffer.concat([Buffer.from('{"text":"'), Buffer.from([0xff, 0xfe]), Buffer.from('"}')]),
+    });
+    expect(r.status).toBe(400);
+    expect(await r.json()).toEqual({ error: "invalid", reason: "json" });
+  });
+
   it("404 · 405", async () => {
     expect((await fetch(`${base}/v2/messages`)).status).toBe(404);
     expect((await fetch(`${base}/v1/messages`)).status).toBe(405);
