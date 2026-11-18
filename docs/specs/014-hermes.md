@@ -41,7 +41,7 @@
 | N9 | Release 자동 배포는 두 앱 뒤 `## adv` 단계를 돈다 — 셋째 체크아웃이 없거나 · 첫 배포 전이거나 · 정지됐거나 · 입력 경로(`auto-inputs.txt`)가 안 바뀌었으면 건너뛴다 · 그 실패는 두 앱 rc 를 바꾸지 않는다 | `deploy/ssh-deploy.sh:9-12,53,59-90` · `deploy/advisor/auto-inputs.txt` · 012 G-R4 |
 | N10 | 로컬 pm2 리허설은 `pleiades-<app>-<역할>` 정규식 · `run.sh` 경유만 — 셋째 앱(adv)은 pm2 리허설이 없다 | `tools/local/precheck.py:111,126` · `workflow.md` 8절 `apps/advisor` 행 |
 | N11 | 두 앱 웹은 루프백에만 묶인다 · nginx 가 `127.0.0.1` 로 proxy_pass 한다 | `deploy/pleiades.config.cjs`(WEB_HOST 주석 · #702) |
-| N12 | 서버 · 로컬(개발 환경) node = **v24.12.0** · CI 앱 잡도 `24.x` — 옛 측정(로컬 v20.18.0 · 2026-10-20)은 낡았다 | 사용자 2026-11-17 · `measured-facts.md:3724` · `apps-ci.yml:56,114,163,205` |
+| N12 | 서버 node = **v24.12.0** · CI 앱 잡 `24.x` · **로컬은 둘이다** — 셸 기본(`PATH` 첫째)은 nvm **v20.18.0**(`node:sqlite` 없음 · `ERR_UNKNOWN_BUILTIN_MODULE`) · `/usr/local/bin/node` = **v24.22.0**(11-18 실측 · 정정 #761) → hermes 로컬 시험·`run.sh hrm` 은 node 24 를 고정해야 한다(H-1) | 사용자 2026-11-17(서버) · 11-18 로컬 실측(`which -a node`) · `apps-ci.yml:56,114,163,205` |
 | N13 | 버전 기준: **major = 서버와의 약속이 깨지는 릴리즈**(서버 `.env` 필수 키 · pm2 이름·포트 변경 등) · 셋째 상주(adv)는 **"전부 선택이고 없으면 통합 층만 안 뜬다 → minor"** 로 판정됐다 | `workflow.md` 릴리즈 전략 확정 블록(#199) · 012 §3-3 G7 행 |
 | N14 | 통합 층 배포 C6 은 **모든 `pleiades-*`** 의 `PLEIADES_ENV_FILE` 대조 `n_bad == 0` 을 기동 **뒤에** 요구한다 — 넷째 상주가 G-R1 을 어기면 **adv 배포도 rc 4** | `deploy/advisor/adv-inplace.sh:217-221` |
 | N15 | 두 앱 배포 점유 검사: 그 앱의 web·mcp 포트를 `pleiades-<app>-*` 가 아닌 프로세스가 잡고 있으면 die — hermes 포트가 fin·fit 포트와 겹치면 **두 앱 배포가 멈춘다** | `deploy/deploy.sh:125-143` |
@@ -57,7 +57,7 @@
 |---|---|---|
 | U1 서버에서 쓰는 포트 목록 | hermes 포트 선택(I-12 로컬 금지 포트와 별개로 서버 충돌) | 사용자 서버 판정 양식(`.server-scripts/` · 값은 판정만) |
 | U2 서버 nginx 에 hermes 경로를 더할 수 있는 server 블록 · TLS 도메인 | 입구 2단계(B2) 비용 | 사용자 확인 |
-| U3 `node:sqlite` 가 node 24.12 에서 `ExperimentalWarning` 을 내는지(N19) — 노드 버전 자체는 확정(N12) | 대기열 C3 의 의존 · 수집기 경고 분류와의 관계(`--disable-warning=ExperimentalWarning` 검토) · 로컬 시험 경로 | 로컬에서 `node -e "require('node:sqlite')"` 한 줄 · 구현 PR 첫 커밋 |
+| U3 `node:sqlite` 가 서버 node 24.12 에서 `ExperimentalWarning` 을 내는지(N19) — **로컬 v24.22 는 경고 없음**(11-18 · `DatabaseSync(':memory:')` 생성·`exec` 까지 stderr 0) · 24.12 만 남았다 | 대기열 C3 의 의존 · 수집기 경고 분류와의 관계(`--disable-warning=ExperimentalWarning` 검토) | H-2 판정 양식에 한 줄(서버) |
 | U4 주문 앱의 시즌 시작일 · 하루 주문 건수 | §5 임시 경로가 필요한지 · 속도 제한 기본값 | 사용자 |
 
 ## 1. 무엇을 만드나
@@ -161,7 +161,7 @@ Idempotency-Key: <출처가 정한 문자열 · 선택 · 최대 128자>
 
 **교체 자리:** 대기열은 인터페이스(`enqueue` · `claimNext` · `markSent` · `markRetry` · `markDead` · `purge`) 뒤에 둔다 — 처리량이 필요해지면 C4·C5 로 갈아 끼운다(§9 유효기간).
 
-**U3 가 막으면:** `node:sqlite` 는 node 22.5+ 에만 있고 실험 기능 경고를 낸다(N19). ① 그대로 쓴다 — 서버 · 로컬 · CI 모두 node 24 라 `node:sqlite` 가 있다(N12) · 경고는 `--disable-warning=ExperimentalWarning` 또는 수집기 분류표 한 줄 ② `better-sqlite3`(네이티브 빌드 · 서버 `npm ci` 에 컴파일) ③ C2 로 내림 — 구현 PR 첫 커밋에서 정한다(§8 Q-H3).
+**`node:sqlite` 의 조건(D10 확정 뒤):** node 22.5+ 에만 있다 — 서버 · CI 는 24 · 로컬은 셸 기본이 20.18 이라 **H-1 이 node 24 를 고정한다**(N12 · `engines` + `run.sh hrm` 의 node 경로 확인). 실험 기능 경고는 node 22 실측 · 로컬 24.22 는 없음 · 서버 24.12 에서 나오면 `--disable-warning=ExperimentalWarning`(D10 · 수집기 분류표는 건드리지 않는다). 막히면 대안은 ② `better-sqlite3`(네이티브 빌드) ③ C2 — 그때 D10 을 다시 연다.
 
 **동작 규칙(C3 기준):**
 - 받기: 한 트랜잭션에 행 삽입(`queued`) → 커밋 → `202`. `Idempotency-Key` 는 (출처, 키) 유일 · 보존 창 7일(설계 변수).
@@ -194,7 +194,7 @@ Idempotency-Key: <출처가 정한 문자열 · 선택 · 최대 128자>
 
 | | 내용 | 되돌리기 |
 |---|---|---|
-| **F1 ★** 수집기 ②③ 와 같은 규칙 + ① 의 재료를 hermes 기준으로 | ② 토큰 형식 = `tools/ops/token_vectors.json` 공통 벡터로 시험(세 번째 구현 · 언어 중립 JSON이라 vitest 에서 읽힌다 · 벡터 파일의 "두 판" 문구를 "세 판" 으로 · **거짓 차단 확인용 `clean` 벡터에 주문·날씨·기사 문구를 더한다** — 지금 `clean` 은 ops 문구뿐) · ③ 길이 · ① 비밀 값 대조 = **플랫폼 설정 + hermes 자기 env**(+ 같은 서버 두 앱 `.env` 를 읽을지 Q-H4) · 걸리면 게시 대신 고정 문구 `[hermes] 게시 차단 · <출처 id> · 사유 <code>` 를 **`#spot` 에**(원문 없음) · fail-closed | 코드 **중간** |
+| **F1 ★** 수집기 ②③ 와 같은 규칙 + ① 의 재료를 hermes 기준으로 | ② 토큰 형식 = `tools/ops/token_vectors.json` 공통 벡터로 시험(세 번째 구현 · 언어 중립 JSON이라 vitest 에서 읽힌다 · 벡터 파일의 "두 판" 문구를 "세 판" 으로 · **거짓 차단 확인용 `clean` 벡터에 주문·날씨·기사 문구를 더한다** — 지금 `clean` 은 ops 문구뿐) · ③ 길이 · ① 비밀 값 대조 = **플랫폼 설정 + hermes 자기 env 만**(D13 — 두 앱 `.env` 는 읽지 않는다) · 걸리면 게시 대신 고정 문구 `[hermes] 게시 차단 · <출처 id> · 사유 <code>` 를 **`#spot` 에**(원문 없음) · fail-closed | 코드 **중간** |
 | F2 검사 없음 | 출처가 책임 | — 택하지 않는다(외부 텍스트가 운영 채널로 직행) |
 | F3 검사 코드를 `packages/` 로 뽑아 수집기·hermes 공용 | 한 구현 | 수집기는 체크아웃 밖 커밋 고정 단일 파일(008 단계 1) — 공용 패키지가 수집기 설치 방식을 바꾼다 · **지금 하지 않는다**(§8 Q-H6) |
 
@@ -204,7 +204,7 @@ Idempotency-Key: <출처가 정한 문자열 · 선택 · 최대 128자>
 
 - hermes 는 상태 파일(`state.json` · 상태 디렉터리)에 **수치만** 쓴다: `queued` · `dead`(누적·오늘) · `blocked`(오늘) · 마지막 게시 성공 시각 · 웹훅 유무 · 만료 임박 출처 id.
 - **수집기**가 넷째 체크아웃이 있을 때만 `pleiades-hrm-*` 를 감시 대상에 넣는다(N6 의 adv 방식) — pm2 상태 · 재시작 · `-error` 로그 패턴 · 위 상태 파일. `dead` 증가 · 적체(`queued` 가 N분 이상 줄지 않음) · 웹훅 없음 → `#ops` 경고 · 만료 임박 → 일일 요약 한 줄.
-- **"`activeApps` 에 한 줄" 로 끝나지 않는다(N16):** `APP_DIRS`·`ROLES_OF` 에 hrm · 로그 이름 정규식의 앱 칸과 **역할 칸**(hermes 역할 이름 · Q-H1) · 활성 표지(`inplace-hrm-last-ok`·`-stopped` — hermes 배포 스크립트가 같은 규약으로 쓴다) · 배포 창 표지(`inplace-hrm-pending`·`-window` — 배포 중 보류) · **봇 생존 표지 판정에서 hrm 제외**(hermes 는 gateway 봇이 아니다) · 상태 파일 판정 신설 · `test_ops_collect.py` 갱신 · **수집기 재설치**(사용자).
+- **"`activeApps` 에 한 줄" 로 끝나지 않는다(N16):** `APP_DIRS`·`ROLES_OF` 에 hrm · 로그 이름 정규식의 앱 칸과 **역할 칸**(`api` · D9) · 활성 표지(`inplace-hrm-last-ok`·`-stopped` — hermes 배포 스크립트가 같은 규약으로 쓴다) · 배포 창 표지(`inplace-hrm-pending`·`-window` — 배포 중 보류) · **봇 생존 표지 판정에서 hrm 제외**(hermes 는 gateway 봇이 아니다) · 상태 파일 판정 신설 · `test_ops_collect.py` 갱신 · **수집기 재설치**(사용자).
 - hermes 자신은 `#ops`·`#admin` 에 쓰지 않는다(D5 · 웹훅 하나 원칙 D4).
 
 ### 3-H. 내부 출처의 연결 (D2 ②③)
@@ -215,7 +215,7 @@ Idempotency-Key: <출처가 정한 문자열 · 선택 · 최대 128자>
 | H2 얇은 클라이언트 `packages/hermes-client` | 재시도 · `Idempotency-Key` · 키를 플랫폼 설정에서 읽기 | 패키지 삭제 **중간** — **내부 출처가 둘 이상일 때**(§8 Q-H2) |
 | H3 내부 앱이 대기열(`hermes.db`)에 직접 쓴다 | HTTP 없음 | 스키마가 공개 인터페이스가 된다 · 검사·인증 우회 — 택하지 않는다 |
 
-- **내부 출처 키의 자리:** 플랫폼 설정의 새 키(예: `HERMES_KEY_<출처>`)는 지금 `PLATFORM_KEY_RE`(N1)에 없다 — 넣으면 notify 공개 인터페이스(정규식) 변경이다. 대안: 그 앱의 `.env`(앱 비밀과 같은 자리 · `check_env.py` 의 "앱 `.env` 에 플랫폼 키 금지"(:258-259)와 충돌하지 않는다). 수집기 ① `SECRET_KEY` 의 `_KEY` 접미가 그 키를 잡지만 **대조 재료는 fin·fit `.env` + 플랫폼 설정뿐**이다(N5) — adv 나 새 작업 앱의 `.env` 에 둔 키는 수집기 ① 이 모른다. 그래서 **출처 키 형식을 32자 이상 영숫자 혼합으로 정해 ② 일반 토큰 검사(`GENERIC_TOKEN`)가 어디서든 잡게** 한다. **권고: 앱 `.env` + 그 키 형식**(§8 Q-H2).
+- **내부 출처 키의 자리:** 플랫폼 설정의 새 키(예: `HERMES_KEY_<출처>`)는 지금 `PLATFORM_KEY_RE`(N1)에 없다 — 넣으면 notify 공개 인터페이스(정규식) 변경이다. 대안: 그 앱의 `.env`(앱 비밀과 같은 자리 · `check_env.py` 의 "앱 `.env` 에 플랫폼 키 금지"(:258-259)와 충돌하지 않는다). 수집기 ① `SECRET_KEY` 의 `_KEY` 접미가 그 키를 잡지만 **대조 재료는 fin·fit `.env` + 플랫폼 설정뿐**이다(N5) — adv 나 새 작업 앱의 `.env` 에 둔 키는 수집기 ① 이 모른다. 그래서 **출처 키 형식을 ② 일반 토큰 검사가 잡는 모양으로 고정**한다 — 수집기 `isGenericToken`(`collect.cjs:845`)은 **16진수만으로 된 문자열을 뺀다**(커밋 해시 오탐 방지)·숫자와 영문을 모두 요구·`-`/`_` 로 나눈 조각 중 가장 긴 것이 `MIN_TOKEN_PIECE` 이상이어야 한다. 그러므로 키 = **접두 `hrm_` + base62 43자**(16진수 밖 글자 `g-z`·`G-Z` 가 들어가지 않으면 다시 뽑는다 · 숫자·영문 둘 다 · 구분자 없는 한 조각) — `hermes-key.sh` 가 이 규칙으로만 만들고 레지스트리 로더가 해시 전 평문 검사를 하지 못하므로 **생성 쪽 시험**(만든 키 N개가 전부 `isGenericToken` 참)과 **`token_vectors.json` 에 `hrm_` 키 벡터(잡힘) + 64자 hex(안 잡힘 — 이 형식을 쓰면 안 되는 이유)를 더한다**(정정 #761 · Codex P2). **권고: 앱 `.env` + 그 키 형식**(§8 Q-H2).
 - **pleiades 안의 주기 작업이 어디 사는가**(새 `apps/<작업>` · `jobs/` · 기존 앱의 크론)는 이 문서 범위 밖 — 작업이 처음 생길 때 정한다. 이 문서가 정하는 것은 **"작업은 hermes API 로 보낸다"** 하나다.
 
 ### 3-I. 개인정보 · 보존
@@ -255,7 +255,7 @@ pleiades 쪽 작업 0 · 이 경로 동안은 §3-F 검사가 없다(출처 책�
 | R2 | 배포 스크립트가 락 fd 를 자식에 넘겨 **이후 배포 전부 rc 1**(N8) | G-R3 정적 시험(adv 시험 형식) |
 | R3 | 공개 입구(B2)가 남용된다 | 키 · 속도 제한(출처 + nginx) · 본문 상한 · 만료 · `X-Real-IP` 는 루프백 앞에서만 |
 | R4 | 출처 텍스트가 운영 비밀을 실어 나른다 | F1 · fail-closed |
-| R5 | 개인정보가 Discord 에 남는다 | §3-I 런북 체크 · 출처 주인 책임 · (선택) 패턴 검사 |
+| R5 | 개인정보가 Discord 에 남는다 | F1 전화·이메일 패턴 차단(D11 · 사유 `pii`) · §3-I 런북 체크(이름·주소) · 출처 주인 책임 |
 | R6 | 대기열 파일이 커지거나 깨진다 | 보존 삭제 · WAL · 깨지면 `hermes.db.corrupt-<시각>` 으로 rename 후 새로 만들고 `#ops`(수집기) — 그 사이 받은 것만 남는다 · **rename 이름에 `.bak`·backup·dump 낱말 금지**(N20 — 덤프로 센다) |
 | R7 | 출처가 재시도를 안 한다(구현 안 함) → hermes 정지 중 유실 | §2 계약 · 출처 등록 런북 체크 · H2 클라이언트(내부) |
 | R8 | 한 출처의 폭주가 다른 출처를 밀어낸다 | 출처별 속도 제한 · (필요하면) 출처별 대기열 상한 → `429` |
@@ -305,4 +305,13 @@ pleiades 쪽 작업 0 · 이 경로 동안은 §3-F 검사가 없다(출처 책�
 | C-9 | 낮음 | 릴리즈 "두 앱 영향 없음" 은 R-8 에만 참 · health "루프백에서만" 은 B2 에서 거짓 | §4 릴리즈 행 · §2 health |
 
 **통과로 확인된 것:** 두 앱 배포 스크립트 무변경(G-R1·G-R2 를 지키면) · N1·N3·N6~N11 · minor 판정(N13) · 앱 `.env` 의 `HERMES_KEY_*` 가 플랫폼 키 금지 규칙과 충돌하지 않음 · 토큰 벡터 셋째 구현 가능 · `.db` 이름은 `backup-check.sh` 와 충돌하지 않음.
-**미확인으로 남긴 것:** node 24.12 의 `node:sqlite` 경고(U3) · 012 가 말하는 "구조 4파일" 의 넷째(012 G7 행은 셋만 나열 — 이 문서는 그 용어를 쓰지 않고 파일 이름을 적었다).
+**미확인으로 남긴 것:** 서버 node 24.12 의 `node:sqlite` 경고(U3 — 로컬 24.22 는 없음 · 10-2) · 012 가 말하는 "구조 4파일" 의 넷째(012 G7 행은 셋만 나열 — 이 문서는 그 용어를 쓰지 않고 파일 이름을 적었다).
+
+### 10-2. 11-18 확인 (다른 세션 리뷰 · Codex · 실측 — 문안 수준 직접 반영)
+
+| # | 출처 | 정정 | 반영 위치 |
+|---|---|---|---|
+| E-1 | Codex P2(`014-hermes.md:218`) | "32자 이상 영숫자 혼합" 은 64자 hex 키를 허용하는데 수집기 일반 토큰 검사는 hex 만인 문자열을 뺀다 → 키 = `hrm_` + base62 43자(16진수 밖 글자 필수) · 생성 시험 · 벡터 2 | §3-H 키 자리 문단 |
+| E-2 | 실측 `which -a node` | 로컬 셸 기본 node = nvm v20.18(`node:sqlite` 없음) · `/usr/local/bin/node` v24.22 — N12 의 "로컬 v24.12" 정정 · H-1 이 node 24 고정 | N12 · §3-C |
+| E-3 | 실측 node 24.22 | `node:sqlite` 경고 없음 — U3 는 서버 24.12 만 남음 | U3 · §3-C · 10-1 끝 |
+| E-4 | 결정 반영 누락 | D9·D10·D11·D13 뒤에도 본문에 미결처럼 남은 문구(F1 Q-H4 · §3-G 역할 · R5 "(선택)" · §3-C "첫 커밋에서 정한다") | 각 위치 |
