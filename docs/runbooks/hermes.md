@@ -130,4 +130,4 @@ C6 pleiades-hrm-api online · cwd 이 체크아웃: 예 · PLEIADES_ENV_FILE sam
 === 끝 ===
 ```
 
-**수집기 감시(H-3) 전에는** hermes 장애가 `#ops` 로 오지 않는다 — 그동안은 이 런북의 D 와 `pm2 ls` 로 본다.
+**수집기 감시(H-3 · #802):** 수집기를 hermes 감시가 든 판으로 재설치하면(`ops-collector.md` 1절 · REF 는 Claude 가 준다) pm2 상태 · 상태 파일(갱신 멈춤 · 웹훅 · 적체 · dead · 레지스트리) · stderr 가 `#ops` 로 온다 — 기록 해석은 `ops-collector.md` "hermes(`hrm·api`) 기록을 보면". 재설치 전에는 이 런북의 D 와 `pm2 ls` 로 본다.
