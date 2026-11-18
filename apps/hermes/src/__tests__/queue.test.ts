@@ -112,6 +112,15 @@ describe("openQueue", () => {
     expect(q.enqueue(msg({ idempotencyKey: "k" }), 1).duplicate).toBe(true);
   });
 
+  it("head — 다음 시도 시각과 상관없이 가장 오래된 queued 행", () => {
+    const a = q.enqueue(msg({ text: "a" }), 0);
+    q.enqueue(msg({ text: "b" }), 1);
+    q.markRetry(a.id, 9_000);
+    expect(q.head()).toMatchObject({ message: { id: a.id, attempts: 1 }, nextAt: 9_000 });
+    q.markSent(a.id, 2);
+    expect(q.head()?.message.text).toBe("b");
+  });
+
   it("WAL 모드로 연다 · 파일은 0600", () => {
     expect(q.journalMode()).toBe("wal");
     expect(statSync(file()).mode & 0o777).toBe(0o600);

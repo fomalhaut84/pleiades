@@ -7,7 +7,7 @@ name: Apps CI
 # - 필수 체크(Q52 · 2026-10-01): apps-fin · apps-fit. apps-fin-test 는 서비스 CI 에 없는 추가분이라 비필수.
 #   apps-adv(#679 · 012 4b-1)도 필수(2026-11-13 · 사용자 요청 · ruleset `main·dev 보호`) — 통합 층 안전 시험(init fail-closed · 락 · 설정)이 여기서 돈다.
 #   단 fin 안전 시험(도구 분류 · MCP 읽기 경로 · #655)은 apps-fin 안에서 따로 돈다 — fit 은 npm test 가 이미 apps-fit 안이다.
-#   apps-hrm(014 H-1a · #791)도 필수(D12 · 사용자 2026-11-17) — ruleset 에 더하는 것은 사용자. hermes 는 packages/ 를 쓰지 않아 루트 npm ci 가 없다.
+#   apps-hrm(014 H-1a · #791)도 필수(D12 · 사용자 2026-11-17) — ruleset 에 더하는 것은 사용자. hermes 는 notify 만 쓴다(H-1b #794 — escape · 플랫폼 설정) — 루트 npm ci 가 먼저다.
 #   job 이름을 바꾸면 dev·main ruleset 의 required_status_checks 도 함께 바꾼다.
 # - apps/* 서비스 결함으로 실패하면 고치지 않는다 (Q57) — 그 체크를 비필수로 내리고 pleiades 이슈에 기록한다.
 # - 네 job 모두 루트 npm ci 를 먼저 한다(apps-adv 는 4b-2b #686 부터 — chat·notify file: 링크) (006 ㉒ · fit M-5a #132 · fin M-5b #136) — apps/* 가 file:../../packages/notify 를 참조하고
@@ -238,7 +238,12 @@ jobs:
         with:
           node-version: 24.x  # 서버와 같다 · 대기열 node:sqlite 는 22.5+ (014 N12 · D10)
           cache: 'npm'
-          cache-dependency-path: apps/hermes/package-lock.json
+          cache-dependency-path: |
+            apps/hermes/package-lock.json
+            package-lock.json
+      - name: Install root (packages/notify)
+        working-directory: .
+        run: npm ci
       - name: Install dependencies
         run: npm ci
       - name: Lint

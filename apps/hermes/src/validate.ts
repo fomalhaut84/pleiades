@@ -31,7 +31,7 @@ const CONTROL_RE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
 // eslint-disable-next-line no-control-regex
 const ONE_LINE_BAD_RE = /[\u0000-\u001f\u007f]/;
 // eslint-disable-next-line no-control-regex
-const URL_BAD_CHAR_RE = /[\s\u0000-\u001f\u007f]/;
+const URL_BAD_CHAR_RE = /[\s\u0000-\u001f\u007f\\]/; // `\` — 파서는 `/` 로 읽고 표시는 다르다(#794 9-1 critical)
 /** 보이는 ASCII(공백 없음) */
 const IDEM_RE = /^[\x21-\x7e]+$/;
 
