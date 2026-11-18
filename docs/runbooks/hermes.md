@@ -70,9 +70,10 @@ bash ~/pleiades-hermes/deploy/hermes/hermes-key.sh add <id> --name <표시 이�
 | 목록 | `hermes-key.sh list` | id · 이름 · 켜짐 · 만료 · 링크 · 분당(해시 · 키 없음) |
 | 잠시 끄기 / 다시 켜기 | `hermes-key.sh disable <id>` / `enable <id>` | 끄면 403 |
 | 키 바꾸기(샜을 때) | `hermes-key.sh rotate <id>` | 새 키 한 번 · 옛 키는 바로 401 |
+| 만료일 바꾸기(시즌 연장 등) | `hermes-key.sh expires <id> <YYYY-MM-DD>` · 없애기 `expires <id> none` | **키 그대로** · 그날(KST) 끝까지 받는다(#811) |
 | 지우기 | `hermes-key.sh remove <id>` | 401 |
 
-hermes 는 레지스트리 수정 시각으로 다시 읽는다 — **재기동하지 않는다**. 키 명령은 **한 번에 하나**(잠금 없이 읽고 고쳐 쓴다 — 동시에 돌리면 한쪽 변경이 사라진다). id 는 소문자 · 숫자 · `-`(32자) · 표시 이름(1~32자)은 `#hermes` 의 게시 이름 `hermes·<이름>` 이 된다(`discord` · `clyde` 금지).
+hermes 는 레지스트리 수정 시각으로 다시 읽는다 — **재기동하지 않는다**. 키 명령은 **한 번에 하나**(잠금 없이 읽고 고쳐 쓴다 — 동시에 돌리면 한쪽 변경이 사라진다). id 는 소문자 · 숫자 · `-`(32자) · 표시 이름(1~32자)은 `#hermes` 메시지 첫 줄의 **`[표시 이름]`** 이 된다 — 게시 이름은 늘 `hermes`(#811 · `discord` · `clyde` 금지는 그대로).
 
 **출처 쪽 계약(014 §2):** `POST http://127.0.0.1:4700/v1/messages` · `Authorization: Bearer <키>` · `Content-Type: application/json` · 본문 `{title?, text, link?: {label, url}, level?: "info"|"warn"}` · **`Idempotency-Key`**(같은 알림의 재시도에 같은 값) · `202` 면 끝 · `503` · 연결 실패면 같은 키로 재시도 · `400`·`401`·`403`·`413` 은 재시도하지 않는다 · `429` 는 `Retry-After` 뒤. 외부 호스트에서 보내려면 H-5(nginx)가 먼저다 — 지금은 같은 서버의 출처만.
 
@@ -118,7 +119,7 @@ read -rs KEY
 printf 'header = "Authorization: Bearer %s"\n' "$KEY" | curl -sS -K - -X POST http://127.0.0.1:4700/v1/messages -H 'Content-Type: application/json' -H 'Idempotency-Key: smoke-1' -d '{"title":"hermes 첫 게시","text":"서버 배치 확인"}'; echo; unset KEY
 ```
 
-응답 `{"id":"…","duplicate":false}` · `#hermes` 에 **`hermes·시험`**(게시 이름 = `hermes·<표시 이름>` · Discord 가 "앱" 배지를 붙인다)으로 굵은 제목 + 한 줄.
+응답 `{"id":"…","duplicate":false}` · `#hermes` 에 게시 이름 **`hermes`**(Discord 가 "앱" 배지를 붙인다) · 첫 줄 굵게 **`[시험] hermes 첫 게시`** + 본문 한 줄(출처 = `[표시 이름]` · #811 — `v1.20.0` 은 이름이 `hermes·시험` 이었다).
 
 ④ 시험 출처를 지운다:
 

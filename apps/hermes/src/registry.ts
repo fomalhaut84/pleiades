@@ -7,10 +7,11 @@
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
+import { hasPii, hasToken } from "./checks";
 
 export interface Source {
   readonly id: string;
-  /** Discord 웹훅 username 에 쓴다 — "discord" · "clyde" 를 담을 수 없다(Discord 규칙) */
+  /** 메시지 첫 줄 `[표시 이름]`(#811 — username 은 hermes 고정). "discord" · "clyde" 금지는 옛 username 규칙의 흔적 — 그대로 둔다 */
   readonly name: string;
   readonly keySha256: string;
   readonly enabled: boolean;
@@ -62,6 +63,8 @@ function parseSource(raw: unknown, i: number): Source | string {
   if (typeof name !== "string" || [...name].length < 1 || [...name].length > 32 || name.trim() !== name || /[\n\r]/.test(name))
     return `${at}.name: 1~32자 한 줄`;
   if (FORBIDDEN_NAME_RE.test(name)) return `${at}.name: Discord 웹훅 이름에 쓸 수 없는 낱말`;
+  // 이름은 모든 게시의 첫 줄에 들어간다 — 토큰 · 전화 · 이메일 모양이면 그 출처의 게시가 전부 막힌다. 등록 때 거부(#811 9-1 info)
+  if (hasToken(name) || hasPii(name)) return `${at}.name: 토큰 · 전화번호 · 이메일 모양(게시 전 검사가 모든 게시를 막는다)`;
   if (typeof keySha256 !== "string" || !HEX64_RE.test(keySha256)) return `${at}.keySha256: 소문자 16진수 64자`;
   if (typeof enabled !== "boolean") return `${at}.enabled: 참/거짓`;
   if (expires !== undefined && expires !== null && (typeof expires !== "string" || !validDate(expires)))

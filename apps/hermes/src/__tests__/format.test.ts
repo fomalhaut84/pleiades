@@ -25,45 +25,47 @@ const m = (over: Partial<QueuedMessage> = {}): QueuedMessage => ({
 });
 
 describe("formatMessage", () => {
-  it("평문 escape · 굵은 제목 · username hermes·이름", () => {
+  // #811 — 게시 이름은 hermes 고정 · 출처는 제목 앞 [표시 이름]
+  it("평문 escape · 굵은 [출처] 제목 · username hermes 고정", () => {
     expect(formatMessage(m({ title: "새 *주문*", text: "# 제목 아님\n- 목록 아님 · **굵게 아님**" }), SRC)).toEqual({
-      content: "**새 \\*주문\\***\n\\# 제목 아님\n\\- 목록 아님 · \\*\\*굵게 아님\\*\\*",
-      username: "hermes·주문",
+      content: "**[주문] 새 \\*주문\\***\n\\# 제목 아님\n\\- 목록 아님 · \\*\\*굵게 아님\\*\\*",
+      username: "hermes",
       linkDropped: false,
     });
   });
 
   it("warn 은 앞에 ⚠️", () => {
-    expect(formatMessage(m({ level: "warn", title: "재고" }), SRC).content).toBe("⚠️ **재고**\n주문 #1");
-    expect(formatMessage(m({ level: "warn" }), SRC).content).toBe("⚠️ 주문 #1");
+    expect(formatMessage(m({ level: "warn", title: "재고" }), SRC).content).toBe("⚠️ **[주문] 재고**\n주문 #1");
+    expect(formatMessage(m({ level: "warn" }), SRC).content).toBe("⚠️ **[주문]** 주문 #1");
   });
 
   it("링크 — 허용 호스트면 주소가 보이는 줄 · 마스크 링크 없음", () => {
     const r = formatMessage(m({ link: { label: "주문 [보기]", url: "https://shop.example.com/o/1?a=b" } }), SRC);
-    expect(r.content).toBe("주문 #1\n🔗 주문 \\[보기\\] · https://shop.example.com/o/1?a=b");
+    expect(r.content).toBe("**[주문]** 주문 #1\n🔗 주문 \\[보기\\] · https://shop.example.com/o/1?a=b");
     expect(r.linkDropped).toBe(false);
   });
 
   it("링크 주소의 서식 · 링크 문자는 퍼센트 인코딩 — 가짜 마스크 링크가 되지 않게", () => {
     const r = formatMessage(m({ link: { label: "x", url: "https://shop.example.com/[a](https://evil.example)_*~|`" } }), SRC);
-    expect(r.content).toBe("주문 #1\n🔗 x · https://shop.example.com/%5Ba%5D%28https://evil.example%29%5F%2A%7E%7C%60");
+    expect(r.content).toBe("**[주문]** 주문 #1\n🔗 x · https://shop.example.com/%5Ba%5D%28https://evil.example%29%5F%2A%7E%7C%60");
   });
 
   // 회귀: #794 9-1 critical — 파서는 `\` 를 `/` 로 읽는다. 판정과 표시가 같은 정규화 주소여야 한다
   it("판정 · 표시 모두 정규화 주소 — 백슬래시로 허용 호스트를 우회하지 못한다", () => {
     const r = formatMessage(m({ link: { label: "x", url: "https://shop.example.com\\@evil.example/x" } }), SRC);
-    expect(r.content).toBe("주문 #1\n🔗 x · https://shop.example.com/@evil.example/x");
+    expect(r.content).toBe("**[주문]** 주문 #1\n🔗 x · https://shop.example.com/@evil.example/x");
     expect(new URL(r.content.split(" · ")[1]).hostname).toBe("shop.example.com");
   });
 
   // 회귀: #794 9-1 major — 본문 속 맨 주소는 자동 링크가 되지 않는다
   it("text · title · label 의 맨 주소는 :// 를 끊는다", () => {
     const r = formatMessage(m({ title: "https://evil.example", text: "여기 http://evil.example/x 로" }), SRC);
-    expect(r.content).toBe("**https:\u200b//evil.example**\n여기 http:\u200b//evil.example/x 로");
+    expect(r.content).toBe("**[주문] https:\u200b//evil.example**\n여기 http:\u200b//evil.example/x 로");
   });
 
-  it("이름에 discord 가 들어가는 출처 id → hermes 이름(Discord 가 400 으로 거절한다)", () => {
-    expect(formatMessage(m({ source: "my-discord" }), null).username).toBe(HERMES_USERNAME);
+  it("출처 이름은 escape · 출처를 못 찾으면 id 로 · 이름은 늘 hermes", () => {
+    expect(formatMessage(m(), { ...SRC, name: "주문*팀" }).content).toBe("**[주문\\*팀]** 주문 #1");
+    expect(formatMessage(m({ source: "my-discord" }), null)).toMatchObject({ content: "**[my-discord]** 주문 #1", username: HERMES_USERNAME });
   });
 
   it("링크 줄이 본문 자리를 다 먹으면 링크 줄을 뺀다", () => {
@@ -74,12 +76,12 @@ describe("formatMessage", () => {
 
   it("허용 밖 호스트 · 허용 목록 없음 · 출처 없음 → 링크 줄을 뺀다", () => {
     const link = { label: "x", url: "https://evil.example.com/" };
-    expect(formatMessage(m({ link }), SRC)).toMatchObject({ content: "주문 #1", linkDropped: true });
+    expect(formatMessage(m({ link }), SRC)).toMatchObject({ content: "**[주문]** 주문 #1", linkDropped: true });
     expect(formatMessage(m({ link: { label: "x", url: "https://shop.example.com.evil.io/" } }), SRC).linkDropped).toBe(true);
     expect(formatMessage(m({ link: { label: "x", url: "https://shop.example.com/" } }), null)).toMatchObject({
-      content: "주문 #1",
+      content: "**[orders]** 주문 #1",
       linkDropped: true,
-      username: "hermes·orders",
+      username: "hermes",
     });
   });
 

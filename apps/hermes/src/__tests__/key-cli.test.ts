@@ -108,6 +108,30 @@ describe("runKeyCli", () => {
     expect(run("remove", "a")).toBe(1);
   });
 
+  // #811 — 시즌 연장: 키는 그대로 · 만료일만
+  it("expires — 만료일 바꾸기 · none 으로 없애기 · 키 그대로", () => {
+    run("add", "a", "--name", "가", "--expires", "2026-11-30");
+    const key = out.find((l) => KEY_RE.test(l))!;
+    out = [];
+    expect(run("expires", "a", "2027-02-28")).toBe(0);
+    expect(out).toEqual(["만료: a → 2027-02-28(키 그대로)"]);
+    expect(reg().sources[0]).toMatchObject({ expires: "2027-02-28", keySha256: sha256(key) });
+    expect(createRegistry(file).authenticate(`Bearer ${key}`, Date.UTC(2026, 11, 15)).ok).toBe(true);
+    expect(run("expires", "a", "none")).toBe(0);
+    expect(reg().sources[0].expires).toBeNull();
+    expect(out.some((l) => KEY_RE.test(l))).toBe(false); // 키를 다시 내지 않는다
+  });
+
+  it("expires — 잘못된 날짜 · 없는 id · 값 없음", () => {
+    run("add", "a", "--name", "가");
+    expect(run("expires", "a", "2027/02/28")).toBe(1);
+    expect(run("expires", "a", "2027-02-30")).toBe(1);
+    expect(run("expires", "zz", "2027-02-28")).toBe(1);
+    expect(run("expires", "a")).toBe(2);
+    expect(run("expires", "a", "2027-01-01", "junk")).toBe(2);
+    expect(reg().sources[0].expires ?? null).toBeNull(); // 실패한 명령은 파일을 바꾸지 않는다(add 때 칸 없음 그대로)
+  });
+
   it("손으로 망가뜨린 레지스트리는 고치지 않고 멈춘다", () => {
     writeFileSync(file, "{");
     expect(run("add", "a", "--name", "가")).toBe(1);
