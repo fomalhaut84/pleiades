@@ -1077,6 +1077,204 @@ class Advisor(Base):
         self.assertNotIn("adv", self.text())
 
 
+class Hermes(Base):
+    """014 H-3(#802) — hermes pleiades-hrm-api 감시. 활성 = inplace-hrm-last-ok 있음 AND inplace-hrm-stopped 없음 · 상태 파일 판정."""
+
+    HRM = "pleiades-hrm-api"
+    E = "pleiades-hrm-api-error-3.log"
+
+    def setUp(self):
+        super().setUp()
+        self.state_file = self.home / "pleiades-hermes-data" / "state" / "state.json"
+        self.state_file.parent.mkdir(parents=True)
+        self.private.mkdir(parents=True, exist_ok=True)
+
+    def activate(self, on=True):
+        (self.private / "inplace-hrm-last-ok").write_text("v1.20.0\n")
+        stopped = self.private / "inplace-hrm-stopped"
+        if on:
+            stopped.unlink(missing_ok=True)
+        else:
+            stopped.write_text("x\n")
+
+    def procs(self, hrm="online", apps=True):
+        p = {n: ("online", 0) for n in NAMES} if apps else {}
+        if hrm:
+            p[self.HRM] = (hrm, 0)
+        self.set_procs(p)
+
+    def hstate(self, at="2026-11-10T07:59:50+09:00", **over):
+        st = {"updatedAt": datetime.fromisoformat(at).astimezone().isoformat(), "queued": 0, "oldestQueuedAt": None, "dead": 0,
+              "deadToday": 0, "blockedToday": 0, "linkDroppedToday": 0, "lastSentAt": None, "webhook": True, "paused": None,
+              "registrySources": 1, "registryError": False, "expiringSoon": [], **over}
+        self.state_file.write_text(json.dumps(st))
+
+    def text(self):
+        return "\n".join(self.posts())
+
+    def test_never_deployed_is_not_judged(self):
+        self.procs(hrm=None)
+        self.log(self.E, "2026-11-10 07:59:00: [hermes] 대기열 쓰기 실패 source=x: Error\n")
+        self.ok()
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertNotIn("hrm", self.text())
+        self.assertNotIn(self.E, self.state()["files"])
+
+    def test_healthy_is_quiet(self):
+        self.activate()
+        self.procs()
+        self.hstate()
+        self.ok()
+        self.hstate(at="2026-11-10T08:04:55+09:00")
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertEqual(self.posts(), [])
+
+    def test_missing_process_is_outage(self):
+        self.activate()
+        self.procs()
+        self.hstate()
+        self.ok()
+        self.procs(hrm=None)
+        self.hstate(at="2026-11-10T08:04:55+09:00")
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertIn("hrm·api · pm2 · missing", self.text())
+
+    def test_hrm_absence_alone_is_not_all_missing(self):
+        self.activate()
+        self.procs(hrm=None)
+        self.hstate()
+        self.ok()
+        self.assertFalse(any("all-missing" in p for p in self.posts()))
+
+    def test_no_alive_marker_judgment_for_hrm(self):
+        # hermes 는 gateway 봇이 아니다 — alive-hrm.json 이 없어도 · 오래돼도 gateway 판정이 없다
+        self.activate()
+        self.procs()
+        self.hstate()
+        self.ok()
+        self.ok(now="2026-11-10T09:00:00+09:00", config={"hrmStaleMin": 600})
+        t = self.text()
+        self.assertNotIn("gateway", t)
+        self.assertNotIn("alive-read:hrm", t)
+
+    def test_state_stale_is_outage_and_recovers(self):
+        self.activate()
+        self.procs()
+        self.hstate(at="2026-11-10T07:50:00+09:00")   # 10분 전 — 5분 넘게 멈췄다
+        self.ok()
+        self.assertIn("hrm·api · state · stale", self.text())
+        self.assertIn("🔴", self.text())
+        self.hstate(at="2026-11-10T08:04:55+09:00")
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.hstate(at="2026-11-10T08:09:55+09:00")
+        self.ok(now="2026-11-10T08:10:00+09:00")
+        self.assertIn("🟢", self.text())
+
+    def test_state_unreadable_is_collector_warning(self):
+        self.activate()
+        self.procs()
+        self.state_file.write_text("{")
+        self.ok()
+        self.assertIn("hrm-state-read", self.text())
+
+    def test_webhook_none_secrets_registry_backlog(self):
+        self.activate()
+        self.procs()
+        self.hstate(webhook=False, paused="webhook", registryError=True, queued=3,
+                    oldestQueuedAt=datetime.fromisoformat("2026-11-10T07:20:00+09:00").astimezone().isoformat())
+        self.ok()
+        t = self.text()
+        self.assertIn("hrm·api · webhook · none", t)
+        self.assertIn("hrm·api · registry · error", t)
+        self.assertIn("hrm·api · queue · backlog", t)
+        self.hstate(at="2026-11-10T08:04:55+09:00", paused="secrets")
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertIn("hrm·api · webhook · secrets", self.text())
+
+    def test_short_queue_is_not_backlog(self):
+        self.activate()
+        self.procs()
+        self.hstate(queued=2, oldestQueuedAt=datetime.fromisoformat("2026-11-10T07:55:00+09:00").astimezone().isoformat())
+        self.ok()
+        self.assertNotIn("backlog", self.text())
+
+    def test_dead_blocked_link_dropped_increase_are_events(self):
+        self.activate()
+        self.procs()
+        self.hstate(dead=1, blockedToday=2, linkDroppedToday=0)
+        self.ok()
+        self.assertEqual(self.posts(), [])   # 첫 회는 기준값만
+        self.hstate(at="2026-11-10T08:04:55+09:00", dead=3, blockedToday=3, linkDroppedToday=1)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        t = self.text()
+        self.assertIn("hrm·api · dead", t)
+        self.assertIn("hrm·api · blocked", t)
+        self.assertIn("hrm·api · link-dropped", t)
+        ev = [e for e in self.events() if e.get("type") == "obs" and e.get("app") == "hrm"]
+        self.assertEqual({e["src"]: e["count"] for e in ev}, {"dead": 2, "blocked": 1, "link-dropped": 1})
+
+    def test_today_counters_reset_on_new_day(self):
+        self.activate()
+        self.procs()
+        self.hstate(blockedToday=5)
+        self.ok()
+        # 다음 날 — 오늘 수치 1 은 어제의 5 와 견주지 않는다(새 날 기준 0 → 1 증가)
+        self.hstate(at="2026-11-11T08:04:55+09:00", blockedToday=1)
+        self.ok(now="2026-11-11T08:05:00+09:00")
+        ev = [e for e in self.events() if e.get("type") == "obs" and e.get("src") == "blocked"]
+        self.assertEqual([e["count"] for e in ev], [1])
+
+    def test_expiry_soon_is_warning_with_id_only(self):
+        self.activate()
+        self.procs()
+        self.hstate(expiringSoon=["orders", "bad id!"])
+        self.ok()
+        t = self.text()
+        self.assertIn("hrm·api · expiry · orders", t)
+        self.assertNotIn("bad id", t)   # 허용 문자 밖 값은 칸에 오지 않는다
+
+    def test_held_during_deploy(self):
+        self.activate()
+        self.procs(hrm=None)
+        (self.private / "inplace-hrm-pending").write_text("v1.20.1\n")
+        self.hstate(at="2026-11-10T07:40:00+09:00")
+        self.ok()
+        self.assertNotIn("hrm", self.text())
+
+    def test_stopped_is_not_judged_and_reactivation_resets_baseline(self):
+        self.activate()
+        self.procs()
+        self.hstate(dead=0)
+        self.ok()
+        self.activate(on=False)
+        self.procs(hrm=None)
+        self.hstate(at="2026-11-10T07:40:00+09:00", dead=5)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertNotIn("hrm", self.text())
+        self.activate()
+        self.procs()
+        self.hstate(at="2026-11-10T08:09:55+09:00", dead=7)
+        self.ok(now="2026-11-10T08:10:00+09:00")
+        self.assertNotIn("hrm·api · dead", self.text())   # 정지 동안의 변화를 한꺼번에 내지 않는다
+
+    def test_error_log_is_read_and_state_transition_lines_are_warnings(self):
+        self.activate()
+        self.procs()
+        self.hstate()
+        self.log(self.E, "")
+        self.ok()
+        self.log(self.E, "2026-11-10 08:01:00: [hermes] 대기열 쓰기 실패 source=orders: SqliteError\n"
+                         "2026-11-10 08:02:00: [hermes] 게시 멈춤 — 웹훅 없음 · 형식 오류\n", append=True)
+        self.hstate(at="2026-11-10T08:04:55+09:00")
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        t = self.text()
+        self.assertIn("hrm·api · stderr · hermes", t)
+        self.assertIn("🟠", t)
+        self.assertIn("hermes-paused", t)
+        paused = [p for p in self.posts() if "hermes-paused" in p]
+        self.assertTrue(all("🟡" in p for p in paused))
+
+
 class Quiet2a(Base):
     """008 PR-2a(#713) — #622 재판정 보정: 스캐너·인증 탐색 분류 · 스택 연속 덩어리 · 경고는 일일 요약에만."""
 

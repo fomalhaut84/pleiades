@@ -243,6 +243,8 @@ Idempotency-Key: <출처가 정한 문자열 · 선택 · 최대 128자>
 
 > **진행 (2026-11-18 · #800 · H-2).** 서버 확인(사용자 · 판정만): **U1** 후보 4700 비어 있음 · fin·fit 포트와 겹치지 않음 → **포트 4700**(pm2 정의 고정 · D9) · **U3** 서버 node 24.12 는 `node:sqlite` 경고 1줄 → `--disable-warning=ExperimentalWarning` 로 0줄(D10 그대로 · pm2 `node_args`). 배치 = `deploy/hermes/hrm-inplace.sh`(adv 판 복사 + ① env 대조 adv 까지 ② 포트 가드 ③ C4 `hermes check` · C6 health + 상태 파일) · `pleiades-hrm.config.cjs`(데이터 `~/pleiades-hermes-data/` · 앱 `.env` 없음) · 출처 키 `hermes key …` + `hermes-key.sh` · 런북 `docs/runbooks/hermes.md`. 되돌리기: 문구 (**즉시**).
 
+> **진행 (2026-11-18 · #802 · H-3).** 수집기 `collect.cjs` — 곁가지 앱 일반화(`SIDE_APPS` adv · hrm · 표지 `inplace-<앱>-last-ok`·`-stopped`) · `ROLES_OF.hrm = ['api']` · 로그 이름 정규식 · 생존 표지 판정은 bot 역할만 · 상태 파일 판정 `collectHermes`(stale 5분 · 적체 30분 · 기준값 `state.hrm` · 다시 켠 회는 기준값만) · hermes 상태 전환 stderr 2줄은 알려진 줄(경고). 서버 조치 = 수집기 재설치(사용자). 되돌리기: 문구 (**즉시**).
+
 H-1~H-3 은 서로의 PR 이 머지돼야 다음이 돈다 — 순서대로. H-1 이 9-1 에이전트 리뷰 필수(실행 코드 · 보안 sensitive) · H-2·H-3 도 필수(`deploy/` 는 서버 경로).
 
 ## 5. 임시 경로 (첫 출처가 hermes 보다 먼저 시즌을 시작할 때)

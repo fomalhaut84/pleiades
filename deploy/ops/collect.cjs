@@ -51,6 +51,9 @@ const DEFAULTS = {
   // #589 봇 생존 표지 — apps/<dir>/logs/alive-<app>.json 수정 시각이 N분 넘게 그대로면 gateway 정지(chat 이 READY·RESUMED 는 곧바로 · ACK 는 60초에 한 번 쓴다)
   // 보는 것은 "Discord 연결 유지"다 — 연결은 살아 있는데 답을 못 하는 경우(4014 강등 · 핸들러·AI 정지)는 잡지 않는다
   aliveStaleMin: 10,
+  // 014 H-3(#802) hermes 상태 파일 — hermes 는 10초마다 · 결과가 바뀌면 바로 쓴다. 갱신이 N분 멈추면 장애 · 가장 오래된 queued 가 M분이면 적체
+  hrmStaleMin: 5,
+  hrmBacklogMin: 30,
   readCapBytes: 4 * 1048576, // 한 파일을 한 회에 읽는 상한 — 남은 것은 다음 회
   socketMs: 2000,
   jlistMs: 20000,
@@ -66,10 +69,16 @@ const APPS = {
   fit: path.join(HOME, 'pleiades-fit', 'apps', 'fitness'),
 }
 const ROLES = ['web', 'bot', 'mcp']
-// 통합 층(012 4b-3c · #704) — 셋째 체크아웃 · 봇 하나 · 수동 배포(deploy/advisor/adv-inplace.sh)가 쓰는 표지로 감시 여부를 정한다
+// 곁가지 앱 — 자기 체크아웃 · 자기 수동 배포 스크립트가 쓰는 표지(inplace-<앱>-last-ok · -stopped)로 감시 여부를 정한다
+//   adv = 통합 층(012 4b-3c · #704 · deploy/advisor/adv-inplace.sh) · 봇 하나
+//   hrm = hermes(014 H-3 · #802 · deploy/hermes/hrm-inplace.sh) · api 하나 · gateway 봇이 아니다(생존 표지 없음 · 상태 파일로 본다)
 const ADV_DIR = path.join(HOME, 'pleiades-adv', 'apps', 'advisor')
-const APP_DIRS = { ...APPS, adv: ADV_DIR }
-const ROLES_OF = { fin: ROLES, fit: ROLES, adv: ['bot'] }
+const HRM_DIR = path.join(HOME, 'pleiades-hermes', 'apps', 'hermes')
+const SIDE_APPS = ['adv', 'hrm']
+const APP_DIRS = { ...APPS, adv: ADV_DIR, hrm: HRM_DIR }
+const ROLES_OF = { fin: ROLES, fit: ROLES, adv: ['bot'], hrm: ['api'] }
+// hermes 상태 파일 — deploy/hermes/pleiades-hrm.config.cjs HERMES_STATE_DIR 와 같은 자리(체크아웃 밖) · 수치만 들어 있다
+const HRM_STATE = path.join(HOME, 'pleiades-hermes-data', 'state', 'state.json')
 const PM2_HOME = process.env.PM2_HOME || path.join(HOME, '.pm2')
 const PRIVATE = process.env.PLEIADES_PRIVATE_DIR || path.join(HOME, 'pleiades-private') // release-inplace.sh 와 같은 규칙
 const OPS_DIR = path.join(PRIVATE, 'ops')
@@ -89,11 +98,14 @@ const KNOWN_STDERR = [
   { re: /Failed to find Server Action/, kind: 'server-action-ref', sev: '경고' }, // 같은 스캐너의 다른 문구(#622 재판정 · 하루 16건 · #713)
   { re: /\[auth\]\[error\].*\bUnknownAction\b/, kind: 'auth-unknown-action', sev: '경고' }, // 스캐너의 /api/auth/* 탐색 — Auth.js 가 없는 동작을 거부(#713)
   { re: /The width\(-?\d+\) and height\(-?\d+\) of chart should be greater than 0/, kind: 'chart-size', sev: '경고' }, // Recharts · #588
+  // hermes 상태 전환 줄(#802) — 같은 사실을 상태 파일 판정(웹훅 · 레지스트리)이 상태형으로 본다 · 줄은 겹치지 않게 경고로만
+  { re: /^\[hermes\] 게시 멈춤/, kind: 'hermes-paused', sev: '경고' },
+  { re: /^\[hermes\] 레지스트리 오류/, kind: 'hermes-registry', sev: '경고' },
 ]
 const PM2_PREFIX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}: / // pleiades.config.cjs log_date_format + pm2 의 ': '
 const ANSI = /\x1b\[[0-9;]*m/g // Auth.js 등은 색 코드로 줄을 시작한다 — 판정 전에 벗긴다(#713)
 const STACK_LINE = /^\s+at /
-const LOG_NAME = /^pleiades-(fin|fit|adv)-(web|bot|mcp)-(out|error)(?:-\d+)?\.log$/ // 앱·역할 조합은 ROLES_OF · 활성 집합이 거른다
+const LOG_NAME = /^pleiades-(fin|fit|adv|hrm)-(web|bot|mcp|api)-(out|error)(?:-\d+)?\.log$/ // 앱·역할 조합은 ROLES_OF · 활성 집합이 거른다
 const FIELD_OK = /^[A-Za-z0-9_.:/-]{1,64}$/ // §1-4 ⓪
 const ERRNO = new Set(Object.keys(os.constants.errno)) // §1-2 코드 = errno 이름 목록 안의 값만(E-6)
 const SEV = { 장애: '🔴', 실패: '🟠', 경고: '🟡', 복구: '🟢' }
@@ -450,7 +462,7 @@ function collectLogs(ctx) {
     }
     seen[key] = true
     sizes[key] = (sizes[key] || 0) + st.size
-    if (stream === 'out' && role !== 'mcp') continue // web·bot -out 은 침묵 감지(C-7 ②)에만 · adv 로그(stdout)는 읽지 않는다
+    if (stream === 'out' && role !== 'mcp') continue // web·bot -out 은 침묵 감지(C-7 ②)에만 · adv · hrm 로그(stdout)는 읽지 않는다
     // 비활성 → 활성으로 바뀐 회 — 끝에서 시작한다(정지 동안 쌓인 줄이 한꺼번에 나오지 않게 · 4b-3 r4 보충 2 · PR #590 첫 회와 같다)
     if (ctx.reactivated.has(app)) {
       ctx.state.files[name] = { ino: st.ino, off: st.size }
@@ -499,6 +511,7 @@ function silence(ctx, sizes) {
 // 열려 있던 stale 은 복구로 닫힌다 · #589 9-1 major) · 배포 보류 중에는 판정하지 않는다
 function collectAlive(ctx) {
   for (const app of ctx.active) {
+    if (!ROLES_OF[app].includes('bot')) continue // hrm 은 gateway 봇이 아니다(#802)
     if (ctx.deploy[app].held) continue
     ctx.evaluated.add(`ops · collector · alive-read:${app}`)
     let st
@@ -513,6 +526,46 @@ function collectAlive(ctx) {
     ctx.evaluated.add(`${app} · bot · gateway`)
     if (ctx.now - st.mtimeMs > CONFIG.aliveStaleMin * MIN) ctx.obs.push(observation(app, 'bot', 'gateway', ['stale'], '장애', 'state'))
   }
+}
+
+// ── 014 H-3 hermes 상태 파일(#802 · §3-G) ─────────────────────────────
+// 상태형: 갱신 멈춤 · 레지스트리 오류(장애) · 웹훅 없음 / 비밀 재료 멈춤 · 적체(실패) · 만료 임박(경고 → 요약)
+// 로그형: dead 증가(실패) · 차단 · 링크 뺌(경고 → 요약) — 기준값은 state.hrm(오늘 수치는 날이 바뀌면 0 부터)
+// 파일은 수치만 담는다 — 출처 id 만 칸에 쓴다(허용 문자 칸 · §1-4 ⓪)
+function collectHermes(ctx) {
+  if (!ctx.active.includes('hrm') || ctx.deploy.hrm.held) return
+  ctx.evaluated.add('ops · collector · hrm-state-read')
+  let st
+  try {
+    st = JSON.parse(fs.readFileSync(HRM_STATE, 'utf8'))
+    if (!st || typeof st !== 'object' || Array.isArray(st)) throw new Error('shape')
+  } catch {
+    ctx.obs.push(collector('hrm-state-read')) // 읽지 못한 회는 상태를 판정하지 않는다(열린 기록을 거짓 복구로 닫지 않게)
+    return
+  }
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0)
+  const push = (src, detail, sev, kind = 'state', count = 1) => ctx.obs.push(observation('hrm', 'api', src, detail, sev, kind, count))
+  for (const src of ['state', 'registry', 'webhook', 'queue', 'expiry']) ctx.evaluated.add(`hrm · api · ${src}`)
+  const updated = Date.parse(st.updatedAt)
+  if (!Number.isFinite(updated) || ctx.now - updated > CONFIG.hrmStaleMin * MIN) push('state', ['stale'], '장애')
+  if (st.registryError === true) push('registry', ['error'], '장애')
+  if (st.paused === 'secrets') push('webhook', ['secrets'], '실패')
+  else if (st.webhook !== true || st.paused === 'webhook') push('webhook', ['none'], '실패')
+  const oldest = Date.parse(st.oldestQueuedAt)
+  if (num(st.queued) > 0 && Number.isFinite(oldest) && ctx.now - oldest > CONFIG.hrmBacklogMin * MIN) push('queue', ['backlog'], '실패')
+  for (const id of Array.isArray(st.expiringSoon) ? st.expiringSoon : []) if (field(id)) push('expiry', [field(id)], '경고')
+
+  const day = kstDate(new Date(ctx.now))
+  const prev = ctx.state.hrm || null
+  const cur = { day, dead: num(st.dead), blocked: num(st.blockedToday), linkDropped: num(st.linkDroppedToday) }
+  // 첫 회 · 정지 뒤 다시 켠 회는 기준값만 남긴다(정지 동안의 변화를 한꺼번에 내지 않게 · 로그의 끝에서 시작과 같다)
+  if (prev && !ctx.reactivated.has('hrm')) {
+    if (cur.dead > prev.dead) push('dead', [], '실패', 'event', cur.dead - prev.dead)
+    const base = (k) => (prev.day === day ? prev[k] : 0)
+    if (cur.blocked > base('blocked')) push('blocked', [], '경고', 'event', cur.blocked - base('blocked'))
+    if (cur.linkDropped > base('linkDropped')) push('link-dropped', [], '경고', 'event', cur.linkDropped - base('linkDropped'))
+  }
+  ctx.state.hrm = cur
 }
 
 // ── C-6 디스크 ───────────────────────────────────────────────────────
@@ -989,11 +1042,11 @@ async function testAlert() {
 }
 
 // 이번 회에 감시하는 앱 — 한 회에 한 번만 정하고 모든 판정이 이것만 쓴다(4b-3 R2-3).
-// adv = 수동 배포가 한 번이라도 통과했고(last-ok) 정지 표지가 없을 때. 표지를 못 읽으면 없는 것으로 본다(감시 밖 · 안전한 쪽은 아니지만
-// 비공개 위치를 못 읽는 회는 두 앱 판정도 deploy-stale·collector 경고로 드러난다)
+// 곁가지 앱(adv · hrm) = 수동 배포가 한 번이라도 통과했고(last-ok) 정지 표지가 없을 때. 표지를 못 읽으면 없는 것으로 본다(감시 밖 ·
+// 안전한 쪽은 아니지만 비공개 위치를 못 읽는 회는 두 앱 판정도 deploy-stale·collector 경고로 드러난다)
 function activeApps(ctx) {
-  const adv = fs.existsSync(path.join(PRIVATE, 'inplace-adv-last-ok')) && !fs.existsSync(path.join(PRIVATE, 'inplace-adv-stopped'))
-  const active = [...Object.keys(APPS), ...(adv ? ['adv'] : [])]
+  const on = (a) => fs.existsSync(path.join(PRIVATE, `inplace-${a}-last-ok`)) && !fs.existsSync(path.join(PRIVATE, `inplace-${a}-stopped`))
+  const active = [...Object.keys(APPS), ...SIDE_APPS.filter(on)]
   const prev = ctx.state.active || Object.keys(APPS)
   ctx.reactivated = new Set(ctx.hadState ? active.filter((a) => !prev.includes(a)) : [])
   // 감시에서 빠진 앱(정지)의 열린 상태형 기록은 조용히 닫는다 — 판정하지 않는 scope 라 복구가 영영 안 나고 요약의 "열린 이상" 에
@@ -1019,6 +1072,7 @@ async function collect(ctx, pm2Bin) {
   await collectHealth(ctx)
   collectLogs(ctx)
   collectAlive(ctx)
+  collectHermes(ctx)
   collectDisk(ctx)
 }
 
