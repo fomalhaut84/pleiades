@@ -56,7 +56,8 @@ head_tag() { git -C "$1" tag --points-at HEAD 2>/dev/null | grep -E "$TAG_RE" | 
 mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null; }
 dump_has_hrm() { grep -q "\"$HRM_NAME\"" "${PM2_HOME:-$HOME/.pm2}/dump.pm2" 2>/dev/null; }
 # 앱 .env 의 한 키(줄 끝 주석 · CR · 따옴표 · 공백 벗김) — 값은 포트 번호뿐이다
-env_port() { grep -E "^[[:space:]]*(export[[:space:]]+)?$2=" "$1" 2>/dev/null | tail -1 | tr -d '\r' | sed -E "s/^[^=]*=//; s/[[:space:]]+#.*$//; s/[\"' ]//g"; }
+# `=` 앞 공백도 받는다 — deploy/pleiades.config.cjs LINE 정규식과 같은 문법(#801 Codex P2)
+env_port() { grep -E "^[[:space:]]*(export[[:space:]]+)?$2[[:space:]]*=" "$1" 2>/dev/null | tail -1 | tr -d '\r' | sed -E "s/^[^=]*=//; s/[[:space:]]+#.*$//; s/[\"' ]//g"; }
 # 포트 가드(②) — 겹치는 자리 이름(없으면 빈 값). fin·fit 앱 .env 의 PORT·MCP_PORT + 두 앱 배포의 pre-flight 기본 포트(deploy.sh
 # DEFAULT_PREFLIGHT — 빌드 뒤 잠깐 띄우는 검사 포트). 읽지 못한 값이 있으면 "?<자리>" — 가드를 할 수 없다
 port_taken() {

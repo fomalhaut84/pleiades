@@ -346,9 +346,15 @@ class HrmInplace(unittest.TestCase):
 
     def test_env_port_parsing(self):
         # export · 따옴표 · 줄 끝 주석 · CR 을 벗기고 견준다 — 놓치면 겹침을 못 본다(9-1 info)
-        (self.srv.home / "pleiades-fin" / "apps" / "finance" / ".env").write_text("export PORT='4100'\r\nMCP_PORT=4700  # mcp\r\n")
+        (self.srv.home / "pleiades-fin" / "apps" / "finance" / ".env").write_text("export PORT = '4100'\r\nMCP_PORT =4700  # mcp\r\n")
         self.srv.release("v1.0.1")
         self.assertUnchanged(self.deploy(), "fin MCP_PORT 과 겹친다")
+
+    # 회귀: #801 Codex P2 — `PORT = 4100` 꼴(두 앱 배포가 받아들인다)을 못 읽어 멈추지 않는다
+    def test_spaced_env_declarations_accepted(self):
+        (self.srv.home / "pleiades-fit" / "apps" / "fitness" / ".env").write_text("PORT = 4200\nMCP_PORT = 4301\n")
+        self.srv.release("v1.0.1")
+        self.assertForm(self.deploy(), 0, "포트 가드: fin·fit 와 겹치지 않음", "결과: 통과")
 
     def test_node_22_12_refused(self):
         self.srv.release("v1.0.1")
