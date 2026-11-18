@@ -18,6 +18,8 @@ import { openQueue } from "./queue";
 import { createRateLimiter } from "./rate-limit";
 import { createRegistry } from "./registry";
 import { createHermesServer } from "./server";
+import { runCheck, WEBHOOK_KEY } from "./check";
+import { runKeyCli } from "./key-cli";
 
 const HOST = "127.0.0.1";
 const PURGE_EVERY_MS = 60 * 60 * 1000;
@@ -50,7 +52,7 @@ function required(name: string): string {
   return v;
 }
 
-function main(): void {
+function serve(): void {
   const port = Number(required("PORT"));
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     console.error("[hermes] 기동 중단 — PORT 가 포트 번호가 아니다");
@@ -74,7 +76,7 @@ function main(): void {
   }, PURGE_EVERY_MS);
   purge.unref();
 
-  const webhook = () => platformEnv("DISCORD_WEBHOOK_HERMES");
+  const webhook = () => platformEnv(WEBHOOK_KEY);
   const poster = createPoster({
     queue,
     sourceOf: (id) => registry.byId(id),
@@ -161,4 +163,35 @@ function main(): void {
   });
 }
 
-main();
+/** 서브명령 — 없으면 받기·게시 서버 · `check`(기동 전 점검) · `health`(기동 뒤 확인) · `key …`(출처 키) — 뒤 셋은 H-2(#800) */
+function main(argv: readonly string[]): void {
+  const [cmd, ...rest] = argv;
+  if (cmd === undefined) return serve();
+  if (cmd === "check") process.exit(runCheck(process.env, (l) => console.log(l)));
+  if (cmd === "health") {
+    // 배포 스크립트 C6 — 이 env 의 PORT 로 루프백 /v1/health 가 200 인가(3 s)
+    void fetch(`http://${HOST}:${Number(process.env.PORT)}/v1/health`, { signal: AbortSignal.timeout(3_000) }).then(
+      (r) => {
+        console.log(`health ${r.status}`);
+        process.exit(r.status === 200 ? 0 : 1);
+      },
+      () => {
+        console.log("health 연결 실패");
+        process.exit(1);
+      },
+    );
+    return;
+  }
+  if (cmd === "key") {
+    const file = process.env.HERMES_REGISTRY?.trim();
+    if (!file) {
+      console.error("HERMES_REGISTRY 가 필요하다(deploy/hermes/hermes-key.sh 가 넣는다)");
+      process.exit(2);
+    }
+    process.exit(runKeyCli(rest, path.resolve(file), { out: (l) => console.log(l), err: (l) => console.error(l) }));
+  }
+  console.error("사용: hermes [check | health | key …]");
+  process.exit(2);
+}
+
+main(process.argv.slice(2));
