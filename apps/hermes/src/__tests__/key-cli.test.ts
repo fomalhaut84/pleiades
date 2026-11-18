@@ -128,6 +128,7 @@ describe("runKeyCli", () => {
     expect(run("expires", "a", "2027-02-30")).toBe(1);
     expect(run("expires", "zz", "2027-02-28")).toBe(1);
     expect(run("expires", "a")).toBe(2);
+    expect(run("expires", "a", "2027-01-01", "junk")).toBe(2);
     expect(reg().sources[0].expires ?? null).toBeNull(); // 실패한 명령은 파일을 바꾸지 않는다(add 때 칸 없음 그대로)
   });
 

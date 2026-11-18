@@ -21,7 +21,6 @@ export interface Formatted {
   readonly linkDropped: boolean;
 }
 
-/** 채널 `#hermes`(#796 · 014 D4 정정) — 게시 이름은 `hermes·<출처 표시 이름>` */
 /**
  * 게시 이름(웹훅 username)은 **hermes 고정** — hermes 는 여러 앱의 메시지를 채널로 전달하는 중계다. 출처는 본문 첫 줄의
  * `[표시 이름]`(굵게)으로 보인다(사용자 2026-11-18 · #811 — 옛 `hermes·<표시 이름>` 대신).

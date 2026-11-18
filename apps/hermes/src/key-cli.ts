@@ -163,7 +163,7 @@ export function runKeyCli(args: readonly string[], registryFile: string, io: Io)
     case "expires": {
       // #811 — 시즌 연장 등: 키는 그대로 · 만료일만. 검증은 save 의 parseRegistry(받기 쪽과 같은 규칙)
       const value = parsed.pos[2];
-      if (id === undefined || value === undefined) {
+      if (id === undefined || value === undefined || parsed.pos.length > 3) {
         USAGE.forEach(io.err);
         return 2;
       }
@@ -173,7 +173,7 @@ export function runKeyCli(args: readonly string[], registryFile: string, io: Io)
         return 1;
       }
       const expires = value === "none" ? null : value;
-      const next = doc.sources.map((s, j) => (j === i ? { ...s, expires } : s)) as Source[];
+      const next = doc.sources.map((s, j) => (j === i ? { ...s, expires } : s));
       return write({ sources: next }, `만료: ${id} → ${expires ?? "없음"}(키 그대로)`);
     }
     case "disable":
