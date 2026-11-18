@@ -8,9 +8,8 @@
 import { prisma } from '@/lib/prisma'
 import { generateTAReport } from '@/lib/ta/engine'
 import { askAdvisor } from '@/lib/ai/claude-advisor'
-import { escapeHtml } from '@/bot/utils/html'
-import { notifierFor, recipients, Route, htmlContent, lastErrorOf } from './notifier'
-import { markdownToHtml } from '@/bot/utils/markdown'
+import { escapeDiscordMarkdown } from '@pleiades/notify'
+import { notifierFor, recipients, Route, markdownContent, lastErrorOf } from './notifier'
 import { isMarketOpenFor } from '@/lib/market-hours'
 import {
   computeDeliveryStatus,
@@ -101,6 +100,52 @@ interface SignalResult {
   signalIds: string[]
   /** Phase 37-A (#444): 발동 당시 TA 리포트 — AlertHistory.contextJson 저장에 재활용 */
   report: TAReport
+}
+
+const STRATEGY_LABELS: Record<string, string> = {
+  swing: '스윙', momentum: '모멘텀', scalp: '단타', long_hold: '장기',
+}
+
+/** AI 가이드 조각 상한(글자) — 알림 한 통이 길어지지 않게 */
+const AI_GUIDE_MAX_CHARS = 300
+
+/**
+ * AI 가이드 한 줄 — 글자(코드 포인트) 단위로 300자 · 잘렸으면 `…` · 줄바꿈은 공백으로 접는다.
+ * 통째로 escape 한 뒤 **가이드 안에서 짝이 맞는 `**굵게**` 만** 되살린다 — 자르기나 모델 출력이 남긴 짝 없는 `**` · `||` ·
+ * 백틱이 Discord 에서 빈 줄을 넘어 다음 종목 틀과 짝을 맺지 않게(#785 9-1 major · 옛 HTML 경로는 태그 안에 가뒀다).
+ */
+function guideLine(guide: string): string {
+  const chars = Array.from(guide.trim())
+  const cut = chars.length > AI_GUIDE_MAX_CHARS ? `${chars.slice(0, AI_GUIDE_MAX_CHARS).join('').trimEnd()}…` : chars.join('')
+  const oneLine = cut.replace(/\s*\n\s*/g, ' ').trim()
+  return escapeDiscordMarkdown(oneLine).replace(/\\\*\\\*([^*\n]+?)\\\*\\\*/g, '**$1**')
+}
+
+/**
+ * TA 시그널 알림 본문 — Discord 마크다운(`markdown` 형식 · 013 F5 · #785).
+ * 틀(제목 · 종목 줄 굵게)만 서식이고 종목명 · 티커 · 시그널 글은 escape 한다. AI 가이드는 `guideLine` — 한 줄로 접어 💡 뒤에 두고
+ * (줄 머리에 오지 않아 제목 · 목록 · 인용이 틀 사이에 끼지 않는다) 짝 맞는 굵게만 살린다.
+ */
+export function buildTaSignalMessage(
+  results: ReadonlyArray<Pick<SignalResult, 'ticker' | 'displayName' | 'strategy' | 'signals'>>,
+  aiGuides: ReadonlyMap<string, string>,
+): string {
+  const lines = ['📊 **TA 시그널 알림**\n']
+  for (const r of results) {
+    const stratLabel = r.strategy.split('/').map((s) => STRATEGY_LABELS[s] ?? s).join('/')
+    // 티커는 괄호째 escape — `005930.KS` 홀로면 줄 머리 번호 목록으로 보고 `\.` 를 넣는다
+    lines.push(`**${escapeDiscordMarkdown(r.displayName)}** ${escapeDiscordMarkdown(`(${r.ticker}) — ${stratLabel}`)}`)
+    for (const sig of r.signals) {
+      lines.push(`  ${escapeDiscordMarkdown(sig)}`)
+    }
+    const guide = aiGuides.get(r.ticker)
+    if (guide) {
+      lines.push('')
+      lines.push(`  💡 ${guideLine(guide)}`)
+    }
+    lines.push('')
+  }
+  return lines.join('\n')
 }
 
 interface Signal {
@@ -288,10 +333,6 @@ async function doCheckTASignals(): Promise<void> {
 
   if (results.length === 0) return
 
-  const STRATEGY_LABELS: Record<string, string> = {
-    swing: '스윙', momentum: '모멘텀', scalp: '단타', long_hold: '장기',
-  }
-
   // AI 간략 가이드 생성 — AlertConfig.ta_ai_guide=off 시 스킵, 티커별 6h 쿨다운 적용.
   // 최대 3종목 (상위 우선). 쿨다운 티커는 후보에서 배제 → 3종목 슬롯 낭비 방지.
   const aiGuides = new Map<string, string>()
@@ -316,25 +357,9 @@ async function doCheckTASignals(): Promise<void> {
     }
   }
 
-  const lines = ['📊 <b>TA 시그널 알림</b>\n']
-  for (const r of results) {
-    const stratLabel = r.strategy.split('/').map((s) => STRATEGY_LABELS[s] ?? s).join('/')
-    lines.push(`<b>${escapeHtml(r.displayName)}</b> (${escapeHtml(r.ticker)}) — ${stratLabel}`)
-    for (const sig of r.signals) {
-      lines.push(`  ${sig}`)
-    }
-    const guide = aiGuides.get(r.ticker)
-    if (guide) {
-      const guideHtml = markdownToHtml(guide.slice(0, 300))
-      lines.push('')
-      lines.push(`  💡 ${guideHtml}`)
-    }
-    lines.push('')
-  }
+  const message = buildTaSignalMessage(results, aiGuides)
 
-  const message = lines.join('\n')
-
-  const delivery = await notifierFor().notify(Route.ALLOWED, htmlContent(message), { label: 'ta-signal' })
+  const delivery = await notifierFor().notify(Route.ALLOWED, markdownContent(message), { label: 'ta-signal' })
   const sendSuccess = delivery.sent
   const lastError = lastErrorOf(delivery)
 

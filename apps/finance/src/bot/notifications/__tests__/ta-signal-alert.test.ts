@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { selectAiGuideTargets, TA_GUIDE_BUDGET_USD } from '../ta-signal-alert'
+import { toDiscordMarkdown } from '@pleiades/notify'
+import { buildTaSignalMessage, selectAiGuideTargets, TA_GUIDE_BUDGET_USD } from '../ta-signal-alert'
 
 const COOLDOWN = 6 * 60 * 60 * 1000
 
@@ -63,3 +64,72 @@ describe('TA 가이드 예산', () => {
   })
 })
 
+
+// 013 F5 (#785) — 틀은 Discord 마크다운 · 템플릿 글은 escape · AI 가이드는 한 줄로 접어 💡 뒤에
+describe('buildTaSignalMessage', () => {
+  const r = (over: Partial<{ ticker: string; displayName: string; strategy: string; signals: string[] }> = {}) => ({
+    ticker: '005930.KS', displayName: '삼성전자', strategy: 'swing/momentum', signals: ['🟢 RSI 과매도 (28.3)'], ...over,
+  })
+
+  it('제목 · 종목 줄은 굵게 · 전략은 한글 · 가이드 없으면 💡 줄 없음', () => {
+    expect(buildTaSignalMessage([r()], new Map())).toBe(
+      '📊 **TA 시그널 알림**\n\n**삼성전자** (005930.KS) — 스윙/모멘텀\n  🟢 RSI 과매도 (28.3)\n',
+    )
+  })
+
+  it('HTML 태그를 쓰지 않는다', () => {
+    expect(buildTaSignalMessage([r()], new Map([['005930.KS', '가이드']]))).not.toMatch(/<\/?b>/)
+  })
+
+  it('종목명 · 티커 · 시그널 글의 마크다운 기호는 escape', () => {
+    const msg = buildTaSignalMessage([r({ displayName: 'A*B_C', signals: ['# 제목 아님', '~~취소~~'] })], new Map())
+    expect(msg).toContain('**A\\*B\\_C**')
+    expect(msg).toContain('  \\# 제목 아님')
+    expect(msg).toContain('\\~\\~취소\\~\\~')
+  })
+
+  it('AI 가이드는 300자(넘으면 …) · 줄바꿈을 한 줄로 접어 💡 뒤에 · 짝 맞는 굵게는 남긴다', () => {
+    const guide = '**관망** 권고\n# 손절 라인\n- 50일선'
+    const msg = buildTaSignalMessage([r()], new Map([['005930.KS', guide]]))
+    expect(msg).toContain('\n\n  💡 **관망** 권고 # 손절 라인 - 50일선\n')
+    const long = buildTaSignalMessage([r()], new Map([['005930.KS', 'x'.repeat(500)]]))
+    expect(long).toContain(`💡 ${'x'.repeat(300)}…\n`)
+    expect(long).not.toContain('x'.repeat(301))
+  })
+
+  it('정리기를 거친 뒤에도 가이드가 줄 머리 서식(제목 · 목록)이 되지 않는다', () => {
+    const out = toDiscordMarkdown(buildTaSignalMessage([r()], new Map([['005930.KS', 'a\n## 제목\n> 인용']])), 'markdown')
+    for (const line of out.split('\n')) expect(line).not.toMatch(/^\s*(#{1,3} |> )/)
+  })
+
+  it('종목 여러 개는 빈 줄로 가른다', () => {
+    const msg = buildTaSignalMessage([r(), r({ ticker: 'AAPL', displayName: 'Apple', strategy: 'long_hold', signals: ['a', 'b'] })], new Map())
+    expect(msg).toBe('📊 **TA 시그널 알림**\n\n**삼성전자** (005930.KS) — 스윙/모멘텀\n  🟢 RSI 과매도 (28.3)\n\n**Apple** (AAPL) — 장기\n  a\n  b\n')
+  })
+
+  // 회귀: #785 9-1 major — 짝 없는 인라인 기호가 빈 줄을 넘어 다음 종목 틀과 짝을 맺었다
+  it('300자 경계에서 갈라진 ** 는 escape — 다음 종목 굵게와 짝을 맺지 않는다', () => {
+    const msg = buildTaSignalMessage(
+      [r(), r({ ticker: 'AAPL', displayName: 'Apple' })],
+      new Map([['005930.KS', `${'x'.repeat(296)}**관망 권고`]]),
+    )
+    expect(msg).toContain(`💡 ${'x'.repeat(296)}\\*\\*관망…\n`)
+    expect(msg).toContain('\n**Apple** (AAPL)')
+  })
+
+  it('가이드의 || · 백틱 · 펜스는 escape — 틀이 스포일러 · 코드로 가려지지 않는다', () => {
+    const msg = buildTaSignalMessage(
+      [r(), r({ ticker: 'AAPL', displayName: 'Apple' })],
+      new Map([['005930.KS', 'a || b ```'], ['AAPL', 'c || d `']]),
+    )
+    expect(msg).toContain('💡 a \\|\\| b \\`\\`\\`')
+    expect(msg).toContain('💡 c \\|\\| d \\`')
+    expect(msg).not.toMatch(/(^|[^\\])(\|\||`)/)
+  })
+
+  it('이모지를 반으로 가르지 않는다(글자 단위)', () => {
+    const msg = buildTaSignalMessage([r()], new Map([['005930.KS', `${'x'.repeat(299)}📈📈`]]))
+    expect(msg).toContain(`💡 ${'x'.repeat(299)}📈…\n`)
+    expect(msg).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/)
+  })
+})
