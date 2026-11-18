@@ -64,7 +64,7 @@ describe("createPoster.step", () => {
     expect(calls).toEqual([
       {
         url: `${HOOK}?wait=true`,
-        body: { content: "**새 주문**\n주문 #1", username: "spot·주문", allowed_mentions: { parse: [] } },
+        body: { content: "**새 주문**\n주문 #1", username: "spot·주문", allowed_mentions: { parse: [] }, flags: 4 },
       },
     ]);
     expect(q.counts()).toMatchObject({ queued: 0, sent: 1 });
@@ -117,6 +117,46 @@ describe("createPoster.step", () => {
     now += 5_000;
     reply = () => Promise.reject(new TypeError("fetch failed"));
     expect(await p.step()).toEqual({ kind: "retry", id, delayMs: 10_000 });
+  });
+
+  // 회귀: #794 9-1 major — 실패한 행 뒤의 행이 앞지르면 받은 순서 · 429 가 깨진다
+  it("실패 뒤에는 그 시각까지 아무것도 보내지 않고 같은 행부터 다시", async () => {
+    const a = q.enqueue({ source: "orders", text: "a", level: "info" }, now);
+    const b = q.enqueue({ source: "orders", text: "b", level: "info" }, now);
+    reply = () => new Response(JSON.stringify({ retry_after: 3 }), { status: 429 });
+    const p = createPoster(deps);
+    expect(await p.step()).toMatchObject({ kind: "retry", id: a.id });
+    now += 1_000;
+    expect(await p.step()).toEqual({ kind: "wait", ms: 2_000 });
+    expect(calls.length).toBe(1);
+    now += 2_000;
+    reply = () => new Response("{}", { status: 200 });
+    expect(await p.step()).toEqual({ kind: "sent", id: a.id });
+    expect(await p.step()).toEqual({ kind: "sent", id: b.id });
+  });
+
+  // 회귀: #794 9-1 major — 웹훅이 지워져도 메시지가 죽지 않는다
+  it.each([401, 403, 404])("웹훅 %i → paused(시도 수 그대로 · 행 보존 · 1분 뒤 다시)", async (status) => {
+    const { id } = q.enqueue({ source: "orders", text: "a", level: "info" }, now);
+    reply = () => new Response("{}", { status });
+    const p = createPoster(deps);
+    expect(await p.step()).toEqual({ kind: "paused", why: "webhook" });
+    expect(q.nextDue(now)).toMatchObject({ id, attempts: 0 });
+    now += 59_999;
+    expect((await p.step()).kind).toBe("wait");
+    now += 1;
+    reply = () => new Response("{}", { status: 200 });
+    expect(await p.step()).toEqual({ kind: "sent", id });
+  });
+
+  // 회귀: #794 9-1 major — 형식이 바꾸거나 자른 값도 원문으로 잡는다
+  it("원문 칸 검사 — 링크 주소 속 비밀 값 · 2000자 뒤에 잘려 나갈 토큰", async () => {
+    const secret = "secret_value_with_underscore";
+    const p = createPoster({ ...deps, sourceOf: () => ({ ...SRC, linkHosts: ["a.example"] }), secrets: () => ({ ok: true, values: [secret] }) });
+    q.enqueue({ source: "orders", text: "a", level: "info", link: { label: "x", url: `https://a.example/${secret}` } }, now);
+    expect(await p.step()).toMatchObject({ kind: "blocked", reason: "secret-match" });
+    q.enqueue({ source: "orders", text: "가".repeat(1990) + " " + "gK7".repeat(14) + "a", level: "info" }, now);
+    expect(await p.step()).toMatchObject({ kind: "blocked", reason: "token" });
   });
 
   it("Discord 400 → 바로 dead(같은 본문은 다시 보내도 같다)", async () => {

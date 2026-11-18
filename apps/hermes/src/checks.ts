@@ -34,8 +34,10 @@ const GENERIC_TOKEN = new RegExp(`(?<![${W}-])[${W}-]{32,}(?![${W}-])`, "g");
 const MIN_TOKEN_PIECE = 16;
 
 /** 개인정보 — 국내 휴대폰 · 지역 번호 · +82 · 이메일. 앞뒤가 숫자면 아니다(주문 번호 · 날짜 안의 숫자열) */
-const PHONE_RE = /(?<![\d])(?:\+82[ -]?|0)(?:1[016789]|2|[3-6][1-5]|70)[ -]?\d{3,4}[ -]?\d{4}(?!\d)/;
-const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/;
+const PHONE_RE = /(?<![\d.])(?:\+82[ .-]?|0)(?:1[016789]|2|[3-6][1-5]|70)[ .-]?\d{3,4}[ .-]?\d{4}(?![\d.])/;
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.([A-Za-z]{2,})(?![A-Za-z0-9-])/g;
+/** 파일 이름(`logo@2x.png`)은 이메일이 아니다 — 흔한 파일 확장자로 끝나면 뺀다(9-1 info) */
+const FILE_EXT = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "js", "mjs", "cjs", "ts", "css", "json", "txt", "pdf", "html", "map"]);
 
 const isGenericToken = (s: string): boolean =>
   !/^[0-9a-fA-F]+$/.test(s) &&
@@ -46,7 +48,8 @@ const isGenericToken = (s: string): boolean =>
 export const hasToken = (s: string): boolean =>
   TOKEN_RES.some((re) => re.test(s)) || [...s.matchAll(GENERIC_TOKEN)].some((m) => isGenericToken(m[0]));
 
-const hasPii = (s: string): boolean => PHONE_RE.test(s) || EMAIL_RE.test(s);
+const hasPii = (s: string): boolean =>
+  PHONE_RE.test(s) || [...s.matchAll(EMAIL_RE)].some((m) => !FILE_EXT.has(m[1].toLowerCase()));
 
 /** escape 가 넣은 `\` 가 값을 끊는다 — 대조는 벗긴 본문으로도 한다 */
 const unescapeMd = (s: string): string => s.replace(/\\(.)/g, "$1");
@@ -58,6 +61,18 @@ export function checkContent(content: string, secrets: readonly string[]): Block
   if (hasToken(content) || hasToken(plain)) return "token";
   if (secrets.some((v) => content.includes(v) || plain.includes(v))) return "secret-match";
   if (hasPii(content) || hasPii(plain)) return "pii";
+  return null;
+}
+
+/**
+ * 형식 전 원문 칸(title · text · link label · url)에도 ①② · 개인정보를 건다 — 형식이 값을 바꾸거나(주소 퍼센트 인코딩) 자르면
+ * (2000자) 완성 본문만으로는 놓친다(#794 9-1 major). 길이는 보지 않는다(형식이 맞춘다).
+ */
+export function checkRaw(fields: readonly string[], secrets: readonly string[]): BlockReason | null {
+  const text = fields.join("\n");
+  if (hasToken(text)) return "token";
+  if (secrets.some((v) => text.includes(v))) return "secret-match";
+  if (hasPii(text)) return "pii";
   return null;
 }
 

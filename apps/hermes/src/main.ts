@@ -11,7 +11,7 @@ import { mkdirSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { platformEnv } from "@pleiades/notify";
 import { loadSecrets } from "./checks";
-import { createPoster, isValidWebhook, type StepResult } from "./poster";
+import { createPoster, isValidWebhook, REQUEST_TIMEOUT_MS, type StepResult } from "./poster";
 import { buildState, kstDayStart, writeState } from "./state";
 import path from "node:path";
 import { openQueue } from "./queue";
@@ -24,7 +24,7 @@ const PURGE_EVERY_MS = 60 * 60 * 1000;
 /** 상태 파일을 다시 쓰는 간격(결과가 바뀌면 바로) */
 const STATE_EVERY_MS = 10_000;
 
-/** 결과별 다음 걸음까지 — 보낼 것이 있으면 바로 · 429 는 retry_after(최대 5 s) 뒤 */
+/** 결과별 다음 걸음까지 — 보낼 것이 있으면 바로 · 기다릴 때는 최대 5 s 씩 끊어 다시 본다(종료 · 설정 변경에 빨리 반응) */
 function pauseAfter(r: StepResult | null): number {
   if (r === null) return 5_000;
   switch (r.kind) {
@@ -32,6 +32,8 @@ function pauseAfter(r: StepResult | null): number {
       return 1_000;
     case "paused":
       return 5_000;
+    case "wait":
+      return Math.min(r.ms, 5_000);
     case "retry":
       return Math.min(r.delayMs, 5_000);
     default:
@@ -103,6 +105,9 @@ function main(): void {
   };
 
   let stopping = false;
+  let running: Promise<void> = Promise.resolve();
+  const naps = new AbortController();
+  const nap = (ms: number) => sleep(ms, undefined, { signal: naps.signal }).catch(() => undefined);
   const loop = async () => {
     while (!stopping) {
       let r: StepResult | null = null;
@@ -112,17 +117,19 @@ function main(): void {
         console.error(`[hermes] 게시 루프 오류: ${err instanceof Error ? err.name : "Error"}`);
       }
       const now = Date.now();
-      const nextPaused = r?.kind === "paused" ? r.why : r?.kind === "idle" ? paused : null;
+      // 멈춤은 다른 결과가 나올 때까지 이어진다 — 기다림 · 할 일 없음 · 루프 오류(9-1 info)는 멈춤을 풀지 않는다
+      const nextPaused =
+        r?.kind === "paused" ? r.why : r === null || r.kind === "idle" || r.kind === "wait" ? paused : null;
       if (r?.kind === "sent" && poster.lastLinkDropped()) {
         const day = kstDayStart(now);
         linkDropped = { day, n: (linkDropped.day === day ? linkDropped.n : 0) + 1 };
       }
-      const changed = nextPaused !== paused || (r !== null && r.kind !== "idle" && r.kind !== "paused");
+      const changed = nextPaused !== paused || (r !== null && r.kind !== "idle" && r.kind !== "paused" && r.kind !== "wait");
       if (nextPaused !== paused && nextPaused !== null) console.warn(`[hermes] 게시 멈춤 — ${nextPaused === "webhook" ? "웹훅 없음 · 형식 오류" : "비밀 대조 재료를 못 읽음"}`);
       paused = nextPaused;
       if (changed || now - lastState >= STATE_EVERY_MS) saveState(now);
       const wait = pauseAfter(r);
-      if (wait > 0) await sleep(wait);
+      if (wait > 0 && !stopping) await nap(wait);
     }
   };
 
@@ -131,9 +138,16 @@ function main(): void {
     stopping = true;
     console.log(`[hermes] ${signal} — 받기를 멈추고 닫는다`);
     hermes.beginShutdown();
-    void hermes.close().finally(() => {
-      queue.close();
-      process.exit(0);
+    naps.abort();
+    // 진행 중인 게시 한 걸음이 끝난 뒤에 대기열을 닫는다 — Discord 가 받았는데 sent 를 못 적으면 재기동 뒤 두 번 나간다(9-1 major)
+    const settled = Promise.race([running, sleep(REQUEST_TIMEOUT_MS + 2_000)]);
+    void Promise.all([hermes.close(), settled]).finally(() => {
+      try {
+        saveState(Date.now());
+      } finally {
+        queue.close();
+        process.exit(0);
+      }
     });
   };
   process.on("SIGTERM", () => stop("SIGTERM"));
@@ -143,7 +157,7 @@ function main(): void {
     const st = registry.status(Date.now());
     console.log(`[hermes] 받기 시작 ${HOST}:${port} · 출처 ${st.sources}${st.error ? " · 레지스트리 오류" : ""} · 웹훅 ${isValidWebhook(webhook()) ? "있음" : "없음"}`);
     saveState(Date.now());
-    void loop();
+    running = loop();
   });
 }
 

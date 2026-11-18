@@ -49,6 +49,29 @@ describe("formatMessage", () => {
     expect(r.content).toBe("주문 #1\n🔗 x · https://shop.example.com/%5Ba%5D%28https://evil.example%29%5F%2A%7E%7C%60");
   });
 
+  // 회귀: #794 9-1 critical — 파서는 `\` 를 `/` 로 읽는다. 판정과 표시가 같은 정규화 주소여야 한다
+  it("판정 · 표시 모두 정규화 주소 — 백슬래시로 허용 호스트를 우회하지 못한다", () => {
+    const r = formatMessage(m({ link: { label: "x", url: "https://shop.example.com\\@evil.example/x" } }), SRC);
+    expect(r.content).toBe("주문 #1\n🔗 x · https://shop.example.com/@evil.example/x");
+    expect(new URL(r.content.split(" · ")[1]).hostname).toBe("shop.example.com");
+  });
+
+  // 회귀: #794 9-1 major — 본문 속 맨 주소는 자동 링크가 되지 않는다
+  it("text · title · label 의 맨 주소는 :// 를 끊는다", () => {
+    const r = formatMessage(m({ title: "https://evil.example", text: "여기 http://evil.example/x 로" }), SRC);
+    expect(r.content).toBe("**https:\u200b//evil.example**\n여기 http:\u200b//evil.example/x 로");
+  });
+
+  it("이름에 discord 가 들어가는 출처 id → hermes 이름(Discord 가 400 으로 거절한다)", () => {
+    expect(formatMessage(m({ source: "my-discord" }), null).username).toBe(HERMES_USERNAME);
+  });
+
+  it("링크 줄이 본문 자리를 다 먹으면 링크 줄을 뺀다", () => {
+    const r = formatMessage(m({ title: "t".repeat(100), link: { label: "x", url: `https://shop.example.com/${"p".repeat(1800)}` } }), SRC);
+    expect(r).toMatchObject({ linkDropped: true });
+    expect(r.content).not.toContain("🔗");
+  });
+
   it("허용 밖 호스트 · 허용 목록 없음 · 출처 없음 → 링크 줄을 뺀다", () => {
     const link = { label: "x", url: "https://evil.example.com/" };
     expect(formatMessage(m({ link }), SRC)).toMatchObject({ content: "주문 #1", linkDropped: true });

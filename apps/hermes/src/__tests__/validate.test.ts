@@ -44,6 +44,7 @@ describe("validateMessage", () => {
     ["link 주소 안 줄바꿈(#791 9-1 major)", { text: "a", link: { label: "x", url: "https://ex\nample.com/a\nFAKE LINE" } }, "link"],
     ["link 주소 앞뒤 공백", { text: "a", link: { label: "x", url: "  https://example.com/x " } }, "link"],
     ["link 주소 탭", { text: "a", link: { label: "x", url: "https://example.com/\tx" } }, "link"],
+    ["link 주소 백슬래시(#794 9-1 critical)", { text: "a", link: { label: "x", url: "https://a.com\\@evil.com/x" } }, "link"],
     ["link 계정 포함", { text: "a", link: { label: "x", url: "https://u:p@a.com" } }, "link"],
     ["link 주소 아님", { text: "a", link: { label: "x", url: "not a url" } }, "link"],
     ["link label 없음", { text: "a", link: { url: "https://a.com" } }, "link"],
