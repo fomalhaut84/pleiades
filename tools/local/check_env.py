@@ -7,8 +7,8 @@
 사용 (cwd = apps/<app> · 보통 tools/local/run.sh 가 부른다):
   PLEIADES_VERIFY_DISCORD_TOKEN_SHA256=<hash,hash> \
   PLEIADES_VERIFY_DISCORD_IDS=<채널·사용자 id,…> PLEIADES_VERIFY_DISCORD_WEBHOOK_SHA256=<hash,hash> \
-    python3 ../../tools/local/check_env.py <fin|fit|adv>
-  해시 구하기: python3 ../../tools/local/check_env.py <fin|fit|adv> --discord-hashes   (실효 Discord 봇 토큰·웹훅의 SHA-256 만 출력)
+    python3 ../../tools/local/check_env.py <fin|fit|adv|hrm>
+  해시 구하기: python3 ../../tools/local/check_env.py <fin|fit|adv|hrm> --discord-hashes   (실효 Discord 봇 토큰·웹훅의 SHA-256 만 출력)
 종료 코드: 0 통과 · 1 위반 · 2 사용 오류
 """
 
@@ -19,16 +19,19 @@ import hashlib
 import os
 import re
 import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
-APP_DIRS = {"fin": "finance", "fit": "fitness", "adv": "advisor"}
+APP_DIRS = {"fin": "finance", "fit": "fitness", "adv": "advisor", "hrm": "hermes"}
 # #679 · 012 4b-1 — 통합 층(adv)은 DB 를 쓰지 않고(012 Q135 · 지식은 MCP prompt 로) 웹 포트가 없다(봇 하나)
 DB_APPS = {"fin", "fit"}
-WEB_APPS = {"fin", "fit"}
+WEB_APPS = {"fin", "fit", "hrm"}  # hrm = hermes HTTP 받기(루프백 · 014 H-1a · #791) — PORT 를 명시한다
+# 014 N12 — hermes 대기열은 node:sqlite(플래그 없이는 22.13+ · #800 9-1). 로컬 셸 기본은 nvm 20.18 이라 조용히 ERR_UNKNOWN_BUILTIN_MODULE 이 난다
+NODE_MIN = {"hrm": (22, 13)}
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 DB_PORT = 5432
 RESERVED_PORTS = {3000, 4100, 4200, 4210, 4301}  # next dev 기본 · 서비스 fin/fit 웹 · MCP (006 L-3)
@@ -36,6 +39,7 @@ MUST_BE_EMPTY = {
     "fin": ("WHOOING_WEBHOOK_URL",),  # 실제 가계부에 기록된다 (L-6)
     "fit": ("GARMIN_EMAIL", "GARMIN_PASSWORD", "MFDS_API_KEY"),  # 서비스 Garmin 세션 · 외부 API (L-5 · L-6)
     "adv": ("DATABASE_URL",),  # 통합 층은 DB 없이 돈다 — 어떤 DB 든 두지 않는다(I-7 · 012 Q135)
+    "hrm": ("DATABASE_URL",),  # hermes 대기열은 자기 SQLite 파일이다(014 C3) — 서버 Postgres 를 쓰지 않는다
 }
 # 009 D-5 B6 (pleiades#517): 옛 채널 검사(검증 봇 id · 앱 간 같은 봇 · CHAT_ID 키 대조)는 지웠다 — 두 앱이 옛 채널 키를
 # 읽지 않아 로컬에 서비스 토큰이 있어도 폴링·409 가 생기지 않는다. 로컬 봇 가드는 Discord 판(I-4′ · I-5′ · 아래 _check_platform).
@@ -220,8 +224,28 @@ def _check_ports(env: dict[str, str], *, web: bool = True) -> list[Problem]:
     return out
 
 
+def _check_node(app: str, env: dict[str, str]) -> list[Problem]:
+    """PATH 첫 node 의 판 — NODE_MIN 에 있는 앱만(hrm). 판을 읽지 못해도 멈춘다."""
+    want = NODE_MIN.get(app)
+    if want is None:
+        return []
+    node = shutil.which("node", path=env.get("PATH", ""))
+    hint = f"node {want[0]}.{want[1]} 이상이 PATH 첫째여야 한다 (014 N12 · node:sqlite) — 예: PATH=/usr/local/bin:$PATH"
+    if node is None:
+        return [Problem("node", f"PATH 에 없다 — {hint}")]
+    try:
+        out = subprocess.run([node, "-p", "process.versions.node"], capture_output=True, text=True, timeout=10,
+                             check=False).stdout.strip()
+        got = tuple(int(x) for x in out.split(".")[:2])
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return [Problem("node", f"판을 읽지 못했다 — {hint}")]
+    return [] if got >= want else [Problem("node", f"{out} — {hint}")]
+
+
 def _check_advisor(app: str, env: dict[str, str], root: Path) -> list[Problem]:
-    # fin · adv 는 PATH 의 'claude' 를 부른다 — 첫 claude 가 shim 이어야 한다
+    # fin · adv 는 PATH 의 'claude' 를 부른다 — 첫 claude 가 shim 이어야 한다 · hrm 은 claude 를 부르지 않는다
+    if app == "hrm":
+        return []
     if app == "fit":
         path = env.get("CLAUDE_BIN", "")
         if not path.startswith("/") or os.path.exists(path):
@@ -253,6 +277,7 @@ def problems(app: str, env: dict[str, str], *, cwd: Path, root: Path = ROOT,
     out += _check_ports(env, web=app in WEB_APPS)
     if check_platform:
         out += _check_platform(env, cwd, root, discord_hashes, discord_ids, webhook_hashes)
+        out += _check_node(app, env)  # 실행 때만 — write_env 템플릿 검사(PATH = bin)는 node 를 보지 않는다
     out += [Problem(k, "비워야 한다") for k in MUST_BE_EMPTY[app] if env.get(k)]
     out += _check_advisor(app, env, root)
     out += [Problem(k, "플랫폼 키는 pleiades 루트 .env 에 둔다 — 앱 .env 값이 루트 값을 가린다 (#143)")

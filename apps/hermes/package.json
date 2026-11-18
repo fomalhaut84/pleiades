@@ -1,0 +1,30 @@
+{
+  "name": "pleiades-hermes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "hermes — 스팟 알림 중계(외부 · 내부 · 주기 작업 → Discord #hermes · 014)",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --platform=node --target=node24 --outfile=dist/hermes.cjs",
+    "lint": "eslint src/ --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@pleiades/notify": "file:../../packages/notify"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@types/node": "^24",
+    "esbuild": "^0.28.1",
+    "eslint": "^9.39.4",
+    "typescript": "^5",
+    "typescript-eslint": "^8",
+    "vitest": "^4.1.12"
+  },
+  "overrides": {
+    "minimatch@10": "^11.0.4"
+  }
+}

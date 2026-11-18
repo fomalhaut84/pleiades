@@ -28,7 +28,7 @@ class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        for app in ("finance", "fitness", "advisor"):
+        for app in ("finance", "fitness", "advisor", "hermes"):
             (self.root / "apps" / app).mkdir(parents=True)
         shim = self.root / "bin" / "claude"
         shim.parent.mkdir()
@@ -39,7 +39,7 @@ class Base(unittest.TestCase):
         self.tmp.cleanup()
 
     def problems(self, app, env, cwd=None, **opts):
-        cwd = cwd or self.root / "apps" / {"fin": "finance", "fit": "fitness", "adv": "advisor"}[app]
+        cwd = cwd or self.root / "apps" / {"fin": "finance", "fit": "fitness", "adv": "advisor", "hrm": "hermes"}[app]
         return c.problems(app, env, cwd=cwd, root=self.root, **{**OPTS, **opts})
 
     def keys(self, *a, **k):
@@ -142,6 +142,54 @@ class Adv(Base):
         self.assertIn("cwd", self.keys("adv", self.env(), cwd=self.root / "apps/finance"))
 
 
+class Hrm(Base):
+    """014 H-1a · #791 — hermes(apps/hermes): DB 없음 · PORT 필수 · claude 안 부름 · node 22.13+ (node:sqlite · N12 · #800)."""
+
+    def fake_node(self, version):
+        d = self.root / f"node-{version}"
+        d.mkdir(exist_ok=True)
+        n = d / "node"
+        n.write_text(f"#!/bin/sh\necho {version}\n")
+        n.chmod(n.stat().st_mode | stat.S_IXUSR)
+        return str(d)
+
+    def env(self, node="24.12.0", **extra):
+        return {"PATH": f"{self.fake_node(node)}:/usr/bin:/bin", "PORT": "4700", **extra}
+
+    def test_good_passes(self):
+        self.assertEqual(self.problems("hrm", self.env()), [])
+
+    def test_old_node_refused(self):
+        self.assertEqual(self.keys("hrm", self.env(node="20.18.0")), {"node"})
+        self.assertEqual(self.keys("hrm", self.env(node="22.12.0")), {"node"})   # 22.5~22.12 는 --experimental-sqlite 필요
+        self.assertEqual(self.problems("hrm", self.env(node="22.13.0")), [])
+
+    def test_no_node_refused(self):
+        self.assertEqual(self.keys("hrm", {"PATH": str(self.root / "empty"), "PORT": "4700"}), {"node"})
+
+    def test_port_required_and_not_reserved(self):
+        env = self.env()
+        del env["PORT"]
+        self.assertEqual(self.keys("hrm", env), {"PORT"})
+        self.assertEqual(self.keys("hrm", self.env(PORT="4210")), {"PORT"})
+
+    def test_database_url_must_be_empty(self):
+        self.assertEqual(self.keys("hrm", self.env(DATABASE_URL="postgresql://u@localhost:5432/pleiades_fin")),
+                         {"DATABASE_URL"})
+
+    def test_claude_shim_not_required(self):
+        # hermes 는 claude 를 부르지 않는다 — PATH 에 shim 이 없어도 통과
+        self.assertNotIn("claude", self.keys("hrm", self.env()))
+
+    def test_template_check_skips_node(self):
+        # write_env 경로(check_platform=False) 는 node 를 보지 않는다
+        self.assertEqual(self.problems("hrm", {"PATH": str(self.root / "bin"), "PORT": "4700"}, check_platform=False), [])
+
+    def test_platform_key_in_app_env_is_blocked(self):
+        (self.root / "apps/hermes/.env").write_text("DISCORD_WEBHOOK_HERMES=x\n")
+        self.assertIn("DISCORD_WEBHOOK_HERMES", self.keys("hrm", self.env()))
+
+
 class RunSh(Base):
     """run.sh — L-1 파괴 명령 거부 · 셸 DATABASE_URL 제거 · 검사 통과 시에만 실행."""
 
@@ -225,6 +273,22 @@ class RunSh(Base):
                            capture_output=True, text=True, env={"PATH": "/usr/bin:/bin", "PLEIADES_ROOT": str(self.root)}, check=False)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("pleiades-<app>-<역할>", r.stderr)
+
+    def test_hrm_runs_in_hermes_dir(self):
+        # #791 — run.sh hrm: cwd = apps/hermes · PATH 첫 node 의 판을 본다
+        import subprocess, shutil
+        node = shutil.which("node", path="/usr/local/bin")
+        if node is None:
+            self.skipTest("/usr/local/bin/node 없음")
+        ver = subprocess.run([node, "-p", "process.versions.node"], capture_output=True, text=True).stdout.strip()
+        if tuple(int(x) for x in ver.split(".")[:2]) < (22, 13):
+            self.skipTest("/usr/local/bin/node 가 22.13 미만")
+        (self.root / "apps/hermes/.env").write_text("PORT=4700\n")
+        full = {"PATH": "/usr/local/bin:/usr/bin:/bin", "PLEIADES_ROOT": str(self.root)}
+        r = subprocess.run(["bash", str(HERE / "run.sh"), "hrm", "--", "node", "-e",
+                            "console.log(require('path').basename(process.cwd()))"],
+                           capture_output=True, text=True, env=full, check=False)
+        self.assertEqual((r.returncode, r.stdout.strip()), (0, "hermes"), r.stderr)
 
     def test_unknown_app_refused(self):
         import subprocess

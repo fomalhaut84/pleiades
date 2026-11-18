@@ -22,6 +22,8 @@
 | D12 (Q-H9) | CI `apps-hrm` 은 **필수 체크** | 사용자 2026-11-17 · 권고안 |
 | D13 (Q-H4) | F1 ① 비밀 대조 재료 = **플랫폼 설정 + hermes 자기 env 만**(두 앱 `.env` 는 읽지 않는다 — ② 토큰 형식 검사가 따로 덮는다) | 사용자 2026-11-17 · 권고안 |
 
+> **정정 (2026-11-18 · 사용자 · #796) — 채널 `#spot` → `#hermes`.** 운영 · 검증 채널 모두 `#hermes` 다. 플랫폼 키 **`DISCORD_WEBHOOK_SPOT` → `DISCORD_WEBHOOK_HERMES`**(앱별 웹훅 키 `DISCORD_WEBHOOK_<APP>` 와 같은 규칙) · 게시 이름 접두 `spot·` → **`hermes·`**(§3-E) · 차단 고정 문구 · 이름을 쓸 수 없을 때의 이름 = **`hermes`**. 이 문서의 `#spot` · `DISCORD_WEBHOOK_SPOT` · `spot·` 은 이 블록으로 읽는다(D4 의 "웹훅 하나" 는 그대로). §5 임시 경로의 채널도 `#hermes` 다. 배치 전이라 서버 조치 없음. 되돌리기: revert (**즉시**).
+
 **첫 출처의 시기:** 주문 앱은 곧 시즌을 시작한다(사용자). hermes 가 그 전에 준비되지 않으면 §5 의 임시 경로를 쓴다.
 
 ## 0. 대장
@@ -236,6 +238,12 @@ Idempotency-Key: <출처가 정한 문자열 · 선택 · 최대 128자>
 | **H-4** 자동 배포 단계 | `ssh-deploy.sh` `## hrm` · `notify()` 앱 매핑 · `notify-deploy.cjs` `APPS`·`ENV_FROM`(N18) · `auto-inputs` 와 같은 hrm 입력 목록(수동 몇 회 통과 뒤 · G-R4) | Release 가 hermes 도 맞춘다 | 단계 revert **중간** |
 | **H-5** 외부 입구 B2 | nginx 반영(사용자) · 런북 절 | 외부 호스트 출처 | nginx 원복 **즉시~중간** |
 | (필요할 때) | `packages/hermes-client`(H2) · 출처별 채널(Q-H7) | — | — |
+
+> **진행 (2026-11-18 · 사용자).** H-1 은 셋으로 나눈다 — **H-1a**(#791 · 골격 · C3 대기열 · 레지스트리 · 받기 API · CI `apps-hrm` · `run.sh hrm` · `check_env` hrm(DB 금지 · `PORT` · node ≥ 22.5)) → **H-1b**(게시 루프 · §3-E 형식 · §3-F 검사 · 상태 파일) → **H-1c**(검증 웹훅 로컬 실측 · `check_env` hermes URL·키 검사). **U4 답: 주문 앱 시즌 = 1~2주 안** → 주문 앱은 §5 임시 경로로 시작하고 hermes 가 서면 바꾼다(pleiades 작업 0). 되돌리기: 문구 (**즉시**).
+
+> **진행 (2026-11-18 · #800 · H-2).** 서버 확인(사용자 · 판정만): **U1** 후보 4700 비어 있음 · fin·fit 포트와 겹치지 않음 → **포트 4700**(pm2 정의 고정 · D9) · **U3** 서버 node 24.12 는 `node:sqlite` 경고 1줄 → `--disable-warning=ExperimentalWarning` 로 0줄(D10 그대로 · pm2 `node_args`). 배치 = `deploy/hermes/hrm-inplace.sh`(adv 판 복사 + ① env 대조 adv 까지 ② 포트 가드 ③ C4 `hermes check` · C6 health + 상태 파일) · `pleiades-hrm.config.cjs`(데이터 `~/pleiades-hermes-data/` · 앱 `.env` 없음) · 출처 키 `hermes key …` + `hermes-key.sh` · 런북 `docs/runbooks/hermes.md`. 되돌리기: 문구 (**즉시**).
+
+> **진행 (2026-11-18 · #802 · H-3).** 수집기 `collect.cjs` — 곁가지 앱 일반화(`SIDE_APPS` adv · hrm · 표지 `inplace-<앱>-last-ok`·`-stopped`) · `ROLES_OF.hrm = ['api']` · 로그 이름 정규식 · 생존 표지 판정은 bot 역할만 · 상태 파일 판정 `collectHermes`(stale 5분 · 적체 30분 · 기준값 `state.hrm` · 다시 켠 회는 기준값만) · hermes 상태 전환 stderr 2줄은 알려진 줄(경고). 서버 조치 = 수집기 재설치(사용자). 되돌리기: 문구 (**즉시**).
 
 H-1~H-3 은 서로의 PR 이 머지돼야 다음이 돈다 — 순서대로. H-1 이 9-1 에이전트 리뷰 필수(실행 코드 · 보안 sensitive) · H-2·H-3 도 필수(`deploy/` 는 서버 경로).
 
