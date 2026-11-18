@@ -13,10 +13,14 @@ export const GAIN_COLOR = 0xe03131
 /** 내리면 파랑. */
 export const LOSS_COLOR = 0x1971c2
 
-/** 손익 색 — 양수 빨강 · 음수 파랑 · 0 · 숫자 아님은 앱 색. */
+/**
+ * 손익 색 — 양수 빨강 · 음수 파랑 · 0 · 숫자 아님은 앱 색. 화면 표기(`formatPercent` 소수 첫째 자리)와 같은 정밀도로 반올림해 본다 —
+ * `+0.0%` 인데 빨강이 되지 않게(P3-b1 9-1 info).
+ */
 export function profitColor(value: number): number {
-  if (!Number.isFinite(value) || value === 0) return FIN_CARD_COLOR
-  return value > 0 ? GAIN_COLOR : LOSS_COLOR
+  const shown = Math.round(value * 10) / 10
+  if (!Number.isFinite(shown) || shown === 0) return FIN_CARD_COLOR
+  return shown > 0 ? GAIN_COLOR : LOSS_COLOR
 }
 
 export interface RowListCardOptions {

@@ -5,10 +5,17 @@ import { FIN_CARD_COLOR, GAIN_COLOR, LOSS_COLOR, profitColor, rowListCard } from
 describe('profitColor', () => {
   it('오르면 빨강 · 내리면 파랑 · 0 · NaN 은 앱 색', () => {
     expect(profitColor(1.2)).toBe(GAIN_COLOR)
-    expect(profitColor(-0.01)).toBe(LOSS_COLOR)
+    expect(profitColor(-0.5)).toBe(LOSS_COLOR)
     expect(profitColor(0)).toBe(FIN_CARD_COLOR)
     expect(profitColor(Number.NaN)).toBe(FIN_CARD_COLOR)
     expect(FIN_CARD_COLOR).toBe(0x0ca678)
+  })
+
+  // 회귀: P3-b1 9-1 info — 화면에 +0.0% 로 보이는데 빨강이었다
+  it('보이는 정밀도(소수 첫째 자리)로 판정 — ±0.04 는 앱 색', () => {
+    expect(profitColor(0.04)).toBe(FIN_CARD_COLOR)
+    expect(profitColor(-0.04)).toBe(FIN_CARD_COLOR)
+    expect(profitColor(0.05)).toBe(GAIN_COLOR)
   })
 })
 
