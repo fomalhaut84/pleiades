@@ -54,8 +54,8 @@ describe("collectSecrets — 플랫폼 설정 + hermes env(D13)", () => {
   const hook = "https://discord.com/api/" + "webhooks/1/" + "abcdefABCDEF12345678";
   it("비밀 키만 · 8자 이상만 · 중복 없이", () => {
     const got = collectSecrets(
-      { DISCORD_WEBHOOK_SPOT: hook, DISCORD_CHANNEL_ID_FINANCE: "123456789012345678", DISCORD_BOT_TOKEN_X: "short" },
-      { HERMES_STATE_DIR: "/srv/state-dir-long", SOME_API_KEY: "k".repeat(12), PATH: "/usr/bin:/bin:/x", DISCORD_WEBHOOK_SPOT: hook },
+      { DISCORD_WEBHOOK_HERMES: hook, DISCORD_CHANNEL_ID_FINANCE: "123456789012345678", DISCORD_BOT_TOKEN_X: "short" },
+      { HERMES_STATE_DIR: "/srv/state-dir-long", SOME_API_KEY: "k".repeat(12), PATH: "/usr/bin:/bin:/x", DISCORD_WEBHOOK_HERMES: hook },
     );
     expect(got.sort()).toEqual([hook, "k".repeat(12)].sort());
   });

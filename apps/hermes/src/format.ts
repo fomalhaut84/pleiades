@@ -21,9 +21,10 @@ export interface Formatted {
   readonly linkDropped: boolean;
 }
 
-const USERNAME_PREFIX = "spot·";
+/** 채널 `#hermes`(#796 · 014 D4 정정) — 게시 이름은 `hermes·<출처 표시 이름>` */
+const USERNAME_PREFIX = "hermes·";
 /** 차단 고정 문구 · 이름을 쓸 수 없을 때의 이름 */
-export const HERMES_USERNAME = `${USERNAME_PREFIX}hermes`;
+export const HERMES_USERNAME = "hermes";
 const FORBIDDEN_NAME_RE = /discord|clyde/i;
 const ELLIPSIS = "…";
 /** 본문에 최소한 남길 자리 — 링크 줄이 이보다 많이 먹으면 링크 줄을 뺀다 */
