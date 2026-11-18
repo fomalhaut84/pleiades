@@ -44,6 +44,31 @@ export interface Content {
   text: string;
   format: BodyFormat;
   components?: Components;
+  /**
+   * 카드(013 P3-a1 · #773) — Discord 는 embed 로 보낸다 · 마지막 조각에 붙는다 · 본문이 비어도 카드만 보낼 수 있다.
+   * 한도(`CARD_LIMITS`)를 넘으면 행 목록 텍스트로 바꿔 본문 뒤에 잇는다.
+   */
+  cards?: readonly Card[];
+}
+
+/** 카드 칸 하나 — 글은 plain(글자 그대로 · escape). 빈 글은 폭 없는 공백으로 보낸다. */
+export interface CardField {
+  name: string;
+  value: string;
+  /** 나란히 놓는다(Discord 는 한 줄에 최대 3칸 · 모바일 표시는 013 §4-1 P3 전 확인). */
+  inline?: boolean;
+}
+
+/**
+ * 카드 — 채널 중립 이름(Discord embed). 글은 전부 plain — 템플릿이 끼워 넣는 외부 값(종목명 등)이 서식이 되지 않게 escape 한다(013 §4-0).
+ * 색은 `0xRRGGBB` 정수 · 기본값은 앱이 정한다(013 F6 · 앱별 고정 + fin 손익만 덮기).
+ */
+export interface Card {
+  title?: string;
+  description?: string;
+  fields?: readonly CardField[];
+  color?: number;
+  footer?: string;
 }
 
 /** HTML 본문 `Content` 를 만드는 헬퍼 — 호출부 대부분은 이것만 쓴다. */

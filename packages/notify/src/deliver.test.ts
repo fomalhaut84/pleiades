@@ -147,6 +147,18 @@ describe('deliverOne — 분할 (maxLength 유한 · 코어 소유)', () => {
     expect(calls[1].content.components).toBe(kb);
   });
 
+  // 013 P3-a1 (#773)
+  it('cards 도 마지막 청크에만 · 폴백 때도 유지된다', async () => {
+    const cards = [{ title: '보유' }];
+    const { transport, calls } = fakeTransport([], 5);
+    await deliverOne(transport, 't', { ...html('aaa\nbbb'), cards }, policy());
+    expect(calls[0].content.cards).toBeUndefined();
+    expect(calls[1].content.cards).toBe(cards);
+    const fb = fakeTransport([parse(), 'ok']);
+    await deliverOne(fb.transport, 't', { ...html('<b>x</b>'), cards }, policy());
+    expect(fb.calls[1].content).toEqual({ text: 'x', format: 'plain', cards });
+  });
+
   it('청크 2 의 네트워크 오류는 청크 2 만 재시도한다 — 청크 1 중복 없음 (S-3)', async () => {
     const { transport, calls } = fakeTransport(['ok', net(), 'ok'], 5);
     const p = policy();

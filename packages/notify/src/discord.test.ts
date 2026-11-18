@@ -124,6 +124,34 @@ describe('createDiscordTransport', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  // 013 P3-a1 (#773) — 카드
+  it('카드는 embeds 로 · 마지막 조각에만 · 멘션 차단은 그대로', async () => {
+    const { transport, bodies } = setup([res(200, { id: 'a' }), res(200, { id: 'b' })]);
+    const text = Array.from({ length: 40 }, (_, i) => `${i} ${'가'.repeat(80)}`).join('\n');
+    const cards = [{ title: '보유', fields: [{ name: 'AAPL', value: '10주', inline: true }], color: 0x1971c2 }];
+    await expect(transport.send('finance', { ...html(text), cards })).resolves.toBe('b');
+    const [first, last] = bodies() as Array<Record<string, unknown>>;
+    expect(first.embeds).toBeUndefined();
+    expect(last.embeds).toEqual([{ title: '보유', fields: [{ name: 'AAPL', value: '10주', inline: true }], color: 0x1971c2 }]);
+    expect(last.allowed_mentions).toEqual({ parse: [] });
+  });
+
+  it('본문 없이 카드만 — content 키 없이 embed 한 건', async () => {
+    const { transport, bodies } = setup([res(200, { id: 'c' })]);
+    await expect(transport.send('finance', { ...html(''), cards: [{ title: '요약' }] })).resolves.toBe('c');
+    expect(bodies()).toEqual([{ embeds: [{ title: '요약' }], allowed_mentions: { parse: [] } }]);
+  });
+
+  it('카드가 한도를 넘으면 행 목록 텍스트로 · embeds 없음 · 경고', async () => {
+    const { transport, bodies, logger } = setup([res(200, { id: 'd' })]);
+    const fields = Array.from({ length: 26 }, (_, i) => ({ name: `n${i}`, value: 'v' }));
+    await transport.send('finance', { ...html('머리'), cards: [{ title: '많음', fields }] });
+    const body = bodies()[0] as Record<string, unknown>;
+    expect(body.embeds).toBeUndefined();
+    expect(String(body.content)).toContain('• **n25** — v');
+    expect(logger.warn).toHaveBeenCalled();
+  });
+
   it('네트워크 오류는 백오프로 재시도한다', async () => {
     const { transport, fetch, sleep, logger } = setup([netErr(), netErr(), res(200, { id: 'ok' })]);
     await expect(transport.send('finance', html('x'))).resolves.toBe('ok');

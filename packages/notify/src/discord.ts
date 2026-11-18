@@ -1,5 +1,5 @@
 /**
- * DiscordTransport — 웹훅 기반 포트 구현 (003 §6 1b-1 · M-6a #141). 텍스트 알림만 — 인터랙션·첨부는 1b-2.
+ * DiscordTransport — 웹훅 기반 포트 구현 (003 §6 1b-1 · M-6a #141). 텍스트 + 카드(embed · 013 P3-a1) — 인터랙션·첨부는 1b-2.
  *
  * **어댑터 소유 모드(`maxLength: Infinity`).** 003 §4-3 제약 2 — 분할은 변환 **뒤** 길이로 해야 한다. HTML→md 변환은
  * 길이를 바꾸므로(태그 축소 · escape 확대) 코어가 HTML 길이로 자르면 틀린다. 그래서 이 어댑터가
@@ -10,6 +10,7 @@
  */
 import { escapeDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
 import { toDiscordMarkdown } from './discord-markdown';
+import { planDiscordMessages, type DiscordMessagePart } from './card';
 import { getErrorCode, isNetworkError, sanitizeError } from './error';
 import { DEFAULT_RETRY_DELAYS_MS } from './deliver';
 import type { Content, Logger, MessageRef, Transport } from './types';
@@ -95,12 +96,12 @@ export function createDiscordTransport(opts: DiscordTransportOptions): Transport
 
   const cfg: PostConfig = { fetch: opts.fetch, retryDelaysMs, maxRateLimitWaitMs, sleep, logger };
 
-  const post = (url: string, alias: string, text: string): Promise<MessageRef> =>
+  const post = (url: string, alias: string, part: DiscordMessagePart): Promise<MessageRef> =>
     postWebhook(cfg, url, alias, () => ({
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       // 본문의 @everyone · @here · <@id> 가 핑을 만들지 않는다
-      body: JSON.stringify({ content: text, allowed_mentions: { parse: [] } }),
+      body: JSON.stringify({ ...part, allowed_mentions: { parse: [] } }),
     }));
 
   return {
@@ -112,11 +113,11 @@ export function createDiscordTransport(opts: DiscordTransportOptions): Transport
         throw new Error('@pleiades/notify: DiscordTransport 는 components(인터랙션)를 지원하지 않는다 — 1b-2');
       }
       const url = webhookFor(opts.webhooks, target);
-      const chunks = splitDiscordMarkdown(toDiscordContent(content), DISCORD_MAX_LENGTH).filter((c) => c.trim() !== '');
-      if (chunks.length === 0) throw new Error('@pleiades/notify: Discord 로 보낼 본문이 비었다');
+      // 본문 조각 + 카드(마지막 조각 · 한도 넘으면 텍스트 대체 · 013 P3-a1) — 보낼 것이 없으면 오류
+      const parts = planDiscordMessages(content, logger);
       // 청크 k 가 끝내 실패하면 앞 청크는 이미 나갔다 — 그대로 실패로 올린다(코어는 재시도하지 않는다 · Infinity 모드).
       let ref = '';
-      for (const chunk of chunks) ref = await post(url, target, chunk);
+      for (const part of parts) ref = await post(url, target, part);
       return ref; // 마지막 청크의 메시지 id (Delivery.ref 계약)
     },
   };

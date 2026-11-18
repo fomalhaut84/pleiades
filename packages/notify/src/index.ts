@@ -9,6 +9,8 @@ export type {
   Components,
   ButtonRows,
   NotifyButton,
+  Card,
+  CardField,
   Content,
   Delivery,
   Logger,
@@ -44,6 +46,8 @@ export type {
   RequestInitLike,
   PostConfig,
 } from './discord';
+export { CARD_LIMITS, cardsToMarkdown, planDiscordMessages, toDiscordEmbeds } from './card';
+export type { DiscordEmbed, DiscordMessagePart } from './card';
 export { htmlToDiscordMarkdown, escapeDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
 export { discordMarkdown, toDiscordMarkdown } from './discord-markdown';
 export {

@@ -6,10 +6,8 @@
  * `components` 는 `ButtonRows` 를 받아 Discord 버튼으로 바꾼다(009 D-5 B5 · 옛 `inline_keyboard` 객체는 지웠다).
  * 어댑터 소유 모드(`maxLength: Infinity`) · 버튼은 마지막 청크에만.
  */
-import { splitDiscordMarkdown } from './discord-md';
-import { toDiscordMarkdown } from './discord-markdown';
+import { planDiscordMessages } from './card';
 import {
-  DISCORD_MAX_LENGTH,
   defaultSleep,
   requestDiscord,
   type FetchLike,
@@ -118,15 +116,14 @@ export function createDiscordBotTransport(opts: DiscordBotTransportOptions): Tra
       const token = resolve(opts.token).trim();
       if (token === '') throw new Error('@pleiades/notify: Discord 봇 토큰이 없다');
       const components = content.components === undefined ? undefined : toDiscordComponents(content.components);
-      const md = toDiscordMarkdown(content.text, content.format);
-      const chunks = splitDiscordMarkdown(md, DISCORD_MAX_LENGTH).filter((c) => c.trim() !== '');
-      if (chunks.length === 0) throw new Error('@pleiades/notify: Discord 로 보낼 본문이 비었다');
+      // 본문 조각 + 카드(마지막 조각 · 한도 넘으면 텍스트 대체 · 013 P3-a1) — 버튼도 마지막 조각
+      const parts = planDiscordMessages(content, cfg.logger);
       let ref = '';
-      for (let i = 0; i < chunks.length; i++) {
+      for (let i = 0; i < parts.length; i++) {
         const body = {
-          content: chunks[i],
+          ...parts[i],
           allowed_mentions: { parse: [] as string[] },
-          ...(i === chunks.length - 1 && components !== undefined ? { components } : {}),
+          ...(i === parts.length - 1 && components !== undefined ? { components } : {}),
         };
         ref = await requestDiscord(
           cfg,

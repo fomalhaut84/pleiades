@@ -51,11 +51,15 @@ export async function deliverOne(
   return ref;
 }
 
-/** i 번째 청크 — `components` 는 마지막 청크에만 붙는다. */
+/** i 번째 청크 — `components` · `cards` 는 마지막 청크에만 붙는다(013 P3-a1). */
 function chunkAt(chunks: string[], i: number, content: Content): Content {
-  return i === chunks.length - 1 && content.components !== undefined
-    ? { text: chunks[i], format: content.format, components: content.components }
-    : { text: chunks[i], format: content.format };
+  if (i !== chunks.length - 1) return { text: chunks[i], format: content.format };
+  return {
+    text: chunks[i],
+    format: content.format,
+    ...(content.components !== undefined ? { components: content.components } : {}),
+    ...(content.cards !== undefined ? { cards: content.cards } : {}),
+  };
 }
 
 async function sendChunkWithRetry(
@@ -74,10 +78,7 @@ async function sendChunkWithRetry(
       lastErr = err;
       // HTML 파싱 실패 → 같은 시도 횟수로 plain 전환 (백오프 없이 즉시 재시도 · fit 정본)
       if (current.format === 'html' && isHtmlParseError(err)) {
-        current =
-          current.components === undefined
-            ? { text: toPlain(current.text), format: 'plain' }
-            : { text: toPlain(current.text), format: 'plain', components: current.components };
+        current = { ...current, text: toPlain(current.text), format: 'plain' };
         attempt--;
         continue;
       }
