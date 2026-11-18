@@ -497,13 +497,23 @@ describe('T15 복수 파싱(fire-and-forget) · T6 multi: 콜백', () => {
     const tx = replyActions(r.steps, 1)[0].split(':')[2]
     expect(r.steps[1]).toEqual([
       'reply',
-      '📝 3건 거래 확인\n\n' +
-        '2026-10-28 | 소비 | 점심 | ₩12,000 | 식비\n' +
-        '2026-10-28 | 소비 | 커피 | ₩4,500 | 카페\n' +
-        '2026-10-28 | 수입 | 용돈 | ₩30,000 | 미분류\n' +
-        '\n기록하시겠습니까?',
+      '📝 3건 거래 확인 — 기록하시겠습니까?',
       'plain',
       [[['✅ 전체 확인', `multi:confirm:${tx}`], ['❌ 취소', `multi:cancel:${tx}`]]],
+      // 013 P3-b1 (#777) — 거래는 행 목록 카드(이름 = 설명 · 굵게) · 앱 색 청록
+      {
+        cards: [
+          {
+            title: '거래 목록',
+            description:
+              '• **점심** — 소비 · ₩12,000 · 식비 · 2026-10-28\n' +
+              '• **커피** — 소비 · ₩4,500 · 카페 · 2026-10-28\n' +
+              '• **용돈** — 수입 · ₩30,000 · 미분류 · 2026-10-28',
+            descriptionFormat: 'markdown',
+            color: 0x0ca678,
+          },
+        ],
+      },
     ])
     expect(mocked.all.mock.calls).toEqual([['expense'], ['income']])
   })
