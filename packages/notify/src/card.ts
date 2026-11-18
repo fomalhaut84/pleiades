@@ -9,7 +9,7 @@
  * 발신 경로(웹훅 · 봇 transport)는 `planDiscordMessages` 하나로 조각과 카드를 나눈다 — 카드는 마지막 조각에만.
  */
 import { escapeDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
-import { toDiscordMarkdown } from './discord-markdown';
+import { neutralize, toDiscordMarkdown } from './discord-markdown';
 import type { Card, Content, Logger } from './types';
 
 /** Discord embed 한도(013 R9). `total` 은 한 메시지의 모든 embed 글 합. */
@@ -44,6 +44,30 @@ export interface DiscordMessagePart {
 }
 
 const esc = (s: string | undefined): string => (s === undefined || s === '' ? '' : escapeDiscordMarkdown(s));
+/**
+ * 설명 칸 — `markdown` 은 **템플릿 마크다운**이다: 서식은 그대로 두고 안전 규칙(`<` · `](` 무력화 · 013 R2·R3)만 건다.
+ * AI 답용 정리(표 · 제목 · 링크 펼치기)는 걸지 않는다 — escape 된 외부 값 `\[x\](url)` 이 링크 펼치기에 다시 걸려 깨졌다(P3-a2 9-1 major).
+ * 아니면 escape.
+ */
+const descOf = (card: Card): string =>
+  card.description === undefined || card.description === ''
+    ? ''
+    : card.descriptionFormat === 'markdown'
+      ? neutralize(card.description)
+      : escapeDiscordMarkdown(card.description);
+/** 행 한 칸 — 줄바꿈은 공백으로(행 하나가 한 줄 · 9-1 info) · escape. */
+const rowCell = (s: string): string => escapeDiscordMarkdown(s.replace(/\s*\r?\n\s*/g, ' '));
+
+/**
+ * 행 목록 설명(013 F1 · F8) — `• **이름** — 값` 줄들 · 이름 · 값은 escape(외부 값) · 서식만 이 함수가 붙인다.
+ * 모바일에서 inline 칸이 세로로 무너져(2026-11-18 실측) 표는 이 모양으로 보낸다. 카드에 펼쳐 쓴다: `{ title, ...cardRowList(rows) }`.
+ */
+export function cardRowList(rows: readonly { label: string; text: string }[]): Pick<Card, 'description' | 'descriptionFormat'> {
+  return {
+    description: rows.map((r) => `• **${rowCell(r.label)}** — ${rowCell(r.text)}`).join('\n'),
+    descriptionFormat: 'markdown',
+  };
+}
 const orZwsp = (s: string): string => (s === '' ? ZWSP : s);
 
 function assertCards(cards: unknown): asserts cards is readonly Card[] {
@@ -57,7 +81,7 @@ function toEmbed(card: Card, i: number): DiscordEmbed {
     ...(f.inline === true ? { inline: true } : {}),
   }));
   const title = esc(card.title);
-  const description = esc(card.description);
+  const description = descOf(card);
   // 꼬리말 칸은 마크다운을 렌더링하지 않는다 — escape 하면 `\_` 가 글자로 보인다(9-1 major) · 원문 그대로(주입 위험 없음)
   const footer = card.footer ?? '';
   if (title === '' && description === '' && fields.length === 0) {
@@ -111,7 +135,8 @@ export function cardsToMarkdown(cards: readonly Card[]): string {
     .map((card) => {
       const lines: string[] = [];
       if (card.title) lines.push(`**${esc(card.title)}**`);
-      if (card.description) lines.push(esc(card.description));
+      const description = descOf(card);
+      if (description !== '') lines.push(description);
       for (const f of card.fields ?? []) lines.push(`• **${esc(f.name)}** — ${esc(f.value)}`);
       if (card.footer) lines.push(`-# ${esc(card.footer)}`);
       return lines.join('\n');

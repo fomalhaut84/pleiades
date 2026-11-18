@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CARD_LIMITS, cardsToMarkdown, planDiscordMessages, toDiscordEmbeds } from './card';
+import { CARD_LIMITS, cardRowList, cardsToMarkdown, planDiscordMessages, toDiscordEmbeds } from './card';
 import { html, markdown, type Card } from './types';
 
 // 013 P3-a1 (#773) — 카드(Discord embed) 변환 · 한도 · 텍스트 대체
@@ -98,6 +98,49 @@ describe('toDiscordEmbeds — 한도(013 R9)', () => {
     const big = { description: 'a'.repeat(2000) };
     expect(toDiscordEmbeds([big, big, big])).toBeDefined(); // 6000
     expect(toDiscordEmbeds([big, big, big, { title: 'x' }])).toBeUndefined(); // 6001
+  });
+});
+
+// 013 P3-a2 (#775) · F8 — 설명 칸 행 목록 · 행 이름 굵게(사용자 2026-11-18)
+describe('cardRowList · descriptionFormat markdown', () => {
+  it('행 이름은 굵게 · 외부 값(이름 · 값)은 escape', () => {
+    expect(cardRowList([{ label: '삼성전자', text: '₩7,120,000 · +2.31%' }, { label: 'a_b*', text: '<@1> [x](https://e.test)' }])).toEqual({
+      description: '• **삼성전자** — ₩7,120,000 · +2.31%\n• **a\\_b\\*** — \\<@1> \\[x\\](https://e.test)',
+      descriptionFormat: 'markdown',
+    });
+  });
+
+  it('embed 설명 — markdown 이면 서식이 살고 외부 값의 서식 문자는 escape 된 채', () => {
+    const card = { title: '보유', ...cardRowList([{ label: 'a_b', text: '-1.2% <@1>' }]) };
+    const [e] = toDiscordEmbeds([card]) ?? [];
+    expect(e.description).toMatch(/^• \*\*a\\_b\*\* — /);
+    expect(e.description).not.toContain('<@1>'); // `<` 는 escape(그리고 정리기가 폭 없는 공백까지)
+  });
+
+  // 회귀: P3-a2 9-1 major — escape 된 외부 값이 정리기의 링크 펼치기에 다시 걸려 `\x\ (url)` 로 깨졌다
+  it('escape 된 링크 꼴은 그대로 보인다 — embed · 대체 글 둘 다', () => {
+    const card = { ...cardRowList([{ label: 'a', text: '[x](https://e.test "t")' }]) };
+    const expected = '• **a** — \\[x\\]\u200b(https://e.test "t")';
+    expect(toDiscordEmbeds([card])?.[0].description).toBe(expected);
+    expect(cardsToMarkdown([card])).toBe(expected);
+  });
+
+  it('행 값의 줄바꿈은 공백으로 — 행 하나가 한 줄(9-1 info)', () => {
+    expect(cardRowList([{ label: 'a\nb', text: '1\n2' }]).description).toBe('• **a b** — 1 2');
+  });
+
+  it('plain(기본)은 그대로 escape — 기존 동작', () => {
+    expect(toDiscordEmbeds([{ description: '**x**' }])?.[0].description).toBe('\\*\\*x\\*\\*');
+  });
+
+  it('행 목록 대체 글에도 같은 서식', () => {
+    const card = { title: '보유', ...cardRowList([{ label: 'AAPL', text: '10주' }]) };
+    expect(cardsToMarkdown([card])).toBe('**보유**\n• **AAPL** — 10주');
+  });
+
+  it('행이 없으면 빈 설명 — 빈 카드 판정은 그대로', () => {
+    expect(cardRowList([])).toEqual({ description: '', descriptionFormat: 'markdown' });
+    expect(() => toDiscordEmbeds([{ ...cardRowList([]) }])).toThrow('빈 카드');
   });
 });
 

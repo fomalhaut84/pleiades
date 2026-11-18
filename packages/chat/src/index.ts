@@ -6,6 +6,8 @@ export type {
   Attachment,
   Button,
   ButtonContext,
+  Card,
+  CardField,
   ButtonHandler,
   ButtonRows,
   Logger,

@@ -118,6 +118,67 @@ describe('rest.edit / setButtons — 인터랙션 밖 편집 · 버튼 교체 (R
   });
 });
 
+// 013 P3-a2 (#775) — 카드(Discord embed)
+describe('카드 — 답장 · 편집 · 인터랙션 편집', () => {
+  const card = { title: '보유', description: '• AAPL — 10주', color: 0x2f9e44 };
+  const embed = [{ title: '보유', description: '• AAPL — 10주', color: 0x2f9e44 }];
+
+  it('send — 카드는 마지막 조각에 embeds 로 · 버튼과 함께', async () => {
+    const { rest, calls } = setup();
+    await rest.send(CH, { text: 'a'.repeat(3000), cards: [card], buttons: [[{ label: 'b', action: 'b' }]] });
+    const c = calls();
+    expect(c).toHaveLength(2);
+    expect(c[0].body).not.toHaveProperty('embeds');
+    expect(c[1].body).toMatchObject({ embeds: embed, components: [expect.anything()] });
+  });
+
+  it('send — 본문 없이 카드만 보낸다(content 키 없음)', async () => {
+    const { rest, calls } = setup();
+    await rest.send(CH, { text: '', cards: [card] });
+    expect(calls()[0].body).toEqual({ embeds: embed, allowed_mentions: { parse: [] } });
+  });
+
+  it('본문도 카드도 없으면 보내지 않고 던진다', async () => {
+    const { rest, fetch } = setup();
+    await expect(rest.send(CH, { text: ' ', cards: [] })).rejects.toThrow('비었다');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('edit — PATCH 는 embeds 를 늘 명시한다(카드 없으면 [] · 빼면 옛 카드가 남는다)', async () => {
+    const { rest, calls } = setup();
+    await rest.edit(CH, 'm9', '기록됨');
+    await rest.edit(CH, 'm9', { text: '', cards: [card] });
+    const c = calls();
+    expect(c[0].body).toMatchObject({ content: '기록됨', embeds: [] });
+    // 카드만으로 바꾸면 옛 본문을 지운다(content '')
+    expect(c[1].body).toMatchObject({ content: '', embeds: embed });
+  });
+
+  it('긴 edit — 원본은 첫 조각 · embeds [] · 카드는 이어 보낸 마지막 메시지에', async () => {
+    const { rest, calls } = setup();
+    await rest.edit(CH, 'm9', { text: 'a'.repeat(3000), cards: [card] });
+    const c = calls();
+    expect(c.map((x) => x.method)).toEqual(['PATCH', 'POST']);
+    expect(c[0].body?.embeds).toEqual([]);
+    expect(c[1].body?.embeds).toEqual(embed);
+  });
+
+  it('인터랙션 원본 편집도 같다 — embeds 명시', async () => {
+    const { rest, calls } = setup();
+    await rest.editOriginal('https://discord.com/api/v10/webhooks/app/itok', CH, { text: '확정', cards: [card] });
+    expect(calls()[0]).toMatchObject({ method: 'PATCH', auth: undefined, body: { content: '확정', embeds: embed } });
+  });
+
+  it('카드가 한도를 넘으면 행 목록 글로 대체 · 경고', async () => {
+    const { rest, calls, logger } = setup();
+    const fields = Array.from({ length: 26 }, (_, i) => ({ name: `n${i}`, value: 'v' }));
+    await rest.send(CH, { text: '머리', cards: [{ title: '많음', fields }] });
+    expect(calls()[0].body).not.toHaveProperty('embeds');
+    expect(String(calls()[0].body?.content)).toContain('• **n25** — v');
+    expect(logger.warn).toHaveBeenCalled();
+  });
+});
+
 describe('rest.sendFile — 봇 경로 파일 (0-3)', () => {
   it('multipart 로 보낸다 · 상한을 넘으면 보내지 않는다', async () => {
     const { fetch } = setup();
