@@ -4,7 +4,7 @@
   "private": true,
   "description": "hermes — 스팟 알림 중계(외부 · 내부 · 주기 작업 → Discord #hermes · 014)",
   "engines": {
-    "node": ">=22.5"
+    "node": ">=22.13"
   },
   "scripts": {
     "build": "esbuild src/main.ts --bundle --platform=node --target=node24 --outfile=dist/hermes.cjs",

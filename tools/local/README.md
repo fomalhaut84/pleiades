@@ -63,7 +63,7 @@ tools/local/run.sh fit -- node dist/bot/standalone.cjs
 
 ## hermes 로컬 실측 (014 H-1c · #798)
 
-hermes(`apps/hermes`)는 **dotenv 를 쓰지 않는다** — 앱 `.env` 는 node 의 `--env-file` 로 넘긴다(`check_env` 가 보는 파일과 같다). **node 22.5+ 가 PATH 첫째**여야 한다(대기열 `node:sqlite` · 셸 기본 nvm 20.18 은 안 된다 · `check_env` 가 판을 본다).
+hermes(`apps/hermes`)는 **dotenv 를 쓰지 않는다** — 앱 `.env` 는 node 의 `--env-file` 로 넘긴다(`check_env` 가 보는 파일과 같다). **node 22.13+ 가 PATH 첫째**여야 한다(대기열 `node:sqlite` · 셸 기본 nvm 20.18 은 안 된다 · `check_env` 가 판을 본다).
 
 ```bash
 S=$(mkdir -p <저장소 밖 임시 디렉터리> && cd "$_" && pwd)   # 반드시 절대 경로 — run.sh 가 cwd 를 apps/hermes 로 옮긴다(#799 Codex P2)

@@ -241,6 +241,8 @@ Idempotency-Key: <출처가 정한 문자열 · 선택 · 최대 128자>
 
 > **진행 (2026-11-18 · 사용자).** H-1 은 셋으로 나눈다 — **H-1a**(#791 · 골격 · C3 대기열 · 레지스트리 · 받기 API · CI `apps-hrm` · `run.sh hrm` · `check_env` hrm(DB 금지 · `PORT` · node ≥ 22.5)) → **H-1b**(게시 루프 · §3-E 형식 · §3-F 검사 · 상태 파일) → **H-1c**(검증 웹훅 로컬 실측 · `check_env` hermes URL·키 검사). **U4 답: 주문 앱 시즌 = 1~2주 안** → 주문 앱은 §5 임시 경로로 시작하고 hermes 가 서면 바꾼다(pleiades 작업 0). 되돌리기: 문구 (**즉시**).
 
+> **진행 (2026-11-18 · #800 · H-2).** 서버 확인(사용자 · 판정만): **U1** 후보 4700 비어 있음 · fin·fit 포트와 겹치지 않음 → **포트 4700**(pm2 정의 고정 · D9) · **U3** 서버 node 24.12 는 `node:sqlite` 경고 1줄 → `--disable-warning=ExperimentalWarning` 로 0줄(D10 그대로 · pm2 `node_args`). 배치 = `deploy/hermes/hrm-inplace.sh`(adv 판 복사 + ① env 대조 adv 까지 ② 포트 가드 ③ C4 `hermes check` · C6 health + 상태 파일) · `pleiades-hrm.config.cjs`(데이터 `~/pleiades-hermes-data/` · 앱 `.env` 없음) · 출처 키 `hermes key …` + `hermes-key.sh` · 런북 `docs/runbooks/hermes.md`. 되돌리기: 문구 (**즉시**).
+
 H-1~H-3 은 서로의 PR 이 머지돼야 다음이 돈다 — 순서대로. H-1 이 9-1 에이전트 리뷰 필수(실행 코드 · 보안 sensitive) · H-2·H-3 도 필수(`deploy/` 는 서버 경로).
 
 ## 5. 임시 경로 (첫 출처가 hermes 보다 먼저 시즌을 시작할 때)
