@@ -92,6 +92,16 @@ describe("createPoster.step", () => {
     expect(q.counts().queued).toBe(1);
   });
 
+  // 회귀: #806 Codex P2 — 웹훅이 없어도 24 h 넘은 메시지는 dead(받기만 하는 동안 대기열이 끝없이 커지지 않게)
+  it("웹훅 없음이어도 24 h 넘은 메시지는 dead · 그다음 행은 paused", async () => {
+    const old = q.enqueue({ source: "orders", text: "old", level: "info" }, now - MAX_AGE_MS);
+    q.enqueue({ source: "orders", text: "new", level: "info" }, now);
+    const p = createPoster({ ...deps, webhook: () => undefined });
+    expect(await p.step()).toEqual({ kind: "dead", id: old.id, reason: "age" });
+    expect(await p.step()).toEqual({ kind: "paused", why: "webhook" });
+    expect(calls).toEqual([]);
+  });
+
   it("비밀 재료를 못 읽으면 paused(fail-closed · 원문을 검사 없이 보내지 않는다)", async () => {
     q.enqueue({ source: "orders", text: "a", level: "info" }, now);
     expect(await createPoster({ ...deps, secrets: () => ({ ok: false, values: [] }) }).step()).toEqual({
