@@ -10,14 +10,14 @@
  */
 import { escapeDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
 import { toDiscordMarkdown } from './discord-markdown';
-import { planDiscordMessages, type DiscordMessagePart } from './card';
+import { DISCORD_MAX_LENGTH, planDiscordMessages, type DiscordMessagePart } from './card';
 import { getErrorCode, isNetworkError, sanitizeError } from './error';
 import { DEFAULT_RETRY_DELAYS_MS } from './deliver';
 import type { Content, Logger, MessageRef, Transport } from './types';
 
 export const DISCORD_CHANNEL = 'discord';
-/** Discord 메시지 `content` 상한. */
-export const DISCORD_MAX_LENGTH = 2000;
+/** Discord 메시지 `content` 상한 — 값은 `card.ts` 한 곳(013 P3-a1 9-1 info). */
+export { DISCORD_MAX_LENGTH };
 
 /** `fetch` 의 최소 형태 — DOM·undici 타입에 결합하지 않는다(소비자 `prepare` 환경 · targets.ts 와 같은 이유). */
 export interface FetchResponseLike {

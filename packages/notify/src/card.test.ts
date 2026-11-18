@@ -44,6 +44,17 @@ describe('toDiscordEmbeds — 모양', () => {
     expect(e.fields).toEqual([{ name: '​', value: '​' }]);
   });
 
+  // 회귀: P3-a1 9-1 major — 꼬리말 칸은 마크다운을 렌더링하지 않아 escape 가 글자로 보인다
+  it('embed 꼬리말은 원문 그대로 · 행 목록 대체에서는 escape', () => {
+    const card: Card = { title: 't', footer: '출처 yahoo_finance <KRX>' };
+    expect(toDiscordEmbeds([card])?.[0].footer).toEqual({ text: '출처 yahoo_finance <KRX>' });
+    expect(cardsToMarkdown([card])).toBe('**t**\n-# 출처 yahoo\\_finance \\<KRX>');
+  });
+
+  it('cards 가 배열이 아니면 조용히 무시하지 않고 오류', () => {
+    expect(() => planDiscordMessages({ ...html('x'), cards: {} as unknown as Card[] }, silent)).toThrow('배열');
+  });
+
   it('빈 title · description · footer 는 빼고 보낸다', () => {
     expect(toDiscordEmbeds([{ title: '', description: '본문', footer: '' }])).toEqual([{ description: '본문' }]);
   });

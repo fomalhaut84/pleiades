@@ -2,6 +2,7 @@
  * 카드 → Discord embed (013 P3-a1 · #773).
  *
  * 카드 글은 plain 이다 — 템플릿이 끼워 넣는 외부 값(종목명 · 사용자 입력)이 서식이 되지 않게 `escapeDiscordMarkdown` 을 거친다(013 §4-0).
+ * 단 embed 꼬리말은 마크다운을 렌더링하지 않는 칸이라 원문 그대로 보낸다(행 목록 대체에서는 `-# ` 줄이라 escape 한다).
  * 한도(013 R9)는 **escape 뒤 길이**로 잰다. 넘으면 embed 를 만들지 않고 행 목록 텍스트(F1)로 바꿔 본문 뒤에 잇는다 —
  * 잘라 버리면 숫자를 잃는다. 길이는 UTF-16 단위로 센다(Discord 의 글자 수보다 크거나 같다 — 안전한 쪽).
  *
@@ -23,8 +24,8 @@ export const CARD_LIMITS = {
   total: 6000,
 } as const;
 
-/** Discord 메시지 `content` 상한(`discord.ts` 와 같은 값 — 순환 import 를 피해 여기 둔다). */
-const MAX_CONTENT = 2000;
+/** Discord 메시지 `content` 상한 — 정본은 여기 · `discord.ts` 가 다시 내보낸다(순환 import 를 피해 이쪽에 둔다). */
+export const DISCORD_MAX_LENGTH = 2000;
 const ZWSP = '​';
 const MAX_COLOR = 0xffffff;
 
@@ -57,7 +58,8 @@ function toEmbed(card: Card, i: number): DiscordEmbed {
   }));
   const title = esc(card.title);
   const description = esc(card.description);
-  const footer = esc(card.footer);
+  // 꼬리말 칸은 마크다운을 렌더링하지 않는다 — escape 하면 `\_` 가 글자로 보인다(9-1 major) · 원문 그대로(주입 위험 없음)
+  const footer = card.footer ?? '';
   if (title === '' && description === '' && fields.length === 0) {
     throw new Error(`@pleiades/notify: 빈 카드 (${i}번째) — 제목 · 설명 · 칸 중 하나는 있어야 한다`);
   }
@@ -125,6 +127,7 @@ export function cardsToMarkdown(cards: readonly Card[]): string {
 export function planDiscordMessages(content: Content, logger: Logger): DiscordMessagePart[] {
   let md = toDiscordMarkdown(content.text, content.format);
   let embeds: DiscordEmbed[] | undefined;
+  if (content.cards !== undefined) assertCards(content.cards); // 배열이 아닌 값을 조용히 무시하지 않는다(9-1 info)
   if (content.cards !== undefined && content.cards.length > 0) {
     embeds = toDiscordEmbeds(content.cards);
     if (embeds === undefined) {
@@ -132,7 +135,7 @@ export function planDiscordMessages(content: Content, logger: Logger): DiscordMe
       md = [md, cardsToMarkdown(content.cards)].filter((s) => s.trim() !== '').join('\n\n');
     }
   }
-  const chunks = splitDiscordMarkdown(md, MAX_CONTENT).filter((c) => c.trim() !== '');
+  const chunks = splitDiscordMarkdown(md, DISCORD_MAX_LENGTH).filter((c) => c.trim() !== '');
   if (chunks.length === 0 && embeds === undefined) throw new Error('@pleiades/notify: Discord 로 보낼 본문이 비었다');
   if (chunks.length === 0) return [{ embeds }];
   return chunks.map((c, i) => (i === chunks.length - 1 && embeds !== undefined ? { content: c, embeds } : { content: c }));
