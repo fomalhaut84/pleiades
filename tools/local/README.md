@@ -66,7 +66,7 @@ tools/local/run.sh fit -- node dist/bot/standalone.cjs
 hermes(`apps/hermes`)는 **dotenv 를 쓰지 않는다** — 앱 `.env` 는 node 의 `--env-file` 로 넘긴다(`check_env` 가 보는 파일과 같다). **node 22.5+ 가 PATH 첫째**여야 한다(대기열 `node:sqlite` · 셸 기본 nvm 20.18 은 안 된다 · `check_env` 가 판을 본다).
 
 ```bash
-S=<저장소 밖 임시 디렉터리>                                   # 예: scratchpad
+S=$(mkdir -p <저장소 밖 임시 디렉터리> && cd "$_" && pwd)   # 반드시 절대 경로 — run.sh 가 cwd 를 apps/hermes 로 옮긴다(#799 Codex P2)
 node tools/local/hermes-live-check.cjs setup "$S"           # 출처 live · 키(0600 · 출력 안 함) · state/
 printf 'PORT=4700\nHERMES_STATE_DIR=%s/state\nHERMES_REGISTRY=%s/sources.json\n' "$S" "$S" > apps/hermes/.env
 grep '^DISCORD_WEBHOOK_HERMES=' .env > "$S/platform.env"    # 검증 #hermes 웹훅 한 줄만 — 다른 플랫폼 키를 허용 목록에 넣지 않아도 된다

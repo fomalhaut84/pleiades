@@ -39,6 +39,7 @@ function setup(dir) {
   const reg = { sources: [{ id: 'live', name: '실측', keySha256: sha, enabled: true, linkHosts: ['example.com'], ratePerMinute: 60 }] }
   fs.writeFileSync(path.join(dir, 'sources.json'), `${JSON.stringify(reg, null, 2)}\n`, { mode: 0o600 })
   console.log(`setup: ${dir} — sources.json · key(0600) · state/ (키는 출력하지 않는다)`)
+  console.log(`앱 .env 에 넣을 줄(절대 경로):\nHERMES_STATE_DIR=${path.join(dir, 'state')}\nHERMES_REGISTRY=${path.join(dir, 'sources.json')}`)
 }
 
 const CASES = [
@@ -61,6 +62,8 @@ async function run(dir, port) {
     console.error(`hermes 가 ${base} 에서 응답하지 않는다(health ${health})`)
     process.exit(1)
   }
+  // 이번 실행 뒤에 쓰인 상태만 본다 — 같은 hermes 에 다시 돌리면 이전 실행의 queued 0 · lastSentAt 이 남아 있다(#799 Codex P2)
+  const started = Date.now()
   let fail = 0
   console.log('| 시나리오 | 기대 | 응답 | 판정 |\n|---|---|---|---|')
   for (const c of CASES) {
@@ -82,10 +85,12 @@ async function run(dir, port) {
     } catch {
       continue
     }
-    if (st.queued === 0 && st.lastSentAt !== null) break
+    const fresh = Date.parse(st.updatedAt) >= started && st.lastSentAt !== null && Date.parse(st.lastSentAt) >= started
+    if (fresh && st.queued === 0) break
+    st = fresh ? st : null
   }
   if (st === null) {
-    console.log('상태 파일 없음')
+    console.log('이번 실행 뒤의 상태 파일이 60 s 안에 나오지 않았다(게시 멈춤 · 웹훅 · 로그 확인)')
     process.exit(1)
   }
   const pick = ({ queued, dead, deadToday, blockedToday, linkDroppedToday, webhook, paused, registrySources, registryError }) => ({
