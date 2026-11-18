@@ -219,7 +219,7 @@ function parseMfdsResponse(payload: unknown, query: string): ParseResult {
   // 재시도. "parseable rows below threshold" (real no-defensible-match) 는 cache OK.
   if (!anyParseable) {
     console.warn(
-      `[mfds] no parseable rows for "${query}" (candidates=${itemArr.length}) — structural`,
+      `[mfds] no parseable rows for qlen=${query.length} (candidates=${itemArr.length}) — structural`,
     );
     return { hit: null, envelopeValid: false };
   }
@@ -227,7 +227,7 @@ function parseMfdsResponse(payload: unknown, query: string): ParseResult {
   // 장애(HTTP · fetch · structural · resultCode)는 warn 그대로.
   if (candidates.length === 0) {
     console.info(
-      `[mfds] no defensible match for "${query}" (candidates=${itemArr.length})`,
+      `[mfds] no defensible match for qlen=${query.length} (candidates=${itemArr.length})`,
     );
     return { hit: null, envelopeValid: true };
   }
@@ -245,7 +245,7 @@ function parseMfdsResponse(payload: unknown, query: string): ParseResult {
   const distinctTuples = new Set(tied.map((c) => tupleKey(c.hit)));
   if (distinctNames.size > 1 || distinctTuples.size > 1) {
     console.info(
-      `[mfds] ambiguous tied match for "${query}" (names=${distinctNames.size} tuples=${distinctTuples.size}) — reject`,
+      `[mfds] ambiguous tied match for qlen=${query.length} (names=${distinctNames.size} tuples=${distinctTuples.size}) — reject`,
     );
     return { hit: null, envelopeValid: true };
   }
@@ -332,13 +332,13 @@ export async function fetchMfdsFood(
     if (!res.ok) {
       const errBody = await res.text().catch(() => "(no body)");
       console.warn(
-        `[mfds] HTTP ${res.status} for "${trimmed}": ${errBody.slice(0, 500)}`,
+        `[mfds] HTTP ${res.status} for qlen=${trimmed.length} body_len=${errBody.length}`,
       );
       // HTTP non-2xx — transient (5xx) or auth issue (401/403). 캐시 X (다음 재시도).
     } else {
       const rawText = await res.text();
       if (opts.logRaw) {
-        console.log(`[mfds] raw response for "${trimmed}":`);
+        console.log(`[mfds] raw response for qlen=${trimmed.length}:`);
         console.log(rawText.slice(0, 2000));
       }
       try {
@@ -352,14 +352,15 @@ export async function fetchMfdsFood(
         cacheable = parsed.envelopeValid;
       } catch (err) {
         console.warn(
-          `[mfds] JSON parse 실패 for "${trimmed}": ${err instanceof Error ? err.message : String(err)}`,
+          // #750 9-1 major: node 24 의 JSON.parse 오류 문구에는 본문 원문이 들어간다 — 이름 · 길이만
+          `[mfds] JSON parse 실패 for qlen=${trimmed.length}: ${err instanceof Error ? err.name : "Error"} body_len=${rawText.length}`,
         );
         // parse 실패는 서버 오류 가능성 — 캐시 X
       }
     }
   } catch (err) {
     console.warn(
-      `[mfds] fetch 실패 for "${trimmed}": ${err instanceof Error ? err.message : String(err)}`,
+      `[mfds] fetch 실패 for qlen=${trimmed.length}: ${err instanceof Error ? err.message : String(err)}`,
     );
     // network / AbortError (timeout) — 캐시 X
   } finally {

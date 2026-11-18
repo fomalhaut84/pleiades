@@ -102,7 +102,25 @@ function toItem(raw: unknown): FoodQueryItem | null {
   return { query: q, quantityG: qty, explicit };
 }
 
+/** #750 검증 실패 사유 — 로그에 응답 원문 대신 남긴다(#626 과 같은 형식) */
+export type FoodQueryParseReason =
+  | "json" // JSON 을 찾지 못했다
+  | "shape" // 객체가 아니다
+  | "items" // items 없음
+  | "item-shape"; // 항목 일부가 무효(이름 · 양 · 상한)
+
+export type FoodQueryParse =
+  | { ok: true; items: FoodQueryItem[] }
+  | { ok: false; reason: FoodQueryParseReason; items: number };
+
 export function parseExtractFoodQueryResponse(rawText: string): FoodQueryItem[] | null {
+  const r = parseExtractFoodQueryResponseDetailed(rawText);
+  return r.ok ? r.items : null;
+}
+
+/** `parseExtractFoodQueryResponse` 와 같은 검증 · 실패면 사유 코드와 항목 수(#750) */
+export function parseExtractFoodQueryResponseDetailed(rawText: string): FoodQueryParse {
+  const fail = (reason: FoodQueryParseReason, items = 0): FoodQueryParse => ({ ok: false, reason, items });
   const trimmed = rawText.trim();
   const stripped = trimmed
     .replace(/^```(?:json)?\s*/i, "")
@@ -113,23 +131,23 @@ export function parseExtractFoodQueryResponse(rawText: string): FoodQueryItem[] 
     parsed = JSON.parse(stripped);
   } catch {
     const m = stripped.match(/\{[\s\S]*\}/);
-    if (!m) return null;
+    if (!m) return fail("json");
     try {
       parsed = JSON.parse(m[0]);
     } catch {
-      return null;
+      return fail("json");
     }
   }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return fail("shape");
   const body = parsed as AiJson;
-  if (!Array.isArray(body.items) || body.items.length === 0) return null;
+  if (!Array.isArray(body.items) || body.items.length === 0) return fail("items");
   // Codex P2 (PR #316 2회차): 일부 item 만 invalid (예: 3kg 초과 · malformed) 시 survivors 만
   // 반환하면 downstream all-or-nothing MFDS 가 loss 감지 못함 → meal 일부만 저장돼 total kcal
   // 왜곡. raw count 와 validated count 다르면 전체 reject → caller (AI text estimator) 폴백.
   const rawCount = body.items.length;
   const items = body.items.map(toItem).filter((x): x is FoodQueryItem => x !== null);
-  if (items.length !== rawCount) return null;
-  return items;
+  if (items.length !== rawCount) return fail("item-shape", rawCount);
+  return { ok: true, items };
 }
 
 export async function extractFoodQuery(
@@ -192,7 +210,8 @@ export async function extractFoodQuery(
         outer = JSON.parse(stdout) as CliResult;
       } catch (err) {
         console.warn(
-          `[extract-food-query] outer JSON parse 실패: ${err instanceof Error ? err.message : String(err)}`,
+          // #750 9-1 major: node 24 의 JSON.parse 오류 문구에는 입력 원문이 들어간다 — 이름 · 길이만
+          `[extract-food-query] outer JSON parse 실패: ${err instanceof Error ? err.name : "Error"} len=${stdout.length}`,
         );
         return resolve(null);
       }
@@ -201,11 +220,12 @@ export async function extractFoodQuery(
         return resolve(null);
       }
       const text = outer.result ?? "";
-      const parsed = parseExtractFoodQueryResponse(text);
-      if (!parsed) {
-        console.warn(`[extract-food-query] AI 응답 파싱 실패: ${text.slice(0, 200)}`);
+      const parsed = parseExtractFoodQueryResponseDetailed(text);
+      if (!parsed.ok) {
+        // #750: 응답 원문(사용자 음식 설명이 섞인다)은 남기지 않는다 — 사유 · 길이 · 항목 수만
+        console.warn(`[extract-food-query] AI 응답 파싱 실패: reason=${parsed.reason} len=${text.length} items=${parsed.items}`);
       }
-      resolve(parsed);
+      resolve(parsed.ok ? parsed.items : null);
     });
   });
 }

@@ -98,9 +98,32 @@ function pickConfidence(v: unknown): "low" | "med" | "high" {
   return "low";
 }
 
+/** #750 검증 실패 사유 — 로그에 응답 원문 대신 남긴다(#626 과 같은 형식) */
+export type KcalParseReason =
+  | "empty" // 빈 응답
+  | "json" // JSON 을 찾지 못했다
+  | "shape" // 객체가 아니다
+  | "total" // total_kcal 없음 · 범위 밖
+  | "items" // items 없음
+  | "item-shape" // 항목 이름 · 타입 문제
+  | "kcal-null" // 항목 kcal null
+  | "item-range" // 항목 kcal 범위 밖
+  | "sum"; // 항목 합 ≠ total
+
+export type KcalParse =
+  | { ok: true; estimate: KcalEstimate }
+  | { ok: false; reason: KcalParseReason; items: number };
+
 /** AI 응답 문자열 → kcal 추정치. 파싱 실패나 이상값 시 null. */
 export function parseKcalResponse(rawText: string): KcalEstimate | null {
-  if (!rawText) return null;
+  const r = parseKcalResponseDetailed(rawText);
+  return r.ok ? r.estimate : null;
+}
+
+/** `parseKcalResponse` 와 같은 검증 · 실패면 사유 코드와 항목 수(#750) */
+export function parseKcalResponseDetailed(rawText: string): KcalParse {
+  const fail = (reason: KcalParseReason, items = 0): KcalParse => ({ ok: false, reason, items });
+  if (!rawText) return fail("empty");
   // Claude CLI 가 --output-format json 을 감쌌으면 이미 result 안에 문자열이 들어있음.
   // 여기 오는 rawText 는 AI 응답 본문 (result). JSON 만이라고 지시했지만 방어적으로 처리.
   const trimmed = rawText.trim();
@@ -115,50 +138,53 @@ export function parseKcalResponse(rawText: string): KcalEstimate | null {
   } catch {
     // JSON 아니면 응답 안에서 { ... } 블록 추출 시도
     const m = stripped.match(/\{[\s\S]*\}/);
-    if (!m) return null;
+    if (!m) return fail("json");
     try {
       parsedUnknown = JSON.parse(m[0]);
     } catch {
-      return null;
+      return fail("json");
     }
   }
   // Codex P1: JSON 이 "null" / 문자열 / 배열 등 non-object 로 유효 파싱되면 이후 dereference
   // 가 throw → estimateKcalFromText 의 close 핸들러에서 uncaughtException 유출. 여기서 방어.
   if (!parsedUnknown || typeof parsedUnknown !== "object" || Array.isArray(parsedUnknown)) {
-    return null;
+    return fail("shape");
   }
   const body = parsedUnknown as AiJson;
   const totalRaw = body.total_kcal;
   const total =
     typeof totalRaw === "number" && Number.isFinite(totalRaw) ? Math.round(totalRaw) : null;
-  if (total === null || total < 0 || total > MAX_KCAL_SANITY) return null;
+  if (total === null || total < 0 || total > MAX_KCAL_SANITY) return fail("total");
   // Codex P2 (#283): items 배열 필수. 없으면 total 을 breakdown 으로 검증할 수 없고, 프롬프트도
   // items 를 필수로 지시함.
-  if (!Array.isArray(body.items) || body.items.length === 0) return null;
+  if (!Array.isArray(body.items) || body.items.length === 0) return fail("items");
   const rawCount = body.items.length;
   const items = body.items.map(toItem).filter((x): x is KcalItem => x !== null);
   // Codex P2 (#283): raw 원소 중 하나라도 name/타입 문제로 toItem 이 걸러냈으면 응답 신뢰 불가.
-  if (items.length !== rawCount) return null;
+  if (items.length !== rawCount) return fail("item-shape", rawCount);
   // Codex P2 (#283): 어느 항목이라도 kcal 이 null 이면 total 은 부분 합계라 신뢰 불가.
-  if (items.some((it) => it.kcal === null)) return null;
+  if (items.some((it) => it.kcal === null)) return fail("kcal-null", rawCount);
   // Codex P2 (#283): item 별 kcal 이 음수거나 상한 초과면 total 이 우연히 정상 범위여도 무효.
   // 예: {items: [{kcal: -200}, {kcal: 700}], total_kcal: 500} 은 잘못된 응답.
   if (items.some((it) => it.kcal !== null && (it.kcal < 0 || it.kcal > MAX_ITEM_KCAL))) {
-    return null;
+    return fail("item-range", rawCount);
   }
   // Codex P2 (#283): 프롬프트가 total = sum(items) 로 정의. sum 이 total 과 근사해야 함.
   // 5% 또는 최소 30 kcal 여유 (반올림/소수점 표현). 불일치는 AI 내부 부정합.
   const itemsSum = items.reduce((s, it) => s + (it.kcal ?? 0), 0);
   const tolerance = Math.max(30, Math.round(total * 0.05));
   if (Math.abs(itemsSum - total) > tolerance) {
-    return null;
+    return fail("sum", rawCount);
   }
   return {
+    ok: true,
+    estimate: {
     kcal: total,
     confidence: pickConfidence(body.confidence),
     items,
     notes: typeof body.notes === "string" ? body.notes : undefined,
     raw: stripped,
+    },
   };
 }
 
@@ -226,7 +252,8 @@ export async function estimateKcalFromText(
         outer = JSON.parse(stdout) as CliResult;
       } catch (err) {
         console.warn(
-          `[kcal] outer JSON parse 실패: ${err instanceof Error ? err.message : String(err)}`,
+          // #750 9-1 major: node 24 의 JSON.parse 오류 문구에는 입력 원문이 들어간다 — 이름 · 길이만
+          `[kcal] outer JSON parse 실패: ${err instanceof Error ? err.name : "Error"} len=${stdout.length}`,
         );
         return resolve(null);
       }
@@ -235,11 +262,12 @@ export async function estimateKcalFromText(
         return resolve(null);
       }
       const text = outer.result ?? "";
-      const parsed = parseKcalResponse(text);
-      if (!parsed) {
-        console.warn(`[kcal] AI 응답 파싱/검증 실패: ${text.slice(0, 200)}`);
+      const parsed = parseKcalResponseDetailed(text);
+      if (!parsed.ok) {
+        // #750: 응답 원문(사용자 음식 설명이 섞인다)은 남기지 않는다 — 사유 · 길이 · 항목 수만
+        console.warn(`[kcal] AI 응답 파싱/검증 실패: reason=${parsed.reason} len=${text.length} items=${parsed.items}`);
       }
-      resolve(parsed);
+      resolve(parsed.ok ? parsed.estimate : null);
     });
   });
 }
