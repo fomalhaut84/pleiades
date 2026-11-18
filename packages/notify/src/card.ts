@@ -9,7 +9,7 @@
  * 발신 경로(웹훅 · 봇 transport)는 `planDiscordMessages` 하나로 조각과 카드를 나눈다 — 카드는 마지막 조각에만.
  */
 import { escapeDiscordMarkdown, splitDiscordMarkdown } from './discord-md';
-import { discordMarkdown, toDiscordMarkdown } from './discord-markdown';
+import { neutralize, toDiscordMarkdown } from './discord-markdown';
 import type { Card, Content, Logger } from './types';
 
 /** Discord embed 한도(013 R9). `total` 은 한 메시지의 모든 embed 글 합. */
@@ -44,13 +44,19 @@ export interface DiscordMessagePart {
 }
 
 const esc = (s: string | undefined): string => (s === undefined || s === '' ? '' : escapeDiscordMarkdown(s));
-/** 설명 칸 — `markdown` 이면 정리기만(서식이 산다) · 아니면 escape. */
+/**
+ * 설명 칸 — `markdown` 은 **템플릿 마크다운**이다: 서식은 그대로 두고 안전 규칙(`<` · `](` 무력화 · 013 R2·R3)만 건다.
+ * AI 답용 정리(표 · 제목 · 링크 펼치기)는 걸지 않는다 — escape 된 외부 값 `\[x\](url)` 이 링크 펼치기에 다시 걸려 깨졌다(P3-a2 9-1 major).
+ * 아니면 escape.
+ */
 const descOf = (card: Card): string =>
   card.description === undefined || card.description === ''
     ? ''
     : card.descriptionFormat === 'markdown'
-      ? discordMarkdown(card.description)
+      ? neutralize(card.description)
       : escapeDiscordMarkdown(card.description);
+/** 행 한 칸 — 줄바꿈은 공백으로(행 하나가 한 줄 · 9-1 info) · escape. */
+const rowCell = (s: string): string => escapeDiscordMarkdown(s.replace(/\s*\r?\n\s*/g, ' '));
 
 /**
  * 행 목록 설명(013 F1 · F8) — `• **이름** — 값` 줄들 · 이름 · 값은 escape(외부 값) · 서식만 이 함수가 붙인다.
@@ -58,7 +64,7 @@ const descOf = (card: Card): string =>
  */
 export function cardRowList(rows: readonly { label: string; text: string }[]): Pick<Card, 'description' | 'descriptionFormat'> {
   return {
-    description: rows.map((r) => `• **${escapeDiscordMarkdown(r.label)}** — ${escapeDiscordMarkdown(r.text)}`).join('\n'),
+    description: rows.map((r) => `• **${rowCell(r.label)}** — ${rowCell(r.text)}`).join('\n'),
     descriptionFormat: 'markdown',
   };
 }

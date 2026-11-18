@@ -117,6 +117,18 @@ describe('cardRowList · descriptionFormat markdown', () => {
     expect(e.description).not.toContain('<@1>'); // `<` 는 escape(그리고 정리기가 폭 없는 공백까지)
   });
 
+  // 회귀: P3-a2 9-1 major — escape 된 외부 값이 정리기의 링크 펼치기에 다시 걸려 `\x\ (url)` 로 깨졌다
+  it('escape 된 링크 꼴은 그대로 보인다 — embed · 대체 글 둘 다', () => {
+    const card = { ...cardRowList([{ label: 'a', text: '[x](https://e.test "t")' }]) };
+    const expected = '• **a** — \\[x\\]\u200b(https://e.test "t")';
+    expect(toDiscordEmbeds([card])?.[0].description).toBe(expected);
+    expect(cardsToMarkdown([card])).toBe(expected);
+  });
+
+  it('행 값의 줄바꿈은 공백으로 — 행 하나가 한 줄(9-1 info)', () => {
+    expect(cardRowList([{ label: 'a\nb', text: '1\n2' }]).description).toBe('• **a b** — 1 2');
+  });
+
   it('plain(기본)은 그대로 escape — 기존 동작', () => {
     expect(toDiscordEmbeds([{ description: '**x**' }])?.[0].description).toBe('\\*\\*x\\*\\*');
   });

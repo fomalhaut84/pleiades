@@ -67,8 +67,8 @@ export interface Card {
   title?: string;
   description?: string;
   /**
-   * 설명 칸 형식(013 F8 · #775) — 기본 `plain`(escape). `markdown` 이면 템플릿이 붙인 서식이 산다 — **외부 값은 호출부가 escape 해 넣는다**
-   * (`cardRowList` 가 그렇게 만든다) · 정리기(`discordMarkdown`)가 `<` · 가짜 링크를 막는다. 제목 · 칸 · 꼬리말은 늘 plain.
+   * 설명 칸 형식(013 F8 · #775) — 기본 `plain`(escape). `markdown` 은 **템플릿 마크다운** — 서식이 그대로 산다 · **외부 값은 호출부가 escape 해 넣는다**
+   * (`cardRowList` 가 그렇게 만든다) · `<` · `](` 무력화(R2·R3)만 걸고 AI 답용 정리(표 · 링크 펼치기)는 걸지 않는다. 제목 · 칸 · 꼬리말은 늘 plain.
    */
   descriptionFormat?: 'plain' | 'markdown';
   fields?: readonly CardField[];
