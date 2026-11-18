@@ -106,13 +106,14 @@ export function createPoster(deps: PosterDeps): Poster {
       if (head === null) return { kind: "idle" };
       if (now < head.nextAt) return { kind: "wait", ms: head.nextAt - now };
       const m = head.message;
-      const hook = deps.webhook();
-      if (!isValidWebhook(hook)) return { kind: "paused", why: "webhook" };
+      // 나이를 먼저 본다 — 웹훅이 없어 받기만 하는 동안에도 24 h 넘은 메시지는 dead(대기열이 끝없이 커지지 않게 · #806 Codex P2)
       if (now - m.receivedAt >= MAX_AGE_MS) {
         deps.queue.markDead(m.id, "age", now);
         log(m.source, "dead(age)", m.attempts);
         return { kind: "dead", id: m.id, reason: "age" };
       }
+      const hook = deps.webhook();
+      if (!isValidWebhook(hook)) return { kind: "paused", why: "webhook" };
       const sec = deps.secrets();
       if (!sec.ok) return { kind: "paused", why: "secrets" };
 
