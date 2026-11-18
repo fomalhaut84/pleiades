@@ -135,6 +135,18 @@ describe("createPoster.step", () => {
     expect(await p.step()).toEqual({ kind: "sent", id: b.id });
   });
 
+  // 회귀: #795 Codex P2 — 대기 시각은 디스크(맨 앞 행 next_at)에서 온다. 재기동한 poster 도 뒤 행을 먼저 보내지 않는다
+  it("재기동 뒤에도 맨 앞 행의 대기 시각 전에는 뒤 행을 보내지 않는다", async () => {
+    const a = q.enqueue({ source: "orders", text: "a", level: "info" }, now);
+    q.enqueue({ source: "orders", text: "b", level: "info" }, now);
+    reply = () => new Response(JSON.stringify({ retry_after: 60 }), { status: 429 });
+    expect(await createPoster(deps).step()).toMatchObject({ kind: "retry", id: a.id });
+    now += 1_000;
+    reply = () => new Response("{}", { status: 200 });
+    expect(await createPoster(deps).step()).toEqual({ kind: "wait", ms: 59_000 });
+    expect(calls.length).toBe(1);
+  });
+
   // 회귀: #794 9-1 major — 웹훅이 지워져도 메시지가 죽지 않는다
   it.each([401, 403, 404])("웹훅 %i → paused(시도 수 그대로 · 행 보존 · 1분 뒤 다시)", async (status) => {
     const { id } = q.enqueue({ source: "orders", text: "a", level: "info" }, now);

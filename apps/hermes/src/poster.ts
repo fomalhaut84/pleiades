@@ -90,7 +90,7 @@ const rawFields = (m: QueuedMessage): string[] => [m.title ?? "", m.text, m.link
 
 export function createPoster(deps: PosterDeps): Poster {
   let linkDropped = false;
-  /** 이 시각 전에는 아무것도 보내지 않는다(받은 순서 · 429) */
+  /** 웹훅 설정 오류(401/403/404) 뒤 다시 볼 때까지 — 메시지 시각이 아니라 웹훅 상태라 메모리에만 둔다 */
   let gate = 0;
   const log = (source: string, result: string, attempts: number) =>
     console.log(`[hermes] 게시 source=${source} result=${result} attempts=${attempts}`);
@@ -101,8 +101,11 @@ export function createPoster(deps: PosterDeps): Poster {
       linkDropped = false;
       const now = deps.now();
       if (now < gate) return { kind: "wait", ms: gate - now };
-      const m = deps.queue.nextDue(now);
-      if (m === null) return { kind: "idle" };
+      // 맨 앞 행만 본다 — 그 행의 다음 시도 시각 전에는 뒤 행도 보내지 않는다(받은 순서 · 429 · 재기동 뒤에도 · #795 Codex P2)
+      const head = deps.queue.head();
+      if (head === null) return { kind: "idle" };
+      if (now < head.nextAt) return { kind: "wait", ms: head.nextAt - now };
+      const m = head.message;
       const hook = deps.webhook();
       if (!isValidWebhook(hook)) return { kind: "paused", why: "webhook" };
       if (now - m.receivedAt >= MAX_AGE_MS) {
@@ -148,8 +151,7 @@ export function createPoster(deps: PosterDeps): Poster {
         return { kind: "dead", id: m.id, reason: "attempts" };
       }
       const delayMs = out.retryAfterMs ?? Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** m.attempts);
-      gate = done + delayMs;
-      deps.queue.markRetry(m.id, gate);
+      deps.queue.markRetry(m.id, done + delayMs);
       log(m.source, `retry(${out.status})`, m.attempts + 1);
       return { kind: "retry", id: m.id, delayMs };
     },

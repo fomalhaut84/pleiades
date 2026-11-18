@@ -48,6 +48,8 @@ export interface Queue {
   enqueue(m: NewMessage, now: number): { id: string; duplicate: boolean };
   /** 다음에 보낼 행(받은 순서 · 다음 시도 시각이 지난 것) — 상태는 그대로 */
   nextDue(now: number): QueuedMessage | null;
+  /** 가장 오래된 queued 행과 그 다음 시도 시각 — 게시 루프는 이것만 본다(받은 순서 · 재기동해도 대기 시각이 디스크에 있다 · #795 Codex P2) */
+  head(): { message: QueuedMessage; nextAt: number } | null;
   markSent(id: string, now: number): void;
   /** 시도 수 +1 · 다음 시도 시각 */
   markRetry(id: string, nextAt: number): void;
@@ -144,6 +146,10 @@ export function openQueue(file: string, opts: QueueOptions = {}): Queue {
     `SELECT id, source, idem_key, title, text, link_label, link_url, level, attempts, received_at FROM messages
      WHERE status = 'queued' AND next_at <= ? ORDER BY received_at, rowid LIMIT 1`,
   );
+  const headStmt = db.prepare(
+    `SELECT id, source, idem_key, title, text, link_label, link_url, level, attempts, received_at, next_at FROM messages
+     WHERE status = 'queued' ORDER BY received_at, rowid LIMIT 1`,
+  );
   const finish = db.prepare(
     "UPDATE messages SET status = ?, attempts = attempts + 1, done_at = ?, reason = ? WHERE id = ? AND status = 'queued'",
   );
@@ -206,6 +212,10 @@ export function openQueue(file: string, opts: QueueOptions = {}): Queue {
     nextDue(now) {
       const r = due.get(now) as Row | undefined;
       return r === undefined ? null : toMessage(r);
+    },
+    head() {
+      const r = headStmt.get() as (Row & { next_at: number }) | undefined;
+      return r === undefined ? null : { message: toMessage(r), nextAt: Number(r.next_at) };
     },
     markSent(id, now) {
       finish.run("sent", now, null, id);
