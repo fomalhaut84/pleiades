@@ -9,14 +9,8 @@ import {
   calcCurrentValueKRW,
   DEFAULT_FX_RATE_USD_KRW,
 } from '@/lib/format'
-import {
-  accountEmoji,
-  formatKRWCompact,
-  formatSignedKRWCompact,
-  formatPercent,
-  profitEmoji,
-} from '@/bot/utils/formatter'
-import { notifierFor, Route, htmlContent, NOTIFY_CTX } from './notifier'
+import { notifierFor, Route, NOTIFY_CTX } from './notifier'
+import { dailySummaryContent, type DailyAccountRow } from './cards'
 import { KST_OFFSET_MS } from '@/lib/kst-date'
 
 export async function sendDailySummary(): Promise<void> {
@@ -54,7 +48,7 @@ export async function sendDailySummary(): Promise<void> {
   let grandCost = 0
   let grandPrevTotal = 0
   let hasPrevData = false
-  const accountLines: string[] = []
+  const accountRows: DailyAccountRow[] = []
 
   for (const account of accounts) {
     let accountValue = 0
@@ -79,18 +73,17 @@ export async function sendDailySummary(): Promise<void> {
     const pl = accountValue - accountCost
     const returnPct = accountCost > 0 ? (pl / accountCost) * 100 : 0
 
-    const emoji = accountEmoji(account.name)
     const prev = prevMap.get(account.id)
-    let changeSuffix = ''
     if (prev) {
       hasPrevData = true
       grandPrevTotal += prev.totalValueKRW
-      const change = accountValue - prev.totalValueKRW
-      changeSuffix = ` | ${formatSignedKRWCompact(change)} ${profitEmoji(change)}`
     }
-    accountLines.push(
-      `${emoji} ${account.name}: ${formatKRWCompact(accountValue)} (${formatPercent(returnPct)})${changeSuffix}`
-    )
+    accountRows.push({
+      name: account.name,
+      value: accountValue,
+      returnPct,
+      ...(prev ? { change: accountValue - prev.totalValueKRW } : {}),
+    })
   }
 
   const grandPL = grandTotal - grandCost
@@ -112,23 +105,18 @@ export async function sendDailySummary(): Promise<void> {
       }
       return s + v
     }, 0)
-  const grandChangeLine = hasPrevData && grandPrevTotal > 0
-    ? `📈 전일 대비: ${formatSignedKRWCompact(grandCurrentForCompare - grandPrevTotal)} (${formatPercent(((grandCurrentForCompare - grandPrevTotal) / grandPrevTotal) * 100)}) ${profitEmoji(grandCurrentForCompare - grandPrevTotal)}`
-    : null
+  const grandChange = grandCurrentForCompare - grandPrevTotal
+  // 013 P3-b2 (#779) — 위 한 줄 + 계좌 행 목록 카드(`./cards`)
+  const content = dailySummaryContent({
+    dateStr,
+    total: grandTotal,
+    returnPct: grandReturn,
+    ...(hasPrevData && grandPrevTotal > 0 ? { change: { amount: grandChange, pct: (grandChange / grandPrevTotal) * 100 } } : {}),
+    accounts: accountRows,
+    fxRate,
+  })
 
-  const lines = [
-    `📊 <b>일일 포트폴리오 요약</b> (${dateStr})\n`,
-    `💰 총 평가금: <b>${formatKRWCompact(grandTotal)}</b> (${formatPercent(grandReturn)})`,
-    ...(grandChangeLine ? [grandChangeLine] : []),
-    '',
-    ...accountLines,
-    '',
-    `💱 환율: ${fxRate.toLocaleString('ko-KR')}원/달러`,
-  ]
-
-  const fullMessage = lines.join('\n')
-
-  await notifierFor().notify(Route.ALLOWED, htmlContent(fullMessage), NOTIFY_CTX)
+  await notifierFor().notify(Route.ALLOWED, content, NOTIFY_CTX)
 
   console.log('[notification] 일일 포트폴리오 요약 발송 완료')
 }
