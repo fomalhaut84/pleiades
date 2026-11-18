@@ -19,6 +19,7 @@ import {
   type Requester,
 } from '../core/reply'
 import { pendingKey } from '../core/state-key'
+import { rowListCard } from '../utils/card'
 
 // pleiades 009 D-3 PR-1a (pleiades#382 · 설계 §4 H2 · B · S): 판단(decide*)은 중립 응답 모델(`../core/reply`)로만 말한다.
 // 수신은 `../discord/router`(PR-3). 옛 채널 등록부는 009 D-5 B3b(pleiades#508)에서 지웠다 — 판단 흐름은 `__tests__/expense-flow.test.ts`.
@@ -554,21 +555,20 @@ async function handleMultiExpenseParsed(out: ReplyOutput, who: Requester, respon
   // 확인 메시지
   cleanExpiredMulti()
   const txId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-  const lines = [`📝 ${matched.length}건 거래 확인\n`]
-  for (const m of matched) {
-    const typeLabel = m.parsed.type === 'expense' ? '소비' : '수입'
-    lines.push(`${m.parsed.date} | ${typeLabel} | ${m.parsed.description} | ${formatKRWFull(m.parsed.amount)} | ${m.categoryName}`)
-  }
-  lines.push('\n기록하시겠습니까?')
-
-  const messageKey = await out.reply(
-    plainReply(lines.join('\n'), [
+  // 013 P3-b1 (#777) — 거래는 행 목록 카드(F8 · 이름 = 설명) · 위 한 줄 = 건수 + 묻는 말(F7) · 버튼은 그대로
+  const rows = matched.map((m) => ({
+    label: m.parsed.description,
+    text: `${m.parsed.type === 'expense' ? '소비' : '수입'} · ${formatKRWFull(m.parsed.amount)} · ${m.categoryName} · ${m.parsed.date}`,
+  }))
+  const messageKey = await out.reply({
+    ...plainReply(`📝 ${matched.length}건 거래 확인 — 기록하시겠습니까?`, [
       [
         { label: '✅ 전체 확인', action: `multi:confirm:${txId}` },
         { label: '❌ 취소', action: `multi:cancel:${txId}` },
       ],
     ]),
-  )
+    cards: [rowListCard('거래 목록', rows)],
+  })
 
   pendingMultiExpenses.set(pendingKey(messageKey, txId), {
     requestedByUserId: who.userId,

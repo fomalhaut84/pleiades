@@ -30,7 +30,9 @@ export function rowsOf(rows: ReplyButtonRows | undefined): [string, string][][] 
 }
 
 function messageStep(kind: 'reply' | 'edit', message: BotReply): Step {
-  return message.buttons ? [kind, message.text, message.format, rowsOf(message.buttons)] : [kind, message.text, message.format]
+  const base: Step = message.buttons ? [kind, message.text, message.format, rowsOf(message.buttons)] : [kind, message.text, message.format]
+  // 013 P3-b1 (#777) — 카드가 있을 때만 끝에 붙인다(카드 없는 응답의 기록은 그대로)
+  return message.cards === undefined ? base : ([...base, { cards: message.cards }] as Step)
 }
 
 export interface RecordingOutputOptions {

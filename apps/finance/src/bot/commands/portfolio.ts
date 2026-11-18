@@ -13,8 +13,9 @@ import {
   formatUSD,
   profitEmoji,
 } from '../utils/formatter'
-import { escapeHtml, h } from '../utils/html'
+import { escapeHtml } from '../utils/html'
 import { plainReply, type ReplyOutput } from '../core/reply'
+import { profitColor, rowListCard } from '../utils/card'
 
 /*
  * pleiades 009 D-3 PR-2a (pleiades#392 · 설계 `_workspace/009/d3/02_writer_d3_r3.md` §4 A2 · H2): 현황 · 계좌.
@@ -77,23 +78,24 @@ export async function decidePortfolioSummary(out: ReplyOutput): Promise<void> {
   const totalCost = summaries.reduce((s, a) => s + a.costKRW, 0)
   const totalReturnPct = totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0
 
-  const lines = [`📊 ${h.b('포트폴리오 현황')}\n`]
-
-  for (const s of summaries) {
-    const emoji = accountEmoji(s.name)
-    lines.push(
-      `${emoji} ${h.b(escapeHtml(s.name))}  ${formatKRWFull(s.currentValueKRW)}  (${formatPercent(s.returnPct)})`
-    )
-  }
-
-  lines.push('─────────────────────')
-  lines.push(`${h.b('합계')}    ${formatKRWFull(totalValue)}  (${formatPercent(totalReturnPct)})`)
-
-  if (fxPrice) {
-    lines.push(`\n환율: $1 = ₩${fxPrice.toFixed(2)}`)
-  }
-
-  await out.replyLong(lines.join('\n'))
+  // 013 P3-b1 (#777) — 위 한 줄 = 제목 + 핵심 숫자(F7 · 푸시 미리보기) · 계좌는 행 목록 카드(F8) · 색 = 합계 손익(F6)
+  const card = rowListCard(
+    '계좌별',
+    summaries.map((s) => ({
+      label: `${accountEmoji(s.name)} ${s.name}`,
+      text: `${formatKRWFull(s.currentValueKRW)} · ${formatPercent(s.returnPct)}`,
+    })),
+    {
+      color: profitColor(totalReturnPct),
+      empty: '계좌가 없습니다.',
+      ...(fxPrice ? { footer: `환율 $1 = ₩${fxPrice.toFixed(2)}` } : {}),
+    },
+  )
+  await out.reply({
+    text: `📊 포트폴리오 현황 · 합계 ${formatKRWFull(totalValue)} (${formatPercent(totalReturnPct)})`,
+    format: 'plain',
+    cards: [card],
+  })
 }
 
 /** 계좌 상세 — 원문 전체를 받는다(이름은 `계좌\s+(.+)` 로 꺼낸다 · 설계 A2 "원문을 쓰는 파싱"). */
@@ -130,27 +132,20 @@ export async function decideAccountDetail(text: string, out: ReplyOutput): Promi
 
   const summary = buildAccountSummary(account, priceMap, currentFxRate)
 
-  const lines = [`${accountEmoji(account.name)} ${h.b(escapeHtml(account.name) + ' 계좌 상세')}\n`]
-
-  for (const holding of account.holdings) {
+  // 013 P3-b1 (#777) — 위 한 줄 = 계좌 · 평가 · 수익률(F7) · 종목은 행 목록 카드(F8) · 색 = 계좌 손익(F6)
+  const rows = account.holdings.map((holding) => {
     const price = priceMap.get(holding.ticker)
-    if (!price) {
-      lines.push(`${escapeHtml(holding.displayName)}  ${holding.shares}주  (가격 미수신)`)
-      continue
-    }
-
+    if (!price) return { label: holding.displayName, text: `${holding.shares}주 · 가격 미수신` }
     const pl = calcProfitLoss(holding, price.price, currentFxRate)
-    const emoji = profitEmoji(pl.returnPct)
     const priceStr = holding.currency === 'USD' ? formatUSD(price.price) : `₩${price.price.toLocaleString('ko-KR')}`
-
-    lines.push(
-      `${escapeHtml(holding.displayName)}  ${holding.shares}주  ${priceStr}  ${formatSignedKRW(pl.totalPL)} (${formatPercent(pl.returnPct)}) ${emoji}`
-    )
-  }
-
-  lines.push('─────────────────────')
-  lines.push(`${h.b('총 평가액')}: ${formatKRWFull(summary.currentValueKRW)}`)
-  lines.push(`${h.b('총 수익률')}: ${formatPercent(summary.returnPct)}`)
-
-  await out.replyLong(lines.join('\n'))
+    return {
+      label: holding.displayName,
+      text: `${holding.shares}주 · ${priceStr} · ${formatSignedKRW(pl.totalPL)} (${formatPercent(pl.returnPct)}) ${profitEmoji(pl.returnPct)}`,
+    }
+  })
+  await out.reply({
+    text: `${accountEmoji(account.name)} ${account.name} 계좌 · 평가 ${formatKRWFull(summary.currentValueKRW)} (${formatPercent(summary.returnPct)})`,
+    format: 'plain',
+    cards: [rowListCard('보유 종목', rows, { color: profitColor(summary.returnPct), empty: '보유 종목이 없습니다.' })],
+  })
 }
