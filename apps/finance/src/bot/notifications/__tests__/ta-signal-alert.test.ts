@@ -88,12 +88,12 @@ describe('buildTaSignalMessage', () => {
     expect(msg).toContain('\\~\\~취소\\~\\~')
   })
 
-  it('AI 가이드는 300자 · 줄바꿈을 한 줄로 접어 💡 뒤에 · AI 서식은 남긴다', () => {
+  it('AI 가이드는 300자(넘으면 …) · 줄바꿈을 한 줄로 접어 💡 뒤에 · 짝 맞는 굵게는 남긴다', () => {
     const guide = '**관망** 권고\n# 손절 라인\n- 50일선'
     const msg = buildTaSignalMessage([r()], new Map([['005930.KS', guide]]))
     expect(msg).toContain('\n\n  💡 **관망** 권고 # 손절 라인 - 50일선\n')
     const long = buildTaSignalMessage([r()], new Map([['005930.KS', 'x'.repeat(500)]]))
-    expect(long).toContain(`💡 ${'x'.repeat(300)}\n`)
+    expect(long).toContain(`💡 ${'x'.repeat(300)}…\n`)
     expect(long).not.toContain('x'.repeat(301))
   })
 
@@ -105,5 +105,31 @@ describe('buildTaSignalMessage', () => {
   it('종목 여러 개는 빈 줄로 가른다', () => {
     const msg = buildTaSignalMessage([r(), r({ ticker: 'AAPL', displayName: 'Apple', strategy: 'long_hold', signals: ['a', 'b'] })], new Map())
     expect(msg).toBe('📊 **TA 시그널 알림**\n\n**삼성전자** (005930.KS) — 스윙/모멘텀\n  🟢 RSI 과매도 (28.3)\n\n**Apple** (AAPL) — 장기\n  a\n  b\n')
+  })
+
+  // 회귀: #785 9-1 major — 짝 없는 인라인 기호가 빈 줄을 넘어 다음 종목 틀과 짝을 맺었다
+  it('300자 경계에서 갈라진 ** 는 escape — 다음 종목 굵게와 짝을 맺지 않는다', () => {
+    const msg = buildTaSignalMessage(
+      [r(), r({ ticker: 'AAPL', displayName: 'Apple' })],
+      new Map([['005930.KS', `${'x'.repeat(296)}**관망 권고`]]),
+    )
+    expect(msg).toContain(`💡 ${'x'.repeat(296)}\\*\\*관망…\n`)
+    expect(msg).toContain('\n**Apple** (AAPL)')
+  })
+
+  it('가이드의 || · 백틱 · 펜스는 escape — 틀이 스포일러 · 코드로 가려지지 않는다', () => {
+    const msg = buildTaSignalMessage(
+      [r(), r({ ticker: 'AAPL', displayName: 'Apple' })],
+      new Map([['005930.KS', 'a || b ```'], ['AAPL', 'c || d `']]),
+    )
+    expect(msg).toContain('💡 a \\|\\| b \\`\\`\\`')
+    expect(msg).toContain('💡 c \\|\\| d \\`')
+    expect(msg).not.toMatch(/(^|[^\\])(\|\||`)/)
+  })
+
+  it('이모지를 반으로 가르지 않는다(글자 단위)', () => {
+    const msg = buildTaSignalMessage([r()], new Map([['005930.KS', `${'x'.repeat(299)}📈📈`]]))
+    expect(msg).toContain(`💡 ${'x'.repeat(299)}📈…\n`)
+    expect(msg).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/)
   })
 })

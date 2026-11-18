@@ -110,10 +110,21 @@ const STRATEGY_LABELS: Record<string, string> = {
 const AI_GUIDE_MAX_CHARS = 300
 
 /**
+ * AI 가이드 한 줄 — 글자(코드 포인트) 단위로 300자 · 잘렸으면 `…` · 줄바꿈은 공백으로 접는다.
+ * 통째로 escape 한 뒤 **가이드 안에서 짝이 맞는 `**굵게**` 만** 되살린다 — 자르기나 모델 출력이 남긴 짝 없는 `**` · `||` ·
+ * 백틱이 Discord 에서 빈 줄을 넘어 다음 종목 틀과 짝을 맺지 않게(#785 9-1 major · 옛 HTML 경로는 태그 안에 가뒀다).
+ */
+function guideLine(guide: string): string {
+  const chars = Array.from(guide.trim())
+  const cut = chars.length > AI_GUIDE_MAX_CHARS ? `${chars.slice(0, AI_GUIDE_MAX_CHARS).join('').trimEnd()}…` : chars.join('')
+  const oneLine = cut.replace(/\s*\n\s*/g, ' ').trim()
+  return escapeDiscordMarkdown(oneLine).replace(/\\\*\\\*([^*\n]+?)\\\*\\\*/g, '**$1**')
+}
+
+/**
  * TA 시그널 알림 본문 — Discord 마크다운(`markdown` 형식 · 013 F5 · #785).
- * 틀(제목 · 종목 줄 굵게)만 서식이고 종목명 · 티커 · 시그널 글은 escape 한다. AI 가이드는 모델 마크다운이라 escape 하지 않고
- * (발신 쪽 정리기 R1~R10 이 다듬는다) 300자로 자른 뒤 줄바꿈을 한 줄로 접어 💡 뒤에 둔다 — 줄 머리에 오지 않아 제목 · 목록 ·
- * 인용이 틀 사이에 끼지 않는다.
+ * 틀(제목 · 종목 줄 굵게)만 서식이고 종목명 · 티커 · 시그널 글은 escape 한다. AI 가이드는 `guideLine` — 한 줄로 접어 💡 뒤에 두고
+ * (줄 머리에 오지 않아 제목 · 목록 · 인용이 틀 사이에 끼지 않는다) 짝 맞는 굵게만 살린다.
  */
 export function buildTaSignalMessage(
   results: ReadonlyArray<Pick<SignalResult, 'ticker' | 'displayName' | 'strategy' | 'signals'>>,
@@ -129,9 +140,8 @@ export function buildTaSignalMessage(
     }
     const guide = aiGuides.get(r.ticker)
     if (guide) {
-      const oneLine = guide.slice(0, AI_GUIDE_MAX_CHARS).replace(/\s*\n\s*/g, ' ').trim()
       lines.push('')
-      lines.push(`  💡 ${oneLine}`)
+      lines.push(`  💡 ${guideLine(guide)}`)
     }
     lines.push('')
   }
