@@ -25,10 +25,10 @@ const m = (over: Partial<QueuedMessage> = {}): QueuedMessage => ({
 });
 
 describe("formatMessage", () => {
-  it("평문 escape · 굵은 제목 · username spot·이름", () => {
+  it("평문 escape · 굵은 제목 · username hermes·이름", () => {
     expect(formatMessage(m({ title: "새 *주문*", text: "# 제목 아님\n- 목록 아님 · **굵게 아님**" }), SRC)).toEqual({
       content: "**새 \\*주문\\***\n\\# 제목 아님\n\\- 목록 아님 · \\*\\*굵게 아님\\*\\*",
-      username: "spot·주문",
+      username: "hermes·주문",
       linkDropped: false,
     });
   });
@@ -79,7 +79,7 @@ describe("formatMessage", () => {
     expect(formatMessage(m({ link: { label: "x", url: "https://shop.example.com/" } }), null)).toMatchObject({
       content: "주문 #1",
       linkDropped: true,
-      username: "spot·orders",
+      username: "hermes·orders",
     });
   });
 

@@ -1388,6 +1388,7 @@ class Post(Base):
         self.assertEqual(sorted(k for k in keys if pat.search(k)), sorted([
             "AUTH_PIN", "AUTH_SECRET", "DATABASE_URL", "DISCORD_BOT_TOKEN_FINANCE", "DISCORD_BOT_TOKEN_FITNESS",
             "DISCORD_WEBHOOK_ADMIN", "DISCORD_WEBHOOK_DEPLOY", "DISCORD_WEBHOOK_FINANCE", "DISCORD_WEBHOOK_FITNESS",
+            "DISCORD_WEBHOOK_HERMES",  # #796 — 플랫폼 설정 템플릿(.env.example)의 hermes 웹훅
             "GARMIN_EMAIL", "GARMIN_PASSWORD", "MFDS_API_KEY", "OMRON_APP_KEY", "OMRON_EMAIL", "OMRON_PASSWORD",
             "OPENDART_API_KEY", "WHOOING_WEBHOOK_URL"]))
         self.assertTrue(pat.search("DISCORD_WEBHOOK_OPS"))

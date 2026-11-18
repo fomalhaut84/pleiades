@@ -5,7 +5,7 @@
  *   PORT                 루프백 포트(B1 · 서버 값은 H-2 에서 고정 · 로컬은 check_env 가 예약 포트를 막는다)
  *   HERMES_STATE_DIR     대기열 hermes.db 자리(체크아웃 밖 · 서버는 H-2)
  *   HERMES_REGISTRY      출처 레지스트리 JSON(서버 비공개 · 체크아웃 밖)
- * 플랫폼 설정(notify platformEnv): DISCORD_WEBHOOK_SPOT — 선택(없으면 받기만 하고 게시는 멈춘다 · 상태 파일 webhook=false).
+ * 플랫폼 설정(notify platformEnv): DISCORD_WEBHOOK_HERMES — 선택(없으면 받기만 하고 게시는 멈춘다 · 상태 파일 webhook=false).
  */
 import { mkdirSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -74,7 +74,7 @@ function main(): void {
   }, PURGE_EVERY_MS);
   purge.unref();
 
-  const webhook = () => platformEnv("DISCORD_WEBHOOK_SPOT");
+  const webhook = () => platformEnv("DISCORD_WEBHOOK_HERMES");
   const poster = createPoster({
     queue,
     sourceOf: (id) => registry.byId(id),

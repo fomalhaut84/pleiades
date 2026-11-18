@@ -186,8 +186,8 @@ class Hrm(Base):
         self.assertEqual(self.problems("hrm", {"PATH": str(self.root / "bin"), "PORT": "4700"}, check_platform=False), [])
 
     def test_platform_key_in_app_env_is_blocked(self):
-        (self.root / "apps/hermes/.env").write_text("DISCORD_WEBHOOK_SPOT=x\n")
-        self.assertIn("DISCORD_WEBHOOK_SPOT", self.keys("hrm", self.env()))
+        (self.root / "apps/hermes/.env").write_text("DISCORD_WEBHOOK_HERMES=x\n")
+        self.assertIn("DISCORD_WEBHOOK_HERMES", self.keys("hrm", self.env()))
 
 
 class RunSh(Base):
