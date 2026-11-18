@@ -44,7 +44,7 @@ bash ~/pleiades-hermes/deploy/hermes/hrm-inplace.sh "$V" --dry-run   # A 까지 
 bash ~/pleiades-hermes/deploy/hermes/hrm-inplace.sh "$V"             # y 로 확인
 ```
 
-스크립트가 하는 일: **0** OS(Linux) · 위치 `~/pleiades-hermes` · node 22.5+ · **C1a** 셸 키 비우기 · `PLEIADES_ENV_FILE=~/pleiades-platform.env`(600) · **L** 배포 락 → (여기부터 락 fd 를 닫은 서브셸) **C1b** 두 앱 기록이 같은 위치 · pm2 데몬 있음 · 도는 **fin · fit · adv** 의 `PLEIADES_ENV_FILE` 이 같음 · **C1c 포트 가드**(pm2 정의 포트 ≠ fin·fit `PORT`·`MCP_PORT`) · **A** 태그 받기 · 깨끗 · 규칙 3줄(통합 층과 같다) · **C2** checkout · **C3** 빌드(루트 `npm ci` → hermes `npm ci` · build) · **C4** `hermes check`(대기열 WAL · 레지스트리 · 웹훅 유무 · 포트를 열지 않는다) · **C5** 옛 `pleiades-hrm-api` delete → `start --update-env` → `save --force` · **C6** 10초 뒤 online · cwd · env · 전체 `pleiades-*` same · 루프백 `/v1/health` 200 · 상태 파일이 기동 뒤 갱신 · 웹훅 있음/없음.
+스크립트가 하는 일: **0** OS(Linux) · 위치 `~/pleiades-hermes` · node 22.13+ · **C1a** 셸 키 비우기 · `PLEIADES_ENV_FILE=~/pleiades-platform.env`(600) · **L** 배포 락 → (여기부터 락 fd 를 닫은 서브셸) **C1b** 두 앱 기록이 같은 위치 · pm2 데몬 있음 · 도는 **fin · fit · adv** 의 `PLEIADES_ENV_FILE` 이 같음 · **C1c 포트 가드**(pm2 정의 포트 ≠ fin·fit `PORT`·`MCP_PORT`·pre-flight — 새 태그의 정의로 C4 에서 다시) · **A** 태그 받기 · 깨끗 · 규칙 3줄(통합 층과 같다) · **C2** checkout · **C3** 빌드(루트 `npm ci` → hermes `npm ci` · build) · **C4** `hermes check`(대기열 WAL · 레지스트리 · 웹훅 유무 · 포트를 열지 않는다) · **C5** 옛 `pleiades-hrm-api` delete → `start --update-env` → `save --force` · **C6** 30초 뒤(pm2 `min_uptime`) online · cwd · env · 전체 `pleiades-*` same · 루프백 `/v1/health` 200 · 상태 파일이 기동 뒤 갱신 · 웹훅 있음/없음.
 
 **확인 프롬프트(`y`)를 오래 열어 두지 않는다** — 그동안 락을 쥐고 있어 Release 자동 배포가 락에서 실패한다.
 
@@ -64,7 +64,7 @@ bash ~/pleiades-hermes/deploy/hermes/hermes-key.sh rotate orders  # 새 키 · �
 bash ~/pleiades-hermes/deploy/hermes/hermes-key.sh remove orders  # 401
 ```
 
-hermes 는 레지스트리 수정 시각으로 다시 읽는다 — **재기동하지 않는다**. id 는 소문자 · 숫자 · `-`(32자) · 표시 이름(1~32자)은 `#hermes` 의 게시 이름 `hermes·<이름>` 이 된다(`discord` · `clyde` 금지).
+hermes 는 레지스트리 수정 시각으로 다시 읽는다 — **재기동하지 않는다**. 키 명령은 **한 번에 하나**(잠금 없이 읽고 고쳐 쓴다 — 동시에 돌리면 한쪽 변경이 사라진다). id 는 소문자 · 숫자 · `-`(32자) · 표시 이름(1~32자)은 `#hermes` 의 게시 이름 `hermes·<이름>` 이 된다(`discord` · `clyde` 금지).
 
 **출처 쪽 계약(014 §2):** `POST http://127.0.0.1:4700/v1/messages` · `Authorization: Bearer <키>` · `Content-Type: application/json` · 본문 `{title?, text, link?: {label, url}, level?: "info"|"warn"}` · **`Idempotency-Key`**(같은 알림의 재시도에 같은 값) · `202` 면 끝 · `503` · 연결 실패면 같은 키로 재시도 · `400`·`401`·`403`·`413` 은 재시도하지 않는다 · `429` 는 `Retry-After` 뒤. 외부 호스트에서 보내려면 H-5(nginx)가 먼저다 — 지금은 같은 서버의 출처만.
 
@@ -93,9 +93,11 @@ bash ~/pleiades-hermes/deploy/hermes/hrm-inplace.sh stop   # y 로 확인
 시험 출처를 하나 만들어(3절 · 예 `smoke` · 만료 오늘) 같은 서버에서 한 건 보낸다:
 
 ```bash
-KEY=<add 가 보여 준 키>   # 셸 기록에 남기지 않으려면 read -rs KEY
-curl -sS -X POST http://127.0.0.1:4700/v1/messages -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: smoke-1' -d '{"title":"hermes 첫 게시","text":"서버 배치 확인"}'
+read -rs KEY   # add 가 보여 준 키를 붙인다(화면 · 셸 기록에 남지 않는다)
+# 키를 명령줄 인자로 넘기지 않는다 — 같은 서버의 다른 계정이 ps 로 볼 수 있다(#800 9-1). 헤더는 표준 입력으로
+printf 'header = "Authorization: Bearer %s"\n' "$KEY" | curl -sS -K - -X POST http://127.0.0.1:4700/v1/messages \
+  -H 'Content-Type: application/json' -H 'Idempotency-Key: smoke-1' -d '{"title":"hermes 첫 게시","text":"서버 배치 확인"}'
+unset KEY
 #   → {"id":"…","duplicate":false} · #hermes 에 "hermes·<이름>" 으로 굵은 제목 + 한 줄
 bash ~/pleiades-hermes/deploy/hermes/hermes-key.sh remove smoke
 ```

@@ -55,8 +55,22 @@ stop() { local code=$1; shift; emit_form "중단 — $(printf '%s' "$*" | redact
 head_tag() { git -C "$1" tag --points-at HEAD 2>/dev/null | grep -E "$TAG_RE" | head -1; }
 mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null; }
 dump_has_hrm() { grep -q "\"$HRM_NAME\"" "${PM2_HOME:-$HOME/.pm2}/dump.pm2" 2>/dev/null; }
-# 앱 .env 의 한 키(따옴표 · 공백 벗김) — 값은 포트 번호뿐이다
-env_port() { grep -E "^[[:space:]]*(export[[:space:]]+)?$2=" "$1" 2>/dev/null | tail -1 | sed -E "s/^[^=]*=//; s/[\"' ]//g"; }
+# 앱 .env 의 한 키(줄 끝 주석 · CR · 따옴표 · 공백 벗김) — 값은 포트 번호뿐이다
+env_port() { grep -E "^[[:space:]]*(export[[:space:]]+)?$2=" "$1" 2>/dev/null | tail -1 | tr -d '\r' | sed -E "s/^[^=]*=//; s/[[:space:]]+#.*$//; s/[\"' ]//g"; }
+# 포트 가드(②) — 겹치는 자리 이름(없으면 빈 값). fin·fit 앱 .env 의 PORT·MCP_PORT + 두 앱 배포의 pre-flight 기본 포트(deploy.sh
+# DEFAULT_PREFLIGHT — 빌드 뒤 잠깐 띄우는 검사 포트). 읽지 못한 값이 있으면 "?<자리>" — 가드를 할 수 없다
+port_taken() {
+  local port=$1 d k v a dir pre
+  for d in fin:finance:4299 fit:fitness:4399; do
+    IFS=: read -r a dir pre <<<"$d"
+    for k in PORT MCP_PORT; do
+      v=$(env_port "$HOME/pleiades-$a/apps/$dir/.env" "$k")
+      [[ -n "$v" ]] || { echo "?$a 앱 .env 의 $k"; return; }
+      [[ "$v" != "$port" ]] || { echo "$a $k"; return; }
+    done
+    [[ "$pre" != "$port" ]] || { echo "$a pre-flight"; return; }
+  done
+}
 
 JSON_OF='const jsonOf = (s) => { const i = s.indexOf("[{"); return i >= 0 ? s.slice(i) : s.slice(s.lastIndexOf("[]")) }'
 # 도는 pleiades-* 마다 PLEIADES_ENV_FILE 이 이 셸 값과 같은지 — release-inplace env_same 과 같은 식 · 값은 내지 않는다
@@ -132,17 +146,13 @@ deploy_body() {
   [[ "$n_bad" == 0 && "$n_app" -gt 0 ]] \
     || stop 1 "C1 — 도는 fin·fit·adv 의 PLEIADES_ENV_FILE 이 이 셸과 다르거나 두 앱 프로세스가 없다(두 앱을 먼저 정상으로)"
 
-  # C1c — 포트 가드(②): pm2 정의의 PORT 가 fin·fit 의 PORT·MCP_PORT 와 겹치면 두 앱 배포가 die 한다(N15)
-  local port taken= d k v
+  # C1c — 포트 가드(②): pm2 정의의 PORT 가 fin·fit 포트와 겹치면 두 앱 배포가 die 한다(N15). 여기는 지금 체크아웃의 정의 —
+  # 새 태그의 정의는 C2 뒤 C4 에서 다시 견준다(#800 9-1 major)
+  local port taken
   port=$(cfg_env PORT)
   [[ "$port" =~ ^[0-9]+$ ]] || stop 1 "C1 — pm2 정의의 PORT 를 읽지 못했다"
-  for d in fin:finance fit:fitness; do
-    for k in PORT MCP_PORT; do
-      v=$(env_port "$HOME/pleiades-${d%%:*}/apps/${d#*:}/.env" "$k")
-      [[ -n "$v" ]] || stop 1 "C1 — ${d%%:*} 앱 .env 의 $k 를 읽지 못했다(포트 가드를 할 수 없다)"
-      [[ "$v" != "$port" ]] || taken="${d%%:*} $k"
-    done
-  done
+  taken=$(port_taken "$port")
+  [[ "$taken" != \?* ]] || stop 1 "C1 — ${taken#\?} 를 읽지 못했다(포트 가드를 할 수 없다)"
   [[ -z "$taken" ]] || stop 1 "C1 — hermes 포트가 $taken 과 겹친다(pm2 정의를 고친 릴리즈로)"
   form "   포트 가드: fin·fit 와 겹치지 않음"
   local tags="태그 hrm $V · fin 마지막 통과 $fin_ok · fit $fit_ok"
@@ -197,6 +207,9 @@ deploy_body() {
   # C4 — check(③ · 포트를 열지 않는다 · 게시 0) — 새 태그의 pm2 정의로 env 를 만든다(C2 가 정의를 바꿨을 수 있다)
   local data out prc
   port=$(cfg_env PORT)
+  [[ "$port" =~ ^[0-9]+$ ]] || stop 4 "C4 — 새 태그의 pm2 정의 PORT 를 읽지 못했다 → $(recovery)"
+  taken=$(port_taken "$port")
+  [[ -z "$taken" ]] || stop 4 "C4 — 새 태그의 hermes 포트가 ${taken#\?} 과 겹치거나 읽지 못했다(띄우지 않았다) → $(recovery)"
   data=$(dirname "$(cfg_env HERMES_STATE_DIR)")
   (umask 077; mkdir -p "$data") 2>>"$LOG" || stop 4 "C4 — 데이터 자리를 만들지 못했다 → $(recovery)"
   out=$(cd "$APPDIR" && PORT="$port" HERMES_STATE_DIR="$(cfg_env HERMES_STATE_DIR)" HERMES_REGISTRY="$(cfg_env HERMES_REGISTRY)" \
@@ -220,7 +233,7 @@ deploy_body() {
   form "C5 $HRM_NAME 기동 · save: 예"
 
   # C6 — 확인(③): pm2 · env · 루프백 health · 상태 파일이 기동 뒤 갱신
-  local settle=10
+  local settle=30   # pm2 min_uptime 30 s — 그 안에 죽는 재시작 루프를 health 한 번으로 통과시키지 않게(9-1 info)
   [[ "${PLEIADES_TEST:-}" != 1 || -z "${HRM_SETTLE_SECS:-}" ]] || settle=$HRM_SETTLE_SECS
   sleep "$settle"
   local st health m hook
@@ -310,7 +323,8 @@ main() {
   [[ "$(node -p "require('$ROOT/package.json').name" 2>/dev/null)" == pleiades ]] || stop 1 "pleiades 체크아웃이 아니다"
   local nv
   nv=$(node -p 'process.versions.node' 2>/dev/null)
-  [[ "$(printf '%s\n%s\n' 22.5.0 "$nv" | sort -V | head -1)" == 22.5.0 ]] || stop 1 "node $nv — 대기열 node:sqlite 는 22.5 이상(014 N12)"
+  # node:sqlite 는 22.13 부터 플래그 없이 로드된다(22.5~22.12 는 --experimental-sqlite 필요 · 9-1 info) — 서버는 24.12
+  [[ "$(printf '%s\n%s\n' 22.13.0 "$nv" | sort -V | head -1)" == 22.13.0 ]] || stop 1 "node $nv — 대기열 node:sqlite 는 22.13 이상(014 N12)"
 
   # C1a — 셸 env 고정(G-R1) · 기록 위치는 두 앱 배포와 같은 기본값만
   [[ -z "${PLEIADES_PRIVATE_DIR+x}" ]] || stop 1 "PLEIADES_PRIVATE_DIR 이 설정돼 있다 — 두 앱 배포와 같은 락·기록 위치를 보장하지 못한다(unset 뒤 다시)"

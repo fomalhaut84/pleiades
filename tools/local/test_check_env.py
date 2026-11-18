@@ -143,7 +143,7 @@ class Adv(Base):
 
 
 class Hrm(Base):
-    """014 H-1a · #791 — hermes(apps/hermes): DB 없음 · PORT 필수 · claude 안 부름 · node 22.5+ (node:sqlite · N12)."""
+    """014 H-1a · #791 — hermes(apps/hermes): DB 없음 · PORT 필수 · claude 안 부름 · node 22.13+ (node:sqlite · N12 · #800)."""
 
     def fake_node(self, version):
         d = self.root / f"node-{version}"
@@ -161,8 +161,8 @@ class Hrm(Base):
 
     def test_old_node_refused(self):
         self.assertEqual(self.keys("hrm", self.env(node="20.18.0")), {"node"})
-        self.assertEqual(self.keys("hrm", self.env(node="22.4.1")), {"node"})
-        self.assertEqual(self.problems("hrm", self.env(node="22.5.0")), [])
+        self.assertEqual(self.keys("hrm", self.env(node="22.12.0")), {"node"})   # 22.5~22.12 는 --experimental-sqlite 필요
+        self.assertEqual(self.problems("hrm", self.env(node="22.13.0")), [])
 
     def test_no_node_refused(self):
         self.assertEqual(self.keys("hrm", {"PATH": str(self.root / "empty"), "PORT": "4700"}), {"node"})
@@ -281,8 +281,8 @@ class RunSh(Base):
         if node is None:
             self.skipTest("/usr/local/bin/node 없음")
         ver = subprocess.run([node, "-p", "process.versions.node"], capture_output=True, text=True).stdout.strip()
-        if tuple(int(x) for x in ver.split(".")[:2]) < (22, 5):
-            self.skipTest("/usr/local/bin/node 가 22.5 미만")
+        if tuple(int(x) for x in ver.split(".")[:2]) < (22, 13):
+            self.skipTest("/usr/local/bin/node 가 22.13 미만")
         (self.root / "apps/hermes/.env").write_text("PORT=4700\n")
         full = {"PATH": "/usr/local/bin:/usr/bin:/bin", "PLEIADES_ROOT": str(self.root)}
         r = subprocess.run(["bash", str(HERE / "run.sh"), "hrm", "--", "node", "-e",

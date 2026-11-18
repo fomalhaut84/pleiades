@@ -148,8 +148,11 @@ class Server:
         self.root = self.home / "pleiades-hermes"
         git(tmp, "clone", "-q", "--no-tags", str(self.origin), str(self.root))
 
-    def release(self, tag: str) -> None:
+    def release(self, tag: str, port: str | None = None) -> None:
         (self.work / "apps" / "hermes" / "a.ts").write_text(tag)
+        if port is not None:   # 새 태그의 pm2 정의 포트를 바꾼다
+            cfg = self.work / "deploy" / "hermes" / "pleiades-hrm.config.cjs"
+            cfg.write_text(re.sub(r"const PORT = '\d+'", f"const PORT = '{port}'", cfg.read_text()))
         git(self.work, "add", "-A")
         git(self.work, "commit", "-qm", tag)
         git(self.work, "tag", tag)
@@ -328,6 +331,28 @@ class HrmInplace(unittest.TestCase):
         (self.srv.home / "pleiades-fin" / "apps" / "finance" / ".env").write_text("PORT=4100\nMCP_PORT=4700\n")
         self.srv.release("v1.0.1")
         self.assertUnchanged(self.deploy(), "fin MCP_PORT 과 겹친다")
+
+    # 회귀: #800 9-1 major — C1c 는 checkout 전 정의를 본다. 새 태그가 포트를 겹치게 바꾸면 C4 에서 막는다
+    def test_new_tag_port_collision_stops_before_start(self):
+        self.srv.release("v1.0.1", port="4210")
+        r = self.deploy()
+        self.assertForm(r, 4, "C4 — 새 태그의 hermes 포트가 fin MCP_PORT 과 겹치거나", "hrm-inplace.sh stop(첫 실행")
+        self.assertNotIn("pm2 start", self.srv.calls())
+        self.assertNotIn("hermes.cjs check", self.srv.calls())
+
+    def test_pre_flight_port_collision_refused(self):
+        self.srv.release("v1.0.1", port="4399")
+        self.assertForm(self.deploy(), 4, "fit pre-flight")
+
+    def test_env_port_parsing(self):
+        # export · 따옴표 · 줄 끝 주석 · CR 을 벗기고 견준다 — 놓치면 겹침을 못 본다(9-1 info)
+        (self.srv.home / "pleiades-fin" / "apps" / "finance" / ".env").write_text("export PORT='4100'\r\nMCP_PORT=4700  # mcp\r\n")
+        self.srv.release("v1.0.1")
+        self.assertUnchanged(self.deploy(), "fin MCP_PORT 과 겹친다")
+
+    def test_node_22_12_refused(self):
+        self.srv.release("v1.0.1")
+        self.assertUnchanged(self.deploy(STUB_NODE_VERSION="22.12.0"), "22.13 이상")
 
     def test_app_port_unreadable_refused(self):
         (self.srv.home / "pleiades-fit" / "apps" / "fitness" / ".env").write_text("PORT=4200\n")

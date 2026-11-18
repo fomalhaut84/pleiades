@@ -13,6 +13,9 @@ CONFIG=$ROOT/deploy/hermes/pleiades-hrm.config.cjs
 DIST=$ROOT/apps/hermes/dist/hermes.cjs
 [[ $# -ge 1 ]] || { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 [[ -f "$DIST" ]] || { echo "hermes-key: $DIST 가 없다 — hrm-inplace.sh 로 먼저 배포한다" >&2; exit 1; }
+NV=$(node -p 'process.versions.node' 2>/dev/null || echo 없음)
+[[ "$(printf '%s\n%s\n' 22.13.0 "$NV" | sort -V | head -1)" == 22.13.0 ]] || { echo "hermes-key: node $NV — node:sqlite 를 쓰는 dist 는 22.13 이상(hrm-inplace.sh 와 같은 node 로)" >&2; exit 1; }
 REG=$(node -e "process.stdout.write(require(process.argv[1]).apps[0].env.HERMES_REGISTRY)" "$CONFIG")
 (umask 077; mkdir -p "$(dirname "$REG")")
-HERMES_REGISTRY="$REG" exec node "$DIST" key "$@"
+# 키 명령은 한 번에 하나 — 잠금 없는 읽기·고치기·쓰기라 동시에 돌리면 한쪽 변경이 사라진다(런북 B)
+HERMES_REGISTRY="$REG" exec node --disable-warning=ExperimentalWarning "$DIST" key "$@"

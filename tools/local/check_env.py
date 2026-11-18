@@ -30,8 +30,8 @@ APP_DIRS = {"fin": "finance", "fit": "fitness", "adv": "advisor", "hrm": "hermes
 # #679 · 012 4b-1 — 통합 층(adv)은 DB 를 쓰지 않고(012 Q135 · 지식은 MCP prompt 로) 웹 포트가 없다(봇 하나)
 DB_APPS = {"fin", "fit"}
 WEB_APPS = {"fin", "fit", "hrm"}  # hrm = hermes HTTP 받기(루프백 · 014 H-1a · #791) — PORT 를 명시한다
-# 014 N12 — hermes 대기열은 node:sqlite(22.5+). 로컬 셸 기본은 nvm 20.18 이라 조용히 ERR_UNKNOWN_BUILTIN_MODULE 이 난다
-NODE_MIN = {"hrm": (22, 5)}
+# 014 N12 — hermes 대기열은 node:sqlite(플래그 없이는 22.13+ · #800 9-1). 로컬 셸 기본은 nvm 20.18 이라 조용히 ERR_UNKNOWN_BUILTIN_MODULE 이 난다
+NODE_MIN = {"hrm": (22, 13)}
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 DB_PORT = 5432
 RESERVED_PORTS = {3000, 4100, 4200, 4210, 4301}  # next dev 기본 · 서비스 fin/fit 웹 · MCP (006 L-3)
