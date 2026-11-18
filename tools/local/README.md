@@ -61,6 +61,27 @@ tools/local/run.sh fit -- node dist/bot/standalone.cjs
 
 첫 기동 실측: `docs/research/measured-facts.md` *2026-10-01 — M-4*.
 
+## hermes 로컬 실측 (014 H-1c · #798)
+
+hermes(`apps/hermes`)는 **dotenv 를 쓰지 않는다** — 앱 `.env` 는 node 의 `--env-file` 로 넘긴다(`check_env` 가 보는 파일과 같다). **node 22.5+ 가 PATH 첫째**여야 한다(대기열 `node:sqlite` · 셸 기본 nvm 20.18 은 안 된다 · `check_env` 가 판을 본다).
+
+```bash
+S=<저장소 밖 임시 디렉터리>                                   # 예: scratchpad
+node tools/local/hermes-live-check.cjs setup "$S"           # 출처 live · 키(0600 · 출력 안 함) · state/
+printf 'PORT=4700\nHERMES_STATE_DIR=%s/state\nHERMES_REGISTRY=%s/sources.json\n' "$S" "$S" > apps/hermes/.env
+grep '^DISCORD_WEBHOOK_HERMES=' .env > "$S/platform.env"    # 검증 #hermes 웹훅 한 줄만 — 다른 플랫폼 키를 허용 목록에 넣지 않아도 된다
+export PATH=/usr/local/bin:$PATH PLEIADES_ENV_FILE="$S/platform.env" PLEIADES_VERIFY_DISCORD_WEBHOOK_SHA256=<그 웹훅 해시>
+tools/local/run.sh hrm -- npm run build
+tools/local/run.sh hrm -- node --env-file=.env dist/hermes.cjs   # 터미널 하나 · 끝나지 않는다 · 정지 Ctrl-C(SIGTERM 과 같다)
+node tools/local/hermes-live-check.cjs run "$S" 4700        # 다른 터미널 — 받기 9 시나리오 표 + 상태 파일 수치 · rc 0 = 기대대로
+```
+
+- 웹훅 해시: `cd apps/hermes && PLEIADES_ENV_FILE="$S/platform.env" python3 ../../tools/local/check_env.py hrm --discord-hashes`. **검증 채널 웹훅인지는 넣는 사람이 확인한다.**
+- 화면(검증 `#hermes`)에서 볼 것: 굵은 제목 · ⚠️ · `🔗 관리 화면 · https://example.com/…` · 링크 줄이 빠진 메시지 · 서식이 글자로 보이는 메시지(맨 주소가 링크가 아니다) · `[hermes] 게시 차단 · live · 사유 pii` · 중복 키 메시지는 한 번만 · 미리보기 없음.
+- 루프백(`127.0.0.1`)에만 묶인다. 백그라운드로 띄웠으면 바깥 셸이 아니라 **node 프로세스**에 SIGTERM 을 보낸다(`lsof -iTCP:4700 -sTCP:LISTEN`).
+- 되돌리기: 프로세스 정지 · `rm -rf "$S"` · `apps/hermes/.env` 에서 `HERMES_*` 줄 삭제(**즉시**).
+- 첫 실측: 2026-11-18 — 받기 9/9 · 게시 sent 5(링크 뺌 1 포함) · blocked 1(pii) · dead 0 · 로그에 키 · 본문 · 웹훅 0건 · SIGTERM 즉시 종료 · 검증 `#hermes` 화면 6건 사용자 확인(#798).
+
 ## 로컬 pm2 (#171 · 007 Q85 ① — 전환 전 리허설용)
 
 pm2 는 **`run.sh` 안에서만** 쓴다 — 직접 치는 `pm2`·`npx pm2` 는 훅이 I-3 으로 막는다(`isolation.md` I-3 예외).
