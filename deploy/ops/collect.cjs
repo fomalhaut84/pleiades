@@ -410,9 +410,14 @@ function mcpOutObs(app, lines, ctx) {
 }
 
 function readNew(file, name, st, ctx) {
-  const prev = ctx.state.files[name]
+  return readFrom(file, name, st, ctx.state.files, !ctx.hadState) // 상태 파일이 없을 때만 끝에서 — 과거 로그 폭주 방지
+}
+
+// store = 오프셋 표({ 이름: { ino, off } }) · atEnd = 이번 회는 끝에서 시작
+function readFrom(file, name, st, store, atEnd) {
+  const prev = store[name]
   let off
-  if (!ctx.hadState) off = st.size // 상태 파일이 없을 때만 끝에서 — 과거 로그 폭주 방지
+  if (atEnd) off = st.size
   else if (!prev || prev.ino !== st.ino || st.size < prev.off) off = 0 // 새 파일 · inode 바뀜 · 크기 줄어듦 = 0 부터(E-8)
   else off = prev.off
   const len = Math.min(st.size - off, CONFIG.readCapBytes)
@@ -430,7 +435,7 @@ function readNew(file, name, st, ctx) {
     lines = buf.subarray(0, end).toString('utf8').split('\n').slice(0, -1)
     off += end
   }
-  ctx.state.files[name] = { ino: st.ino, off }
+  store[name] = { ino: st.ino, off }
   return lines
 }
 
@@ -453,6 +458,7 @@ function collectLogs(ctx) {
     // 활성 집합 밖 앱(정지 · 첫 배포 전 adv) · 그 앱에 없는 역할은 읽지도 오프셋을 남기지도 않는다(4b-3 R2-3)
     if (!ctx.active.includes(app) || !ROLES_OF[app].includes(role)) {
       delete ctx.state.files[name]
+      delete ctx.state.usage.files[name]
       continue
     }
     let st
@@ -463,7 +469,11 @@ function collectLogs(ctx) {
     }
     seen[key] = true
     sizes[key] = (sizes[key] || 0) + st.size
-    if (stream === 'out' && role !== 'mcp') continue // web·bot -out 은 침묵 감지(C-7 ②)에만 · adv · hrm 로그(stdout)는 읽지 않는다
+    if (stream === 'out' && role !== 'mcp') {
+      // web·bot -out 은 침묵 감지(C-7 ②)와 AI 사용량 줄(#846)에만 · hrm 로그는 읽지 않는다
+      if (USAGE_OUT.has(`${app}-${role}`)) usageOut(ctx, dir, name, key, app, st)
+      continue
+    }
     // 비활성 → 활성으로 바뀐 회 — 끝에서 시작한다(정지 동안 쌓인 줄이 한꺼번에 나오지 않게 · 4b-3 r4 보충 2 · PR #590 첫 회와 같다)
     if (ctx.reactivated.has(app)) {
       ctx.state.files[name] = { ino: st.ino, off: st.size }
@@ -484,8 +494,12 @@ function collectLogs(ctx) {
       continue
     }
     ctx.obs.push(...(stream === 'out' ? mcpOutObs(app, lines, ctx) : stderrObs(app, role, lines, ctx.deploy[app].window)))
+    if (stream === 'error' && USAGE_ERR.has(`${app}-${role}`)) addUsage(ctx, app, lines) // fin 실패 줄은 console.error(#846)
   }
-  if (listed) for (const name of Object.keys(ctx.state.files)) if (!names.includes(name)) delete ctx.state.files[name]
+  if (listed) {
+    for (const name of Object.keys(ctx.state.files)) if (!names.includes(name)) delete ctx.state.files[name]
+    for (const name of Object.keys(ctx.state.usage.files)) if (!names.includes(name)) delete ctx.state.usage.files[name]
+  }
   for (const app of Object.keys(APPS)) { // 도메인 앱만 — adv 는 크래시 때만 -error 가 생긴다
     for (const key of [`${app}-web-error`, `${app}-bot-error`, `${app}-mcp-out`, `${app}-mcp-error`]) {
       ctx.evaluated.add(`ops · collector · glob-empty:${key}`)
@@ -495,6 +509,94 @@ function collectLogs(ctx) {
     if (ctx.parseFail[app]) ctx.obs.push(collector(`json-parse:${app}`))
   }
   silence(ctx, sizes)
+}
+
+// ── #846 U1 AI 사용량(Claude API 환산 비용) ───────────────────────────
+// 세 앱이 AI 호출마다 남기는 고정 접두 줄만 본다 — 그 밖의 줄(사용자 입력이 섞일 수 있다)은 버린다.
+// 꺼내는 것: 앱 · 호출부/채널 이름(허용 문자만) · 성공/실패 · cost(CLI total_cost_usd = API 가격 환산). 원문은 저장하지 않는다.
+// 날짜는 수집 회의 KST 날짜(줄의 시각이 아니다 — 자정 근처 5분 안의 호출은 다음 날로 갈 수 있다).
+const USAGE_OUT = new Set(['fin-web', 'fin-bot', 'fit-web', 'fit-bot', 'adv-bot']) // stdout — 성공(fin · fit) · 전부(adv)
+const USAGE_ERR = new Set(['fin-web', 'fin-bot']) // stderr — fin 실패 줄. fit 실패는 비용 줄이 없다(U2 에서 메운다)
+const USAGE_RE = {
+  fin: /^\[advisor\] (ok|fail) caller=(\S+) model=\S+(?:.*?\scost=\$(\S+))?/, // claude-advisor.ts ok · fail
+  fit: /^\[askAdvisor\] channel=(\S+) model=\S+ .*?\scost=\$(\S+)/, // claude-advisor.ts 완료 요약(is_error=true 면 실패)
+  adv: /^\[advisor\] key=\S+ status=(\S+)(?: code=\S+)? model=\S+ .*?\scost=\$(\S+)/, // advisor.ts K-5 줄
+}
+const USAGE_MAX_USD = 100 // 한 호출이 이보다 크면 줄이 깨졌다고 본다(비용 모름)
+const USAGE_BY_MAX = 20 // 앱 · 날짜당 호출부 칸 상한 — 넘으면 (기타)
+const USAGE_DAYS = 62
+const USAGE_UNKNOWN_SRC = '(알 수 없음)'
+
+const usageCost = (s) => (typeof s === 'string' && /^\d{1,3}(?:\.\d{1,8})?$/.test(s) && Number(s) <= USAGE_MAX_USD ? Number(s) : null)
+
+function usageOf(app, raw) {
+  const t = raw.replace(PM2_PREFIX, '').replace(ANSI, '')
+  const m = USAGE_RE[app] && USAGE_RE[app].exec(t)
+  if (!m) return null
+  if (app === 'fin') return { src: m[2], fail: m[1] === 'fail', usd: usageCost(m[3]) }
+  if (app === 'fit') return { src: m[1], fail: /\sis_error=true\b/.test(t), usd: usageCost(m[2]) }
+  return { src: 'adv', fail: m[1] !== '완료', usd: usageCost(m[2]) }
+}
+
+function addUsage(ctx, app, lines) {
+  const date = kstDate(new Date(ctx.now))
+  for (const line of lines) {
+    const u = usageOf(app, line)
+    if (!u) continue
+    const day = (ctx.state.usage.days[date] = ctx.state.usage.days[date] || {})
+    const a = (day[app] = day[app] || { n: 0, fail: 0, usd: 0, unknown: 0, by: {} })
+    a.n += 1
+    if (u.fail) a.fail += 1
+    if (u.usd === null) a.unknown += 1
+    else a.usd += u.usd
+    let src = field(u.src) || USAGE_UNKNOWN_SRC
+    if (!(src in a.by) && Object.keys(a.by).length >= USAGE_BY_MAX) src = '(기타)'
+    const b = (a.by[src] = a.by[src] || { n: 0, usd: 0 })
+    b.n += 1
+    b.usd += u.usd || 0
+  }
+}
+
+// web·bot · adv -out — 오프셋은 오류 감시와 따로(state.usage.files). 집계를 처음 켜는 회 · 다시 켠 앱은 끝에서 시작한다
+function usageOut(ctx, dir, name, key, app, st) {
+  ctx.evaluated.add(`ops · collector · usage-read:${key}`)
+  let lines
+  try {
+    lines = readFrom(path.join(dir, name), name, st, ctx.state.usage.files, !ctx.usageOn || ctx.reactivated.has(app))
+  } catch {
+    ctx.obs.push(collector(`usage-read:${key}`))
+    return
+  }
+  addUsage(ctx, app, lines)
+}
+
+const dayNum = (date) => Math.round(Date.parse(`${date}T00:00:00Z`) / 86400000)
+const daysInMonth = (date) => new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)), 0)).getUTCDate()
+const usd2 = (n) => `$${n.toFixed(2)}`
+
+// 일일 요약의 한 줄 — 어제 · 이달 누적 · 월말 예상(이달 누적 ÷ 집계한 날수 × 그 달 날수)
+function usagePart(usage, yesterday) {
+  const head = ' · AI 사용량(API 환산 · 서비스 호출만)'
+  if (!usage || !usage.since || usage.since > yesterday) return `${head} 집계 시작 전`
+  const sum = (day) => Object.values(day || {}).reduce((t, a) => ({ usd: t.usd + a.usd, n: t.n + a.n, fail: t.fail + a.fail, unknown: t.unknown + a.unknown }), { usd: 0, n: 0, fail: 0, unknown: 0 })
+  const day = usage.days[yesterday] || {}
+  const y = sum(day)
+  const apps = ['fin', 'fit', 'adv'].filter((a) => day[a]).map((a) => `${a} ${usd2(day[a].usd)}`)
+  const month = yesterday.slice(0, 7)
+  const from = usage.since > `${month}-01` ? usage.since : `${month}-01`
+  const mtd = Object.entries(usage.days).filter(([d]) => d >= from && d <= yesterday).reduce((t, [, v]) => t + sum(v).usd, 0)
+  const counted = dayNum(yesterday) - dayNum(from) + 1
+  const proj = (mtd / counted) * daysInMonth(yesterday)
+  const unknown = y.unknown ? ` · 비용 모름 ${y.unknown}` : ''
+  return `${head} 어제 ${usd2(y.usd)} (${[...apps, `${y.n}회`, `실패 ${y.fail}`].join(' · ')}${unknown}) · 이달 ${usd2(mtd)} · 월말 예상 ${usd2(proj)}`
+}
+
+// 일일 요약을 보낸 회에 어제 하루치를 usage.jsonl 에 한 줄 — 015 V-5(ops 제공자)가 읽는다 · 하루 한 번
+function logUsageDay(state, yesterday) {
+  const u = state.usage
+  if (!u.since || u.since > yesterday || u.logged === yesterday) return
+  appendLines('usage.jsonl', [JSON.stringify({ date: yesterday, apps: u.days[yesterday] || {} })])
+  u.logged = yesterday
 }
 
 function silence(ctx, sizes) {
@@ -749,7 +851,7 @@ function summaryPost(ctx, today) {
   const warned = all.filter((e) => (e.warnDays || {})[yesterday])
   const warnTotal = warned.reduce((n, e) => n + e.warnDays[yesterday], 0)
   const warnPart = CONFIG.quietWarnings ? ` · 경고 어제 ${warned.length}종 ${warnTotal}회` : ''
-  const text = `[ops] ${md(`일일 요약 · 살아 있음 · 열린 이상 ${open.length}${open.length ? ` (${open.slice(0, 10).join(' / ')})` : ''}${warnPart} · 어제 상위 ${top.length ? top.join(' / ') : '없음'}`)}`
+  const text = `[ops] ${md(`일일 요약 · 살아 있음 · 열린 이상 ${open.length}${open.length ? ` (${open.slice(0, 10).join(' / ')})` : ''}${warnPart} · 어제 상위 ${top.length ? top.join(' / ') : '없음'}${usagePart(ctx.state.usage, yesterday)}`)}`
   return { type: 'summary', e: null, count: open.length, text, commit: () => (ctx.state.summaryDate = today) }
 }
 
@@ -772,6 +874,8 @@ function loadState() {
 }
 
 function prune(state, now) {
+  const usageKeep = kstDate(new Date(now - USAGE_DAYS * 86400000))
+  for (const d of Object.keys(state.usage.days)) if (d < usageKeep) delete state.usage.days[d]
   const keep = now - CONFIG.retainDays * 86400000
   const days = new Set([kstDate(new Date(now)), kstDate(new Date(now - 86400000))])
   for (const [fp, e] of Object.entries(state.fps)) {
@@ -1167,6 +1271,9 @@ async function run(pm2Bin, live) {
   try {
     const { state, hadState, corrupt } = loadState()
     const ctx = { state, hadState, now: nowDate.getTime(), started: Date.now(), obs: [], evaluated: new Set(), parseFail: {} }
+    // #846 — 집계를 처음 켜는 회(상태 없음 · usage 칸 없음)는 모든 -out 을 끝에서 시작한다(과거 줄을 세지 않는다)
+    ctx.usageOn = hadState && !!state.usage
+    if (!state.usage) state.usage = { files: {}, days: {}, since: kstDate(nowDate), logged: null }
     if (got.status === 'stale') ctx.obs.push(collector('lock-stale', 'event'))
     if (corrupt) ctx.obs.push(collector('state-parse', 'event'))
     await collect(ctx, pm2Bin)
@@ -1175,7 +1282,10 @@ async function run(pm2Bin, live) {
     const r = await deliver(posts, ctx, live)
     const obsLines = merge(ctx.obs).map((o) => JSON.stringify({ at: ctx.now, type: 'obs', fp: o.fp, app: o.app, role: o.role, src: o.src, sev: o.sev, count: o.count }))
     appendLines('events.jsonl', [...obsLines, ...r.events])
-    if (summaryRun && state.summaryDate === kstDate(nowDate)) pruneEvents(ctx.now)
+    if (summaryRun && state.summaryDate === kstDate(nowDate)) {
+      pruneEvents(ctx.now)
+      logUsageDay(state, kstDate(new Date(ctx.now - 86400000)))
+    }
     state.lastRunAt = ctx.now
     writeAtomic(STATE(), prune(state, ctx.now))
     const beat = live ? await heartbeat(r, ctx.started + CONFIG.maxRunMs) : ''
