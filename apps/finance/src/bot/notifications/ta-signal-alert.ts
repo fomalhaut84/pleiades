@@ -18,7 +18,7 @@ import {
 import { buildTaContext } from '@/lib/alert-history/context'
 import type { TAReport } from '@/lib/ta/types'
 import { KST_OFFSET_MS } from '@/lib/kst-date'
-import { buildTaSignalMessage, metricsOf, type TaAlertItem } from './ta-signal-format'
+import { BB_LABELS, buildTaSignalMessage, metricsOf, type TaAlertItem } from './ta-signal-format'
 
 export { buildTaSignalMessage } from './ta-signal-format'
 
@@ -166,10 +166,14 @@ function checkSignals(report: TAReport, strategy: string, hasHolding: boolean): 
  */
 export function buildGuidePrompt(r: Pick<SignalResult, 'ticker' | 'displayName' | 'signals' | 'report'>): string {
   const m = metricsOf(r.report)
+  // 숫자가 아닌 값(20일 평균 거래량 0 등)은 빼고 넘긴다 — `NaN%` · `Infinity배` 를 모델이 옮기지 않게(#820 9-1 info)
+  const num = (n: number, text: string): string => (Number.isFinite(n) ? text : '')
   const facts = [
-    `5일 ${m.change5d.toFixed(1)}%`, `20일 ${m.change20d.toFixed(1)}%`, `52주 고점 대비 ${m.fromHigh52w.toFixed(1)}%`,
-    `RSI ${m.rsi.toFixed(1)}`, `거래량 20일 평균 대비 ${m.volumeRatio.toFixed(1)}배`, `볼린저 ${m.bbPosition}`,
-  ].join(', ')
+    num(m.change5d, `5일 ${m.change5d.toFixed(1)}%`), num(m.change20d, `20일 ${m.change20d.toFixed(1)}%`),
+    num(m.fromHigh52w, `52주 고점 대비 ${m.fromHigh52w.toFixed(1)}%`), num(m.rsi, `RSI ${m.rsi.toFixed(1)}`),
+    num(m.volumeRatio, `거래량 20일 평균 대비 ${m.volumeRatio.toFixed(1)}배`),
+    BB_LABELS[m.bbPosition] ? `볼린저 밴드 ${BB_LABELS[m.bbPosition]}` : '',
+  ].filter(Boolean).join(', ')
   return [
     `${r.displayName}(${r.ticker})에서 TA 시그널이 발생했다: ${r.signals.join(', ')}.`,
     `지표: ${facts}.`,

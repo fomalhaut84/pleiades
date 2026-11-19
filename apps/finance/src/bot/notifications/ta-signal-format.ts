@@ -27,7 +27,7 @@ export const AI_GUIDE_LINE_MAX_CHARS = 120
 /** Discord `!ai` 명령 — 라우터 접두와 같다(fin `discord/router.ts` DISCORD_AI_COMMAND) */
 export const AI_COMMAND = '!ai'
 
-const BB_LABELS: Record<BBPosition, string> = {
+export const BB_LABELS: Record<BBPosition, string> = {
   ABOVE_UPPER: '상단 이탈', NEAR_UPPER: '상단 근접', MIDDLE: '중간', NEAR_LOWER: '하단 근접', BELOW_LOWER: '하단 이탈',
 }
 
@@ -142,18 +142,22 @@ export function metricLines(m: TaMetrics): string[] {
 const HEADING_RE = /^#{1,6}\s/
 const RULE_RE = /^([-*_=])(?:\s*\1){2,}$/
 const LIST_MARK_RE = /^(?:[-*+•]\s+|\d+[.)]\s+|>\s*)+/
+/** 표 줄(머리 · 구분 · 행) — 프롬프트가 표를 금지해도 모델이 내면 두 칸을 차지한다 */
+const TABLE_ROW_RE = /^\|.*\|$/
+/** 끝의 서식 기호 — `**결론:**` · `__근거:__` 를 라벨 줄로 보게 */
+const TRAILING_MARKS_RE = /[*_~\s]+$/
 
 /**
- * 모델 출력 → 남길 줄(최대 2). 제목 · 구분선 · 빈 줄 · `…:` 로 끝나는 라벨 줄은 버리고 목록 · 인용 기호를 뗀다.
+ * 모델 출력 → 남길 줄(최대 2). 제목 · 구분선 · 표 줄 · 빈 줄 · `…:` 로 끝나는 라벨 줄(끝 서식 기호 무시)은 버리고 목록 · 인용 기호를 뗀다.
  * 줄마다 120자(코드 포인트 · 넘으면 `…`) — 이모지를 반으로 가르지 않는다.
  */
 export function guideLines(guide: string): string[] {
   const out: string[] = []
   for (const raw of guide.replace(/\r\n?/g, '\n').split('\n')) {
     const line = raw.trim()
-    if (!line || HEADING_RE.test(line) || RULE_RE.test(line)) continue
+    if (!line || HEADING_RE.test(line) || RULE_RE.test(line) || TABLE_ROW_RE.test(line)) continue
     const body = line.replace(LIST_MARK_RE, '').trim()
-    if (!body || /[:：]$/.test(body)) continue
+    if (!body || /[:：]$/.test(body.replace(TRAILING_MARKS_RE, ''))) continue
     const chars = Array.from(body)
     out.push(chars.length > AI_GUIDE_LINE_MAX_CHARS ? `${chars.slice(0, AI_GUIDE_LINE_MAX_CHARS).join('').trimEnd()}…` : body)
     if (out.length >= AI_GUIDE_MAX_LINES) break

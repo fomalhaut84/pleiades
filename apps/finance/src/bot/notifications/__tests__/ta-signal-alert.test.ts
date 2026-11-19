@@ -120,6 +120,11 @@ describe('buildTaSignalMessage', () => {
     expect(msg).not.toContain('변동성')
   })
 
+  // 회귀: #820 9-1 major — 끝이 서식 기호인 라벨 줄(`**결론:**`)이 2줄 중 한 칸을 차지했다
+  it('굵게 · 밑줄로 감싼 라벨 줄과 표 줄도 버린다', () => {
+    expect(guideLines('**결론:**\n관망\n__근거:__\n| a | b |\n|---|---|\n근거')).toEqual(['관망', '근거'])
+  })
+
   it('가이드 줄은 120자(넘으면 …) · 이모지를 반으로 가르지 않는다', () => {
     expect(guideLines('x'.repeat(200))).toEqual([`${'x'.repeat(120)}…`])
     const [line] = guideLines(`${'x'.repeat(119)}📈📈`)
@@ -200,5 +205,14 @@ describe('buildGuidePrompt', () => {
     expect(p).toContain('제목 · 목록 · 구분선 · 표')
     expect(p).toContain('RSI 34.4')
     expect(p).toContain('거래량 20일 평균 대비 0.4배')
+    expect(p).toContain('볼린저 밴드 하단 근접')
+    expect(p).not.toContain('NEAR_LOWER')
+  })
+
+  it('숫자가 아닌 지표는 빼고 넘긴다', () => {
+    const bad = { ...report, indicators: { ...report.indicators, volume: { ...report.indicators.volume, ratio: Number.POSITIVE_INFINITY } } } as TAReport
+    const p = buildGuidePrompt({ ticker: 'SOXL', displayName: 'SOXL', signals: ['x'], report: bad })
+    expect(p).not.toMatch(/Infinity|NaN/)
+    expect(p).toContain('RSI 34.4')
   })
 })
