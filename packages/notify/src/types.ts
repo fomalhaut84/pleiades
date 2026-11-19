@@ -28,7 +28,7 @@ export type Components = ButtonRows;
 
 /**
  * 본문 형식(013 P2-a · #756).
- *   - `html` — HTML 부분집합(b · i · u · s · code · pre · a · blockquote — `discord-md` 지원 태그) · 텔레그램 시절 템플릿
+ *   - `html` — HTML 부분집합(b · i · u · s · code · pre · a · blockquote — `discord-md` 지원 태그) · 옛 HTML 템플릿
  *   - `plain` — 글자 그대로 보인다(서식 문자 escape)
  *   - `markdown` — 모델이 쓴 마크다운(AI 장문) · 서식을 살리고 해가 되는 것만 막는다(`discordMarkdown`)
  */
