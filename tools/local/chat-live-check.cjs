@@ -4,7 +4,7 @@
 // 사용(앱 cwd · run.sh 가 check_env 로 검증 봇 토큰·채널·사용자·웹훅만 허용한다 — I-4′ · I-5′):
 //   npm run build                                   # pleiades 루트 — packages/notify · packages/chat dist
 //   tools/local/run.sh fit -- node ../../tools/local/chat-live-check.cjs fit
-// 검증 서버의 채널(DISCORD_CHANNEL_ID_<APP> · 있으면 DISCORD_CHANNEL_ID_<APP>_CHAT 도)에서 아래 말을 보낸다. `끝` 이면 종료 · 15분 뒤 자동 종료.
+// 검증 서버의 채널(DISCORD_CHANNEL_ID_<APP> · 있으면 DISCORD_CHANNEL_ID_<APP>_CHAT 도)에서 아래 명령을 **`/` 접두로** 보낸다(`/핑` — 라우터 기본 접두 · 앱 봇은 `!`). `/끝` 이면 종료 · 15분 뒤 자동 종료.
 // 토큰·웹훅은 출력하지 않는다. IDENTIFY 기록은 <루트>/.chat-local/identify-<app>.json(gitignored).
 'use strict'
 
@@ -79,7 +79,7 @@ const router = createRouter()
     }
   })
   .fallback(async (ctx) => {
-    await ctx.reply('명령: 핑 · 긴글 · 버튼 · 편집 · 파일 · (사진 첨부) · (pdf 등 첨부 = 거부 확인) · 끝')
+    await ctx.reply('명령(앞에 / — 예 /핑): /핑 · /긴글 · /버튼 · /편집 · /파일 · (사진 첨부) · (pdf 등 첨부 = 거부 확인) · /끝')
   })
   .action('live:swap', async (ctx) => {
     await ctx.setButtons([[{ label: '되돌리기', action: 'live:restore' }]])
