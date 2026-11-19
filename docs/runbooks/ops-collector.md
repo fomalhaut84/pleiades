@@ -21,7 +21,7 @@ pm2 상태 · MCP `/health` · web 응답 · pm2 로그 · 디스크를 5분마�
 
 `<REF>` 와 `<SHA256>` 은 Claude 가 머지 뒤 실값을 준다. 재설치 때도 검증 전에는 도는 파일을 덮지 않는다.
 
-**지금 설치된 판(2026-11-18 · #802 · hermes 감시 판 · `v1.20.0` · 크론 `--dry-run` 없음 · 사용자 설치 통과):** REF `18bab57f89e53cba3aed47e57a8c91473ddc3469` · SHA256 `b8ffdc77ef1af7d7e0933030b9dddfc721df829069f4e6c780509f6391735729`. 되돌리기: 게시만 멈추려면 3절(크론 줄에 `--dry-run`) · 판을 되돌리려면 직전 판 REF `d73e5dcd48cd3ff029c1b75f92fceaa5dfae927e`(#732) · SHA256 `8dccc6a34421e1c3af56f0d29c25de9066910feeb5a946bb4233bec5e125bf23` 로 같은 명령(그 앞 판 REF `b7ba56715e8eb69343ac0b9f5ff947b60c8ed02d` · #726 · SHA256 `33c815fd5f1406cacf56cc8f4d29e2671053baf73b09cbf1838644f8ee562e66`)(dry-run 판은 REF `e0b98d23` · SHA256 `d52ec075c3f7daa0ab9487f40b13a505ba867166807cb143a56e797a5946a863` — 게시 판의 크론 줄과 함께 쓰면 "게시는 아직 없다" 로 멈춘다 · 3절 줄로).
+**지금 설치된 판(2026-11-19 · #847 · PR-4 외부 하트비트 판 · 크론 `--dry-run` 없음 · 사용자 `--test-ping` 통과):** REF `d7355f2eeacb5fad2238e79e293b932ed251342e` · SHA256 `91956340403d481e6d602855f7e1e2eeb5c5a289becf76fb2b0ad48c11a1e145`. 되돌리기: 게시만 멈추려면 3절(크론 줄에 `--dry-run`) · ping 만 멈추려면 6절 되돌리기 · 판을 되돌리려면 직전 판 REF `18bab57f89e53cba3aed47e57a8c91473ddc3469`(#802 hermes 감시 판) · SHA256 `b8ffdc77ef1af7d7e0933030b9dddfc721df829069f4e6c780509f6391735729` 로 같은 명령 — **이때 healthchecks 체크를 Pause 한다**(옛 판은 ping 하지 않는다) · 그 앞 판 REF `d73e5dcd48cd3ff029c1b75f92fceaa5dfae927e`(#732) · SHA256 `8dccc6a34421e1c3af56f0d29c25de9066910feeb5a946bb4233bec5e125bf23`.
 
 ```bash
 mkdir -p ~/pleiades-ops ~/pleiades-private/ops && chmod 700 ~/pleiades-ops ~/pleiades-private ~/pleiades-private/ops
@@ -309,9 +309,11 @@ chmod 600 ~/pleiades-platform.env && grep -cE '^OPS_HEARTBEAT_URL=["'"'"']?https
 
 ### 6-2. 설치 · 시험
 
-1절 명령을 **PR-4 판 REF · SHA256** 으로 돌린다(머지 뒤 Claude 가 준다). 2절의 `NODE_BIN` 을 같은 셸에 둔 채로:
+1절 명령을 **PR-4 판 REF · SHA256** 으로 돌린다. 시험은 크론이 쓰는 node 로 한다 — 새 셸이면 `NODE_BIN` 이 비어 `env: ''` rc 127 이 난다(2026-11-19 실측). 크론 줄의 여섯째 칸이 node 경로다:
 
 ```bash
+NODE_BIN=$(crontab -l | grep 'collect.cjs --pm2-bin' | awk '{print $6}')
+case "$NODE_BIN" in /*) echo "node 경로 통과" ;; *) echo "[중단] 크론 줄에서 node 경로를 찾지 못했다 — 2절의 NODE_BIN 으로" ;; esac
 env -i HOME="$HOME" PATH=/usr/bin:/bin "$NODE_BIN" --network-family-autoselection-attempt-timeout=2000 ~/pleiades-ops/collect.cjs --test-ping; echo "rc=$?"
 ```
 
