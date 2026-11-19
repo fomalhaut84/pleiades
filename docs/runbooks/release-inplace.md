@@ -42,7 +42,7 @@ ssh-keygen -lf /tmp/pleiades_known_hosts      # 지문을 서버의 `ssh-keygen 
 
 - **배포 알림(#304 · 009 D-5 B1 #502)** — 앱마다 끝나면 `deploy/notify-deploy.cjs` 가 Discord 배포 채널로 보낸다(플랫폼 설정의 `DISCORD_WEBHOOK_DEPLOY` · 비면 보내지 않는다 · GitHub secrets 아님): "✅ <app> <tag> 배포 완료 · 소요 · 프로브" 또는 "⚠️ … 배포 중단 · rc · 결과 줄" + 릴리즈 링크. 알림 실패는 배포 결과를 바꾸지 않는다. 자동 배포에서만 보낸다(손 실행은 보내지 않는다). `ssh-deploy.sh` 는 실행 중인 판으로 돈다 — 이 알림이 든 태그의 **다음** 자동 배포부터 온다. 배포 채널은 ADMIN 채널과 같아도 된다(#321).
 - **두 배포가 겹치지 않는다** — `release-inplace.sh` 가 `~/pleiades-private/deploy.lock` 에 flock 을 잡는다(손 실행 포함 · 프로세스가 끝나면 커널이 푼다 · 지우지 않는다).
-- **통합 층(4b-5 · #744)** — 두 앱이 통과한 뒤 `## adv` 줄. 켜져 있고 입력이 바뀌었을 때만 통합 층도 배포하고, 그 실패는 rc 를 바꾸지 않는다 — **초록이어도 `## adv` 줄을 본다**(런북 `advisor-inplace.md` 6절).
+- **곁가지 앱 — 통합 층(4b-5 · #744) · hermes(014 H-4 · #829)** — 두 앱이 통과한 뒤 `## adv` · `## hrm` 줄. 각각 켜져 있고 입력이 바뀌었을 때만 배포하고, 그 실패는 rc 를 바꾸지 않는다(서로도 막지 않는다) — **초록이어도 두 줄을 본다**(런북 `advisor-inplace.md` 6절 · `hermes.md` 7절).
 - **R-8 로 #242 이전 태그(`v1.0.2` 이하)에 가면** fin 체크아웃에서 `ssh-deploy.sh` 가 사라진다 — 그동안 자동 배포는 실패로 닫힌다(안전 쪽). 다시 #242 이후 태그를 손으로 배포하면 돌아온다.
 - 마이그레이션 릴리즈는 prerelease 로 발행돼 건너뛴다 · 서버 조치 릴리즈는 draft → 조치 뒤 Publish(`workflow.md` 릴리즈 절).
 

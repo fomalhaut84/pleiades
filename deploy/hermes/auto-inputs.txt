@@ -1,0 +1,16 @@
+# hermes 자동 배포의 입력 경로 (014 H-4 · #829) — 한 줄에 git pathspec 하나 · # 은 주석.
+# Release 자동 배포(deploy/ssh-deploy.sh side_auto hrm)는 hermes 의 마지막 통과 태그 → 새 태그 사이에 이 경로가 하나라도
+# 바뀌었을 때만 hermes 를 다시 배포한다. 목록은 **새 태그의 이 파일**을 읽는다(git show <새 태그>:이 경로) — 읽지 못하면 배포한다.
+# 버전 줄("version": "X.Y.Z")만 바뀐 묶음은 비교에서 뺀다(ssh-deploy.sh SIDE_VERSION_ONLY).
+# 경로를 더하거나 뺄 때: deploy/test_ssh_deploy.py 의 HrmAutoInputs 시험이 hermes 가 실제로 읽는 곳을 대조한다.
+#
+# hermes 가 돌 때 자기 체크아웃에서 읽는 것만 적는다. 출처 레지스트리 · 대기열은 체크아웃 밖(~/pleiades-hermes-data)이다.
+
+# hermes 코드 · 의존(apps/hermes 의 file: 링크 = notify 하나 · 빌드 선행 = 루트 npm ci 가 notify dist 를 만든다)
+apps/hermes/
+packages/notify/
+package.json
+package-lock.json
+
+# 배포 스크립트 · 키 도구 · pm2 정의(hrm-inplace.sh 는 자기 체크아웃의 것으로 돈다)
+deploy/hermes/

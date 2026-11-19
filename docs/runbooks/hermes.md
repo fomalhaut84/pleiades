@@ -9,7 +9,7 @@ hermes(`apps/hermes` · pm2 `pleiades-hrm-api`)를 **넷째 체크아웃 `~/plei
 | pm2 정의 | `deploy/hermes/pleiades-hrm.config.cjs` — 이름 `pleiades-hrm-api` 하나 · **루프백 포트 4700**(서버 확인 U1 · 2026-11-18) · `kill_timeout 20000` · `--disable-warning=ExperimentalWarning`(U3 — 서버 node 24.12 는 `node:sqlite` 경고 1줄) |
 | 데이터 | **체크아웃 밖** `~/pleiades-hermes-data/` — `state/hermes.db`(대기열 · WAL) · `state/state.json`(수치 · 수집기가 읽는다 · H-3) · `sources.json`(출처 레지스트리 · 키 해시만) · 전부 0600/0700 |
 | 플랫폼 키 | `~/pleiades-platform.env` 의 **`DISCORD_WEBHOOK_HERMES`**(채널 `#hermes` · 선택 — 없으면 받기만 하고 게시는 멈춘다 · 넣으면 재기동 없이 다음 걸음부터 게시) |
-| 자동 배포 | **없다**(H-4 에서 수동 몇 회 통과 뒤 `ssh-deploy.sh` `## hrm` 단계) — 지금은 Release 뒤 손으로 |
+| 자동 배포 | **조건부**(H-4 · #829 · 7절) — Release 자동 배포가 fin → fit → 통합 층 뒤 **켜져 있고 입력이 바뀌었을 때만** 이 스크립트를 `--yes` 로 부른다. 첫 배포 · `stop` 뒤 다시 켜기 · 되돌리기는 손으로 |
 | 기록 | `~/pleiades-private/inplace-hrm-{last-ok,pending,stopped}` · 원본 로그 `inplace-hrm-<시각>.log`(600 · 세션에 붙이지 않는다) |
 | 락 | 두 앱 · 통합 층 배포와 **같은** `~/pleiades-private/deploy.lock` |
 | 종료 코드 | 0 통과 · 1 바꾸기 전 중단 · 2 사용법 · 4 바꾼 뒤 실패(양식의 복구 줄) |
@@ -130,6 +130,23 @@ bash ~/pleiades-hermes/deploy/hermes/hermes-key.sh remove smoke
 양식의 "사람 확인" 줄에 예/아니오를 덧붙인다.
 
 **첫 설치(2026-11-18 · `v1.20.0`):** 2절 통과(C4 WAL · 레지스트리 0 · 웹훅 있음 · C6 online · health 200 · 상태 파일 갱신) · D 통과(202 · `#hermes` 에 `hermes·시험` 게시 확인 — 사용자).
+
+## 7. Release 자동 배포 (H-4 · #829)
+
+두 앱이 모두 통과한 뒤 `deploy/ssh-deploy.sh` 가 통합 층(`## adv`) → hermes(`## hrm`) 단계를 돈다. 통합 층 단계와 같은 함수다(`side_auto` · 런북 `advisor-inplace.md` 6절).
+
+| 줄 | 뜻 |
+|---|---|
+| `hrm 건너뜀 — 체크아웃 없음(~/pleiades-hermes)` · `첫 배포 전` | hermes 를 띄운 적이 없다 — 1~2절(손) |
+| `hrm 건너뜀 — 정지됨(stop) · 마지막 통과 vX 유지` | `stop` 한 hermes 는 다시 띄우지 않는다 — 켜려면 4절 |
+| `hrm 건너뜀 — 입력 변경 없음 · vX 유지` | 마지막 통과 태그 → 새 태그 사이에 `deploy/hermes/auto-inputs.txt` 의 경로(`apps/hermes/` · `packages/notify/` · 루트 package · `deploy/hermes/`)가 그대로다 — hermes 는 옛 태그로 둔다. 버전 줄만 바뀐 묶음은 변경으로 보지 않는다 |
+| `hrm 배포 — 입력 변경 있음 · 끝나지 않은 시도 · 같은 태그 · 판정 불능(…)` | 아래에 2절과 같은 판정 양식이 이어진다. **판정하지 못하면 배포한다** |
+| `hrm 실패 rc N — 두 앱 배포 결과는 그대로다` | 5절 표대로 사용자가 서버에서. 배포 알림(`⚠️ hrm … 배포 중단`)도 온다 |
+
+- **Actions 가 초록이어도 `## hrm` 줄을 본다**(012 G-R4) — hermes 실패는 종료 코드에 없다. 통합 층이 실패해도 hermes 는 판정한다(서로 막지 않는다).
+- 건너뛰면 hermes 태그가 두 앱과 달라진다 — 손으로 돌릴 때 C1 의 `(주의) 두 앱과 다른 태그` 는 그 때문이다.
+- **효력:** 이 단계가 든 릴리즈의 **다음** Release 부터(`ssh-deploy.sh` 는 체크아웃 전에 읽힌 판으로 돈다).
+- 되돌리기: 자동 단계만 멈추려면 `stop`(**즉시** · 받기도 멈춘다) · 단계 자체는 revert + 릴리즈(**중간**).
 
 ## 판정 양식
 

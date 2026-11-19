@@ -77,6 +77,13 @@ class NotifyDeploy(unittest.TestCase):
         self.assertIn("✅ **adv v1.17.1 배포 완료**", r.stdout)
         self.assertNotIn("SECRETHOOK", r.stdout + r.stderr)
 
+    # 014 H-4 (#829) — hermes 도 fin 체크아웃의 이 파일을 hrm 으로 부른다(넷째 체크아웃에는 dotenv 가 없다)
+    def test_hrm_reads_platform_file_through_finance_dotenv(self):
+        r = self.run_notify("hrm", "ok", "v1.21.0", "통과", PLEIADES_ENV_FILE=self.platform(self.HOOK))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("✅ **hrm v1.21.0 배포 완료**", r.stdout)
+        self.assertNotIn("SECRETHOOK", r.stdout + r.stderr)
+
     def test_inherited_names_are_not_apps(self):
         for app in ("constructor", "toString", "__proto__", "hasOwnProperty"):
             r = self.run_notify(app, "ok", "v1.0.5", "x", PLEIADES_ENV_FILE=self.platform(self.HOOK))

@@ -271,7 +271,7 @@ class AdvAuto(unittest.TestCase):
         (self.priv / "inplace-adv-stopped").unlink()
         (self.adv / "deploy" / "advisor" / "adv-inplace.sh").unlink()
         r = self.run_cmd("v1.0.2")
-        self.assertIn("adv 건너뜀 — 셋째 체크아웃 없음", r.stdout)
+        self.assertIn("adv 건너뜀 — 체크아웃 없음(~/pleiades-adv)", r.stdout)
         self.assertEqual(self.adv_calls(), [])
         self.assertEqual(r.returncode, 0)
 
@@ -358,6 +358,189 @@ class AutoInputs(unittest.TestCase):
         # 도구 목록 · 지식은 도는 두 앱에서 질문마다 받는다 — 두 앱 코드 전체를 넣으면 거의 모든 릴리즈가 배포된다
         self.assertFalse(self.covered("apps/finance/src/mcp/server.ts"))
         self.assertFalse(self.covered("apps/fitness/src/app/page.tsx"))
+
+
+HRM_STUB = """#!/bin/bash
+echo "hrm $1 $2 stdin=$( [ -t 0 ] && echo tty || echo none )" >> "$STUB_LOG"
+echo "=== 판정 양식 hrm ==="
+[[ ${STUB_RC_hrm:-0} -eq 0 ]] && echo "결과: 통과" || echo "결과: 중단 — C3 — 빌드 실패 (/home/svc/x)"
+exit "${STUB_RC_hrm:-0}"
+"""
+HRM_INPUTS = HERE / "hermes" / "auto-inputs.txt"
+
+
+class HrmAuto(unittest.TestCase):
+    """014 H-4 (#829) — 두 앱 · 통합 층 뒤 hermes 는 켜져 있고 입력이 바뀌었을 때만 · 실패는 rc 를 바꾸지 않는다(G-R4)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = Path(self._tmp.name)
+        for app in ("fin", "fit"):
+            d = self.base / f"pleiades-{app}" / "deploy"
+            d.mkdir(parents=True)
+            (d / "release-inplace.sh").write_text(RELEASE_STUB)
+        (self.base / "pleiades-fin" / "deploy" / "notify-deploy.cjs").write_text(NOTIFY_STUB)
+        self.log = self.base / "calls"
+        self.log.write_text("")
+        self.priv = self.base / "pleiades-private"
+        self.priv.mkdir()
+        # 두 곁가지 체크아웃 — 같은 이력(같은 저장소의 다른 체크아웃)
+        self.adv = self.base / "pleiades-adv"
+        self.hrm = self.base / "pleiades-hermes"
+        self.repo(self.hrm)
+        self.git(self.hrm, "init", "-q")
+        self.write("deploy/advisor/adv-inplace.sh", ADV_STUB)
+        self.write("deploy/advisor/auto-inputs.txt", INPUTS.read_text())
+        self.write("deploy/hermes/hrm-inplace.sh", HRM_STUB)
+        self.write("deploy/hermes/auto-inputs.txt", HRM_INPUTS.read_text())
+        self.write("apps/hermes/src/main.ts", "1")
+        self.write("apps/advisor/src/main.ts", "1")
+        self.write("README.md", "1")
+        self.commit_tag("v1.0.0")
+        self.write("README.md", "2")                # 둘 다 입력 밖
+        self.commit_tag("v1.0.1")
+        self.write("apps/hermes/src/main.ts", "2")  # hermes 입력만
+        self.commit_tag("v1.0.2")
+        self.write("packages/notify/src/x.ts", "1")  # 둘 다 입력(packages/ · packages/notify/)
+        self.commit_tag("v1.0.3")
+        self.git(self.hrm, "checkout", "-q", "v1.0.0")
+        subprocess.run(["git", "clone", "-q", str(self.hrm), str(self.adv)], check=True, capture_output=True)
+        self.git(self.adv, "checkout", "-q", "v1.0.0")
+        for key in ("adv", "hrm"):
+            (self.priv / f"inplace-{key}-last-ok").write_text("v1.0.0\n")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    @staticmethod
+    def repo(d: Path) -> None:
+        d.mkdir()
+
+    def git(self, d: Path, *args: str) -> str:
+        return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+                               "-c", "tag.gpgsign=false", "-C", str(d), *args],
+                              check=True, capture_output=True, text=True).stdout
+
+    def write(self, rel: str, text: str) -> None:
+        f = self.hrm / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(text)
+
+    def commit_tag(self, tag: str) -> None:
+        self.git(self.hrm, "add", "-A")
+        self.git(self.hrm, "commit", "-q", "-m", tag)
+        self.git(self.hrm, "tag", tag)
+
+    def run_cmd(self, tag: str, **extra: str) -> subprocess.CompletedProcess:
+        env = {"PATH": f"{NODE_DIR}:{BASE_PATH}", "HOME": str(self.base), "PLEIADES_TEST": "1",
+               "PLEIADES_CHECKOUT_BASE": str(self.base), "STUB_LOG": str(self.log), "SSH_ORIGINAL_COMMAND": f"deploy {tag}", **extra}
+        return subprocess.run(["bash", str(SCRIPT)], capture_output=True, text=True, env=env, timeout=60)
+
+    def runs(self) -> list[str]:
+        return [c for c in self.log.read_text().splitlines() if c and not c.startswith("notify ")]
+
+    def hrm_calls(self) -> list[str]:
+        return [c for c in self.runs() if c.startswith("hrm ")]
+
+    def test_changed_input_deploys_after_apps_and_adv(self):
+        r = self.run_cmd("v1.0.3")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.runs(), ["fin v1.0.3 --yes stdin=none", "fit v1.0.3 --yes stdin=none",
+                                       "adv v1.0.3 --yes stdin=none", "hrm v1.0.3 --yes stdin=none"])
+        self.assertLess(r.stdout.index("## adv"), r.stdout.index("## hrm"))
+        self.assertIn("hrm 배포 — 입력 변경 있음(v1.0.0 → v1.0.3)", r.stdout)
+        self.assertIn("notify hrm|ok|v1.0.3|통과", self.log.read_text().splitlines())
+
+    def test_inputs_are_per_side_app(self):
+        # v1.0.2 는 hermes 코드만 바꿨다 — 통합 층은 건너뛰고 hermes 만 배포한다
+        r = self.run_cmd("v1.0.2")
+        self.assertIn("adv 건너뜀 — 입력 변경 없음 · v1.0.0 유지", r.stdout)
+        self.assertEqual(self.hrm_calls(), ["hrm v1.0.2 --yes stdin=none"])
+
+    def test_unchanged_input_is_skipped_and_not_notified(self):
+        r = self.run_cmd("v1.0.1")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("hrm 건너뜀 — 입력 변경 없음 · v1.0.0 유지", r.stdout)
+        self.assertEqual(self.hrm_calls(), [])
+        self.assertNotIn("notify hrm", self.log.read_text())
+
+    def test_every_listed_input_triggers(self):
+        specs = [l.strip() for l in HRM_INPUTS.read_text().splitlines() if l.strip() and not l.strip().startswith("#")]
+        for i, spec in enumerate(specs):
+            tag = f"v2.0.{i}"
+            rel = spec + "probe.txt" if spec.endswith("/") else spec
+            self.git(self.hrm, "checkout", "-q", "v1.0.0")
+            self.write(rel, f"change {i}")
+            self.commit_tag(tag)
+            self.git(self.hrm, "checkout", "-q", "v1.0.0")
+            self.log.write_text("")
+            r = self.run_cmd(tag)
+            self.assertEqual(self.hrm_calls(), [f"hrm {tag} --yes stdin=none"], spec + r.stdout)
+
+    def test_not_started_or_stopped_or_missing_checkout_is_left_alone(self):
+        (self.priv / "inplace-hrm-last-ok").unlink()
+        r = self.run_cmd("v1.0.2")
+        self.assertIn("hrm 건너뜀 — 첫 배포 전(첫 배포는 수동 · 런북 hermes.md)", r.stdout)
+        (self.priv / "inplace-hrm-last-ok").write_text("v1.0.0\n")
+        (self.priv / "inplace-hrm-stopped").write_text("x")
+        r = self.run_cmd("v1.0.2")
+        self.assertIn("hrm 건너뜀 — 정지됨(stop) · 마지막 통과 v1.0.0 유지", r.stdout)
+        (self.priv / "inplace-hrm-stopped").unlink()
+        (self.hrm / "deploy" / "hermes" / "hrm-inplace.sh").unlink()
+        r = self.run_cmd("v1.0.2")
+        self.assertIn("hrm 건너뜀 — 체크아웃 없음(~/pleiades-hermes)", r.stdout)
+        self.assertEqual(self.hrm_calls(), [])
+        self.assertEqual(r.returncode, 0)
+
+    def test_hrm_failure_keeps_exit_code_and_is_reported(self):
+        r = self.run_cmd("v1.0.2", STUB_RC_hrm="4")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("hrm 실패 rc 4 — 두 앱 배포 결과는 그대로다", r.stdout)
+        notes = [c for c in self.log.read_text().splitlines() if c.startswith("notify hrm")]
+        self.assertEqual(len(notes), 1)
+        self.assertTrue(notes[0].startswith("notify hrm|fail|v1.0.2|rc 4 · 중단 — C3"), notes[0])
+        self.assertNotIn("/home/svc", r.stdout + notes[0])
+
+    def test_adv_failure_does_not_stop_hrm(self):
+        r = self.run_cmd("v1.0.3", STUB_RC_adv="4")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("adv 실패 rc 4", r.stdout)
+        self.assertEqual(self.hrm_calls(), ["hrm v1.0.3 --yes stdin=none"])
+
+    def test_app_failure_never_reaches_side_apps(self):
+        r = self.run_cmd("v1.0.3", STUB_RC_fit="4")
+        self.assertEqual(r.returncode, 4)
+        self.assertNotIn("## hrm", r.stdout)
+        self.assertEqual(self.hrm_calls(), [])
+
+
+class HrmAutoInputs(unittest.TestCase):
+    """deploy/hermes/auto-inputs.txt 가 hermes 가 자기 체크아웃에서 읽는 곳을 덮는다 — 빠지면 그 변경이 운영에 들어가지 않는다."""
+
+    def setUp(self):
+        self.specs = [l.strip() for l in HRM_INPUTS.read_text().splitlines() if l.strip() and not l.strip().startswith("#")]
+
+    def covered(self, rel: str) -> bool:
+        return any(rel == s or (s.endswith("/") and rel.startswith(s)) for s in self.specs)
+
+    def test_code_dependencies_and_deploy_scripts(self):
+        pkg = __import__("json").loads((HERE.parent / "apps" / "hermes" / "package.json").read_text())
+        for spec in pkg.get("dependencies", {}).values():
+            if spec.startswith("file:"):
+                self.assertTrue(spec.startswith("file:../../packages/"), spec)   # 새 의존 형식이면 목록을 다시 본다
+                self.assertTrue(self.covered(spec.replace("file:../../", "") + "/"), spec)
+        for rel in ("apps/hermes/src/x.ts", "apps/hermes/package-lock.json", "package.json", "package-lock.json",
+                    "deploy/hermes/hrm-inplace.sh", "deploy/hermes/hermes-key.sh", "deploy/hermes/pleiades-hrm.config.cjs"):
+            self.assertTrue(self.covered(rel), rel)
+
+    def test_every_spec_exists(self):
+        for s in self.specs:
+            self.assertTrue((HERE.parent / s).exists(), s)
+
+    def test_other_apps_are_not_inputs(self):
+        # hermes 가 쓰지 않는 곳 — 넣으면 거의 모든 릴리즈가 hermes 를 다시 띄운다
+        for rel in ("packages/chat/src/index.ts", "apps/finance/src/x.ts", "apps/advisor/src/main.ts", "deploy/deploy.sh"):
+            self.assertFalse(self.covered(rel), rel)
 
 
 class Workflow(unittest.TestCase):
