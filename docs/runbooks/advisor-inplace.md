@@ -42,6 +42,8 @@ bash ~/pleiades-adv/deploy/advisor/adv-inplace.sh "$V"             # y 로 확�
 
 스크립트가 하는 일: **0** OS(Linux) · 위치 `~/pleiades-adv` · **C1a** 셸 키 비우기 · `PLEIADES_ENV_FILE=~/pleiades-platform.env`(600) · **L** 배포 락 → (여기부터 락 fd 를 닫은 서브셸) **C1b** 두 앱 기록(`inplace-fin/fit-last-ok`)이 같은 위치에 있음 · pm2 데몬 있음 · `claude` 찾기(PATH → `~/.local/bin`) · 도는 fin·fit 의 `PLEIADES_ENV_FILE` 이 같음 · **A** 태그 받기 · 깨끗 · 규칙 3줄 · **C2** checkout · **C3** 빌드(루트 `npm ci` → chat ci·tsc → advisor `npm ci`·build) · **C4** `probe`(모델 호출 0 · 두 도메인 읽기 경로 · 락은 "busy(이 실행의 락)") · **C5** 옛 `pleiades-adv-bot` delete → `start --update-env` → `save --force` · **C6** 30초 뒤 online · cwd · env · `PLEIADES_PRIVATE_DIR` 없음 · 전체 `pleiades-*` same · 봇 키가 있으면 생존 표지 갱신.
 
+**C4 크기 줄(#839 · 015 V-1 · S0).** probe 는 도메인 줄 끝에 `도구 정의 N B · 지식 N B` 를(도구 정의 = tools/list 응답의 도구 객체 JSON 바이트 — 모델에 실리는 직렬화의 **근사** · 시스템 합계에는 들어가지 않는다), 끝에 `시스템 프롬프트: N B · 경고선 75000 B · 상한 100000 B` 를 낸다(합계는 질문 경로와 같은 계산 · 준비된 도메인이 없으면 줄 없음). 합계가 경고선을 넘으면 `경고: 시스템 프롬프트가 경고선을 넘었다 …` 한 줄이 더 나온다 — **배포를 막지 않는다**(rc 무변경). 경고를 보면 015 §5 전환 조건 ③ — 지식을 줄이거나 S3(지식 온디맨드)를 검토한다. 상한을 넘으면 새 세션이 전부 거부된다. 자동 배포의 `## adv` 에도 같은 줄이 나온다.
+
 **확인 프롬프트(`y`)를 오래 열어 두지 않는다** — 그동안 락을 쥐고 있어 Release 자동 배포가 락에서 실패한다(두 앱 배포와 같다).
 
 **A 규칙(상태로 판정 · 별도 재시도 플래그 없음):**
@@ -86,7 +88,7 @@ D  status <answer/…> · cost=$<값> (0 이 아니고 $1.0000 미만) · tools 
 |---|---|
 | `adv 건너뜀 — 체크아웃 없음(~/pleiades-adv)` · `첫 배포 전` | 통합 층을 띄운 적이 없다 — 1~2절(손) |
 | `adv 건너뜀 — 정지됨(stop) · 마지막 통과 vX 유지` | `stop` 한 통합 층은 다시 띄우지 않는다 — 켜려면 2절 |
-| `adv 건너뜀 — 입력 변경 없음 · vX 유지` | 마지막 통과 태그 → 새 태그 사이에 `deploy/advisor/auto-inputs.txt` 의 경로가 그대로다(통합 층 코드 · `packages/` · 루트 package · `deploy/advisor/` · 두 앱 `domain.json`·`models.ts`) — 통합 층은 옛 태그로 둔다. 릴리즈마다 올리는 **버전 줄**(`"version": "X.Y.Z"`)만 바뀐 묶음은 변경으로 보지 않는다(의존을 올리면 같은 묶음의 `resolved` 줄도 바뀌어 잡힌다). 도구 목록 · 지식은 도는 두 앱에서 질문마다 받으므로 두 앱만 바뀐 릴리즈는 다시 배포할 필요가 없다 |
+| `adv 건너뜀 — 입력 변경 없음 · vX 유지` | 마지막 통과 태그 → 새 태그 사이에 `deploy/advisor/auto-inputs.txt` 의 경로가 그대로다(통합 층 코드 · `packages/` · 루트 package · `deploy/advisor/` · 모든 앱의 `apps/*/domain.json`(글롭 · #841) · 두 앱 `models.ts`) — 통합 층은 옛 태그로 둔다. 릴리즈마다 올리는 **버전 줄**(`"version": "X.Y.Z"`)만 바뀐 묶음은 변경으로 보지 않는다(의존을 올리면 같은 묶음의 `resolved` 줄도 바뀌어 잡힌다). 도구 목록 · 지식은 도는 두 앱에서 질문마다 받으므로 두 앱만 바뀐 릴리즈는 다시 배포할 필요가 없다 |
 | `adv 배포 — 입력 변경 있음 · 끝나지 않은 시도 · 같은 태그 · 판정 불능(…)` | 아래에 2절과 같은 판정 양식이 이어진다. **판정하지 못하면 배포한다**(놓치는 것보다 한 번 더 — 같은 태그면 "이미 배포됨") |
 | `adv 실패 rc N — 두 앱 배포 결과는 그대로다` | 4절 표대로 사용자가 서버에서. 배포 알림(`⚠️ adv … 배포 중단`)도 온다 |
 
