@@ -103,6 +103,14 @@ class Config(unittest.TestCase):
         self.assertEqual(self.apps("fit")["pleiades-fit-web"]["args"], "start -H 127.0.0.1 -p 4520")
         self.assertEqual(self.apps("fin")["pleiades-fin-web"]["args"], "start -H 127.0.0.1 -p 4510")
 
+    def test_web_rss_limit_above_heap(self):
+        # 회귀: #824 — pm2 는 RSS 로 판정한다. 힙 한도와 같으면 힙이 정상이어도 재시작한다(11-18 fit 웹)
+        for app in ("fin", "fit"):
+            web = self.apps(app)[f"pleiades-{app}-web"]
+            heap = int(re.search(r"--max-old-space-size=(\d+)", web["node_args"]).group(1))
+            rss = int(re.fullmatch(r"(\d+)M", web["max_memory_restart"]).group(1))
+            self.assertGreaterEqual(rss, heap + 256, app)
+
     def test_fit_mcp_gets_web_url_from_port(self):
         # 회귀: PR #179 Codex P2 — MCP 의 웹 API 기본값은 localhost:4200 고정이라 다른 PORT 에서 Garmin 경유 도구가 끊긴다
         self.assertEqual(self.apps("fit")["pleiades-fit-mcp"]["env"]["APP_BASE_URL"], "http://127.0.0.1:4520")  # #702 — 웹이 루프백에만 듣는다
@@ -212,12 +220,13 @@ class DeployDryRun(unittest.TestCase):
         for app in ("fin", "fit"):
             r = deploy(self.root, app, "--dry-run")
             self.assertEqual(r.returncode, 0, r.stderr)
-            m = re.search(r"등록된 args 가 '([^']+)' 가 아닐 때만", r.stdout)
+            m = re.search(r"등록된 args 가 '([^']+)' 가 아니거나 메모리 한도가 (\d+M) 이 아닐 때만", r.stdout)
             self.assertIsNotNone(m, r.stdout)
             c = load_config(self.root, app)
             self.assertEqual(c.returncode, 0, c.stderr)
             web = next(a for a in json.loads(c.stdout)["apps"] if a["name"] == f"pleiades-{app}-web")
             self.assertEqual(m.group(1), web["args"])
+            self.assertEqual(m.group(2), web["max_memory_restart"])  # #824 — 한도도 같은 방식으로 대조한다
 
     def test_install_order_root_then_chat_then_app(self):
         # 009 D-1 PR-1(#345) — chat 은 notify dist(루트 prepare) 뒤에 설치·빌드하고, 앱 봇 번들보다 먼저 dist 가 있어야 한다
@@ -380,7 +389,7 @@ PM2_STUB = r"""#!/usr/bin/env node
 // pm2 흉내 — 상태는 $STUB/state.json · 호출은 $STUB/log
 const fs = require('fs'), path = require('path')
 const dir = process.env.STUB, file = path.join(dir, 'state.json')
-const st = { online: {}, restarts: {}, reg: {}, ...(fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : {}) }
+const st = { online: {}, restarts: {}, reg: {}, mem: {}, ...(fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : {}) }
 const argv = process.argv.slice(2)
 fs.appendFileSync(path.join(dir, 'log'), 'pm2 ' + argv.join(' ') + '\n')
 const preset = Object.fromEntries((process.env.STUB_PRESET || '').split(',').filter(Boolean).map((p) => p.split('=')))
@@ -392,7 +401,9 @@ if (argv[0] === 'jlist') {
     if (flap.includes(name)) st.restarts[name] = (st.restarts[name] || 0) + 1
     // 등록 형식 — 지금은 -H 루프백 포함(#702) · st.legacy 면 그 전 형식(-p 만)
     const args = name.endsWith('-web') && st.reg[name] ? (st.legacy ? ['start', '-p', st.reg[name]] : ['start', '-H', '127.0.0.1', '-p', st.reg[name]]) : []
-    return { name, pm2_env: { status: st.online[name] ? 'online' : preset[name] || 'stopped', restart_time: st.restarts[name] || 0, args } }
+    // 메모리 한도 — 등록 때 정의 값(#824 · pm2 는 바이트로 둔다) · 시드로 옛 값(1024M)을 넣을 수 있다
+    const mem = name.endsWith('-web') && st.reg[name] ? (st.mem[name] ?? 1610612736) : undefined
+    return { name, pm2_env: { status: st.online[name] ? 'online' : preset[name] || 'stopped', restart_time: st.restarts[name] || 0, args, max_memory_restart: mem } }
   })
   process.stdout.write(JSON.stringify(list))
 } else if (['start', 'startOrRestart'].includes(argv[0])) {
@@ -400,7 +411,7 @@ if (argv[0] === 'jlist') {
   // pm2 는 이미 등록된 앱의 args 를 유지한다(PR #177 Codex P2) — 처음 등록할 때만 새 포트
   if (only.endsWith('-web') && !st.reg[only]) st.reg[only] = process.env.STUB_WEB_NEW || '4510'
 } else if (argv[0] === 'stop') delete st.online[argv[1]]
-else if (argv[0] === 'delete') { delete st.online[argv[1]]; delete st.reg[argv[1]]; st.legacy = false }
+else if (argv[0] === 'delete') { delete st.online[argv[1]]; delete st.reg[argv[1]]; delete st.mem[argv[1]]; st.legacy = false }
 fs.writeFileSync(file, JSON.stringify(st))
 """
 
@@ -690,10 +701,11 @@ class ServerPathWithStubs(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertNotIn("pm2 delete pleiades-fin-web", log)
 
-    def seed(self, *, web_port: str, legacy: bool = False) -> None:
+    def seed(self, *, web_port: str, legacy: bool = False, mem=None) -> None:
         (self.stub / "state.json").write_text(json.dumps({
             "online": {"pleiades-fin-mcp": True, "pleiades-fin-web": True}, "restarts": {},
-            "reg": {"pleiades-fin-web": web_port}, "legacy": legacy}))
+            "reg": {"pleiades-fin-web": web_port}, "legacy": legacy,
+            "mem": {} if mem is None else {"pleiades-fin-web": mem}}))
 
     def test_non_http_listener_counts_as_occupied(self):
         # 회귀: PR #177 Codex P2 — HTTP 가 아니거나 빈 응답(curl 52)인 리스너를 "비었다" 로 읽었다
@@ -714,6 +726,20 @@ class ServerPathWithStubs(unittest.TestCase):
         r, log = self.run_fin()
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertLess(log.index("pm2 delete pleiades-fin-web"), log.index("--only pleiades-fin-web"))
+
+    def test_old_memory_limit_recreates_web(self):
+        # 회귀: #824 — startOrRestart 는 등록된 max_memory_restart(옛 1024M)를 유지한다. 정의만 바꾸면 운영에 안 들어간다
+        self.seed(web_port="4510", mem=1024 * 1024 * 1024)
+        r, log = self.run_fin()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertLess(log.index("pm2 delete pleiades-fin-web"), log.index("--only pleiades-fin-web"))
+
+    def test_memory_limit_as_string_matches(self):
+        # pm2 판에 따라 "1536M" 문자열로 남아 있어도 같은 한도다 — 지우지 않는다
+        self.seed(web_port="4510", mem="1536M")
+        r, log = self.run_fin()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("pm2 delete pleiades-fin-web", log)
 
     def test_web_not_listening_on_configured_port_fails(self):
         r, log = self.run_fin(STUB_WEB_NEW="4999")

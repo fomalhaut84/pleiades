@@ -120,6 +120,23 @@ pm2_state() {
     })" "$1"
 }
 
+# pm2 에 등록된 웹 정의 중 startOrRestart 가 갱신하지 않는 것 — "<max_memory_restart 바이트> <args…>" · 없으면 빈 줄
+# (pm2 는 바이트 수로 저장한다 · 문자열 "1536M" 이어도 바이트로 맞춘다 — 비교는 바이트로)
+pm2_web_def() {
+  (cd "$APP_DIR" && pm2 jlist 2>/dev/null) | node -e "
+    let s = ''; process.stdin.on('data', (d) => (s += d)).on('end', () => {
+      const i = s.indexOf('[')
+      const list = i < 0 ? [] : JSON.parse(s.slice(i))
+      const p = list.find((x) => x.name === process.argv[1])
+      if (!p) return
+      const raw = String(p.pm2_env.max_memory_restart ?? '')
+      const m = /^(\\d+)\\s*([KMG]?)B?$/i.exec(raw)
+      const mul = { '': 1, K: 1024, M: 1024 ** 2, G: 1024 ** 3 }
+      const bytes = m ? Number(m[1]) * mul[m[2].toUpperCase()] : 0
+      process.stdout.write(bytes + ' ' + [].concat(p.pm2_env.args || []).join(' '))
+    })" "$1"
+}
+
 # 옛 서비스가 online 이면 기본 실행은 여기서 exit 3 으로 멈춘다(빌드·pre-flight 는 끝났다) · --activate 에서는 오류다
 check_occupancy() {
   echo "+ 점유 검사 — 옛 서비스 pm2($SERVICE_NAMES) online 0 · 포트 $WEB_PORT·$MCP_PORT 는 비었거나 pleiades-$APP-* 가 잡고 있다"
@@ -345,13 +362,15 @@ confirm_stable "pleiades-$APP-mcp"
 at_app pm2 save --force  # 이후 단계가 멈춰도 새 MCP 는 resurrect 대상이다
 
 step "5. 웹 · 봇"
-# startOrRestart 는 등록된 args(-H 주소 · -p 포트)를 유지한다 — 달라졌으면 지우고 새로 등록한다(PR #177 Codex P2 · #702 루프백)
-# 기대값은 pleiades.config.cjs webArgs 와 같아야 한다(test_deploy 가 대조한다)
+# startOrRestart 는 등록된 args(-H 주소 · -p 포트)와 max_memory_restart 를 유지한다 — 달라졌으면 지우고 새로 등록한다
+# (PR #177 Codex P2 · #702 루프백 · #824 RSS 한도). 기대값은 pleiades.config.cjs webArgs · WEB_RSS_LIMIT_MB 와 같아야 한다(test_deploy 가 대조한다)
 WEB_ARGS="start -H 127.0.0.1 -p $WEB_PORT"
-echo "+ (apps/$DIR) pm2 delete pleiades-$APP-web  # 등록된 args 가 '$WEB_ARGS' 가 아닐 때만"
+WEB_RSS_LIMIT_MB=1536
+WEB_DEF="$((WEB_RSS_LIMIT_MB * 1024 * 1024)) $WEB_ARGS"
+echo "+ (apps/$DIR) pm2 delete pleiades-$APP-web  # 등록된 args 가 '$WEB_ARGS' 가 아니거나 메모리 한도가 ${WEB_RSS_LIMIT_MB}M 이 아닐 때만"
 if [[ $DRY -eq 0 ]]; then
-  WEB_STATE=$(pm2_state "pleiades-$APP-web")
-  if [[ -n "$WEB_STATE" && "${WEB_STATE#* * }" != "$WEB_ARGS" ]]; then
+  WEB_NOW=$(pm2_web_def "pleiades-$APP-web")
+  if [[ -n "$WEB_NOW" && "$WEB_NOW" != "$WEB_DEF" ]]; then
     (cd "$APP_DIR" && pm2 delete "pleiades-$APP-web")
   fi
 fi
