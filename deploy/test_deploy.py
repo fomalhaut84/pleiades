@@ -735,11 +735,21 @@ class ServerPathWithStubs(unittest.TestCase):
         self.assertLess(log.index("pm2 delete pleiades-fin-web"), log.index("--only pleiades-fin-web"))
 
     def test_memory_limit_as_string_matches(self):
-        # pm2 판에 따라 "1536M" 문자열로 남아 있어도 같은 한도다 — 지우지 않는다
-        self.seed(web_port="4510", mem="1536M")
-        r, log = self.run_fin()
+        # pm2 판에 따라 "1536M" · "1.5G" 문자열로 남아 있어도 같은 한도다 — 지우지 않는다
+        for mem in ("1536M", "1.5G", "1536MB"):
+            self.seed(web_port="4510", mem=mem)
+            (self.stub / "log").unlink(missing_ok=True)
+            (self.stub / "preflight-up").unlink(missing_ok=True)  # 앞 반복의 pre-flight 흔적
+            r, log = self.run_fin()
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertNotIn("pm2 delete pleiades-fin-web", log, mem)
+
+    def test_recreate_reason_is_printed(self):
+        # #824 9-1 info — 재등록하면 등록 정의와 기대값을 남긴다(해석 못 한 한도가 배포마다 재등록하면 보이게)
+        self.seed(web_port="4510", mem=1024 * 1024 * 1024)
+        r, _ = self.run_fin()
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertNotIn("pm2 delete pleiades-fin-web", log)
+        self.assertIn("등록 정의 '1073741824 start -H 127.0.0.1 -p 4510' ≠ 기대 '1610612736 start -H 127.0.0.1 -p 4510'", r.stdout)
 
     def test_web_not_listening_on_configured_port_fails(self):
         r, log = self.run_fin(STUB_WEB_NEW="4999")

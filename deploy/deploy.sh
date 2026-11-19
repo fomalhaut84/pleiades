@@ -130,9 +130,9 @@ pm2_web_def() {
       const p = list.find((x) => x.name === process.argv[1])
       if (!p) return
       const raw = String(p.pm2_env.max_memory_restart ?? '')
-      const m = /^(\\d+)\\s*([KMG]?)B?$/i.exec(raw)
+      const m = /^(\\d+(?:\\.\\d+)?)\\s*([KMG]?)B?$/i.exec(raw)
       const mul = { '': 1, K: 1024, M: 1024 ** 2, G: 1024 ** 3 }
-      const bytes = m ? Number(m[1]) * mul[m[2].toUpperCase()] : 0
+      const bytes = m ? Math.round(Number(m[1]) * mul[m[2].toUpperCase()]) : 0
       process.stdout.write(bytes + ' ' + [].concat(p.pm2_env.args || []).join(' '))
     })" "$1"
 }
@@ -371,6 +371,7 @@ echo "+ (apps/$DIR) pm2 delete pleiades-$APP-web  # 등록된 args 가 '$WEB_ARG
 if [[ $DRY -eq 0 ]]; then
   WEB_NOW=$(pm2_web_def "pleiades-$APP-web")
   if [[ -n "$WEB_NOW" && "$WEB_NOW" != "$WEB_DEF" ]]; then
+    echo "+ 등록 정의 '$WEB_NOW' ≠ 기대 '$WEB_DEF' — 지우고 새로 등록한다"  # 해석 못 한 한도(0)가 배포마다 재등록하면 여기서 보인다
     (cd "$APP_DIR" && pm2 delete "pleiades-$APP-web")
   fi
 fi
