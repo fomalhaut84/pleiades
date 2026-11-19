@@ -1829,3 +1829,138 @@ class Heartbeat(Base):
         r = self.run_c("--test-ping", **env)
         self.assertEqual(r.returncode, 1)
         self.assertIn("단 크론 회는 ping 을 건너뛴다 — 웹훅 없음", r.stdout)
+
+
+def L(text, at="2026-11-10 08:01:00"):
+    return f"{at}: {text}\n"
+
+
+class Usage(Base):
+    """#846 U1 — AI 사용량(API 환산 비용) 집계. 고정 접두 줄의 허용 필드만 · 원문 0 · 일일 요약 한 줄 · usage.jsonl."""
+
+    def setUp(self):
+        super().setUp()
+        self.ok()  # 첫 회 — 집계를 켜는 회는 모든 파일을 끝에서 시작한다
+
+    def day(self, date="2026-11-10"):
+        return self.state()["usage"]["days"].get(date, {})
+
+    def test_three_formats_aggregate_by_app(self):
+        self.log("pleiades-fin-bot-out-0.log",
+                 L("[advisor] ok caller=briefing model=claude-sonnet-5 used=claude-sonnet-5 cost=$0.1234 turns=3 tools=2 duration=10ms")
+                 + L("[advisor] claude stderr: 무시") + L("다른 줄 cost=$9.9999"), append=True)
+        self.log("pleiades-fin-web-error-0.log",
+                 L("[advisor] fail caller=ta-guide model=claude-sonnet-5 code=quota_exceeded exit=1 subtype=error_max_budget_usd cost=$0.2500 turns=1"),
+                 append=True)
+        self.log("pleiades-fit-web-out-0.log",
+                 L("[askAdvisor] channel=web model=claude-sonnet-5 duration=5ms turns=2 context=10 session=ab cost=$0.0500 cap=$1.0000"), append=True)
+        self.log("pleiades-fit-bot-out-0.log",
+                 L("[askAdvisor] channel=discord model=claude-sonnet-5 duration=5ms turns=1 context=? session=cd cost=$0.0100 cap=$1.0000 is_error=true"),
+                 append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        d = self.day()
+        self.assertEqual((d["fin"]["n"], d["fin"]["fail"], round(d["fin"]["usd"], 4)), (2, 1, 0.3734))
+        self.assertEqual((d["fit"]["n"], d["fit"]["fail"], round(d["fit"]["usd"], 4)), (2, 1, 0.06))
+        self.assertEqual(sorted(d["fin"]["by"]), ["briefing", "ta-guide"])
+        self.assertEqual(sorted(d["fit"]["by"]), ["discord", "web"])
+        self.ok(now="2026-11-10T08:10:00+09:00")  # 오프셋 — 다시 세지 않는다
+        self.assertEqual(self.day()["fin"]["n"], 2)
+
+    def test_adv_counted_only_while_active(self):
+        (self.home / "pleiades-adv" / "apps" / "advisor" / "logs").mkdir(parents=True)
+        self.private.mkdir(parents=True, exist_ok=True)
+        line = L("[advisor] key=k1 status=완료 model=sonnet drift=없음 cost=$0.0991 cap=$1.0000 turns=1 tools=myfinance:0/0 outside=0 context=1 duration=1ms resumed=false domains=2")
+        self.log("pleiades-adv-bot-out-9.log", line)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertNotIn("adv", self.day())  # 감시 밖
+        (self.private / "inplace-adv-last-ok").write_text("v1.22.0\n")
+        self.ok(now="2026-11-10T08:10:00+09:00")  # 다시 켠 회 — 끝에서 시작
+        self.log("pleiades-adv-bot-out-9.log", line + L("[advisor] key=k2 status=실패 code=x model=sonnet drift=없음 cost=$0.0010 cap=$1.0000 turns=1"), append=True)
+        self.ok(now="2026-11-10T08:15:00+09:00")
+        a = self.day()["adv"]
+        self.assertEqual((a["n"], a["fail"], round(a["usd"], 4)), (2, 1, 0.1001))
+
+    def test_unknown_cost_and_bad_caller(self):
+        self.log("pleiades-fin-bot-out-0.log",
+                 L("[advisor] ok caller=../질문 model=claude-sonnet-5 used=unknown cost=$? turns=0 tools=0")
+                 + L("[advisor] ok caller=x model=claude-sonnet-5 used=x cost=$1e9 turns=1 tools=0"), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        f = self.day()["fin"]
+        self.assertEqual((f["n"], f["unknown"], f["usd"]), (2, 2, 0))  # 숫자가 아니거나 상한 밖이면 비용 모름
+        self.assertIn("(알 수 없음)", f["by"])
+
+    # 회귀: #846 9-1 info — 호출부 이름이 프로토타입 키여도 집계 객체를 오염시키지 않는다
+    def test_prototype_key_caller(self):
+        self.log("pleiades-fin-bot-out-0.log",
+                 L("[advisor] ok caller=__proto__ model=claude-sonnet-5 used=x cost=$0.1000 turns=1 tools=0")
+                 + L("[advisor] ok caller=constructor model=claude-sonnet-5 used=x cost=$0.2000 turns=1 tools=0"), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        f = self.day()["fin"]
+        self.assertEqual((f["n"], round(f["usd"], 4)), (2, 0.3))
+        self.assertEqual(f["by"], {"(알 수 없음)": {"n": 2, "usd": 0.30000000000000004}})
+
+    def test_state_usage_missing_fields_are_repaired(self):
+        st = self.state()
+        st["usage"] = {"since": "2026-11-10"}
+        (self.ops / "state.json").write_text(json.dumps(st))
+        self.log("pleiades-fin-bot-out-0.log", L("[advisor] ok caller=b model=claude-sonnet-5 used=x cost=$0.1000 turns=1 tools=0"), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")  # 멈추지 않는다
+        self.assertIn("files", self.state()["usage"])
+
+    # 회귀: PR #851 Codex P2 — fin MCP 프로세스의 AI 호출(사용자 전략 파서 strategy:parse · strategy:edit)도 센다
+    def test_fin_mcp_calls_counted(self):
+        self.log("pleiades-fin-mcp-out-0.log",
+                 L('{"level":30,"msg":"tool_call"}')
+                 + L("[advisor] ok caller=strategy:parse model=claude-sonnet-5 used=claude-sonnet-5 cost=$0.0300 turns=1 tools=0"), append=True)
+        self.log("pleiades-fin-mcp-error-0.log",
+                 L("[advisor] fail caller=strategy:edit model=claude-sonnet-5 code=x exit=1 subtype=error cost=$0.0100 turns=1"), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        f = self.day()["fin"]
+        self.assertEqual((f["n"], f["fail"], round(f["usd"], 4)), (2, 1, 0.04))
+        self.assertEqual(sorted(f["by"]), ["strategy:edit", "strategy:parse"])
+
+    def test_no_raw_text_stored(self):
+        self.log("pleiades-fin-bot-out-0.log",
+                 L("[advisor] ok caller=briefing model=claude-sonnet-5 used=claude-sonnet-5 cost=$0.1000 turns=1 tools=0 원문RAWXYZ"), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertEqual(self.day()["fin"]["n"], 1)
+        self.assert_no_raw("RAWXYZ")
+
+    def test_upgrade_starts_at_end_then_new_files_from_zero(self):
+        old = L("[advisor] ok caller=old model=claude-sonnet-5 used=x cost=$5.0000 turns=1 tools=0")
+        self.log("pleiades-fin-bot-out-0.log", old * 3, append=True)
+        st = self.state()
+        st.pop("usage")  # 집계를 처음 켜는 판으로 올린 상황
+        (self.ops / "state.json").write_text(json.dumps(st))
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertEqual(self.day(), {})  # 과거 줄은 세지 않는다
+        p = self.pm2 / "logs" / "pleiades-fin-bot-out-0.log"
+        p.unlink()
+        self.log("pleiades-fin-bot-out-0.log", L("[advisor] ok caller=new model=claude-sonnet-5 used=x cost=$0.2000 turns=1 tools=0"))
+        self.ok(now="2026-11-10T08:10:00+09:00")  # inode 가 바뀐 새 파일은 0 부터
+        self.assertEqual(round(self.day()["fin"]["usd"], 4), 0.2)
+
+    def test_summary_line_month_projection_and_jsonl(self):
+        cfg = {"summaryAt": "09:05"}
+        self.ok(now="2026-11-10T09:06:00+09:00", config=cfg)
+        summ = [p for p in self.posts() if "일일 요약" in p]
+        self.assertIn("AI 사용량(API 환산 · 서비스 호출만) 집계 시작 전", summ[-1])  # 켠 날의 요약
+        self.log("pleiades-fin-bot-out-0.log", L("[advisor] ok caller=b model=claude-sonnet-5 used=x cost=$0.3000 turns=1 tools=0"), append=True)
+        self.log("pleiades-fit-web-out-0.log",
+                 L("[askAdvisor] channel=web model=claude-sonnet-5 duration=5ms turns=2 context=1 session=ab cost=$0.1000 cap=$1.0000"), append=True)
+        self.ok(now="2026-11-10T10:00:00+09:00", config=cfg)
+        self.ok(now="2026-11-11T09:06:00+09:00", config=cfg)
+        summ = [p for p in self.posts() if "일일 요약" in p]
+        self.assertIn("AI 사용량(API 환산 · 서비스 호출만) 어제 $0.40 (fin $0.30 · fit $0.10 · 2회 · 실패 0) · 이달 $0.40 · 월말 예상 $12.00", summ[-1])
+        rows = [json.loads(l) for l in (self.ops / "usage.jsonl").read_text().splitlines()]
+        self.assertEqual([r["date"] for r in rows], ["2026-11-10"])
+        self.assertEqual(round(rows[0]["apps"]["fin"]["usd"], 4), 0.3)
+        self.ok(now="2026-11-11T09:11:00+09:00", config=cfg)
+        self.assertEqual(len((self.ops / "usage.jsonl").read_text().splitlines()), 1)  # 하루 한 줄
+
+    def test_days_pruned_after_retention(self):
+        st = self.state()
+        st["usage"]["days"]["2026-08-01"] = {"fin": {"n": 1, "fail": 0, "usd": 1, "unknown": 0, "by": {}}}
+        (self.ops / "state.json").write_text(json.dumps(st))
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertNotIn("2026-08-01", self.state()["usage"]["days"])
