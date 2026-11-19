@@ -41,7 +41,7 @@ const fs = require('fs')
 const path = require('path')
 globalThis.fetch = async (url, opts) => {
   const log = path.join(path.dirname(__filename), 'fetch.jsonl')
-  fs.appendFileSync(log, JSON.stringify({ url: String(url), body: JSON.parse(opts.body) }) + '\n')
+  fs.appendFileSync(log, JSON.stringify({ url: String(url), method: (opts && opts.method) || 'GET', body: opts && opts.body ? JSON.parse(opts.body) : null }) + '\n')
   const n = fs.readFileSync(log, 'utf8').trim().split('\n').length
   const codes = (process.env.STUB_FETCH_STATUS || '204').split(',')
   const st = Number(codes[Math.min(n - 1, codes.length - 1)])
@@ -240,9 +240,11 @@ class Cli(Base):
         src = SCRIPT.read_text()
         self.assertNotIn("deploy.lock", src)  # E-3 — 배포가 flock -n 이다
         self.assertNotIn("flock", src.replace("flock -n 이라", ""))
-        # 외부로 나가는 길은 웹훅 게시 하나다(#725) — 주소는 플랫폼 설정에서만 온다(코드에 박지 않는다)
-        self.assertEqual(src.count("fetch("), 1)
+        # 외부로 나가는 길은 둘이다 — 웹훅 게시(#725)와 하트비트 GET(PR-4 #847) · 주소는 플랫폼 설정에서만 온다(코드에 박지 않는다)
+        self.assertEqual(src.count("fetch("), 2)
         self.assertIn("await fetch(target, {", src)
+        self.assertIn("await fetch(url, { method: 'GET', redirect: 'error', signal: ctrl.signal })", src)  # 리다이렉트로 다른 곳에 가지 않는다  # 본문 없음 — 밖으로 데이터를 싣지 않는다
+        self.assertNotIn("hc-ping.com", src)
         self.assertNotIn("discord.com", src)
         self.assertIn("allowed_mentions: { parse: [] }", src)
         # 외부 프로세스 호출은 pm2 jlist 하나뿐이다(Q97 — 코드가 지키는 규칙)
@@ -1723,3 +1725,107 @@ class Post(Base):
         self.assertIn("기록 1 · 미룸 0 · 요약만 0", r.stdout)
         self.assertIn("🟠", self.sent()[-1])
         self.assertIn("실패", self.sent()[-1])
+
+
+PING = "https://hc-ping.com/" + "11111111-2222-3333-4444-" + "PINGSECRET00"  # 시험용 가짜 ping 주소
+
+
+class Heartbeat(Base):
+    """PR-4 (#847 · 008 Q90) — 게시 경로가 막히지 않은 회에만 외부 하트비트 ping · 실패는 수집 결과를 바꾸지 않는다."""
+
+    live = Post.live
+
+    def setUp(self):
+        super().setUp()
+        self.platform = self.tmp / "platform.env"
+        self.platform.write_text(f'DISCORD_WEBHOOK_OPS="{HOOK}"\nOPS_HEARTBEAT_URL="{PING}"\n')
+        self.E = "pleiades-fin-bot-error-0.log"
+        self.ok(now="2026-11-10T07:55:00+09:00")  # 상태 없는 첫 회(dry-run · 외부 0)
+
+    def pings(self):
+        return [f for f in self.fetches() if f["url"].startswith("https://hc-ping.com/")]
+
+    def test_quiet_run_pings_once_with_get_and_no_body(self):
+        r = self.live(now="2026-11-10T08:00:00+09:00")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        [p] = self.pings()
+        self.assertEqual((p["url"], p["method"], p["body"]), (PING, "GET", None))
+        self.assertIn("ping 통과", r.stdout)
+        self.assertNotIn("PINGSECRET", r.stdout + r.stderr)
+        self.assert_no_raw(PING, "PINGSECRET")
+
+    def test_ping_after_successful_post(self):
+        self.log(self.E, ERR_LINE, append=True)
+        r = self.live(now="2026-11-10T08:00:00+09:00")
+        self.assertIn("기록 1 · 미룸 0", r.stdout)
+        self.assertEqual([f["url"] for f in self.fetches()], [HOOK + "?wait=true", PING])  # 게시가 먼저 · ping 은 끝에
+
+    def test_no_ping_when_post_fails(self):
+        self.log(self.E, ERR_LINE, append=True)
+        r = self.live(now="2026-11-10T08:00:00+09:00", status="500")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("미룸 1", r.stdout)
+        self.assertEqual(self.pings(), [])  # 게시가 막힌 회는 ping 하지 않는다 → 외부 서비스가 알린다
+        self.assertIn("ping 건너뜀", r.stdout)
+
+    def test_no_ping_when_webhook_missing(self):
+        self.platform.write_text(f'OPS_HEARTBEAT_URL="{PING}"\n')
+        r = self.live(now="2026-11-10T08:00:00+09:00")
+        self.assertEqual(self.pings(), [])  # 게시할 길이 없으면 살아 있다고 알리지 않는다
+        self.assertIn("ping 건너뜀", r.stdout)
+
+    def test_dry_run_never_pings(self):
+        self.run_c("--dry-run", f"--pm2-bin={self.bin}", now="2026-11-10T08:00:00+09:00",
+                   PLEIADES_ENV_FILE=str(self.platform), NODE_OPTIONS=f"--require={self.fetch_stub()}")
+        self.assertEqual(self.fetches(), [])
+
+    def test_no_key_no_ping_and_no_line(self):
+        self.platform.write_text(f'DISCORD_WEBHOOK_OPS="{HOOK}"\n')
+        r = self.live(now="2026-11-10T08:00:00+09:00")
+        self.assertEqual(self.pings(), [])
+        self.assertNotIn("ping", r.stdout)  # 키가 없으면 지금과 같다
+
+    def test_non_https_ping_never_fetched(self):
+        self.platform.write_text(f'DISCORD_WEBHOOK_OPS="{HOOK}"\nOPS_HEARTBEAT_URL="http://hc-ping.com/x"\n')
+        r = self.live(now="2026-11-10T08:00:00+09:00")
+        self.assertEqual([f for f in self.fetches() if "hc-ping" in f["url"]], [])
+        self.assertIn("ping 형식 오류", r.stdout)
+
+    def test_ping_failure_does_not_change_result(self):
+        for status, name in (("503", "HTTP 503"), ("0", "TypeError")):
+            with self.subTest(status=status):
+                r = self.live(now="2026-11-10T08:00:00+09:00", status=status)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertIn(f"ping 실패 {name}", r.stdout)
+                self.assertNotIn("PINGSECRET", r.stdout + r.stderr)  # 예외 메시지에 URL 이 실려도 이름만
+
+    def test_ping_url_is_a_secret_for_check_one(self):
+        import re
+        pat = re.compile(re.search(r"const SECRET_KEY = /(.+?)/ ", SCRIPT.read_text()).group(1))
+        self.assertTrue(pat.search("OPS_HEARTBEAT_URL"))  # 게시 본문에 ping 주소가 실리면 ① 이 막는다
+
+    def test_test_ping(self):
+        before = (self.ops / "state.json").read_text()
+        env = {"PLEIADES_ENV_FILE": str(self.platform), "NODE_OPTIONS": f"--require={self.fetch_stub()}"}
+        r = self.run_c("--test-ping", **env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("시험 ping 통과", r.stdout)
+        self.assertEqual([f["url"] for f in self.fetches()], [PING])
+        self.assertEqual((self.ops / "state.json").read_text(), before)  # 수집하지 않는다
+        r = self.run_c("--test-ping", **env, STUB_FETCH_STATUS="404")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("시험 ping 실패 HTTP 404", r.stdout)
+        self.platform.write_text(f'DISCORD_WEBHOOK_OPS="{HOOK}"\n')
+        r = self.run_c("--test-ping", **env)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("OPS_HEARTBEAT_URL 없음", r.stdout)
+        self.assertEqual(len(self.fetches()), 2)
+        self.assertEqual(self.run_c("--test-ping", "--dry-run", **env).returncode, 2)
+
+    # 회귀: #847 9-1 info — 웹훅이 없으면 크론 회는 ping 하지 않는다 · 시험이 거짓 통과하지 않는다
+    def test_test_ping_fails_when_cron_would_skip(self):
+        self.platform.write_text(f'OPS_HEARTBEAT_URL="{PING}"\n')
+        env = {"PLEIADES_ENV_FILE": str(self.platform), "NODE_OPTIONS": f"--require={self.fetch_stub()}"}
+        r = self.run_c("--test-ping", **env)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("단 크론 회는 ping 을 건너뛴다 — 웹훅 없음", r.stdout)

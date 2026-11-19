@@ -3,6 +3,7 @@
 //
 // 사용:  node collect.cjs [--dry-run] [--pm2-bin=<절대 경로>]   수집 1회(crontab 이 부른다)
 //        node collect.cjs --test-alert                             설치 시험 — 고정 문구 1건을 게시 경로로(런북 4절)
+//        node collect.cjs --test-ping                              설치 시험 — 외부 하트비트 ping 1회(런북 6절 · PR-4 #847)
 //
 // 게시(PR-2b · #725): 플랫폼 설정의 DISCORD_WEBHOOK_OPS 로 Discord #ops 에 보낸다(폴백 없음) · 보낸 본문은 posted.log.
 // --dry-run 은 외부로 나가는 것이 0 이다 — 게시할 메시지는 상태 디렉터리의 dry-run.log 에 쓴다(PR-1 판과 같다).
@@ -890,7 +891,7 @@ const POST_MAX = 2000 // ③ Discord 메시지 한 건 상한
 const SECRET_MIN = 8 // P-10 비밀 대조 최소 길이 — 짧은 값은 템플릿 문구·숫자와 우연히 맞는다(거짓 차단)
 // ① 대조할 키 — 비밀인 것만(PORT · NODE_ENV · 채널·사용자 ID 같은 비밀 아닌 값은 대조하지 않는다 · 거짓 차단)
 // 서버 템플릿 키 전수(deploy/env/*.template · 루트 .env.example)와 대조해 정했다(#725) — 시험이 두 목록을 함께 본다
-const SECRET_KEY = /TOKEN|SECRET|PASSWORD|EMAIL|WEBHOOK|_KEY(?:_|$)|_PIN$|^DATABASE_URL$/ // 접미가 붙는 키가 있다(DISCORD_BOT_TOKEN_FINANCE)
+const SECRET_KEY = /TOKEN|SECRET|PASSWORD|EMAIL|WEBHOOK|HEARTBEAT|_KEY(?:_|$)|_PIN$|^DATABASE_URL$/ // 접미가 붙는 키가 있다(DISCORD_BOT_TOKEN_FINANCE)
 const W = 'A-Za-z0-9_'
 // ② 토큰 형식 — tools/ops/promote_check.py 의 TOKEN 패턴을 옮긴 것이다. 두 판은 tools/ops/token_vectors.json 을 함께 시험한다
 const TOKEN_RES = [
@@ -930,7 +931,7 @@ function platformFile() {
 function loadSecrets() {
   const dotenv = dotenvFor('fin')
   // 해석기가 없으면 웹훅도 못 읽는다 — "웹훅 없음" 으로 오진하지 않게 사유를 따로 낸다(PR-2b 9-1 major)
-  if (!dotenv) return { ok: false, values: [], webhook: '', why: 'dotenv 없음' }
+  if (!dotenv) return { ok: false, values: [], webhook: '', why: 'dotenv 없음', ping: NO_PING }
   const read = (file) => {
     try {
       return file ? dotenv.parse(fs.readFileSync(file)) : null
@@ -943,10 +944,48 @@ function loadSecrets() {
   const raw = (platform && platform.DISCORD_WEBHOOK_OPS) || ''
   const webhook = /^https:\/\//.test(raw) ? raw : '' // 잘못 넣은 값으로 본문이 다른 곳에 가지 않게 — https 만
   const missing = raw ? '웹훅 형식 오류' : '웹훅 없음'
-  if (envs.some((e) => e === null)) return { ok: false, values: [], webhook, why: webhook ? '비밀 읽기 실패' : missing }
+  const ping = pingOf(platform)
+  if (envs.some((e) => e === null)) return { ok: false, values: [], webhook, why: webhook ? '비밀 읽기 실패' : missing, ping }
   const values = new Set()
   for (const env of envs) for (const [k, v] of Object.entries(env)) if (SECRET_KEY.test(k) && v.length >= SECRET_MIN) values.add(v)
-  return { ok: true, values: [...values], webhook, why: webhook ? '' : missing }
+  return { ok: true, values: [...values], webhook, why: webhook ? '' : missing, ping }
+}
+
+// ── 외부 하트비트(PR-4 · #847 · 008 Q90) ──────────────────────────────
+// 플랫폼 설정 OPS_HEARTBEAT_URL(healthchecks.io 의 ping 주소) — 비밀로 다룬다(SECRET_KEY 의 HEARTBEAT · 출력엔 이름만).
+// 키가 없으면 ping 하지 않는다(지금과 같다) · https 만(잘못 넣은 값으로 다른 곳에 요청하지 않게)
+const NO_PING = { url: '', why: '' }
+function pingOf(platform) {
+  const raw = (platform && platform.OPS_HEARTBEAT_URL) || ''
+  if (!raw) return NO_PING
+  return /^https:\/\//.test(raw) ? { url: raw, why: '' } : { url: '', why: '형식 오류' }
+}
+
+// GET · 본문 없음(밖으로 나가는 데이터 0) · 실패는 이름 · HTTP 코드만
+async function pingHeartbeat(url, ms) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), Math.max(1, ms))
+  try {
+    // redirect: 'error' — https 가드가 첫 요청에만 걸리지 않게(리다이렉트로 다른 곳에 가지 않는다 · 9-1 info)
+    const res = await fetch(url, { method: 'GET', redirect: 'error', signal: ctrl.signal })
+    if (res.body && typeof res.body.cancel === 'function') await res.body.cancel().catch(() => {})
+    return res.ok ? null : `HTTP ${res.status}`
+  } catch (err) {
+    return err && typeof err.name === 'string' && /^[A-Za-z]{1,32}$/.test(err.name) ? err.name : 'error' // 메시지에 주소가 실릴 수 있다 — 이름만
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// 이번 회의 하트비트 — 게시 경로가 막히지 않았을 때만(미룸 0 · 사유 없음) ping 한다. 막히면 ping 이 끊겨 외부 서비스가 알린다.
+// 결과 줄 꼬리만 돌려준다 · 수집 결과(rc · 상태)는 바꾸지 않는다
+async function heartbeat(r, deadline) {
+  const ping = r.ping || NO_PING
+  if (ping.why) return ` · ping ${ping.why}`
+  if (!ping.url) return ''
+  if (r.why || r.deferred > 0) return ' · ping 건너뜀(게시 막힘)'
+  const err = await pingHeartbeat(ping.url, postMs(deadline))
+  return err ? ` · ping 실패 ${err}` : ' · ping 통과'
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -1023,7 +1062,7 @@ async function deliver(posts, ctx, live) {
   }
   if (live && sec.webhook && !sec.ok && r.deferred > 0) await secretLoadNotice(ctx, sec.webhook, r.deferred, deadline)
   appendLines(live ? 'posted.log' : 'dry-run.log', out)
-  return { events, posted: out.length, ...r }
+  return { events, posted: out.length, ...r, ping: sec ? sec.ping : NO_PING }
 }
 
 // 비밀을 못 읽는 동안 게시가 멈췄다는 것만 알린다 — 본문 없는 고정 문구라 ① 없이 보낼 수 있다 · P-1 간격으로 한 번
@@ -1049,6 +1088,31 @@ async function testAlert() {
     console.log(`시험 게시 실패 — ${why}`)
     return 1
   }
+}
+
+// 설치 시험(런북 6절) — 수집 없이 ping 1회. 상태 파일을 건드리지 않는다
+async function testPing() {
+  const sec = loadSecrets()
+  if (!sec.ping.url) {
+    // 해석기가 없거나 비밀을 못 읽으면 키가 없는 것으로 오진하지 않는다(PR-2b 9-1 major 와 같은 길 · #847 9-1 info)
+    const why = sec.ping.why ? 'OPS_HEARTBEAT_URL 형식 오류(https:// 로 시작해야 한다)'
+      : sec.why === 'dotenv 없음' ? 'dotenv 없음 — 두 앱 체크아웃의 node_modules 를 확인한다'
+        : 'OPS_HEARTBEAT_URL 없음 — 플랫폼 설정에 넣는다(플랫폼 설정을 읽을 수 있는지도 본다)'
+    console.log(`시험 ping 실패 — ${why}`)
+    return 1
+  }
+  const err = await pingHeartbeat(sec.ping.url, CONFIG.httpMs * 2)
+  if (err) {
+    console.log(`시험 ping 실패 ${err}`)
+    return 1
+  }
+  // ping 은 됐어도 게시 경로가 막혀 있으면 크론 회는 ping 하지 않는다 — 시험이 거짓 통과하지 않게
+  if (sec.why) {
+    console.log(`시험 ping 통과 · 단 크론 회는 ping 을 건너뛴다 — ${sec.why}(4-2 표)`)
+    return 1
+  }
+  console.log('시험 ping 통과 — 외부 서비스에서 마지막 ping 시각을 확인한다')
+  return 0
 }
 
 // 이번 회에 감시하는 앱 — 한 회에 한 번만 정하고 모든 판정이 이것만 쓴다(4b-3 R2-3).
@@ -1114,7 +1178,8 @@ async function run(pm2Bin, live) {
     if (summaryRun && state.summaryDate === kstDate(nowDate)) pruneEvents(ctx.now)
     state.lastRunAt = ctx.now
     writeAtomic(STATE(), prune(state, ctx.now))
-    const tail = live ? ` · 차단 ${r.blocked}${r.why ? ` · ${r.why}` : ''} (게시)` : ' (dry-run)'
+    const beat = live ? await heartbeat(r, ctx.started + CONFIG.maxRunMs) : ''
+    const tail = live ? ` · 차단 ${r.blocked}${r.why ? ` · ${r.why}` : ''}${beat} (게시)` : ' (dry-run)'
     console.log(`${kstMinute(nowDate)} 수집 통과 · 관측 ${obsLines.length} · 기록 ${r.posted} · 미룸 ${r.deferred} · 요약만 ${r.quiet}${tail}`)
     return 0
   } finally {
@@ -1125,18 +1190,21 @@ async function run(pm2Bin, live) {
 function parseArgs(argv) {
   let dry = false
   let testAlert = false
+  let testPing = false
   let pm2Bin = path.join(path.dirname(path.dirname(process.execPath)), 'lib', 'node_modules', 'pm2', 'bin', 'pm2') // npm 전역 기본 위치(V16)
   for (const a of argv) {
     if (a === '--dry-run') dry = true
     else if (a === '--test-alert') testAlert = true
+    else if (a === '--test-ping') testPing = true
     else if (a.startsWith('--pm2-bin=')) pm2Bin = a.slice('--pm2-bin='.length)
     else return null
   }
   if (dry && testAlert) return null // 시험 게시는 게시 경로를 시험한다 — dry-run 과 함께 쓰지 않는다
-  return { dry, testAlert, pm2Bin }
+  if (testPing && (dry || testAlert)) return null // 시험은 하나씩
+  return { dry, testAlert, testPing, pm2Bin }
 }
 
-const USAGE = '사용법: node collect.cjs [--dry-run] [--pm2-bin=<절대 경로>]   |   node collect.cjs --test-alert'
+const USAGE = '사용법: node collect.cjs [--dry-run] [--pm2-bin=<절대 경로>]   |   node collect.cjs --test-alert   |   node collect.cjs --test-ping'
 
 // 시험 전용(PLEIADES_TEST=1) — 공통 시험 벡터를 게시 전 검사 ②·③ 에 통과시켜 사유 코드를 낸다(tools/ops/token_vectors.json)
 function selfCheck() {
@@ -1159,6 +1227,7 @@ async function main() {
   }
   process.umask(0o077)
   if (args.testAlert) return testAlert()
+  if (args.testPing) return testPing()
   return run(args.pm2Bin, !args.dry)
 }
 
