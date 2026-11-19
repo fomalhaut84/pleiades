@@ -278,3 +278,46 @@ console.log("크기 KB",JSON.stringify(Object.fromEntries(["state.json","events.
 | `크기 KB` | `state.json` 1024 아래(상한 1 MB) · `collect.log` · `posted.log` 는 정리하지 않는다 — 수십 MB 가 되면 알린다 |
 
 되돌리기: 이 절은 문구다(**즉시**). 양식은 상태 파일을 읽기만 한다.
+
+## 6. 외부 하트비트 (PR-4 · #847 · 008 Q90)
+
+서버 전체 장애 · 크론 정지 · 잠금 · Discord 쪽 침묵은 수집기 자신이 알릴 수 없다. 수집기가 **매 회 끝에, 그 회의 게시 경로가 막히지 않았을 때만** 외부 서비스(healthchecks.io)에 ping 한다. ping 이 끊기면 그 서비스가 **이메일**로 알린다(+ 원하면 Discord).
+
+- ping = `GET <주소>` · 본문 없음(밖으로 나가는 데이터 0) · 서버 인바운드 노출 없음
+- **ping 하지 않는 회:** `--dry-run` · 웹훅 없음 · 비밀 읽기 실패 · 게시 실패(미룸 1 이상) · 크론이 돌지 않음 · 서버가 죽음 — 전부 외부 서비스의 알림으로 드러난다
+- ping 실패는 수집 결과(rc · 상태)를 바꾸지 않는다 · `collect.log` 줄 끝에 이유만(`· ping 통과` · `· ping 실패 HTTP 5xx` · `· ping 건너뜀(게시 막힘)` · `· ping 형식 오류`) — 주소는 찍지 않는다
+- 주소는 비밀로 다룬다 — 게시 본문에 실리면 검사 ① 이 막는다(키 이름의 `HEARTBEAT`)
+
+### 6-1. 체크 만들기(사용자 · healthchecks.io)
+
+가입 전에 지금의 무료 한도를 확인한다. 새 체크를 만들고:
+
+| 설정 | 값 |
+|---|---|
+| Schedule | Simple · **Period 5 minutes**(크론 주기) |
+| Grace | **15 minutes** 권고 — 한 회 상한(2분) · 429 로 미룬 한두 회를 소음으로 만들지 않는다 |
+| Integrations | **Email**(필수 — Discord 장애 때도 오는 길) · Discord 는 선택 |
+
+Ping URL(`https://hc-ping.com/<uuid>`)을 복사해 플랫폼 설정에 한 줄 더한다(편집기로 · 값을 명령줄 · 히스토리에 남기지 않는다).
+
+```bash
+${EDITOR:-nano} ~/pleiades-platform.env    # OPS_HEARTBEAT_URL=<복사한 URL>
+chmod 600 ~/pleiades-platform.env && grep -cE '^OPS_HEARTBEAT_URL=["'"'"']?https://' ~/pleiades-platform.env
+```
+
+마지막 숫자는 `1` 이어야 한다.
+
+### 6-2. 설치 · 시험
+
+1절 명령을 **PR-4 판 REF · SHA256** 으로 돌린다(머지 뒤 Claude 가 준다). 2절의 `NODE_BIN` 을 같은 셸에 둔 채로:
+
+```bash
+env -i HOME="$HOME" PATH=/usr/bin:/bin "$NODE_BIN" --network-family-autoselection-attempt-timeout=2000 ~/pleiades-ops/collect.cjs --test-ping; echo "rc=$?"
+```
+
+**기대:** `시험 ping 통과 — 외부 서비스에서 마지막 ping 시각을 확인한다` · `rc=0` · healthchecks 화면의 체크가 `up`. 수집하지 않고 상태 파일도 바꾸지 않는다.
+- `OPS_HEARTBEAT_URL 없음` · `형식 오류` → 6-1 · `시험 ping 실패 HTTP 404` → 주소가 잘렸거나 체크가 지워졌다 · `TypeError` · `AbortError` → 서버의 나가는 연결
+
+크론 줄은 바꾸지 않는다(같은 줄이 다음 회부터 ping 한다). **10분 뒤** `tail -2 ~/pleiades-private/ops/collect.log` 줄 끝에 `· ping 통과` 가 있고 healthchecks 의 마지막 ping 이 5분 안팎이면 통과다.
+
+**되돌리기:** 플랫폼 설정에서 `OPS_HEARTBEAT_URL` 줄 삭제 → 다음 회부터 ping 없음(**즉시**) — **healthchecks 의 체크도 Pause 한다**(안 하면 유예 뒤 "down" 알림이 온다). 수집기 옛 판 재설치도 **즉시**. 계정 · 체크 삭제는 사용자.
