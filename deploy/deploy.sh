@@ -120,9 +120,9 @@ pm2_state() {
     })" "$1"
 }
 
-# pm2 에 등록된 웹 정의 중 startOrRestart 가 갱신하지 않는 것 — "<max_memory_restart 바이트> <args…>" · 없으면 빈 줄
+# pm2 에 등록된 정의 중 startOrRestart 가 갱신하지 않는 것 — "<max_memory_restart 바이트> <args…>" · 없으면 빈 줄 (웹 5단계 · MCP 4c)
 # (pm2 는 바이트 수로 저장한다 · 문자열 "1536M" 이어도 바이트로 맞춘다 — 비교는 바이트로)
-pm2_web_def() {
+pm2_def() {
   (cd "$APP_DIR" && pm2 jlist 2>/dev/null) | node -e "
     let s = ''; process.stdin.on('data', (d) => (s += d)).on('end', () => {
       const i = s.indexOf('[')
@@ -356,6 +356,17 @@ check_occupancy
 step "4c. MCP — 활성화 → 재기동 → health"
 at_app npm run build:mcp:activate
 [[ $DRY -eq 1 ]] || rm -f "$READY"  # staged 를 소비했다 — 표지도 소비
+# startOrRestart 는 등록된 max_memory_restart 를 유지한다 — 다르면 지우고 새로 등록한다(#825 · 웹 5단계와 같다).
+# 기대값은 pleiades.config.cjs LONG_RSS_LIMIT_MB 와 같아야 한다(test_deploy 가 대조한다)
+MCP_RSS_LIMIT_MB=768
+echo "+ (apps/$DIR) pm2 delete pleiades-$APP-mcp  # 등록된 메모리 한도가 ${MCP_RSS_LIMIT_MB}M 이 아닐 때만"
+if [[ $DRY -eq 0 ]]; then
+  MCP_NOW=$(pm2_def "pleiades-$APP-mcp")
+  if [[ -n "$MCP_NOW" && "${MCP_NOW%% *}" != "$((MCP_RSS_LIMIT_MB * 1024 * 1024))" ]]; then
+    echo "+ 등록 한도 '${MCP_NOW%% *}' ≠ 기대 '$((MCP_RSS_LIMIT_MB * 1024 * 1024))' — 지우고 새로 등록한다"
+    (cd "$APP_DIR" && pm2 delete "pleiades-$APP-mcp")
+  fi
+fi
 at_app pm2 startOrRestart "$CONFIG" --only "pleiades-$APP-mcp" --update-env
 wait_mcp
 confirm_stable "pleiades-$APP-mcp"
@@ -369,7 +380,7 @@ WEB_RSS_LIMIT_MB=1536
 WEB_DEF="$((WEB_RSS_LIMIT_MB * 1024 * 1024)) $WEB_ARGS"
 echo "+ (apps/$DIR) pm2 delete pleiades-$APP-web  # 등록된 args 가 '$WEB_ARGS' 가 아니거나 메모리 한도가 ${WEB_RSS_LIMIT_MB}M 이 아닐 때만"
 if [[ $DRY -eq 0 ]]; then
-  WEB_NOW=$(pm2_web_def "pleiades-$APP-web")
+  WEB_NOW=$(pm2_def "pleiades-$APP-web")
   if [[ -n "$WEB_NOW" && "$WEB_NOW" != "$WEB_DEF" ]]; then
     echo "+ 등록 정의 '$WEB_NOW' ≠ 기대 '$WEB_DEF' — 지우고 새로 등록한다"  # 해석 못 한 한도(0)가 배포마다 재등록하면 여기서 보인다
     (cd "$APP_DIR" && pm2 delete "pleiades-$APP-web")

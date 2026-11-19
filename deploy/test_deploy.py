@@ -103,6 +103,19 @@ class Config(unittest.TestCase):
         self.assertEqual(self.apps("fit")["pleiades-fit-web"]["args"], "start -H 127.0.0.1 -p 4520")
         self.assertEqual(self.apps("fin")["pleiades-fin-web"]["args"], "start -H 127.0.0.1 -p 4510")
 
+    def test_every_pm2_definition_has_rss_limit_above_heap(self):
+        # 회귀: #825 — 봇 · MCP · 통합 층 · hermes 도 힙 = RSS 였다. pm2 는 RSS 로 판정한다
+        for app in ("fin", "fit"):
+            for a in self.apps(app).values():
+                heap = int(re.search(r"--max-old-space-size=(\d+)", a["node_args"]).group(1))
+                rss = int(re.fullmatch(r"(\d+)M", a["max_memory_restart"]).group(1))
+                self.assertGreaterEqual(rss, heap + 128, a["name"])
+        for rel in ("advisor/pleiades-adv.config.cjs", "hermes/pleiades-hrm.config.cjs"):
+            text = (HERE / rel).read_text()
+            heap = int(re.search(r"--max-old-space-size=(\d+)", text).group(1))
+            rss = int(re.search(r"max_memory_restart: '(\d+)M'", text).group(1))
+            self.assertGreaterEqual(rss, heap + 128, rel)
+
     def test_web_rss_limit_above_heap(self):
         # 회귀: #824 — pm2 는 RSS 로 판정한다. 힙 한도와 같으면 힙이 정상이어도 재시작한다(11-18 fit 웹)
         for app in ("fin", "fit"):
@@ -227,6 +240,10 @@ class DeployDryRun(unittest.TestCase):
             web = next(a for a in json.loads(c.stdout)["apps"] if a["name"] == f"pleiades-{app}-web")
             self.assertEqual(m.group(1), web["args"])
             self.assertEqual(m.group(2), web["max_memory_restart"])  # #824 — 한도도 같은 방식으로 대조한다
+            mcp = next(a for a in json.loads(c.stdout)["apps"] if a["name"] == f"pleiades-{app}-mcp")
+            n = re.search(r"pleiades-\w+-mcp  # 등록된 메모리 한도가 (\d+M) 이 아닐 때만", r.stdout)
+            self.assertIsNotNone(n, r.stdout)
+            self.assertEqual(n.group(1), mcp["max_memory_restart"])  # #825
 
     def test_install_order_root_then_chat_then_app(self):
         # 009 D-1 PR-1(#345) — chat 은 notify dist(루트 prepare) 뒤에 설치·빌드하고, 앱 봇 번들보다 먼저 dist 가 있어야 한다
@@ -402,7 +419,8 @@ if (argv[0] === 'jlist') {
     // 등록 형식 — 지금은 -H 루프백 포함(#702) · st.legacy 면 그 전 형식(-p 만)
     const args = name.endsWith('-web') && st.reg[name] ? (st.legacy ? ['start', '-p', st.reg[name]] : ['start', '-H', '127.0.0.1', '-p', st.reg[name]]) : []
     // 메모리 한도 — 등록 때 정의 값(#824 · pm2 는 바이트로 둔다) · 시드로 옛 값(1024M)을 넣을 수 있다
-    const mem = name.endsWith('-web') && st.reg[name] ? (st.mem[name] ?? 1610612736) : undefined
+    const mem = name.endsWith('-web') && st.reg[name] ? (st.mem[name] ?? 1610612736)
+      : name.endsWith('-mcp') ? (st.mem[name] ?? 805306368) : undefined  // #825 — MCP 도 startOrRestart 라 한도를 대조한다
     return { name, pm2_env: { status: st.online[name] ? 'online' : preset[name] || 'stopped', restart_time: st.restarts[name] || 0, args, max_memory_restart: mem } }
   })
   process.stdout.write(JSON.stringify(list))
@@ -701,11 +719,11 @@ class ServerPathWithStubs(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertNotIn("pm2 delete pleiades-fin-web", log)
 
-    def seed(self, *, web_port: str, legacy: bool = False, mem=None) -> None:
+    def seed(self, *, web_port: str, legacy: bool = False, mem=None, mcp_mem=None) -> None:
+        mems = {k: v for k, v in (("pleiades-fin-web", mem), ("pleiades-fin-mcp", mcp_mem)) if v is not None}
         (self.stub / "state.json").write_text(json.dumps({
             "online": {"pleiades-fin-mcp": True, "pleiades-fin-web": True}, "restarts": {},
-            "reg": {"pleiades-fin-web": web_port}, "legacy": legacy,
-            "mem": {} if mem is None else {"pleiades-fin-web": mem}}))
+            "reg": {"pleiades-fin-web": web_port}, "legacy": legacy, "mem": mems}))
 
     def test_non_http_listener_counts_as_occupied(self):
         # 회귀: PR #177 Codex P2 — HTTP 가 아니거나 빈 응답(curl 52)인 리스너를 "비었다" 로 읽었다
@@ -733,6 +751,21 @@ class ServerPathWithStubs(unittest.TestCase):
         r, log = self.run_fin()
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertLess(log.index("pm2 delete pleiades-fin-web"), log.index("--only pleiades-fin-web"))
+
+    def test_old_mcp_memory_limit_recreates_mcp_only(self):
+        # 회귀: #825 — MCP 도 startOrRestart 라 옛 512M 를 유지한다. 다르면 MCP 만 지우고 새로 등록한다(웹은 그대로)
+        self.seed(web_port="4510", mcp_mem=512 * 1024 * 1024)
+        r, log = self.run_fin()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertLess(log.index("pm2 delete pleiades-fin-mcp"), log.index("--only pleiades-fin-mcp"))
+        self.assertNotIn("pm2 delete pleiades-fin-web", log)
+        self.assertIn("등록 한도 '536870912' ≠ 기대 '805306368'", r.stdout)
+
+    def test_current_mcp_limit_is_kept(self):
+        self.seed(web_port="4510", mcp_mem="768M")
+        r, log = self.run_fin()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("pm2 delete pleiades-fin-mcp", log)
 
     def test_memory_limit_as_string_matches(self):
         # pm2 판에 따라 "1536M" · "1.5G" 문자열로 남아 있어도 같은 한도다 — 지우지 않는다
