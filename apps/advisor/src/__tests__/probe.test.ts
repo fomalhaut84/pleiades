@@ -1,6 +1,6 @@
 // #839 · 015 V-1 — probe 판정 줄: 도구 정의 · 지식 · 시스템 합계 바이트와 S0 경고 줄(X2 · 막지 않는다).
 import { describe, expect, it } from "vitest";
-import { BASE_SYSTEM_PROMPT, SYSTEM_MAX_BYTES, buildSystem } from "../advisor";
+import { SYSTEM_MAX_BYTES, buildSystem } from "../advisor";
 import { DomainDecl, DomainReady } from "../domains";
 import { SYSTEM_WARN_BYTES, probeReport } from "../probe";
 
@@ -35,8 +35,9 @@ describe("probeReport", () => {
   });
 
   it("경고선 경계 — 같으면 경고 없음 · 1 B 넘으면 경고 줄(막지 않는다)", () => {
-    const sep = "\n\n## 도메인 지식 — 재무\n";
-    const fill = (n: number) => "a".repeat(n - bytes(BASE_SYSTEM_PROMPT) - bytes(sep));
+    // 기준선 = 지식이 빈 문자열일 때의 buildSystem 바이트(구분 문구를 복제하지 않는다 · 9-1 info)
+    const base = bytes(buildSystem([ok("fin", "재무", "")], []));
+    const fill = (n: number) => "a".repeat(n - base);
     const at = probeReport("free", [ok("fin", "재무", fill(SYSTEM_WARN_BYTES))]);
     expect(at.systemBytes).toBe(SYSTEM_WARN_BYTES);
     expect(at.warn).toBe(false);
