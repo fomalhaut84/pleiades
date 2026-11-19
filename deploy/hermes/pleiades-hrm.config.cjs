@@ -32,7 +32,8 @@ module.exports = {
       kill_timeout: 20000,
       min_uptime: 30000,
       exp_backoff_restart_delay: 100,
-      max_memory_restart: '256M',
+      // pm2 는 RSS 로 판정한다 — 힙(256) 위로 여유(#825 · 두 앱 웹 #824 와 같은 이유)
+      max_memory_restart: '384M',
       node_args: `--max-old-space-size=256 --disable-warning=ExperimentalWarning ${NET_ARGS}`,
       env: {
         NODE_ENV: 'production',
