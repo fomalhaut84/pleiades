@@ -1889,6 +1889,24 @@ class Usage(Base):
         self.assertEqual((f["n"], f["unknown"], f["usd"]), (2, 2, 0))  # 숫자가 아니거나 상한 밖이면 비용 모름
         self.assertIn("(알 수 없음)", f["by"])
 
+    # 회귀: #846 9-1 info — 호출부 이름이 프로토타입 키여도 집계 객체를 오염시키지 않는다
+    def test_prototype_key_caller(self):
+        self.log("pleiades-fin-bot-out-0.log",
+                 L("[advisor] ok caller=__proto__ model=claude-sonnet-5 used=x cost=$0.1000 turns=1 tools=0")
+                 + L("[advisor] ok caller=constructor model=claude-sonnet-5 used=x cost=$0.2000 turns=1 tools=0"), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        f = self.day()["fin"]
+        self.assertEqual((f["n"], round(f["usd"], 4)), (2, 0.3))
+        self.assertEqual(f["by"], {"(알 수 없음)": {"n": 2, "usd": 0.30000000000000004}})
+
+    def test_state_usage_missing_fields_are_repaired(self):
+        st = self.state()
+        st["usage"] = {"since": "2026-11-10"}
+        (self.ops / "state.json").write_text(json.dumps(st))
+        self.log("pleiades-fin-bot-out-0.log", L("[advisor] ok caller=b model=claude-sonnet-5 used=x cost=$0.1000 turns=1 tools=0"), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")  # 멈추지 않는다
+        self.assertIn("files", self.state()["usage"])
+
     def test_no_raw_text_stored(self):
         self.log("pleiades-fin-bot-out-0.log",
                  L("[advisor] ok caller=briefing model=claude-sonnet-5 used=claude-sonnet-5 cost=$0.1000 turns=1 tools=0 원문RAWXYZ"), append=True)

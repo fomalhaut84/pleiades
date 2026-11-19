@@ -549,9 +549,11 @@ function addUsage(ctx, app, lines) {
     if (u.fail) a.fail += 1
     if (u.usd === null) a.unknown += 1
     else a.usd += u.usd
-    let src = field(u.src) || USAGE_UNKNOWN_SRC
-    if (!(src in a.by) && Object.keys(a.by).length >= USAGE_BY_MAX) src = '(기타)'
-    const b = (a.by[src] = a.by[src] || { n: 0, usd: 0 })
+    // 프로토타입 키(__proto__ · constructor …)는 (알 수 없음) 으로 — 줄 머리를 흉내 낸 글이 집계 객체를 오염시키지 않게(#846 9-1 info)
+    let src = field(u.src)
+    if (!src || src in Object.prototype) src = USAGE_UNKNOWN_SRC
+    if (!Object.hasOwn(a.by, src) && Object.keys(a.by).length >= USAGE_BY_MAX) src = '(기타)'
+    const b = (a.by[src] = Object.hasOwn(a.by, src) ? a.by[src] : { n: 0, usd: 0 })
     b.n += 1
     b.usd += u.usd || 0
   }
@@ -1274,6 +1276,9 @@ async function run(pm2Bin, live) {
     // #846 — 집계를 처음 켜는 회(상태 없음 · usage 칸 없음)는 모든 -out 을 끝에서 시작한다(과거 줄을 세지 않는다)
     ctx.usageOn = hadState && !!state.usage
     if (!state.usage) state.usage = { files: {}, days: {}, since: kstDate(nowDate), logged: null }
+    // 손으로 고친 상태 파일에 칸이 빠져도 매 회 멈추지 않게(#846 9-1 info)
+    state.usage.files = state.usage.files || {}
+    state.usage.days = state.usage.days || {}
     if (got.status === 'stale') ctx.obs.push(collector('lock-stale', 'event'))
     if (corrupt) ctx.obs.push(collector('state-parse', 'event'))
     await collect(ctx, pm2Bin)
