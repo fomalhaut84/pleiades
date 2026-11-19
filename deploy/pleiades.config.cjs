@@ -64,7 +64,16 @@ const NET_ARGS = '--network-family-autoselection-attempt-timeout=2000'
 const WEB_HOST = '127.0.0.1'
 const webArgs = (port) => `start -H ${WEB_HOST} -p ${port}`
 const COMMON = { instances: 1, autorestart: true, log_date_format: 'YYYY-MM-DD HH:mm:ss' }
-const WEB = { ...COMMON, script: 'node_modules/.bin/next', max_memory_restart: '1024M', node_args: `--max-old-space-size=1024 ${NET_ARGS}` }
+// pm2 max_memory_restart 는 프로세스 전체(RSS)로 판정한다 — V8 힙 한도와 같게 두면 힙이 정상이어도 RSS(힙 + 코드 · 버퍼 · 네이티브)가
+// 먼저 닿아 재시작한다(#824 · 11-18 fit 웹 기동 50분 만). 힙 1024 MB 위로 여유를 둔다. deploy.sh 5단계가 같은 값을 대조한다
+const WEB_HEAP_MB = 1024
+const WEB_RSS_LIMIT_MB = 1536
+const WEB = {
+  ...COMMON,
+  script: 'node_modules/.bin/next',
+  max_memory_restart: `${WEB_RSS_LIMIT_MB}M`,
+  node_args: `--max-old-space-size=${WEB_HEAP_MB} ${NET_ARGS}`,
+}
 const LONG_RUNNING = {
   ...COMMON,
   kill_timeout: 15000,
