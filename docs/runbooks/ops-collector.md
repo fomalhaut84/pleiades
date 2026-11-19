@@ -330,7 +330,7 @@ env -i HOME="$HOME" PATH=/usr/bin:/bin "$NODE_BIN" --network-family-autoselectio
 
 `· AI 사용량(API 환산 · 서비스 호출만) 어제 $1.23 (fin $0.80 · fit $0.30 · adv $0.13 · 41회 · 실패 2) · 이달 $12.40 · 월말 예상 $28.00`
 
-- **읽는 줄:** 고정 접두 세 개만 — fin `[advisor] ok|fail caller=`(web · bot 의 stdout · stderr) · fit `[askAdvisor] channel=`(web · bot stdout) · 통합 층 `[advisor] key=`(adv-bot stdout). 그 밖의 줄은 버린다. 꺼내는 것은 앱 · 호출부/채널 이름(허용 문자만) · 성공/실패 · cost 숫자 — **원문은 저장하지 않는다**
+- **읽는 줄:** 고정 접두 세 개만 — fin `[advisor] ok|fail caller=`(web · bot · mcp 의 stdout · stderr — mcp 는 사용자 전략 파서) · fit `[askAdvisor] channel=`(web · bot stdout) · 통합 층 `[advisor] key=`(adv-bot stdout). 그 밖의 줄은 버린다. 꺼내는 것은 앱 · 호출부/채널 이름(허용 문자만) · 성공/실패 · cost 숫자 — **원문은 저장하지 않는다**
 - **저장:** 상태 파일 `usage` 칸(날짜별 앱 · 호출부 합 · 62일) · 일일 요약을 보낸 회에 어제 하루치를 `usage.jsonl` 에 한 줄(015 V-5 가 읽는다)
 - **처음 켠 회**(이 판을 설치한 첫 회)는 모든 로그를 끝에서 시작한다 — 과거 호출은 세지 않는다. 그날의 요약은 `집계 시작 전` · 다음 날부터 숫자가 나온다
 - **월말 예상** = 이달 누적 ÷ 집계한 날수 × 그 달 날수

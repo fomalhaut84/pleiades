@@ -494,7 +494,8 @@ function collectLogs(ctx) {
       continue
     }
     ctx.obs.push(...(stream === 'out' ? mcpOutObs(app, lines, ctx) : stderrObs(app, role, lines, ctx.deploy[app].window)))
-    if (stream === 'error' && USAGE_ERR.has(`${app}-${role}`)) addUsage(ctx, app, lines) // fin 실패 줄은 console.error(#846)
+    // fin 실패 줄은 console.error(#846) · fin MCP 의 성공 줄은 -out(오류 감시와 같은 오프셋 · 같은 줄)
+    if ((stream === 'error' && USAGE_ERR.has(`${app}-${role}`)) || (stream === 'out' && USAGE_MCP_OUT.has(`${app}-${role}`))) addUsage(ctx, app, lines)
   }
   if (listed) {
     for (const name of Object.keys(ctx.state.files)) if (!names.includes(name)) delete ctx.state.files[name]
@@ -516,7 +517,9 @@ function collectLogs(ctx) {
 // 꺼내는 것: 앱 · 호출부/채널 이름(허용 문자만) · 성공/실패 · cost(CLI total_cost_usd = API 가격 환산). 원문은 저장하지 않는다.
 // 날짜는 수집 회의 KST 날짜(줄의 시각이 아니다 — 자정 근처 5분 안의 호출은 다음 날로 갈 수 있다).
 const USAGE_OUT = new Set(['fin-web', 'fin-bot', 'fit-web', 'fit-bot', 'adv-bot']) // stdout — 성공(fin · fit) · 전부(adv)
-const USAGE_ERR = new Set(['fin-web', 'fin-bot']) // stderr — fin 실패 줄. fit 실패는 비용 줄이 없다(U2 에서 메운다)
+const USAGE_ERR = new Set(['fin-web', 'fin-bot', 'fin-mcp']) // stderr — fin 실패 줄. fit 실패는 비용 줄이 없다(U2 에서 메운다)
+// fin MCP 는 사용자 전략 파서(strategy:parse · strategy:edit)가 AI 를 부른다 — 그 -out 은 오류 감시가 이미 읽는다(PR #851 Codex P2) · fit MCP 는 AI 를 부르지 않는다
+const USAGE_MCP_OUT = new Set(['fin-mcp'])
 const USAGE_RE = {
   fin: /^\[advisor\] (ok|fail) caller=(\S+) model=\S+(?:.*?\scost=\$(\S+))?/, // claude-advisor.ts ok · fail
   fit: /^\[askAdvisor\] channel=(\S+) model=\S+ .*?\scost=\$(\S+)/, // claude-advisor.ts 완료 요약(is_error=true 면 실패)

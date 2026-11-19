@@ -1907,6 +1907,18 @@ class Usage(Base):
         self.ok(now="2026-11-10T08:05:00+09:00")  # 멈추지 않는다
         self.assertIn("files", self.state()["usage"])
 
+    # 회귀: PR #851 Codex P2 — fin MCP 프로세스의 AI 호출(사용자 전략 파서 strategy:parse · strategy:edit)도 센다
+    def test_fin_mcp_calls_counted(self):
+        self.log("pleiades-fin-mcp-out-0.log",
+                 L('{"level":30,"msg":"tool_call"}')
+                 + L("[advisor] ok caller=strategy:parse model=claude-sonnet-5 used=claude-sonnet-5 cost=$0.0300 turns=1 tools=0"), append=True)
+        self.log("pleiades-fin-mcp-error-0.log",
+                 L("[advisor] fail caller=strategy:edit model=claude-sonnet-5 code=x exit=1 subtype=error cost=$0.0100 turns=1"), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        f = self.day()["fin"]
+        self.assertEqual((f["n"], f["fail"], round(f["usd"], 4)), (2, 1, 0.04))
+        self.assertEqual(sorted(f["by"]), ["strategy:edit", "strategy:parse"])
+
     def test_no_raw_text_stored(self):
         self.log("pleiades-fin-bot-out-0.log",
                  L("[advisor] ok caller=briefing model=claude-sonnet-5 used=claude-sonnet-5 cost=$0.1000 turns=1 tools=0 원문RAWXYZ"), append=True)
