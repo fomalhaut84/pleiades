@@ -243,7 +243,7 @@ class Cli(Base):
         # 외부로 나가는 길은 둘이다 — 웹훅 게시(#725)와 하트비트 GET(PR-4 #847) · 주소는 플랫폼 설정에서만 온다(코드에 박지 않는다)
         self.assertEqual(src.count("fetch("), 2)
         self.assertIn("await fetch(target, {", src)
-        self.assertIn("await fetch(url, { method: 'GET', signal: ctrl.signal })", src)  # 본문 없음 — 밖으로 데이터를 싣지 않는다
+        self.assertIn("await fetch(url, { method: 'GET', redirect: 'error', signal: ctrl.signal })", src)  # 리다이렉트로 다른 곳에 가지 않는다  # 본문 없음 — 밖으로 데이터를 싣지 않는다
         self.assertNotIn("hc-ping.com", src)
         self.assertNotIn("discord.com", src)
         self.assertIn("allowed_mentions: { parse: [] }", src)
@@ -1821,3 +1821,11 @@ class Heartbeat(Base):
         self.assertIn("OPS_HEARTBEAT_URL 없음", r.stdout)
         self.assertEqual(len(self.fetches()), 2)
         self.assertEqual(self.run_c("--test-ping", "--dry-run", **env).returncode, 2)
+
+    # 회귀: #847 9-1 info — 웹훅이 없으면 크론 회는 ping 하지 않는다 · 시험이 거짓 통과하지 않는다
+    def test_test_ping_fails_when_cron_would_skip(self):
+        self.platform.write_text(f'OPS_HEARTBEAT_URL="{PING}"\n')
+        env = {"PLEIADES_ENV_FILE": str(self.platform), "NODE_OPTIONS": f"--require={self.fetch_stub()}"}
+        r = self.run_c("--test-ping", **env)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("단 크론 회는 ping 을 건너뛴다 — 웹훅 없음", r.stdout)

@@ -316,8 +316,8 @@ env -i HOME="$HOME" PATH=/usr/bin:/bin "$NODE_BIN" --network-family-autoselectio
 ```
 
 **기대:** `시험 ping 통과 — 외부 서비스에서 마지막 ping 시각을 확인한다` · `rc=0` · healthchecks 화면의 체크가 `up`. 수집하지 않고 상태 파일도 바꾸지 않는다.
-- `OPS_HEARTBEAT_URL 없음` · `형식 오류` → 6-1 · `시험 ping 실패 HTTP 404` → 주소가 잘렸거나 체크가 지워졌다 · `TypeError` · `AbortError` → 서버의 나가는 연결
+- `OPS_HEARTBEAT_URL 없음` · `형식 오류` → 6-1 · `dotenv 없음` → 4-2 표 · `통과 · 단 크론 회는 ping 을 건너뛴다 — <사유>`(rc 1) → 그 사유(4-2 표)를 먼저 고친다 · `시험 ping 실패 HTTP 404` → 주소가 잘렸거나 체크가 지워졌다 · `TypeError` · `AbortError` → 서버의 나가는 연결
 
 크론 줄은 바꾸지 않는다(같은 줄이 다음 회부터 ping 한다). **10분 뒤** `tail -2 ~/pleiades-private/ops/collect.log` 줄 끝에 `· ping 통과` 가 있고 healthchecks 의 마지막 ping 이 5분 안팎이면 통과다.
 
-**되돌리기:** 플랫폼 설정에서 `OPS_HEARTBEAT_URL` 줄 삭제 → 다음 회부터 ping 없음(**즉시**) — **healthchecks 의 체크도 Pause 한다**(안 하면 유예 뒤 "down" 알림이 온다). 수집기 옛 판 재설치도 **즉시**. 계정 · 체크 삭제는 사용자.
+**되돌리기:** 플랫폼 설정에서 `OPS_HEARTBEAT_URL` 줄 삭제 → 다음 회부터 ping 없음(**즉시**) · 또는 수집기 옛 판 재설치(**즉시**). **어느 쪽이든 healthchecks 의 체크를 Pause 한다**(안 하면 유예 뒤 "down" 알림이 온다). 계정 · 체크 삭제는 사용자.

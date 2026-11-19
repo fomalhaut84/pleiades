@@ -3,7 +3,7 @@
 //
 // 사용:  node collect.cjs [--dry-run] [--pm2-bin=<절대 경로>]   수집 1회(crontab 이 부른다)
 //        node collect.cjs --test-alert                             설치 시험 — 고정 문구 1건을 게시 경로로(런북 4절)
-//        node collect.cjs --test-ping                              설치 시험 — 외부 하트비트 ping 1회(런북 7절 · PR-4 #847)
+//        node collect.cjs --test-ping                              설치 시험 — 외부 하트비트 ping 1회(런북 6절 · PR-4 #847)
 //
 // 게시(PR-2b · #725): 플랫폼 설정의 DISCORD_WEBHOOK_OPS 로 Discord #ops 에 보낸다(폴백 없음) · 보낸 본문은 posted.log.
 // --dry-run 은 외부로 나가는 것이 0 이다 — 게시할 메시지는 상태 디렉터리의 dry-run.log 에 쓴다(PR-1 판과 같다).
@@ -966,7 +966,8 @@ async function pingHeartbeat(url, ms) {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), Math.max(1, ms))
   try {
-    const res = await fetch(url, { method: 'GET', signal: ctrl.signal })
+    // redirect: 'error' — https 가드가 첫 요청에만 걸리지 않게(리다이렉트로 다른 곳에 가지 않는다 · 9-1 info)
+    const res = await fetch(url, { method: 'GET', redirect: 'error', signal: ctrl.signal })
     if (res.body && typeof res.body.cancel === 'function') await res.body.cancel().catch(() => {})
     return res.ok ? null : `HTTP ${res.status}`
   } catch (err) {
@@ -1089,16 +1090,29 @@ async function testAlert() {
   }
 }
 
-// 설치 시험(런북 7절) — 수집 없이 ping 1회. 상태 파일을 건드리지 않는다
+// 설치 시험(런북 6절) — 수집 없이 ping 1회. 상태 파일을 건드리지 않는다
 async function testPing() {
   const sec = loadSecrets()
   if (!sec.ping.url) {
-    console.log(`시험 ping 실패 — ${sec.ping.why ? 'OPS_HEARTBEAT_URL 형식 오류(https:// 로 시작해야 한다)' : 'OPS_HEARTBEAT_URL 없음 — 플랫폼 설정에 넣는다'}`)
+    // 해석기가 없거나 비밀을 못 읽으면 키가 없는 것으로 오진하지 않는다(PR-2b 9-1 major 와 같은 길 · #847 9-1 info)
+    const why = sec.ping.why ? 'OPS_HEARTBEAT_URL 형식 오류(https:// 로 시작해야 한다)'
+      : sec.why === 'dotenv 없음' ? 'dotenv 없음 — 두 앱 체크아웃의 node_modules 를 확인한다'
+        : 'OPS_HEARTBEAT_URL 없음 — 플랫폼 설정에 넣는다(플랫폼 설정을 읽을 수 있는지도 본다)'
+    console.log(`시험 ping 실패 — ${why}`)
     return 1
   }
   const err = await pingHeartbeat(sec.ping.url, CONFIG.httpMs * 2)
-  console.log(err ? `시험 ping 실패 ${err}` : '시험 ping 통과 — 외부 서비스에서 마지막 ping 시각을 확인한다')
-  return err ? 1 : 0
+  if (err) {
+    console.log(`시험 ping 실패 ${err}`)
+    return 1
+  }
+  // ping 은 됐어도 게시 경로가 막혀 있으면 크론 회는 ping 하지 않는다 — 시험이 거짓 통과하지 않게
+  if (sec.why) {
+    console.log(`시험 ping 통과 · 단 크론 회는 ping 을 건너뛴다 — ${sec.why}(4-2 표)`)
+    return 1
+  }
+  console.log('시험 ping 통과 — 외부 서비스에서 마지막 ping 시각을 확인한다')
+  return 0
 }
 
 // 이번 회에 감시하는 앱 — 한 회에 한 번만 정하고 모든 판정이 이것만 쓴다(4b-3 R2-3).
