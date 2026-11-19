@@ -131,16 +131,31 @@ export async function openSession(url: string, timeoutMs: number): Promise<McpSe
 
 const MAX_PAGES = 48;
 
-export async function listTools(s: McpSession): Promise<string[]> {
+export interface ToolDefs {
+  names: string[];
+  /** 이름 있는 도구 정의(name · description · inputSchema …)의 UTF-8 JSON 바이트 합 — 모델에 실리는 도구 정의 크기의 근사(#839 · 015 V-1) */
+  bytes: number;
+}
+
+export async function listToolDefs(s: McpSession): Promise<ToolDefs> {
   const names: string[] = [];
+  let bytes = 0;
   let cursor: unknown;
   for (let page = 0; page < MAX_PAGES; page++) {
     const res = await s.call("tools/list", typeof cursor === "string" ? { cursor } : {});
-    for (const t of Array.isArray(res.tools) ? res.tools : []) if (isObj(t) && typeof t.name === "string") names.push(t.name);
+    for (const t of Array.isArray(res.tools) ? res.tools : []) {
+      if (!isObj(t) || typeof t.name !== "string") continue;
+      names.push(t.name);
+      bytes += Buffer.byteLength(JSON.stringify(t), "utf8");
+    }
     cursor = res.nextCursor;
-    if (typeof cursor !== "string" || !cursor) return names;
+    if (typeof cursor !== "string" || !cursor) return { names, bytes };
   }
   throw new Error("tools/list 페이지가 너무 많다");
+}
+
+export async function listTools(s: McpSession): Promise<string[]> {
+  return (await listToolDefs(s)).names;
 }
 
 /** prompts/get — user/assistant 메시지의 text 를 이어 붙인다. text 가 하나도 없으면 던진다. */

@@ -42,6 +42,8 @@ bash ~/pleiades-adv/deploy/advisor/adv-inplace.sh "$V"             # y 로 확�
 
 스크립트가 하는 일: **0** OS(Linux) · 위치 `~/pleiades-adv` · **C1a** 셸 키 비우기 · `PLEIADES_ENV_FILE=~/pleiades-platform.env`(600) · **L** 배포 락 → (여기부터 락 fd 를 닫은 서브셸) **C1b** 두 앱 기록(`inplace-fin/fit-last-ok`)이 같은 위치에 있음 · pm2 데몬 있음 · `claude` 찾기(PATH → `~/.local/bin`) · 도는 fin·fit 의 `PLEIADES_ENV_FILE` 이 같음 · **A** 태그 받기 · 깨끗 · 규칙 3줄 · **C2** checkout · **C3** 빌드(루트 `npm ci` → chat ci·tsc → advisor `npm ci`·build) · **C4** `probe`(모델 호출 0 · 두 도메인 읽기 경로 · 락은 "busy(이 실행의 락)") · **C5** 옛 `pleiades-adv-bot` delete → `start --update-env` → `save --force` · **C6** 30초 뒤 online · cwd · env · `PLEIADES_PRIVATE_DIR` 없음 · 전체 `pleiades-*` same · 봇 키가 있으면 생존 표지 갱신.
 
+**C4 크기 줄(#839 · 015 V-1 · S0).** probe 는 도메인 줄 끝에 `도구 정의 N B · 지식 N B` 를, 끝에 `시스템 프롬프트: N B · 경고선 75000 B · 상한 100000 B` 를 낸다(합계는 질문 경로와 같은 계산 · 준비된 도메인이 없으면 줄 없음). 합계가 경고선을 넘으면 `경고: 시스템 프롬프트가 경고선을 넘었다 …` 한 줄이 더 나온다 — **배포를 막지 않는다**(rc 무변경). 경고를 보면 015 §5 전환 조건 ③ — 지식을 줄이거나 S3(지식 온디맨드)를 검토한다. 상한을 넘으면 새 세션이 전부 거부된다. 자동 배포의 `## adv` 에도 같은 줄이 나온다.
+
 **확인 프롬프트(`y`)를 오래 열어 두지 않는다** — 그동안 락을 쥐고 있어 Release 자동 배포가 락에서 실패한다(두 앱 배포와 같다).
 
 **A 규칙(상태로 판정 · 별도 재시도 플래그 없음):**

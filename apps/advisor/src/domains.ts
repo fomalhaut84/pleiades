@@ -3,7 +3,7 @@
 // (012 §2-1 — 쓰기 도구는 그 경로에 등록되지 않는다). 이 체크아웃의 분류는 방어 한 겹 — 쓰기로 분류된 이름이 목록에 보이면 그 도메인을 쓰지 않는다.
 import fs from "node:fs";
 import path from "node:path";
-import { getPromptText, listTools, openSession } from "./mcp-client";
+import { getPromptText, listToolDefs, openSession } from "./mcp-client";
 
 /** 통합 층이 붙는 도메인 디렉터리(apps/<dir>) — 도메인 #3(#240)은 여기에 한 줄 + 그 앱의 domain.json · 읽기 경로 */
 export const DOMAIN_DIRS = ["finance", "fitness"] as const;
@@ -60,7 +60,7 @@ export const prefixOf = (d: Pick<DomainDecl, "serverKey">) => `mcp__${d.serverKe
 export const readUrlOf = (d: Pick<DomainDecl, "port">) => `http://127.0.0.1:${d.port}${READ_PATH}`;
 
 export type DomainReady =
-  | { id: string; ok: true; decl: DomainDecl; allow: string[]; knowledge: string }
+  | { id: string; ok: true; decl: DomainDecl; allow: string[]; knowledge: string; /** tools/list 도구 정의 바이트 — probe 출력만 쓴다(#839) */ toolBytes: number }
   | { id: string; ok: false; decl: DomainDecl; why: string };
 
 /** 한 도메인의 읽기 경로에서 도구 목록과 지식을 받는다. 어느 하나라도 실패하면 그 도메인을 쓰지 않는다(012 R-바닥 정정 ②). */
@@ -74,8 +74,9 @@ export async function prepareDomain(decl: DomainDecl, timeoutMs: number): Promis
   }
   try {
     let names: string[];
+    let toolBytes: number;
     try {
-      names = await listTools(s);
+      ({ names, bytes: toolBytes } = await listToolDefs(s));
     } catch {
       return fail("tools/list 실패");
     }
@@ -89,7 +90,7 @@ export async function prepareDomain(decl: DomainDecl, timeoutMs: number): Promis
       return fail("prompts/get 실패");
     }
     if (Buffer.byteLength(knowledge, "utf8") > KNOWLEDGE_MAX_BYTES) return fail("지식 상한 초과");
-    return { id: decl.id, ok: true, decl, allow: names.map((n) => prefixOf(decl) + n), knowledge };
+    return { id: decl.id, ok: true, decl, allow: names.map((n) => prefixOf(decl) + n), knowledge, toolBytes };
   } finally {
     await s.close();
   }

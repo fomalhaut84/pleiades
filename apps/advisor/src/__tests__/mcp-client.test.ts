@@ -2,7 +2,7 @@
 import http from "node:http";
 import { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
-import { MAX_BODY_BYTES, post } from "../mcp-client";
+import { MAX_BODY_BYTES, McpSession, listToolDefs, listTools, post } from "../mcp-client";
 
 let server: http.Server | null = null;
 afterEach(async () => {
@@ -54,5 +54,29 @@ describe("post — 끝나지 않는 응답", () => {
     await new Promise((r) => server!.close(() => r(undefined)));
     server = null;
     await expect(post(url, {}, {}, 2000)).rejects.toThrow(/연결/);
+  });
+});
+
+// #839 · 015 V-1 — tools/list 도구 정의 바이트(S0 판정 근거). 이름 목록은 그대로다.
+describe("listToolDefs — 도구 정의 바이트", () => {
+  const page1 = [{ name: "get_a", description: "가나다", inputSchema: { type: "object" } }];
+  const page2 = [{ name: "get_b", inputSchema: { type: "object", properties: { x: { type: "string" } } } }, { noName: true }];
+  const session = (): McpSession => ({
+    async call(method, params) {
+      expect(method).toBe("tools/list");
+      return (params as { cursor?: string }).cursor === "p2" ? { tools: page2 } : { tools: page1, nextCursor: "p2" };
+    },
+    async close() {},
+  });
+
+  it("여러 페이지의 이름 있는 도구 정의를 UTF-8 JSON 바이트로 더한다", async () => {
+    const r = await listToolDefs(session());
+    expect(r.names).toEqual(["get_a", "get_b"]);
+    const want = [page1[0], page2[0]].reduce((n, t) => n + Buffer.byteLength(JSON.stringify(t), "utf8"), 0);
+    expect(r.bytes).toBe(want);
+  });
+
+  it("listTools 는 같은 이름 목록을 돌려준다", async () => {
+    expect(await listTools(session())).toEqual(["get_a", "get_b"]);
   });
 });
