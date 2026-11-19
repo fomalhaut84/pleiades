@@ -134,3 +134,18 @@ describe("loadDomains — 발견 · 격리(fixture)", () => {
     expect(loadDomains(path.join(root, "none"), {})).toEqual({ decls: [], broken: [] });
   });
 });
+
+// 회귀: #841 9-1 info — 파일 오류 사유는 코드만(절대경로를 로그에 남기지 않는다)
+describe("loadDomains — 파일 오류 사유", () => {
+  it("domain.json 이 디렉터리면 EISDIR 만 남는다", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "adv-disc-"));
+    try {
+      fs.mkdirSync(path.join(root, "weird", "domain.json"), { recursive: true });
+      const r = loadDomains(root, {});
+      expect(r.broken).toEqual([{ id: "apps/weird", why: "선언 오류(EISDIR)" }]);
+      expect(r.broken[0].why).not.toContain(root);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+});

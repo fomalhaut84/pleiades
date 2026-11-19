@@ -60,7 +60,13 @@ export interface Discovered {
   broken: BrokenDecl[];
 }
 
-const reason = (e: unknown) => (e instanceof SyntaxError ? "JSON" : e instanceof Error ? e.message : String(e));
+/** 로그 · probe 에 남는 사유 — 파일 오류는 코드만(EACCES 등 · 메시지의 절대경로를 남기지 않는다 · #841 9-1 info) */
+const reason = (e: unknown) => {
+  if (e instanceof SyntaxError) return "JSON";
+  const code = (e as NodeJS.ErrnoException | null)?.code;
+  if (typeof code === "string") return code;
+  return e instanceof Error ? e.message : "알 수 없음";
+};
 const byKey = <T>(xs: T[], key: (x: T) => string) => [...xs].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
 
 /**
