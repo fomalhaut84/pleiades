@@ -72,6 +72,7 @@ SIDE_VERSION_ONLY='^[[:space:]]*"version": "[0-9]+\.[0-9]+\.[0-9]+",?[[:space:]]
 side_auto() {  # <키> <base> <tag>
   local key=$1 tag=$3 conf co script inputs runbook dir priv="$HOME/pleiades-private" last why rc
   conf=$(side_conf "$key")
+  [[ -n "$conf" ]] || { echo "## $key"; echo "$key 건너뜀 — 모르는 곁가지 키"; return 0; }
   read -r co script inputs runbook <<<"$conf"
   dir="$2/$co"
   echo "## $key"

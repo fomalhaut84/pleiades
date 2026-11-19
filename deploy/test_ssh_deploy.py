@@ -507,6 +507,15 @@ class HrmAuto(unittest.TestCase):
         self.assertIn("adv 실패 rc 4", r.stdout)
         self.assertEqual(self.hrm_calls(), ["hrm v1.0.3 --yes stdin=none"])
 
+    def test_unknown_side_key_is_skipped(self):
+        # #829 9-1 info — 모르는 키는 "체크아웃 없음(~/)" 같은 엉뚱한 안내 대신 그렇다고 적고 건너뛴다
+        script = (f"source {SCRIPT}; OUT=$(mktemp); side_auto xyz {self.base} v1.0.3; rc=$?; rm -f \"$OUT\"; exit $rc")
+        r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30,
+                           env={"PATH": f"{NODE_DIR}:{BASE_PATH}", "HOME": str(self.base), "STUB_LOG": str(self.log)})
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("xyz 건너뜀 — 모르는 곁가지 키", r.stdout)
+        self.assertEqual(self.hrm_calls(), [])
+
     def test_app_failure_never_reaches_side_apps(self):
         r = self.run_cmd("v1.0.3", STUB_RC_fit="4")
         self.assertEqual(r.returncode, 4)
