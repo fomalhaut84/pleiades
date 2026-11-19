@@ -25,7 +25,8 @@ export function probeReport(lock: string, all: DomainReady[]): ProbeReport {
   }
   const ready = all.filter((d): d is Extract<DomainReady, { ok: true }> => d.ok);
   if (!ready.length) return { lines, systemBytes: null, warn: false };
-  const systemBytes = bytes(buildSystem(ready, all.filter((d) => !d.ok).map((d) => d.decl)));
+  // 질문 경로(advisor.ts startSession)와 같이 — 선언 오류는 빠진 도메인 안내에 넣지 않는다(#841)
+  const systemBytes = bytes(buildSystem(ready, all.flatMap((d) => (!d.ok && d.decl ? [d.decl] : []))));
   lines.push(`시스템 프롬프트: ${systemBytes} B · 경고선 ${SYSTEM_WARN_BYTES} B · 상한 ${SYSTEM_MAX_BYTES} B`);
   const warn = systemBytes > SYSTEM_WARN_BYTES;
   if (warn) lines.push("경고: 시스템 프롬프트가 경고선을 넘었다 — 015 §5 전환 조건 ③ · 막지 않는다(상한을 넘으면 새 세션이 거부된다)");

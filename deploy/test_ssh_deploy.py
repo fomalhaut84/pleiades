@@ -5,6 +5,7 @@ release-inplace.sh 는 스텁으로 바꾼다(가짜 체크아웃 두 개). 핵�
 fin 이 통과하지 않으면 fit 을 하지 않는다 · workflow 는 저장소 코드를 checkout 하지 않고 secrets 는 environment 에만.
 """
 
+import fnmatch
 import os
 import re
 import subprocess
@@ -199,6 +200,22 @@ class AdvAuto(unittest.TestCase):
         self.assertIn("adv 건너뜀 — 입력 변경 없음 · v1.0.0 유지", r.stdout)
         self.assertFalse([c for c in self.calls() if c.startswith("notify adv")], "건너뜀은 알리지 않는다")
 
+    # #841 — 선언 입력은 글롭 한 줄 · 셸이 펼치지 않고 git pathspec 으로 넘어가 새 앱의 선언도 배포를 부른다
+    def test_new_app_declaration_glob_deploys(self):
+        self.git("checkout", "-q", "v1.0.0")
+        self.write("apps/newapp/domain.json", "{}")
+        self.commit_tag("v4.0.0")
+        r = self.run_cmd("v4.0.0")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("adv 배포 — 입력 변경 있음(v1.0.0 → v4.0.0)", r.stdout)
+        self.git("checkout", "-q", "v1.0.0")
+        self.write("apps/newapp/other.json", "{}")   # 선언 밖 앱 파일
+        self.commit_tag("v4.0.1")
+        self.last_ok("v1.0.0")
+        self.log.write_text("")
+        r = self.run_cmd("v4.0.1")
+        self.assertIn("adv 건너뜀 — 입력 변경 없음 · v1.0.0 유지", r.stdout)
+
     # 회귀: 9-1 major — 릴리즈마다 버전 커밋이 루트 · packages 의 package 파일을 바꾼다. 그것만이면 건너뛴다
     def test_version_bump_only_is_skipped_but_dependency_change_deploys(self):
         pkg = '{\n  "name": "pleiades",\n  "version": "%s",\n  "dependencies": {\n    "ws": "%s"\n  }\n}\n'
@@ -321,6 +338,9 @@ class AdvAuto(unittest.TestCase):
         self.assertEqual(self.git("status", "--porcelain"), "")
 
 
+GLOB_CHARS = re.compile(r"[*?\[]")
+
+
 class AutoInputs(unittest.TestCase):
     """auto-inputs.txt 가 통합 층이 자기 체크아웃에서 읽는 곳을 덮는다 — 빠지면 그 변경이 운영에 들어가지 않는다."""
 
@@ -329,15 +349,20 @@ class AutoInputs(unittest.TestCase):
         self.src = HERE.parent / "apps" / "advisor" / "src"
 
     def covered(self, rel: str) -> bool:
-        return any(rel == s or (s.endswith("/") and rel.startswith(s)) for s in self.specs)
+        # 글롭 줄은 git pathspec(마법 없음)과 같은 의미 = fnmatch(`*` 가 `/` 를 넘는다) — pathlib.glob 로 바꾸지 않는다(015 AU2:45 · #841)
+        return any(rel == s or (s.endswith("/") and rel.startswith(s)) or (GLOB_CHARS.search(s) and fnmatch.fnmatchcase(rel, s))
+                   for s in self.specs)
 
     def test_domain_declarations_and_model_pins(self):
-        dirs = re.findall(r'"(\w+)"', re.search(r"DOMAIN_DIRS = \[([^\]]*)\]", (self.src / "domains.ts").read_text()).group(1))
-        pins = re.findall(r'dir: "(\w+)"', (self.src / "cli.ts").read_text())
-        self.assertEqual(sorted(dirs), ["finance", "fitness"])
-        self.assertEqual(sorted(pins), sorted(dirs))
-        for d in dirs:
+        # #841 — 통합 층은 apps/*/domain.json 을 스캔한다(domains.ts DECLARATION_FILE). 저장소의 선언 전부가 입력이어야 한다
+        self.assertIn('DECLARATION_FILE = "domain.json"', (self.src / "domains.ts").read_text())
+        decls = sorted(p.parent.name for p in (HERE.parent / "apps").glob("*/domain.json"))
+        self.assertGreaterEqual(len(decls), 2)
+        for d in decls:
             self.assertTrue(self.covered(f"apps/{d}/domain.json"), d)
+        self.assertTrue(self.covered("apps/newapp/domain.json"), "새 앱의 선언도 덮는다(글롭)")
+        pins = re.findall(r'dir: "(\w+)"', (self.src / "cli.ts").read_text())
+        self.assertTrue(set(pins) <= set(decls), (pins, decls))   # 모델 핀 ⊆ 발견
         for d in pins:
             self.assertTrue(self.covered(f"apps/{d}/src/lib/ai/models.ts"), d)
 
@@ -351,13 +376,21 @@ class AutoInputs(unittest.TestCase):
             self.assertTrue(self.covered(rel), rel)
 
     def test_every_spec_exists(self):
+        root = HERE.parent
         for s in self.specs:
-            self.assertTrue((HERE.parent / s).exists(), s)
+            if GLOB_CHARS.search(s):   # 글롭은 지금 하나 이상 맞아야 한다(#841)
+                tracked = subprocess.run(["git", "-C", str(root), "ls-files"], capture_output=True, text=True, check=True).stdout.split()
+                hits = [t for t in tracked if fnmatch.fnmatchcase(t, s)]
+                self.assertTrue(hits, s)
+            else:
+                self.assertTrue((root / s).exists(), s)
 
     def test_app_code_is_not_an_input(self):
         # 도구 목록 · 지식은 도는 두 앱에서 질문마다 받는다 — 두 앱 코드 전체를 넣으면 거의 모든 릴리즈가 배포된다
         self.assertFalse(self.covered("apps/finance/src/mcp/server.ts"))
         self.assertFalse(self.covered("apps/fitness/src/app/page.tsx"))
+        self.assertFalse(self.covered("apps/hermes/src/server.ts"))   # 글롭이 선언 밖 앱 코드를 덮지 않는다(#841)
+        self.assertFalse(self.covered("apps/finance/domain.json.bak"))
 
 
 HRM_STUB = """#!/bin/bash
@@ -543,8 +576,14 @@ class HrmAutoInputs(unittest.TestCase):
             self.assertTrue(self.covered(rel), rel)
 
     def test_every_spec_exists(self):
+        root = HERE.parent
         for s in self.specs:
-            self.assertTrue((HERE.parent / s).exists(), s)
+            if GLOB_CHARS.search(s):   # 글롭은 지금 하나 이상 맞아야 한다(#841)
+                tracked = subprocess.run(["git", "-C", str(root), "ls-files"], capture_output=True, text=True, check=True).stdout.split()
+                hits = [t for t in tracked if fnmatch.fnmatchcase(t, s)]
+                self.assertTrue(hits, s)
+            else:
+                self.assertTrue((root / s).exists(), s)
 
     def test_other_apps_are_not_inputs(self):
         # hermes 가 쓰지 않는 곳 — 넣으면 거의 모든 릴리즈가 hermes 를 다시 띄운다

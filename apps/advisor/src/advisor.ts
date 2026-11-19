@@ -112,9 +112,11 @@ export class Advisor {
 
   /** 읽기 경로 준비 — 모델 호출 없음(4b-3 기동 탐침 · 로컬 점검) */
   async prepareAll(): Promise<DomainReady[]> {
-    const decls = loadDomains(this.deps.appsDir, this.deps.env);
+    const { decls, broken } = loadDomains(this.deps.appsDir, this.deps.env);
     const prep = this.deps.prepare ?? ((d: DomainDecl) => prepareDomain(d, MCP_TIMEOUT_MS));
-    return Promise.all(decls.map(prep));
+    const ready = await Promise.all(decls.map(prep));
+    // 선언 오류는 뒤에 — 준비된 순서(id 순)와 지식 절 순서를 바꾸지 않는다(#841)
+    return [...ready, ...broken.map((b): DomainReady => ({ id: b.id, ok: false, decl: null, why: b.why }))];
   }
 
   private async startSession(key: string): Promise<Session | null> {
@@ -122,7 +124,8 @@ export class Advisor {
     const ready = all.filter((d): d is Extract<DomainReady, { ok: true }> => d.ok);
     for (const d of all) if (!d.ok) this.log(`[advisor] domain=${d.id} unavailable why=${d.why}`);
     if (!ready.length) return null;
-    const missing = all.filter((d) => !d.ok).map((d) => d.decl);
+    // 선언 오류(decl 없음)는 안내에 넣지 않는다 — 모델은 그 제공자를 모른다(#841 · B)
+    const missing = all.flatMap((d) => (!d.ok && d.decl ? [d.decl] : []));
     const mcpConfigPath = path.join(this.advisorDir, `mcp-${keyTag(key)}.json`);
     writePrivate(mcpConfigPath, JSON.stringify({
       mcpServers: Object.fromEntries(ready.map((d) => [d.decl.serverKey, { type: "http", url: readUrlOf(d.decl) }])),
