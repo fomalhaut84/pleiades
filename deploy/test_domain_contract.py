@@ -1,7 +1,7 @@
 """apps/*/domain.json — 도메인 계약 v0 의 K-0(선언) · K-2(도구 분류) (#653 · 012 §7-2).
 
 실행: python3 -m unittest discover -s deploy
-도메인마다 같은 검사를 돈다 — 새 도메인(#240)은 DOMAINS 에 한 줄 더하면 같은 계약을 받는다.
+도메인마다 같은 검사를 돈다 — 새 도메인(#240)은 DOMAINS 에 한 줄 더하면 같은 계약을 받는다(더하지 않으면 발견 대조 시험이 막는다 · #841).
 보는 것: 형식 · 분류가 MCP 서버 등록과 양방향으로 같다 · 서버 키·포트가 mcp-config.json · server.ts 기본값과 같다 ·
 키 접미사를 앱 코드가 실제로 쓴다 · 읽기 전용 경로(K-1) · 지식 prompt(K-3). 소스를 읽기만 한다(실행 0).
 """
@@ -28,6 +28,12 @@ def registered(app_dir: str) -> list:
 
 
 class DomainContract(unittest.TestCase):
+    # 회귀: #841 9-1 major — 통합 층은 apps/*/domain.json 을 스캔해 붙인다(015 V-2). 선언 파일 하나만 더하면 이 계약 시험 없이
+    # 운영 통합 층에 들어가므로, 일반화(V-3) 전까지는 저장소의 선언 전부가 DOMAINS 에 있어야 한다 — 새 선언은 여기서 막힌다.
+    def test_every_declaration_is_under_contract(self):
+        found = sorted(p.parent.name for p in (ROOT / "apps").glob("*/domain.json"))
+        self.assertEqual(found, sorted(DOMAINS.values()), "새 apps/<x>/domain.json 은 DOMAINS 에 더해 계약 시험을 받는다(015 V-3 전)")
+
     def test_shape(self):
         for app, d in DOMAINS.items():
             with self.subTest(app=app):

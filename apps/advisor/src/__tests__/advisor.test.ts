@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { Advisor, MESSAGES } from "../advisor";
+import { Advisor, BASE_SYSTEM_PROMPT, MESSAGES } from "../advisor";
 import { LockState } from "../deploy-lock";
 import { FakeMcp, startFakeMcp } from "./helpers/fake-mcp";
 import { initLine, resultLine, toolResult, toolUse } from "./helpers/stream";
@@ -274,5 +274,48 @@ describe("Advisor.ask — 거부 · 실패", () => {
     const first = a.ask(KEY, "q1");
     expect(await a.ask("discord:1:2", "q2")).toMatchObject({ kind: "refused", reason: "busy" });
     expect((await first).kind).toBe("answer");
+  });
+});
+
+// #841 · 015 V-2 — 발견 · 제공자 단위 격리. 답 입력은 {fin, fit} 에서 지금과 바이트 동일해야 한다.
+describe("Advisor — 발견 · 선언 격리", () => {
+  const fixtureApps = (extra: Record<string, string>, withDomains = true) => {
+    const apps = path.join(tmp, "apps");
+    for (const dir of ["finance", "fitness"]) {
+      const files = ["src/lib/ai/models.ts", ...(withDomains ? ["domain.json"] : [])];
+      for (const f of files) {
+        fs.mkdirSync(path.dirname(path.join(apps, dir, f)), { recursive: true });
+        fs.copyFileSync(path.join(APPS, dir, f), path.join(apps, dir, f));
+      }
+    }
+    for (const [dir, text] of Object.entries(extra)) {
+      fs.mkdirSync(path.join(apps, dir), { recursive: true });
+      fs.writeFileSync(path.join(apps, dir, "domain.json"), text);
+    }
+    return apps;
+  };
+  const systemOf = () => {
+    const [call] = cliCalls();
+    return call.argv[call.argv.indexOf("--system-prompt") + 1];
+  };
+
+  it("{fin, fit} 시스템 프롬프트는 BASE + 재무 · 건강 순 지식 절 그대로(바이트 동일)", async () => {
+    happy();
+    await advisor().ask(KEY, "q");
+    expect(systemOf()).toBe(`${BASE_SYSTEM_PROMPT}\n\n## 도메인 지식 — 재무\n재무 지식 본문\n\n## 도메인 지식 — 건강\n건강 지식 본문`);
+  });
+
+  it("깨진 선언이 섞여도 남은 도메인으로 답하고 · 모델 안내에는 넣지 않는다(B) · 로그에는 남는다", async () => {
+    happy();
+    const r = await advisor({ appsDir: fixtureApps({ broken: "{" }) }).ask(KEY, "q");
+    expect(r).toMatchObject({ kind: "answer", text: "답입니다" });
+    expect(systemOf()).toBe(`${BASE_SYSTEM_PROMPT}\n\n## 도메인 지식 — 재무\n재무 지식 본문\n\n## 도메인 지식 — 건강\n건강 지식 본문`);
+    expect(logs.join("\n")).toMatch(/domain=apps\/broken unavailable why=선언 오류/);
+  });
+
+  it("선언이 전부 깨지면 지금과 같은 no-domain 거부", async () => {
+    happy();
+    const apps = fixtureApps({ broken: "{" }, false);
+    expect(await advisor({ appsDir: apps }).ask(KEY, "q")).toMatchObject({ kind: "refused", reason: "no-domain", text: MESSAGES.noDomain });
   });
 });

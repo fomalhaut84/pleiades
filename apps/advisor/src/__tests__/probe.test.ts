@@ -26,7 +26,7 @@ describe("probeReport", () => {
 
   it("시스템 합계는 실제 질문 경로의 buildSystem 바이트와 같다(빠진 도메인 안내 포함)", () => {
     const ready = [ok("fin", "재무", "지식"), bad("fit", "건강")];
-    const want = bytes(buildSystem([ready[0] as Extract<DomainReady, { ok: true }>], [ready[1].decl]));
+    const want = bytes(buildSystem([ready[0] as Extract<DomainReady, { ok: true }>], [ready[1].decl!]));
     const r = probeReport("free", ready);
     expect(r.systemBytes).toBe(want);
     expect(r.lines).toContain(`시스템 프롬프트: ${want} B · 경고선 ${SYSTEM_WARN_BYTES} B · 상한 ${SYSTEM_MAX_BYTES} B`);
@@ -51,5 +51,16 @@ describe("probeReport", () => {
     const r = probeReport("free", [bad("fin", "재무"), bad("fit", "건강")]);
     expect(r.systemBytes).toBeNull();
     expect(r.lines.some((l) => l.startsWith("시스템 프롬프트"))).toBe(false);
+  });
+});
+
+// #841 — 선언 오류 제공자(decl 없음)는 줄로만 · 시스템 합계의 빠진 도메인 안내에 넣지 않는다(B)
+describe("probeReport — 선언 오류", () => {
+  it("선언 오류 줄 · 합계는 선언 오류를 뺀 buildSystem", () => {
+    const broken: DomainReady = { id: "apps/x", ok: false, decl: null, why: "선언 오류(JSON)" };
+    const fin = ok("fin", "재무", "지식");
+    const r = probeReport("free", [fin, broken]);
+    expect(r.lines).toContain("apps/x: 쓸 수 없음 · 선언 오류(JSON)");
+    expect(r.systemBytes).toBe(bytes(buildSystem([fin], [])));
   });
 });
