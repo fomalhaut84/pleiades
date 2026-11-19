@@ -5,11 +5,12 @@
 #   restrict,command="<홈>/pleiades-fin/deploy/ssh-deploy.sh" ssh-ed25519 AAAA… pleiades-deploy   (런북 release-inplace.md *자동 배포*)
 # 받는 명령은 하나뿐: SSH_ORIGINAL_COMMAND = "deploy vX.Y.Z" — 그 밖은 거부(셸·인자 추가·다른 명령 없음).
 # 하는 일: fin → fit 순서로 각 체크아웃의 deploy/release-inplace.sh <app> <V> --yes. fin 이 통과하지 않으면 fit 은 하지 않는다.
-#   두 앱이 통과하면 통합 층(012 4b-5 · #744): 셋째 체크아웃이 있고 · 켜져 있고(마지막 통과 기록 · 정지 표지 없음) ·
-#   입력(deploy/advisor/auto-inputs.txt)이 바뀌었을 때만 ~/pleiades-adv 의 adv-inplace.sh <V> --yes. 이 단계는 종료 코드를 바꾸지 않는다(G-R4).
+#   두 앱이 통과하면 곁가지 앱 — 통합 층(012 4b-5 · #744) → hermes(014 H-4 · #829): 그 체크아웃이 있고 · 켜져 있고(마지막 통과 기록 ·
+#   정지 표지 없음) · 입력(deploy/<곳>/auto-inputs.txt)이 바뀌었을 때만 그 체크아웃의 <키>-inplace.sh <V> --yes.
+#   곁가지는 종료 코드를 바꾸지 않고(G-R4) 서로 막지 않는다(adv 가 실패해도 hrm 은 판정한다).
 # 출력은 release-inplace.sh 의 판정 양식뿐 — Actions 로그는 공개 저장소에서 누구나 본다.
 # 종료 코드: 0 둘 다 통과 · 2 명령 거부 · 그 밖 = 처음 실패한 앱의 release-inplace.sh 코드(1 바꾸기 전 · 3 · 4 R-8 안내)
-#   통합 층 실패는 종료 코드에 없다 — Actions 가 초록이어도 "## adv" 줄 · 배포 알림을 본다.
+#   곁가지 실패는 종료 코드에 없다 — Actions 가 초록이어도 "## adv" · "## hrm" 줄 · 배포 알림을 본다.
 # 자기 교체: fin 의 checkout 이 이 파일(fin 체크아웃 안)을 바꾼다 — 본문을 함수에 두고 마지막 줄에서 main + exit.
 
 TAG_RE='^v[0-9]+\.[0-9]+\.[0-9]+$'
@@ -50,41 +51,53 @@ main() {
       return "$rc"
     fi
   done
-  adv_auto "$base" "$tag"
+  side_auto adv "$base" "$tag"
+  side_auto hrm "$base" "$tag"
   return 0
 }
 
-# ── 통합 층(012 4b-5 · #744) ─────────────────────────────────────────────
+# ── 곁가지 앱 — 통합 층(012 4b-5 · #744) · hermes(014 H-4 · #829) ───────────────
 # 필요할 때만 — 켜져 있고 입력이 바뀌었을 때. 실패해도 두 앱 결과(rc)를 바꾸지 않는다(G-R4).
-ADV_INPUTS=deploy/advisor/auto-inputs.txt
+# 키별: 체크아웃 · 배포 스크립트 · 입력 목록(태그 안의 경로) · 첫 배포 런북. 상태 표지는 <키>-inplace.sh 가 쓰는 이름
+#   ~/pleiades-private/inplace-<키>-{last-ok,stopped,pending} 그대로다.
+side_conf() {  # <키> → "체크아웃 스크립트 입력목록 런북" · 모르는 키는 빈 줄
+  case $1 in
+    adv) echo "pleiades-adv deploy/advisor/adv-inplace.sh deploy/advisor/auto-inputs.txt advisor-inplace.md" ;;
+    hrm) echo "pleiades-hermes deploy/hermes/hrm-inplace.sh deploy/hermes/auto-inputs.txt hermes.md" ;;
+  esac
+}
 # 릴리즈마다 올리는 버전 줄(루트 · packages 의 package.json · lock)만 바뀐 묶음은 변경으로 보지 않는다(9-1 major) —
 # 의존을 올리면 같은 묶음의 resolved · integrity 줄도 바뀌므로 그대로 잡힌다. git -I 는 2.30+ · 없으면 비교 실패 = 배포
-ADV_VERSION_ONLY='^[[:space:]]*"version": "[0-9]+\.[0-9]+\.[0-9]+",?[[:space:]]*$'
-adv_auto() {  # <base> <tag>
-  local dir="$1/pleiades-adv" priv="$HOME/pleiades-private" last why rc
-  echo "## adv"
-  [[ -f "$dir/deploy/advisor/adv-inplace.sh" ]] || { echo "adv 건너뜀 — 셋째 체크아웃 없음"; return 0; }
-  last=$(cat "$priv/inplace-adv-last-ok" 2>/dev/null || true)
-  [[ -n "$last" ]] || { echo "adv 건너뜀 — 첫 배포 전(첫 배포는 수동 · 런북 advisor-inplace.md)"; return 0; }
-  [[ ! -e "$priv/inplace-adv-stopped" ]] || { echo "adv 건너뜀 — 정지됨(stop) · 마지막 통과 $last 유지"; return 0; }
-  why=$(adv_reason "$dir" "$priv" "$last" "$2")
+SIDE_VERSION_ONLY='^[[:space:]]*"version": "[0-9]+\.[0-9]+\.[0-9]+",?[[:space:]]*$'
+side_auto() {  # <키> <base> <tag>
+  local key=$1 tag=$3 conf co script inputs runbook dir priv="$HOME/pleiades-private" last why rc
+  conf=$(side_conf "$key")
+  [[ -n "$conf" ]] || { echo "## $key"; echo "$key 건너뜀 — 모르는 곁가지 키"; return 0; }
+  read -r co script inputs runbook <<<"$conf"
+  dir="$2/$co"
+  echo "## $key"
+  [[ -f "$dir/$script" ]] || { echo "$key 건너뜀 — 체크아웃 없음(~/$co)"; return 0; }
+  last=$(cat "$priv/inplace-$key-last-ok" 2>/dev/null || true)
+  [[ -n "$last" ]] || { echo "$key 건너뜀 — 첫 배포 전(첫 배포는 수동 · 런북 $runbook)"; return 0; }
+  [[ ! -e "$priv/inplace-$key-stopped" ]] || { echo "$key 건너뜀 — 정지됨(stop) · 마지막 통과 $last 유지"; return 0; }
+  why=$(side_reason "$dir" "$priv/inplace-$key-pending" "$last" "$tag" "$inputs")
   if [[ "$why" == skip ]]; then
-    echo "adv 건너뜀 — 입력 변경 없음 · $last 유지"
+    echo "$key 건너뜀 — 입력 변경 없음 · $last 유지"
     return 0
   fi
-  echo "adv 배포 — $why"
-  bash "$dir/deploy/advisor/adv-inplace.sh" "$2" --yes </dev/null 2>&1 \
+  echo "$key 배포 — $why"
+  bash "$dir/$script" "$tag" --yes </dev/null 2>&1 \
     | sed -E "s#$HOME#~#g; s#/(home|Users)/[^/[:space:]]+#~#g" | tee "$OUT"
   rc=${PIPESTATUS[0]}
-  notify "$1" adv "$2" "$rc" "$OUT"
-  [[ $rc -eq 0 ]] || echo "adv 실패 rc $rc — 두 앱 배포 결과는 그대로다 · 위 양식의 복구 줄은 사용자가 서버에서"
+  notify "$2" "$key" "$tag" "$rc" "$OUT"
+  [[ $rc -eq 0 ]] || echo "$key 실패 rc $rc — 두 앱 배포 결과는 그대로다 · 위 양식의 복구 줄은 사용자가 서버에서"
   return 0
 }
 # 배포할 이유 한 줄 · 할 일이 없으면 skip. 판정하지 못하면 배포한다(놓치는 것보다 한 번 더 도는 쪽 — 같은 태그면 "이미 배포됨")
-adv_reason() {  # <dir> <priv> <last> <tag>
+side_reason() {  # <dir> <pending 파일> <last> <tag> <입력 목록 경로>
   local dir=$1 last=$3 tag=$4 line rc
   local -a specs=()
-  [[ ! -s "$2/inplace-adv-pending" ]] || { echo "끝나지 않은 시도가 있다"; return; }
+  [[ ! -s "$2" ]] || { echo "끝나지 않은 시도가 있다"; return; }
   # 기록은 공개 로그에 찍히고 git 인자로도 쓰인다 — 태그 형식만 믿는다(9-1 info)
   [[ "$last" =~ $TAG_RE ]] || { echo "판정 불능(마지막 통과 기록 형식)"; return; }
   [[ "$last" != "$tag" ]] || { echo "같은 태그 — 상태 확인"; return; }
@@ -98,9 +111,9 @@ adv_reason() {  # <dir> <priv> <last> <tag>
     line=${line%%#*}
     line=${line#"${line%%[![:space:]]*}"}; line=${line%"${line##*[![:space:]]}"}   # 앞뒤만 다듬는다
     [[ -z "$line" ]] || specs+=("$line")
-  done < <(git -C "$dir" show "$tag:$ADV_INPUTS" 2>/dev/null </dev/null)
+  done < <(git -C "$dir" show "$tag:$5" 2>/dev/null </dev/null)
   [[ ${#specs[@]} -gt 0 ]] || { echo "판정 불능(입력 목록 없음)"; return; }
-  git -C "$dir" diff --quiet -I"$ADV_VERSION_ONLY" "$last" "$tag" -- "${specs[@]}" >/dev/null 2>&1 </dev/null; rc=$?
+  git -C "$dir" diff --quiet -I"$SIDE_VERSION_ONLY" "$last" "$tag" -- "${specs[@]}" >/dev/null 2>&1 </dev/null; rc=$?
   case $rc in
     0) echo skip ;;
     1) echo "입력 변경 있음($last → $tag)" ;;
@@ -111,8 +124,8 @@ adv_reason() {  # <dir> <priv> <last> <tag>
 # 앱마다 끝난 뒤 Discord 배포 채널로(#304 · 옛 fin·fit 의 배포 완료 메시지 · #502). 알림 실패는 배포 결과를 바꾸지 않는다.
 # 요약은 판정 양식에서만 뽑는다(결과 줄 · 소요 · 프로브) — 이미 홈 경로를 가린 출력이다
 notify() {  # <base> <app> <tag> <rc> <양식 파일>
-  # 통합 층은 fin 체크아웃의 알림 스크립트를 빌린다 — 셋째 체크아웃에는 dotenv 가 없다(이미 새 태그다)
-  local from=$2; [[ $2 != adv ]] || from=fin
+  # 곁가지(통합 층 · hermes)는 fin 체크아웃의 알림 스크립트를 빌린다 — 그 체크아웃에는 dotenv 가 없다(이미 새 태그다)
+  local from=$2; [[ $2 != adv && $2 != hrm ]] || from=fin
   local script="$1/pleiades-$from/deploy/notify-deploy.cjs" status summary secs probe result
   [[ -f "$script" ]] || { echo "notify-deploy: 이 체크아웃에 알림 스크립트가 없다 — 건너뜀"; return 0; }
   secs=$(grep -oE '기본 실행 rc [0-9]+ · [0-9]+s' "$5" | grep -oE '[0-9]+s$' | tail -1)
@@ -121,7 +134,7 @@ notify() {  # <base> <app> <tag> <rc> <양식 파일>
   if [[ $4 -eq 0 ]]; then
     status=ok; summary="${secs:+소요 $secs}${probe:+ · $probe}"
     # Actions 재실행 등으로 할 일이 없었으면 그렇게 적는다 — "배포 완료" 를 다시 받으면 오해한다
-    [[ "$result" == *"이미 배포됨"* || $2 == adv ]] && summary="$result"
+    [[ "$result" == *"이미 배포됨"* || $2 == adv || $2 == hrm ]] && summary="$result"
   else
     status=fail; summary="rc $4${result:+ · $result}"
     [[ $2 == fin ]] && summary+=" · fit 은 하지 않았다"

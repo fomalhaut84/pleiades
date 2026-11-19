@@ -1,7 +1,7 @@
 # 통합 층 자동 배포의 입력 경로 (012 4b-5 · #744) — 한 줄에 git pathspec 하나 · # 은 주석.
 # Release 자동 배포(deploy/ssh-deploy.sh)는 통합 층의 마지막 통과 태그 → 새 태그 사이에 이 경로가 하나라도 바뀌었을 때만
 # 통합 층을 다시 배포한다. 목록은 **새 태그의 이 파일**을 읽는다(git show <새 태그>:이 경로) — 읽지 못하면 배포한다.
-# 버전 줄("version": "X.Y.Z")만 바뀐 묶음은 비교에서 뺀다 — 릴리즈마다 루트 · packages 의 package 파일이 바뀌기 때문이다(ssh-deploy.sh ADV_VERSION_ONLY).
+# 버전 줄("version": "X.Y.Z")만 바뀐 묶음은 비교에서 뺀다 — 릴리즈마다 루트 · packages 의 package 파일이 바뀌기 때문이다(ssh-deploy.sh SIDE_VERSION_ONLY).
 # 경로를 더하거나 뺄 때: deploy/test_ssh_deploy.py 의 AutoInputs 시험이 통합 층 코드가 실제로 읽는 곳을 대조한다.
 #
 # 통합 층이 돌 때 자기 체크아웃에서 읽는 것만 적는다. 도구 목록 · 지식은 도는 두 앱의 읽기 경로(tools/list · prompts/get)에서

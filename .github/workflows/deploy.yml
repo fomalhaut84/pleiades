@@ -33,7 +33,7 @@ jobs:
         run: |
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "태그 형식이 vX.Y.Z 가 아니다: $TAG"; exit 1; }
 
-      - name: Deploy over ssh (fin → fit)
+      - name: Deploy over ssh (fin → fit → adv · hrm)
         env:
           TAG: ${{ github.event.release.tag_name }}
           KEY: ${{ secrets.DEPLOY_SSH_KEY }}

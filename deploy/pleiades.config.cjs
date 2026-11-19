@@ -74,13 +74,16 @@ const WEB = {
   max_memory_restart: `${WEB_RSS_LIMIT_MB}M`,
   node_args: `--max-old-space-size=${WEB_HEAP_MB} ${NET_ARGS}`,
 }
+// 봇 · MCP 도 같은 이유로 RSS 한도를 힙 위로(#825). MCP 는 웹처럼 startOrRestart 라 deploy.sh 4c 가 같은 값을 대조한다
+const LONG_HEAP_MB = 512
+const LONG_RSS_LIMIT_MB = 768
 const LONG_RUNNING = {
   ...COMMON,
   kill_timeout: 15000,
   min_uptime: 30000,
   exp_backoff_restart_delay: 100,
-  max_memory_restart: '512M',
-  node_args: `--max-old-space-size=512 ${NET_ARGS}`,
+  max_memory_restart: `${LONG_RSS_LIMIT_MB}M`,
+  node_args: `--max-old-space-size=${LONG_HEAP_MB} ${NET_ARGS}`,
 }
 
 function finApps(cwd, { PORT, MCP_PORT }) {
