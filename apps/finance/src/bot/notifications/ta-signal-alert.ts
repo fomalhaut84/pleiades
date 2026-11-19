@@ -8,7 +8,6 @@
 import { prisma } from '@/lib/prisma'
 import { generateTAReport } from '@/lib/ta/engine'
 import { askAdvisor } from '@/lib/ai/claude-advisor'
-import { escapeDiscordMarkdown } from '@pleiades/notify'
 import { notifierFor, recipients, Route, markdownContent, lastErrorOf } from './notifier'
 import { isMarketOpenFor } from '@/lib/market-hours'
 import {
@@ -19,6 +18,9 @@ import {
 import { buildTaContext } from '@/lib/alert-history/context'
 import type { TAReport } from '@/lib/ta/types'
 import { KST_OFFSET_MS } from '@/lib/kst-date'
+import { buildTaSignalMessage, metricsOf, type TaAlertItem } from './ta-signal-format'
+
+export { buildTaSignalMessage } from './ta-signal-format'
 
 /** 당일 시그널 발송 기록 (키 → date string) */
 const sentToday = new Map<string, string>()
@@ -102,52 +104,6 @@ interface SignalResult {
   report: TAReport
 }
 
-const STRATEGY_LABELS: Record<string, string> = {
-  swing: '스윙', momentum: '모멘텀', scalp: '단타', long_hold: '장기',
-}
-
-/** AI 가이드 조각 상한(글자) — 알림 한 통이 길어지지 않게 */
-const AI_GUIDE_MAX_CHARS = 300
-
-/**
- * AI 가이드 한 줄 — 글자(코드 포인트) 단위로 300자 · 잘렸으면 `…` · 줄바꿈은 공백으로 접는다.
- * 통째로 escape 한 뒤 **가이드 안에서 짝이 맞는 `**굵게**` 만** 되살린다 — 자르기나 모델 출력이 남긴 짝 없는 `**` · `||` ·
- * 백틱이 Discord 에서 빈 줄을 넘어 다음 종목 틀과 짝을 맺지 않게(#785 9-1 major · 옛 HTML 경로는 태그 안에 가뒀다).
- */
-function guideLine(guide: string): string {
-  const chars = Array.from(guide.trim())
-  const cut = chars.length > AI_GUIDE_MAX_CHARS ? `${chars.slice(0, AI_GUIDE_MAX_CHARS).join('').trimEnd()}…` : chars.join('')
-  const oneLine = cut.replace(/\s*\n\s*/g, ' ').trim()
-  return escapeDiscordMarkdown(oneLine).replace(/\\\*\\\*([^*\n]+?)\\\*\\\*/g, '**$1**')
-}
-
-/**
- * TA 시그널 알림 본문 — Discord 마크다운(`markdown` 형식 · 013 F5 · #785).
- * 틀(제목 · 종목 줄 굵게)만 서식이고 종목명 · 티커 · 시그널 글은 escape 한다. AI 가이드는 `guideLine` — 한 줄로 접어 💡 뒤에 두고
- * (줄 머리에 오지 않아 제목 · 목록 · 인용이 틀 사이에 끼지 않는다) 짝 맞는 굵게만 살린다.
- */
-export function buildTaSignalMessage(
-  results: ReadonlyArray<Pick<SignalResult, 'ticker' | 'displayName' | 'strategy' | 'signals'>>,
-  aiGuides: ReadonlyMap<string, string>,
-): string {
-  const lines = ['📊 **TA 시그널 알림**\n']
-  for (const r of results) {
-    const stratLabel = r.strategy.split('/').map((s) => STRATEGY_LABELS[s] ?? s).join('/')
-    // 티커는 괄호째 escape — `005930.KS` 홀로면 줄 머리 번호 목록으로 보고 `\.` 를 넣는다
-    lines.push(`**${escapeDiscordMarkdown(r.displayName)}** ${escapeDiscordMarkdown(`(${r.ticker}) — ${stratLabel}`)}`)
-    for (const sig of r.signals) {
-      lines.push(`  ${escapeDiscordMarkdown(sig)}`)
-    }
-    const guide = aiGuides.get(r.ticker)
-    if (guide) {
-      lines.push('')
-      lines.push(`  💡 ${guideLine(guide)}`)
-    }
-    lines.push('')
-  }
-  return lines.join('\n')
-}
-
 interface Signal {
   id: string
   message: string
@@ -202,6 +158,25 @@ function checkSignals(report: TAReport, strategy: string, hasHolding: boolean): 
   }
 
   return signals
+}
+
+/**
+ * AI 가이드 질문 (#820) — 형식을 고정한다. 옛 *"1~2줄 · 간결하게"* 만으로는 모델이 제목 · 구분선 · 목록이 든 보고서를 냈다
+ * (2026-11-19 SOXL). 숫자는 알림의 지표 줄(코드)이 보여 주므로 모델에는 판단만 맡기고, 지표를 넘겨 숫자를 지어내지 않게 한다.
+ */
+export function buildGuidePrompt(r: Pick<SignalResult, 'ticker' | 'displayName' | 'signals' | 'report'>): string {
+  const m = metricsOf(r.report)
+  const facts = [
+    `5일 ${m.change5d.toFixed(1)}%`, `20일 ${m.change20d.toFixed(1)}%`, `52주 고점 대비 ${m.fromHigh52w.toFixed(1)}%`,
+    `RSI ${m.rsi.toFixed(1)}`, `거래량 20일 평균 대비 ${m.volumeRatio.toFixed(1)}배`, `볼린저 ${m.bbPosition}`,
+  ].join(', ')
+  return [
+    `${r.displayName}(${r.ticker})에서 TA 시그널이 발생했다: ${r.signals.join(', ')}.`,
+    `지표: ${facts}.`,
+    'stock-trading-method 프레임워크 기준으로 판단해줘.',
+    '출력 형식(반드시 지킨다): 평문 정확히 2줄. 1줄 = 지금 할 행동(결론), 2줄 = 그 근거(위 지표 중 1~2개).',
+    '제목 · 목록 · 구분선 · 표 · 인사말 금지. 각 줄 80자 이내. 위에 없는 숫자를 만들지 않는다.',
+  ].join('\n')
 }
 
 let isChecking = false
@@ -278,11 +253,11 @@ async function doCheckTASignals(): Promise<void> {
   // AlertHistory 에 시세 스냅샷 캡처 (사후 진단 유용).
   const priceCaches = await prisma.priceCache.findMany({
     where: { ticker: { in: Array.from(tickerStrategies.keys()) } },
-    select: { ticker: true, market: true, price: true, changePercent: true },
+    select: { ticker: true, market: true, price: true, changePercent: true, currency: true },
   })
   const marketByTicker = new Map(priceCaches.map((p) => [p.ticker, p.market]))
   const snapshotByTicker = new Map(
-    priceCaches.map((p) => [p.ticker, { price: p.price, changePercent: p.changePercent }]),
+    priceCaches.map((p) => [p.ticker, { price: p.price, changePercent: p.changePercent, currency: p.currency }]),
   )
 
   const results: SignalResult[] = []
@@ -348,7 +323,7 @@ async function doCheckTASignals(): Promise<void> {
     )
     for (const r of guideTargets) {
       try {
-        const prompt = `${r.displayName}(${r.ticker})에서 다음 TA 시그널이 발생했다: ${r.signals.join(', ')}. stock-trading-method 프레임워크 기준으로 현재 상황 1~2줄 가이드를 작성해줘. 간결하게.`
+        const prompt = buildGuidePrompt(r)
         const guide = await askAdvisor(prompt, { timeout: 30_000, maxBudgetUsd: TA_GUIDE_BUDGET_USD, intent: 'guide', caller: 'cron:ta_signal' })  // 1~2줄 가이드 → haiku (35-A)
         aiGuides.set(r.ticker, guide.response.trim())
       } catch (error) {
@@ -357,7 +332,12 @@ async function doCheckTASignals(): Promise<void> {
     }
   }
 
-  const message = buildTaSignalMessage(results, aiGuides)
+  const items: TaAlertItem[] = results.map((r) => ({
+    ...r,
+    metrics: metricsOf(r.report),
+    quote: snapshotByTicker.get(r.ticker) ?? null,
+  }))
+  const message = buildTaSignalMessage(items, aiGuides)
 
   const delivery = await notifierFor().notify(Route.ALLOWED, markdownContent(message), { label: 'ta-signal' })
   const sendSuccess = delivery.sent
