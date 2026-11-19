@@ -44,6 +44,9 @@ describe("prepareDomain (가짜 읽기 경로)", () => {
     const s = await start({ tools: ["get_portfolio", "get_prices"], knowledge: "지식", sse: true });
     const r = await prepareDomain(decl(s.port), 2000);
     expect(r).toMatchObject({ ok: true, allow: ["mcp__myfinance__get_portfolio", "mcp__myfinance__get_prices"], knowledge: "지식" });
+    // #839 V-1 — 가짜 서버가 보낸 도구 정의의 JSON 바이트 합
+    const defBytes = ["get_portfolio", "get_prices"].reduce((n, name) => n + Buffer.byteLength(JSON.stringify({ name, inputSchema: { type: "object" } }), "utf8"), 0);
+    expect(r).toMatchObject({ toolBytes: defBytes });
     expect(s.calls).toEqual(["initialize", "notifications/initialized", "tools/list", "prompts/get", "DELETE"]);
   });
 

@@ -1,7 +1,7 @@
 // apps/advisor — 통합 어드바이저 진입점 (012 §8 · 4b).
 // 4b-1b(#680) · 4b-2b(#686):
 //   bot          Discord 통합 채널 상주(4b-3 에서 서버 pm2 `pleiades-adv-bot` 이 이것을 띄운다)
-//   probe        두 도메인 읽기 경로(tools/list · prompts/get)와 배포 락 상태만 본다 — 모델 호출 0
+//   probe        두 도메인 읽기 경로(tools/list · prompts/get)와 배포 락 상태만 본다 — 모델 호출 0 · 크기 줄(#839)
 //   ask <채널ID> <사용자ID>   질문을 stdin 으로 받아 한 번 답한다(같은 프로세스 안에서만 세션이 이어진다)
 // 로컬 실행은 tools/local/run.sh adv -- node dist/advisor.cjs … 만 — claude 는 shim 이라 모델 호출 0(I-8) · pm2 리허설 없음(012 §4-3).
 import os from "node:os";
@@ -9,6 +9,7 @@ import path from "node:path";
 import { Advisor } from "./advisor";
 import { resolveClaude } from "./cli";
 import { lockFileOf, probeDeployLock } from "./deploy-lock";
+import { probeReport } from "./probe";
 import { Inflight, startBotWhenReady } from "./bot";
 import { botConfig, createAdminAlert } from "./platform";
 import { privateRoot } from "./private-dir";
@@ -53,8 +54,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv, out: Write, e
     const adv = makeAdvisor(env, err, false);
     const lock = probeDeployLock(lockFileOf(privateRoot(env)));
     const ready = await adv.prepareAll();
-    out(`배포 락: ${lock}`);
-    for (const d of ready) out(d.ok ? `${d.id}: 준비됨 · 읽기 도구 ${d.allow.length} · 지식 ${Buffer.byteLength(d.knowledge, "utf8")} B` : `${d.id}: 쓸 수 없음 · ${d.why}`);
+    for (const l of probeReport(lock, ready).lines) out(l);
     return ready.some((d) => d.ok) ? 0 : 1;
   }
   if (cmd === "bot" && rest.length === 0) {
