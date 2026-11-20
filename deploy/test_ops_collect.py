@@ -41,7 +41,7 @@ const fs = require('fs')
 const path = require('path')
 globalThis.fetch = async (url, opts) => {
   const log = path.join(path.dirname(__filename), 'fetch.jsonl')
-  fs.appendFileSync(log, JSON.stringify({ url: String(url), body: JSON.parse(opts.body) }) + '\n')
+  fs.appendFileSync(log, JSON.stringify({ url: String(url), method: (opts && opts.method) || 'GET', body: opts && opts.body ? JSON.parse(opts.body) : null }) + '\n')
   const n = fs.readFileSync(log, 'utf8').trim().split('\n').length
   const codes = (process.env.STUB_FETCH_STATUS || '204').split(',')
   const st = Number(codes[Math.min(n - 1, codes.length - 1)])
@@ -240,9 +240,11 @@ class Cli(Base):
         src = SCRIPT.read_text()
         self.assertNotIn("deploy.lock", src)  # E-3 — 배포가 flock -n 이다
         self.assertNotIn("flock", src.replace("flock -n 이라", ""))
-        # 외부로 나가는 길은 웹훅 게시 하나다(#725) — 주소는 플랫폼 설정에서만 온다(코드에 박지 않는다)
-        self.assertEqual(src.count("fetch("), 1)
+        # 외부로 나가는 길은 둘이다 — 웹훅 게시(#725)와 하트비트 GET(PR-4 #847) · 주소는 플랫폼 설정에서만 온다(코드에 박지 않는다)
+        self.assertEqual(src.count("fetch("), 2)
         self.assertIn("await fetch(target, {", src)
+        self.assertIn("await fetch(url, { method: 'GET', redirect: 'error', signal: ctrl.signal })", src)  # 리다이렉트로 다른 곳에 가지 않는다  # 본문 없음 — 밖으로 데이터를 싣지 않는다
+        self.assertNotIn("hc-ping.com", src)
         self.assertNotIn("discord.com", src)
         self.assertIn("allowed_mentions: { parse: [] }", src)
         # 외부 프로세스 호출은 pm2 jlist 하나뿐이다(Q97 — 코드가 지키는 규칙)
@@ -1723,3 +1725,242 @@ class Post(Base):
         self.assertIn("기록 1 · 미룸 0 · 요약만 0", r.stdout)
         self.assertIn("🟠", self.sent()[-1])
         self.assertIn("실패", self.sent()[-1])
+
+
+PING = "https://hc-ping.com/" + "11111111-2222-3333-4444-" + "PINGSECRET00"  # 시험용 가짜 ping 주소
+
+
+class Heartbeat(Base):
+    """PR-4 (#847 · 008 Q90) — 게시 경로가 막히지 않은 회에만 외부 하트비트 ping · 실패는 수집 결과를 바꾸지 않는다."""
+
+    live = Post.live
+
+    def setUp(self):
+        super().setUp()
+        self.platform = self.tmp / "platform.env"
+        self.platform.write_text(f'DISCORD_WEBHOOK_OPS="{HOOK}"\nOPS_HEARTBEAT_URL="{PING}"\n')
+        self.E = "pleiades-fin-bot-error-0.log"
+        self.ok(now="2026-11-10T07:55:00+09:00")  # 상태 없는 첫 회(dry-run · 외부 0)
+
+    def pings(self):
+        return [f for f in self.fetches() if f["url"].startswith("https://hc-ping.com/")]
+
+    def test_quiet_run_pings_once_with_get_and_no_body(self):
+        r = self.live(now="2026-11-10T08:00:00+09:00")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        [p] = self.pings()
+        self.assertEqual((p["url"], p["method"], p["body"]), (PING, "GET", None))
+        self.assertIn("ping 통과", r.stdout)
+        self.assertNotIn("PINGSECRET", r.stdout + r.stderr)
+        self.assert_no_raw(PING, "PINGSECRET")
+
+    def test_ping_after_successful_post(self):
+        self.log(self.E, ERR_LINE, append=True)
+        r = self.live(now="2026-11-10T08:00:00+09:00")
+        self.assertIn("기록 1 · 미룸 0", r.stdout)
+        self.assertEqual([f["url"] for f in self.fetches()], [HOOK + "?wait=true", PING])  # 게시가 먼저 · ping 은 끝에
+
+    def test_no_ping_when_post_fails(self):
+        self.log(self.E, ERR_LINE, append=True)
+        r = self.live(now="2026-11-10T08:00:00+09:00", status="500")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("미룸 1", r.stdout)
+        self.assertEqual(self.pings(), [])  # 게시가 막힌 회는 ping 하지 않는다 → 외부 서비스가 알린다
+        self.assertIn("ping 건너뜀", r.stdout)
+
+    def test_no_ping_when_webhook_missing(self):
+        self.platform.write_text(f'OPS_HEARTBEAT_URL="{PING}"\n')
+        r = self.live(now="2026-11-10T08:00:00+09:00")
+        self.assertEqual(self.pings(), [])  # 게시할 길이 없으면 살아 있다고 알리지 않는다
+        self.assertIn("ping 건너뜀", r.stdout)
+
+    def test_dry_run_never_pings(self):
+        self.run_c("--dry-run", f"--pm2-bin={self.bin}", now="2026-11-10T08:00:00+09:00",
+                   PLEIADES_ENV_FILE=str(self.platform), NODE_OPTIONS=f"--require={self.fetch_stub()}")
+        self.assertEqual(self.fetches(), [])
+
+    def test_no_key_no_ping_and_no_line(self):
+        self.platform.write_text(f'DISCORD_WEBHOOK_OPS="{HOOK}"\n')
+        r = self.live(now="2026-11-10T08:00:00+09:00")
+        self.assertEqual(self.pings(), [])
+        self.assertNotIn("ping", r.stdout)  # 키가 없으면 지금과 같다
+
+    def test_non_https_ping_never_fetched(self):
+        self.platform.write_text(f'DISCORD_WEBHOOK_OPS="{HOOK}"\nOPS_HEARTBEAT_URL="http://hc-ping.com/x"\n')
+        r = self.live(now="2026-11-10T08:00:00+09:00")
+        self.assertEqual([f for f in self.fetches() if "hc-ping" in f["url"]], [])
+        self.assertIn("ping 형식 오류", r.stdout)
+
+    def test_ping_failure_does_not_change_result(self):
+        for status, name in (("503", "HTTP 503"), ("0", "TypeError")):
+            with self.subTest(status=status):
+                r = self.live(now="2026-11-10T08:00:00+09:00", status=status)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertIn(f"ping 실패 {name}", r.stdout)
+                self.assertNotIn("PINGSECRET", r.stdout + r.stderr)  # 예외 메시지에 URL 이 실려도 이름만
+
+    def test_ping_url_is_a_secret_for_check_one(self):
+        import re
+        pat = re.compile(re.search(r"const SECRET_KEY = /(.+?)/ ", SCRIPT.read_text()).group(1))
+        self.assertTrue(pat.search("OPS_HEARTBEAT_URL"))  # 게시 본문에 ping 주소가 실리면 ① 이 막는다
+
+    def test_test_ping(self):
+        before = (self.ops / "state.json").read_text()
+        env = {"PLEIADES_ENV_FILE": str(self.platform), "NODE_OPTIONS": f"--require={self.fetch_stub()}"}
+        r = self.run_c("--test-ping", **env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("시험 ping 통과", r.stdout)
+        self.assertEqual([f["url"] for f in self.fetches()], [PING])
+        self.assertEqual((self.ops / "state.json").read_text(), before)  # 수집하지 않는다
+        r = self.run_c("--test-ping", **env, STUB_FETCH_STATUS="404")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("시험 ping 실패 HTTP 404", r.stdout)
+        self.platform.write_text(f'DISCORD_WEBHOOK_OPS="{HOOK}"\n')
+        r = self.run_c("--test-ping", **env)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("OPS_HEARTBEAT_URL 없음", r.stdout)
+        self.assertEqual(len(self.fetches()), 2)
+        self.assertEqual(self.run_c("--test-ping", "--dry-run", **env).returncode, 2)
+
+    # 회귀: #847 9-1 info — 웹훅이 없으면 크론 회는 ping 하지 않는다 · 시험이 거짓 통과하지 않는다
+    def test_test_ping_fails_when_cron_would_skip(self):
+        self.platform.write_text(f'OPS_HEARTBEAT_URL="{PING}"\n')
+        env = {"PLEIADES_ENV_FILE": str(self.platform), "NODE_OPTIONS": f"--require={self.fetch_stub()}"}
+        r = self.run_c("--test-ping", **env)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("단 크론 회는 ping 을 건너뛴다 — 웹훅 없음", r.stdout)
+
+
+def L(text, at="2026-11-10 08:01:00"):
+    return f"{at}: {text}\n"
+
+
+class Usage(Base):
+    """#846 U1 — AI 사용량(API 환산 비용) 집계. 고정 접두 줄의 허용 필드만 · 원문 0 · 일일 요약 한 줄 · usage.jsonl."""
+
+    def setUp(self):
+        super().setUp()
+        self.ok()  # 첫 회 — 집계를 켜는 회는 모든 파일을 끝에서 시작한다
+
+    def day(self, date="2026-11-10"):
+        return self.state()["usage"]["days"].get(date, {})
+
+    def test_three_formats_aggregate_by_app(self):
+        self.log("pleiades-fin-bot-out-0.log",
+                 L("[advisor] ok caller=briefing model=claude-sonnet-5 used=claude-sonnet-5 cost=$0.1234 turns=3 tools=2 duration=10ms")
+                 + L("[advisor] claude stderr: 무시") + L("다른 줄 cost=$9.9999"), append=True)
+        self.log("pleiades-fin-web-error-0.log",
+                 L("[advisor] fail caller=ta-guide model=claude-sonnet-5 code=quota_exceeded exit=1 subtype=error_max_budget_usd cost=$0.2500 turns=1"),
+                 append=True)
+        self.log("pleiades-fit-web-out-0.log",
+                 L("[askAdvisor] channel=web model=claude-sonnet-5 duration=5ms turns=2 context=10 session=ab cost=$0.0500 cap=$1.0000"), append=True)
+        self.log("pleiades-fit-bot-out-0.log",
+                 L("[askAdvisor] channel=discord model=claude-sonnet-5 duration=5ms turns=1 context=? session=cd cost=$0.0100 cap=$1.0000 is_error=true"),
+                 append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        d = self.day()
+        self.assertEqual((d["fin"]["n"], d["fin"]["fail"], round(d["fin"]["usd"], 4)), (2, 1, 0.3734))
+        self.assertEqual((d["fit"]["n"], d["fit"]["fail"], round(d["fit"]["usd"], 4)), (2, 1, 0.06))
+        self.assertEqual(sorted(d["fin"]["by"]), ["briefing", "ta-guide"])
+        self.assertEqual(sorted(d["fit"]["by"]), ["discord", "web"])
+        self.ok(now="2026-11-10T08:10:00+09:00")  # 오프셋 — 다시 세지 않는다
+        self.assertEqual(self.day()["fin"]["n"], 2)
+
+    def test_adv_counted_only_while_active(self):
+        (self.home / "pleiades-adv" / "apps" / "advisor" / "logs").mkdir(parents=True)
+        self.private.mkdir(parents=True, exist_ok=True)
+        line = L("[advisor] key=k1 status=완료 model=sonnet drift=없음 cost=$0.0991 cap=$1.0000 turns=1 tools=myfinance:0/0 outside=0 context=1 duration=1ms resumed=false domains=2")
+        self.log("pleiades-adv-bot-out-9.log", line)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertNotIn("adv", self.day())  # 감시 밖
+        (self.private / "inplace-adv-last-ok").write_text("v1.22.0\n")
+        self.ok(now="2026-11-10T08:10:00+09:00")  # 다시 켠 회 — 끝에서 시작
+        self.log("pleiades-adv-bot-out-9.log", line + L("[advisor] key=k2 status=실패 code=x model=sonnet drift=없음 cost=$0.0010 cap=$1.0000 turns=1"), append=True)
+        self.ok(now="2026-11-10T08:15:00+09:00")
+        a = self.day()["adv"]
+        self.assertEqual((a["n"], a["fail"], round(a["usd"], 4)), (2, 1, 0.1001))
+
+    def test_unknown_cost_and_bad_caller(self):
+        self.log("pleiades-fin-bot-out-0.log",
+                 L("[advisor] ok caller=../질문 model=claude-sonnet-5 used=unknown cost=$? turns=0 tools=0")
+                 + L("[advisor] ok caller=x model=claude-sonnet-5 used=x cost=$1e9 turns=1 tools=0"), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        f = self.day()["fin"]
+        self.assertEqual((f["n"], f["unknown"], f["usd"]), (2, 2, 0))  # 숫자가 아니거나 상한 밖이면 비용 모름
+        self.assertIn("(알 수 없음)", f["by"])
+
+    # 회귀: #846 9-1 info — 호출부 이름이 프로토타입 키여도 집계 객체를 오염시키지 않는다
+    def test_prototype_key_caller(self):
+        self.log("pleiades-fin-bot-out-0.log",
+                 L("[advisor] ok caller=__proto__ model=claude-sonnet-5 used=x cost=$0.1000 turns=1 tools=0")
+                 + L("[advisor] ok caller=constructor model=claude-sonnet-5 used=x cost=$0.2000 turns=1 tools=0"), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        f = self.day()["fin"]
+        self.assertEqual((f["n"], round(f["usd"], 4)), (2, 0.3))
+        self.assertEqual(f["by"], {"(알 수 없음)": {"n": 2, "usd": 0.30000000000000004}})
+
+    def test_state_usage_missing_fields_are_repaired(self):
+        st = self.state()
+        st["usage"] = {"since": "2026-11-10"}
+        (self.ops / "state.json").write_text(json.dumps(st))
+        self.log("pleiades-fin-bot-out-0.log", L("[advisor] ok caller=b model=claude-sonnet-5 used=x cost=$0.1000 turns=1 tools=0"), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")  # 멈추지 않는다
+        self.assertIn("files", self.state()["usage"])
+
+    # 회귀: PR #851 Codex P2 — fin MCP 프로세스의 AI 호출(사용자 전략 파서 strategy:parse · strategy:edit)도 센다
+    def test_fin_mcp_calls_counted(self):
+        self.log("pleiades-fin-mcp-out-0.log",
+                 L('{"level":30,"msg":"tool_call"}')
+                 + L("[advisor] ok caller=strategy:parse model=claude-sonnet-5 used=claude-sonnet-5 cost=$0.0300 turns=1 tools=0"), append=True)
+        self.log("pleiades-fin-mcp-error-0.log",
+                 L("[advisor] fail caller=strategy:edit model=claude-sonnet-5 code=x exit=1 subtype=error cost=$0.0100 turns=1"), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        f = self.day()["fin"]
+        self.assertEqual((f["n"], f["fail"], round(f["usd"], 4)), (2, 1, 0.04))
+        self.assertEqual(sorted(f["by"]), ["strategy:edit", "strategy:parse"])
+
+    def test_no_raw_text_stored(self):
+        self.log("pleiades-fin-bot-out-0.log",
+                 L("[advisor] ok caller=briefing model=claude-sonnet-5 used=claude-sonnet-5 cost=$0.1000 turns=1 tools=0 원문RAWXYZ"), append=True)
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertEqual(self.day()["fin"]["n"], 1)
+        self.assert_no_raw("RAWXYZ")
+
+    def test_upgrade_starts_at_end_then_new_files_from_zero(self):
+        old = L("[advisor] ok caller=old model=claude-sonnet-5 used=x cost=$5.0000 turns=1 tools=0")
+        self.log("pleiades-fin-bot-out-0.log", old * 3, append=True)
+        st = self.state()
+        st.pop("usage")  # 집계를 처음 켜는 판으로 올린 상황
+        (self.ops / "state.json").write_text(json.dumps(st))
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertEqual(self.day(), {})  # 과거 줄은 세지 않는다
+        p = self.pm2 / "logs" / "pleiades-fin-bot-out-0.log"
+        p.unlink()
+        self.log("pleiades-fin-bot-out-0.log", L("[advisor] ok caller=new model=claude-sonnet-5 used=x cost=$0.2000 turns=1 tools=0"))
+        self.ok(now="2026-11-10T08:10:00+09:00")  # inode 가 바뀐 새 파일은 0 부터
+        self.assertEqual(round(self.day()["fin"]["usd"], 4), 0.2)
+
+    def test_summary_line_month_projection_and_jsonl(self):
+        cfg = {"summaryAt": "09:05"}
+        self.ok(now="2026-11-10T09:06:00+09:00", config=cfg)
+        summ = [p for p in self.posts() if "일일 요약" in p]
+        self.assertIn("AI 사용량(API 환산 · 서비스 호출만) 집계 시작 전", summ[-1])  # 켠 날의 요약
+        self.log("pleiades-fin-bot-out-0.log", L("[advisor] ok caller=b model=claude-sonnet-5 used=x cost=$0.3000 turns=1 tools=0"), append=True)
+        self.log("pleiades-fit-web-out-0.log",
+                 L("[askAdvisor] channel=web model=claude-sonnet-5 duration=5ms turns=2 context=1 session=ab cost=$0.1000 cap=$1.0000"), append=True)
+        self.ok(now="2026-11-10T10:00:00+09:00", config=cfg)
+        self.ok(now="2026-11-11T09:06:00+09:00", config=cfg)
+        summ = [p for p in self.posts() if "일일 요약" in p]
+        self.assertIn("AI 사용량(API 환산 · 서비스 호출만) 어제 $0.40 (fin $0.30 · fit $0.10 · 2회 · 실패 0) · 이달 $0.40 · 월말 예상 $12.00", summ[-1])
+        rows = [json.loads(l) for l in (self.ops / "usage.jsonl").read_text().splitlines()]
+        self.assertEqual([r["date"] for r in rows], ["2026-11-10"])
+        self.assertEqual(round(rows[0]["apps"]["fin"]["usd"], 4), 0.3)
+        self.ok(now="2026-11-11T09:11:00+09:00", config=cfg)
+        self.assertEqual(len((self.ops / "usage.jsonl").read_text().splitlines()), 1)  # 하루 한 줄
+
+    def test_days_pruned_after_retention(self):
+        st = self.state()
+        st["usage"]["days"]["2026-08-01"] = {"fin": {"n": 1, "fail": 0, "usd": 1, "unknown": 0, "by": {}}}
+        (self.ops / "state.json").write_text(json.dumps(st))
+        self.ok(now="2026-11-10T08:05:00+09:00")
+        self.assertNotIn("2026-08-01", self.state()["usage"]["days"])

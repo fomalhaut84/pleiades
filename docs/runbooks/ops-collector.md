@@ -21,7 +21,7 @@ pm2 상태 · MCP `/health` · web 응답 · pm2 로그 · 디스크를 5분마�
 
 `<REF>` 와 `<SHA256>` 은 Claude 가 머지 뒤 실값을 준다. 재설치 때도 검증 전에는 도는 파일을 덮지 않는다.
 
-**지금 설치된 판(2026-11-18 · #802 · hermes 감시 판 · `v1.20.0` · 크론 `--dry-run` 없음 · 사용자 설치 통과):** REF `18bab57f89e53cba3aed47e57a8c91473ddc3469` · SHA256 `b8ffdc77ef1af7d7e0933030b9dddfc721df829069f4e6c780509f6391735729`. 되돌리기: 게시만 멈추려면 3절(크론 줄에 `--dry-run`) · 판을 되돌리려면 직전 판 REF `d73e5dcd48cd3ff029c1b75f92fceaa5dfae927e`(#732) · SHA256 `8dccc6a34421e1c3af56f0d29c25de9066910feeb5a946bb4233bec5e125bf23` 로 같은 명령(그 앞 판 REF `b7ba56715e8eb69343ac0b9f5ff947b60c8ed02d` · #726 · SHA256 `33c815fd5f1406cacf56cc8f4d29e2671053baf73b09cbf1838644f8ee562e66`)(dry-run 판은 REF `e0b98d23` · SHA256 `d52ec075c3f7daa0ab9487f40b13a505ba867166807cb143a56e797a5946a863` — 게시 판의 크론 줄과 함께 쓰면 "게시는 아직 없다" 로 멈춘다 · 3절 줄로).
+**지금 설치된 판(2026-11-19 · #846 U1 · AI 사용량 집계 + PR-4 하트비트 판 · 크론 `--dry-run` 없음 · 사용자 설치 통과):** REF `096a5c6d2aa1daceebaa55e759b7fb7d6d3c7027` · SHA256 `cc8681fd040b6567ae69236a743d0233965049c27bc27b4e0326276d7d88bb5f`. 되돌리기: 게시만 멈추려면 3절(크론 줄에 `--dry-run`) · ping 만 멈추려면 6절 되돌리기 · 사용량 집계만 빼려면 직전 판 REF `d7355f2eeacb5fad2238e79e293b932ed251342e`(#847 PR-4 판) · SHA256 `91956340403d481e6d602855f7e1e2eeb5c5a289becf76fb2b0ad48c11a1e145` 로 같은 명령(하트비트는 그대로) · 그 앞 판 REF `18bab57f89e53cba3aed47e57a8c91473ddc3469`(#802) · SHA256 `b8ffdc77ef1af7d7e0933030b9dddfc721df829069f4e6c780509f6391735729` — **이때 healthchecks 체크를 Pause 한다**(그 판은 ping 하지 않는다).
 
 ```bash
 mkdir -p ~/pleiades-ops ~/pleiades-private/ops && chmod 700 ~/pleiades-ops ~/pleiades-private ~/pleiades-private/ops
@@ -278,3 +278,64 @@ console.log("크기 KB",JSON.stringify(Object.fromEntries(["state.json","events.
 | `크기 KB` | `state.json` 1024 아래(상한 1 MB) · `collect.log` · `posted.log` 는 정리하지 않는다 — 수십 MB 가 되면 알린다 |
 
 되돌리기: 이 절은 문구다(**즉시**). 양식은 상태 파일을 읽기만 한다.
+
+## 6. 외부 하트비트 (PR-4 · #847 · 008 Q90)
+
+서버 전체 장애 · 크론 정지 · 잠금 · Discord 쪽 침묵은 수집기 자신이 알릴 수 없다. 수집기가 **매 회 끝에, 그 회의 게시 경로가 막히지 않았을 때만** 외부 서비스(healthchecks.io)에 ping 한다. ping 이 끊기면 그 서비스가 **이메일**로 알린다(+ 원하면 Discord).
+
+- ping = `GET <주소>` · 본문 없음(밖으로 나가는 데이터 0) · 서버 인바운드 노출 없음
+- **ping 하지 않는 회:** `--dry-run` · 웹훅 없음 · 비밀 읽기 실패 · 게시 실패(미룸 1 이상) · 크론이 돌지 않음 · 서버가 죽음 — 전부 외부 서비스의 알림으로 드러난다
+- ping 실패는 수집 결과(rc · 상태)를 바꾸지 않는다 · `collect.log` 줄 끝에 이유만(`· ping 통과` · `· ping 실패 HTTP 5xx` · `· ping 건너뜀(게시 막힘)` · `· ping 형식 오류`) — 주소는 찍지 않는다
+- 주소는 비밀로 다룬다 — 게시 본문에 실리면 검사 ① 이 막는다(키 이름의 `HEARTBEAT`)
+
+### 6-1. 체크 만들기(사용자 · healthchecks.io)
+
+가입 전에 지금의 무료 한도를 확인한다. 새 체크를 만들고:
+
+| 설정 | 값 |
+|---|---|
+| Schedule | Simple · **Period 5 minutes**(크론 주기) |
+| Grace | **15 minutes** 권고 — 한 회 상한(2분) · 429 로 미룬 한두 회를 소음으로 만들지 않는다 |
+| Integrations | **Email**(필수 — Discord 장애 때도 오는 길) · Discord 는 선택 |
+
+Ping URL(`https://hc-ping.com/<uuid>`)을 복사해 플랫폼 설정에 한 줄 더한다(편집기로 · 값을 명령줄 · 히스토리에 남기지 않는다).
+
+```bash
+${EDITOR:-nano} ~/pleiades-platform.env    # OPS_HEARTBEAT_URL=<복사한 URL>
+chmod 600 ~/pleiades-platform.env && grep -cE '^OPS_HEARTBEAT_URL=["'"'"']?https://' ~/pleiades-platform.env
+```
+
+마지막 숫자는 `1` 이어야 한다.
+
+### 6-2. 설치 · 시험
+
+1절 명령을 **PR-4 판 REF · SHA256** 으로 돌린다. 시험은 크론이 쓰는 node 로 한다 — 새 셸이면 `NODE_BIN` 이 비어 `env: ''` rc 127 이 난다(2026-11-19 실측). 크론 줄의 여섯째 칸이 node 경로다:
+
+```bash
+NODE_BIN=$(crontab -l | grep 'collect.cjs --pm2-bin' | awk '{print $6}')
+case "$NODE_BIN" in /*) echo "node 경로 통과" ;; *) echo "[중단] 크론 줄에서 node 경로를 찾지 못했다 — 2절의 NODE_BIN 으로" ;; esac
+env -i HOME="$HOME" PATH=/usr/bin:/bin "$NODE_BIN" --network-family-autoselection-attempt-timeout=2000 ~/pleiades-ops/collect.cjs --test-ping; echo "rc=$?"
+```
+
+**기대:** `시험 ping 통과 — 외부 서비스에서 마지막 ping 시각을 확인한다` · `rc=0` · healthchecks 화면의 체크가 `up`. 수집하지 않고 상태 파일도 바꾸지 않는다.
+- `OPS_HEARTBEAT_URL 없음` · `형식 오류` → 6-1 · `dotenv 없음` → 4-2 표 · `통과 · 단 크론 회는 ping 을 건너뛴다 — <사유>`(rc 1) → 그 사유(4-2 표)를 먼저 고친다 · `시험 ping 실패 HTTP 404` → 주소가 잘렸거나 체크가 지워졌다 · `TypeError` · `AbortError` → 서버의 나가는 연결
+
+크론 줄은 바꾸지 않는다(같은 줄이 다음 회부터 ping 한다). **10분 뒤** `tail -2 ~/pleiades-private/ops/collect.log` 줄 끝에 `· ping 통과` 가 있고 healthchecks 의 마지막 ping 이 5분 안팎이면 통과다.
+
+**되돌리기:** 플랫폼 설정에서 `OPS_HEARTBEAT_URL` 줄 삭제 → 다음 회부터 ping 없음(**즉시**) · 또는 수집기 옛 판 재설치(**즉시**). **어느 쪽이든 healthchecks 의 체크를 Pause 한다**(안 하면 유예 뒤 "down" 알림이 온다). 계정 · 체크 삭제는 사용자.
+
+## 7. AI 사용량 · API 환산 비용 (#846 U1)
+
+수집기가 세 앱의 AI 호출 줄에서 **CLI 가 계산한 API 가격 환산 비용**(`total_cost_usd`)을 모아 일일 요약 끝에 한 줄을 붙인다:
+
+`· AI 사용량(API 환산 · 서비스 호출만) 어제 $1.23 (fin $0.80 · fit $0.30 · adv $0.13 · 41회 · 실패 2) · 이달 $12.40 · 월말 예상 $28.00`
+
+- **읽는 줄:** 고정 접두 세 개만 — fin `[advisor] ok|fail caller=`(web · bot · mcp 의 stdout · stderr — mcp 는 사용자 전략 파서) · fit `[askAdvisor] channel=`(web · bot stdout) · 통합 층 `[advisor] key=`(adv-bot stdout). 그 밖의 줄은 버린다. 꺼내는 것은 앱 · 호출부/채널 이름(허용 문자만) · 성공/실패 · cost 숫자 — **원문은 저장하지 않는다**
+- **저장:** 상태 파일 `usage` 칸(날짜별 앱 · 호출부 합 · 62일) · 일일 요약을 보낸 회에 어제 하루치를 `usage.jsonl` 에 한 줄(015 V-5 가 읽는다)
+- **처음 켠 회**(이 판을 설치한 첫 회)는 모든 로그를 끝에서 시작한다 — 과거 호출은 세지 않는다. 그날의 요약은 `집계 시작 전` · 다음 날부터 숫자가 나온다
+- **월말 예상** = 이달 누적 ÷ 집계한 날수 × 그 달 날수
+- **잡히지 않는 것:** fit 의 실패 호출(비용 줄이 없다 — U2 에서 메운다) · 서버에서 사람이 쓰는 개발 세션(같은 계정이지만 로그가 없다) · 비용 칸이 `?` 이거나 깨진 줄은 `비용 모름 N` 으로 센다
+- 날짜는 수집 회의 KST 날짜다 — 자정 근처 5분 안의 호출은 다음 날로 갈 수 있다 · 수집기가 오래 멈췄다 다시 돌면 밀린 줄이 재개한 날로 들어간다 · 설치한 달의 월말 예상은 첫날이 반나절이라 낮게 나온다
+- **시뮬레이션이다.** 실제 청구는 구독이다. CLI 의 환산이 공식 가격과 맞는지는 U2(모델별 토큰 × 가격표 대조)에서 검증한다
+
+**되돌리기:** 직전 판으로 재설치(**즉시** — 옛 판은 `usage` 칸을 읽지 않는다) · `usage.jsonl` 삭제(**즉시**).
