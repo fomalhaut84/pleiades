@@ -20,7 +20,7 @@ export function probeReport(lock: string, all: DomainReady[]): ProbeReport {
   const lines = [`배포 락: ${lock}`];
   for (const d of all) {
     lines.push(d.ok
-      ? `${d.id}: 준비됨 · 읽기 도구 ${d.allow.length} · 도구 정의 ${d.toolBytes} B · 지식 ${bytes(d.knowledge)} B`
+      ? `${d.id}: 준비됨 · 읽기 도구 ${d.allow.length} · 도구 정의 ${d.toolBytes} B · 지식 ${bytes(d.knowledge)} B${d.initMs === undefined ? "" : ` · 기동 ${d.initMs} ms`}`
       : `${d.id}: 쓸 수 없음 · ${d.why}`);
   }
   const ready = all.filter((d): d is Extract<DomainReady, { ok: true }> => d.ok);

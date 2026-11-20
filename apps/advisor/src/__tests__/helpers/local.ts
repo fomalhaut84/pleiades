@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-export { TEST_REGISTRY, outsideWriter, sampleReader, writingReader } from "./local-readers";
+export { SLOW_START_MS, TEST_REGISTRY, outsideWriter, sampleReader, slowReader, writingReader } from "./local-readers";
 
 export const SRC = path.resolve(__dirname, "../..");
 export const LOCAL_SRC = path.join(SRC, "local");
