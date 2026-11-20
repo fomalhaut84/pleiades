@@ -208,7 +208,14 @@ export function loadDomains(appsDir: string, env: NodeJS.ProcessEnv = process.en
     } catch {
       continue;
     }
-    if (st.isDirectory()) read(rel, path.join(dir, DECLARATION_FILE), "");
+    if (!st.isDirectory()) continue;
+    const before = parsed.length;
+    read(rel, path.join(dir, DECLARATION_FILE), "");
+    // 모델 핀(models.file)은 앱 디렉터리 기준이다 — apps 밖 선언이 핀을 가지면 엉뚱한 파일을 읽는다(#880 9-1 I4) · 그 선언만 뺀다
+    if (parsed.length > before && parsed[parsed.length - 1].decl.models) {
+      parsed.pop();
+      broken.push({ id: rel, why: "선언 오류(apps 밖 선언은 models 를 쓰지 않는다)" });
+    }
   }
   // 키가 없는 선언(keySuffix 없음 · local 의 포트 키)은 세지 않는다
   const count = (key: (d: DomainDecl) => string | null) => {

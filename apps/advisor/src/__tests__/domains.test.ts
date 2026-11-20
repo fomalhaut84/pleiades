@@ -249,6 +249,31 @@ describe("prepareDomain — v1 준비 경로", () => {
   });
 });
 
+// 회귀: #880 9-1 info I4 — apps 밖 선언(deploy/ops)은 models 를 쓸 수 없다(핀 파일 기준이 앱 디렉터리라 엉뚱한 파일을 읽는다)
+describe("loadDomains — apps 밖 선언(deploy/ops · #880)", () => {
+  it("발견 · origin = deploy/ops · models 가 있으면 그 선언만 선언 오류 · 심링크 디렉터리는 따라가지 않는다", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "adv-extra-"));
+    try {
+      fs.mkdirSync(path.join(root, "apps"));
+      fs.mkdirSync(path.join(root, "deploy", "ops"), { recursive: true });
+      const decl = (over: Record<string, unknown> = {}) => JSON.stringify({ contract: "pleiades-domain/v1", id: "ops", name: "운영", kind: "local", summary: "s",
+        local: { reader: "ops" }, tools: { read: ["ops_summary"], write: [], propose: [] }, ...over });
+      fs.writeFileSync(path.join(root, "deploy", "ops", "domain.json"), decl());
+      expect(loadDomains(path.join(root, "apps"), {}).decls).toMatchObject([{ id: "ops", origin: "deploy/ops", dir: "" }]);
+      fs.writeFileSync(path.join(root, "deploy", "ops", "domain.json"), decl({ models: { file: "src/lib/ai/models.ts", constant: "X" } }));
+      expect(loadDomains(path.join(root, "apps"), {})).toEqual({ decls: [], broken: [{ id: "deploy/ops", why: expect.stringMatching(/models/) }] });
+      fs.rmSync(path.join(root, "deploy", "ops"), { recursive: true });
+      const real = fs.mkdtempSync(path.join(os.tmpdir(), "adv-extra-real-"));
+      fs.writeFileSync(path.join(real, "domain.json"), decl());
+      fs.symlinkSync(real, path.join(root, "deploy", "ops"));
+      expect(loadDomains(path.join(root, "apps"), {}).decls).toEqual([]);
+      fs.rmSync(real, { recursive: true, force: true });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
 // 회귀: #841 9-1 info — 파일 오류 사유는 코드만(절대경로를 로그에 남기지 않는다)
 describe("loadDomains — 파일 오류 사유", () => {
   it("domain.json 이 디렉터리면 EISDIR 만 남는다", () => {

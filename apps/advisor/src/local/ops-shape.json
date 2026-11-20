@@ -8,7 +8,7 @@
   "state": {
     "required": {},
     "optional": { "lastRunAt": "number", "summaryDate": "string" },
-    "ignored": ["files", "fps", "restarts", "lastOk", "growth", "usage", "active"]
+    "ignored": ["files", "fps", "restarts", "lastOk", "growth", "usage", "active", "hrm", "secretNoticeAt"]
   },
   "fp": {
     "required": { "fp": "string", "sev": "string", "kind": "string", "open": "boolean", "first": "number", "last": "number" },

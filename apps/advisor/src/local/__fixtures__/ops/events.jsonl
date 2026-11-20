@@ -25,8 +25,10 @@
 {"at":1794265500000,"type":"obs","fp":"f42cfd496469","app":"ops","role":"collector","src":"glob-empty:fit-bot-error","sev":"경고","count":1}
 {"at":1794265500000,"type":"obs","fp":"fd374ed7bf9b","app":"ops","role":"collector","src":"glob-empty:fit-mcp-out","sev":"경고","count":1}
 {"at":1794265500000,"type":"obs","fp":"2977b6780090","app":"ops","role":"collector","src":"glob-empty:fit-mcp-error","sev":"경고","count":1}
+{"at":1794265500000,"type":"obs","fp":"0ede7b78fc49","app":"hrm","role":"api","src":"dead","sev":"실패","count":1}
 {"at":1794265500000,"type":"obs","fp":"69d664c0b017","app":"host","role":"home","src":"usage","sev":"장애","count":1}
 {"at":1794265500000,"type":"obs","fp":"0bc003f5113b","app":"host","role":"backup","src":"usage","sev":"장애","count":1}
+{"at":1794265500000,"type":"first","fp":"0ede7b78fc49","app":"hrm","role":"api","src":"dead","sev":"실패","count":1}
 {"at":1794269400000,"type":"obs","fp":"89d5f575fa2d","app":"ops","role":"collector","src":"late","sev":"경고","count":1}
 {"at":1794269400000,"type":"obs","fp":"324e3596bdc6","app":"ops","role":"collector","src":"pm2-bin","sev":"경고","count":1}
 {"at":1794269400000,"type":"obs","fp":"a29e2f306ad2","app":"ops","role":"collector","src":"env-read:fin","sev":"경고","count":1}
@@ -40,6 +42,7 @@
 {"at":1794269400000,"type":"obs","fp":"f42cfd496469","app":"ops","role":"collector","src":"glob-empty:fit-bot-error","sev":"경고","count":1}
 {"at":1794269400000,"type":"obs","fp":"fd374ed7bf9b","app":"ops","role":"collector","src":"glob-empty:fit-mcp-out","sev":"경고","count":1}
 {"at":1794269400000,"type":"obs","fp":"2977b6780090","app":"ops","role":"collector","src":"glob-empty:fit-mcp-error","sev":"경고","count":1}
+{"at":1794269400000,"type":"obs","fp":"0ede7b78fc49","app":"hrm","role":"api","src":"dead","sev":"실패","count":1}
 {"at":1794269400000,"type":"obs","fp":"69d664c0b017","app":"host","role":"home","src":"usage","sev":"장애","count":1}
 {"at":1794269400000,"type":"obs","fp":"0bc003f5113b","app":"host","role":"backup","src":"usage","sev":"장애","count":1}
 {"at":1794269400000,"type":"first","fp":"89d5f575fa2d","app":"ops","role":"collector","src":"late","sev":"경고","count":1}
@@ -57,4 +60,5 @@
 {"at":1794269400000,"type":"repeat","fp":"2977b6780090","app":"ops","role":"collector","src":"glob-empty:fit-mcp-error","sev":"경고","count":2}
 {"at":1794269400000,"type":"repeat","fp":"69d664c0b017","app":"host","role":"home","src":"usage","sev":"장애","count":2}
 {"at":1794269400000,"type":"repeat","fp":"0bc003f5113b","app":"host","role":"backup","src":"usage","sev":"장애","count":2}
+{"at":1794269400000,"type":"repeat","fp":"0ede7b78fc49","app":"hrm","role":"api","src":"dead","sev":"실패","count":1}
 {"at":1794269400000,"type":"summary","fp":null,"app":null,"role":null,"src":null,"sev":null,"count":14}
