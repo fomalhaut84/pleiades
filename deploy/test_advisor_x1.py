@@ -483,7 +483,7 @@ class S5Tools(Base):
         orig = f.read_text()
         f.write_text(orig[:-3])
         self.assert_stopped(self.run_x1(), "S-5: domain.json 이 JSON 이 아니다")
-        f.write_text(orig.replace('"pleiades-domain/v0"', '"pleiades-domain/v9"'))
+        f.write_text(orig.replace('"pleiades-domain/v1"', '"pleiades-domain/v9"'))
         self.assert_stopped(self.run_x1(), "S-5: domain.json 형식이 예상과 다르다")
         f.write_text(orig.replace('"get_portfolio"', '"get_portfolio // x"', 1))
         self.assert_stopped(self.run_x1(), "S-5: domain.json 분류에 이름 형식이 다른 항목")

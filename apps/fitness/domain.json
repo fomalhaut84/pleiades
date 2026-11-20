@@ -1,9 +1,16 @@
 {
-  "$comment": "pleiades 도메인 계약 v0(012 §7-2 · #653). K-0 선언 + K-2 도구 분류. tools 는 이 도메인 MCP 서버(src/mcp/server.ts)에 등록된 도구만 · 접두 없는 이름 · read = 원장·설정을 바꾸지 않는다 · write = 바꾼다. 앱 advisor(src/lib/ai/advisor-tools.ts) · 통합 층 · 시험이 이 파일을 읽는다 — 새 MCP 도구는 여기에 분류한다.",
-  "contract": "pleiades-domain/v0",
+  "$comment": "pleiades 도메인 계약 v1(015 §3-2 · #858 · v0 = 012 §7-2 #653). K-0 선언 + K-2 도구 분류 + K-3 지식 prompt(knowledge) + K-7 모델 핀(models). tools 는 이 도메인 MCP 서버(src/mcp/server.ts)에 등록된 도구만 · 접두 없는 이름 · read = 원장·설정을 바꾸지 않는다 · write = 바꾼다 · propose = mcp 는 쓰지 않는다(빈 배열). 앱 advisor(src/lib/ai/advisor-tools.ts) · 통합 층 · 시험이 이 파일을 읽는다 — 새 MCP 도구는 여기에 분류한다.",
+  "contract": "pleiades-domain/v1",
   "id": "fit",
   "name": "건강",
+  "kind": "mcp",
+  "summary": "건강 — 활동 · 수면 · 심박 · 체성분 · 혈압 · 훈련 부하 · 레이스 예측 · 건강검진 · 복약",
   "keySuffix": "FITNESS",
+  "knowledge": true,
+  "models": {
+    "file": "src/lib/ai/models.ts",
+    "constant": "PINNED_CLAUDE_MODELS"
+  },
   "mcp": {
     "serverKey": "myfitness",
     "defaultPort": 4301
@@ -40,6 +47,7 @@
     ],
     "write": [
       "generate_training_plan"
-    ]
+    ],
+    "propose": []
   }
 }

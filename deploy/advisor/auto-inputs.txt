@@ -16,8 +16,8 @@ package-lock.json
 # 배포 스크립트 · pm2 정의(adv-inplace.sh 는 자기 체크아웃의 것으로 돈다)
 deploy/advisor/
 
-# 질문마다 읽는 도메인 선언 · 모델 고정(apps/advisor/src/domains.ts 가 apps/*/domain.json 을 스캔 · cli.ts PIN_SOURCES)
+# 질문마다 읽는 도메인 선언 · 모델 고정(apps/advisor/src/domains.ts 가 apps/*/domain.json 을 스캔 · cli.ts readPins 가 선언의 models 를 읽는다)
 # 선언은 글롭 한 줄(#841 · 015 V-2) — 어느 앱이든 domain.json 을 더하거나 바꾸면 통합 층이 다시 배포된다
+# 모델 핀도 글롭(K-7 · #858) — 선언의 models.file 이 이 글롭 밖이면 AutoInputs 시험이 막는다
 apps/*/domain.json
-apps/finance/src/lib/ai/models.ts
-apps/fitness/src/lib/ai/models.ts
+apps/*/src/lib/ai/models.ts
