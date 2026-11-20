@@ -795,6 +795,13 @@ class StateAndLock(Base):
         self.assertEqual(len(summaries), 1)
         self.assertIn("열린 이상 1", summaries[0])
         self.assertTrue(summaries[0].startswith("11-10 09:06"))
+        # #863 절 나눔 — 머리 · 상태 줄(판정 문구 유지) · 열린 이상 목록 · 어제 상위 · AI 사용량 순서
+        parts = summaries[0].split(" ⏎ ")
+        self.assertEqual(parts[0], "11-10 09:06 [ops] **일일 요약** · 11-09")
+        self.assertTrue(parts[1].startswith("❗ 살아 있음 · 열린 이상 1"), parts[1])
+        order = [i for i, x in enumerate(parts) if x in ("**열린 이상**", "**어제 상위**") or x.startswith("**💰 AI 사용량**")]
+        self.assertEqual(len(order), 3, parts)
+        self.assertTrue(parts[order[0] + 1].startswith("- ") and "`" in parts[order[0] + 1], parts)
         self.assertTrue(any(e["type"] == "summary" for e in self.events()))
 
     def test_events_are_summaries_only(self):
@@ -1405,7 +1412,7 @@ class Quiet2a(Base):
         summ = [p for p in self.posts() if "일일 요약" in p]
         self.assertEqual(len(summ), 1)
         self.assertRegex(summ[0], r"경고 어제 [1-9]\d*종 [2-9]\d*회")   # Deprecated 2회 + 수집기 late 등
-        self.assertIn("fin·bot·stderr e682dc78fef1 ×2", summ[0])   # 운영 Deprecated 지문과 같은 값
+        self.assertIn("fin·bot·stderr `e682dc78fef1` ×2", summ[0])   # #863 — 지문은 코드 서식   # 운영 Deprecated 지문과 같은 값
 
     def test_quiet_warnings_do_not_count_toward_burst(self):
         q = {"quietWarnings": True, "burstLimit": 2}
@@ -1556,6 +1563,20 @@ class Post(Base):
         self.live(now="2026-11-10T08:05:00+09:00")  # 같은 지문 · 새 줄 없음 → 다시 보내지 않는다
         self.assertEqual(len(self.fetches()), 1)
         self.assert_no_raw(HOOK, "HOOKSECRET")
+
+    # #863 — 일일 요약은 여러 줄로 게시하고 기록 파일에는 한 줄(⏎)로 남긴다
+    def test_summary_posts_multiline_and_logs_one_line(self):
+        r = self.live(now="2026-11-10T09:06:00+09:00", config={"summaryAt": "09:05"})
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        summ = [c for c in self.sent() if "일일 요약" in c]
+        self.assertEqual(len(summ), 1)
+        lines = summ[0].split("\n")
+        self.assertEqual(lines[0], "[ops] **일일 요약** · 11-09")
+        self.assertIn("**어제 상위**", lines)
+        self.assertNotIn("⏎", summ[0])
+        logged = [l for l in self.posted_log() if "일일 요약" in l]
+        self.assertEqual(len(logged), 1)
+        self.assertIn(" ⏎ **어제 상위** ⏎ ", logged[0])
 
     def test_dry_run_never_fetches_even_with_webhook(self):
         self.log(self.E, ERR_LINE, append=True)
@@ -1944,19 +1965,26 @@ class Usage(Base):
         cfg = {"summaryAt": "09:05"}
         self.ok(now="2026-11-10T09:06:00+09:00", config=cfg)
         summ = [p for p in self.posts() if "일일 요약" in p]
-        self.assertIn("AI 사용량(API 환산 · 서비스 호출만) 집계 시작 전", summ[-1])  # 켠 날의 요약
+        self.assertIn("**💰 AI 사용량** (API 환산 · 서비스 호출만) ⏎ - 집계 시작 전", summ[-1])  # 켠 날의 요약(#863 절 나눔)
         self.log("pleiades-fin-bot-out-0.log", L("[advisor] ok caller=b model=claude-sonnet-5 used=x cost=$0.3000 turns=1 tools=0"), append=True)
         self.log("pleiades-fit-web-out-0.log",
                  L("[askAdvisor] channel=web model=claude-sonnet-5 duration=5ms turns=2 context=1 session=ab cost=$0.1000 cap=$1.0000"), append=True)
         self.ok(now="2026-11-10T10:00:00+09:00", config=cfg)
         self.ok(now="2026-11-11T09:06:00+09:00", config=cfg)
         summ = [p for p in self.posts() if "일일 요약" in p]
-        self.assertIn("AI 사용량(API 환산 · 서비스 호출만) 어제 $0.40 (fin $0.30 · fit $0.10 · 2회 · 실패 0) · 이달 $0.40 · 월말 예상 $12.00", summ[-1])
+        # #863 — 절 나눔 · 집계 시작일은 하루치가 아니라는 표지 · 월말 예상의 근거 일수
+        self.assertIn("**💰 AI 사용량** (API 환산 · 서비스 호출만) ⏎ - 어제 $0.40 (집계 시작일 · 일부) — fin $0.30 · fit $0.10 · 2회 · 실패 0"
+                      " ⏎ - 이달 $0.40 · 월말 예상 $12.00 (1일 기준)", summ[-1])
         rows = [json.loads(l) for l in (self.ops / "usage.jsonl").read_text().splitlines()]
         self.assertEqual([r["date"] for r in rows], ["2026-11-10"])
         self.assertEqual(round(rows[0]["apps"]["fin"]["usd"], 4), 0.3)
         self.ok(now="2026-11-11T09:11:00+09:00", config=cfg)
         self.assertEqual(len((self.ops / "usage.jsonl").read_text().splitlines()), 1)  # 하루 한 줄
+        self.log("pleiades-fin-bot-out-0.log", L("[advisor] ok caller=b model=claude-sonnet-5 used=x cost=$0.5000 turns=1 tools=0"), append=True)
+        self.ok(now="2026-11-11T10:00:00+09:00", config=cfg)
+        self.ok(now="2026-11-12T09:06:00+09:00", config=cfg)
+        last = [p for p in self.posts() if "일일 요약" in p][-1]
+        self.assertIn("- 어제 $0.50 — fin $0.50 · 1회 · 실패 0 ⏎ - 이달 $0.90 · 월말 예상 $13.50 (2일 기준)", last)  # 둘째 날부터 표지 없음
 
     def test_days_pruned_after_retention(self):
         st = self.state()

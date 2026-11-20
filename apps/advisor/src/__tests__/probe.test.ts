@@ -1,11 +1,11 @@
 // #839 · 015 V-1 — probe 판정 줄: 도구 정의 · 지식 · 시스템 합계 바이트와 S0 경고 줄(X2 · 막지 않는다).
 import { describe, expect, it } from "vitest";
 import { SYSTEM_MAX_BYTES, buildSystem } from "../advisor";
-import { DomainDecl, DomainReady } from "../domains";
+import { DomainReady } from "../domains";
+import { mcpDecl } from "./helpers/decl";
 import { SYSTEM_WARN_BYTES, probeReport } from "../probe";
 
-const decl = (id: string, name: string): DomainDecl =>
-  ({ id, name, keySuffix: id.toUpperCase(), serverKey: id, port: 1, write: new Set<string>() });
+const decl = (id: string, name: string) => mcpDecl({ id, name, keySuffix: id.toUpperCase(), serverKey: id });
 const ok = (id: string, name: string, knowledge: string, toolBytes = 120): Extract<DomainReady, { ok: true }> =>
   ({ id, ok: true, decl: decl(id, name), allow: [`mcp__${id}__a`, `mcp__${id}__b`], knowledge, toolBytes });
 const bad = (id: string, name: string): DomainReady => ({ id, ok: false, decl: decl(id, name), why: "읽기 경로 연결 실패" });

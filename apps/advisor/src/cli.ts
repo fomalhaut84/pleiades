@@ -6,6 +6,7 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import type { DomainDecl } from "./domains";
 import { InitVerdict } from "./judge";
 
 /** 012 [D1] 통합 층 호출당 상한 — fin 크론 · fit askAdvisor 기본값과 같다 */
@@ -20,23 +21,24 @@ export interface Pin {
   sonnet: string;
 }
 
-const PIN_SOURCES: ReadonlyArray<{ dir: string; constant: string }> = [
-  { dir: "finance", constant: "PINNED_MODELS" },
-  { dir: "fitness", constant: "PINNED_CLAUDE_MODELS" },
-];
-
-/** 두 앱 `src/lib/ai/models.ts` 의 고정 모델 — 다르면 던진다(앱과 같은 모델로만 답한다 · #255 · X1 S-4) */
-export function readPins(appsDir: string): Pin {
-  const got = PIN_SOURCES.map(({ dir, constant }) => {
-    const src = fs.readFileSync(path.join(appsDir, dir, "src/lib/ai/models.ts"), "utf8");
-    const at = src.indexOf(constant);
+/**
+ * 모델 고정 — 발견한 선언의 `models`(K-7 · 015 §3-2 · #858)가 가리키는 파일의 상수. 핀 출처는 발견 목록의 부분집합이다(V31 정정).
+ * 모두 같아야 한다 — 다르면 던진다(앱과 같은 모델로만 답한다 · #255 · X1 S-4). 하나도 없어도 던진다.
+ */
+export function readPins(appsDir: string, decls: readonly Pick<DomainDecl, "dir" | "models">[]): Pin {
+  const sources = decls.flatMap((d) => (d.models ? [{ dir: d.dir, ...d.models }] : []));
+  if (!sources.length) throw new Error("모델 고정을 선언한 도메인이 없다");
+  const got = sources.map(({ dir, file, constant }) => {
+    const src = fs.readFileSync(path.join(appsDir, dir, file), "utf8");
+    // 상수 이름은 선언에서 온다(CONSTANT 정규식을 거쳤다) — 부분 문자열이 아니라 `const <이름>` 선언 자리에서 찾는다(#858 9-1 info)
+    const at = src.search(new RegExp(`\\b(?:export\\s+)?const\\s+${constant}\\b`));
     const block = at < 0 ? "" : src.slice(at);
     const haiku = (block.match(/haiku:\s*['"]([^'"]+)['"]/) ?? [])[1];
     const sonnet = (block.match(/sonnet:\s*['"]([^'"]+)['"]/) ?? [])[1];
     if (!haiku || !sonnet) throw new Error(`${dir}: 모델 고정을 찾지 못했다`);
     return { haiku, sonnet };
   });
-  if (got.some((p) => p.haiku !== got[0].haiku || p.sonnet !== got[0].sonnet)) throw new Error("두 앱 모델 고정이 다르다");
+  if (got.some((p) => p.haiku !== got[0].haiku || p.sonnet !== got[0].sonnet)) throw new Error("모델 고정이 앱마다 다르다");
   return got[0];
 }
 

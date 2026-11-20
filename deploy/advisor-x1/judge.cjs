@@ -8,7 +8,7 @@ const NAME_OK = /^[A-Za-z0-9_]{1,80}$/
 const safeName = (s) => (typeof s === 'string' && NAME_OK.test(s) ? s : '?')
 
 // ── S-5 분류(Q118 · #653 — 012 K-2) ─────────────────────────────────
-// 앱 루트 domain.json(계약 pleiades-domain/v0)의 tools.read · tools.write — 이 도메인 MCP 도구만 · 접두 없는 이름.
+// 앱 루트 domain.json(계약 pleiades-domain/v0 · v1 — v1 은 #858 · 015 V-3 · 서버 설치본은 끝난 실험이라 그대로)의 tools.read · tools.write — 이 도메인 MCP 도구만 · 접두 없는 이름.
 // JSON 이라 주석·템플릿으로 도구가 가려질 길이 없다(옛 TS 상수 파서의 #632 9-1 major 1 가드가 필요 없어졌다).
 // 형식이 다르면 멈춘다 — 빈 목록 · 이름 형식 · 겹침은 x1.cjs sourceLists 가 본다.
 const TOOL_NAME = /^[a-z0-9_]{1,60}$/
@@ -16,7 +16,7 @@ function domainLists(text) {
   let d
   try { d = JSON.parse(text) } catch { stop('S-5: domain.json 이 JSON 이 아니다') }
   const t = d && d.tools, key = d && d.mcp && d.mcp.serverKey
-  if (!d || d.contract !== 'pleiades-domain/v0' || !t || !Array.isArray(t.read) || !Array.isArray(t.write) || typeof key !== 'string' || !TOOL_NAME.test(key))
+  if (!d || !['pleiades-domain/v0', 'pleiades-domain/v1'].includes(d.contract) || !t || !Array.isArray(t.read) || !Array.isArray(t.write) || typeof key !== 'string' || !TOOL_NAME.test(key))
     stop('S-5: domain.json 형식이 예상과 다르다(contract · mcp.serverKey · tools.read · tools.write — 스크립트 갱신 필요)')
   if ([...t.read, ...t.write].some((n) => typeof n !== 'string' || !TOOL_NAME.test(n))) stop('S-5: domain.json 분류에 이름 형식이 다른 항목')
   const prefix = `mcp__${key}__`
