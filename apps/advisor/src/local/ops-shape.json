@@ -1,0 +1,18 @@
+{
+  "$comment": "ops 리더 허용 목록(015 §7-1 O2 · #880) — 통합 층 ops 리더(src/local/ops.ts)와 수집기 쪽 형식 시험(deploy/test_ops_format.py · 필수 verify)이 같이 읽는다. required = 없거나 형이 다르면 그 레코드를 버리고 센다 · optional = null 은 없음 · ignored = 알지만 내보내지 않는다(세지 않는다) · 그 밖의 키 = 모르는 필드(세고 버린다 → 도구 결과 실패). 수집기가 키를 더하거나 바꾸면 여기와 고정값(src/local/__fixtures__/ops/)을 같이 고친다.",
+  "event": {
+    "required": { "at": "number", "type": "string" },
+    "optional": { "fp": "string", "app": "string", "role": "string", "src": "string", "sev": "string", "count": "number", "quiet": "boolean", "blocked": "string" },
+    "ignored": []
+  },
+  "state": {
+    "required": {},
+    "optional": { "lastRunAt": "number", "summaryDate": "string" },
+    "ignored": ["files", "fps", "restarts", "lastOk", "growth", "usage", "active"]
+  },
+  "fp": {
+    "required": { "fp": "string", "sev": "string", "kind": "string", "open": "boolean", "first": "number", "last": "number" },
+    "optional": { "app": "string", "role": "string", "src": "string" },
+    "ignored": ["material", "detail", "scope", "posted", "pending", "ok", "days", "deferred", "warnDays", "firstCount", "postedQuiet", "pendingSev"]
+  }
+}

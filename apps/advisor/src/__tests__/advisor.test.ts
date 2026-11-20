@@ -32,6 +32,7 @@ function advisor(over: Partial<ConstructorParameters<typeof Advisor>[0]> = {}) {
   const settingsDirs = { claudeDir: path.join(tmp, "claude"), managedDir: path.join(tmp, "managed") };
   return new Advisor({
     appsDir: APPS,
+    extraDeclDirs: [], // fin · fit 만 — ops(local) 왕복은 local-provider.test(#880)
     privateRoot: path.join(tmp, "private"),
     env: { PATH: process.env.PATH, ADVISOR_MCP_PORT_FINANCE: String(fin.port), ADVISOR_MCP_PORT_FITNESS: String(fit.port),
       FAKE_CLI_SPEC: spec, FAKE_CLI_LOG: cliLog, DATABASE_URL: "postgresql://svc@prod/x" },

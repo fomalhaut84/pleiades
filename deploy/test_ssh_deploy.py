@@ -377,6 +377,14 @@ class AutoInputs(unittest.TestCase):
         for d in decls:
             self.assertTrue(self.covered(f"apps/{d}/domain.json"), d)
         self.assertTrue(self.covered("apps/newapp/domain.json"), "새 앱의 선언도 덮는다(글롭)")
+        # #880 — apps 밖 선언(domains.ts EXTRA_DECLARATION_DIRS)도 전부 입력이어야 한다
+        extra = re.search(r"EXTRA_DECLARATION_DIRS: readonly string\[\] = \[([^\]]*)\]", (self.src / "domains.ts").read_text())
+        self.assertIsNotNone(extra)
+        dirs = re.findall(r'"([^"]+)"', extra.group(1))
+        self.assertEqual(dirs, ["deploy/ops"])
+        for d in dirs:
+            self.assertTrue(self.covered(f"{d}/domain.json"), d)
+        self.assertFalse(self.covered("deploy/ops/collect.cjs"), "수집기 코드는 통합 층 입력이 아니다")
         # K-7(#858) — 모델 핀 출처는 선언의 models 다(핀 ⊆ 발견은 구조로 성립) · 그 파일이 입력이어야 한다
         pins = [(d, json.loads((HERE.parent / "apps" / d / "domain.json").read_text()).get("models")) for d in decls]
         pins = [(d, m) for d, m in pins if m]

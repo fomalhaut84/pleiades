@@ -5,7 +5,9 @@
 import { emptyTally, mismatchOf } from "./fields";
 import type { Reader, Registry } from "./readers";
 
-/** 기동 상한 — 호스트를 띄워 initialize 응답을 받기까지(V-4b prepare 가 이것을 넘으면 그 제공자를 쓰지 않는다 · 탐침 p50 364~381 ms 의 여유) */
+/** 기동 상한 — 호스트를 띄워 initialize 응답을 받기까지(V-4b prepare 가 이것을 넘으면 그 제공자를 쓰지 않는다).
+ * 근거: 서버 실측(봇과 같은 node v24 · 의존 0 stdio 호스트 50회) p99 25 ms · 최대 25 ms(2026-11-20 · #880) — 40배 여유.
+ * (#868 의 364~381 ms 는 CLI init 첫 줄까지 시간이라 이 상한의 근거가 아니다 — #880 정정) */
 export const LOCAL_INIT_MAX_MS = 1000;
 /** 한 줄 요청 상한 — 넘으면 그 입력을 버린다(호스트가 메모리를 쌓지 않게) */
 export const REQUEST_MAX_BYTES = 1024 * 1024;

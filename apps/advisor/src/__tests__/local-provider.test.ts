@@ -36,7 +36,7 @@ const ctx = (over: Partial<LocalHostContext> = {}): LocalHostContext => ({
   registry: TEST_REGISTRY, command: process.execPath, prefix: [hostJs], privateRoot: path.join(tmp, "private"), initMaxMs: ROOMY_MS, ...over,
 });
 const localDecl = (over: Partial<LocalDecl> = {}): LocalDecl => ({
-  ...mcpDecl(), kind: "local", dir: "sample", id: "sample", name: "시험", summary: "시험 제공자 한 줄", keySuffix: null,
+  ...mcpDecl(), kind: "local", dir: "sample", origin: "apps/sample", id: "sample", name: "시험", summary: "시험 제공자 한 줄", keySuffix: null,
   serverKey: "pl_sample", reader: "sample", read: new Set(["sample_status", "sample_events"]), knowledge: false, ...over,
 } as LocalDecl);
 /** 리더 위치(privateRoot/sample)에 고정값을 놓는다 */
@@ -51,7 +51,7 @@ describe("localLaunch — 실행 명령(H-R3 · H-R6 · 015 §3-1 원칙 1)", ()
 
   it("레지스트리에 없는 리더 · 다른 위치의 선언이 그 리더를 고르면 null", () => {
     expect(localLaunch(localDecl({ reader: "ops" }), ctx())).toBeNull();
-    expect(localLaunch(localDecl({ dir: "finance" }), ctx())).toBeNull(); // apps/finance 는 sample 리더의 허용 위치가 아니다
+    expect(localLaunch(localDecl({ dir: "finance", origin: "apps/finance" }), ctx())).toBeNull(); // apps/finance 는 sample 리더의 허용 위치가 아니다
     expect(localLaunch(localDecl(), ctx({ registry: new Map() }))).toBeNull(); // 운영 레지스트리(빈)
   });
 });
@@ -65,7 +65,7 @@ describe("prepareDomain — local 경로", () => {
 
   it.each<[string, Partial<LocalDecl>, Partial<LocalHostContext>, string]>([
     ["리더가 레지스트리에 없다", { reader: "ops" }, {}, "reader-not-allowed"],
-    ["허용 선언 위치가 아니다", { dir: "finance" }, {}, "reader-not-allowed"],
+    ["허용 선언 위치가 아니다", { dir: "finance", origin: "apps/finance" }, {}, "reader-not-allowed"],
     ["실행 파일이 없다", {}, { command: "/nonexistent/node" }, "호스트 기동 실패"],
     ["등록 이름이 선언 read 밖", { read: new Set(["sample_status"]) }, {}, "선언에 없는 도구"],
     ["쓰기 분류 이름이 보인다", { write: new Set(["sample_events"]) }, {}, "쓰기 분류 도구가 읽기 경로에 있다"],
@@ -75,7 +75,7 @@ describe("prepareDomain — local 경로", () => {
   });
 
   it(`양성 대조 — 기동이 상한(${LOCAL_INIT_MAX_MS} ms)을 넘는 호스트는 쓰지 않는다(질문마다 init 첫 줄이 늦어진다 · #868)`, async () => {
-    const r = await prepareDomain(localDecl({ dir: "sample_slow", reader: "sample_slow" }), 5000, ctx({ initMaxMs: undefined })); // 운영 상한
+    const r = await prepareDomain(localDecl({ dir: "sample_slow", origin: "apps/sample_slow", reader: "sample_slow" }), 5000, ctx({ initMaxMs: undefined })); // 운영 상한
     expect(r).toMatchObject({ ok: false, why: "기동 지연" });
   });
 });
