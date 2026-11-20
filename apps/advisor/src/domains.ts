@@ -223,6 +223,8 @@ export interface LocalHostContext {
   command: string;
   prefix: readonly string[];
   privateRoot: string;
+  /** 기동 상한(기본 LOCAL_INIT_MAX_MS) — 시험이 정상 경로에서 넉넉히 둔다(느린 러너 · #873 9-1 info 1) */
+  initMaxMs?: number;
 }
 
 export interface Launch {
@@ -293,7 +295,7 @@ async function prepareLocal(decl: LocalDecl, timeoutMs: number, ctx: LocalHostCo
     return fail("호스트 기동 실패");
   }
   try {
-    if (s.initMs > LOCAL_INIT_MAX_MS) return fail("기동 지연");
+    if (s.initMs > (ctx?.initMaxMs ?? LOCAL_INIT_MAX_MS)) return fail("기동 지연");
     return await readyFrom(decl, s, { launch, initMs: s.initMs });
   } finally {
     await s.close();

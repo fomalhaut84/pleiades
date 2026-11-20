@@ -67,7 +67,7 @@ export interface AdvisorDeps {
   /** 자식 env 허용 목록에 더할 키 — 시험(가짜 CLI)만 쓴다 */
   passEnv?: readonly string[];
   /** `local` 호스트(015 V-4 · #873) — 기본 = 운영 레지스트리 · process.execPath(H-R6) · 봇 번들 옆 dist/local-host.cjs. 시험이 시험 레지스트리 · 시험 번들을 넣는다 */
-  localHost?: { registry: Registry; command: string; prefix: readonly string[] };
+  localHost?: { registry: Registry; command: string; prefix: readonly string[]; initMaxMs?: number };
 }
 
 /** 봇 번들(dist/advisor.cjs) 옆의 호스트 번들 — 같은 build 가 만든다(package.json) */

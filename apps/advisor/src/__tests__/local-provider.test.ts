@@ -30,8 +30,10 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
+/** 정상 경로는 상한을 넉넉히(CI 부하 · 9-1 info 1) — 운영 상한은 양성 대조가 initMaxMs 없이 본다 */
+const ROOMY_MS = 10_000;
 const ctx = (over: Partial<LocalHostContext> = {}): LocalHostContext => ({
-  registry: TEST_REGISTRY, command: process.execPath, prefix: [hostJs], privateRoot: path.join(tmp, "private"), ...over,
+  registry: TEST_REGISTRY, command: process.execPath, prefix: [hostJs], privateRoot: path.join(tmp, "private"), initMaxMs: ROOMY_MS, ...over,
 });
 const localDecl = (over: Partial<LocalDecl> = {}): LocalDecl => ({
   ...mcpDecl(), kind: "local", dir: "sample", id: "sample", name: "시험", summary: "시험 제공자 한 줄", keySuffix: null,
@@ -58,7 +60,7 @@ describe("prepareDomain — local 경로", () => {
   it("준비됨 — 호스트를 띄워 tools/list · 지식 = summary · 같은 명령을 돌려준다 · 기동 ms", async () => {
     const r = await prepareDomain(localDecl(), 5000, ctx());
     expect(r).toMatchObject({ ok: true, allow: [TOOL, "mcp__pl_sample__sample_events"], knowledge: "시험 제공자 한 줄", launch: localLaunch(localDecl(), ctx()) });
-    expect((r as { initMs: number }).initMs).toBeLessThan(LOCAL_INIT_MAX_MS);
+    expect((r as { initMs: number }).initMs).toBeGreaterThan(0);
   });
 
   it.each<[string, Partial<LocalDecl>, Partial<LocalHostContext>, string]>([
@@ -73,7 +75,7 @@ describe("prepareDomain — local 경로", () => {
   });
 
   it(`양성 대조 — 기동이 상한(${LOCAL_INIT_MAX_MS} ms)을 넘는 호스트는 쓰지 않는다(질문마다 init 첫 줄이 늦어진다 · #868)`, async () => {
-    const r = await prepareDomain(localDecl({ dir: "sample_slow", reader: "sample_slow" }), 5000, ctx());
+    const r = await prepareDomain(localDecl({ dir: "sample_slow", reader: "sample_slow" }), 5000, ctx({ initMaxMs: undefined })); // 운영 상한
     expect(r).toMatchObject({ ok: false, why: "기동 지연" });
   });
 });
@@ -126,7 +128,7 @@ describe("Advisor — local 제공자 질문 왕복(가짜 CLI)", () => {
       appsDir: appsWithSample(), privateRoot, env: { PATH: process.env.PATH, FAKE_CLI_SPEC: spec, FAKE_CLI_LOG: cliLog },
       claude: { bin: process.execPath, prefix: [FAKE_CLI] }, settingsDirs: { claudeDir: path.join(tmp, "claude"), managedDir: path.join(tmp, "managed") },
       lockProbe: () => "free", log: (l) => logs.push(l), questionTimeoutMs: 5000, passEnv: ["FAKE_CLI_SPEC", "FAKE_CLI_LOG"],
-      localHost: { registry: TEST_REGISTRY, command: process.execPath, prefix: [hostJs] },
+      localHost: { registry: TEST_REGISTRY, command: process.execPath, prefix: [hostJs], initMaxMs: ROOMY_MS },
     });
     const r = await adv.ask("discord:100:200", "시험 상태는?");
     expect(r).toMatchObject({ kind: "answer", text: "답입니다" });

@@ -205,12 +205,12 @@
 > - CI "코드 기본값 기준 하한" 출력은 **별 PR**(사용자 2026-11-20).
 
 > **구현 기록 (#872 V-4a · #873 V-4b · 2026-11-20) — `local` 호스트.** 위 블록의 *"`local` 은 V-4 전까지 `unavailable why=local 호스트 없음`"* 은 소진 — 이제 리더를 고를 수 있는지로 갈린다. 되돌리기: 문구 (**즉시**) · 코드는 통합 층 공통(§10).
-> - **호스트 = 별 번들 `dist/local-host.cjs`**(봇 번들 옆 · 같은 build) — 쓰기 0 겹 ② 가 번들 출력(의존 포함)에도 걸린다(§13 #3). mcp-config 항목 = `{type: "stdio", command: process.execPath, args: [<번들>, "--reader", <id>, "--dir", <위치>]}`(H-R6) · prepare · probe 가 **같은 명령**으로 띄운다(H-R3). 호스트는 env 를 읽지 않는다.
+> - **호스트 = 별 번들 `dist/local-host.cjs`**(봇 번들 옆 · 같은 build) — 쓰기 0 겹 ② 가 번들 출력(의존 포함)에도 걸린다(§13 #3). mcp-config 항목 = `{type: "stdio", command: process.execPath, args: [<번들>, "--reader", <id>, "--dir", <위치>]}`(H-R6) · prepare · probe 가 **같은 명령**으로 띄운다(H-R3). env 는 다르다 — prepare 는 빈 env · 질문 때는 CLI 의 env — 호스트가 env 를 읽지 않으므로(겹 ② 가 막는다) 동작은 같다.
 > - **리더 레지스트리는 코드 상수**(`src/local/readers.ts`) — 리더마다 허용 선언 위치(`apps/<dir>`) · 도구 · 예시 인자 · **읽을 위치 규칙 `location(비공개 루트)`**(원칙 1 — 선언에는 경로가 없다). **운영 레지스트리는 비어 있다**(사용자 2026-11-20 · ops = V-5 · hermes = V-6) — 그래서 운영의 `local` 선언은 `unavailable why=reader-not-allowed`.
-> - prepare 의 `local` 사유: `reader-not-allowed`(레지스트리에 없음 · 허용 위치가 아님) · `호스트 기동 실패` · **`기동 지연`**(initialize 응답이 `LOCAL_INIT_MAX_MS` 1,000 ms 를 넘음 — 탐침이 보인 첫 줄 지연 위험 · Q143 판정 블록) · `선언에 없는 도구`(등록 이름 ⊄ 선언 `read` — 겹 ①) · 그 밖은 `mcp` 와 같은 검사. 호스트는 prompt 를 내지 않으므로 `knowledge: true` 인 `local` 선언은 `prompts/get 실패`로 쓰지 않는다.
+> - prepare 의 `local` 사유: `reader-not-allowed`(레지스트리에 없음 · 허용 위치가 아님) · `호스트 기동 실패` · **`기동 지연`**(initialize 응답이 `LOCAL_INIT_MAX_MS` 1,000 ms 를 넘음 — 탐침이 보인 첫 줄 지연 위험 · Q143 판정 블록) · `선언에 없는 도구`(등록 이름 ⊄ 선언 `read` — 런타임 검사 · 정적 겹 ① 과 다르다: **prepare 는 `read` 만 받고 `propose` 이름이 보이면 실패**한다 · 제안 호스트 노출은 #837 에서 정한다) · 그 밖은 `mcp` 와 같은 검사. 호스트는 prompt 를 내지 않으므로 `knowledge: true` 인 `local` 선언은 `prompts/get 실패`로 쓰지 않는다.
 > - **쓰기 0 시험 세 겹**(필수 `apps-adv`): ① 이름 ⊆ 허용 선언의 `read ∪ propose` · 운영 리더는 저장소에 선언이 있어야 한다 ② `src/local/**` 소스와 호스트 번들에 쓰기 · 열기 · 프로세스 · 동적 코드 · env · 계산된 접근 API 0 · `node:fs` import 는 `fields.ts` 한 파일 · 번들 require ⊆ `node:fs` · `node:path` · 변수 require 0 ③ 500/400 읽기 전용 사본(하위까지)에서 모든 도구 성공 + **fs 쓰기 함수 감시**(고정값 밖 쓰기도 잡는다 — §13 #3 의 답: 정적 검사가 못 보는 길을 감시가 덮는다). 새 리더는 `src/local/__fixtures__/<id>/` 고정값과 함께 더한다.
 > - 형식 불일치 = 도구 결과 `isError` + 고정 문구 · stderr `[local-host] reader=<id> tool=<name> mismatch unknown=N missing=N broken=N`(원문 0 · 원칙 3) · 읽기 실패는 `error=<코드>`.
-> - 남은 것: 질문마다 준비 때 호스트를 한 번 더 띄운다(약 0.4 s · 탐침 p50) — 측정은 V-5 실사용 뒤. 서버 CLI 2.1.311 재확인 · pm2 RSS 계산 범위는 그대로 미측정(§11-2 판정 블록).
+> - 남은 것: 질문마다 준비 때 호스트를 한 번 더 띄운다(약 0.4 s · 탐침 p50) — 측정은 V-5 실사용 뒤. **기동 상한 1,000 ms 는 로컬 p50 기준이다 — 서버 p99 는 미측정**(V-5 착수 전에 탐침 `tools/local/stdio-probe.cjs` 로 재고 상한을 다시 판정한다 · 넘나들면 질문마다 제공자가 들쭉날쭉 빠진다 · #873 9-1 info 2). 서버 CLI 2.1.311 재확인 · pm2 RSS 계산 범위는 그대로 미측정(§11-2 판정 블록).
 
 ---
 
