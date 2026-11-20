@@ -6,6 +6,7 @@ fin 이 통과하지 않으면 fit 을 하지 않는다 · workflow 는 저장�
 """
 
 import fnmatch
+import json
 import os
 import re
 import subprocess
@@ -341,6 +342,23 @@ class AdvAuto(unittest.TestCase):
 GLOB_CHARS = re.compile(r"[*?\[]")
 
 
+def spec_matches(rel: str, spec: str) -> bool:
+    """auto-inputs 한 줄이 경로를 덮는가 — 같음 · 디렉터리 접두(`/` 끝) · 글롭.
+    글롭은 git pathspec(마법 없음)과 같은 의미 = fnmatch(`*` 가 `/` 를 넘는다) — pathlib.glob 로 바꾸지 않는다(015 AU2:45 · #841).
+    adv · hrm 두 AutoInputs 시험이 같은 판정을 쓴다(#842 9-1 info — 헬퍼 중복 정리 · hrm 쪽은 글롭을 못 받았다 · #858)."""
+    return rel == spec or (spec.endswith("/") and rel.startswith(spec)) or bool(GLOB_CHARS.search(spec) and fnmatch.fnmatchcase(rel, spec))
+
+
+def check_every_spec_exists(case: unittest.TestCase, specs: list) -> None:
+    root = HERE.parent
+    tracked = subprocess.run(["git", "-C", str(root), "ls-files"], capture_output=True, text=True, check=True).stdout.split()
+    for s in specs:
+        if GLOB_CHARS.search(s):   # 글롭은 지금 하나 이상 맞아야 한다(#841)
+            case.assertTrue([t for t in tracked if spec_matches(t, s)], s)
+        else:
+            case.assertTrue((root / s).exists(), s)
+
+
 class AutoInputs(unittest.TestCase):
     """auto-inputs.txt 가 통합 층이 자기 체크아웃에서 읽는 곳을 덮는다 — 빠지면 그 변경이 운영에 들어가지 않는다."""
 
@@ -349,9 +367,7 @@ class AutoInputs(unittest.TestCase):
         self.src = HERE.parent / "apps" / "advisor" / "src"
 
     def covered(self, rel: str) -> bool:
-        # 글롭 줄은 git pathspec(마법 없음)과 같은 의미 = fnmatch(`*` 가 `/` 를 넘는다) — pathlib.glob 로 바꾸지 않는다(015 AU2:45 · #841)
-        return any(rel == s or (s.endswith("/") and rel.startswith(s)) or (GLOB_CHARS.search(s) and fnmatch.fnmatchcase(rel, s))
-                   for s in self.specs)
+        return any(spec_matches(rel, s) for s in self.specs)
 
     def test_domain_declarations_and_model_pins(self):
         # #841 — 통합 층은 apps/*/domain.json 을 스캔한다(domains.ts DECLARATION_FILE). 저장소의 선언 전부가 입력이어야 한다
@@ -361,13 +377,16 @@ class AutoInputs(unittest.TestCase):
         for d in decls:
             self.assertTrue(self.covered(f"apps/{d}/domain.json"), d)
         self.assertTrue(self.covered("apps/newapp/domain.json"), "새 앱의 선언도 덮는다(글롭)")
-        pins = re.findall(r'dir: "(\w+)"', (self.src / "cli.ts").read_text())
-        self.assertTrue(set(pins) <= set(decls), (pins, decls))   # 모델 핀 ⊆ 발견
-        for d in pins:
-            self.assertTrue(self.covered(f"apps/{d}/src/lib/ai/models.ts"), d)
+        # K-7(#858) — 모델 핀 출처는 선언의 models 다(핀 ⊆ 발견은 구조로 성립) · 그 파일이 입력이어야 한다
+        pins = [(d, json.loads((HERE.parent / "apps" / d / "domain.json").read_text()).get("models")) for d in decls]
+        pins = [(d, m) for d, m in pins if m]
+        self.assertGreaterEqual(len(pins), 1)
+        for d, m in pins:
+            self.assertTrue(self.covered(f"apps/{d}/{m['file']}"), d)
+        self.assertNotIn("PIN_SOURCES", (self.src / "cli.ts").read_text())   # 따로 적은 핀 목록이 돌아오지 않게
 
     def test_code_dependencies_and_deploy_script(self):
-        pkg = __import__("json").loads((HERE.parent / "apps" / "advisor" / "package.json").read_text())
+        pkg = json.loads((HERE.parent / "apps" / "advisor" / "package.json").read_text())
         for spec in pkg["dependencies"].values():
             self.assertTrue(spec.startswith("file:../../packages/"), spec)   # 새 의존 형식이면 목록을 다시 본다
             self.assertTrue(self.covered(spec.replace("file:../../", "") + "/"), spec)
@@ -376,14 +395,7 @@ class AutoInputs(unittest.TestCase):
             self.assertTrue(self.covered(rel), rel)
 
     def test_every_spec_exists(self):
-        root = HERE.parent
-        for s in self.specs:
-            if GLOB_CHARS.search(s):   # 글롭은 지금 하나 이상 맞아야 한다(#841)
-                tracked = subprocess.run(["git", "-C", str(root), "ls-files"], capture_output=True, text=True, check=True).stdout.split()
-                hits = [t for t in tracked if fnmatch.fnmatchcase(t, s)]
-                self.assertTrue(hits, s)
-            else:
-                self.assertTrue((root / s).exists(), s)
+        check_every_spec_exists(self, self.specs)
 
     def test_app_code_is_not_an_input(self):
         # 도구 목록 · 지식은 도는 두 앱에서 질문마다 받는다 — 두 앱 코드 전체를 넣으면 거의 모든 릴리즈가 배포된다
@@ -563,10 +575,10 @@ class HrmAutoInputs(unittest.TestCase):
         self.specs = [l.strip() for l in HRM_INPUTS.read_text().splitlines() if l.strip() and not l.strip().startswith("#")]
 
     def covered(self, rel: str) -> bool:
-        return any(rel == s or (s.endswith("/") and rel.startswith(s)) for s in self.specs)
+        return any(spec_matches(rel, s) for s in self.specs)
 
     def test_code_dependencies_and_deploy_scripts(self):
-        pkg = __import__("json").loads((HERE.parent / "apps" / "hermes" / "package.json").read_text())
+        pkg = json.loads((HERE.parent / "apps" / "hermes" / "package.json").read_text())
         for spec in pkg.get("dependencies", {}).values():
             if spec.startswith("file:"):
                 self.assertTrue(spec.startswith("file:../../packages/"), spec)   # 새 의존 형식이면 목록을 다시 본다
@@ -576,14 +588,7 @@ class HrmAutoInputs(unittest.TestCase):
             self.assertTrue(self.covered(rel), rel)
 
     def test_every_spec_exists(self):
-        root = HERE.parent
-        for s in self.specs:
-            if GLOB_CHARS.search(s):   # 글롭은 지금 하나 이상 맞아야 한다(#841)
-                tracked = subprocess.run(["git", "-C", str(root), "ls-files"], capture_output=True, text=True, check=True).stdout.split()
-                hits = [t for t in tracked if fnmatch.fnmatchcase(t, s)]
-                self.assertTrue(hits, s)
-            else:
-                self.assertTrue((root / s).exists(), s)
+        check_every_spec_exists(self, self.specs)
 
     def test_other_apps_are_not_inputs(self):
         # hermes 가 쓰지 않는 곳 — 넣으면 거의 모든 릴리즈가 hermes 를 다시 띄운다

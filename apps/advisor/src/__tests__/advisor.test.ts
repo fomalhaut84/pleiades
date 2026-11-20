@@ -279,6 +279,37 @@ describe("Advisor.ask — 거부 · 실패", () => {
   });
 });
 
+// #858 · 015 V-3 — enabled:false 는 발견하되 준비하지 않고 모델 안내에도 넣지 않는다 · 핀은 선언의 models
+describe("Advisor — 선언 끄기 · 핀 출처(fixture)", () => {
+  it("꺼진 선언은 prepare 를 부르지 않고 decl 없이 '꺼짐' · 켜진 선언만 준비한다", async () => {
+    const apps = path.join(tmp, "apps");
+    const put = (dir: string, o: unknown) => {
+      fs.mkdirSync(path.join(apps, dir, "src"), { recursive: true });
+      fs.writeFileSync(path.join(apps, dir, "domain.json"), JSON.stringify(o));
+      fs.writeFileSync(path.join(apps, dir, "src", "m.ts"), "export const P = { haiku: 'claude-h', sonnet: 'claude-s' }");
+    };
+    const decl = (id: string, enabled: boolean) => ({ contract: "pleiades-domain/v1", id, name: id, kind: "mcp", summary: "s", enabled,
+      models: { file: "src/m.ts", constant: "P" }, mcp: { serverKey: `srv_${id}`, defaultPort: 1 }, tools: { read: ["a"], write: [], propose: [] } });
+    put("on", decl("on", true));
+    put("off", decl("off", false));
+    const prepared: string[] = [];
+    const a = advisor({ appsDir: apps, prepare: async (d) => (prepared.push(d.id), { id: d.id, ok: false, decl: d, why: "가짜" }) });
+    const all = await a.prepareAll();
+    expect(prepared).toEqual(["on"]);
+    expect(all).toContainEqual({ id: "off", ok: false, decl: null, why: "꺼짐" });
+  });
+
+  it("핀을 선언한 도메인이 없으면 기동은 하고 질문은 no-domain 으로 거부한다(K-7 · V-3 전과 같은 결과)", async () => {
+    const apps = path.join(tmp, "apps2");
+    fs.mkdirSync(path.join(apps, "x"), { recursive: true });
+    fs.writeFileSync(path.join(apps, "x", "domain.json"), JSON.stringify({ contract: "pleiades-domain/v1", id: "x", name: "x", kind: "local",
+      summary: "s", local: { reader: "r" }, tools: { read: [], write: [], propose: [] } }));
+    expect(await advisor({ appsDir: apps }).ask(KEY, "q")).toMatchObject({ kind: "refused", reason: "no-domain" });
+    expect(logs.some((l) => l.endsWith("refused pin=none"))).toBe(true);
+    expect(fs.existsSync(cliLog)).toBe(false);
+  });
+});
+
 // #854 · 015 V-2c §4-3 — 질문당 init 재시도 1회 · "MCP 미연결" 에서만 제공자 제외 · violation:hook 재시도 없음
 describe("Advisor — init 재시도(V-2c)", () => {
   const BOTH = ["myfinance", "myfitness"];

@@ -94,7 +94,8 @@ export function buildSystem(ready: Extract<DomainReady, { ok: true }>[], missing
 
 export class Advisor {
   private readonly store: SessionStore;
-  private readonly pin: Pin;
+  /** null = 모델 핀을 선언한 도메인이 없다(선언이 모두 깨진 경우 등) — 기동은 하고 질문은 거부한다(V-3 전과 같은 no-domain) */
+  private readonly pin: Pin | null;
   private readonly workDir: string;
   private readonly advisorDir: string;
   private busy = false;
@@ -103,7 +104,9 @@ export class Advisor {
 
   constructor(private readonly deps: AdvisorDeps) {
     this.store = new SessionStore(deps.now);
-    this.pin = readPins(deps.appsDir);
+    // K-7 — 핀 출처 = 발견한 선언(#858) · 포트 env 와 무관하게(기본 포트로 읽는다). 핀이 서로 다르거나 파일을 못 읽으면 지금처럼 기동 실패
+    const decls = loadDomains(deps.appsDir, {}).decls;
+    this.pin = decls.some((d) => d.models) ? readPins(deps.appsDir, decls) : null;
     this.advisorDir = ensurePrivateDir(path.join(deps.privateRoot, "advisor"));
     // CLI 의 cwd — 비어 있는 중립 디렉터리(체크아웃 밖 · 조상에 .claude 없음). 세션 기록(resume)은 cwd 기준이라 늘 같다
     this.workDir = ensurePrivateDir(path.join(this.advisorDir, "work"));
@@ -128,7 +131,8 @@ export class Advisor {
   async prepareAll(): Promise<DomainReady[]> {
     const { decls, broken } = loadDomains(this.deps.appsDir, this.deps.env);
     const prep = this.deps.prepare ?? ((d: DomainDecl) => prepareDomain(d, MCP_TIMEOUT_MS));
-    const ready = await Promise.all(decls.map(prep));
+    // enabled:false 는 준비하지 않는다 · 모델 안내에도 넣지 않는다(decl = null · 015 §4-1 정상 끄기 · #858)
+    const ready = await Promise.all(decls.map((d) => (d.enabled ? prep(d) : Promise.resolve<DomainReady>({ id: d.id, ok: false, decl: null, why: "꺼짐" }))));
     // 선언 오류는 뒤에 — 준비된 순서(id 순)와 지식 절 순서를 바꾸지 않는다(#841)
     return [...ready, ...broken.map((b): DomainReady => ({ id: b.id, ok: false, decl: null, why: b.why }))];
   }
@@ -183,6 +187,10 @@ export class Advisor {
     if (!settings.ok) {
       this.log(`[advisor] key=${keyTag(key)} refused settings=${settings.blocking.length}`);
       return { kind: "refused", reason: "settings", text: MESSAGES.settings };
+    }
+    if (!this.pin) {
+      this.log(`[advisor] key=${keyTag(key)} refused pin=none`);
+      return { kind: "refused", reason: "no-domain", text: MESSAGES.noDomain };
     }
     let session: Session | null | undefined = this.store.get(key);
     const resumed = !!session?.cliSessionId;
@@ -239,20 +247,22 @@ export class Advisor {
   }
 
   private async runOnce(key: string, s: Session, q: string, resumed: boolean) {
+    const pin = this.pin;
+    if (!pin) throw new Error("모델 핀 없음"); // askLocked 가 먼저 거부한다 — 여기 오면 코드 결함
     const allow = new Set(s.allow);
     const run = await runCli({
       bin: this.deps.claude.bin,
       prefix: this.deps.claude.prefix,
-      args: cliArgs({ model: this.pin.sonnet, system: s.system, mcpConfigPath: s.mcpConfigPath, allow: s.allow,
+      args: cliArgs({ model: pin.sonnet, system: s.system, mcpConfigPath: s.mcpConfigPath, allow: s.allow,
         budgetUsd: CALL_BUDGET_USD, resume: s.cliSessionId }),
-      env: childEnv(this.pin, this.deps.env, this.deps.passEnv),
+      env: childEnv(pin, this.deps.env, this.deps.passEnv),
       cwd: this.workDir,
       prompt: q,
       checkInit: (e) => judgeInit(e, allow, s.serverKeys),
       timeoutMs: this.deps.questionTimeoutMs,
       signal: this.abort.signal,
     });
-    const v = judgeAnswer(run, allow, s.prefixes, this.pin);
+    const v = judgeAnswer(run, allow, s.prefixes, pin);
     const tools = s.prefixes.map((p) => `${safeName(p.replace(/^mcp__|__$/g, ""))}:${v.byPrefix[p].ok}/${v.byPrefix[p].n}`).join(",");
     // K-5 줄 — 질문 원문 · 채널·사용자 ID 없음(키는 해시)
     this.log(`[advisor] key=${keyTag(key)} status=${v.status}${v.code ? ` code=${v.code}` : ""} model=sonnet drift=${v.drift}`

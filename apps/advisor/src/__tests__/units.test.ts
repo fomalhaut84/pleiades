@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CALL_BUDGET_USD, childEnv, cliArgs, readPins, resolveClaude } from "../cli";
+import { loadDomains } from "../domains";
 import { lockFileOf, probeDeployLock } from "../deploy-lock";
 import { ensurePrivateDir, insideGit } from "../private-dir";
 import { SESSION_IDLE_MS, SessionStore, sessionKey } from "../session-store";
@@ -108,10 +109,28 @@ describe("SessionStore", () => {
 });
 
 describe("CLI 인자 · env · 고정", () => {
-  it("두 앱 모델 고정이 같다(실제 models.ts)", () => {
-    const pin = readPins(APPS);
+  it("두 앱 모델 고정이 같다(실제 models.ts · 선언의 models 로 찾는다 — K-7 #858)", () => {
+    const pin = readPins(APPS, loadDomains(APPS, {}).decls);
     expect(pin.sonnet).toMatch(/^claude-/);
     expect(pin.haiku).toMatch(/^claude-/);
+  });
+
+  it("핀을 선언한 도메인이 없거나 앱마다 다르면 던진다(K-7)", () => {
+    expect(() => readPins(APPS, [])).toThrow(/선언한 도메인이 없다/);
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "adv-pin-"));
+    try {
+      for (const [dir, sonnet] of [["a", "claude-x"], ["b", "claude-y"]]) {
+        fs.mkdirSync(path.join(tmp, dir, "src"), { recursive: true });
+        // 앞의 주석 · 다른 식별자(PX)에 걸리지 않고 선언 자리에서 읽는다(#858 9-1 info)
+        fs.writeFileSync(path.join(tmp, dir, "src", "m.ts"), `// P = { haiku: 'wrong', sonnet: 'wrong' }\nexport const PX = { haiku: 'x', sonnet: 'x' }\nexport const P = { haiku: 'claude-h', sonnet: '${sonnet}' }`);
+      }
+      const decl = (dir: string) => ({ dir, models: { file: "src/m.ts", constant: "P" } });
+      expect(readPins(tmp, [decl("a")])).toEqual({ haiku: "claude-h", sonnet: "claude-x" });
+      expect(() => readPins(tmp, [decl("a"), decl("b")])).toThrow(/다르다/);
+      expect(() => readPins(tmp, [decl("a"), { dir: "z", models: null }])).not.toThrow(); // 핀 없는 선언은 건너뛴다
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
   });
 
   it("자식 env 에 DB · Discord · NOTIFY 키를 넘기지 않는다 · 핀 셋", () => {
