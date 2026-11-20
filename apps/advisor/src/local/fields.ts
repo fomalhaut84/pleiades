@@ -68,7 +68,7 @@ export function pick(v: unknown, shape: Shape, tally: Tally): Rec | null {
     if (isField(v[k], f)) out[k] = v[k] as string | number | boolean;
     else tally.missing++;
   }
-  for (const k of Object.keys(v)) if (!(k in shape.required) && !(k in optional)) tally.unknown++;
+  for (const k of Object.keys(v)) if (!Object.hasOwn(shape.required, k) && !Object.hasOwn(optional, k)) tally.unknown++; // 프로토타입 이름(__proto__ 등)도 센다(#872 9-1 I3)
   return out;
 }
 

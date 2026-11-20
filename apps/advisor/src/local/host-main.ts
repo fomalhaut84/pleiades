@@ -16,7 +16,7 @@ if (require.main === module) {
         input: process.stdin,
         write: (l) => process.stdout.write(`${l}\n`),
         err: (l) => process.stderr.write(`${l}\n`),
-        onEnd: () => process.exit(0), // H-R4
+        onEnd: () => process.stdout.write("", () => process.exit(0)), // H-R4 · 쓰는 중인 응답을 비운 뒤(#872 9-1 I4)
       });
     } catch {
       process.stderr.write("[local-host] 리더 없음\n");

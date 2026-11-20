@@ -4,12 +4,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { emptyTally, fileIn, pick, pickJson, pickLines } from "../local/fields";
 import { FAILED_TEXT, LOCAL_INIT_MAX_MS, MISMATCH_TEXT, REQUEST_MAX_BYTES, parseHostArgs, runHost } from "../local/host";
 import { READERS } from "../local/readers";
 import { openStdioSession } from "../mcp-client";
-import { SAMPLE_FIXTURE, TEST_HOST_ENTRY, TEST_REGISTRY, bundle } from "./helpers/local";
+import { SAMPLE_FIXTURE, TEST_HOST_ENTRY, TEST_REGISTRY, bundle, cleanupBundles } from "./helpers/local";
+
+afterAll(cleanupBundles);
 
 describe("fields — 허용 목록 · 불일치 개수", () => {
   const shape = { required: { at: "string" as const }, optional: { n: "number" as const } };
@@ -180,8 +182,11 @@ describe("별 프로세스 — stdio 클라이언트 · H-R4 · 기동 상한", 
   });
 
   it("H-R4 — 부모가 stdin 을 닫으면(CLI SIGKILL) 호스트는 1 s 안에 스스로 끝난다", async () => {
-    const child = spawn(process.execPath, args(SAMPLE_FIXTURE), { stdio: ["pipe", "ignore", "ignore"] });
-    await new Promise((r) => setTimeout(r, 200));
+    const child = spawn(process.execPath, args(SAMPLE_FIXTURE), { stdio: ["pipe", "pipe", "ignore"] });
+    // 기동이 끝난 것을 응답으로 확인한 뒤 잰다 — 고정 대기는 느린 러너에서 기동 시간이 예산에 섞인다(#872 9-1 I5)
+    const pong = new Promise<void>((r) => child.stdout.once("data", () => r()));
+    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" })}\n`);
+    await pong;
     const t0 = Date.now();
     const code = new Promise<number | null>((r) => child.once("exit", (c) => r(c)));
     child.stdin.end();

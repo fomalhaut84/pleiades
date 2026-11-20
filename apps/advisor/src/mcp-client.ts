@@ -222,6 +222,7 @@ export async function openStdioSession(command: string, args: readonly string[],
       else w.reject(new Error(`rpc ${m.id} 실패`)); // 오류 본문을 싣지 않는다
     }
     if (Buffer.byteLength(buf, "utf8") > MAX_BODY_BYTES) {
+      buf = "";
       child.kill("SIGKILL");
       failAll(new Error("응답 본문 상한 초과"));
     }
@@ -250,8 +251,11 @@ export async function openStdioSession(command: string, args: readonly string[],
   const close = async () => {
     child.stdin.end();
     const grace = setTimeout(() => child.kill("SIGKILL"), STDIO_CLOSE_GRACE_MS);
-    await exited;
+    // SIGKILL 뒤에도 파이프를 물려받은 손자가 있으면 close 가 오지 않는다 — 유예 두 배에서 기다림을 끝낸다(#872 9-1 I1)
+    let cap: NodeJS.Timeout | undefined;
+    await Promise.race([exited, new Promise<void>((r) => { cap = setTimeout(r, STDIO_CLOSE_GRACE_MS * 2); })]);
     clearTimeout(grace);
+    clearTimeout(cap);
   };
   try {
     await call("initialize", { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "pleiades-advisor", version: "1" } });

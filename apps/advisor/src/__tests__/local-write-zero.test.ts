@@ -6,15 +6,18 @@
 // 운영 레지스트리는 비어 있다(V-4a) — ① · ③ 은 리더가 더해지는 순간(V-5 · V-6) 그 리더에 걸린다. 같은 판정 함수를 시험 리더로 양성 · 음성 대조한다.
 import fs from "node:fs";
 import path from "node:path";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { parseDomain } from "../domains";
 import { mismatchOf } from "../local/fields";
 import { callTool } from "../local/host";
 import { READERS, Reader } from "../local/readers";
 import { openStdioSession } from "../mcp-client";
 import {
-  LOCAL_SRC, REPO_ROOT, SAMPLE_FIXTURE, SRC, TEST_HOST_ENTRY, bundle, readOnlyCopy, requiresOf, sampleReader, writeApiHits, writingReader,
+  LOCAL_SRC, REPO_ROOT, SAMPLE_FIXTURE, SRC, TEST_HOST_ENTRY, bundle, cleanupBundles, importSpecifiers, outsideWriter, readOnlyCopy,
+  requireCounts, requiresOf, sampleReader, watchFsWrites, writeApiHits, writingReader,
 } from "./helpers/local";
+
+afterAll(cleanupBundles);
 
 const FIXTURES = path.join(LOCAL_SRC, "__fixtures__");
 const KEY = /^[a-z0-9_]{1,60}$/;
@@ -42,11 +45,11 @@ const decl = (read: string[], write: string[] = []) => JSON.stringify({
 });
 
 describe("① 이름 ⊆ read ∪ propose", () => {
-  it("운영 리더마다 — 허용 선언이 저장소에 있으면 그 선언과 대조한다(V-4a 는 리더 0)", () => {
+  it("운영 리더마다 — 허용 선언이 저장소에 있어야 하고 그 선언과 대조한다(V-4a 는 리더 0 · #872 9-1 M3)", () => {
     for (const r of READERS.values()) {
       const file = path.join(REPO_ROOT, r.allowedDecl, "domain.json");
-      if (fs.existsSync(file)) expect(namesProblems(r, fs.readFileSync(file, "utf8")), r.id).toEqual([]);
-      else expect(r.tools.every((t) => KEY.test(t.name)), r.id).toBe(true);
+      expect(fs.existsSync(file), `${r.id} 선언 ${r.allowedDecl}/domain.json`).toBe(true);
+      expect(namesProblems(r, fs.readFileSync(file, "utf8")), r.id).toEqual([]);
     }
   });
 
@@ -68,10 +71,23 @@ describe("② 쓰기 API 정적 금지", () => {
     for (const f of files) expect(writeApiHits(fs.readFileSync(f, "utf8")), path.relative(SRC, f)).toEqual([]);
   });
 
-  it("src/local/** 는 local 밖의 통합 층 모듈을 import 하지 않는다(봇 · 비공개 디렉터리 · 세션 기록에는 쓰기가 있다)", () => {
+  // 리더는 fields 도우미로만 읽는다(015 §3-1 원칙 3) — node:fs 를 import 할 수 있는 파일은 fields.ts 하나(#872 9-1 M1)
+  const ALLOWED_IMPORTS: Readonly<Record<string, readonly string[]>> = {
+    "fields.ts": ["node:fs", "node:path"],
+  };
+  const DEFAULT_IMPORTS = ["./fields", "./readers", "./host", "node:path"];
+
+  it("src/local/** 의 import 는 허용 목록뿐 · node:fs 는 fields.ts 만 · .. 없음 · 변수 require 없음", () => {
     for (const f of sources()) {
-      const imports = [...fs.readFileSync(f, "utf8").matchAll(/from\s+["']([^"']+)["']/g)].map((m) => m[1]);
-      for (const i of imports) expect(i.startsWith("./") || i === "node:fs" || i === "node:path", `${path.relative(SRC, f)} → ${i}`).toBe(true);
+      const text = fs.readFileSync(f, "utf8");
+      const rel = path.relative(LOCAL_SRC, f);
+      const allowed = ALLOWED_IMPORTS[rel] ?? DEFAULT_IMPORTS;
+      for (const i of importSpecifiers(text)) {
+        expect(i.includes(".."), `${rel} → ${i}`).toBe(false);
+        expect(allowed, `${rel} → ${i}`).toContain(i);
+      }
+      const c = requireCounts(text);
+      expect(c.all, rel).toBe(c.literal);
     }
   });
 
@@ -79,22 +95,29 @@ describe("② 쓰기 API 정적 금지", () => {
     const js = fs.readFileSync(bundle(path.join(LOCAL_SRC, "host-main.ts")), "utf8");
     expect(writeApiHits(js)).toEqual([]);
     expect(requiresOf(js).filter((m) => m !== "node:fs" && m !== "node:path")).toEqual([]);
+    const c = requireCounts(js);
+    expect(c.all).toBe(c.literal); // 변수로 부르는 require 가 없다(requiresOf 가 못 보는 길)
   });
 
   it("양성 대조 — 검사가 실제로 잡는다", () => {
     expect(writeApiHits(fs.readFileSync(path.join(SRC, "__tests__/helpers/local-readers.ts"), "utf8"))).toContain(String(/\bwriteFile(Sync)?\b/));
-    for (const s of ["fs.openSync(p, 'w')", "require('node:child_process')", "await import(x)", "process.env.X", "fs.promises.rm(d)", "fs.renameSync(a,b)"]) {
+    for (const s of ["fs.openSync(p, 'w')", "require('node:child_process')", "await import(x)", "process.env.X", "fs.promises.rm(d)", "fs.renameSync(a,b)",
+      "fs.lchmodSync(p, 0)", "fs.fchownSync(fd, 0, 0)", "fs.mkdtempDisposableSync(p)", "new fs.WriteStream(p)", 'fs["write" + "FileSync"](p, x)',
+      'process["env"]', "const { env } = process", 'process.binding("fs")', "createRequire(x)", "module.require(x)", "Reflect.get(fs, k)",
+      'import("node:fs/promises")', "globalThis.process"]) {
       expect(writeApiHits(s).length, s).toBeGreaterThan(0);
     }
     expect(requiresOf('require("node:fs");require("node:net")')).toEqual(["node:fs", "node:net"]);
+    expect(requireCounts('require("node:fs"); require(name)')).toEqual({ all: 2, literal: 1 });
+    expect(importSpecifiers('import "node:net";\nimport x = require("./../a");\nimport { y } from "./b";').sort()).toEqual(["./../a", "./b", "node:net"]);
   });
 });
 
 describe("③ 읽기 전용 고정값 디렉터리 — 모든 도구 성공", () => {
-  /** 리더의 모든 도구를 examples 인자로 — 실패한 도구 이름 목록 */
+  /** 리더의 모든 도구를 examples 인자로 — 쓰기 감시 아래에서. 실패하거나 쓰기를 시도한 도구 이름 목록 */
   const failing = (r: Reader, dir: string) => r.tools.map((t) => t.name).filter((n) => {
-    const res = callTool(r, dir, n, r.examples[n] ?? {}, () => undefined);
-    return res.isError === true;
+    const { value, writes } = watchFsWrites(() => callTool(r, dir, n, r.examples[n] ?? {}, () => undefined));
+    return value.isError === true || writes.length > 0;
   });
 
   it("운영 리더마다 고정값 디렉터리 · 도구마다 예시 인자가 있다", () => {
@@ -121,6 +144,8 @@ describe("③ 읽기 전용 고정값 디렉터리 — 모든 도구 성공", ()
     try {
       expect(failing(sampleReader, ro.dir)).toEqual([]);
       expect(failing(writingReader, ro.dir)).toEqual(["writer_touch"]);
+      expect(failing(outsideWriter, ro.dir)).toEqual(["outside_touch"]); // 고정값 밖 쓰기 — 쓰기 감시가 잡는다(파일은 생기지 않는다)
+      expect(watchFsWrites(() => fs.readFileSync(path.join(ro.dir, "state.json"), "utf8")).writes).toEqual([]); // 읽기는 감시에 걸리지 않는다
       expect(fs.readdirSync(ro.dir).sort()).toEqual(["events.jsonl", "state.json"]);
     } finally {
       ro.done();

@@ -1,5 +1,6 @@
 // 시험 리더 (#872) — 운영 레지스트리에는 없다(사용자 2026-11-20 · 시험에서만 주입). 시험 호스트 번들에 실리므로 시험 도구(esbuild 등)를 import 하지 않는다.
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { emptyTally, fileIn, pickJson, pickLines, readCapped } from "../../local/fields";
 import type { Reader, Registry } from "../../local/readers";
@@ -33,6 +34,18 @@ export const writingReader: Reader = {
   examples: { writer_touch: {} },
   call(_tool, _args, dir) {
     fs.writeFileSync(path.join(dir, "touched"), "x"); // 시험 전용 — 운영 코드는 쓰기 0 시험 ② 가 막는다
+    return { text: "ok", tally: emptyTally() };
+  },
+};
+
+/** 양성 대조 — 고정값 밖(tmpdir)에 쓰는 리더 · 읽기 전용 디렉터리로는 안 잡힌다 — 쓰기 감시가 잡아야 한다(#872 9-1 M1) */
+export const outsideWriter: Reader = {
+  id: "outside",
+  allowedDecl: "apps/outside",
+  tools: [{ name: "outside_touch", description: "밖에 쓰기", inputSchema: { type: "object" } }],
+  examples: { outside_touch: {} },
+  call() {
+    fs.appendFileSync(path.join(os.tmpdir(), "pl-local-outside-touch"), "x"); // 시험 전용
     return { text: "ok", tally: emptyTally() };
   },
 };
