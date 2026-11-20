@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { emptyTally, fileIn, pick, pickJson, pickLines } from "../local/fields";
 import { FAILED_TEXT, LOCAL_INIT_MAX_MS, MISMATCH_TEXT, REQUEST_MAX_BYTES, parseHostArgs, runHost } from "../local/host";
 import { READERS } from "../local/readers";
-import { openStdioSession } from "../mcp-client";
+import { MAX_BODY_BYTES, openStdioSession } from "../mcp-client";
 import { SAMPLE_FIXTURE, TEST_HOST_ENTRY, TEST_REGISTRY, bundle, cleanupBundles } from "./helpers/local";
 
 afterAll(cleanupBundles);
@@ -175,6 +175,17 @@ describe("별 프로세스 — stdio 클라이언트 · H-R4 · 기동 상한", 
     const t0 = Date.now();
     await expect(openStdioSession(process.execPath, args(SAMPLE_FIXTURE, 3000), 200)).rejects.toThrow(/기한/);
     expect(Date.now() - t0).toBeLessThan(2500); // close 의 SIGKILL 유예 포함
+  });
+
+  // 회귀: PR #874 Codex P2 — 상한을 넘는 응답이 줄 끝과 한 청크로 오면 상한 검사 없이 해석됐다
+  it("상한을 넘는 응답 줄은 청크 경계와 무관하게 실패한다", async () => {
+    const big = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "pl-big-")), "big.cjs");
+    fs.writeFileSync(big, `process.stdin.once("data", () => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: 1, result: { x: "a".repeat(${MAX_BODY_BYTES}) } }) + "\\n"));`);
+    try {
+      await expect(openStdioSession(process.execPath, [big], 5000)).rejects.toThrow(/상한/);
+    } finally {
+      fs.rmSync(path.dirname(big), { recursive: true, force: true });
+    }
   });
 
   it("띄우지 못하면 실패", async () => {

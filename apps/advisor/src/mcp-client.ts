@@ -207,6 +207,13 @@ export async function openStdioSession(command: string, args: readonly string[],
     while ((i = buf.indexOf("\n")) >= 0) {
       const s = buf.slice(0, i);
       buf = buf.slice(i + 1);
+      // 줄 끝과 한 청크로 온 큰 응답도 같은 상한 — 청크 경계에 따라 받아지지 않게(PR #874 Codex P2)
+      if (Buffer.byteLength(s, "utf8") > MAX_BODY_BYTES) {
+        buf = "";
+        child.kill("SIGKILL");
+        failAll(new Error("응답 본문 상한 초과"));
+        return;
+      }
       let m: unknown;
       try {
         m = JSON.parse(s);
