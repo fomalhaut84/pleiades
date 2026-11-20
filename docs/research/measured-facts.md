@@ -4766,3 +4766,19 @@ pleiades 추적 파일 정적 읽기 + 로컬 node_modules 소스 읽기 + 로�
 로컬(개발 환경)·서버 node = **v24.12.0**(사용자 2026-11-17). 이 파일의 로컬 v20.18.0 기록(2026-10-20 이전)은 낡았다. CI 앱 잡은 `24.x`(`.github/workflows/apps-ci.yml:56,114,163,205`).
 
 > **정정 (2026-11-18 · #761).** 로컬은 node 가 둘이다 — `which -a node` → 셸 기본 `~/.nvm/versions/node/v20.18.0/bin/node`(**v20.18.0** · `node:sqlite` 없음 `ERR_UNKNOWN_BUILTIN_MODULE`) · `/usr/local/bin/node`(**v24.22.0** · `node -e "const {DatabaseSync}=require('node:sqlite'); new DatabaseSync(':memory:').exec('create table t(x)')"` stderr 0 · rc 0). Claude 세션의 검증 명령은 v20.18 로 돈다. 서버 v24.12.0 은 사용자 확인 그대로.
+
+## 2026-11-20 — stdio MCP init 탐침 (#868 · 015 §0-4 · Q143 · V-4 선행)
+
+로컬 · 사용자 확인 뒤 · 모델 호출 0(init 첫 줄에서 SIGKILL + API 주소 = 닫힌 로컬 포트) · 통합 층과 같은 CLI 인자 · 허용 env(`--no-session-persistence` 만 더함). 호스트 = `tools/local/stdio-probe.cjs --host`(의존 0 가짜 리더 · 줄 단위 JSON-RPC).
+
+| 항목 | 값 | 명령 |
+|---|---|---|
+| 환경 | 로컬 CLI **2.1.329** · 탐침 node v20.18.0(셸 기본 nvm) — **서버 CLI 2.1.311 과 판이 다르다** | `node tools/local/stdio-probe.cjs --claude=$HOME/.local/bin/claude …` |
+| 호스트 1 × 10회 | init 받음 10/10 · 전부 `connected` 10/10 · `pending` 0 · init 첫 줄 p50 **364 ms** · p90 376 · 최대 376 · 고아 0/10 · init 앞 hook 0 | `--runs=10 --hosts=1,3` |
+| 호스트 3 × 10회 | init 받음 10/10 · 전부 `connected` 10/10(30/30) · `pending` 0 · p50 **381 ms** · p90 393 · 최대 393 · 고아 0/30 · init 앞 hook 0 | 같은 실행 |
+| 느린 호스트(initialize 응답 2 s · 8 s 지연) | `pending` 이 되지 않는다 — **`-p` 모드 CLI 는 stdio 서버가 연결될 때까지 init 첫 줄을 늦춘다**(2,432 ms · 8,433 ms · 각 2회 connected) | `--runs=2 --hosts=1 --host-delay=2000` · `=8000` |
+| 모델 응답 | 전 회 없음 | — |
+| SIGKILL 뒤 호스트 | 전부 stdin EOF 로 5 s 안에 끝났다(H-R4) — 탐침 뒤 남은 `--host` 프로세스 0 | `pgrep -f "stdio-probe.cjs --host"` |
+
+- **해석:** stdio 의 위험은 V12 의 "pending → 질문 전체 실패" 가 아니라 **느린 호스트 = 첫 줄 지연**이다(로컬 판). 호스트 수 3 의 기동 비용은 +17 ms(p50).
+- **못 잰 값:** 서버 CLI 2.1.311 의 같은 동작(의존 0 한 파일이라 서버에서 그대로 돌릴 수 있다 · 사용자) · CLI 의 MCP 연결 상한(느린 호스트를 몇 초까지 기다리는가 — 8 s 까지는 기다렸다) · pm2 `max_memory_restart` 가 자식 RSS 를 세는가.
