@@ -102,3 +102,17 @@ tools/local/run.sh fin -- npx pm2 kill                                          
 - **pm2 이름 규약 = `pleiades-<fin|fit>-<역할>`**(서비스 `myfinance*`·`myfitness*` 와 겹치지 않는다 · 007 Q77 "새 pm2 이름").
 - **pm2 앱은 데몬을 처음 띄운 환경을 물려받는다**(007 G-f) — 첫 기동은 반드시 `run.sh` 경유(shim PATH · `env -u`). 기동 뒤 `describe` 로 `claude` 가 shim 인지 확인한다. `describe`·`jlist`·`prettylist` 는 프로세스 env(검증 봇·Discord 토큰 포함)를 출력하므로 결과를 붙여 넣지 않는다 — `env` 서브커맨드는 허용하지 않는다.
 - 포트: 설정 파일이 포트 env 누락 시 기동을 거부해야 한다(L-3 · I-12 — T-1b).
+
+## stdio init 탐침 (#868 · 015 §0-4 · V-4 선행)
+
+`local` 제공자 호스트를 stdio 로 둘지(Q143) 정하는 측정. **진짜 claude CLI 를 띄우는 격리 경계 작업이라 사용자 확인 뒤에만** 돌린다(`run.sh` 밖 · shim 은 건너뛴다).
+
+```bash
+node tools/local/stdio-probe.cjs --runs=10 --hosts=1,3     # 판정 양식만 출력 — 그 블록을 세션에 붙인다
+```
+
+- 통합 층과 같은 CLI 인자 · 허용 env 로 stdio 호스트(이 파일의 `--host` 모드 · 가짜 리더) k 개를 붙여 init 첫 줄의 서버 상태 · 시간을 재고, CLI 를 SIGKILL 한 뒤 호스트가 stdin EOF 로 끝나는지(고아 수) 본다
+- **모델 호출 0 두 겹:** init 첫 줄에서 SIGKILL · API 주소 = 닫힌 로컬 포트(`--keep-api` 는 쓰지 않는다)
+- 세션 기록을 남기지 않는다(`--no-session-persistence`) · 임시 디렉터리만 쓰고 지운다
+- `--host-delay=<ms>` 느린 호스트(pending 경계) · `--host-ignore-eof` 양성 대조(고아 판정 확인 — 측정 결과 아님)
+- 시험: `python3 -m unittest discover -s tools/local`(가짜 CLI · 진짜 claude 를 부르지 않는다)
