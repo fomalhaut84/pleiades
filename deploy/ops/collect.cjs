@@ -579,10 +579,11 @@ const dayNum = (date) => Math.round(Date.parse(`${date}T00:00:00Z`) / 86400000)
 const daysInMonth = (date) => new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)), 0)).getUTCDate()
 const usd2 = (n) => `$${n.toFixed(2)}`
 
-// 일일 요약의 한 줄 — 어제 · 이달 누적 · 월말 예상(이달 누적 ÷ 집계한 날수 × 그 달 날수)
-function usagePart(usage, yesterday) {
-  const head = ' · AI 사용량(API 환산 · 서비스 호출만)'
-  if (!usage || !usage.since || usage.since > yesterday) return `${head} 집계 시작 전`
+// 일일 요약의 AI 사용량 절(#863 — 절 나눔) — 어제 · 이달 누적 · 월말 예상(이달 누적 ÷ 집계한 날수 × 그 달 날수)
+// 줄 배열을 돌려준다. 머리 · 목록 기호는 마크다운 그대로 · 값(숫자 · 고정 앱 이름)은 escape 가 필요 없는 문자만이다
+function usageLines(usage, yesterday) {
+  const head = '**💰 AI 사용량** (API 환산 · 서비스 호출만)'
+  if (!usage || !usage.since || usage.since > yesterday) return [head, '- 집계 시작 전']
   const sum = (day) => Object.values(day || {}).reduce((t, a) => ({ usd: t.usd + a.usd, n: t.n + a.n, fail: t.fail + a.fail, unknown: t.unknown + a.unknown }), { usd: 0, n: 0, fail: 0, unknown: 0 })
   const day = usage.days[yesterday] || {}
   const y = sum(day)
@@ -593,7 +594,13 @@ function usagePart(usage, yesterday) {
   const counted = dayNum(yesterday) - dayNum(from) + 1
   const proj = (mtd / counted) * daysInMonth(yesterday)
   const unknown = y.unknown ? ` · 비용 모름 ${y.unknown}` : ''
-  return `${head} 어제 ${usd2(y.usd)} (${[...apps, `${y.n}회`, `실패 ${y.fail}`].join(' · ')}${unknown}) · 이달 ${usd2(mtd)} · 월말 예상 ${usd2(proj)}`
+  // 집계 시작일은 설치한 회부터라 하루치가 아니다 — 숫자를 하루치로 읽지 않게(#863 · 2026-11-20 첫 요약)
+  const partial = yesterday === usage.since ? ' (집계 시작일 · 일부)' : ''
+  return [
+    head,
+    `- 어제 ${usd2(y.usd)}${partial} — ${[...apps, `${y.n}회`, `실패 ${y.fail}`].join(' · ')}${unknown}`,
+    `- 이달 ${usd2(mtd)} · 월말 예상 ${usd2(proj)} (${counted}일 기준)`,
+  ]
 }
 
 // 일일 요약을 보낸 회에 어제 하루치를 usage.jsonl 에 한 줄 — 015 V-5(ops 제공자)가 읽는다 · 하루 한 번
@@ -847,17 +854,28 @@ function summaryPost(ctx, today) {
   if (ctx.state.summaryDate === today || hm < CONFIG.summaryAt) return null
   const yesterday = kstDate(new Date(ctx.now - 86400000))
   const all = Object.values(ctx.state.fps)
-  const open = all.filter((e) => e.kind === 'state' && e.open).map((e) => `${e.app}·${e.role}·${e.src} ${e.fp}`)
+  // 지문 한 줄 — 이름은 md escape · 지문(16진수)은 코드 서식(escape 불필요)
+  const fpLine = (e, tail = '') => `- ${md(`${e.app}·${e.role}·${e.src}`)} \`${e.fp}\`${tail}`
+  const open = all.filter((e) => e.kind === 'state' && e.open)
   const top = all
     .filter((e) => e.days[yesterday])
     .sort((a, b) => b.days[yesterday] - a.days[yesterday])
     .slice(0, 5)
-    .map((e) => `${e.app}·${e.role}·${e.src} ${e.fp} ×${e.days[yesterday]}`)
   const warned = all.filter((e) => (e.warnDays || {})[yesterday])
   const warnTotal = warned.reduce((n, e) => n + e.warnDays[yesterday], 0)
   const warnPart = CONFIG.quietWarnings ? ` · 경고 어제 ${warned.length}종 ${warnTotal}회` : ''
-  const text = `[ops] ${md(`일일 요약 · 살아 있음 · 열린 이상 ${open.length}${open.length ? ` (${open.slice(0, 10).join(' / ')})` : ''}${warnPart} · 어제 상위 ${top.length ? top.join(' / ') : '없음'}${usagePart(ctx.state.usage, yesterday)}`)}`
-  return { type: 'summary', e: null, count: open.length, text, commit: () => (ctx.state.summaryDate = today) }
+  // 절 나눔(#863 · 사용자 2026-11-20) — 상태 줄 · 열린 이상 · 어제 상위 · AI 사용량. 판정 문구("열린 이상 N" · "경고 어제 N종 M회")는 런북 표가 쓴다 — 바꾸지 않는다
+  const lines = [
+    `[ops] **일일 요약** · ${yesterday.slice(5)}`,
+    `${open.length ? '❗' : '✅'} 살아 있음 · 열린 이상 ${open.length}${warnPart}`,
+    ...(open.length ? ['', '**열린 이상**', ...open.slice(0, 10).map((e) => fpLine(e)), ...(open.length > 10 ? [`- 외 ${open.length - 10}`] : [])] : []),
+    '',
+    '**어제 상위**',
+    ...(top.length ? top.map((e) => fpLine(e, ` ×${e.days[yesterday]}`)) : ['- 없음']),
+    '',
+    ...usageLines(ctx.state.usage, yesterday),
+  ]
+  return { type: 'summary', e: null, count: open.length, text: lines.join('\n'), commit: () => (ctx.state.summaryDate = today) }
 }
 
 // ── 상태 · 기록 · 잠금 ───────────────────────────────────────────────
@@ -1101,6 +1119,9 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 // 요청 하나의 상한 — 느린 응답 하나가 한 회 예산(P-9)을 다 쓰지 않게
 const postMs = (deadline) => Math.min(CONFIG.httpMs * 2, deadline - Date.now())
 
+// 기록 파일(dry-run.log · posted.log)은 게시 하나 = 한 줄이다 — 여러 줄 본문(일일 요약 · #863)의 줄바꿈을 ⏎ 로 적는다
+const oneLine = (text) => text.replace(/\n+/g, ' ⏎ ')
+
 async function postWebhook(url, content, ms) {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), Math.max(1, ms))
@@ -1142,7 +1163,7 @@ async function deliver(posts, ctx, live) {
     }
     let blocked = null
     if (silent) r.quiet += 1 // 요약에만 — 기록하지 않고 상태만 넘긴다(미뤄진 채 남지 않게 commit 은 한다)
-    else if (!live) out.push(`${stamp} ${p.text}`) // dry-run: 게시 대신 기록 · 템플릿 + 허용 칸뿐이다
+    else if (!live) out.push(`${stamp} ${oneLine(p.text)}`) // dry-run: 게시 대신 기록 · 템플릿 + 허용 칸뿐이다
     else {
       if (sentAny) await sleep(CONFIG.postGapMs) // 웹훅 속도 제한(약 5건/2초)에 연달아 걸리지 않게
       sentAny = true
@@ -1161,7 +1182,7 @@ async function deliver(posts, ctx, live) {
         continue
       }
       if (blocked) r.blocked += 1
-      out.push(`${stamp} ${text}`) // 보낸 그대로(검사를 통과한 본문 또는 고정 문구)
+      out.push(`${stamp} ${oneLine(text)}`) // 보낸 그대로(검사를 통과한 본문 또는 고정 문구) · 줄바꿈만 ⏎ 로
     }
     p.commit(ctx.now)
     const sev = p.e ? (p.type === 'repeat' && p.e.pendingSev) || p.e.sev : null // 반복은 본문과 같은 심각도로 기록한다(#731 9-1 info)
