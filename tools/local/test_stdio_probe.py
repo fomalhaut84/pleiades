@@ -78,6 +78,14 @@ class StdioProbe(unittest.TestCase):
         left = subprocess.run(["pgrep", "-f", "stdio-probe.cjs --host"], capture_output=True, text=True).stdout.split()
         self.assertEqual(left, [], "탐침이 남은 호스트를 정리해야 한다")
 
+    # 회귀: PR #869 Codex P2 — init 을 못 받거나 서버가 connected 가 아니면 "충족" 이 아니라 판정 불가
+    def test_no_init_is_inconclusive(self):
+        r = subprocess.run([NODE, str(PROBE), "--claude=/usr/bin/false", "--runs=1", "--hosts=1"], capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("호스트 1: init 받음 0/1", r.stdout)
+        self.assertIn("판정 재료: 판정 불가 — 모든 서버가 connected 가 아닌 회 1", r.stdout)
+        self.assertNotIn("stdio 조건 충족", r.stdout)
+
     def test_rejects_bad_args_and_shim(self):
         r = subprocess.run([NODE, str(PROBE), "--runs=0"], capture_output=True, text=True, timeout=30)
         self.assertNotEqual(r.returncode, 0)

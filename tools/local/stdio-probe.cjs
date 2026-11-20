@@ -123,12 +123,17 @@ function childEnv(keepApi, delay, ignoreEof = false) {
   return env
 }
 
+// 끝났지만 거둬지지 않은 좀비(Z)는 살아 있는 고아가 아니다 — 자식을 바로 거두지 않는 컨테이너 PID 1 에서 생긴다(PR #869 Codex P2)
 const alive = (pid) => {
   try {
     process.kill(pid, 0)
-    return true
   } catch {
     return false
+  }
+  try {
+    return !execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8', timeout: 5_000 }).trim().startsWith('Z')
+  } catch {
+    return false // ps 가 못 찾았다 — 그 사이 끝났다
   }
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -239,6 +244,7 @@ async function main(argv) {
   out.push(`CLI ${cliVersion(claude)} · node ${process.version} · ${a.keepApi ? 'API 주소 그대로(모델 호출 가능)' : 'API 주소 닫힌 포트(모델 호출 0)'} · 반복 ${a.runs} · 호스트 지연 ${a.delay} ms${a.ignoreEof ? ' · 양성 대조(호스트가 EOF 무시 — 측정 아님)' : ''}`)
   let pendingAny = 0
   let orphanAny = 0
+  let incomplete = 0 // init 을 못 받았거나 서버가 전부 connected 가 아닌 회 — 있으면 판정 불가(PR #869 Codex P2)
   let repliedAny = 0
   let worstInit = 0
   for (const k of a.hosts) {
@@ -252,6 +258,7 @@ async function main(argv) {
     const orphans = rs.reduce((n, r) => n + r.orphans, 0)
     const spawned = rs.reduce((n, r) => n + r.spawned, 0)
     const pending = states.pending || 0
+    incomplete += rs.length - allOk
     pendingAny += pending
     orphanAny += orphans
     repliedAny += rs.filter((r) => r.replied).length
@@ -262,7 +269,11 @@ async function main(argv) {
       + ` · init 앞 hook ${rs.reduce((n, r) => n + r.hooksBefore, 0)}`)
   }
   out.push(`모델 응답: ${repliedAny ? `있음 ${repliedAny}회` : '없음'}`)
-  const verdict = pendingAny === 0 && orphanAny === 0 ? 'stdio 조건 충족(pending 0 · EOF 종료) — init 최대 시간을 MCP 타임아웃과 대조한다' : `루프백 대안 검토(Q143 · H-R5) — pending ${pendingAny} · 고아 ${orphanAny}`
+  const verdict = pendingAny > 0 || orphanAny > 0
+    ? `루프백 대안 검토(Q143 · H-R5) — pending ${pendingAny} · 고아 ${orphanAny}${incomplete ? ` · 미완 ${incomplete}회` : ''}`
+    : incomplete > 0
+      ? `판정 불가 — 모든 서버가 connected 가 아닌 회 ${incomplete}(init 없음 · failed 등) · 원인을 먼저 본다`
+      : 'stdio 조건 충족(전 회 전부 connected · pending 0 · EOF 종료) — init 최대 시간을 MCP 타임아웃과 대조한다'
   out.push(`판정 재료: ${verdict} · init 최대 ${worstInit} ms`)
   out.push('미측정: pm2 max_memory_restart 가 자식 RSS 를 세는가(서버 pm2)')
   out.push('=== 끝 ===')
