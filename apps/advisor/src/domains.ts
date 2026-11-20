@@ -3,7 +3,9 @@
 // (012 §2-1 — 쓰기 도구는 그 경로에 등록되지 않는다). 이 체크아웃의 분류는 방어 한 겹 — 쓰기로 분류된 이름이 목록에 보이면 그 도메인을 쓰지 않는다.
 import fs from "node:fs";
 import path from "node:path";
-import { getPromptText, listToolDefs, openSession } from "./mcp-client";
+import { LOCAL_INIT_MAX_MS } from "./local/host";
+import type { Registry } from "./local/readers";
+import { McpSession, getPromptText, listToolDefs, openSession, openStdioSession } from "./mcp-client";
 
 /** 선언 파일 이름 — 발견 루트(apps/) 바로 아래 디렉터리마다 이 파일이 있으면 제공자다(015 §4-1 · ops 루트는 V-5) */
 export const DECLARATION_FILE = "domain.json";
@@ -59,10 +61,12 @@ export interface McpDecl extends DeclBase {
   portKey: string;
 }
 
-/** 통합 층이 띄우는 읽기 호스트(015 §3-1 P-b) — 호스트는 V-4. 그 전까지 선언만 받고 쓰지 않는다 */
+/** 통합 층이 띄우는 읽기 호스트(015 §3-1 P-b) — 질문 때는 CLI 가 · 준비 때는 prepare 가 같은 명령으로 띄운다(H-R3 · #873 V-4b) */
 export interface LocalDecl extends DeclBase {
   kind: "local";
   reader: string;
+  /** 선언 tools.read — 호스트가 등록한 이름은 이 안이어야 한다(쓰기 0 겹 ① · #873) */
+  read: ReadonlySet<string>;
 }
 
 export type DomainDecl = McpDecl | LocalDecl;
@@ -129,7 +133,7 @@ function parseV1(d: Json, env: NodeJS.ProcessEnv, dir: string): DomainDecl {
     if (tools.write.length) throw bad("local 은 write 가 늘 빈 배열");
     const serverKey = `pl_${id}`; // H-R2
     if (!KEY.test(serverKey)) throw bad("id 가 길다");
-    return { ...base, kind, serverKey, reader: d.local.reader };
+    return { ...base, kind, serverKey, reader: d.local.reader, read: new Set(tools.read) };
   }
   throw bad("kind");
 }
@@ -213,15 +217,95 @@ export function loadDomains(appsDir: string, env: NodeJS.ProcessEnv = process.en
 export const prefixOf = (d: Pick<DomainDecl, "serverKey">) => `mcp__${d.serverKey}__`;
 export const readUrlOf = (d: Pick<McpDecl, "port">) => `http://127.0.0.1:${d.port}${READ_PATH}`;
 
+/** `local` 호스트를 띄우는 문맥 — 리더 레지스트리 · 실행 파일(H-R6 = process.execPath) · 앞 인자(호스트 번들) · 통합 층 비공개 루트 */
+export interface LocalHostContext {
+  registry: Registry;
+  command: string;
+  prefix: readonly string[];
+  privateRoot: string;
+  /** 기동 상한(기본 LOCAL_INIT_MAX_MS) — 시험이 정상 경로에서 넉넉히 둔다(느린 러너 · #873 9-1 info 1) */
+  initMaxMs?: number;
+}
+
+export interface Launch {
+  command: string;
+  args: string[];
+}
+
+/**
+ * 호스트 실행 명령 — prepare · probe · mcp-config 가 같은 것을 쓴다(H-R3). null = 이 선언은 그 리더를 고를 수 없다.
+ * 리더가 레지스트리에 있고 그 리더의 허용 선언 위치가 이 선언의 위치(apps/<dir>)여야 한다(015 §3-1 원칙 1).
+ */
+export function localLaunch(decl: LocalDecl, ctx: LocalHostContext): Launch | null {
+  const reader = ctx.registry.get(decl.reader);
+  if (!reader || reader.allowedDecl !== `apps/${decl.dir}`) return null;
+  const dir = reader.location(ctx.privateRoot);
+  if (!path.isAbsolute(dir)) return null;
+  return { command: ctx.command, args: [...ctx.prefix, "--reader", decl.reader, "--dir", dir] };
+}
+
 export type DomainReady =
-  | { id: string; ok: true; decl: McpDecl; allow: string[]; knowledge: string; /** tools/list 도구 정의 바이트 — probe 출력만 쓴다(#839) */ toolBytes: number }
+  | { id: string; ok: true; decl: DomainDecl; allow: string[]; knowledge: string; /** tools/list 도구 정의 바이트 — probe 출력만 쓴다(#839) */ toolBytes: number;
+      /** local 만 — 질문 때 mcp-config 에 쓸 명령(prepare 와 같다) · 기동 ms(probe) */ launch?: Launch; initMs?: number }
   /** decl = null 은 선언 오류(#841) — 이름을 믿을 수 없어 모델의 "쓸 수 없는 도메인" 안내에 넣지 않는다(B) */
   | { id: string; ok: false; decl: DomainDecl | null; why: string };
 
-/** 한 도메인의 읽기 경로에서 도구 목록과 지식을 받는다. 어느 하나라도 실패하면 그 도메인을 쓰지 않는다(012 R-바닥 정정 ②). */
-export async function prepareDomain(decl: DomainDecl, timeoutMs: number): Promise<DomainReady> {
+/** 열린 세션에서 도구 목록 · 지식 — 두 종류가 같은 검사를 탄다. local 은 이름이 선언 read 안이어야 한다(쓰기 0 겹 ①) */
+async function readyFrom(decl: DomainDecl, s: McpSession, extra: { launch?: Launch; initMs?: number }): Promise<DomainReady> {
   const fail = (why: string): DomainReady => ({ id: decl.id, ok: false, decl, why });
-  if (decl.kind !== "mcp") return fail("local 호스트 없음"); // 015 V-4 전 — 선언만 받는다
+  let names: string[];
+  let toolBytes: number;
+  try {
+    ({ names, bytes: toolBytes } = await listToolDefs(s));
+  } catch {
+    return fail("tools/list 실패");
+  }
+  if (!names.length) return fail("읽기 도구 0");
+  if (names.some((n) => !KEY.test(n))) return fail("도구 이름 형식");
+  if (names.some((n) => decl.write.has(n))) return fail("쓰기 분류 도구가 읽기 경로에 있다");
+  if (names.some((n) => decl.propose.has(n))) return fail("제안 분류 도구가 읽기 경로에 있다");
+  if (decl.kind === "local" && names.some((n) => !decl.read.has(n))) return fail("선언에 없는 도구");
+  // K-3 — 지식 prompt 를 선언한 제공자만 받는다 · 선언했는데 못 받으면 그 도메인을 쓰지 않는다(지금처럼) · 아니면 summary 한 줄(015 §3-2)
+  let knowledge = decl.summary;
+  if (decl.knowledge) {
+    try {
+      knowledge = await getPromptText(s, KNOWLEDGE_PROMPT);
+    } catch {
+      return fail("prompts/get 실패");
+    }
+  }
+  if (Buffer.byteLength(knowledge, "utf8") > KNOWLEDGE_MAX_BYTES) return fail("지식 상한 초과");
+  return { id: decl.id, ok: true, decl, allow: names.map((n) => prefixOf(decl) + n), knowledge, toolBytes, ...extra };
+}
+
+/** local — 호스트를 질문 때와 같은 명령으로 띄워 묻는다(H-R3). 기동이 상한을 넘으면 쓰지 않는다(질문마다 CLI 의 init 첫 줄이 늦어진다 · #868) */
+async function prepareLocal(decl: LocalDecl, timeoutMs: number, ctx: LocalHostContext | undefined): Promise<DomainReady> {
+  const fail = (why: string): DomainReady => ({ id: decl.id, ok: false, decl, why });
+  let launch: Launch | null;
+  try {
+    launch = ctx ? localLaunch(decl, ctx) : null;
+  } catch {
+    launch = null;
+  }
+  if (!launch) return fail("reader-not-allowed");
+  let s;
+  try {
+    s = await openStdioSession(launch.command, launch.args, timeoutMs);
+  } catch {
+    return fail("호스트 기동 실패");
+  }
+  try {
+    if (s.initMs > (ctx?.initMaxMs ?? LOCAL_INIT_MAX_MS)) return fail("기동 지연");
+    return await readyFrom(decl, s, { launch, initMs: s.initMs });
+  } finally {
+    await s.close();
+  }
+}
+
+/** 한 도메인의 읽기 경로에서 도구 목록과 지식을 받는다. 어느 하나라도 실패하면 그 도메인을 쓰지 않는다(012 R-바닥 정정 ②). */
+export async function prepareDomain(decl: DomainDecl, timeoutMs: number, local?: LocalHostContext): Promise<DomainReady> {
+  const fail = (why: string): DomainReady => ({ id: decl.id, ok: false, decl, why });
+  if (decl.kind === "local") return prepareLocal(decl, timeoutMs, local);
   let s;
   try {
     s = await openSession(readUrlOf(decl), timeoutMs);
@@ -229,28 +313,7 @@ export async function prepareDomain(decl: DomainDecl, timeoutMs: number): Promis
     return fail("읽기 경로 연결 실패");
   }
   try {
-    let names: string[];
-    let toolBytes: number;
-    try {
-      ({ names, bytes: toolBytes } = await listToolDefs(s));
-    } catch {
-      return fail("tools/list 실패");
-    }
-    if (!names.length) return fail("읽기 도구 0");
-    if (names.some((n) => !KEY.test(n))) return fail("도구 이름 형식");
-    if (names.some((n) => decl.write.has(n))) return fail("쓰기 분류 도구가 읽기 경로에 있다");
-    if (names.some((n) => decl.propose.has(n))) return fail("제안 분류 도구가 읽기 경로에 있다");
-    // K-3 — 지식 prompt 를 선언한 제공자만 받는다 · 선언했는데 못 받으면 그 도메인을 쓰지 않는다(지금처럼) · 아니면 summary 한 줄(015 §3-2)
-    let knowledge = decl.summary;
-    if (decl.knowledge) {
-      try {
-        knowledge = await getPromptText(s, KNOWLEDGE_PROMPT);
-      } catch {
-        return fail("prompts/get 실패");
-      }
-    }
-    if (Buffer.byteLength(knowledge, "utf8") > KNOWLEDGE_MAX_BYTES) return fail("지식 상한 초과");
-    return { id: decl.id, ok: true, decl, allow: names.map((n) => prefixOf(decl) + n), knowledge, toolBytes };
+    return await readyFrom(decl, s, {});
   } finally {
     await s.close();
   }

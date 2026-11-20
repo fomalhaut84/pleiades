@@ -4,7 +4,7 @@
   "private": true,
   "description": "통합 어드바이저 — 두 도메인 읽기 경로를 한 세션에서 쓰는 통합 층 (012 · 4b)",
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --platform=node --target=node20 --outfile=dist/advisor.cjs",
+    "build": "esbuild src/main.ts --bundle --platform=node --target=node20 --outfile=dist/advisor.cjs && esbuild src/local/host-main.ts --bundle --platform=node --target=node20 --outfile=dist/local-host.cjs",
     "lint": "eslint src/ --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

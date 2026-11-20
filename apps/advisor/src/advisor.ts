@@ -4,7 +4,8 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { CALL_BUDGET_USD, Pin, childEnv, cliArgs, readPins, runCli } from "./cli";
-import { DomainDecl, DomainReady, loadDomains, prefixOf, prepareDomain, readUrlOf } from "./domains";
+import { DomainDecl, DomainReady, LocalHostContext, loadDomains, prefixOf, prepareDomain, readUrlOf } from "./domains";
+import { READERS, Registry } from "./local/readers";
 import { LockState, lockFileOf, probeDeployLock } from "./deploy-lock";
 import { AnswerVerdict, InitVerdict, POST_INIT_HOOK_CODE, judgeAnswer, judgeInit, safeName } from "./judge";
 import { ensurePrivateDir, writePrivate } from "./private-dir";
@@ -65,6 +66,20 @@ export interface AdvisorDeps {
   systemMaxBytes?: number;
   /** 자식 env 허용 목록에 더할 키 — 시험(가짜 CLI)만 쓴다 */
   passEnv?: readonly string[];
+  /** `local` 호스트(015 V-4 · #873) — 기본 = 운영 레지스트리 · process.execPath(H-R6) · 봇 번들 옆 dist/local-host.cjs. 시험이 시험 레지스트리 · 시험 번들을 넣는다 */
+  localHost?: { registry: Registry; command: string; prefix: readonly string[]; initMaxMs?: number };
+}
+
+/** 봇 번들(dist/advisor.cjs) 옆의 호스트 번들 — 같은 build 가 만든다(package.json) */
+export const LOCAL_HOST_BUNDLE = "local-host.cjs";
+
+type Ready = Extract<DomainReady, { ok: true }>;
+
+/** mcp-config 항목 — mcp = 앱 읽기 경로(http) · local = prepare 와 같은 명령의 stdio 호스트(H-R3 · env 는 CLI 가 정한다 · 호스트는 읽지 않는다) */
+export function mcpServerEntry(d: Ready): Record<string, unknown> {
+  if (d.decl.kind === "mcp") return { type: "http", url: readUrlOf(d.decl) };
+  if (!d.launch) throw new Error("local 호스트 명령 없음"); // prepare 가 늘 채운다 — 여기 오면 코드 결함
+  return { type: "stdio", command: d.launch.command, args: d.launch.args };
 }
 
 /**
@@ -83,7 +98,7 @@ export function initRetry(v: AnswerVerdict, init: InitVerdict | null, resumed: b
 const keyTag = (key: string) => crypto.createHash("sha256").update(key).digest("hex").slice(0, 8);
 const usd = (v: number | null) => (v === null ? "?" : v.toFixed(4));
 
-export function buildSystem(ready: Extract<DomainReady, { ok: true }>[], missing: DomainDecl[]): string {
+export function buildSystem(ready: Ready[], missing: DomainDecl[]): string {
   const parts = [BASE_SYSTEM_PROMPT];
   for (const d of ready) parts.push(`## 도메인 지식 — ${d.decl.name}\n${d.knowledge}`);
   if (missing.length) {
@@ -101,6 +116,7 @@ export class Advisor {
   private busy = false;
   private closing = false;
   private readonly abort = new AbortController();
+  private readonly local: LocalHostContext;
 
   constructor(private readonly deps: AdvisorDeps) {
     this.store = new SessionStore(deps.now);
@@ -110,6 +126,8 @@ export class Advisor {
     this.advisorDir = ensurePrivateDir(path.join(deps.privateRoot, "advisor"));
     // CLI 의 cwd — 비어 있는 중립 디렉터리(체크아웃 밖 · 조상에 .claude 없음). 세션 기록(resume)은 cwd 기준이라 늘 같다
     this.workDir = ensurePrivateDir(path.join(this.advisorDir, "work"));
+    const host = deps.localHost ?? { registry: READERS, command: process.execPath, prefix: [path.join(__dirname, LOCAL_HOST_BUNDLE)] };
+    this.local = { ...host, privateRoot: deps.privateRoot };
   }
 
   private log(line: string) {
@@ -130,7 +148,7 @@ export class Advisor {
   /** 읽기 경로 준비 — 모델 호출 없음(4b-3 기동 탐침 · 로컬 점검) */
   async prepareAll(): Promise<DomainReady[]> {
     const { decls, broken } = loadDomains(this.deps.appsDir, this.deps.env);
-    const prep = this.deps.prepare ?? ((d: DomainDecl) => prepareDomain(d, MCP_TIMEOUT_MS));
+    const prep = this.deps.prepare ?? ((d: DomainDecl) => prepareDomain(d, MCP_TIMEOUT_MS, this.local));
     // enabled:false 는 준비하지 않는다 · 모델 안내에도 넣지 않는다(decl = null · 015 §4-1 정상 끄기 · #858)
     const ready = await Promise.all(decls.map((d) => (d.enabled ? prep(d) : Promise.resolve<DomainReady>({ id: d.id, ok: false, decl: null, why: "꺼짐" }))));
     // 선언 오류는 뒤에 — 준비된 순서(id 순)와 지식 절 순서를 바꾸지 않는다(#841)
@@ -151,7 +169,7 @@ export class Advisor {
     const missing = all.flatMap((d) => (d.decl && (!d.ok || excluded(d)) ? [d.decl] : []));
     const mcpConfigPath = path.join(this.advisorDir, `mcp-${keyTag(key)}.json`);
     writePrivate(mcpConfigPath, JSON.stringify({
-      mcpServers: Object.fromEntries(ready.map((d) => [d.decl.serverKey, { type: "http", url: readUrlOf(d.decl) }])),
+      mcpServers: Object.fromEntries(ready.map((d) => [d.decl.serverKey, mcpServerEntry(d)])),
     }, null, 2));
     const frame: SessionFrame = {
       system: buildSystem(ready, missing),
