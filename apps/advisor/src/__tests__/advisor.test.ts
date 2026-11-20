@@ -3,7 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { Advisor, BASE_SYSTEM_PROMPT, MESSAGES } from "../advisor";
+import { Advisor, BASE_SYSTEM_PROMPT, MESSAGES, initRetry } from "../advisor";
+import { AnswerVerdict, InitVerdict } from "../judge";
 import { LockState } from "../deploy-lock";
 import { FakeMcp, startFakeMcp } from "./helpers/fake-mcp";
 import { initLine, resultLine, toolResult, toolUse } from "./helpers/stream";
@@ -208,8 +209,9 @@ describe("Advisor.ask — 거부 · 실패", () => {
   it("CLI 실행 실패 · init 형식 오류는 안전 문구가 아니라 일반 실패(9-1 info 2)", async () => {
     happy();
     expect(await advisor({ claude: { bin: path.join(tmp, "no-claude") } }).ask(KEY, "q")).toMatchObject({ kind: "failed", text: MESSAGES.failed });
-    setCli([{ ...initLine([FIN_TOOL, FIT_TOOL], ["myfinance", "myfitness"]), mcp_servers: [{ name: "myfinance", status: "pending" }, { name: "myfitness", status: "connected" }] }]);
-    expect(await advisor().ask(KEY, "q")).toMatchObject({ kind: "failed", text: MESSAGES.failed });
+    setCli([{ ...initLine([FIN_TOOL, FIT_TOOL], ["myfinance", "myfitness"]), mcp_servers: [{ name: "myfinance", status: "connected" }, { name: "myfitness", status: "zzz" }] }]);
+    expect(await advisor().ask(KEY, "q")).toMatchObject({ kind: "failed", text: MESSAGES.failed, code: "format:알 수 없는 MCP 상태" });
+    expect(cliCalls()).toHaveLength(1); // 알 수 없는 상태는 제외 · 재시도 없음(015 §4-3 — "MCP 미연결" 에서만)
   });
 
   it("이어 묻던 세션의 init 이 낡은 허용 목록으로 실패하면 도메인을 다시 받아 한 번 새로 묻는다(9-1 info 1)", async () => {
@@ -274,6 +276,95 @@ describe("Advisor.ask — 거부 · 실패", () => {
     const first = a.ask(KEY, "q1");
     expect(await a.ask("discord:1:2", "q2")).toMatchObject({ kind: "refused", reason: "busy" });
     expect((await first).kind).toBe("answer");
+  });
+});
+
+// #854 · 015 V-2c §4-3 — 질문당 init 재시도 1회 · "MCP 미연결" 에서만 제공자 제외 · violation:hook 재시도 없음
+describe("Advisor — init 재시도(V-2c)", () => {
+  const BOTH = ["myfinance", "myfitness"];
+  const pendingInit = (pending: string[]) => ({
+    ...initLine([FIN_TOOL, FIT_TOOL], BOTH),
+    mcp_servers: BOTH.map((name) => ({ name, status: pending.includes(name) ? "pending" : "connected" })),
+  });
+  const runs = (...xs: unknown[][]) => fs.writeFileSync(spec, JSON.stringify({ runs: xs.map((lines) => ({ lines })) }));
+  const argOf = (i: number, flag: string) => cliCalls()[i].argv[cliCalls()[i].argv.indexOf(flag) + 1];
+
+  it("initRetry 판정 표(9-1 info)", () => {
+    const v = (over: Partial<AnswerVerdict>) => ({ status: "init", code: "format:MCP 미연결", violation: false, ...over }) as AnswerVerdict;
+    const unc = (unconnected: string[], over: Partial<InitVerdict> = {}): InitVerdict => ({ ok: false, kind: "format", why: "MCP 미연결", unconnected, ...over });
+    expect(initRetry(v({}), unc(["myfitness"]), false)).toEqual({ exclude: ["myfitness"] });
+    expect(initRetry(v({}), unc(["myfitness"]), true)).toEqual({ exclude: ["myfitness"] });
+    expect(initRetry(v({ violation: true }), unc(["myfitness"]), false)).toBeNull(); // init 앞 hook 과 겹쳐도 제외 없음
+    expect(initRetry(v({ violation: true }), unc(["myfitness"]), true)).toEqual({ exclude: [] });
+    expect(initRetry(v({ code: "format:알 수 없는 MCP 상태" }), unc([], { why: "알 수 없는 MCP 상태" }), false)).toBeNull();
+    expect(initRetry(v({}), unc([]), false)).toBeNull();
+    expect(initRetry(v({ code: "init 없음" }), null, false)).toBeNull();
+    expect(initRetry(v({ code: "init 없음" }), null, true)).toEqual({ exclude: [] });
+    expect(initRetry(v({ code: "violation:hook", violation: true }), unc(["myfitness"]), true)).toBeNull();
+    expect(initRetry(v({ status: "오류", code: "timeout" }), null, true)).toBeNull();
+  });
+
+  it("새 세션에서 한 제공자가 미연결이면 그 제공자를 빼고 한 번 더 묻고 · 첫 답에 안내한다", async () => {
+    runs([pendingInit(["myfitness"])], [initLine([FIN_TOOL], ["myfinance"]), toolUse("a", FIN_TOOL), toolResult("a"), resultLine()]);
+    const a = advisor();
+    const r = await a.ask(KEY, "q1");
+    expect(r).toMatchObject({ kind: "answer" });
+    expect(r.text).toBe("ℹ️ 이번 대화에서는 건강 데이터를 쓰지 못했어요.\n\n답입니다"); // 맥락 소실 안내는 없다(새 세션)
+    expect(cliCalls()).toHaveLength(2);
+    expect(argOf(1, "--allowedTools")).toBe(FIN_TOOL);
+    expect(Object.keys(JSON.parse(fs.readFileSync(argOf(1, "--mcp-config"), "utf8")).mcpServers)).toEqual(["myfinance"]);
+    expect(argOf(1, "--system-prompt")).toContain("## 이번 대화에서 쓸 수 없는 도메인\n건강");
+    expect(logs.some((l) => /retry=init excluded=1 resumed=false$/.test(l))).toBe(true);
+    expect(logs.some((l) => l.includes("domain=fit unavailable why=MCP 미연결"))).toBe(true);
+    // 다음 질문은 줄어든 세션을 이어 묻는다 — 안내는 첫 답에만
+    expect((await a.ask(KEY, "q2")).text).toBe("답입니다");
+    expect(cliCalls()[2].argv).toContain("--resume");
+  });
+
+  it("모든 제공자가 미연결이면 CLI 를 다시 띄우지 않고 no-domain(015 Q467 ②)", async () => {
+    runs([pendingInit(BOTH)]);
+    expect(await advisor().ask(KEY, "q")).toMatchObject({ kind: "refused", reason: "no-domain", text: MESSAGES.noDomain });
+    expect(cliCalls()).toHaveLength(1);
+  });
+
+  it("재시도는 질문당 1회 — 다시 미연결이면 그대로 실패한다", async () => {
+    runs([pendingInit(["myfitness"])], [{ ...initLine([FIN_TOOL], ["myfinance"]), mcp_servers: [{ name: "myfinance", status: "failed" }] }]);
+    expect(await advisor().ask(KEY, "q")).toMatchObject({ kind: "failed", text: MESSAGES.failed, code: "format:MCP 미연결" });
+    expect(cliCalls()).toHaveLength(2);
+  });
+
+  it("새 세션의 위반(목록 밖 도구)은 제외 · 재시도 없이 안전 문구 — 빼고 다시 열면 위반을 우회한다", async () => {
+    runs([{ ...pendingInit(["myfitness"]), tools: [FIN_TOOL, FIT_TOOL, "Bash"] }]);
+    expect(await advisor().ask(KEY, "q")).toMatchObject({ kind: "failed", text: MESSAGES.safety, code: "violation:목록 밖 도구" });
+    expect(cliCalls()).toHaveLength(1);
+  });
+
+  it("새 세션의 init 뒤 hook 도 재시도 없음(#711)", async () => {
+    runs([initLine([FIN_TOOL, FIT_TOOL], BOTH), { type: "system", subtype: "hook_started" }, resultLine({ total_cost_usd: 0.3 })]);
+    expect(await advisor().ask(KEY, "q")).toMatchObject({ kind: "failed", code: "violation:hook" });
+    expect(cliCalls()).toHaveLength(1);
+  });
+
+  it("이어 묻던 세션에서 미연결이면 빼고 새 세션으로 · 맥락 소실과 빠진 도메인을 함께 안내한다", async () => {
+    const ok = [initLine([FIN_TOOL, FIT_TOOL], BOTH), resultLine()];
+    runs(ok, [pendingInit(["myfinance"])], [initLine([FIT_TOOL], ["myfitness"]), resultLine()]);
+    const a = advisor();
+    await a.ask(KEY, "q1");
+    const r = await a.ask(KEY, "q2");
+    expect(r.text).toBe(`${MESSAGES.contextLost}\nℹ️ 이번 대화에서는 재무 데이터를 쓰지 못했어요.\n\n답입니다`);
+    expect(cliCalls()[1].argv).toContain("--resume");
+    expect(cliCalls()[2].argv).not.toContain("--resume");
+    expect(argOf(2, "--allowedTools")).toBe(FIT_TOOL);
+  });
+
+  it("이어 묻던 세션의 다른 init 실패도 제외 없이 새 세션으로 · 맥락 소실 안내", async () => {
+    const ok = [initLine([FIN_TOOL, FIT_TOOL], BOTH), resultLine()];
+    runs(ok, [initLine([FIN_TOOL], ["myfinance", "other"])], ok);
+    const a = advisor();
+    await a.ask(KEY, "q1");
+    expect((await a.ask(KEY, "q2")).text).toBe(`${MESSAGES.contextLost}\n\n답입니다`);
+    expect(argOf(2, "--allowedTools")).toBe(`${FIN_TOOL},${FIT_TOOL}`);
+    expect(logs.some((l) => /retry=init excluded=0 resumed=true$/.test(l))).toBe(true);
   });
 });
 
