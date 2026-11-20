@@ -90,6 +90,8 @@ export interface InitVerdict {
   servers?: number;
   connected?: number;
   outside?: number;
+  /** 연결되지 않은 serverKey — CLI 가 준 이름이 아니라 우리 선언의 이름(domains.ts KEY 검사를 거쳤다 · safeName 과 같은 문자 집합) · "MCP 미연결" 일 때만 · 제공자 제외에 쓴다(015 §4-3 V-2c) */
+  unconnected?: string[];
 }
 
 const fmt = (why: string, extra: Partial<InitVerdict> = {}): InitVerdict => ({ ok: false, kind: "format", why, ...extra });
@@ -117,7 +119,10 @@ export function judgeInit(e: unknown, allow: ReadonlySet<string>, serverKeys: re
   if (why) return { ok: false, kind: "violation", why, ...counts };
   if (connected !== serverKeys.length) {
     const unknown = servers.some((m) => !isObj(m) || typeof m.status !== "string" || !KNOWN_STATUS.has(m.status));
-    return fmt(unknown ? "알 수 없는 MCP 상태" : "MCP 미연결", counts);
+    if (unknown) return fmt("알 수 없는 MCP 상태", counts);
+    // pending · failed · needs-auth · disabled 모두 미연결 — 어느 쪽이든 그 제공자는 이번 세션에서 쓸 수 없다(015 Q467 ①)
+    const unconnected = serverKeys.filter((k) => !servers.some((m) => isObj(m) && m.name === k && m.status === "connected"));
+    return fmt("MCP 미연결", { ...counts, unconnected });
   }
   return { ok: true, kind: "", why: "", ...counts };
 }

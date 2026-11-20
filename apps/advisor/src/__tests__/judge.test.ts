@@ -52,7 +52,10 @@ describe("judgeInit (fail-closed)", () => {
 
   it("미연결 · 알 수 없는 상태 · init 없음은 형식", () => {
     const pending = { ...initLine([FIN, FIT], KEYS), mcp_servers: [{ name: "myfinance", status: "connected" }, { name: "myfitness", status: "pending" }] };
-    expect(judgeInit(pending, ALLOW, KEYS)).toMatchObject({ ok: false, kind: "format", why: "MCP 미연결" });
+    expect(judgeInit(pending, ALLOW, KEYS)).toMatchObject({ ok: false, kind: "format", why: "MCP 미연결", unconnected: ["myfitness"] });
+    // V-2c — 미연결 목록은 우리 serverKey 만(CLI 가 준 이름이 아니다) · pending · failed 구분 없음(015 Q467 ①)
+    const both = { ...pending, mcp_servers: [{ name: "myfinance", status: "failed" }, { name: "myfitness", status: "needs-auth" }] };
+    expect(judgeInit(both, ALLOW, KEYS)).toMatchObject({ why: "MCP 미연결", unconnected: KEYS });
     const weird = { ...pending, mcp_servers: [{ name: "myfinance", status: "connected" }, { name: "myfitness", status: "zzz" }] };
     expect(judgeInit(weird, ALLOW, KEYS)).toMatchObject({ kind: "format", why: "알 수 없는 MCP 상태" });
     expect(judgeInit(null, ALLOW, KEYS)).toMatchObject({ kind: "format", why: "init 없음" });

@@ -6,7 +6,7 @@ import path from "node:path";
 import { CALL_BUDGET_USD, Pin, childEnv, cliArgs, readPins, runCli } from "./cli";
 import { DomainDecl, DomainReady, loadDomains, prefixOf, prepareDomain, readUrlOf } from "./domains";
 import { LockState, lockFileOf, probeDeployLock } from "./deploy-lock";
-import { AnswerVerdict, POST_INIT_HOOK_CODE, judgeAnswer, judgeInit, safeName } from "./judge";
+import { AnswerVerdict, InitVerdict, POST_INIT_HOOK_CODE, judgeAnswer, judgeInit, safeName } from "./judge";
 import { ensurePrivateDir, writePrivate } from "./private-dir";
 import { Session, SessionFrame, SessionStore } from "./session-store";
 import { SettingsDirs, checkSettings } from "./settings";
@@ -33,6 +33,7 @@ export const MESSAGES = {
   reset: "🔄 통합 어드바이저 대화를 새로 시작해요.",
   tooLarge: "🔧 도메인 지식이 너무 커서 질문을 시작하지 않았어요. 관리자 확인이 필요해요.",
   shuttingDown: "🔄 통합 어드바이저가 다시 시작하는 중이에요. 잠시 뒤 다시 물어봐 주세요.",
+  contextLost: "ℹ️ 이전 대화를 이어가지 못해 새 대화로 답했어요.",
 } as const;
 
 export type RefuseReason = "busy" | "deploying" | "lock-unknown" | "settings" | "no-domain" | "invalid" | "config"
@@ -64,6 +65,19 @@ export interface AdvisorDeps {
   systemMaxBytes?: number;
   /** 자식 env 허용 목록에 더할 키 — 시험(가짜 CLI)만 쓴다 */
   passEnv?: readonly string[];
+}
+
+/**
+ * 질문당 init 재시도 1회(015 §4-3 · X5 · V-2c) — 다시 물을지와 그때 뺄 serverKey. null = 재시도 없음.
+ * - init 뒤 hook(violation:hook)은 재시도 없음 — 모델 비용이 났을 수 있고 다시 물으면 판정·비용을 덮어쓴다(#711)
+ * - 제공자 제외는 "MCP 미연결" 에서만 — 위반(플러그인 · MCP 서버 · 목록 밖 도구)에서 빼고 다시 열면 위반을 우회한다
+ * - 이어 묻던 세션은 그 밖의 init 실패에도 제외 없이 새 세션으로 한 번(낡은 허용 목록 · 9-1 info 1 · 진짜 위반이면 다시 걸린다)
+ */
+export function initRetry(v: AnswerVerdict, init: InitVerdict | null, resumed: boolean): { exclude: string[] } | null {
+  if (v.status !== "init" || v.code === POST_INIT_HOOK_CODE) return null;
+  const unconnected = !v.violation && init?.kind === "format" && init.why === "MCP 미연결" ? init.unconnected ?? [] : [];
+  if (unconnected.length) return { exclude: unconnected };
+  return resumed ? { exclude: [] } : null;
 }
 
 const keyTag = (key: string) => crypto.createHash("sha256").update(key).digest("hex").slice(0, 8);
@@ -119,13 +133,18 @@ export class Advisor {
     return [...ready, ...broken.map((b): DomainReady => ({ id: b.id, ok: false, decl: null, why: b.why }))];
   }
 
-  private async startSession(key: string): Promise<Session | null> {
+  /** exclude = 이번 세션에서 뺄 serverKey(CLI init 에서 미연결이었던 제공자 · V-2c) — 뺀 제공자는 안내(missing)에 들어간다 */
+  private async startSession(key: string, exclude: ReadonlySet<string> = new Set()): Promise<Session | null> {
     const all = await this.prepareAll();
-    const ready = all.filter((d): d is Extract<DomainReady, { ok: true }> => d.ok);
-    for (const d of all) if (!d.ok) this.log(`[advisor] domain=${d.id} unavailable why=${d.why}`);
+    const excluded = (d: DomainReady) => d.ok && exclude.has(d.decl.serverKey);
+    const ready = all.filter((d): d is Extract<DomainReady, { ok: true }> => d.ok && !excluded(d));
+    for (const d of all) {
+      if (!d.ok) this.log(`[advisor] domain=${d.id} unavailable why=${d.why}`);
+      else if (excluded(d)) this.log(`[advisor] domain=${d.id} unavailable why=MCP 미연결`);
+    }
     if (!ready.length) return null;
     // 선언 오류(decl 없음)는 안내에 넣지 않는다 — 모델은 그 제공자를 모른다(#841 · B)
-    const missing = all.flatMap((d) => (!d.ok && d.decl ? [d.decl] : []));
+    const missing = all.flatMap((d) => (d.decl && (!d.ok || excluded(d)) ? [d.decl] : []));
     const mcpConfigPath = path.join(this.advisorDir, `mcp-${keyTag(key)}.json`);
     writePrivate(mcpConfigPath, JSON.stringify({
       mcpServers: Object.fromEntries(ready.map((d) => [d.decl.serverKey, { type: "http", url: readUrlOf(d.decl) }])),
@@ -175,12 +194,13 @@ export class Advisor {
     // 세션 준비(MCP · 최대 10 s) 중 종료가 오면 CLI 를 새로 띄우지 않는다 — 신호 뒤 생긴 자식은 pm2 트리 종료가 못 본다(9-1 info 1)
     if (this.abort.signal.aborted) return { kind: "refused", reason: "shutting-down", text: MESSAGES.shuttingDown };
     let { v, run } = await this.runOnce(key, session, q, resumed);
-    if (resumed && v.status === "init" && v.code !== POST_INIT_HOOK_CODE) {
-      // 이어 묻던 세션의 init 실패 — 그 사이 배포로 읽기 도구가 바뀌면 세션 시작 때 고정한 허용 목록이 낡는다(9-1 info 1).
-      // init 실패는 모델 호출 전에 끊으므로 비용 0 — 세션을 버리고 도메인을 다시 받아 한 번만 새로 묻는다. 진짜 위반이면 다시 걸린다.
-      // init 뒤 hook(violation:hook)은 뺀다 — 모델 비용이 났을 수 있고 안전 위반이다. 다시 물으면 그 판정·비용을 덮어썼다(#711)
+    const retry = initRetry(v, run.init, resumed);
+    if (retry) {
+      // init 실패는 모델 호출 전에 끊으므로 비용 0 — 세션을 버리고 도메인을 다시 받아(미연결 제공자는 빼고) 한 번만 새로 묻는다.
+      // 재시도는 질문당 1회 — 다시 실패하면 그대로 실패한다(015 §4-3 X5)
+      this.log(`[advisor] key=${keyTag(key)} retry=init excluded=${retry.exclude.length} resumed=${resumed}`);
       this.store.reset(key);
-      const started = await this.startOrRefuse(key);
+      const started = await this.startOrRefuse(key, new Set(retry.exclude));
       if ("kind" in started) return started;
       session = started;
       if (this.abort.signal.aborted) return { kind: "refused", reason: "shutting-down", text: MESSAGES.shuttingDown };
@@ -195,13 +215,15 @@ export class Advisor {
     }
     if (v.sessionId) this.store.record(key, v.sessionId, v.contextTokens);
     else this.store.reset(key); // 이어 물을 id 가 없다 — 같은 프레임으로 새 CLI 세션을 돌리지 않는다(9-1 info 11)
-    // 쓰지 못한 도메인 안내는 세션의 첫 답에만(012 R-16 — 조용히 한 도메인 없이 답하지 않는다)
-    return { kind: "answer", text: s.missing && !s.cliSessionId ? `${s.missing}\n\n${v.text}` : v.text, verdict: v };
+    // 쓰지 못한 도메인 안내는 세션의 첫 답에만(012 R-16 — 조용히 한 도메인 없이 답하지 않는다) ·
+    // 이어 묻던 세션을 버리고 새로 답했으면 그 사실도(맥락을 조용히 잃지 않는다 · 015 §4-3 · AU2:38)
+    const notes = [resumed && retry ? MESSAGES.contextLost : "", s.missing && !s.cliSessionId ? s.missing : ""].filter(Boolean);
+    return { kind: "answer", text: notes.length ? `${notes.join("\n")}\n\n${v.text}` : v.text, verdict: v };
   }
 
-  private async startOrRefuse(key: string): Promise<Session | AskOutcome> {
+  private async startOrRefuse(key: string, exclude?: ReadonlySet<string>): Promise<Session | AskOutcome> {
     try {
-      const started = await this.startSession(key);
+      const started = await this.startSession(key, exclude);
       if (!started) return { kind: "refused", reason: "no-domain", text: MESSAGES.noDomain };
       const bytes = Buffer.byteLength(started.system, "utf8");
       if (bytes > (this.deps.systemMaxBytes ?? SYSTEM_MAX_BYTES)) {
