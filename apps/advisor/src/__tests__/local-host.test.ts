@@ -71,8 +71,9 @@ function inProcess(dir: string) {
 }
 
 describe("runHost — 프로토콜", () => {
-  it("운영 레지스트리는 비어 있다(V-4a · 사용자 2026-11-20) · 없는 리더는 던진다", () => {
-    expect(READERS.size).toBe(0);
+  it("운영 레지스트리 = ops 하나(#880 V-5 · hermes 는 V-6) · 없는 리더는 던진다", () => {
+    expect([...READERS.keys()]).toEqual(["ops"]);
+    expect(READERS.get("ops")!.allowedDecl).toBe("deploy/ops");
     expect(() => runHost(READERS, "sample", "/x", { input: new PassThrough(), write: () => undefined, err: () => undefined, onEnd: () => undefined })).toThrow();
   });
 

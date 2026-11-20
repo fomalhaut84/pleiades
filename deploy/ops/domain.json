@@ -1,0 +1,15 @@
+{
+  "$comment": "pleiades 도메인 계약 v1(015 §3-2 · §7 O2 · #880 V-5) — 운영 수집기(collect.cjs)의 요약 상태 · 요약 이벤트를 통합 층 ops 리더(apps/advisor/src/local/ops.ts)가 읽기만 한다. 수집기는 상주 프로세스가 없어(크론) local 제공자다. 리더 허용 선언 위치는 이 파일 하나(Q144). 원문 없음 — 허용 목록은 apps/advisor/src/local/ops-shape.json.",
+  "contract": "pleiades-domain/v1",
+  "id": "ops",
+  "name": "운영",
+  "kind": "local",
+  "summary": "운영 — pleiades 서버 수집기의 요약: 열린 이상 · 최근 이벤트(앱 · 역할 · 출처 코드 · 심각도 · 횟수 · 시각). 오류 원문은 없다.",
+  "knowledge": false,
+  "local": { "reader": "ops" },
+  "tools": {
+    "read": ["ops_summary", "ops_events"],
+    "write": [],
+    "propose": []
+  }
+}

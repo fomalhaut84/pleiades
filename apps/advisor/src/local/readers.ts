@@ -1,8 +1,9 @@
 // `local` 리더 레지스트리 (#872 · 015 V-4a · §3-1 원칙 1 · H-R1).
 // 리더 = 통합 층 코드가 선언된 데이터만 읽어 MCP 도구로 내는 것. 읽을 위치는 location() 이 정하고 통합 층이 mcp-config args 로 넘기며(V-4b),
 // 어느 선언이 이 리더를 고를 수 있는지(allowedDecl)는 여기 상수다 — 선언 JSON 에는 경로를 두지 않는다.
-// **운영 레지스트리는 비어 있다**(사용자 2026-11-20) — ops 리더는 V-5 · hermes 리더는 V-6 에서 더한다. 시험은 가짜 리더를 주입한다.
+// 운영 레지스트리 = ops(V-5 · #880) · hermes 는 V-6 에서 더한다. 시험은 가짜 리더를 주입한다.
 import type { Tally } from "./fields";
+import { makeOpsReader } from "./ops";
 
 export interface ToolSpec {
   /** 접두 없는 도구 이름 — 선언 tools.read 에 있어야 한다(쓰기 0 시험 ① · V-4b prepare) */
@@ -38,5 +39,7 @@ export interface Reader {
 
 export type Registry = ReadonlyMap<string, Reader>;
 
-/** 운영 레지스트리 — 비어 있다(V-4a) */
-export const READERS: Registry = new Map<string, Reader>();
+const ops = makeOpsReader();
+
+/** 운영 레지스트리 */
+export const READERS: Registry = new Map<string, Reader>([[ops.id, ops]]);

@@ -27,13 +27,21 @@ V1_ALLOWED = V1_REQUIRED | {"$comment", "enabled", "keySuffix", "knowledge", "mo
 KNOWN_COUNTS = {"finance": (25, 34), "fitness": (27, 1)}
 
 
+# domains.ts EXTRA_DECLARATION_DIRS 와 같다(015 Q144 · #880) — apps 밖 선언 · 키는 저장소 기준 경로(앱 디렉터리 이름과 겹치지 않게)
+EXTRA_DECLARATION_DIRS = ("deploy/ops",)
+
+
 def discovered() -> dict:
-    """통합 층 loadDomains 와 같은 규칙 — apps/ 바로 아래 실제 디렉터리(심링크 제외)의 domain.json"""
+    """통합 층 loadDomains 와 같은 규칙 — apps/ 바로 아래 실제 디렉터리(심링크 제외)의 domain.json + apps 밖 고정 위치"""
     found = {}
     for p in sorted((ROOT / "apps").iterdir()):
         f = p / "domain.json"
         if p.is_dir() and not p.is_symlink() and f.exists():
             found[p.name] = json.loads(f.read_text(encoding="utf-8"))
+    for rel in EXTRA_DECLARATION_DIRS:
+        p = ROOT / rel
+        if p.is_dir() and not p.is_symlink() and (p / "domain.json").exists():
+            found[rel] = json.loads((p / "domain.json").read_text(encoding="utf-8"))
     return found
 
 
@@ -72,7 +80,8 @@ class DomainContract(unittest.TestCase):
 
     def test_discovery(self):
         # 지금 저장소의 선언 — fin · fit 이 빠지면 발견 규칙이 깨진 것이다(새 선언은 더해져도 된다)
-        self.assertTrue({"finance", "fitness"} <= set(self.domains), sorted(self.domains))
+        self.assertTrue({"finance", "fitness", "deploy/ops"} <= set(self.domains), sorted(self.domains))
+        self.assertIn('EXTRA_DECLARATION_DIRS: readonly string[] = ["deploy/ops"]', (ROOT / "apps" / "advisor" / "src" / "domains.ts").read_text())
         for d, dom in self.domains.items():
             self.assertIn(dom.get("contract"), (V0, V1), d)   # 아니면 아래 형태 시험이 둘 다 건너뛴다(#858 9-1 info)
         for key in ("id", "name"):

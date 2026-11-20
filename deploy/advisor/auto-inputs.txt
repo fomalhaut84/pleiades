@@ -21,3 +21,5 @@ deploy/advisor/
 # 모델 핀도 글롭(K-7 · #858) — 선언의 models.file 이 이 글롭 밖이면 AutoInputs 시험이 막는다
 apps/*/domain.json
 apps/*/src/lib/ai/models.ts
+# apps 밖 선언(015 Q144 · #880 V-5) — domains.ts EXTRA_DECLARATION_DIRS. 수집기 코드(collect.cjs)는 통합 층 입력이 아니다(리더는 데이터 파일만 읽는다)
+deploy/ops/domain.json
