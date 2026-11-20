@@ -21,7 +21,7 @@ pm2 상태 · MCP `/health` · web 응답 · pm2 로그 · 디스크를 5분마�
 
 `<REF>` 와 `<SHA256>` 은 Claude 가 머지 뒤 실값을 준다. 재설치 때도 검증 전에는 도는 파일을 덮지 않는다.
 
-**지금 설치된 판(2026-11-19 · #846 U1 · AI 사용량 집계 + PR-4 하트비트 판 · 크론 `--dry-run` 없음 · 사용자 설치 통과):** REF `096a5c6d2aa1daceebaa55e759b7fb7d6d3c7027` · SHA256 `cc8681fd040b6567ae69236a743d0233965049c27bc27b4e0326276d7d88bb5f`. 되돌리기: 게시만 멈추려면 3절(크론 줄에 `--dry-run`) · ping 만 멈추려면 6절 되돌리기 · 사용량 집계만 빼려면 직전 판 REF `d7355f2eeacb5fad2238e79e293b932ed251342e`(#847 PR-4 판) · SHA256 `91956340403d481e6d602855f7e1e2eeb5c5a289becf76fb2b0ad48c11a1e145` 로 같은 명령(하트비트는 그대로) · 그 앞 판 REF `18bab57f89e53cba3aed47e57a8c91473ddc3469`(#802) · SHA256 `b8ffdc77ef1af7d7e0933030b9dddfc721df829069f4e6c780509f6391735729` — **이때 healthchecks 체크를 Pause 한다**(그 판은 ping 하지 않는다).
+**지금 설치된 판(2026-11-20 · #863 · 일일 요약 절 나눔 판 · 크론 `--dry-run` 없음 · 사용자 설치 통과):** REF `aff1c606b67a16e79e7a1f694ef70ab8f9303150` · SHA256 `3f88186d56f2c3d6b14a6044fddd48fcaf9475d31559b6f8d8f35bf86597d377`. 되돌리기: 게시만 멈추려면 3절(크론 줄에 `--dry-run`) · ping 만 멈추려면 6절 되돌리기 · 요약을 한 줄 형식으로 되돌리려면 직전 판 REF `096a5c6d2aa1daceebaa55e759b7fb7d6d3c7027`(#846 U1 판) · SHA256 `cc8681fd040b6567ae69236a743d0233965049c27bc27b4e0326276d7d88bb5f` 로 같은 명령(집계 · 하트비트는 그대로) · 사용량 집계까지 빼려면 REF `d7355f2eeacb5fad2238e79e293b932ed251342e`(#847 PR-4 판) · SHA256 `91956340403d481e6d602855f7e1e2eeb5c5a289becf76fb2b0ad48c11a1e145` · 그 앞 판 REF `18bab57f89e53cba3aed47e57a8c91473ddc3469`(#802) · SHA256 `b8ffdc77ef1af7d7e0933030b9dddfc721df829069f4e6c780509f6391735729` — **이때 healthchecks 체크를 Pause 한다**(그 판은 ping 하지 않는다).
 
 ```bash
 mkdir -p ~/pleiades-ops ~/pleiades-private/ops && chmod 700 ~/pleiades-ops ~/pleiades-private ~/pleiades-private/ops
