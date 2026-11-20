@@ -40,8 +40,10 @@ export type Field = "string" | "number" | "boolean";
 export interface Shape {
   /** 필수 필드와 형 */
   required: Readonly<Record<string, Field>>;
-  /** 선택 필드와 형 — 형이 다르면 그 필드만 버리고 missing 으로 센다 */
+  /** 선택 필드와 형 — 형이 다르면 그 필드만 버리고 missing 으로 센다 · null 은 "없음"(쓰는 쪽이 `x || null` 로 적는다 · #880) */
   optional?: Readonly<Record<string, Field>>;
+  /** 아는 필드지만 내보내지 않는다 — 세지도 복사하지도 않는다(원문이 섞일 수 있는 자리 · 내부 집계 · #880). 모르는 필드와 다르다 */
+  ignored?: readonly string[];
 }
 
 type Rec = Record<string, string | number | boolean>;
@@ -64,11 +66,14 @@ export function pick(v: unknown, shape: Shape, tally: Tally): Rec | null {
     out[k] = v[k] as string | number | boolean;
   }
   for (const [k, f] of Object.entries(optional)) {
-    if (v[k] === undefined) continue;
+    if (v[k] === undefined || v[k] === null) continue;
     if (isField(v[k], f)) out[k] = v[k] as string | number | boolean;
     else tally.missing++;
   }
-  for (const k of Object.keys(v)) if (!Object.hasOwn(shape.required, k) && !Object.hasOwn(optional, k)) tally.unknown++; // 프로토타입 이름(__proto__ 등)도 센다(#872 9-1 I3)
+  const ignored = shape.ignored ?? [];
+  for (const k of Object.keys(v)) {
+    if (!Object.hasOwn(shape.required, k) && !Object.hasOwn(optional, k) && !ignored.includes(k)) tally.unknown++; // 프로토타입 이름(__proto__ 등)도 센다(#872 9-1 I3)
+  }
   return out;
 }
 

@@ -67,3 +67,7 @@ jobs:
       # 필수 체크(verify) 안에서 돌려 분류 회귀가 머지를 막게 한다. 나머지 deploy/ 시험은 8절대로 로컬.
       - name: Domain contract (deploy/test_domain_contract.py)
         run: python3 -m unittest deploy.test_domain_contract
+
+      # #880 · 015 V-5 §3-1 원칙 4 — 수집기 출력 형식 ↔ 통합 층 ops 리더 허용 목록. 수집기가 키를 바꾸는 PR 이 여기서 막힌다(같은 예외)
+      - name: Ops format (deploy/test_ops_format.py)
+        run: python3 -m unittest deploy.test_ops_format

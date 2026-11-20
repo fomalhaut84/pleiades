@@ -14,11 +14,16 @@ afterEach(async () => {
 });
 
 describe("loadDomains (실제 apps/*/domain.json · 계약 v1 · #858)", () => {
-  it("fin · fit 두 도메인 · 기본 포트 · 쓰기 분류", () => {
+  it("fin · fit · ops 세 제공자 · 기본 포트 · 쓰기 분류", () => {
     const { decls, broken } = loadDomains(APPS, {});
-    expect(decls.map((d) => d.id)).toEqual(["fin", "fit"]); // #841 — 발견 결과 = 지금 저장소의 선언 전부 · 순서도 고정 목록과 같다
+    expect(decls.map((d) => d.id)).toEqual(["fin", "fit", "ops"]); // #841 — 발견 결과 = 지금 저장소의 선언 전부(id 순) · ops 는 apps 밖(#880)
     expect(broken).toEqual([]);
-    const [fin, fit] = decls;
+    const [fin, fit, ops] = decls;
+    expect(ops).toMatchObject({ kind: "local", origin: "deploy/ops", dir: "", serverKey: "pl_ops", reader: "ops", knowledge: false, models: null });
+    if (ops.kind !== "local") throw new Error("ops 는 local");
+    expect([...ops.read]).toEqual(["ops_summary", "ops_events"]);
+    expect([fin.origin, fit.origin]).toEqual(["apps/finance", "apps/fitness"]);
+    expect(loadDomains(APPS, {}, []).decls.map((d) => d.id)).toEqual(["fin", "fit"]); // apps 밖 목록을 비우면 apps/* 만
     if (fin.kind !== "mcp" || fit.kind !== "mcp") throw new Error("fin · fit 는 mcp");
     expect([fin.id, fin.serverKey, fin.keySuffix, fin.port, fin.portKey]).toEqual(["fin", "myfinance", "FINANCE", 4210, "ADVISOR_MCP_PORT_FINANCE"]);
     expect([fit.id, fit.serverKey, fit.keySuffix, fit.port, fit.portKey]).toEqual(["fit", "myfitness", "FITNESS", 4301, "ADVISOR_MCP_PORT_FITNESS"]);
@@ -33,7 +38,7 @@ describe("loadDomains (실제 apps/*/domain.json · 계약 v1 · #858)", () => {
     expect(loadDomains(APPS, { ADVISOR_MCP_PORT_FINANCE: "4610" }).decls[0]).toMatchObject({ port: 4610 });
     // #841 — 포트 오류는 그 제공자만 선언 오류로 뺀다(전체를 멈추지 않는다)
     const r = loadDomains(APPS, { ADVISOR_MCP_PORT_FITNESS: "abc" });
-    expect(r.decls.map((d) => d.id)).toEqual(["fin"]);
+    expect(r.decls.map((d) => d.id)).toEqual(["fin", "ops"]);
     expect(r.broken).toEqual([{ id: "apps/fitness", why: expect.stringMatching(/포트/) }]);
   });
 
@@ -241,6 +246,31 @@ describe("prepareDomain — v1 준비 경로", () => {
   it("local 선언 — 호스트 문맥이 없거나 운영 레지스트리에 그 리더가 없으면 reader-not-allowed(띄우지 않는다 · #873)", async () => {
     const local = { ...mcpDecl(), kind: "local" as const, serverKey: "pl_ops", reader: "ops", read: new Set(["ops_events"]) };
     expect(await prepareDomain(local, 2000)).toMatchObject({ ok: false, why: "reader-not-allowed", decl: local });
+  });
+});
+
+// 회귀: #880 9-1 info I4 — apps 밖 선언(deploy/ops)은 models 를 쓸 수 없다(핀 파일 기준이 앱 디렉터리라 엉뚱한 파일을 읽는다)
+describe("loadDomains — apps 밖 선언(deploy/ops · #880)", () => {
+  it("발견 · origin = deploy/ops · models 가 있으면 그 선언만 선언 오류 · 심링크 디렉터리는 따라가지 않는다", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "adv-extra-"));
+    try {
+      fs.mkdirSync(path.join(root, "apps"));
+      fs.mkdirSync(path.join(root, "deploy", "ops"), { recursive: true });
+      const decl = (over: Record<string, unknown> = {}) => JSON.stringify({ contract: "pleiades-domain/v1", id: "ops", name: "운영", kind: "local", summary: "s",
+        local: { reader: "ops" }, tools: { read: ["ops_summary"], write: [], propose: [] }, ...over });
+      fs.writeFileSync(path.join(root, "deploy", "ops", "domain.json"), decl());
+      expect(loadDomains(path.join(root, "apps"), {}).decls).toMatchObject([{ id: "ops", origin: "deploy/ops", dir: "" }]);
+      fs.writeFileSync(path.join(root, "deploy", "ops", "domain.json"), decl({ models: { file: "src/lib/ai/models.ts", constant: "X" } }));
+      expect(loadDomains(path.join(root, "apps"), {})).toEqual({ decls: [], broken: [{ id: "deploy/ops", why: expect.stringMatching(/models/) }] });
+      fs.rmSync(path.join(root, "deploy", "ops"), { recursive: true });
+      const real = fs.mkdtempSync(path.join(os.tmpdir(), "adv-extra-real-"));
+      fs.writeFileSync(path.join(real, "domain.json"), decl());
+      fs.symlinkSync(real, path.join(root, "deploy", "ops"));
+      expect(loadDomains(path.join(root, "apps"), {}).decls).toEqual([]);
+      fs.rmSync(real, { recursive: true, force: true });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

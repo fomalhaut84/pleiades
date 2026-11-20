@@ -7,8 +7,10 @@ import { LOCAL_INIT_MAX_MS } from "./local/host";
 import type { Registry } from "./local/readers";
 import { McpSession, getPromptText, listToolDefs, openSession, openStdioSession } from "./mcp-client";
 
-/** 선언 파일 이름 — 발견 루트(apps/) 바로 아래 디렉터리마다 이 파일이 있으면 제공자다(015 §4-1 · ops 루트는 V-5) */
+/** 선언 파일 이름 — 발견 루트(apps/) 바로 아래 디렉터리마다 이 파일이 있으면 제공자다(015 §4-1) */
 export const DECLARATION_FILE = "domain.json";
+/** apps/ 밖의 선언 — 저장소 루트 기준 디렉터리(015 §4-1 · Q144 · #880 V-5). 수집기는 앱이 아니라 deploy/ops 에 있다 */
+export const EXTRA_DECLARATION_DIRS: readonly string[] = ["deploy/ops"];
 export const CONTRACT_V0 = "pleiades-domain/v0";
 export const CONTRACT_V1 = "pleiades-domain/v1"; // 015 §3-2 (#858 V-3)
 export const READ_PATH = "/mcp/read"; // 012 §7-2 K-1 확정(#655)
@@ -33,8 +35,10 @@ export interface ModelsRef {
 }
 
 interface DeclBase {
-  /** 발견 루트 아래 디렉터리 이름(apps/<dir>) — 모델 핀 파일을 여기서 찾는다 */
+  /** 발견 루트 아래 디렉터리 이름(apps/<dir>) — 모델 핀 파일을 여기서 찾는다 · apps 밖 선언은 빈 문자열 */
   dir: string;
+  /** 선언 위치 — 저장소 루트 기준(`apps/<dir>` · `deploy/ops`). `local` 리더의 허용 선언 위치와 대조한다(015 §3-1 원칙 1 · #880) */
+  origin: string;
   id: string;
   name: string;
   /** 지식 prompt 가 없을 때 지식 절이 되는 한 줄(v1 · ≤ SUMMARY_MAX_BYTES) · v0 는 빈 문자열 */
@@ -93,7 +97,7 @@ function parseV0(d: Json, env: NodeJS.ProcessEnv, dir: string): McpDecl {
     throw new Error("domain.json 형식이 다르다(id · name · keySuffix · mcp.serverKey · tools.write)");
   }
   const portKey = `ADVISOR_MCP_PORT_${keySuffix}`;
-  return { kind: "mcp", dir, id, name, summary: "", enabled: true, keySuffix, serverKey, port: portOf(id, portKey, defaultPort, env), portKey,
+  return { kind: "mcp", dir, origin: `apps/${dir}`, id, name, summary: "", enabled: true, keySuffix, serverKey, port: portOf(id, portKey, defaultPort, env), portKey,
     write: new Set(tools.write as string[]), propose: new Set(), knowledge: true, models: null };
 }
 
@@ -120,7 +124,7 @@ function parseV1(d: Json, env: NodeJS.ProcessEnv, dir: string): DomainDecl {
   if (!tools || !isNames(tools.read) || !isNames(tools.write) || !isNames(tools.propose)) throw bad("tools.read · write · propose");
   const all = [...tools.read, ...tools.write, ...tools.propose];
   if (new Set(all).size !== all.length) throw bad("분류 중복");
-  const base = { dir, id, name, summary, enabled: enabled !== false, keySuffix: (keySuffix as string | undefined) ?? null,
+  const base = { dir, origin: `apps/${dir}`, id, name, summary, enabled: enabled !== false, keySuffix: (keySuffix as string | undefined) ?? null,
     write: new Set(tools.write), propose: new Set(tools.propose), knowledge: knowledge === true, models: parseModels(d.models) };
   if (kind === "mcp") {
     if (d.local !== undefined || !isObj(d.mcp) || typeof d.mcp.serverKey !== "string" || !KEY.test(d.mcp.serverKey)) throw bad("mcp.serverKey");
@@ -173,7 +177,7 @@ const byKey = <T>(xs: T[], key: (x: T) => string) => [...xs].sort((a, b) => (key
  * id · serverKey · keySuffix(채널 키) · 포트 override 키가 겹치면 어느 쪽이 맞는지 모르므로 겹친 쪽 모두 뺀다.
  * 심링크 디렉터리는 따라가지 않는다(#842 9-1 info) — 체크아웃 밖을 가리킬 수 있고, 저장소의 앱은 실제 디렉터리다.
  */
-export function loadDomains(appsDir: string, env: NodeJS.ProcessEnv = process.env): Discovered {
+export function loadDomains(appsDir: string, env: NodeJS.ProcessEnv = process.env, extraDirs: readonly string[] = EXTRA_DECLARATION_DIRS): Discovered {
   let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(appsDir, { withFileTypes: true });
@@ -182,15 +186,35 @@ export function loadDomains(appsDir: string, env: NodeJS.ProcessEnv = process.en
   }
   const parsed: { label: string; decl: DomainDecl }[] = [];
   const broken: BrokenDecl[] = [];
-  for (const e of entries) {
-    if (!e.isDirectory()) continue; // Dirent 는 링크를 따라가지 않는다 — 심링크는 여기서 빠진다
-    const file = path.join(appsDir, e.name, DECLARATION_FILE);
-    if (!fs.existsSync(file)) continue;
-    const label = `apps/${e.name}`;
+  const read = (label: string, file: string, dir: string) => {
+    if (!fs.existsSync(file)) return;
     try {
-      parsed.push({ label, decl: parseDomain(fs.readFileSync(file, "utf8"), env, e.name) });
+      parsed.push({ label, decl: { ...parseDomain(fs.readFileSync(file, "utf8"), env, dir), origin: label } });
     } catch (err) {
       broken.push({ id: label, why: `선언 오류(${reason(err)})` });
+    }
+  };
+  for (const e of entries) {
+    if (!e.isDirectory()) continue; // Dirent 는 링크를 따라가지 않는다 — 심링크는 여기서 빠진다
+    read(`apps/${e.name}`, path.join(appsDir, e.name, DECLARATION_FILE), e.name);
+  }
+  // apps 밖 — 저장소 루트(appsDir 의 부모) 기준 고정 위치만 · 심링크 디렉터리는 apps/ 와 같이 따라가지 않는다
+  const repoRoot = path.dirname(path.resolve(appsDir));
+  for (const rel of extraDirs) {
+    const dir = path.join(repoRoot, rel);
+    let st: fs.Stats;
+    try {
+      st = fs.lstatSync(dir);
+    } catch {
+      continue;
+    }
+    if (!st.isDirectory()) continue;
+    const before = parsed.length;
+    read(rel, path.join(dir, DECLARATION_FILE), "");
+    // 모델 핀(models.file)은 앱 디렉터리 기준이다 — apps 밖 선언이 핀을 가지면 엉뚱한 파일을 읽는다(#880 9-1 I4) · 그 선언만 뺀다
+    if (parsed.length > before && parsed[parsed.length - 1].decl.models) {
+      parsed.pop();
+      broken.push({ id: rel, why: "선언 오류(apps 밖 선언은 models 를 쓰지 않는다)" });
     }
   }
   // 키가 없는 선언(keySuffix 없음 · local 의 포트 키)은 세지 않는다
@@ -234,11 +258,11 @@ export interface Launch {
 
 /**
  * 호스트 실행 명령 — prepare · probe · mcp-config 가 같은 것을 쓴다(H-R3). null = 이 선언은 그 리더를 고를 수 없다.
- * 리더가 레지스트리에 있고 그 리더의 허용 선언 위치가 이 선언의 위치(apps/<dir>)여야 한다(015 §3-1 원칙 1).
+ * 리더가 레지스트리에 있고 그 리더의 허용 선언 위치가 이 선언의 위치(origin)여야 한다(015 §3-1 원칙 1).
  */
 export function localLaunch(decl: LocalDecl, ctx: LocalHostContext): Launch | null {
   const reader = ctx.registry.get(decl.reader);
-  if (!reader || reader.allowedDecl !== `apps/${decl.dir}`) return null;
+  if (!reader || reader.allowedDecl !== decl.origin) return null;
   const dir = reader.location(ctx.privateRoot);
   if (!path.isAbsolute(dir)) return null;
   return { command: ctx.command, args: [...ctx.prefix, "--reader", decl.reader, "--dir", dir] };

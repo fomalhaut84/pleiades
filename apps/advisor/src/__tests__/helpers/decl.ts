@@ -2,6 +2,6 @@
 import { McpDecl } from "../../domains";
 
 export const mcpDecl = (over: Partial<McpDecl> = {}): McpDecl => ({
-  kind: "mcp", dir: "finance", id: "fin", name: "재무", summary: "", enabled: true, keySuffix: "FINANCE", serverKey: "myfinance",
+  kind: "mcp", dir: "finance", origin: "apps/finance", id: "fin", name: "재무", summary: "", enabled: true, keySuffix: "FINANCE", serverKey: "myfinance",
   port: 1, portKey: "ADVISOR_MCP_PORT_FINANCE", write: new Set(), propose: new Set(), knowledge: true, models: null, ...over,
 });

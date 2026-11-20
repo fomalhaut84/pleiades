@@ -66,6 +66,8 @@ export interface AdvisorDeps {
   systemMaxBytes?: number;
   /** 자식 env 허용 목록에 더할 키 — 시험(가짜 CLI)만 쓴다 */
   passEnv?: readonly string[];
+  /** apps 밖 선언 위치(기본 EXTRA_DECLARATION_DIRS · #880) — 시험이 fin · fit 만 보려고 비운다 */
+  extraDeclDirs?: readonly string[];
   /** `local` 호스트(015 V-4 · #873) — 기본 = 운영 레지스트리 · process.execPath(H-R6) · 봇 번들 옆 dist/local-host.cjs. 시험이 시험 레지스트리 · 시험 번들을 넣는다 */
   localHost?: { registry: Registry; command: string; prefix: readonly string[]; initMaxMs?: number };
 }
@@ -121,7 +123,7 @@ export class Advisor {
   constructor(private readonly deps: AdvisorDeps) {
     this.store = new SessionStore(deps.now);
     // K-7 — 핀 출처 = 발견한 선언(#858) · 포트 env 와 무관하게(기본 포트로 읽는다). 핀이 서로 다르거나 파일을 못 읽으면 지금처럼 기동 실패
-    const decls = loadDomains(deps.appsDir, {}).decls;
+    const decls = loadDomains(deps.appsDir, {}, deps.extraDeclDirs).decls;
     this.pin = decls.some((d) => d.models) ? readPins(deps.appsDir, decls) : null;
     this.advisorDir = ensurePrivateDir(path.join(deps.privateRoot, "advisor"));
     // CLI 의 cwd — 비어 있는 중립 디렉터리(체크아웃 밖 · 조상에 .claude 없음). 세션 기록(resume)은 cwd 기준이라 늘 같다
@@ -147,7 +149,7 @@ export class Advisor {
 
   /** 읽기 경로 준비 — 모델 호출 없음(4b-3 기동 탐침 · 로컬 점검) */
   async prepareAll(): Promise<DomainReady[]> {
-    const { decls, broken } = loadDomains(this.deps.appsDir, this.deps.env);
+    const { decls, broken } = loadDomains(this.deps.appsDir, this.deps.env, this.deps.extraDeclDirs);
     const prep = this.deps.prepare ?? ((d: DomainDecl) => prepareDomain(d, MCP_TIMEOUT_MS, this.local));
     // enabled:false 는 준비하지 않는다 · 모델 안내에도 넣지 않는다(decl = null · 015 §4-1 정상 끄기 · #858)
     const ready = await Promise.all(decls.map((d) => (d.enabled ? prep(d) : Promise.resolve<DomainReady>({ id: d.id, ok: false, decl: null, why: "꺼짐" }))));

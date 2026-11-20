@@ -74,6 +74,8 @@ describe("② 쓰기 API 정적 금지", () => {
   // 리더는 fields 도우미로만 읽는다(015 §3-1 원칙 3) — node:fs 를 import 할 수 있는 파일은 fields.ts 하나(#872 9-1 M1)
   const ALLOWED_IMPORTS: Readonly<Record<string, readonly string[]>> = {
     "fields.ts": ["node:fs", "node:path"],
+    "readers.ts": ["./fields", "./ops"], // 운영 레지스트리 = 리더 모듈들(#880)
+    "ops.ts": ["./fields", "./readers", "node:path", "./ops-shape.json"], // 허용 목록은 수집기 쪽 형식 시험과 같이 읽는 JSON(#880)
   };
   const DEFAULT_IMPORTS = ["./fields", "./readers", "./host", "node:path"];
 
