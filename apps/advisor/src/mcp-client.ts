@@ -1,6 +1,7 @@
 // 도메인 MCP 읽기 경로 클라이언트 — `tools/list` · `prompts/get` (#680 · 012 K-1 · K-3 · Q135).
 // X1 `listTools`(StreamableHTTP · JSON 또는 SSE 응답)를 옮기고 prompts/get 을 더했다. SDK 를 싣지 않는다 — 요청 넷뿐이다.
 // 호출은 세션 시작 때만이다(모델 턴 0). 통합 층은 DB·cwd 없이 도메인 지식을 이 경로로만 받는다.
+import { spawn } from "node:child_process";
 import http from "node:http";
 
 export interface HttpResponse {
@@ -166,4 +167,110 @@ export async function getPromptText(s: McpSession, name: string): Promise<string
     .filter(Boolean);
   if (!texts.length) throw new Error(`prompts/get ${name}: text 없음`);
   return texts.join("\n\n");
+}
+
+// ── stdio 전송 (#872 · 015 V-4a · H-R3) ─────────────────────────────
+// `local` 호스트를 prepare · probe 가 직접 띄워 묻는다 — CLI 가 질문 때 띄우는 것과 같은 실행 파일 · 같은 args(V-4b).
+// 줄 단위 JSON-RPC. 요청마다 기한 · 응답 줄 상한 · 자식이 끝나면 대기 중 요청은 실패. close 는 stdin 을 닫고(H-R4) 기다렸다가 SIGKILL.
+
+export interface StdioSession extends McpSession {
+  /** 자식을 띄운 뒤 initialize 응답까지 ms — V-4b 의 기동 상한 판정 */
+  initMs: number;
+}
+
+/** close 때 자식이 stdin EOF 로 스스로 끝나기를 기다리는 시간 */
+export const STDIO_CLOSE_GRACE_MS = 1000;
+
+export async function openStdioSession(command: string, args: readonly string[], timeoutMs: number): Promise<StdioSession> {
+  const t0 = Date.now();
+  // env 는 비운다 — 호스트는 위치를 args 로만 받는다(015 §3-1 원칙 1) · 상속한 플랫폼 키가 자식에 가지 않는다
+  const child = spawn(command, [...args], { stdio: ["pipe", "pipe", "ignore"], env: {} });
+  const waiting = new Map<number, { resolve: (m: Json) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
+  let dead: Error | null = null;
+  let buf = "";
+  const failAll = (e: Error) => {
+    dead ??= e;
+    for (const [id, w] of waiting) {
+      clearTimeout(w.timer);
+      waiting.delete(id);
+      w.reject(dead);
+    }
+  };
+  const exited = new Promise<void>((r) => child.once("close", () => r()));
+  child.on("error", () => failAll(new Error("호스트를 띄우지 못했다")));
+  child.on("close", () => failAll(new Error("호스트가 끝났다")));
+  child.stdin.on("error", () => undefined);
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (c: string) => {
+    buf += c;
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const s = buf.slice(0, i);
+      buf = buf.slice(i + 1);
+      // 줄 끝과 한 청크로 온 큰 응답도 같은 상한 — 청크 경계에 따라 받아지지 않게(PR #874 Codex P2)
+      if (Buffer.byteLength(s, "utf8") > MAX_BODY_BYTES) {
+        buf = "";
+        child.kill("SIGKILL");
+        failAll(new Error("응답 본문 상한 초과"));
+        return;
+      }
+      let m: unknown;
+      try {
+        m = JSON.parse(s);
+      } catch {
+        continue;
+      }
+      if (!isObj(m) || typeof m.id !== "number") continue;
+      const w = waiting.get(m.id);
+      if (!w) continue;
+      clearTimeout(w.timer);
+      waiting.delete(m.id);
+      if (isObj(m.result)) w.resolve(m.result);
+      else w.reject(new Error(`rpc ${m.id} 실패`)); // 오류 본문을 싣지 않는다
+    }
+    if (Buffer.byteLength(buf, "utf8") > MAX_BODY_BYTES) {
+      buf = "";
+      child.kill("SIGKILL");
+      failAll(new Error("응답 본문 상한 초과"));
+    }
+  });
+  const send = (msg: Json) => {
+    if (dead) throw dead;
+    child.stdin.write(`${JSON.stringify(msg)}\n`);
+  };
+  let next = 1;
+  const call = (method: string, params: Json): Promise<Json> => new Promise((resolve, reject) => {
+    if (dead) return reject(dead);
+    const id = next++;
+    const timer = setTimeout(() => {
+      waiting.delete(id);
+      reject(new Error("기한 초과"));
+    }, timeoutMs);
+    waiting.set(id, { resolve, reject, timer });
+    try {
+      send({ jsonrpc: "2.0", id, method, params });
+    } catch (e) {
+      clearTimeout(timer);
+      waiting.delete(id);
+      reject(e as Error);
+    }
+  });
+  const close = async () => {
+    child.stdin.end();
+    const grace = setTimeout(() => child.kill("SIGKILL"), STDIO_CLOSE_GRACE_MS);
+    // SIGKILL 뒤에도 파이프를 물려받은 손자가 있으면 close 가 오지 않는다 — 유예 두 배에서 기다림을 끝낸다(#872 9-1 I1)
+    let cap: NodeJS.Timeout | undefined;
+    await Promise.race([exited, new Promise<void>((r) => { cap = setTimeout(r, STDIO_CLOSE_GRACE_MS * 2); })]);
+    clearTimeout(grace);
+    clearTimeout(cap);
+  };
+  try {
+    await call("initialize", { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "pleiades-advisor", version: "1" } });
+    const initMs = Date.now() - t0;
+    send({ jsonrpc: "2.0", method: "notifications/initialized" });
+    return { call, close, initMs };
+  } catch (e) {
+    await close();
+    throw e;
+  }
 }
