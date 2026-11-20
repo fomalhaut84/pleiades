@@ -76,6 +76,11 @@ describe("Advisor.ask — 정상", () => {
     expect(call.argv).not.toContain("--resume");
     const mcp = JSON.parse(fs.readFileSync(call.argv[call.argv.indexOf("--mcp-config") + 1], "utf8"));
     expect(mcp.mcpServers.myfinance.url).toBe(`http://127.0.0.1:${fin.port}/mcp/read`);
+    // 회귀 고정(#873 V-4b) — mcp 제공자만이면 mcp-config 는 V-4b 전과 바이트 동일(답 입력 무변경 · 키 순서 포함)
+    expect(fs.readFileSync(call.argv[call.argv.indexOf("--mcp-config") + 1], "utf8")).toBe(JSON.stringify({ mcpServers: {
+      myfinance: { type: "http", url: `http://127.0.0.1:${fin.port}/mcp/read` },
+      myfitness: { type: "http", url: `http://127.0.0.1:${fit.port}/mcp/read` },
+    } }, null, 2));
     const line = logs.find((l) => l.includes("status="))!;
     expect(line).toMatch(/status=완료 model=sonnet drift=판정 불가 cost=\$0\.1234 cap=\$1\.0000 turns=3 tools=myfinance:1\/1,myfitness:1\/1 outside=0 context=400/); // 1200 ÷ turns 3(#721)
     expect(logs.join("\n")).not.toContain("지출");

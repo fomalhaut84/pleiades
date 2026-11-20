@@ -9,6 +9,7 @@ import type { Reader, Registry } from "../../local/readers";
 export const sampleReader: Reader = {
   id: "sample",
   allowedDecl: "apps/sample",
+  location: (root) => path.join(root, "sample"), // 시험은 고정값을 여기에 복사한다
   tools: [
     { name: "sample_status", description: "시험 상태", inputSchema: { type: "object", properties: {} } },
     { name: "sample_events", description: "시험 이벤트", inputSchema: { type: "object", properties: { app: { type: "string" } } } },
@@ -30,6 +31,7 @@ export const sampleReader: Reader = {
 export const writingReader: Reader = {
   id: "writer",
   allowedDecl: "apps/writer",
+  location: (root) => path.join(root, "writer"),
   tools: [{ name: "writer_touch", description: "쓰기 시도", inputSchema: { type: "object" } }],
   examples: { writer_touch: {} },
   call(_tool, _args, dir) {
@@ -42,6 +44,7 @@ export const writingReader: Reader = {
 export const outsideWriter: Reader = {
   id: "outside",
   allowedDecl: "apps/outside",
+  location: (root) => path.join(root, "outside"),
   tools: [{ name: "outside_touch", description: "밖에 쓰기", inputSchema: { type: "object" } }],
   examples: { outside_touch: {} },
   call() {
@@ -50,4 +53,8 @@ export const outsideWriter: Reader = {
   },
 };
 
-export const TEST_REGISTRY: Registry = new Map([[sampleReader.id, sampleReader]]);
+/** 양성 대조 — 기동이 느린 호스트(시험 호스트가 이 리더면 initialize 전에 기다린다 · #873 기동 상한) */
+export const slowReader: Reader = { ...sampleReader, id: "sample_slow", allowedDecl: "apps/sample_slow" };
+export const SLOW_START_MS = 1300;
+
+export const TEST_REGISTRY: Registry = new Map([[sampleReader.id, sampleReader], [slowReader.id, slowReader]]);

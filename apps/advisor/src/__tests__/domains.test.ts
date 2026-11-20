@@ -238,9 +238,9 @@ describe("prepareDomain — v1 준비 경로", () => {
     expect(await prepareDomain(mcpDecl({ port: s.port, propose: new Set(["propose_note"]) }), 2000)).toMatchObject({ ok: false, why: "제안 분류 도구가 읽기 경로에 있다" });
   });
 
-  it("local 선언은 호스트가 생기기 전(V-4)까지 쓰지 않는다 · 연결을 시도하지 않는다", async () => {
-    const local = { ...mcpDecl(), kind: "local" as const, serverKey: "pl_ops", reader: "ops" };
-    expect(await prepareDomain(local, 2000)).toMatchObject({ ok: false, why: "local 호스트 없음", decl: local });
+  it("local 선언 — 호스트 문맥이 없거나 운영 레지스트리에 그 리더가 없으면 reader-not-allowed(띄우지 않는다 · #873)", async () => {
+    const local = { ...mcpDecl(), kind: "local" as const, serverKey: "pl_ops", reader: "ops", read: new Set(["ops_events"]) };
+    expect(await prepareDomain(local, 2000)).toMatchObject({ ok: false, why: "reader-not-allowed", decl: local });
   });
 });
 
